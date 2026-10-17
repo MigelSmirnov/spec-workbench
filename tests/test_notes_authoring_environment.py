@@ -267,7 +267,7 @@ def test_a_list_note_goes_with_its_continuation_lines(case, factory):
     assert [n["text"] for n in parse] == ["MUST return the text unchanged."]
 
 
-@pytest.mark.parametrize("ending", ["\r\n", "\n"])
+@pytest.mark.parametrize("ending", ["\r\n", "\n", "\r"])
 @pytest.mark.parametrize("final", [True, False])
 def test_line_endings_and_the_final_newline_are_kept(case, factory, ending, final):
     body = NOTES.replace("\n", ending)
@@ -286,3 +286,46 @@ def test_the_cli_refuses_a_task_for_a_module_the_case_does_not_have(case, capsys
     assert "unknown module: nowhere" in capsys.readouterr().err
     assert design_notes.main([str(case), "--module", "store", "--author-prompt"]) == 0
     assert "module `store`" in capsys.readouterr().out
+
+
+def test_a_module_heading_with_trailing_blanks_is_the_module_s_heading(case, factory):
+    (case / "80_notes.md").write_text(NOTES.replace("## store\n", "## store  \n"), encoding="utf-8")
+    notes = ["load_rows: [BEHAVIOR] MUST return rows in store order.", "save_row: [BEHAVIOR] MUST store the new row."]
+    assert run(case, factory, result(notes))["status"] == "written"
+    text = (case / "80_notes.md").read_text(encoding="utf-8")
+    assert text.count("## store") == 1 and "MUST store the new row." in text
+
+
+def test_a_notes_file_that_mixes_line_endings_is_refused_untouched(case, factory):
+    body = NOTES.replace("## store\n", "## store\r\n").encode("utf-8")
+    (case / "80_notes.md").write_bytes(body)
+    notes = ["load_rows: [BEHAVIOR] MUST return rows in store order.", "save_row: [BEHAVIOR] MUST store the row."]
+    report = run(case, factory, result(notes))
+    assert report["status"] == "refused" and "normalise it" in report["reason"]
+    assert (case / "80_notes.md").read_bytes() == body
+
+
+@pytest.mark.parametrize("separator", ["\u2028", "\x85", "\x0c"])
+def test_a_notes_file_with_another_line_break_is_refused_untouched(case, factory, separator):
+    body = NOTES.replace("## store\n", f"## store{separator}").encode("utf-8")
+    (case / "80_notes.md").write_bytes(body)
+    notes = ["load_rows: [BEHAVIOR] MUST return rows in store order.", "save_row: [BEHAVIOR] MUST store the row."]
+    assert run(case, factory, result(notes))["status"] == "refused"
+    assert (case / "80_notes.md").read_bytes() == body
+
+
+def test_a_notes_file_whose_only_break_is_not_crlf_lf_or_cr_is_refused_untouched(case, factory):
+    body = NOTES.replace("\n", " ").encode("utf-8")
+    (case / "80_notes.md").write_bytes(body)
+    notes = ["load_rows: [BEHAVIOR] MUST return rows in store order.", "save_row: [BEHAVIOR] MUST store the row."]
+    assert run(case, factory, result(notes))["status"] == "refused"
+    assert (case / "80_notes.md").read_bytes() == body
+
+
+def test_a_module_heading_written_twice_is_refused_untouched(case, factory):
+    body = (NOTES + "\n## store \n").encode("utf-8")
+    (case / "80_notes.md").write_bytes(body)
+    notes = ["load_rows: [BEHAVIOR] MUST return rows in store order.", "save_row: [BEHAVIOR] MUST store the row."]
+    report = run(case, factory, result(notes))
+    assert report["status"] == "refused" and "more than one '## store' heading" in report["reason"]
+    assert (case / "80_notes.md").read_bytes() == body

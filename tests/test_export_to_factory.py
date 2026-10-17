@@ -462,3 +462,34 @@ def test_an_uncarried_project_owes_its_whole_surface(tmp_path: Path) -> None:
     audit.unlink()
     _write_json(working / "route_b_run_manifest.json", {"status": "pass"})
     assert export_to_factory.project_ever_carried(factory, "demo", working)
+
+
+def test_export_blocks_index_drift_before_project_creation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    real_workbench_root = Path(export_to_factory.__file__).resolve().parents[1]
+    standard = (real_workbench_root / "skills/spec-authoring/SPEC_STANDARD.md").read_text(encoding="utf-8")
+    workbench_root = tmp_path / "spec-workbench"
+    _write(workbench_root / "skills/spec-authoring/SPEC_STANDARD.md", standard)
+    _write(workbench_root / "skills/spec-authoring/SPEC_STANDARD_INDEX.md", STANDARD_INDEX + "\n- drifted\n")
+    factory = _fake_factory(tmp_path, standard)
+    source = workbench_root / "examples/demo/global_spec.json"
+    _write_json(source, {"standard_version": 2})
+    monkeypatch.setattr(export_to_factory, "__file__", str(workbench_root / "tools/export_to_factory.py"))
+    monkeypatch.setattr(export_to_factory, "git_metadata", _clean_git_metadata)
+    monkeypatch.setattr(sys, "argv", ["export_to_factory.py", "--spec", str(source), "--project", "demo",
+                                      "--factory-root", str(factory)])
+    # FA004 already blocks this in admission; drop it to reach the export's own check
+    admission = export_to_factory.check_factory_admission
+
+    def without_fa004(**kwargs):
+        report = admission(**kwargs)
+        report["checks"] = [item for item in report["checks"] if item["id"] != "FA004"]
+        report["ready"] = all(item["status"] != "BLOCK" for item in report["checks"])
+        return report
+
+    monkeypatch.setattr(export_to_factory, "check_factory_admission", without_fa004)
+
+    with pytest.raises(SystemExit, match=r"^SPEC_STANDARD_INDEX mismatch: update or pin"):
+        export_to_factory.main()
+    assert not (factory / "projects/demo").exists()
