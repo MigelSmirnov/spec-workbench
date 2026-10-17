@@ -559,11 +559,15 @@ def main() -> int:
         ]
         raise SystemExit("Factory admission blocked: " + "; ".join(blockers))
 
-    workbench_standard = workbench_root / "skills" / "spec-authoring" / "SPEC_STANDARD.md"
-    workbench_standard_sha = sha256_file(workbench_standard)
+    # the standard and its quick index, as FA004 compares them
+    for name in ("SPEC_STANDARD.md", "SPEC_STANDARD_INDEX.md"):
+        workbench_sha = sha256_file(workbench_root / "skills" / "spec-authoring" / name)
+        factory_sha = sha256_file(required["standard"].with_name(name))
+        if workbench_sha != factory_sha:
+            raise SystemExit(f"{name.removesuffix('.md')} mismatch: update or pin both repositories before exporting "
+                             f"(workbench={workbench_sha}, factory={factory_sha})")
+    workbench_standard_sha = sha256_file(workbench_root / "skills" / "spec-authoring" / "SPEC_STANDARD.md")
     factory_standard_sha = sha256_file(required["standard"])
-    if workbench_standard_sha != factory_standard_sha:
-        raise SystemExit("SPEC_STANDARD mismatch: update or pin both repositories before exporting " f"(workbench={workbench_standard_sha}, factory={factory_standard_sha})")
 
     validation_report = admission["factory_validation"]
     if not isinstance(validation_report, dict):
