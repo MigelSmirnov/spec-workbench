@@ -134,7 +134,7 @@ def test_module_slice_names_the_module_and_refuses_an_unknown_one(case, monkeypa
         service.module_slice(case, "nowhere")
 
 
-@pytest.mark.parametrize("address", ["models.Status", "PAGE_MAX", "rules.x"])
-def test_an_address_not_written_as_in_a_note_is_refused_with_the_forms(case, address):
-    with pytest.raises(ValueError, match="'= models.X' or 'the imported X constant'"):
+@pytest.mark.parametrize("address", ["models.Status", "PAGE_MAX", "rules.x", "= foo.bar", "= models.X.", "= models.X for rows"])
+def test_an_address_the_resolver_does_not_check_is_refused_with_the_forms(case, address):
+    with pytest.raises(ValueError, match="'= models.X' and 'the imported X constant'"):
         service.resolve_address(case, address)

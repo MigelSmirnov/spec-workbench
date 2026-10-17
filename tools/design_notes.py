@@ -20,6 +20,8 @@ def _author(args: argparse.Namespace) -> tuple[dict[str, object] | str, int]:
     if args.author_requests:
         return request.status(args.project, SpecIndex.build(spec)), 0
     if args.author_prompt:
+        if args.module not in (spec.get("module_functions") or {}):
+            raise ValueError(f"unknown module: {args.module}; modules: {sorted(spec.get('module_functions') or {})}")
         return prompt.build(args.project, args.module, spec), 0
     result = json.loads(Path(args.author_accept).read_text(encoding="utf-8"))
     payload = accept.accept(args.project, args.module, result, spec=spec, write=not args.check)

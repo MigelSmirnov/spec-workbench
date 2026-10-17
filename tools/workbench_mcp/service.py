@@ -322,7 +322,12 @@ def _surface(case_root: Path) -> dict[str, Any]:
     return projected_spec(case_root)
 
 
-_NOTE_ADDRESS_FORM_RE = re.compile(r"=\s*\S+|the imported [A-Za-z_][A-Za-z0-9_]* constant")
+# The forms the Factory resolver checks (code-factory tools/spec_address.py:
+# DATA_ADDRESS_RE, IMPORTED_CONSTANT_RE); anything else it refuses as input.
+_NOTE_ADDRESS_FORM_RE = re.compile(
+    r"=\s*(?:models|rules|config)\.[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*"
+    r"|the imported [A-Za-z_][A-Za-z0-9_]* constant"
+)
 
 
 def resolve_address(case_root: Path, address: str, factory_root: Path | None = None) -> dict[str, Any]:
@@ -330,9 +335,11 @@ def resolve_address(case_root: Path, address: str, factory_root: Path | None = N
     from notes_workbench import factory_addresses
 
     if not _NOTE_ADDRESS_FORM_RE.fullmatch(address.strip()):
-        # the Factory resolver refuses it as input, not as a verdict; say how to write it
-        raise ValueError(f"{address!r} is not written as in a note: "
-                         "'= models.X' or 'the imported X constant'")
+        # the Factory resolver refuses it as input, not as a verdict; say what it checks
+        raise ValueError(f"{address!r} is not a data address the resolver checks. It checks "
+                         "'= models.X' and 'the imported X constant' (in standard_version 2 also "
+                         "'= rules.<backend>.…' and '= config.persistence.…'); a runtime setting "
+                         "is named by its field of the settings object and has no address")
 
     report = factory_addresses.run_resolver(_surface(case_root), [address], factory_root)
     return {

@@ -277,3 +277,12 @@ def test_line_endings_and_the_final_newline_are_kept(case, factory, ending, fina
     notes = ["load_rows: [BEHAVIOR] MUST return rows in store order.", "save_row: [BEHAVIOR] MUST store the row."]
     assert run(case, factory, result(notes))["status"] == "written"
     assert (case / "80_notes.md").read_bytes() == body.encode("utf-8")
+
+
+def test_the_cli_refuses_a_task_for_a_module_the_case_does_not_have(case, capsys):
+    import design_notes
+
+    assert design_notes.main([str(case), "--module", "nowhere", "--author-prompt"]) == 2
+    assert "unknown module: nowhere" in capsys.readouterr().err
+    assert design_notes.main([str(case), "--module", "store", "--author-prompt"]) == 0
+    assert "module `store`" in capsys.readouterr().out
