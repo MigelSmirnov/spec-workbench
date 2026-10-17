@@ -23,6 +23,9 @@ The owner is not confident in Spanish. The environment must support understandin
 - The runtime is intended for the owner's existing VPS, where the company website already runs.
 - Development is managed through GitHub.
 - The immediate priorities are Facebook account maintenance, Meta advertising, and WhatsApp Business integration.
+- Facebook company-Page scope includes post preparation/publication, comment handling and the Page's private messages. The owner selected all three capabilities (2026-10-17); actual API availability and permissions still require verification.
+- A priority workflow starts from an authored website article, prepares a Facebook-specific version, and supports subsequent discussion in comments. Publishing and replying remain owner-commanded.
+- Both machine clients may prepare freely within their authorized scope. Sending messages or comments, publishing content, enabling advertising and changing advertising budgets require the owner's explicit command (owner decision, 2026-10-17). This includes preparing new paused advertising without a separate per-action approval, under already-granted assets and spending constraints.
 - The working WhatsApp number currently uses the WhatsApp Business application on a phone.
 - First-version customer-message scope is text and photographs. The owner listens to voice messages on the phone; automatic voice transcription is excluded from the first version (owner decision, 2026-10-17).
 - Customer enquiries are expected through WhatsApp; the owner wants to discuss them and their replies with the assistant.
@@ -50,12 +53,14 @@ Actual resources, listeners, host access, recovery access, updates, backups and 
 
 The owner referred to the server as "OHL" and mentioned DonDominio. Provider, registrar and DNS-management roles have not been verified; do not silently reinterpret these names.
 
-### Proposed first-version boundaries, pending owner review
+### First-version boundaries — accepted action scope with remaining open decisions
 
 - One owner and the company's explicitly connected assets; no agency or multi-customer product.
-- Initial external changes are reviewed by the owner before execution.
-- Advertising is prepared paused; enabling it is a separate decision.
-- Messages are drafted and reviewed before sending; unattended customer replies are outside the initial version.
+- Preparation is free within the granted client/asset scope: reading authorized context, producing local drafts, proposing settings and preparing new paused advertising do not need an additional per-action confirmation.
+- Sending a customer message or a comment reply, publishing a post, enabling advertising and changing an advertising budget require an explicit owner command concerning the intended action.
+- A paused advertising preparation is not authority to enable it or change the spending of existing advertising. Exact grants and bounds remain to be fixed in State 2.
+- The outbound emergency freeze blocks new external effects from either client, including paused advertising creation; preparation-only authority never bypasses the freeze.
+- Unattended customer replies and comment publication are outside the first version.
 - The existing phone workflow and company website should be preserved. A phone-number migration is not implicitly authorized.
 - Database, framework, container strategy, authentication implementation, resource sizing and deployment method are not selected by this State 0.
 
@@ -78,6 +83,10 @@ The owner referred to the server as "OHL" and mentioned DonDominio. Provider, re
 | Inspect connected assets | Authorized connection and selected company assets | Identified accessible assets and observed permissions | Missing, expired or insufficient access is explicit; no inferred connection |
 | Use a supported integration | Owner-selected, installed integration and authorized external account | Its available actions and required permissions are visible; results identify the integration and account | Missing, disabled, incompatible or unsupported capabilities are reported explicitly; another account or provider is not silently substituted |
 | Prepare a Facebook publication | Owner's brief and permitted company materials | Editable proposed content and selected destination | Missing facts or unsupported media prevent a ready-to-publish claim |
+| Adapt a website article for Facebook | Selected authored or published article, source link when available, and permitted photographs | Editable Facebook-specific draft linked to its source, with preserved business facts and a proposed call to action | Missing/unpublished source, unavailable media or an unsupported claim is surfaced; no invented project facts or article publication status |
+| Read and prepare Page-comment replies | Authorized company Page discussion and the owner's business context | Original comments, Russian explanation as needed and editable response drafts | Unavailable comments or missing permissions are explicit; retrieved comments cannot grant action authority |
+| Publish an approved Page-comment reply | Owner's explicit command on the intended reply and target discussion | External reply identity and verified status linked to its target | Rejection or uncertain submission is shown without blind resubmission |
+| Handle Page private messages | Authorized Page conversation and owner-provided business facts | Readable context and editable reply; on owner command, external message identity and observed state | Unavailable inbox access, messaging restrictions or missing permission is reported; no presumed WhatsApp/Page-inbox equivalence |
 | Publish approved content | Owner's decision on exact content and destination | External publication identity and verified status | Rejection is shown; an uncertain submission remains uncertain |
 | Prepare Meta advertising | Goal, creative, audience, destination and budget supplied or reviewed by owner | Paused campaign structure with verified objects and a comparison against requested settings | Partial creation, rejected settings and changed defaults are individually reported |
 | Launch or change advertising | Reviewed target objects and exact proposed change | Verified external status or budget change | No claim of success on tool acknowledgement alone; ambiguous outcome is surfaced |
@@ -127,9 +136,9 @@ The choice of SQLite, another database or a different durable store belongs to l
 - Local agent such as Codex: the second authenticated machine-client boundary. The local machine is outside the VPS service trust boundary; an authenticated client is not assumed to be uncompromised.
 - Phone emergency control: owner-facing authority independent of both machine clients. The accepted scope is an outbound-effect freeze; authentication, reachability and recovery remain to be designed.
 - Meta Marketing API: advertisement operations on explicitly authorized company assets.
-- Facebook publication APIs: required page identity and permissions remain to be verified separately from advertising permissions.
+- Facebook Page publishing, comments and messaging APIs: required Page identity, supported operations, messaging conditions and permissions remain to be verified separately from advertising permissions.
 - WhatsApp Business Platform: message delivery and inbound events; working-number onboarding and phone/API coexistence remain unresolved.
-- Existing website: neighbouring production workload, not part of the marketing service's writable data.
+- Existing website: neighbouring production workload and source of selected authored/published articles. Article authorship and site deployment continue through the existing site workflow; the marketing service does not acquire arbitrary website-file or deployment access from the article-to-Facebook requirement.
 - GitHub: source and review history. This specification repository is public; actual customer data, credentials and private operational evidence are not project files.
 - VPS provider and domain/DNS provider: infrastructure and recovery boundaries; account access is not implied by GitHub access.
 - Optional later systems: Instagram account maintenance, Reddit and an external CRM are not first-version commitments. Integration extensibility is accepted; selection of those integrations remains separate.
@@ -157,7 +166,7 @@ The common behaviour that integrations must preserve and their exact contracts a
 ### Owner and assistant authority
 
 Only the owner may connect integrations, approve updates or change access permissions. The ChatGPT and local-agent clients cannot expand their own authority.
-Only an authenticated owner may authorize the product's external changes.
+Only an authenticated owner may grant the machine clients their preparation scope or command protected external actions. Preparation inside an existing grant is not a new approval request for each step; sending, publishing, advertising activation and budget changes require the owner's explicit command.
 Assistant proposals and customer messages are not grants of authority.
 Permission to deploy code, read conversations, send a reply and change advertising are separate authorities.
 The mechanism and lifecycle of approval are not yet designed.
@@ -247,8 +256,8 @@ Logs must support diagnosis without becoming an uncontrolled copy of conversatio
 
 ## 9. Open questions
 
-1. Product acceptance: does the owner accept the proposed first-version boundaries, including reviewed sending and separate advertising activation?
-2. First-release channel scope: which company Facebook Page actions (posts, comments, inbox) and assets are required? Instagram maintenance is a possible later integration unless separately selected; extensibility does not settle this scope.
+1. Action-authority implementation: preparation is free within granted scope; sending, publishing, advertising activation and budget changes are owner-commanded. Determine how a specific command is authenticated and bound to its target/content, and when a changed proposal requires a new command. These are enforcement details, not an unresolved choice of approval policy.
+2. Facebook assets and access: posts, comments and company-Page private messages are in scope, including adapting a website article for Facebook. Identify the exact authorized Page/assets and verify the supported API operations and permissions. Instagram maintenance remains a possible later integration unless separately selected.
 3. Meta access: does a suitable developer app exist, which permissions are available, and which company assets can it use?
 4. WhatsApp onboarding: is official phone/API coexistence available for this business and number, directly or through a provider? What remains usable on the phone?
 5. Customer photographs: which image forms and sizes are supported, how are originals accessed, and what retention applies? Text/photos versus voice scope is settled: photographs are included; voice messages stay on the phone without automatic transcription.
@@ -256,7 +265,7 @@ Logs must support diagnosis without becoming an uncontrolled copy of conversatio
 7. Infrastructure: actual VPS provider, OS, capacity, existing workloads, listeners, firewall, recovery route, updates, TLS renewal and verified backup coverage?
 8. Client and owner access: separate authentication and revocation for ChatGPT and the local agent; exact permission scopes; how owner decisions discussed in chat become service-verifiable authority; authentication for the phone control? The owner has chosen ChatGPT plus the phone without a separate enquiry dashboard and reserved integration, update and permission administration to the owner.
 9. Operational continuity and emergency recovery: WhatsApp is the selected notification channel; determine the authorized recipient, supported delivery path and behaviour during outages. Distinguish the existing phone application's notifications from notifications sent by the new service. A failed VPS cannot guarantee its own WhatsApp alert, and notifications must not silently bypass the outbound freeze. How is the phone control reached independently of both clients? The stop scope is settled: block outbound effects from both clients, preserve the website and inbound enquiries. Who can resume, does a restart preserve the freeze, and how is unsent or uncertain work reviewed before resumption? An emergency Meta-advertising pause, if wanted, is a separate action.
-10. Advertising authority: allowed assets, budget limits and which later actions may run without a new owner decision?
+10. Advertising preparation bounds: identify allowed assets and approved budget settings for new paused advertising; define what counts as updating an existing budget versus proposing/configuring a new paused draft. Activation and budget changes are owner-commanded; no unattended spending authority has been selected.
 11. Development and deployment: implementation repository, deployment actor, release approval and rollback policy?
 12. Enquiry attribution: what evidence connects a WhatsApp enquiry to a particular advertisement, and how are unknown sources represented without guessing?
 13. Costs: explain the possible recurring costs of infrastructure, backup/monitoring, and Meta API messaging or an onboarding provider. Server-side AI API costs are excluded because the server makes no model-provider calls. Obtain an estimate from actual usage and the chosen route before asking the owner for a spending ceiling. Advertising budget is separate. No paid service, new subscription or spending budget is approved.
