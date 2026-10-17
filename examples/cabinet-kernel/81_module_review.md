@@ -518,6 +518,10 @@ The first verification after the split found the seam between `sandbox` and `san
 
 The second verification after the split found the `--info-fd` report read only at the pipe's end and the pidfd opened unguarded: under the fixture's bubblewrap a busy loop was never killed, and a probe that returned at once failed the kernel's start with `ProcessLookupError`. The report is now taken as soon as it parses, and a vanished init means nothing to kill. It moved `sandbox`, `service_invoker`, `run_values`, `functions`, `bindings`, `flows`, `effects`, `run_graph`, `runs`, `surface`. State 7 rounds 62-63 closed. No verdict changed; hashes recomputed.
 
+## Decision 33 delta (2026-10-18)
+
+Correspondences over enumeration members left `plan_run`, `check_request_shape` and `prepare_request` prose for four `data_provider_backend` version 2 tables, each keyed by an enumeration and total over its members, with the new `NodeConclusion` and four row models. It moved `models`, `data_provider`, `service_invoker`, `run_graph`. Reviewed against the Factory's own local specs: `run_graph` receives `StatusConclusion`, `ConclusionEffect`, `WaitReasonRestingStatus` and `NodeConclusion` with their fields and no longer imports `clock`; `service_invoker` receives `HttpMethodBody`. State 7 rounds 64-65 found two wordings of decision 33 — a NodeConclusion taken for an ElementConclusion, and an ElementFailed read through the status table against A11 rule 3 — both repaired; rounds 66-67 closed. No verdict changed; hashes recomputed. The review packet does not show the row models a provider symbol's type names, as it omits union variants (tool defect 3); the Factory slice does.
+
 ## Remarks, not blocking
 
 - **Published `inputSchema` and null.** By decision 22's closed rule, the published `inputSchema`
