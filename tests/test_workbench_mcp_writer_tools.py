@@ -106,3 +106,35 @@ def test_draft_check_sees_a_diverged_copy_whatever_the_module_order(case):
 def test_draft_check_refuses_a_text_that_is_no_one_note(case, text):
     with pytest.raises(ValueError):
         service.check_note_draft(case, text)
+
+
+def test_spec_standard_reads_the_copy_on_the_cases_ref(tmp_path, monkeypatch):
+    from notes_authoring import standard
+
+    repo = tmp_path / "repo"
+    case = repo / "examples" / "demo"
+    case.mkdir(parents=True)
+    skill = repo / standard.SKILL
+    skill.mkdir(parents=True)
+    (skill / standard.STANDARD).write_text("# S\n\n## 2. notes\n\nOn this ref.\n", encoding="utf-8")
+    (skill / standard.INDEX).write_text("# I\n", encoding="utf-8")
+    assert service.spec_standard(case, "§2")["text"] == "## 2. notes\n\nOn this ref."
+    assert service.spec_standard(case)["sections"] == [{"section": "2", "title": "2. notes", "level": 2, "lines": 3}]
+
+
+def test_module_slice_names_the_module_and_refuses_an_unknown_one(case, monkeypatch):
+    from notes_workbench import service as notes_service
+
+    monkeypatch.setattr(notes_service, "module_slice", lambda project, module: {"responsibility": "stores rows"})
+    answer = service.module_slice(case, "store")
+    assert answer["callables"] == {"load_rows": "(limit: int) -> list[Row]"}
+    assert answer["models_named"] == {"Row": {"fields": ["row_id"]}}
+    assert answer["design"]["responsibility"] == "stores rows"
+    with pytest.raises(ValueError):
+        service.module_slice(case, "nowhere")
+
+
+@pytest.mark.parametrize("address", ["models.Status", "PAGE_MAX", "rules.x", "= foo.bar", "= models.X.", "= models.X for rows"])
+def test_an_address_the_resolver_does_not_check_is_refused_with_the_forms(case, address):
+    with pytest.raises(ValueError, match="'= models.X' and 'the imported X constant'"):
+        service.resolve_address(case, address)

@@ -191,17 +191,31 @@ def test_notes_and_requests_together_are_refused(case, factory):
 
 # ── the agent's task ─────────────────────────────────────────────────────
 
-def test_the_task_carries_the_input_and_the_standard_not_the_values(case):
-    slice_payload = {"responsibility": "keeps rows", "capabilities": [], "flows": [], "public_operations": [], "obligations": []}
-    from notes_workbench import language
-
-    text = prompt.build(case, "store", SPEC, slice_payload, language.authored_notes(case))
-    assert '"load_rows": "(limit: int) -> list[Row]"' in text
-    assert '"Row": {' in text and '"Status": {' in text
-    assert "load_rows: [BEHAVIOR] MUST return rows in store order." in text
-    assert "### 15.11 " in text and "## 2. notes" in text
-    assert "200" not in text  # the value reaches the agent only through find_value_homes
+def test_the_task_is_navigation_and_restates_no_rule(case):
+    text = prompt.build(case, "store", SPEC)
+    # where the rules are, and the tools that read the rules, the module and the data
+    for tool in ("spec_standard", "module_slice", "module_notes", "find_value_homes",
+                 "resolve_data_address", "find_absence", "check_note_draft"):
+        assert f"`{tool}(" in text or f"`{tool}`" in text
+    assert "§2" in text and "§15" in text
+    # no copy of the standard, no module content, no value
+    assert "## 2. notes" not in text and "### 15." not in text
+    assert "load_rows" not in text and "list[Row]" not in text
+    assert "200" not in text
     assert prompt.RESULT_SCHEMA in text and request.SCHEMA in text
+
+
+def test_the_module_slice_carries_the_module_not_the_values(case):
+    from notes_authoring import brief
+
+    slice_payload = {"responsibility": "keeps rows", "capabilities": [], "flows": [], "public_operations": [], "obligations": []}
+    payload = brief.build(case, "store", SPEC, slice_payload)
+    assert payload["callables"] == {"load_rows": "(limit: int) -> list[Row]", "save_row": "(row: Row) -> Status"}
+    assert payload["other_symbols"] == []
+    assert payload["models_named"] == {"Row": {"fields": ["row_id"]}, "Status": {"enum_members": ["open", "closed"]}}
+    assert payload["design"]["responsibility"] == "keeps rows"
+    assert payload["open_structure_requests"] == []
+    assert "200" not in json.dumps(payload)
 
 
 def test_the_same_notes_handed_in_again_leave_the_file_byte_for_byte(case, factory):
@@ -263,3 +277,12 @@ def test_line_endings_and_the_final_newline_are_kept(case, factory, ending, fina
     notes = ["load_rows: [BEHAVIOR] MUST return rows in store order.", "save_row: [BEHAVIOR] MUST store the row."]
     assert run(case, factory, result(notes))["status"] == "written"
     assert (case / "80_notes.md").read_bytes() == body.encode("utf-8")
+
+
+def test_the_cli_refuses_a_task_for_a_module_the_case_does_not_have(case, capsys):
+    import design_notes
+
+    assert design_notes.main([str(case), "--module", "nowhere", "--author-prompt"]) == 2
+    assert "unknown module: nowhere" in capsys.readouterr().err
+    assert design_notes.main([str(case), "--module", "store", "--author-prompt"]) == 0
+    assert "module `store`" in capsys.readouterr().out
