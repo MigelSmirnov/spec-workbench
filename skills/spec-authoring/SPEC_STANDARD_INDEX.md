@@ -98,10 +98,12 @@ predicate или method shape не замкнуты, diagnostic emitter возв
 Порядок authoring фиксирует [AUTHORING_SEQUENCE.md](AUTHORING_SEQUENCE.md).
 
 - `persistence_backend/v2` — SQLite-only: `engine=sqlite`, emitter
-  `sqlite_sync_v2`. `persistence_backend/v3` добавляет `engine=postgres` с
-  emitter `postgres_sync_v1`, владение транзакцией (`transaction: owned`),
-  вид метода `lock` и bind-ы `argument_set`/`optional_argument`. Форма
-  таблиц и запросов не меняется.
+  `sqlite_sync_v2`. `persistence_backend/v3` добавляет ровно семь вещей
+  (§6.3): `engine=postgres` с emitter `postgres_sync_v1`, владение
+  транзакцией (`transaction: owned`), вид метода `lock`, bind-ы
+  `argument_set`/`optional_argument`, формы хранения `json_model`/`json_value`,
+  `path` в фильтрах и `unique`, виды запросов `upsert_many` и `list_all`.
+  Форма таблиц, колонок, агрегатов и конвенций не меняется.
 - Полный backend IR contract-dependent: его нельзя помещать в pre-contract
   `60_data_closure.json`.
 - После готового State 6 создай `70_persistence_closure.json`; его `backend_ir`
