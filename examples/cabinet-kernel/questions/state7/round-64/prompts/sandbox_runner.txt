@@ -1,0 +1,135 @@
+Module: sandbox_runner
+Target path: cabinet_kernel/sandbox_runner.py
+Target file: sandbox_runner.py
+
+IMPORTS:
+from cabinet_kernel.data_provider import RELEASE_CEILING_SANDBOX_SCRATCH_BYTES_MAX, SANDBOX_ENVIRONMENT, SANDBOX_RUNTIME_PATHS, SANDBOX_TRAPPED_CLASS, SANDBOX_TRAPPED_FUNCTIONS, SANDBOX_TRAPPED_WITHOUT_ARGUMENT, SANDBOX_UNSEEDED_CONSTRUCTOR
+from cabinet_kernel.models import Actor, ActorKind, Cardinality, Carriage, DisclosureClass, FileFacts, FileFactsRef, Implementation, KernelInstant, PinnedImplementation, Port, PortDirection, PortRef, ResourceBounds, Resumption, ReturnedForm, ReturnedOutput, Run, RunStatus, RunnerInput, RunnerLaunch, RunnerReport, RunnerReturn, SpooledFile, SpooledFileKey, SpooledFilesRef, StoredValue, StoredValuesRef, WaitReason, WaitingPoint
+
+CONTRACTS (function signatures — follow exactly):
+def read_runner_report(message: bytes) -> RunnerReport
+def runner_arguments(launch: RunnerLaunch) -> tuple[str, str]
+def runner_source() -> str
+
+IMPORTED DATA ACCESS SIGNATURES (constants from the imports above — read them, never redefine them; their values are not part of this context):
+RELEASE_CEILING_SANDBOX_SCRATCH_BYTES_MAX: int
+SANDBOX_ENVIRONMENT: Mapping[str, str]
+SANDBOX_RUNTIME_PATHS: tuple[str, ...]
+SANDBOX_TRAPPED_CLASS: str
+SANDBOX_TRAPPED_FUNCTIONS: tuple[str, ...]
+SANDBOX_TRAPPED_WITHOUT_ARGUMENT: tuple[str, ...]
+SANDBOX_UNSEEDED_CONSTRUCTOR: str
+
+OWNED FUNCTIONS REQUIRED (must be defined as top-level functions):
+- read_runner_report: (message: bytes) -> RunnerReport
+- runner_arguments: (launch: RunnerLaunch) -> tuple[str, str]
+- runner_source: () -> str
+
+STATIC GATE CONTRACT (deterministic checks; a violating candidate is rejected without repair):
+- Reflective attribute access is rejected: never call getattr, hasattr,
+  setattr, delattr, or vars; every declared field and operation is
+  addressed directly by name, including in try/finally cleanup.
+- A definition whose parameter list differs from its declared contract
+  signature is rejected; keep names and order exactly.
+- A constructed record accepted by a declared insert_*/upsert_*/append_*
+  operation must reach a call or return; a built-and-dropped record is
+  rejected.
+- Instantiating a spec-declared interface is rejected; construct the
+  module-owned concrete class instead.
+- A stub, placeholder, or fail-closed body for a contracted callable is
+  rejected; implement the complete specified behavior.
+- A top-level import of a package outside the Python standard library and
+  this project's own modules is rejected unless IMPORTS lists it; a note
+  never adds a package to IMPORTS.
+- A model is constructed with values of its declared field types; a field
+  typed tuple[...] receives a tuple, built with tuple(...) where the items
+  were collected in a list, never the list itself.
+
+OWNED CLASSES REQUIRED (must be defined locally, not merely referenced):
+No owned local classes required.
+
+CONCRETE IMPLEMENTATION OBLIGATIONS:
+No local concrete-to-interface obligations.
+
+REQUIREMENTS (notes — implement these):
+- read_runner_report: [BEHAVIOR] The program writes each message as one line of UTF-8 JSON ended by a newline, an object whose kind is trap (with the trapped name), resource, crashed (with failure, the exception's type and message or null) or returned (with is_dict and outputs, each port, form, json_text and contents, the bytes base64-encoded). read_runner_report MUST decode the lines in order: trap names in the order written, resource_hit true when any resource line is present, crashed and failure from a crashed line, returned only from one complete returned line; a line that is not complete JSON of a known kind, the last line cut short included, ends the decoding and what follows is ignored.
+- read_runner_report: [RETURN_SHAPE] Returns RunnerReport with trap_hits, resource_hit, crashed, failure and returned (None when no complete returned line was read), each ReturnedOutput's json_text set only for form json and contents holding the file's bytes, or the list's in order, only for file and file_list.
+- runner_arguments: [BEHAVIOR] MUST return exactly two arguments: the decimal number launch.channel_fd, the descriptor the program writes every message to, which is the parent's own pipe end inherited at that number; and one JSON text with the members exchange_directory, code_file, inputs (each port, carriage, cardinality and files), output_ports (each name, carriage and cardinality), and memory_bytes, process_count and output_bytes of launch.bounds; its member file_size_limit is the imported RELEASE_CEILING_SANDBOX_SCRATCH_BYTES_MAX constant; its member environment is the imported SANDBOX_ENVIRONMENT constant; its member readable_paths is the imported SANDBOX_RUNTIME_PATHS constant; its member raise_on_call is the imported SANDBOX_TRAPPED_FUNCTIONS constant; its member raise_without_argument is the imported SANDBOX_TRAPPED_WITHOUT_ARGUMENT constant; its member raise_on_every_method is the imported SANDBOX_TRAPPED_CLASS constant; its member raise_unseeded is the imported SANDBOX_UNSEEDED_CONSTRUCTOR constant; the program reads exactly these two arguments after its own path.
+- runner_source: [SECURITY_BOUNDARY] MUST return the text of one self-contained Python program for the release interpreter that imports only the standard library and nothing of the kernel's package; the program takes every fact of one execution from its command line as runner_arguments builds it, so the text is the same for every execution and holds no list, bound, path or descriptor number of its own. setattr appears only in this text, which the static gates do not read; the module's own code calls none of setattr, getattr, hasattr, delattr and vars.
+- runner_source: [BEHAVIOR] The program runs as the interpreter's script, so it MUST read the descriptor number it writes to from sys.argv[1] and its configuration from the JSON text in sys.argv[2], the two runner_arguments in their order.
+- runner_source: [BEHAVIOR] The program MUST, before it loads the code, set os.environ to exactly the environment its configuration carries (clear, then update) — bubblewrap adds PWD and the interpreter's C-locale coercion a locale variable —, ignore SIGXFSZ, and set every setrlimit limit inside the sandbox's user namespace, soft and hard to the same value: address space at memory_bytes, the size of a file written in the scratch at file_size_limit, so a write past it raises OSError with errno EFBIG, the only scratch hit, the directory as a whole having no separate bound, and the number of processes at process_count + 1, an outer bound kept above the audit hook's exact count; a limit it cannot set — an earlier contract version's larger bounds (A20 rule 4) included, where the host refuses them — makes it exit with status 1 before it loads the code.
+- runner_source: [BEHAVIOR] The program MUST, before it loads the code, replace every entry point named in raise_on_call with one that raises, those in raise_without_argument with ones that raise when called without an argument, every method of the class named by raise_on_every_method, and the class named by raise_unseeded when constructed without a seed or with None, and that class's seed method when called on an instance without a seed or with None (A03 rule 4: an explicitly seeded instance draws no entropy and stays usable); and install an audit hook that raises on socket, subprocess and ctypes use and on opening any path outside the exchange directory and the readable_paths. Each trap first writes its hit to the channel, which the code cannot unsend. A replacement is installed in one of two ways, chosen for every path of every list by the object the path names before its last dot: when that object is a class (isinstance of type) — datetime.datetime.now, datetime.datetime.utcnow, datetime.datetime.today and datetime.date.today, and the trapped class's methods — the method is trapped as a method, otherwise the module attribute is; an attribute of a module is replaced with setattr on that module; a method of a class or of a built-in type is replaced by setting, on the class's module, the class's name to a subclass that defines the trapping method, since the __dict__ of a type is read-only and is never written.
+- runner_source: [BEHAVIOR] process_count bounds the code's tasks alive at once: the main thread counts as the first, every live thread and every process forked with os.fork counts with its threads, bubblewrap's own processes do not count. Process creation other than os.fork — subprocess, os.system, os.posix_spawn, os.posix_spawnp and the os.exec family — is subprocess use and raises in the audit hook as a trap hit (A03 rule 4). On os.fork and on starting a thread the audit hook counts the tasks of the environment's proc and, when the new task would exceed process_count, writes a resource hit to the channel and raises, so the execution concludes resource_exhausted even when the code catches the error; a creation the outer limit refuses is reported the same way (A03 required test 2).
+- runner_source: [BEHAVIOR] The program MUST load the code file as a module and call its top-level run once with a dict holding one entry per input port, read from the files its configuration names: a value port has exactly one file, its JSON decoded to Python — for cardinality many that file holds the JSON array, which decodes to the list itself and is never wrapped in another —; a file port of cardinality one its one file's bytes; a file port of cardinality many a list of its files' bytes in order; it writes a crashed message, with the type and message of the exception when one escaped, when the module fails to load, has no run, or run raises. A MemoryError, or an OSError with errno EFBIG for a file past the file-size limit, that escaped run is written as a resource hit with that type and message, while ENOSPC or EDQUOT from exhausted host storage is an ordinary raised error; code that catches such an error and returns is judged by what it returned.
+- runner_source: [BEHAVIOR] When run returned, the program MUST write one returned message: whether the value is a dict with only str keys and, for each key, its form — json for a value port whose value json.dumps accepts with sort_keys=True, separators (',', ':'), ensure_ascii=False and allow_nan=False (for a many value port, a list), file for a file port whose value is bytes, file_list for a many file port whose value is a list of bytes, not_representable otherwise and for a key that is no output port. Before it builds that message it MUST pre-count the representable outputs against output_bytes — each value output as the UTF-8 bytes of that json.dumps, each file as its bytes — and when the pre-count exceeds output_bytes write a resource hit and no outputs; a MemoryError while it pre-counts, encodes or writes the outputs is a resource hit too, so an output too large to send concludes resource_exhausted rather than crashed. It writes nothing to standard output or standard error.
+
+MODEL DATA DEFINITIONS (READ-ONLY SPEC DATA, NOT CODE):
+No = models.* spec data addresses referenced by notes.
+
+MODEL DATA ADDRESSES (SPEC DATA, NOT IMPORT PATHS):
+No = models.* spec data addresses referenced by notes.
+
+IMPORTED MODEL OWNERSHIP (DO NOT REDEFINE):
+Imported runtime model symbols are owned by their source modules listed in IMPORTS; use them as imported and do not redefine them here.
+
+RUNTIME MODEL SURFACE (CORE.MODELS IMPORTS):
+These are imported runtime symbols from cabinet_kernel.models. Use the listed enum member names and model fields exactly.
+- Actor fields (exact, no others exist): agent_name: str | None, kind: ActorKind
+- ActorKind enum members: AGENT='agent', KERNEL='kernel', OWNER='owner'
+- Cardinality enum members: MANY='many', ONE='one'
+- Carriage enum members: FILE='file', VALUE='value'
+- DisclosureClass enum members: BUSINESS_CONFIDENTIAL='business_confidential', OPEN='open', PERSONAL_DATA='personal_data'
+- FileFacts fields (exact, no others exist): content_digest: str, media_type: str, size_bytes: int
+- FileFactsRef fields (exact, no others exist): disclosure_class: DisclosureClass, files: tuple[FileFacts, ...], port: str, ref_kind: Literal['file_facts']
+- Implementation fields (exact, no others exist): code: str, contract_version_id: str, implementation_id: str, submitted_at: KernelInstant, submitted_by: Actor
+- KernelInstant fields (exact, no others exist): epoch_us: int
+- PinnedImplementation fields (exact, no others exist): implementation_id: str, node_id: str
+- Port fields (exact, no others exist): cardinality: Cardinality, carriage: Carriage, direction: PortDirection, disclosure_class: DisclosureClass | None, media_type: str | None, name: str, value_schema: str
+- PortDirection enum members: INPUT='input', OUTPUT='output'
+- PortRef: imported runtime symbol; no local surface details available.
+- ResourceBounds fields (exact, no others exist): memory_bytes: int, output_bytes: int, process_count: int, wall_time_ms: int
+- Resumption fields (exact, no others exist): resumed_at: KernelInstant, resumed_by: Actor
+- ReturnedForm enum members: FILE='file', FILE_LIST='file_list', JSON='json', NOT_REPRESENTABLE='not_representable'
+- ReturnedOutput fields (exact, no others exist): contents: tuple[bytes, ...], form: ReturnedForm, json_text: str | None, port: str
+- Run fields (exact, no others exist): cancelled_by: Actor | None, ended_at: KernelInstant | None, flow_version_id: str, inputs: tuple[PortRef, ...], outputs: tuple[PortRef, ...], pinned_implementations: tuple[PinnedImplementation, ...], released_at: KernelInstant | None, released_by: Actor | None, resumptions: tuple[Resumption, ...], run_id: str, started_at: KernelInstant, started_by: Actor, status: RunStatus, waiting: tuple[WaitingPoint, ...]
+- RunStatus enum members: AWAITING_APPROVAL='awaiting_approval', CANCELLED='cancelled', FAILED='failed', PENDING='pending', REFUSED='refused', RUNNING='running', SUCCEEDED='succeeded'
+- RunnerInput fields (exact, no others exist): cardinality: Cardinality, carriage: Carriage, files: tuple[str, ...], port: str
+- RunnerLaunch fields (exact, no others exist): bounds: ResourceBounds, channel_fd: int, code_file: str, exchange_directory: str, inputs: tuple[RunnerInput, ...], output_ports: tuple[Port, ...]
+- RunnerReport fields (exact, no others exist): crashed: bool, failure: str | None, resource_hit: bool, returned: RunnerReturn | None, trap_hits: tuple[str, ...]
+- RunnerReturn fields (exact, no others exist): is_dict: bool, outputs: tuple[ReturnedOutput, ...]
+- SpooledFile fields (exact, no others exist): attempt_number: int, content_digest: str, disclosure_class: DisclosureClass, list_index: int | None, map_index: int | None, media_type: str, producer_node_id: str, producer_port: str, run_id: str, size_bytes: int
+- SpooledFileKey fields (exact, no others exist): attempt_number: int, list_index: int | None, map_index: int | None, producer_node_id: str, producer_port: str, run_id: str
+- SpooledFilesRef fields (exact, no others exist): disclosure_class: DisclosureClass, files: tuple[SpooledFileKey, ...], port: str, ref_kind: Literal['spooled_files']
+- StoredValue fields (exact, no others exist): carriage: Carriage, disclosure_class: DisclosureClass, media_type: str | None, size_bytes: int, value_digest: str, value_id: str, value_schema: str
+- StoredValuesRef fields (exact, no others exist): port: str, ref_kind: Literal['stored_values'], value_id: str
+- WaitReason enum members: OUTCOME_UNKNOWN='outcome_unknown', OWNER_APPROVAL='owner_approval', SERVICE_UNREACHABLE='service_unreachable'
+- WaitingPoint fields (exact, no others exist): map_index: int | None, node_id: str, reason: WaitReason
+
+MODULE-LOCAL EXCEPTION EXPORTS:
+If any exception class is listed here, define it in this file at top level.
+Do not import these classes from core.errors or any other module.
+No module-local exception exports required.
+
+FUNCTION ORDER (define in this order):
+read_runner_report, runner_arguments, runner_source
+
+MODELS CONTEXT:
+Runtime models live in cabinet_kernel.models. Use IMPORTS and IMPORTED MODEL
+OWNERSHIP for runtime model symbols; do not reproduce model schemas
+or import from a top-level models module.
+
+Generate the complete sandbox_runner.py file.
+Every owned function listed above must be implemented exactly once at module top level.
+Define every class and method listed in OWNED CLASSES REQUIRED in this file.
+For every local binding in CONCRETE IMPLEMENTATION OBLIGATIONS, inherit the declared interface and implement its complete method surface with non-placeholder bodies.
+If this is the models module, emit every enum/model in MODEL DEFINITIONS exactly once.
+If this is not the models module, do not emit Pydantic model classes, enums, create_model calls, or local model schema shadows.
+Do not invent model fields or enum values not present in the imported runtime models.
+Use only the IMPORTS listed above plus required standard library imports.
+Never import from a top-level models module or models.*; runtime models live in cabinet_kernel.models only when listed in IMPORTS.
+`models.<name>` in notes is a canonical spec data address, not an importable Python module.
+When one owner module provides a function and cabinet_kernel.models provides a DTO with a similar name, split the imports by source exactly as listed in IMPORTS.
+Construct imported runtime models only with the fields listed in IMPORTED MODEL SURFACE; models are frozen and forbid extra fields, so an invented keyword argument fails at runtime.
+Read from a model value only the fields listed for its type; never use getattr(value, name, default) to probe for a field that is not declared.
+Never assign to an attribute of a model value (models are frozen): derive a changed value with value.model_copy(update={...}) or construct a new instance.
+Define every class listed in MODULE-LOCAL EXCEPTION EXPORTS in this file.
