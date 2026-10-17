@@ -386,7 +386,9 @@ members of such an enumeration — the conclusion each NodeExecution status give
 dependants (A13 rules 5 and 7), the status a run rests in for each wait reason
 (A13 rule 8), whether an HTTP method carries a body (A09 rule 2) — is a
 correspondence over that taxonomy (SPEC_STANDARD 15.2): a table here keyed by
-the enumeration, total over its members, whose cells name members.
+the enumeration, total over its members, whose cells name members. The rules
+that read these tables stay their owners': A13's are `run_graph`'s, A09's
+`service_invoker`'s; this module holds only the values.
 
 ### Knows
 
