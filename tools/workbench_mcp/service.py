@@ -18,6 +18,7 @@ on someone's working checkout. Pure case-level functions take a materialized
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -321,9 +322,17 @@ def _surface(case_root: Path) -> dict[str, Any]:
     return projected_spec(case_root)
 
 
+_NOTE_ADDRESS_FORM_RE = re.compile(r"=\s*\S+|the imported [A-Za-z_][A-Za-z0-9_]* constant")
+
+
 def resolve_address(case_root: Path, address: str, factory_root: Path | None = None) -> dict[str, Any]:
     """M1: is one address, written as in a note, a legal node — the Factory's verdict."""
     from notes_workbench import factory_addresses
+
+    if not _NOTE_ADDRESS_FORM_RE.fullmatch(address.strip()):
+        # the Factory resolver refuses it as input, not as a verdict; say how to write it
+        raise ValueError(f"{address!r} is not written as in a note: "
+                         "'= models.X' or 'the imported X constant'")
 
     report = factory_addresses.run_resolver(_surface(case_root), [address], factory_root)
     return {
