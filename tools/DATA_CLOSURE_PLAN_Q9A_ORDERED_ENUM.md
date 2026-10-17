@@ -13,6 +13,8 @@
 - Cabinet Kernel `origin/agent/cabinet-kernel` @ `b3bee2e`.
 
 Все ссылки `файл:строка` даны по этим ревизиям.
+После Gate Registry PR 5 (Factory `b65bbca`) номера строк в
+`tools/draft_static_gates.py` сдвинулись; для него в скобках указан текущий символ.
 
 ### Утверждённый контракт
 
@@ -50,7 +52,7 @@
    | `tools/bootstrap_project.py` | `:65`, `:96–98` |
    | `tools/build_local_spec.py` | `:1141–1143` |
    | `tools/data_code_seam.py` | `:129`, `:157`, `:165`, `:226`, `:264` |
-   | `tools/draft_static_gates.py` | `:3122` |
+   | `tools/draft_static_gates.py` | `:3122` (сейчас — проверка версии в `inspect_naive_datetime_now`) |
    | `run_generate.py` | `:363–370` |
    | `rebuild_module.py` | `:1528`, `:1544` |
    | `experimental/factory_mcp/factory_state.py` | `:235–276` |
@@ -138,7 +140,7 @@ v2 → v3 у проекта — это новая принятая спека, �
 | `tools/generate_models_draft.py` | `structured_enum_members` (`:232–247`) | При `ordered` формы `members` и `member_names`-словарь недостижимы (отвергнуты валидатором). Для страховки — `ValueError`. |
 | `tools/generate_agent.py` | `build_runtime_model_surface_block` (`:422–466`) | Для `ordered` enum в **обоих** путях (`:440–443` и `:464–466`) выводить одну и ту же строку: члены в порядке `values` и пометку «ordered, lowest → highest; compare with `.rank()`, never with `<`, `max`, `min` or `sorted` on members». Для неупорядоченных enum не менять ничего: v2-промпты остаются побайтно прежними. |
 | `tools/generate_agent.py` | `_parse_runtime_model_surface` (`:343–383`) | Без изменений. Если строку ordered строить из спеки, порядок членов из кода не нужен. |
-| `tools/draft_static_gates.py` | Новый gate рядом с проверкой версии (`:3122`) | Рекомендуется: в коде LLM-модуля сравнение членов упорядоченного enum через `<`, `>`, `max`, `min`, `sorted` без `key=…rank` — BLOCK. |
+| `tools/draft_static_gates.py` | Новый gate рядом с проверкой версии (`:3122`; сейчас gate — `inspect_ordered_enum_comparisons`, строка `ordered_enum_comparisons` в `tools/gates/draft_static_table.py`) | Рекомендуется: в коде LLM-модуля сравнение членов упорядоченного enum через `<`, `>`, `max`, `min`, `sorted` без `key=…rank` — BLOCK. |
 | Гейты версии (§1.1, п. 4) | Все места | Заменить `== 2` / `!= 2` на принадлежность константе. Для lineage — «все переходы одной версии». |
 | `tools/bootstrap_project.py` | `:65` | Новый проект по-прежнему создаётся в v2. v3 — осознанный переход. |
 | `patch_ops.py` | `_op_set_standard_version` (`:169`) | Принимать 3. Это путь миграции проекта, если он идёт через Factory. |
