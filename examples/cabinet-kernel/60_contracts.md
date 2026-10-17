@@ -1256,8 +1256,78 @@ item names the module, the witnesses, what the text said and what it says now.
         `kernel_a03_outcome_precedence_order` and every witness that starts
         or restarts the kernel.
 
+## Decision closed by the data-closure tables (2026-10-18)
+
+The live run of the State 7 notes writer on `run_graph` (2026-10-17) found
+`plan_run` holding correspondences over enumeration members as prose — "succeeded
+concludes succeeded, contract_violation … crashed conclude failed" — and stopped
+with four structure requests: the statuses that conclude an element failed, the
+node conclusions that let a run succeed, those that make dependants
+`upstream_failed`, and the status a run rests in for each wait reason. The same
+form stands in `prepare_request` and `check_request_shape` ("for POST, PUT and
+PATCH", "for GET and DELETE"). SPEC_STANDARD §2 and §15.2 (Workbench decisions
+Q9-b and Q9-c, homes corrected by the owner on 2026-10-17) give each the one home
+code can read: a `data_provider_backend` version 2 `record_tuple` keyed by the
+enumeration and total over its members.
+
+33. **Correspondences over enumeration members are provider tables.**
+    The owner decided on 2026-10-18: a new enumeration of node conclusions;
+    the status table covers all thirteen statuses and is total; the run's and
+    the dependants' readings of a conclusion are one table.
+    - `NodeConclusion` (`60_model_closure_domain.json`): `succeeded`,
+      `failed`, `waiting`, `refused`, `skipped_by_guard`, `upstream_failed` —
+      what an element or a node has concluded (A13 rules 5 and 7). Not
+      reached is no conclusion and is not a member. `ElementConclusion` stays
+      the union `effects` answers; its discriminator is the variant, not this
+      taxonomy.
+    - `EXECUTION_STATUS_CONCLUSIONS` (row `StatusConclusion`, key `status`,
+      total): every NodeExecutionStatus with its NodeConclusion. The seven
+      failures of A13 rule 5 conclude `failed`; `service_unreachable` and
+      `outcome_unknown` are waits (A13 rule 5), an unresolved one concluding
+      `waiting` and a resolved one as A11 rule 3 says; `refused_by_owner`
+      concludes `refused`, which makes the run `refused` (A10); a
+      `skipped_by_guard` or `upstream_failed` record concludes so. An
+      operation element is still judged by `operation_element_conclusion`
+      alone (A13 rule 7); the table is the reading of a status, not a second
+      judgment of the operation.
+    - `NODE_CONCLUSION_EFFECTS` (row `ConclusionEffect`, key `conclusion`,
+      total): `lets_run_succeed` — a run that ends without waits succeeds
+      when every node's conclusion has it (A13 rule 7: `succeeded`,
+      `skipped_by_guard`); `fails_dependants` — a node with an input from a
+      node whose conclusion has it concludes `upstream_failed` (A13 rule 5:
+      `failed`, `upstream_failed`). One table, because both readings are
+      asked of every new conclusion together; `waiting` and `refused` have
+      neither, since a waiting node's dependants wait and a refused run
+      derives nothing.
+    - `WAIT_REASON_RESTING_STATUSES` (row `WaitReasonRestingStatus`, key
+      `reason`, total): every WaitReason with the RunStatus a run rests in
+      while an element waits for it (A13 rule 8). That `awaiting_approval`
+      wins over `pending` when elements wait for different reasons stays a
+      rule of `plan_run`'s notes, naming the two members.
+    - `HTTP_METHOD_BODIES` (row `HttpMethodBody`, key `method`, total): every
+      HttpMethod and whether its request carries the inputs not used in the
+      path as a body (A09 rule 2); without one they become query parameters.
+    - `data_provider` knows `models`; `run_graph` knows `data_provider`;
+      `service_invoker` already did. The notes that stated these
+      correspondences in prose — `plan_run`, `check_request_shape`,
+      `prepare_request` — now name the imported constants and the row field
+      each reads.
+    - Not changed, and why. A flow endpoint stays the empty `from_node` /
+      `to_node` of M15 (A05 rule 2): it is the form of FlowEdge, not a value
+      code chooses, and a provider `string` is non-empty by §6.10. `plan_run`
+      reads no clock (State 3, `run_graph` knows no clock); its note's clause
+      on where `runs` takes `now` is `runs`' rule and leaves `run_graph`'s
+      text, so `clock` does not become an import of `run_graph` (§7).
+
 ## Texts of earlier states changed by State 6
 
+- State 1 (2026-10-18, decision 33): the enumeration `NodeConclusion` and the
+  row models `StatusConclusion`, `ConclusionEffect`, `WaitReasonRestingStatus`
+  and `HttpMethodBody`. Reopens the rounds of State 1.
+- State 3 (2026-10-18, decision 33): `data_provider` owns the correspondences
+  over enumeration members and knows `models`; `run_graph` knows
+  `data_provider`; `30_trace.json` names `data_provider` a consumer of A13.
+  Reopens the rounds of States 3–5.
 - State 2 (2026-10-11, decision 30 item 2): A03 rule 5 — the process count
   and every other `setrlimit` limit are set by the runner inside the
   environment's user namespace before the code loads, the process count at

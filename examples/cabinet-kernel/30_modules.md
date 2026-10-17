@@ -376,15 +376,21 @@ standard-library entry points of A03 rule 4 and the sandbox environment of A03
 rule 1; the minimum token length of A16 rule 1; the instance classes that allow
 plain `http` and the class an absent or unknown one counts as (A09 rule 4); the
 headers the kernel sets itself and the one of them an instance may set instead
-(A08 rule 5); the form of a `service_id` and the
-file name suffix of a service record (A08 rule 1). Emitted as module constants
-(SPEC_STANDARD 15.3.1); nothing overrides them. Closed sets that are a
-model's — classes, statuses, HTTP methods — are `models` enumerations, and the
-field names of a manifest record are the fields of its model, not constants.
+(A08 rule 5); the form of a `service_id` and the file name suffix of a service
+record (A08 rule 1). Emitted as module constants (SPEC_STANDARD 15.3.1);
+nothing overrides them. Closed sets that are a model's — classes, statuses,
+HTTP methods — are `models` enumerations, and the field names of a manifest
+record are the fields of its model, not constants. What code reads about the
+members of such an enumeration — the conclusion each NodeExecution status gives
+(A13 rules 5 and 7), what each node conclusion means for the run and for its
+dependants (A13 rules 5 and 7), the status a run rests in for each wait reason
+(A13 rule 8), whether an HTTP method carries a body (A09 rule 2) — is a
+correspondence over that taxonomy (SPEC_STANDARD 15.2): a table here keyed by
+the enumeration, total over its members, whose cells name members.
 
 ### Knows
 
-Nothing.
+`models`: the row models of its tables and the enumerations their cells name.
 
 ### Must not own
 
@@ -413,6 +419,10 @@ KERNEL_SET_HEADER_NAMES
 INSTANCE_SETTABLE_HEADER_NAMES
 SERVICE_ID_PATTERN
 MANIFEST_RECORD_FILE_SUFFIX
+EXECUTION_STATUS_CONCLUSIONS
+NODE_CONCLUSION_EFFECTS
+WAIT_REASON_RESTING_STATUSES
+HTTP_METHOD_BODIES
 ```
 
 ### Depth assessment
@@ -1023,9 +1033,9 @@ and the reason of every missing one.
 
 ### Knows
 
-`models`, `store` (value bytes), `run_values` (mapped lists), `effects` (an
-operation element's conclusion); no clock — the time of a draft is the `now`
-`runs` passes.
+`models`, `data_provider` (conclusion tables), `store` (value bytes),
+`run_values` (mapped lists), `effects` (an operation element's conclusion); no
+clock — the time of a draft is the `now` `runs` passes.
 
 ### Must not own
 
