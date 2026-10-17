@@ -2,7 +2,7 @@
 
 Status: draft for owner review; not accepted or closed.
 Created: 2026-10-17.
-Updated: 2026-10-17 — owner selected text and photos; voice messages remain on the phone.
+Updated: 2026-10-17 — owner selected text/photos, deferred voice processing, and required extensible integrations.
 Project: `vvc-marketing-workspace`.
 Canonical ref: `agent/vvc-marketing-workspace`.
 Owner: Vital Vibe Construction.
@@ -30,6 +30,7 @@ The owner is not confident in Spanish. The environment must support understandin
 - Reddit is a possible later direction; the owner deferred its format and priority.
 - Login to Meta for Developers is currently unavailable to the owner. Whether a suitable Meta app exists is unknown.
 - The owner explicitly requested consideration of VPS requirements and security before implementation.
+- Integration extensibility is required: the architecture must allow separately developed integration modules or adapters (owner decision, 2026-10-17). This decision does not by itself include Instagram or Reddit in the first release.
 
 ### Existing infrastructure evidence; not a current server audit
 
@@ -63,6 +64,7 @@ The owner referred to the server as "OHL" and mentioned DonDominio. Provider, re
 | Owner action | Inputs | Observable result | Failure or uncertainty |
 | --- | --- | --- | --- |
 | Inspect connected assets | Authorized connection and selected company assets | Identified accessible assets and observed permissions | Missing, expired or insufficient access is explicit; no inferred connection |
+| Use a supported integration | Owner-selected, installed integration and authorized external account | Its available actions and required permissions are visible; results identify the integration and account | Missing, disabled, incompatible or unsupported capabilities are reported explicitly; another account or provider is not silently substituted |
 | Prepare a Facebook publication | Owner's brief and permitted company materials | Editable proposed content and selected destination | Missing facts or unsupported media prevent a ready-to-publish claim |
 | Publish approved content | Owner's decision on exact content and destination | External publication identity and verified status | Rejection is shown; an uncertain submission remains uncertain |
 | Prepare Meta advertising | Goal, creative, audience, destination and budget supplied or reviewed by owner | Paused campaign structure with verified objects and a comparison against requested settings | Partial creation, rejected settings and changed defaults are individually reported |
@@ -108,9 +110,24 @@ Exact models, identifiers, status vocabularies, schema fields and retention dura
 - Existing website: neighbouring production workload, not part of the marketing service's writable data.
 - GitHub: source and review history. This specification repository is public; actual customer data, credentials and private operational evidence are not project files.
 - VPS provider and domain/DNS provider: infrastructure and recovery boundaries; account access is not implied by GitHub access.
-- Optional later systems: Reddit, an external CRM and server-side AI inference are not first-version commitments.
+- Optional later systems: Instagram account maintenance, Reddit, an external CRM and server-side AI inference are not first-version commitments. Integration extensibility is accepted; selection of those integrations remains separate.
 
 The VPS receives and stores events while a ChatGPT conversation is closed. That does not itself start a ChatGPT conversation or guarantee that the assistant is continuously running. Notifications and any unattended processing require an explicit product decision.
+
+### Integration extensibility — accepted product requirement
+
+New external services must be introducible through separately developed integration modules or adapters, preserving the product's owner authority, approval history, enquiry context and observable action outcomes.
+The initial concrete integrations remain company Facebook publishing, Meta advertising and WhatsApp Business. They provide the first real cases against which the extension boundary will later be designed.
+
+Each integration has an explicit supported capability scope, external account scope and credential needs. Differences between platforms remain visible: support for publishing does not imply advertising, inbox access, attachments or every action of another platform.
+The product must be able to state that an operation is unavailable, an account lacks permission, or an integration is disconnected. An extension must not invent data or replace an unsupported action with a different external action.
+
+An owner must be able to stop an integration's external actions and see its connection state. What remains readable, how inbound events are treated, and how pending or uncertain actions are handled after disablement must be decided explicitly in States 1–2.
+
+This requirement is not permission to download or execute arbitrary integration code from a customer message or assistant response. Automatic discovery, installation, hot-loading, a public adapter marketplace and arbitrary user-supplied code are not first-version promises.
+How approved integration code is added, versioned, tested and deployed is a later architecture/release decision.
+
+The common behaviour that integrations must preserve and their exact contracts are not designed here. Models and rules come before responsibility boundaries and public APIs; no generic operation/payload abstraction is accepted merely to make an adapter appear universal.
 
 ## 7. State 0 trust boundaries
 
@@ -133,6 +150,7 @@ Exact authentication and allowed public surfaces remain to be selected.
 Meta credentials and asset grants determine which external operations are available.
 Webhook verification, event authenticity, duplicate delivery and external retries require explicit treatment in States 1–2.
 Knowing an account ID or a customer's phone number does not authorize access or sending.
+Integration installation, credential access, owner authorization and external account permissions are separate boundaries. Adding an integration does not inherit another integration's credentials or external-action authority.
 
 ### Customer content and files
 
@@ -181,7 +199,7 @@ Logs must support diagnosis without becoming an uncontrolled copy of conversatio
 ## 9. Open questions
 
 1. Product acceptance: does the owner accept the proposed first-version boundaries, including reviewed sending and separate advertising activation?
-2. Facebook scope: company Page only, or also Instagram, comments, inbox and personal-profile activity? Which exact assets are authorized?
+2. First-release channel scope: which company Facebook Page actions (posts, comments, inbox) and assets are required? Instagram maintenance is a possible later integration unless separately selected; extensibility does not settle this scope.
 3. Meta access: does a suitable developer app exist, which permissions are available, and which company assets can it use?
 4. WhatsApp onboarding: is official phone/API coexistence available for this business and number, directly or through a provider? What remains usable on the phone?
 5. Customer photographs: which image forms and sizes are supported, how are originals accessed, and what retention applies? Text/photos versus voice scope is settled: photographs are included; voice messages stay on the phone without automatic transcription.
@@ -194,6 +212,7 @@ Logs must support diagnosis without becoming an uncontrolled copy of conversatio
 12. Enquiry attribution: what evidence connects a WhatsApp enquiry to a particular advertisement, and how are unknown sources represented without guessing?
 13. Costs: acceptable infrastructure, Meta messaging and optional AI-processing costs? No paid service is selected.
 14. Recovery semantics: how are uncertain external submissions resolved without double-sending or duplicate creation?
+15. Integration lifecycle: who may approve integration releases, what compatibility and capability checks are required, and what happens to inbound events, readable data and pending actions when an integration is disabled or upgraded?
 
 These are recorded gaps, not implementation defaults. State 1 and later states must not silently decide them.
 
@@ -205,7 +224,7 @@ These are recorded gaps, not implementation defaults. State 1 and later states m
 
 ## 11. Handoff and verification status
 
-This is the State 0 draft updated with the owner's media-scope decision. It is not a completed application, an accepted security review, an approved deployment plan or evidence of a working direct Meta integration.
+This is the State 0 draft updated with the owner's media-scope and integration-extensibility decisions. It is not a completed application, an accepted security review, an approved deployment plan or evidence of a working direct Meta integration.
 No State 1 source, assembled global_spec.json or Factory export is created.
 
 Authoring CLI and State 0 question rounds have not been run in this session. Two clean reviews of the current State 0 text have not been obtained.
