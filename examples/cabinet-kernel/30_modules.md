@@ -25,7 +25,7 @@ is the one mapping;
 | A10 | `effects` | `service_invoker`, `runs`, `surface` |
 | A11 | `effects` | `runs`, `run_graph`, `store` |
 | A12 | `runs` | `functions`, `flows`, `canonical_values` |
-| A13 | `run_graph` | `runs`, `run_values`, `sandbox`, `effects`, `canonical_values` |
+| A13 | `run_graph` | `runs`, `run_values`, `sandbox`, `effects`, `canonical_values`, `data_provider` |
 | A14 | `runs` | `run_graph`, `effects`, `store`, `surface` |
 | A15 | `runs` | `run_graph`, `run_values`, `store`, `functions`, `effects`, `surface` |
 | A16 | `surface` | `installation`, `store`, `data_provider` |

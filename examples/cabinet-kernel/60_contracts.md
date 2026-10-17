@@ -1317,7 +1317,9 @@ enumeration and total over its members.
       code chooses, and a provider `string` is non-empty by §6.10. `plan_run`
       reads no clock (State 3, `run_graph` knows no clock); its note's clause
       on where `runs` takes `now` is `runs`' rule and leaves `run_graph`'s
-      text, so `clock` does not become an import of `run_graph` (§7).
+      text, so `clock` does not become an import of `run_graph` (§7), and
+      `30_trace.json` no longer names `run_graph` a consumer of A19 — a
+      remnant of decision 32's split that the State 3 table never had.
 
 ## Texts of earlier states changed by State 6
 
@@ -1326,7 +1328,8 @@ enumeration and total over its members.
   and `HttpMethodBody`. Reopens the rounds of State 1.
 - State 3 (2026-10-18, decision 33): `data_provider` owns the correspondences
   over enumeration members and knows `models`; `run_graph` knows
-  `data_provider`; `30_trace.json` names `data_provider` a consumer of A13.
+  `data_provider`; the A13 row and `30_trace.json` name `data_provider` a
+  consumer of A13, and the trace no longer names `run_graph` for A19.
   Reopens the rounds of States 3–5.
 - State 2 (2026-10-11, decision 30 item 2): A03 rule 5 — the process count
   and every other `setrlimit` limit are set by the runner inside the
