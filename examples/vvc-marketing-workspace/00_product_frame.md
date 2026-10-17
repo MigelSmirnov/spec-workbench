@@ -35,6 +35,7 @@ The owner is not confident in Spanish. The environment must support understandin
 - ChatGPT and WhatsApp on the phone are sufficient for first-version daily work; no separate enquiry dashboard is required. The phone emergency-stop control remains a separate small owner-facing surface (owner decision, 2026-10-17).
 - WhatsApp is the owner's selected channel for new-enquiry and failure notifications (owner decision, 2026-10-17). Exact delivery feasibility, recipient and outage behaviour remain to be designed.
 - Only the owner may connect integrations, approve updates or change permissions (owner decision, 2026-10-17). Machine clients may prepare or perform specifically authorized work, not grant themselves administrative authority.
+- The server does not call AI/model-provider APIs for translation, drafting, inference or other processing. AI work stays in the ChatGPT or local-agent client under its existing access (owner decision, 2026-10-17). No server-side model API credentials, model gateway or model-serving component is in scope. The service interface used by the two clients and the Meta/WhatsApp APIs remain required integration boundaries.
 - The owner prefers simple storage and questioned the need for a database or a large conversation archive. The owner has not requested a full CRM or approved permanent archiving of all conversations and photographs.
 - The question about recurring service costs needs explanation before a budget can be selected; no monthly budget has been approved.
 - Integration extensibility is required: the architecture must allow separately developed integration modules or adapters (owner decision, 2026-10-17). This decision does not by itself include Instagram or Reddit in the first release.
@@ -131,7 +132,8 @@ The choice of SQLite, another database or a different durable store belongs to l
 - Existing website: neighbouring production workload, not part of the marketing service's writable data.
 - GitHub: source and review history. This specification repository is public; actual customer data, credentials and private operational evidence are not project files.
 - VPS provider and domain/DNS provider: infrastructure and recovery boundaries; account access is not implied by GitHub access.
-- Optional later systems: Instagram account maintenance, Reddit, an external CRM and server-side AI inference are not first-version commitments. Integration extensibility is accepted; selection of those integrations remains separate.
+- Optional later systems: Instagram account maintenance, Reddit and an external CRM are not first-version commitments. Integration extensibility is accepted; selection of those integrations remains separate.
+- Server-side AI/model API calls are excluded by owner decision. A client-facing MCP/service interface is not a model-provider API and remains in scope.
 
 The VPS receives and stores events while a ChatGPT conversation is closed. That does not itself start a ChatGPT conversation or guarantee that the assistant is continuously running. Notifications and any unattended processing require an explicit product decision.
 
@@ -221,7 +223,7 @@ Actual network exposure and host security remain unverified.
 
 Customer messages and contact details are private working data.
 Using ChatGPT to discuss them crosses an external processing boundary; the minimum necessary context, access and retention must be defined before live use.
-Whether text translation runs unattended on the VPS is undecided. Automatic voice transcription is excluded from the first version.
+The VPS does not call model-provider APIs or run unattended AI translation/drafting. Translation and drafting take place in the ChatGPT or local-agent client; the server stores only the agreed working records and executes authorized integration actions. Automatic voice transcription is excluded from the first version.
 No separate first-version customer dashboard is required; the owner works in ChatGPT and on the phone. The small emergency-stop surface is still needed and does not imply a broader administrative UI.
 
 ### Releases, backups and logs
@@ -237,6 +239,7 @@ Logs must support diagnosis without becoming an uncontrolled copy of conversatio
 - Do not require Supermetrics or Windsor.ai as the product's permanent execution layer.
 - Do not promise that Meta API exposes every action available in Ads Manager.
 - Do not promise coexistence with the phone application until the owner's actual onboarding route is verified.
+- Server-side model-provider API calls and AI gateways are excluded; no AI API key or separate server-side inference budget is required by this design. Client subscriptions or local-agent access are outside the service's model-calling responsibility.
 - Automatic voice transcription, translation and audio archiving are outside the first version; the owner listens on the phone.
 - Unattended spending decisions, automatic sales negotiation and bulk outreach are outside the proposed first version.
 - Reddit, full accounting, invoicing, payments, contract generation, a public CRM product and multi-tenant operation are deferred.
@@ -256,7 +259,7 @@ Logs must support diagnosis without becoming an uncontrolled copy of conversatio
 10. Advertising authority: allowed assets, budget limits and which later actions may run without a new owner decision?
 11. Development and deployment: implementation repository, deployment actor, release approval and rollback policy?
 12. Enquiry attribution: what evidence connects a WhatsApp enquiry to a particular advertisement, and how are unknown sources represented without guessing?
-13. Costs: explain the possible recurring costs of infrastructure, backup/monitoring, Meta API messaging or an onboarding provider, and optional server-side AI processing. Obtain an estimate from actual usage and the chosen route before asking the owner for a spending ceiling. Advertising budget is separate. No paid service, new subscription or spending budget is approved.
+13. Costs: explain the possible recurring costs of infrastructure, backup/monitoring, and Meta API messaging or an onboarding provider. Server-side AI API costs are excluded because the server makes no model-provider calls. Obtain an estimate from actual usage and the chosen route before asking the owner for a spending ceiling. Advertising budget is separate. No paid service, new subscription or spending budget is approved.
 14. Recovery semantics: how are uncertain external submissions resolved without double-sending or duplicate creation?
 15. Integration lifecycle: the owner alone approves updates, connections and permission changes. Define compatibility/capability checks, the permitted deployment actor, and what happens to inbound events, readable data and pending actions when an integration is disabled or upgraded.
 
