@@ -20,6 +20,7 @@ from factory_admission_workbench.service import (
 
 ROOT = Path(__file__).resolve().parents[1]
 STANDARD = (ROOT / "skills/spec-authoring/SPEC_STANDARD.md").read_text(encoding="utf-8")
+STANDARD_INDEX = (ROOT / "skills/spec-authoring/SPEC_STANDARD_INDEX.md").read_text(encoding="utf-8")
 CLEAN_GIT = {
     "commit": "a" * 40,
     "branch": "agent/test",
@@ -61,6 +62,7 @@ def _factory(
 ) -> Path:
     root = tmp_path / "code_factory"
     _write(root / "SPEC_STANDARD.md", STANDARD)
+    _write(root / "SPEC_STANDARD_INDEX.md", STANDARD_INDEX)
     _write(root / "tools/bootstrap_project.py", "# test fixture\n")
     _write_json(root / "project_index/structure.json", {})
     status = "PASS" if valid else "FINDINGS_PRESENT"
@@ -125,6 +127,7 @@ def _run(
 ) -> dict:
     workbench = tmp_path / "spec-workbench"
     _write(workbench / "skills/spec-authoring/SPEC_STANDARD.md", STANDARD)
+    _write(workbench / "skills/spec-authoring/SPEC_STANDARD_INDEX.md", STANDARD_INDEX)
     source = workbench / "accepted/global_spec.json"
     _write_json(source, {"standard_version": 2, "contracts": {}})
     factory = _factory(tmp_path, valid=valid, inspector_valid=inspector_valid)
@@ -901,3 +904,36 @@ def test_v2_lineage_of_a_v3_specification_is_not_fresh(tmp_path: Path) -> None:
     assert evidence["lineage_standard_version"] == 2
     assert evidence["lineage_fresh"] is False
     assert evidence["action"] == "accept_lineage"
+
+
+def _standard_pair(tmp_path: Path, *, factory_index: str | None = STANDARD_INDEX) -> tuple[Path, Path]:
+    workbench, factory = tmp_path / "wb", tmp_path / "cf"
+    _write(workbench / "skills/spec-authoring/SPEC_STANDARD.md", STANDARD)
+    _write(workbench / "skills/spec-authoring/SPEC_STANDARD_INDEX.md", STANDARD_INDEX)
+    _write(factory / "SPEC_STANDARD.md", STANDARD)
+    if factory_index is not None:
+        _write(factory / "SPEC_STANDARD_INDEX.md", factory_index)
+    return workbench, factory
+
+
+def test_fa004_passes_when_the_standard_and_its_index_are_byte_identical(tmp_path: Path) -> None:
+    from factory_admission_workbench.service import _standard_check
+
+    result = _standard_check(*_standard_pair(tmp_path))
+    assert result.status == "PASS"
+    assert result.evidence["workbench_index_sha256"] == result.evidence["factory_index_sha256"]
+
+
+def test_fa004_blocks_when_only_the_index_drifted(tmp_path: Path) -> None:
+    from factory_admission_workbench.service import _standard_check
+
+    result = _standard_check(*_standard_pair(tmp_path, factory_index=STANDARD_INDEX + "\n- one more line\n"))
+    assert result.status == "BLOCK"
+    assert "SPEC_STANDARD_INDEX.md mismatch" in result.summary and "SPEC_STANDARD.md mismatch" not in result.summary
+
+
+def test_fa004_blocks_when_the_index_is_missing_on_one_side(tmp_path: Path) -> None:
+    from factory_admission_workbench.service import _standard_check
+
+    result = _standard_check(*_standard_pair(tmp_path, factory_index=None))
+    assert result.status == "BLOCK" and result.evidence["missing"][0].endswith("SPEC_STANDARD_INDEX.md")

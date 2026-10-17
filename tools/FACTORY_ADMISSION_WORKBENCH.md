@@ -39,7 +39,8 @@ nobody made.
 - `FA001` — committed, clean Workbench source;
 - `FA002` — closed Stage 8.1 ledger with current slice hashes, when present;
 - `FA003` — aggregate Workbench assembly readiness;
-- `FA004` — byte-identical Workbench and Factory `SPEC_STANDARD.md`;
+- `FA004` — byte-identical Workbench and Factory `SPEC_STANDARD.md` and
+  `SPEC_STANDARD_INDEX.md`;
 - `FA005` — PASS from the real Factory canonical validator, bound to the source;
 - `FA006` — closed, byte-addressable semantic-test handoff, when declared;
 - `FA007` — target create/no-op or explicit replacement authorization;
