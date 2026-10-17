@@ -294,3 +294,21 @@ def test_a_module_heading_with_trailing_blanks_is_the_module_s_heading(case, fac
     assert run(case, factory, result(notes))["status"] == "written"
     text = (case / "80_notes.md").read_text(encoding="utf-8")
     assert text.count("## store") == 1 and "MUST store the new row." in text
+
+
+def test_a_notes_file_that_mixes_line_endings_is_refused_untouched(case, factory):
+    body = NOTES.replace("## store\n", "## store\r\n").encode("utf-8")
+    (case / "80_notes.md").write_bytes(body)
+    notes = ["load_rows: [BEHAVIOR] MUST return rows in store order.", "save_row: [BEHAVIOR] MUST store the row."]
+    report = run(case, factory, result(notes))
+    assert report["status"] == "refused" and "mixes line endings" in report["reason"]
+    assert (case / "80_notes.md").read_bytes() == body
+
+
+@pytest.mark.parametrize("separator", ["\u2028", "\x85", "\x0c"])
+def test_a_notes_file_with_another_line_break_is_refused_untouched(case, factory, separator):
+    body = NOTES.replace("## store\n", f"## store{separator}").encode("utf-8")
+    (case / "80_notes.md").write_bytes(body)
+    notes = ["load_rows: [BEHAVIOR] MUST return rows in store order.", "save_row: [BEHAVIOR] MUST store the row."]
+    assert run(case, factory, result(notes))["status"] == "refused"
+    assert (case / "80_notes.md").read_bytes() == body

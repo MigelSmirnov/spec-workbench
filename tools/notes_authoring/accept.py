@@ -93,6 +93,29 @@ def _uncovered(module: str, notes: list[dict[str, Any]], spec: dict[str, Any]) -
     })
 
 
+def _notes_text(project: Path) -> str:
+    path = project / NOTES_FILE
+    if not path.is_file():
+        return ""
+    with path.open(encoding="utf-8", newline="") as handle:
+        return handle.read()
+
+
+# every break str.splitlines splits on, so the line numbering of
+# language.authored_notes and of the rewrite agree
+_LINE_BREAK_RE = re.compile("\r\n|[\n\r\v\f\x1c\x1d\x1e\x85\u2028\u2029]")
+
+
+def _mixed_line_endings(text: str) -> list[str]:
+    return sorted(set(_LINE_BREAK_RE.findall(text)))
+
+
+def _line_ending(text: str) -> str:
+    # the file's own line ending (one, see _mixed_line_endings)
+    endings = _mixed_line_endings(text)
+    return endings[0] if endings else "\n"
+
+
 def _continuation(raw: str) -> bool:
     stripped = raw.strip()
     return bool(stripped) and raw.startswith((" ", "\t")) and not stripped.startswith(("-", "#"))
@@ -104,15 +127,10 @@ def _rewrite(project: Path, module: str, notes: list[dict[str, Any]], existing: 
     A list-shaped note goes with its continuation lines; every other line,
     the file's line endings and its final newline stay as they were."""
     path = project / NOTES_FILE
-    text = ""
-    if path.is_file():
-        with path.open(encoding="utf-8", newline="") as handle:
-            text = handle.read()
+    text = _notes_text(project)
     # the same line numbering as language.authored_notes (str.splitlines)
     lines = text.splitlines(keepends=True)
-    # the file's own line ending: the first one it uses (CRLF, LF or a bare CR)
-    first = re.search(r"\r\n|\n|\r", text)
-    newline = first.group(0) if first else "\n"
+    newline = _line_ending(text)
     drop: set[int] = set()
     for note in existing:
         if note["path"] != NOTES_FILE:
@@ -129,7 +147,7 @@ def _rewrite(project: Path, module: str, notes: list[dict[str, Any]], existing: 
     bare = [line.rstrip("\r\n") for line in kept]
     heading = f"## {module}"
     # a heading is the module's whatever trailing blanks it carries
-    headings = [i for i, line in enumerate(bare) if line.rstrip() == heading]
+    headings = [i for i, line in enumerate(bare) if line.rstrip(" \t") == heading]
     if headings:
         at = headings[0] + 1
         if at == len(kept) or kept[at - 1] == kept[at - 1].rstrip("\r\n"):
@@ -193,6 +211,10 @@ def accept(project: Path, module: str, result: Any, *, spec: dict[str, Any] | No
     if elsewhere:
         return _refused(module, f"the module has notes in {sorted({n['path'] for n in elsewhere})}; "
                                 f"the environment writes only {NOTES_FILE}")
+    mixed = _mixed_line_endings(_notes_text(project))
+    if len(mixed) > 1:
+        # rewriting it would join or split lines; normalising it is not ours to do
+        return _refused(module, f"{NOTES_FILE} mixes line endings {[repr(e) for e in mixed]}; normalise it first")
     parsed, errors = _parse(notes, module, spec)
     if errors:
         return _refused(module, "notes do not parse or bind to the module", errors=errors)
