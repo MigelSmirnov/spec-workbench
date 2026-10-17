@@ -138,3 +138,16 @@ def test_module_slice_names_the_module_and_refuses_an_unknown_one(case, monkeypa
 def test_an_address_the_resolver_does_not_check_is_refused_with_the_forms(case, address):
     with pytest.raises(ValueError, match="'= models.X' and 'the imported X constant'"):
         service.resolve_address(case, address)
+
+
+def test_spec_standard_finds_the_repository_at_any_depth_of_the_case(tmp_path):
+    from notes_authoring import standard
+
+    repo = tmp_path / "repo"
+    case = repo / "cases" / "group" / "demo"
+    case.mkdir(parents=True)
+    skill = repo / standard.SKILL
+    skill.mkdir(parents=True)
+    (skill / standard.STANDARD).write_text("# S\n\n## 2. notes\n\nDeep ref.\n", encoding="utf-8")
+    (skill / standard.INDEX).write_text("# I\n", encoding="utf-8")
+    assert service.spec_standard(case, "§2")["text"] == "## 2. notes\n\nDeep ref."
