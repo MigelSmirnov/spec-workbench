@@ -623,7 +623,9 @@ def _standard_check(workbench_root: Path, factory_root: Path) -> AdmissionCheck:
     summary = (
         "Workbench and Factory SPEC_STANDARD.md and SPEC_STANDARD_INDEX.md are byte-identical."
         if status == CHECK_PASS
-        else "; ".join(f"{name} mismatch: workbench={shas[name][0]}, factory={shas[name][1]}" for name in differ)
+        # "SPEC_STANDARD mismatch" is the summary consumers match; the index follows its form
+        else "; ".join(f"{name.removesuffix('.md')} mismatch: workbench={shas[name][0]}, factory={shas[name][1]}"
+                       for name in differ)
     )
     standard, index = shas["SPEC_STANDARD.md"], shas["SPEC_STANDARD_INDEX.md"]
     return AdmissionCheck(

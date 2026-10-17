@@ -929,7 +929,7 @@ def test_fa004_blocks_when_only_the_index_drifted(tmp_path: Path) -> None:
 
     result = _standard_check(*_standard_pair(tmp_path, factory_index=STANDARD_INDEX + "\n- one more line\n"))
     assert result.status == "BLOCK"
-    assert "SPEC_STANDARD_INDEX.md mismatch" in result.summary and "SPEC_STANDARD.md mismatch" not in result.summary
+    assert result.summary.startswith("SPEC_STANDARD_INDEX mismatch") and "SPEC_STANDARD mismatch" not in result.summary
 
 
 def test_fa004_blocks_when_the_index_is_missing_on_one_side(tmp_path: Path) -> None:
