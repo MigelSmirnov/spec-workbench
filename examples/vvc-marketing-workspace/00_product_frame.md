@@ -31,6 +31,7 @@ The owner is not confident in Spanish. The environment must support understandin
 - Login to Meta for Developers is currently unavailable to the owner. Whether a suitable Meta app exists is unknown.
 - The owner explicitly requested consideration of VPS requirements and security before implementation.
 - Integration extensibility is required: the architecture must allow separately developed integration modules or adapters (owner decision, 2026-10-17). This decision does not by itself include Instagram or Reddit in the first release.
+- Python is the implementation language for the VPS service and integration adapters (owner decision, 2026-10-17). The Python version, framework and dependencies remain to be selected.
 
 ### Existing infrastructure evidence; not a current server audit
 
@@ -194,7 +195,7 @@ Logs must support diagnosis without becoming an uncontrolled copy of conversatio
 - Automatic voice transcription, translation and audio archiving are outside the first version; the owner listens on the phone.
 - Unattended spending decisions, automatic sales negotiation and bulk outreach are outside the proposed first version.
 - Reddit, full accounting, invoicing, payments, contract generation, a public CRM product and multi-tenant operation are deferred.
-- This State 0 does not select modules, contracts, algorithms or a final software stack.
+- Python is selected for the VPS service and integration adapters. This State 0 does not select module boundaries, contracts, algorithms, Python version, framework or dependencies.
 
 ## 9. Open questions
 
