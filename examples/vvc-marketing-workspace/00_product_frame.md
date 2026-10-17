@@ -2,6 +2,7 @@
 
 Status: draft for owner review; not accepted or closed.
 Created: 2026-10-17.
+Updated: 2026-10-17 — owner selected text and photos; voice messages remain on the phone.
 Project: `vvc-marketing-workspace`.
 Canonical ref: `agent/vvc-marketing-workspace`.
 Owner: Vital Vibe Construction.
@@ -23,6 +24,7 @@ The owner is not confident in Spanish. The environment must support understandin
 - Development is managed through GitHub.
 - The immediate priorities are Facebook account maintenance, Meta advertising, and WhatsApp Business integration.
 - The working WhatsApp number currently uses the WhatsApp Business application on a phone.
+- First-version customer-message scope is text and photographs. The owner listens to voice messages on the phone; automatic voice transcription is excluded from the first version (owner decision, 2026-10-17).
 - Customer enquiries are expected through WhatsApp; the owner wants to discuss them and their replies with the assistant.
 - A personal plugin connecting ChatGPT to the owner's service is the intended interaction surface.
 - Reddit is a possible later direction; the owner deferred its format and priority.
@@ -66,7 +68,8 @@ The owner referred to the server as "OHL" and mentioned DonDominio. Provider, re
 | Prepare Meta advertising | Goal, creative, audience, destination and budget supplied or reviewed by owner | Paused campaign structure with verified objects and a comparison against requested settings | Partial creation, rejected settings and changed defaults are individually reported |
 | Launch or change advertising | Reviewed target objects and exact proposed change | Verified external status or budget change | No claim of success on tool acknowledgement alone; ambiguous outcome is surfaced |
 | Receive an enquiry | Authorized WhatsApp event | Durable enquiry and conversation visible to the owner | Invalid events are refused; receipt, storage or delivery failures are observable to the operator |
-| Understand an enquiry | Selected original messages | Original text, Russian explanation and identified missing business facts | Unknown meaning or unavailable attachments are stated, not invented |
+| Understand an enquiry | Selected original text messages and available customer photographs | Original text, Russian explanation and identified missing business facts, with access to the selected photographs | Unknown meaning or unavailable attachments are stated, not invented |
+| View enquiry photographs | Selected conversation and its received photographs | Photographs associated with their source messages and available for owner/assistant review through authorized access | Missing, unsupported or inaccessible photographs are explicitly identified; no fabricated image description |
 | Prepare a customer response | Conversation, owner's instructions and known business facts | Editable Spanish draft and Russian meaning | Missing price, availability, scope or terms remain explicit questions |
 | Send an approved response | Exact recipient, conversation and owner-reviewed text | Message identity and separately observed delivery state | API rejection, unknown submission and delivery failure remain distinct |
 | Track an enquiry | Owner's assessment and supported conversation facts | Current status and history of what changed | The system does not infer a signed contract, payment or qualified lead from a click |
@@ -78,13 +81,15 @@ Publication, advertising and WhatsApp operations are conditional on each externa
 ## 5. Inputs, outputs and persistent facts
 
 Inputs include the owner's instructions, authorized asset selections, business descriptions, approved photographs and texts, platform observations, and customer messages.
-Attachments may include customer photos and voice messages; their supported formats, storage and transcription are open first-version scope questions.
+First-version attachments are customer photographs, associated with their source messages and conversation. Supported image formats, size limits, retention and protected access remain to be designed.
+Voice messages remain handled by the owner in the phone application. The first version does not promise voice transcription, translation or audio archiving; the owner may supply a text summary for discussion.
 
 Outputs include retrieved observations, bilingual drafts, approval previews, externally created object identities, observed external statuses, enquiry status histories and operator-visible failures.
 
 Persistent facts needed by the product:
 - owner and connection identity, allowed asset scope and access status;
 - original conversation events, participants and external message identities;
+- received photographs and their association with the source conversation and message, subject to the retention decision;
 - enquiry assessments and owner-entered business facts;
 - drafts and the exact version considered by the owner;
 - approval/refusal decisions and the external action they concern;
@@ -133,7 +138,7 @@ Knowing an account ID or a customer's phone number does not authorize access or 
 
 Messages, linked pages and uploaded media remain untrusted material even when received through an authentic integration.
 They cannot authorize a change to advertising, disclose another customer's conversation, grant access or execute instructions on the host.
-Supported attachment processing and its isolation remain unresolved.
+Photographs are in first-version scope; exact accepted image forms, processing limits, protected access and isolation remain unresolved. Voice processing is excluded from the first version.
 
 ### Secrets
 
@@ -153,7 +158,7 @@ Actual network exposure and host security remain unverified.
 
 Customer messages and contact details are private working data.
 Using ChatGPT to discuss them crosses an external processing boundary; the minimum necessary context, access and retention must be defined before live use.
-Whether translation or transcription also runs unattended on the VPS is undecided.
+Whether text translation runs unattended on the VPS is undecided. Automatic voice transcription is excluded from the first version.
 
 ### Releases, backups and logs
 
@@ -168,6 +173,7 @@ Logs must support diagnosis without becoming an uncontrolled copy of conversatio
 - Do not require Supermetrics or Windsor.ai as the product's permanent execution layer.
 - Do not promise that Meta API exposes every action available in Ads Manager.
 - Do not promise coexistence with the phone application until the owner's actual onboarding route is verified.
+- Automatic voice transcription, translation and audio archiving are outside the first version; the owner listens on the phone.
 - Unattended spending decisions, automatic sales negotiation and bulk outreach are outside the proposed first version.
 - Reddit, full accounting, invoicing, payments, contract generation, a public CRM product and multi-tenant operation are deferred.
 - This State 0 does not select modules, contracts, algorithms or a final software stack.
@@ -178,7 +184,7 @@ Logs must support diagnosis without becoming an uncontrolled copy of conversatio
 2. Facebook scope: company Page only, or also Instagram, comments, inbox and personal-profile activity? Which exact assets are authorized?
 3. Meta access: does a suitable developer app exist, which permissions are available, and which company assets can it use?
 4. WhatsApp onboarding: is official phone/API coexistence available for this business and number, directly or through a provider? What remains usable on the phone?
-5. Customer media: are photo handling and voice-message transcription required for the first release?
+5. Customer photographs: which image forms and sizes are supported, how are originals accessed, and what retention applies? Text/photos versus voice scope is settled: photographs are included; voice messages stay on the phone without automatic transcription.
 6. Privacy: which customer facts may be sent to ChatGPT, what notice is needed, how long are messages and attachments retained, and how are deletion requests handled?
 7. Infrastructure: actual VPS provider, OS, capacity, existing workloads, listeners, firewall, recovery route, updates, TLS renewal and verified backup coverage?
 8. Owner access: authentication for the plugin, session revocation, and any owner-facing interface outside ChatGPT?
@@ -195,14 +201,15 @@ These are recorded gaps, not implementation defaults. State 1 and later states m
 
 - Goal, actors, primary actions, inputs, outputs, persistent facts, integrations, constraints and unknowns are recorded in sections 1–9.
 - Section 4 names an owner action, an observable result and a failure/uncertainty outcome for each current product promise.
-- Unverified access, onboarding, topology, media scope, privacy, unattended behaviour and costs are explicitly listed as open questions.
+- Unverified access, onboarding, topology, photograph handling details, privacy, unattended behaviour and costs are explicitly listed as open questions. The owner has selected text/photos and excluded automatic voice processing.
 
 ## 11. Handoff and verification status
 
-This is the first draft of State 0. It is not a completed application, an accepted security review, an approved deployment plan or evidence of a working direct Meta integration.
+This is the State 0 draft updated with the owner's media-scope decision. It is not a completed application, an accepted security review, an approved deployment plan or evidence of a working direct Meta integration.
 No State 1 source, assembled global_spec.json or Factory export is created.
 
-Authoring CLI, the question rounds and repository CI have not been run by the author at this point. Two clean reviews of the current State 0 text have not been obtained.
+Authoring CLI and State 0 question rounds have not been run in this session. Two clean reviews of the current State 0 text have not been obtained.
+The index-registration PR #127 ran repository CI: 1211 tests passed, ownership and durable-archive reviews passed; the aggregate job failed on cabinet-web-backend projection verification, also reproduced on its base main. This does not constitute semantic acceptance of this State 0.
 Continue through the common Workbench pipeline after project registration; do not skip to code or exact contracts.
 
 Infrastructure reference:
