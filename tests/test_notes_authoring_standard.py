@@ -123,3 +123,18 @@ def test_words_that_start_with_digits_are_still_a_title(tmp_path):
     (skill / standard.INDEX).write_text("# I\n", encoding="utf-8")
     assert standard.section("200 строк", tmp_path)["title"] == "Лимит 200 строк"
     assert standard.section("2", tmp_path)["section"] == "2"
+
+
+def test_a_number_naming_a_section_with_another_section_s_title_refuses(repo):
+    with pytest.raises(ValueError):
+        standard.section("2 Placement", repo)
+
+
+def test_a_closing_fence_carries_only_blanks_and_a_backtick_info_holds_no_backtick(tmp_path):
+    skill = tmp_path / standard.SKILL
+    skill.mkdir(parents=True)
+    (skill / standard.STANDARD).write_text(
+        "# S\n\n## 2. notes\n\n```text\n```python\n## 9. still inside\n```\n\n"
+        "```code``` inline\n\n## 3. next\n", encoding="utf-8")
+    (skill / standard.INDEX).write_text("# I\n", encoding="utf-8")
+    assert [s["section"] for s in standard.contents(tmp_path)["sections"]] == ["2", "3"]
