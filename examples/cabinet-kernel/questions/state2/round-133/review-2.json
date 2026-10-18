@@ -1,0 +1,165 @@
+{
+ "open_points": [
+  {
+   "subject": "A17 configuration-file path resolution",
+   "kind": "relative-path anchor",
+   "text": "a relative one from the working directory",
+   "question": "For configuration re-reads before later requests, does a relative command-line path remain anchored to the working directory captured at startup, or is it resolved from the process's working directory at each re-read?",
+   "options": [
+    "Capture and retain a descriptor for the startup working directory",
+    "Resolve from the current working directory on every read",
+    "Convert the path to an absolute path at startup"
+   ],
+   "default_guess": "Capture the startup working-directory descriptor and use it for every read.",
+   "unit": "A17"
+  },
+  {
+   "subject": "A18 data-directory initialization",
+   "kind": "missing bootstrap rule",
+   "text": "The data directory holds one SQLite database with every kernel record, a content-addressed area of value bytes and file fixtures named by digest, and the run spool, one subdirectory per run.",
+   "question": "What happens when the data directory, database, value area, fixture area, spool area, or lock object does not yet exist, and which of them may the kernel create?",
+   "options": [
+    "Create every missing store artifact securely",
+    "Require the data directory to exist but create its internal artifacts",
+    "Refuse startup if any artifact is missing"
+   ],
+   "default_guess": "Require a pre-existing private data directory and securely create missing internal store artifacts.",
+   "unit": "A18"
+  },
+  {
+   "subject": "A18 data-directory root path",
+   "kind": "symlink scope",
+   "text": "Every file of the directory is opened without following symbolic links; a link found at start stops the start",
+   "question": "Does the no-symlink rule also cover the configured data-directory path itself and every ancestor component, or only entries beneath the resolved data directory?",
+   "options": [
+    "Reject symlinks in the data-directory path and all descendants",
+    "Reject only the data-directory entry itself and descendants",
+    "Allow the configured path to resolve through symlinks but reject links inside it"
+   ],
+   "default_guess": "Reject symlinks in the data-directory path and in every descendant opened by the store.",
+   "unit": "A18"
+  },
+  {
+   "subject": "A18 store layout validation",
+   "kind": "unsupported entry handling",
+   "text": "The data directory holds one SQLite database with every kernel record, a content-addressed area of value bytes and file fixtures named by digest, and the run spool, one subdirectory per run.",
+   "question": "Must startup refuse unknown entries or unexpected file types such as devices, FIFOs and sockets, or may unrelated private entries remain in the data directory?",
+   "options": [
+    "Refuse every unrecognized entry and every unexpected file type",
+    "Allow unknown regular files but refuse special files",
+    "Ignore all unknown entries except symbolic links"
+   ],
+   "default_guess": "Refuse unexpected file types but leave unknown private regular files untouched.",
+   "unit": "A18"
+  },
+  {
+   "subject": "A18 private store permissions",
+   "kind": "vague invariant",
+   "text": "The directory and everything in it are private to the kernel's user; the kernel refuses to start otherwise.",
+   "question": "What exact ownership and permission conditions constitute “private,” including directory execute bits, group/other bits, ACLs, and files the kernel creates?",
+   "options": [
+    "Require ownership by the effective kernel user and no group/other permission bits",
+    "Also reject ACLs that grant access to another principal",
+    "Rely only on the data directory's permissions and do not inspect every child"
+   ],
+   "default_guess": "Require the effective kernel user to own every entry, reject all group/other permission bits, and create new entries with owner-only modes.",
+   "unit": "A18"
+  },
+  {
+   "subject": "A18 permission changes after startup",
+   "kind": "unverified invariant",
+   "text": "The directory and everything in it are private to the kernel's user; the kernel refuses to start otherwise.",
+   "question": "If ownership or permissions become non-private after startup, must each affected store call detect and refuse them, must the kernel stop, or are permissions checked only at startup?",
+   "options": [
+    "Recheck safely on every open and fail only the affected store call",
+    "Recheck and stop the kernel on any change",
+    "Check only at startup and trust the host afterward"
+   ],
+   "default_guess": "Recheck the entry on every open and fail the affected store call with nothing written.",
+   "unit": "A18"
+  },
+  {
+   "subject": "A18 exclusive store lock",
+   "kind": "lock semantics",
+   "text": "At start it takes an exclusive lock in the data directory; a second process on the same directory refuses to start.",
+   "question": "What object and Linux locking primitive define the exclusive lock, when is it acquired and released, and must its descriptor be prevented from being inherited by child processes?",
+   "options": [
+    "Hold a non-inherited flock lock on a fixed regular lock file for the process lifetime",
+    "Hold a non-inherited fcntl record lock on the SQLite database",
+    "Use an atomically created sentinel file with explicit stale-lock recovery"
+   ],
+   "default_guess": "Hold a close-on-exec flock lock on a fixed owner-only regular file for the kernel process's lifetime.",
+   "unit": "A18"
+  },
+  {
+   "subject": "A18 startup refusal precedence",
+   "kind": "check order",
+   "text": "At start it takes an exclusive lock in the data directory; a second process on the same directory refuses to start. The directory and everything in it are private to the kernel's user; the kernel refuses to start otherwise. Every file of the directory is opened without following symbolic links; a link found at start stops the start",
+   "question": "What is the exact order of the lock, data-directory ownership and mode checks, symlink scan, database validation, cleanup, A17 configuration checks, and A03 sandbox probe when several startup conditions fail?",
+   "options": [
+    "Use decision and rule order across A17, A18, A03 and A20",
+    "Define one explicit global startup-check sequence",
+    "Startup may report any encountered failure"
+   ],
+   "default_guess": "Define and use one explicit global startup-check sequence before opening the surface.",
+   "unit": "A18"
+  },
+  {
+   "subject": "A18 request serialization",
+   "kind": "undefined arrival order",
+   "text": "Surface requests are handled one at a time in the order they arrive",
+   "question": "What event establishes arrival order when requests reach the MCP surface concurrently?",
+   "options": [
+    "Order when a complete request message is received",
+    "Order when authentication begins",
+    "Order by a monotonic sequence assigned on connection acceptance",
+    "Permit either concurrent request to be first"
+   ],
+   "default_guess": "Assign a store-independent sequence when each complete request message is received and process by that sequence.",
+   "unit": "A18"
+  },
+  {
+   "subject": "A18 file and record crash durability",
+   "kind": "durability gap",
+   "text": "Value bytes and spooled files are written to a temporary file, flushed, checked against their digest and size, and then renamed into place; a completed file a record names is never overwritten",
+   "question": "Which objects must be durably flushed, and in what order relative to rename and SQLite commit, so a crash or power loss cannot leave a committed record naming a missing or incomplete file?",
+   "options": [
+    "Flush the temporary file, rename it, flush the containing directory, then commit and durably flush SQLite",
+    "Treat rename completion as sufficient and then commit SQLite",
+    "Guarantee only process-crash safety, not power-loss durability"
+   ],
+   "default_guess": "Flush the file, rename it, flush its directory, and only then commit the SQLite transaction with full durability.",
+   "unit": "A18"
+  },
+  {
+   "subject": "A18 startup cleanup failures",
+   "kind": "missing failure behavior",
+   "text": "On start, temporary files, value bytes no record names ... and the spool directories of runs that ended and do not keep their spool ... are removed; nothing else is. A spool directory that cannot be removed does not stop the start",
+   "question": "Does the same continue-start rule apply when a temporary file or unreferenced value byte file cannot be removed, or must that failure stop startup?",
+   "options": [
+    "Continue startup for every cleanup failure and never serve the leftovers",
+    "Continue only for ended-run spool cleanup; refuse startup for temporary or unreferenced value cleanup failure",
+    "Refuse startup for any cleanup failure"
+   ],
+   "default_guess": "Continue startup for all cleanup failures while ensuring no leftover unreferenced file can be served.",
+   "unit": "A18"
+  },
+  {
+   "subject": "A18 database failure handling",
+   "kind": "missing refusal conditions",
+   "text": "The data directory holds one SQLite database with every kernel record",
+   "question": "What must startup do when the database is unreadable, malformed, corrupt, has an unsupported schema, or cannot provide the required transaction and durability behavior?",
+   "options": [
+    "Refuse startup and identify the store check that failed",
+    "Create or repair the database automatically",
+    "Start with a new empty database",
+    "Leave the outcome as an internal error"
+   ],
+   "default_guess": "Refuse startup without modifying or replacing the database.",
+   "unit": "A18"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A17 configuration-file path resolution\",\"kind\":\"relative-path anchor\",\"text\":\"a relative one from the working directory\",\"question\":\"For configuration re-reads before later requests, does a relative command-line path remain anchored to the working directory captured at startup, or is it resolved from the process's working directory at each re-read?\",\"options\":[\"Capture and retain a descriptor for the startup working directory\",\"Resolve from the current working directory on every read\",\"Convert the path to an absolute path at startup\"],\"default_guess\":\"Capture the startup working-directory descriptor and use it for every read.\",\"unit\":\"A17\"},{\"subject\":\"A18 data-directory initialization\",\"kind\":\"missing bootstrap rule\",\"text\":\"The data directory holds one SQLite database with every kernel record, a content-addressed area of value bytes and file fixtures named by digest, and the run spool, one subdirectory per run.\",\"question\":\"What happens when the data directory, database, value area, fixture area, spool area, or lock object does not yet exist, and which of them may the kernel create?\",\"options\":[\"Create every missing store artifact securely\",\"Require the data directory to exist but create its internal artifacts\",\"Refuse startup if any artifact is missing\"],\"default_guess\":\"Require a pre-existing private data directory and securely create missing internal store artifacts.\",\"unit\":\"A18\"},{\"subject\":\"A18 data-directory root path\",\"kind\":\"symlink scope\",\"text\":\"Every file of the directory is opened without following symbolic links; a link found at start stops the start\",\"question\":\"Does the no-symlink rule also cover the configured data-directory path itself and every ancestor component, or only entries beneath the resolved data directory?\",\"options\":[\"Reject symlinks in the data-directory path and all descendants\",\"Reject only the data-directory entry itself and descendants\",\"Allow the configured path to resolve through symlinks but reject links inside it\"],\"default_guess\":\"Reject symlinks in the data-directory path and in every descendant opened by the store.\",\"unit\":\"A18\"},{\"subject\":\"A18 store layout validation\",\"kind\":\"unsupported entry handling\",\"text\":\"The data directory holds one SQLite database with every kernel record, a content-addressed area of value bytes and file fixtures named by digest, and the run spool, one subdirectory per run.\",\"question\":\"Must startup refuse unknown entries or unexpected file types such as devices, FIFOs and sockets, or may unrelated private entries remain in the data directory?\",\"options\":[\"Refuse every unrecognized entry and every unexpected file type\",\"Allow unknown regular files but refuse special files\",\"Ignore all unknown entries except symbolic links\"],\"default_guess\":\"Refuse unexpected file types but leave unknown private regular files untouched.\",\"unit\":\"A18\"},{\"subject\":\"A18 private store permissions\",\"kind\":\"vague invariant\",\"text\":\"The directory and everything in it are private to the kernel's user; the kernel refuses to start otherwise.\",\"question\":\"What exact ownership and permission conditions constitute “private,” including directory execute bits, group/other bits, ACLs, and files the kernel creates?\",\"options\":[\"Require ownership by the effective kernel user and no group/other permission bits\",\"Also reject ACLs that grant access to another principal\",\"Rely only on the data directory's permissions and do not inspect every child\"],\"default_guess\":\"Require the effective kernel user to own every entry, reject all group/other permission bits, and create new entries with owner-only modes.\",\"unit\":\"A18\"},{\"subject\":\"A18 permission changes after startup\",\"kind\":\"unverified invariant\",\"text\":\"The directory and everything in it are private to the kernel's user; the kernel refuses to start otherwise.\",\"question\":\"If ownership or permissions become non-private after startup, must each affected store call detect and refuse them, must the kernel stop, or are permissions checked only at startup?\",\"options\":[\"Recheck safely on every open and fail only the affected store call\",\"Recheck and stop the kernel on any change\",\"Check only at startup and trust the host afterward\"],\"default_guess\":\"Recheck the entry on every open and fail the affected store call with nothing written.\",\"unit\":\"A18\"},{\"subject\":\"A18 exclusive store lock\",\"kind\":\"lock semantics\",\"text\":\"At start it takes an exclusive lock in the data directory; a second process on the same directory refuses to start.\",\"question\":\"What object and Linux locking primitive define the exclusive lock, when is it acquired and released, and must its descriptor be prevented from being inherited by child processes?\",\"options\":[\"Hold a non-inherited flock lock on a fixed regular lock file for the process lifetime\",\"Hold a non-inherited fcntl record lock on the SQLite database\",\"Use an atomically created sentinel file with explicit stale-lock recovery\"],\"default_guess\":\"Hold a close-on-exec flock lock on a fixed owner-only regular file for the kernel process's lifetime.\",\"unit\":\"A18\"},{\"subject\":\"A18 startup refusal precedence\",\"kind\":\"check order\",\"text\":\"At start it takes an exclusive lock in the data directory; a second process on the same directory refuses to start. The directory and everything in it are private to the kernel's user; the kernel refuses to start otherwise. Every file of the directory is opened without following symbolic links; a link found at start stops the start\",\"question\":\"What is the exact order of the lock, data-directory ownership and mode checks, symlink scan, database validation, cleanup, A17 configuration checks, and A03 sandbox probe when several startup conditions fail?\",\"options\":[\"Use decision and rule order across A17, A18, A03 and A20\",\"Define one explicit global startup-check sequence\",\"Startup may report any encountered failure\"],\"default_guess\":\"Define and use one explicit global startup-check sequence before opening the surface.\",\"unit\":\"A18\"},{\"subject\":\"A18 request serialization\",\"kind\":\"undefined arrival order\",\"text\":\"Surface requests are handled one at a time in the order they arrive\",\"question\":\"What event establishes arrival order when requests reach the MCP surface concurrently?\",\"options\":[\"Order when a complete request message is received\",\"Order when authentication begins\",\"Order by a monotonic sequence assigned on connection acceptance\",\"Permit either concurrent request to be first\"],\"default_guess\":\"Assign a store-independent sequence when each complete request message is received and process by that sequence.\",\"unit\":\"A18\"},{\"subject\":\"A18 file and record crash durability\",\"kind\":\"durability gap\",\"text\":\"Value bytes and spooled files are written to a temporary file, flushed, checked against their digest and size, and then renamed into place; a completed file a record names is never overwritten\",\"question\":\"Which objects must be durably flushed, and in what order relative to rename and SQLite commit, so a crash or power loss cannot leave a committed record naming a missing or incomplete file?\",\"options\":[\"Flush the temporary file, rename it, flush the containing directory, then commit and durably flush SQLite\",\"Treat rename completion as sufficient and then commit SQLite\",\"Guarantee only process-crash safety, not power-loss durability\"],\"default_guess\":\"Flush the file, rename it, flush its directory, and only then commit the SQLite transaction with full durability.\",\"unit\":\"A18\"},{\"subject\":\"A18 startup cleanup failures\",\"kind\":\"missing failure behavior\",\"text\":\"On start, temporary files, value bytes no record names ... and the spool directories of runs that ended and do not keep their spool ... are removed; nothing else is. A spool directory that cannot be removed does not stop the start\",\"question\":\"Does the same continue-start rule apply when a temporary file or unreferenced value byte file cannot be removed, or must that failure stop startup?\",\"options\":[\"Continue startup for every cleanup failure and never serve the leftovers\",\"Continue only for ended-run spool cleanup; refuse startup for temporary or unreferenced value cleanup failure\",\"Refuse startup for any cleanup failure\"],\"default_guess\":\"Continue startup for all cleanup failures while ensuring no leftover unreferenced file can be served.\",\"unit\":\"A18\"},{\"subject\":\"A18 database failure handling\",\"kind\":\"missing refusal conditions\",\"text\":\"The data directory holds one SQLite database with every kernel record\",\"question\":\"What must startup do when the database is unreadable, malformed, corrupt, has an unsupported schema, or cannot provide the required transaction and durability behavior?\",\"options\":[\"Refuse startup and identify the store check that failed\",\"Create or repair the database automatically\",\"Start with a new empty database\",\"Leave the outcome as an internal error\"],\"default_guess\":\"Refuse startup without modifying or replacing the database.\",\"unit\":\"A18\"}]}",
+ "set_aside": []
+}

@@ -1,0 +1,189 @@
+{
+ "open_points": [
+  {
+   "unit": "A17",
+   "subject": "configuration-file re-read",
+   "kind": "snapshot ambiguity",
+   "text": "Before evaluating each request the kernel reads the configuration file and compares the SHA-256 of its bytes with that of the last read; when they differ, or the file cannot be read, it re-reads it ... and the checks and the read use that one opened file, so the file checked is the file read.",
+   "question": "When the configuration changes, are hashing, security checks and parsing performed from one opened descriptor and one byte snapshot, or may the second “re-read” open and read a different file?",
+   "options": [
+    "Open once, read one bounded snapshot, and use those same bytes for checking, hashing and parsing",
+    "Open once for comparison and open again for parsing",
+    "Open twice but retry if the identity or metadata changes"
+   ],
+   "default_guess": "Open once and use the same descriptor and byte snapshot for checking, hashing and parsing."
+  },
+  {
+   "unit": "A17",
+   "subject": "component-by-component path walk",
+   "kind": "resolution ambiguity",
+   "text": "the path as given, an absolute one walked from the root directory and a relative one from the working directory; each directory on the way opened with `O_PATH` and `O_DIRECTORY`",
+   "question": "Must every later component be opened relative to the descriptor of the preceding opened directory, or may an implementation reconstruct and reopen pathname prefixes from the root or working directory?",
+   "options": [
+    "Resolve each component with a directory-relative open from the preceding descriptor",
+    "Reopen each accumulated pathname prefix",
+    "Either method is allowed if the final checked descriptor is the one read"
+   ],
+   "default_guess": "Resolve every component relative to the preceding opened directory descriptor."
+  },
+  {
+   "unit": "A18",
+   "subject": "data-directory initialization",
+   "kind": "missing lifecycle rule",
+   "text": "The data directory holds one SQLite database with every kernel record, a content-addressed area of value bytes and file fixtures named by digest, and the run spool, one subdirectory per run.",
+   "question": "What must happen on first start when the data directory, database, content area or spool does not yet exist, and what happens when an expected object exists with the wrong type or the database is unreadable or corrupt?",
+   "options": [
+    "Create a missing empty layout but refuse wrong-type, unreadable or corrupt existing objects",
+    "Require the complete layout to be provisioned before start",
+    "Create or repair every missing or invalid object"
+   ],
+   "default_guess": "Require the data directory itself to exist, create missing kernel-owned layout objects, and refuse wrong-type, unreadable or corrupt existing objects."
+  },
+  {
+   "unit": "A18",
+   "subject": "exclusive process lock",
+   "kind": "unspecified protocol",
+   "text": "At start it takes an exclusive lock in the data directory; a second process on the same directory refuses to start.",
+   "question": "Which lock object and Linux locking primitive identify an installation, when is the lock acquired, and must it remain held for the process lifetime and be excluded from child processes?",
+   "options": [
+    "A fixed lock file with `flock`, held for the kernel lifetime and close-on-exec",
+    "A fixed lock file with POSIX record locking, held for the kernel lifetime and close-on-exec",
+    "A lock directory or another atomic filesystem protocol"
+   ],
+   "default_guess": "Use a fixed owner-only lock file with a nonblocking exclusive `flock`, held for the process lifetime and marked close-on-exec."
+  },
+  {
+   "unit": "A18",
+   "subject": "private store permissions",
+   "kind": "vague refusal condition",
+   "text": "The directory and everything in it are private to the kernel's user; the kernel refuses to start otherwise.",
+   "question": "What exact ownership, file types and permission bits constitute “private,” including for the root directory, subdirectories, SQLite auxiliary files, lock file, temporary files and spool contents?",
+   "options": [
+    "Every object must be owned by the kernel user and grant no group or other permissions",
+    "Only the data-directory root must be owner-only; descendants rely on traversal protection",
+    "Require exact modes such as 0700 for directories and 0600 for regular files"
+   ],
+   "default_guess": "Require every object recursively to be owned by the kernel user with no group or other permission bits, while allowing any owner permission bits appropriate to its type."
+  },
+  {
+   "unit": "A18",
+   "subject": "store symlink exclusion",
+   "kind": "scope ambiguity",
+   "text": "Every file of the directory is opened without following symbolic links; a link found at start stops the start, and one found later makes that store call fail with nothing written.",
+   "question": "Does this cover the data-directory path and all of its path components, every nested directory and arbitrary entry recursively, or only known regular-file locations inside an already opened data-directory root?",
+   "options": [
+    "Reject symlinks in the data-directory path and anywhere recursively below it",
+    "Anchor an opened data-directory root and reject every symlink below it, but do not constrain its parent path",
+    "Check only known database, value, fixture and spool paths"
+   ],
+   "default_guess": "Open and anchor the data-directory root without following symlinks, then reject every symlink recursively below it."
+  },
+  {
+   "unit": "A18",
+   "subject": "SQLite auxiliary storage",
+   "kind": "boundary ambiguity",
+   "text": "The data directory holds one SQLite database with every kernel record ... Every file of the directory is opened without following symbolic links.",
+   "question": "May SQLite create journals, WAL files, shared-memory files or temporary files outside the data directory, and how are SQLite-created files made subject to the ownership and no-symlink rules?",
+   "options": [
+    "All SQLite auxiliary and temporary files must stay below the data directory and use the same protected open policy",
+    "Persistent sidecars must stay below the data directory but SQLite temporary files may use host temporary storage",
+    "SQLite's default auxiliary-file placement and open behavior are accepted"
+   ],
+   "default_guess": "Keep every SQLite auxiliary and temporary file below the data directory and enforce the same ownership and no-follow policy through the SQLite VFS or equivalent configuration."
+  },
+  {
+   "unit": "A18",
+   "subject": "startup check and cleanup precedence",
+   "kind": "unspecified order",
+   "text": "At start it takes an exclusive lock in the data directory ... the kernel refuses to start otherwise ... On start, temporary files, value bytes no record names ... and the spool directories ... are removed.",
+   "question": "In what exact order are locking, type/permission checks, symlink inspection, database opening or recovery, orphan cleanup and run recovery performed, and may cleanup mutate a directory before all security checks pass?",
+   "options": [
+    "Lock, validate the whole store, open and recover the database, clean orphans, then recover runs",
+    "Lock, clean orphans, then validate and open the store",
+    "Validate first, then lock and clean"
+   ],
+   "default_guess": "Acquire the lock first, complete all non-mutating security checks next, open and recover the database, then clean orphans before run recovery."
+  },
+  {
+   "unit": "A18",
+   "subject": "startup cleanup failures",
+   "kind": "missing failure behavior",
+   "text": "On start, temporary files, value bytes no record names ... are removed ... A spool directory that cannot be removed does not stop the start",
+   "question": "If removal of a temporary file or an unreferenced content file fails, does start refuse, continue while never serving it, or treat it like the explicitly tolerated spool-directory removal failure?",
+   "options": [
+    "Refuse start for failed temporary or content cleanup",
+    "Continue and retry cleanup on a later start",
+    "Continue only for permission-neutral transient errors"
+   ],
+   "default_guess": "Refuse start when temporary or unreferenced content cleanup fails, since only spool-directory cleanup is explicitly tolerated."
+  },
+  {
+   "unit": "A18",
+   "subject": "orphan-file cleanup coverage",
+   "kind": "incomplete rule",
+   "text": "temporary files, value bytes no record names ... and the spool directories of runs that ended and do not keep their spool ... are removed; nothing else is",
+   "question": "Are unreferenced trial-fixture files and spool directories or files naming no recorded run removed, retained forever, or handled as “value bytes” and ended-run spools?",
+   "options": [
+    "Remove every unreferenced content object, including fixtures, and every spool with no live retaining run",
+    "Remove only the categories literally named, retaining orphan fixtures and spools without run records",
+    "Remove orphan fixtures but retain spools without run records"
+   ],
+   "default_guess": "Remove every unreferenced content object, including trial fixtures, and every spool not belonging to a recorded run entitled to retain it."
+  },
+  {
+   "unit": "A18",
+   "subject": "file and database atomicity",
+   "kind": "crash-consistency gap",
+   "text": "Every change is one call to the store module and one transaction inside it ... Value bytes and spooled files are written to a temporary file, flushed, checked against their digest and size, and then renamed into place; a completed file a record names is never overwritten.",
+   "question": "What ordering and recovery protocol guarantees consistency across the SQLite commit and filesystem publication when the process or host crashes between file flush, rename, directory persistence and database commit?",
+   "options": [
+    "Publish and durably persist the file before committing its referencing record, cleaning unreferenced files on restart",
+    "Commit a staged record first and complete or roll it back during startup recovery",
+    "Use a recoverable intent record or journal spanning both resources"
+   ],
+   "default_guess": "Flush and verify the temporary file, atomically publish it, persist the containing directory, and only then commit the SQLite record; startup removes any published file left unreferenced."
+  },
+  {
+   "unit": "A18",
+   "subject": "meaning of flushed and durable",
+   "kind": "unspecified durability",
+   "text": "written to a temporary file, flushed, checked against their digest and size, and then renamed into place",
+   "question": "Which durability operations are required for the file, containing directories and SQLite transaction, and is survival of a process crash only or of a host/power failure promised?",
+   "options": [
+    "Require `fsync` or equivalent on file and affected directories plus durable SQLite commit, covering host crashes",
+    "Require only process-visible flushes, covering process crashes but not power loss",
+    "Leave durability to the filesystem and SQLite defaults"
+   ],
+   "default_guess": "Require durable file and directory synchronization and a durable SQLite commit so completed records survive host crashes under the supported Linux filesystem assumptions."
+  },
+  {
+   "unit": "A18",
+   "subject": "store record order",
+   "kind": "undefined ordering",
+   "text": "one process with one store and one writer ... records have one order",
+   "question": "How is the single store position assigned when one store call creates several records, and do mutations of entity records such as status transitions retain their original position or receive a new position?",
+   "options": [
+    "Each record receives a monotonically increasing creation position in a specified intra-call order; later mutations retain it",
+    "Each transaction has one position shared by all records it creates",
+    "Every mutation gives the entity a new store position"
+   ],
+   "default_guess": "Assign a distinct monotonically increasing position at first creation in the semantic write order specified for the call, and never move an existing entity when its mutable fields change."
+  },
+  {
+   "unit": "A18",
+   "subject": "surface request serialization",
+   "kind": "order ambiguity",
+   "text": "Surface requests are handled one at a time in the order they arrive",
+   "question": "For concurrently received MCP requests, what event defines arrival order and breaks ties: transport receipt, completion of message decoding, authentication completion, or an explicit sequence assigned by the listener?",
+   "options": [
+    "Assign a monotonically increasing sequence when the complete request message is received",
+    "Order by the first byte received",
+    "Allow the event loop or worker scheduling order to decide"
+   ],
+   "default_guess": "Assign the serialization sequence when a complete request message has been received, before validation or authentication."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A17\",\"subject\":\"configuration-file re-read\",\"kind\":\"snapshot ambiguity\",\"text\":\"Before evaluating each request the kernel reads the configuration file and compares the SHA-256 of its bytes with that of the last read; when they differ, or the file cannot be read, it re-reads it ... and the checks and the read use that one opened file, so the file checked is the file read.\",\"question\":\"When the configuration changes, are hashing, security checks and parsing performed from one opened descriptor and one byte snapshot, or may the second “re-read” open and read a different file?\",\"options\":[\"Open once, read one bounded snapshot, and use those same bytes for checking, hashing and parsing\",\"Open once for comparison and open again for parsing\",\"Open twice but retry if the identity or metadata changes\"],\"default_guess\":\"Open once and use the same descriptor and byte snapshot for checking, hashing and parsing.\"},{\"unit\":\"A17\",\"subject\":\"component-by-component path walk\",\"kind\":\"resolution ambiguity\",\"text\":\"the path as given, an absolute one walked from the root directory and a relative one from the working directory; each directory on the way opened with `O_PATH` and `O_DIRECTORY`\",\"question\":\"Must every later component be opened relative to the descriptor of the preceding opened directory, or may an implementation reconstruct and reopen pathname prefixes from the root or working directory?\",\"options\":[\"Resolve each component with a directory-relative open from the preceding descriptor\",\"Reopen each accumulated pathname prefix\",\"Either method is allowed if the final checked descriptor is the one read\"],\"default_guess\":\"Resolve every component relative to the preceding opened directory descriptor.\"},{\"unit\":\"A18\",\"subject\":\"data-directory initialization\",\"kind\":\"missing lifecycle rule\",\"text\":\"The data directory holds one SQLite database with every kernel record, a content-addressed area of value bytes and file fixtures named by digest, and the run spool, one subdirectory per run.\",\"question\":\"What must happen on first start when the data directory, database, content area or spool does not yet exist, and what happens when an expected object exists with the wrong type or the database is unreadable or corrupt?\",\"options\":[\"Create a missing empty layout but refuse wrong-type, unreadable or corrupt existing objects\",\"Require the complete layout to be provisioned before start\",\"Create or repair every missing or invalid object\"],\"default_guess\":\"Require the data directory itself to exist, create missing kernel-owned layout objects, and refuse wrong-type, unreadable or corrupt existing objects.\"},{\"unit\":\"A18\",\"subject\":\"exclusive process lock\",\"kind\":\"unspecified protocol\",\"text\":\"At start it takes an exclusive lock in the data directory; a second process on the same directory refuses to start.\",\"question\":\"Which lock object and Linux locking primitive identify an installation, when is the lock acquired, and must it remain held for the process lifetime and be excluded from child processes?\",\"options\":[\"A fixed lock file with `flock`, held for the kernel lifetime and close-on-exec\",\"A fixed lock file with POSIX record locking, held for the kernel lifetime and close-on-exec\",\"A lock directory or another atomic filesystem protocol\"],\"default_guess\":\"Use a fixed owner-only lock file with a nonblocking exclusive `flock`, held for the process lifetime and marked close-on-exec.\"},{\"unit\":\"A18\",\"subject\":\"private store permissions\",\"kind\":\"vague refusal condition\",\"text\":\"The directory and everything in it are private to the kernel's user; the kernel refuses to start otherwise.\",\"question\":\"What exact ownership, file types and permission bits constitute “private,” including for the root directory, subdirectories, SQLite auxiliary files, lock file, temporary files and spool contents?\",\"options\":[\"Every object must be owned by the kernel user and grant no group or other permissions\",\"Only the data-directory root must be owner-only; descendants rely on traversal protection\",\"Require exact modes such as 0700 for directories and 0600 for regular files\"],\"default_guess\":\"Require every object recursively to be owned by the kernel user with no group or other permission bits, while allowing any owner permission bits appropriate to its type.\"},{\"unit\":\"A18\",\"subject\":\"store symlink exclusion\",\"kind\":\"scope ambiguity\",\"text\":\"Every file of the directory is opened without following symbolic links; a link found at start stops the start, and one found later makes that store call fail with nothing written.\",\"question\":\"Does this cover the data-directory path and all of its path components, every nested directory and arbitrary entry recursively, or only known regular-file locations inside an already opened data-directory root?\",\"options\":[\"Reject symlinks in the data-directory path and anywhere recursively below it\",\"Anchor an opened data-directory root and reject every symlink below it, but do not constrain its parent path\",\"Check only known database, value, fixture and spool paths\"],\"default_guess\":\"Open and anchor the data-directory root without following symlinks, then reject every symlink recursively below it.\"},{\"unit\":\"A18\",\"subject\":\"SQLite auxiliary storage\",\"kind\":\"boundary ambiguity\",\"text\":\"The data directory holds one SQLite database with every kernel record ... Every file of the directory is opened without following symbolic links.\",\"question\":\"May SQLite create journals, WAL files, shared-memory files or temporary files outside the data directory, and how are SQLite-created files made subject to the ownership and no-symlink rules?\",\"options\":[\"All SQLite auxiliary and temporary files must stay below the data directory and use the same protected open policy\",\"Persistent sidecars must stay below the data directory but SQLite temporary files may use host temporary storage\",\"SQLite's default auxiliary-file placement and open behavior are accepted\"],\"default_guess\":\"Keep every SQLite auxiliary and temporary file below the data directory and enforce the same ownership and no-follow policy through the SQLite VFS or equivalent configuration.\"},{\"unit\":\"A18\",\"subject\":\"startup check and cleanup precedence\",\"kind\":\"unspecified order\",\"text\":\"At start it takes an exclusive lock in the data directory ... the kernel refuses to start otherwise ... On start, temporary files, value bytes no record names ... and the spool directories ... are removed.\",\"question\":\"In what exact order are locking, type/permission checks, symlink inspection, database opening or recovery, orphan cleanup and run recovery performed, and may cleanup mutate a directory before all security checks pass?\",\"options\":[\"Lock, validate the whole store, open and recover the database, clean orphans, then recover runs\",\"Lock, clean orphans, then validate and open the store\",\"Validate first, then lock and clean\"],\"default_guess\":\"Acquire the lock first, complete all non-mutating security checks next, open and recover the database, then clean orphans before run recovery.\"},{\"unit\":\"A18\",\"subject\":\"startup cleanup failures\",\"kind\":\"missing failure behavior\",\"text\":\"On start, temporary files, value bytes no record names ... are removed ... A spool directory that cannot be removed does not stop the start\",\"question\":\"If removal of a temporary file or an unreferenced content file fails, does start refuse, continue while never serving it, or treat it like the explicitly tolerated spool-directory removal failure?\",\"options\":[\"Refuse start for failed temporary or content cleanup\",\"Continue and retry cleanup on a later start\",\"Continue only for permission-neutral transient errors\"],\"default_guess\":\"Refuse start when temporary or unreferenced content cleanup fails, since only spool-directory cleanup is explicitly tolerated.\"},{\"unit\":\"A18\",\"subject\":\"orphan-file cleanup coverage\",\"kind\":\"incomplete rule\",\"text\":\"temporary files, value bytes no record names ... and the spool directories of runs that ended and do not keep their spool ... are removed; nothing else is\",\"question\":\"Are unreferenced trial-fixture files and spool directories or files naming no recorded run removed, retained forever, or handled as “value bytes” and ended-run spools?\",\"options\":[\"Remove every unreferenced content object, including fixtures, and every spool with no live retaining run\",\"Remove only the categories literally named, retaining orphan fixtures and spools without run records\",\"Remove orphan fixtures but retain spools without run records\"],\"default_guess\":\"Remove every unreferenced content object, including trial fixtures, and every spool not belonging to a recorded run entitled to retain it.\"},{\"unit\":\"A18\",\"subject\":\"file and database atomicity\",\"kind\":\"crash-consistency gap\",\"text\":\"Every change is one call to the store module and one transaction inside it ... Value bytes and spooled files are written to a temporary file, flushed, checked against their digest and size, and then renamed into place; a completed file a record names is never overwritten.\",\"question\":\"What ordering and recovery protocol guarantees consistency across the SQLite commit and filesystem publication when the process or host crashes between file flush, rename, directory persistence and database commit?\",\"options\":[\"Publish and durably persist the file before committing its referencing record, cleaning unreferenced files on restart\",\"Commit a staged record first and complete or roll it back during startup recovery\",\"Use a recoverable intent record or journal spanning both resources\"],\"default_guess\":\"Flush and verify the temporary file, atomically publish it, persist the containing directory, and only then commit the SQLite record; startup removes any published file left unreferenced.\"},{\"unit\":\"A18\",\"subject\":\"meaning of flushed and durable\",\"kind\":\"unspecified durability\",\"text\":\"written to a temporary file, flushed, checked against their digest and size, and then renamed into place\",\"question\":\"Which durability operations are required for the file, containing directories and SQLite transaction, and is survival of a process crash only or of a host/power failure promised?\",\"options\":[\"Require `fsync` or equivalent on file and affected directories plus durable SQLite commit, covering host crashes\",\"Require only process-visible flushes, covering process crashes but not power loss\",\"Leave durability to the filesystem and SQLite defaults\"],\"default_guess\":\"Require durable file and directory synchronization and a durable SQLite commit so completed records survive host crashes under the supported Linux filesystem assumptions.\"},{\"unit\":\"A18\",\"subject\":\"store record order\",\"kind\":\"undefined ordering\",\"text\":\"one process with one store and one writer ... records have one order\",\"question\":\"How is the single store position assigned when one store call creates several records, and do mutations of entity records such as status transitions retain their original position or receive a new position?\",\"options\":[\"Each record receives a monotonically increasing creation position in a specified intra-call order; later mutations retain it\",\"Each transaction has one position shared by all records it creates\",\"Every mutation gives the entity a new store position\"],\"default_guess\":\"Assign a distinct monotonically increasing position at first creation in the semantic write order specified for the call, and never move an existing entity when its mutable fields change.\"},{\"unit\":\"A18\",\"subject\":\"surface request serialization\",\"kind\":\"order ambiguity\",\"text\":\"Surface requests are handled one at a time in the order they arrive\",\"question\":\"For concurrently received MCP requests, what event defines arrival order and breaks ties: transport receipt, completion of message decoding, authentication completion, or an explicit sequence assigned by the listener?\",\"options\":[\"Assign a monotonically increasing sequence when the complete request message is received\",\"Order by the first byte received\",\"Allow the event loop or worker scheduling order to decide\"],\"default_guess\":\"Assign the serialization sequence when a complete request message has been received, before validation or authentication.\"}]}",
+ "set_aside": []
+}
