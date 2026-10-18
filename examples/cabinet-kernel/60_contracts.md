@@ -1340,9 +1340,10 @@ the candidate would have followed links.
     version named; another host is unsupported. Today's host is the owner's
     machine, later a home server.
     - A20 rule 3 (`02_rules_installation.md`) says so; its formal invariants
-      gain `host = linux`. Another system, or a Linux on which `O_NOFOLLOW`,
-      `O_PATH` or `O_DIRECTORY` does not act as documented, is unsupported
-      and untested; the sandbox's facilities stay A03's. Rule 3
+      gain `host = linux`. Another system, or a Linux or file system on
+      which a call the rules rely on (opening with the named flags, locking,
+      renaming, flushing) does not act as documented, is unsupported and
+      untested; the sandbox's facilities stay A03's. Rule 3
       stays outside the running kernel (State 3).
     - A17 rule 1 (and through "here and in rule 2" the secret files) opens
       each component with `O_NOFOLLOW`, whose presence no code tests; the
@@ -1350,9 +1351,11 @@ the candidate would have followed links.
       directory, each directory on the way with `O_PATH` and `O_DIRECTORY`
       so that a search-only directory such as a home of mode 0711 is passed,
       `.` and `..` opened as named and empty components skipped, a path
-      naming no component unreadable; any
+      naming no component unreadable, the last component opened with
+      `O_NONBLOCK` so that a FIFO is refused rather than waited on, and no
+      such descriptor inherited by a process the kernel starts; any
       component that cannot be opened so makes the file unreadable (State 2
-      rounds 129–131, State 5 rounds 145–146). Notes:
+      rounds 129–132, State 5 rounds 145–147). Notes:
       `read_configuration` (and through it `current_token_list`) and
       `resolve_service_credential`.
     - `open_store`'s note said the database file is "opened without
@@ -1361,7 +1364,7 @@ the candidate would have followed links.
       code does: the database path is checked with `os.lstat` before the
       connection opens. A18 is unchanged.
     - Why no more is specified. In between, the State 2–5 and 7 rounds of
-      2026-10-18 (State 2 123–131, State 3 110–115, State 4 99–104, State 5
+      2026-10-18 (State 2 123–132, State 3 110–115, State 4 99–104, State 5
       138–143, State 7 68–73) were run on a fuller text that named
       `O_NOFOLLOW` for every store open, an exception for SQLite's files,
       `O_PATH` for pass-through directories and the treatment of `.`, `..`

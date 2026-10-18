@@ -169,12 +169,15 @@ Reuses cabinet-flow decision 23, narrowed by K-16.
    given, an absolute one walked from the root directory and a relative one
    from the working directory; each directory on the way opened with
    `O_PATH` and `O_DIRECTORY`, so a directory the kernel's user may only
-   search is passed, and the last component for reading; every component the
+   search is passed, and the last component for reading with `O_NONBLOCK`
+   as well, so a component that is no regular file is refused by the checks
+   rather than waited on; every component the
    path names, `.` and `..` included, opened as named, and an empty one, from
    a repeated or trailing `/`, skipped; a path that names no component, empty
    or `/` alone, a file that cannot be read; a component that cannot be opened so,
    for whatever reason, making the file one that cannot be read —, and the checks and the read use
-   that one opened file, so the file checked is the file read.
+   that one opened file, so the file checked is the file read. No
+   descriptor so opened is inherited by a process the kernel starts.
 2. A credential is resolved only when a request to its service is built: its
    secret file is read then, without following a symbolic link, and must be a
    regular file owned by the kernel's user with no permission for group or
@@ -390,9 +393,10 @@ reads.
    3.12, whose `random` module gives A03 rule 4 its list. A vulnerable dependency is answered by a new
    release; a running kernel never updates one. A release runs on Linux and
    on no other host, no version named (owner, 2026-10-18). Another system, or
-   a Linux on which an open flag these rules name (`O_NOFOLLOW`, `O_PATH`,
-   `O_DIRECTORY`) does not act as Linux documents it, is unsupported: the
-   kernel neither tests for it nor defines what it does there; the sandbox's facilities stay A03's,
+   a Linux or file system on which a call these rules rely on — opening with
+   the flags they name, locking, renaming, flushing — does not act as Linux
+   documents it, is unsupported: the kernel neither tests for it nor defines
+   what it does there; the sandbox's facilities stay A03's,
    which the start probes.
 4. A new release may change ceilings. They bind contract versions issued after
    it; a contract version issued earlier keeps its bounds and executes under them

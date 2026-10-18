@@ -1,0 +1,190 @@
+{
+ "open_points": [
+  {
+   "subject": "A17 final-component opening",
+   "kind": "vague open semantics",
+   "text": "“and the last component for reading”",
+   "question": "Which flags are used for the last component, and how is a non-regular object rejected without allowing an open of a FIFO, device or other special file to block or have side effects before the regular-file check?",
+   "options": [
+    "Open with O_RDONLY|O_NOFOLLOW and then fstat",
+    "Add O_NONBLOCK before fstat",
+    "First inspect with O_PATH, then obtain a readable descriptor by a separately specified safe method"
+   ],
+   "default_guess": "Open with O_RDONLY|O_NOFOLLOW|O_NONBLOCK|O_CLOEXEC, then fstat the same descriptor before reading.",
+   "unit": "?"
+  },
+  {
+   "subject": "A17 Linux path encoding",
+   "kind": "missing representation",
+   "text": "“the path as given”",
+   "question": "How are the command-line configuration path and JSON secret-path strings converted to Linux pathname bytes, including non-ASCII text and undecodable argv bytes?",
+   "options": [
+    "Strict UTF-8",
+    "The process locale/filesystem encoding",
+    "Preserve raw argv bytes and require UTF-8 for paths read from JSON"
+   ],
+   "default_guess": "Require paths to be valid UTF-8 and encode them as UTF-8 bytes.",
+   "unit": "?"
+  },
+  {
+   "subject": "A17 traversal file descriptors",
+   "kind": "missing security rule",
+   "text": "“each directory on the way opened with O_PATH and O_DIRECTORY, so a directory the kernel's user may only search is passed, and the last component for reading”",
+   "question": "Must every directory and final-file descriptor be close-on-exec, when must it be closed, and may any such descriptor survive into bubblewrap or another child process?",
+   "options": [
+    "Use O_CLOEXEC and close all traversal descriptors immediately after the operation",
+    "Rely on the language runtime's default non-inheritable descriptors",
+    "Allow descriptors to remain open until ordinary garbage collection or request completion"
+   ],
+   "default_guess": "Use O_CLOEXEC on every descriptor and close all of them deterministically before any child process can be started.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 exclusive data-directory lock",
+   "kind": "undefined lock semantics",
+   "text": "“At start it takes an exclusive lock in the data directory; a second process on the same directory refuses to start.”",
+   "question": "What object and locking primitive define this lock, when is it acquired and released, and does a stale lock file after a crash prevent startup?",
+   "options": [
+    "A persistent lock file with a lifetime-held advisory flock; an unlocked stale file is harmless",
+    "Exclusive creation of a lock file; a stale file prevents startup until removed",
+    "A lock on the SQLite database using SQLite's own locking"
+   ],
+   "default_guess": "Use a fixed lock file with a non-blocking advisory lock held for the process lifetime; a stale unlocked file does not prevent startup.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 private data directory",
+   "kind": "vague refusal condition",
+   "text": "“The directory and everything in it are private to the kernel's user; the kernel refuses to start otherwise.”",
+   "question": "What exact ownership, object-type and permission-bit conditions make the data directory, its subdirectories, database files, lock file, SQLite auxiliary files and stored payloads “private”?",
+   "options": [
+    "Every object must be owned by the effective kernel user and have no group or other permission bits",
+    "Only the top-level directory must be owner-only",
+    "Directories may grant group or other search permission while files remain owner-only"
+   ],
+   "default_guess": "Require the effective kernel user to own every object, with no group or other permission bits; require directories where directories are expected and regular files where files are expected.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 symlink checking scope",
+   "kind": "undefined traversal",
+   "text": "“Every file of the directory is opened without following symbolic links; a link found at start stops the start, and one found later makes that store call fail with nothing written.”",
+   "question": "Does this cover the data-directory path and every directory component and entry recursively, how are inaccessible or concurrently replaced entries handled, and which store call is considered to have “met” a symlink?",
+   "options": [
+    "Walk every component and descendant without following links; any link or race-induced mismatch refuses startup or the current call",
+    "Check only files the store happens to open",
+    "Scan descendants at startup, but trust directory components and later traversal"
+   ],
+   "default_guess": "Anchor the data directory with a descriptor, walk every component and relevant descendant without following links, and fail startup or the current store call on any symlink or replacement detected during that walk.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 request serialization order",
+   "kind": "undefined ordering",
+   "text": "“Surface requests are handled one at a time in the order they arrive”",
+   "question": "Which observable event establishes arrival order when multiple MCP requests arrive concurrently?",
+   "options": [
+    "Completion of receipt of the full MCP message",
+    "Acceptance by the listener before the full message is read",
+    "Completion of size, token and schema validation",
+    "The runtime event loop's scheduling order"
+   ],
+   "default_guess": "Assign a monotonically ordered queue position when the complete request message has been received, before validation.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 file and database crash consistency",
+   "kind": "missing durability protocol",
+   "text": "“Value bytes and spooled files are written to a temporary file, flushed, checked against their digest and size, and then renamed into place”",
+   "question": "What does “flushed” guarantee, and what publication, directory-sync and SQLite-commit order prevents a committed record from naming a file that disappears after a crash or power loss?",
+   "options": [
+    "fsync the temporary file, rename, fsync the containing directory, then commit the database record durably",
+    "Flush only userspace buffers before rename",
+    "Commit the database first and repair a missing file during startup"
+   ],
+   "default_guess": "Fsync the file, rename it, fsync its directory, and only then durably commit the record; a pre-commit failure may leave the permitted unnamed file.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 SQLite auxiliary state",
+   "kind": "rule conflict",
+   "text": "“the only trace it can leave is a published file no record names” and “On start, temporary files, value bytes no record names ... and the spool directories ... are removed; nothing else is.”",
+   "question": "Are SQLite journals, WAL/SHM files, lock artifacts and changes made by SQLite crash recovery permitted traces of a failed call or startup, despite “only” and “nothing else,” and how must they be validated and cleaned?",
+   "options": [
+    "SQLite-managed auxiliary files and recovery are explicit exceptions",
+    "Configure SQLite so no persistent auxiliary file can remain",
+    "Treat any auxiliary file or recovery mutation as a violation and refuse startup"
+   ],
+   "default_guess": "Make SQLite's required auxiliary files and crash-recovery mutations explicit exceptions, while subjecting their paths and permissions to the same security checks.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 orphan trial fixtures",
+   "kind": "missing cleanup rule",
+   "text": "“a spooled file is replaced at its position, value bytes are reused by equal bytes until the next start removes them” and “On start, temporary files, value bytes no record names ... are removed”",
+   "question": "What happens to a published trial file fixture when its store transaction fails and no TrialCase record names it?",
+   "options": [
+    "Remove every unreferenced content-addressed object at the next start, including fixtures",
+    "Retain and reuse an orphan fixture by digest",
+    "Remove it immediately when the transaction failure is detected"
+   ],
+   "default_guess": "Treat fixtures like other content-addressed bytes and remove any unreferenced published fixture at the next start.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 existing content-addressed file",
+   "kind": "undefined integrity failure",
+   "text": "“a completed file a record names is never overwritten” and “Equal bytes are stored once.”",
+   "question": "What happens when the digest-named destination already exists but its size or bytes do not equal the bytes being published, whether because of corruption, tampering or a digest collision?",
+   "options": [
+    "Fail the store call and never overwrite it",
+    "Replace it after verifying the new bytes",
+    "Reuse it based only on its filename"
+   ],
+   "default_guess": "Verify the existing file and fail with an integrity error without overwriting it if its bytes or size differ.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 startup refusal precedence",
+   "kind": "missing check order",
+   "text": "“At start it takes an exclusive lock” and “the kernel refuses to start otherwise” and “a link found at start stops the start”",
+   "question": "In what order are the lock, data-directory ownership and permissions, type and symlink scan, database integrity/opening, orphan cleanup, configuration checks and sandbox probe performed, and which reason is reported when several fail?",
+   "options": [
+    "Specify one total startup-check order",
+    "Report all startup failures together",
+    "Leave the first reported failure dependent on module initialization order"
+   ],
+   "default_guess": "Use a fixed total order beginning with securely opening and validating the configuration and data-directory path, then directory privacy and lock, store validation/recovery and cleanup, followed by the sandbox probe.",
+   "unit": "?"
+  },
+  {
+   "subject": "A20 supported Linux boundary",
+   "kind": "unverifiable support predicate",
+   "text": "“A release runs on Linux and on no other host, no version named” and “a Linux on which an open flag these rules name ... does not act as Linux documents it, is unsupported: the kernel neither tests for it”",
+   "question": "Which Linux documentation or ABI version defines the required flag behavior, and who or what determines that a host satisfies it when the kernel neither names a version nor tests the behavior?",
+   "options": [
+    "Pin a Linux ABI or man-pages version as part of the release",
+    "Treat every host identifying as Linux as conforming by assumption",
+    "Make conformance an installer-attested precondition"
+   ],
+   "default_guess": "Pin the required Linux syscall semantics to a documented release baseline and make host conformance an explicit installer precondition.",
+   "unit": "?"
+  },
+  {
+   "subject": "A20 Linux filesystem requirements for A18",
+   "kind": "cross-unit support gap",
+   "text": "“A release runs on Linux” versus A18's “exclusive lock,” “flushed,” and “renamed into place” guarantees",
+   "question": "Does supported Linux also require a filesystem that provides reliable SQLite locking, atomic same-filesystem rename and durable fsync semantics, and what happens on Linux filesystems that do not?",
+   "options": [
+    "State those filesystem capabilities as supported-host prerequisites",
+    "Probe them at startup and refuse when unavailable",
+    "Regard every Linux filesystem as supported without additional checks"
+   ],
+   "default_guess": "Require a local filesystem with reliable SQLite locking, atomic rename and durable fsync semantics, and refuse startup when the store can identify that the requirement is not met.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A17 final-component opening\",\"kind\":\"vague open semantics\",\"text\":\"“and the last component for reading”\",\"question\":\"Which flags are used for the last component, and how is a non-regular object rejected without allowing an open of a FIFO, device or other special file to block or have side effects before the regular-file check?\",\"options\":[\"Open with O_RDONLY|O_NOFOLLOW and then fstat\",\"Add O_NONBLOCK before fstat\",\"First inspect with O_PATH, then obtain a readable descriptor by a separately specified safe method\"],\"default_guess\":\"Open with O_RDONLY|O_NOFOLLOW|O_NONBLOCK|O_CLOEXEC, then fstat the same descriptor before reading.\"},{\"subject\":\"A17 Linux path encoding\",\"kind\":\"missing representation\",\"text\":\"“the path as given”\",\"question\":\"How are the command-line configuration path and JSON secret-path strings converted to Linux pathname bytes, including non-ASCII text and undecodable argv bytes?\",\"options\":[\"Strict UTF-8\",\"The process locale/filesystem encoding\",\"Preserve raw argv bytes and require UTF-8 for paths read from JSON\"],\"default_guess\":\"Require paths to be valid UTF-8 and encode them as UTF-8 bytes.\"},{\"subject\":\"A17 traversal file descriptors\",\"kind\":\"missing security rule\",\"text\":\"“each directory on the way opened with O_PATH and O_DIRECTORY, so a directory the kernel's user may only search is passed, and the last component for reading”\",\"question\":\"Must every directory and final-file descriptor be close-on-exec, when must it be closed, and may any such descriptor survive into bubblewrap or another child process?\",\"options\":[\"Use O_CLOEXEC and close all traversal descriptors immediately after the operation\",\"Rely on the language runtime's default non-inheritable descriptors\",\"Allow descriptors to remain open until ordinary garbage collection or request completion\"],\"default_guess\":\"Use O_CLOEXEC on every descriptor and close all of them deterministically before any child process can be started.\"},{\"subject\":\"A18 exclusive data-directory lock\",\"kind\":\"undefined lock semantics\",\"text\":\"“At start it takes an exclusive lock in the data directory; a second process on the same directory refuses to start.”\",\"question\":\"What object and locking primitive define this lock, when is it acquired and released, and does a stale lock file after a crash prevent startup?\",\"options\":[\"A persistent lock file with a lifetime-held advisory flock; an unlocked stale file is harmless\",\"Exclusive creation of a lock file; a stale file prevents startup until removed\",\"A lock on the SQLite database using SQLite's own locking\"],\"default_guess\":\"Use a fixed lock file with a non-blocking advisory lock held for the process lifetime; a stale unlocked file does not prevent startup.\"},{\"subject\":\"A18 private data directory\",\"kind\":\"vague refusal condition\",\"text\":\"“The directory and everything in it are private to the kernel's user; the kernel refuses to start otherwise.”\",\"question\":\"What exact ownership, object-type and permission-bit conditions make the data directory, its subdirectories, database files, lock file, SQLite auxiliary files and stored payloads “private”?\",\"options\":[\"Every object must be owned by the effective kernel user and have no group or other permission bits\",\"Only the top-level directory must be owner-only\",\"Directories may grant group or other search permission while files remain owner-only\"],\"default_guess\":\"Require the effective kernel user to own every object, with no group or other permission bits; require directories where directories are expected and regular files where files are expected.\"},{\"subject\":\"A18 symlink checking scope\",\"kind\":\"undefined traversal\",\"text\":\"“Every file of the directory is opened without following symbolic links; a link found at start stops the start, and one found later makes that store call fail with nothing written.”\",\"question\":\"Does this cover the data-directory path and every directory component and entry recursively, how are inaccessible or concurrently replaced entries handled, and which store call is considered to have “met” a symlink?\",\"options\":[\"Walk every component and descendant without following links; any link or race-induced mismatch refuses startup or the current call\",\"Check only files the store happens to open\",\"Scan descendants at startup, but trust directory components and later traversal\"],\"default_guess\":\"Anchor the data directory with a descriptor, walk every component and relevant descendant without following links, and fail startup or the current store call on any symlink or replacement detected during that walk.\"},{\"subject\":\"A18 request serialization order\",\"kind\":\"undefined ordering\",\"text\":\"“Surface requests are handled one at a time in the order they arrive”\",\"question\":\"Which observable event establishes arrival order when multiple MCP requests arrive concurrently?\",\"options\":[\"Completion of receipt of the full MCP message\",\"Acceptance by the listener before the full message is read\",\"Completion of size, token and schema validation\",\"The runtime event loop's scheduling order\"],\"default_guess\":\"Assign a monotonically ordered queue position when the complete request message has been received, before validation.\"},{\"subject\":\"A18 file and database crash consistency\",\"kind\":\"missing durability protocol\",\"text\":\"“Value bytes and spooled files are written to a temporary file, flushed, checked against their digest and size, and then renamed into place”\",\"question\":\"What does “flushed” guarantee, and what publication, directory-sync and SQLite-commit order prevents a committed record from naming a file that disappears after a crash or power loss?\",\"options\":[\"fsync the temporary file, rename, fsync the containing directory, then commit the database record durably\",\"Flush only userspace buffers before rename\",\"Commit the database first and repair a missing file during startup\"],\"default_guess\":\"Fsync the file, rename it, fsync its directory, and only then durably commit the record; a pre-commit failure may leave the permitted unnamed file.\"},{\"subject\":\"A18 SQLite auxiliary state\",\"kind\":\"rule conflict\",\"text\":\"“the only trace it can leave is a published file no record names” and “On start, temporary files, value bytes no record names ... and the spool directories ... are removed; nothing else is.”\",\"question\":\"Are SQLite journals, WAL/SHM files, lock artifacts and changes made by SQLite crash recovery permitted traces of a failed call or startup, despite “only” and “nothing else,” and how must they be validated and cleaned?\",\"options\":[\"SQLite-managed auxiliary files and recovery are explicit exceptions\",\"Configure SQLite so no persistent auxiliary file can remain\",\"Treat any auxiliary file or recovery mutation as a violation and refuse startup\"],\"default_guess\":\"Make SQLite's required auxiliary files and crash-recovery mutations explicit exceptions, while subjecting their paths and permissions to the same security checks.\"},{\"subject\":\"A18 orphan trial fixtures\",\"kind\":\"missing cleanup rule\",\"text\":\"“a spooled file is replaced at its position, value bytes are reused by equal bytes until the next start removes them” and “On start, temporary files, value bytes no record names ... are removed”\",\"question\":\"What happens to a published trial file fixture when its store transaction fails and no TrialCase record names it?\",\"options\":[\"Remove every unreferenced content-addressed object at the next start, including fixtures\",\"Retain and reuse an orphan fixture by digest\",\"Remove it immediately when the transaction failure is detected\"],\"default_guess\":\"Treat fixtures like other content-addressed bytes and remove any unreferenced published fixture at the next start.\"},{\"subject\":\"A18 existing content-addressed file\",\"kind\":\"undefined integrity failure\",\"text\":\"“a completed file a record names is never overwritten” and “Equal bytes are stored once.”\",\"question\":\"What happens when the digest-named destination already exists but its size or bytes do not equal the bytes being published, whether because of corruption, tampering or a digest collision?\",\"options\":[\"Fail the store call and never overwrite it\",\"Replace it after verifying the new bytes\",\"Reuse it based only on its filename\"],\"default_guess\":\"Verify the existing file and fail with an integrity error without overwriting it if its bytes or size differ.\"},{\"subject\":\"A18 startup refusal precedence\",\"kind\":\"missing check order\",\"text\":\"“At start it takes an exclusive lock” and “the kernel refuses to start otherwise” and “a link found at start stops the start”\",\"question\":\"In what order are the lock, data-directory ownership and permissions, type and symlink scan, database integrity/opening, orphan cleanup, configuration checks and sandbox probe performed, and which reason is reported when several fail?\",\"options\":[\"Specify one total startup-check order\",\"Report all startup failures together\",\"Leave the first reported failure dependent on module initialization order\"],\"default_guess\":\"Use a fixed total order beginning with securely opening and validating the configuration and data-directory path, then directory privacy and lock, store validation/recovery and cleanup, followed by the sandbox probe.\"},{\"subject\":\"A20 supported Linux boundary\",\"kind\":\"unverifiable support predicate\",\"text\":\"“A release runs on Linux and on no other host, no version named” and “a Linux on which an open flag these rules name ... does not act as Linux documents it, is unsupported: the kernel neither tests for it”\",\"question\":\"Which Linux documentation or ABI version defines the required flag behavior, and who or what determines that a host satisfies it when the kernel neither names a version nor tests the behavior?\",\"options\":[\"Pin a Linux ABI or man-pages version as part of the release\",\"Treat every host identifying as Linux as conforming by assumption\",\"Make conformance an installer-attested precondition\"],\"default_guess\":\"Pin the required Linux syscall semantics to a documented release baseline and make host conformance an explicit installer precondition.\"},{\"subject\":\"A20 Linux filesystem requirements for A18\",\"kind\":\"cross-unit support gap\",\"text\":\"“A release runs on Linux” versus A18's “exclusive lock,” “flushed,” and “renamed into place” guarantees\",\"question\":\"Does supported Linux also require a filesystem that provides reliable SQLite locking, atomic same-filesystem rename and durable fsync semantics, and what happens on Linux filesystems that do not?\",\"options\":[\"State those filesystem capabilities as supported-host prerequisites\",\"Probe them at startup and refuse when unavailable\",\"Regard every Linux filesystem as supported without additional checks\"],\"default_guess\":\"Require a local filesystem with reliable SQLite locking, atomic rename and durable fsync semantics, and refuse startup when the store can identify that the requirement is not met.\"}]}",
+ "set_aside": []
+}
