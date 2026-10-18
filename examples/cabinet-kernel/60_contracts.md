@@ -1337,16 +1337,17 @@ the candidate would have followed links.
 
 34. **The kernel runs on Linux; no-follow opening is `O_NOFOLLOW`, where it guards something.**
     The owner decided on 2026-10-18, after the State 2–5 and 7 rounds of
-    that day (State 2 123–126, State 3 110–113, State 4 99–102, State 5
-    138–141, State 7 68–71) asked who proves the host, how SQLite's own
+    that day (State 2 123–127, State 3 110–114, State 4 99–103, State 5
+    138–142, State 7 68–72) asked who proves the host, how SQLite's own
     files refuse a link, and how a path is walked:
     - *Host.* A20 rule 3: the kernel runs on Linux, no version named, and
       the formal invariants gain `host = linux`. Another host is not
       supported; the kernel neither tests the host nor defines what it does
       elsewhere, so no start step and no module owns a host check. Rule 3
       stays outside the running kernel (State 3): a fact of the release.
-      A Linux lacking a facility these rules use (`O_PATH`, `O_NOFOLLOW`,
-      A03's namespaces and limits) is unsupported in the same way. Today's
+      A Linux without `O_PATH` and `O_NOFOLLOW` is unsupported in the same
+      way; the sandbox's facilities stay A03's, which the start probes and
+      refuses without (State 2 round 127, State 3 round 114). Today's
       host is the owner's machine, later a home server.
     - *Configuration and secret files* (A17 rule 1, and rule 2 through
       "here and in rule 2"). Their paths lie outside the kernel's private
@@ -1355,10 +1356,13 @@ the candidate would have followed links.
       to a service as a credential. Each component is opened with
       `O_NOFOLLOW`, a directory on the way with `O_PATH` as well, so that a
       directory the kernel's user may only pass through (a home directory of
-      mode 0711) is passed; a relative path starts at the working directory;
+      mode 0711) is passed; an absolute path starts at the root directory, a
+      relative one at the working directory;
       empty and `.` components are skipped and `..` is opened as any other
       component (the parent of the directory reached so far, never a link);
-      no code asks whether a flag exists. Notes: `read_configuration` (and through
+      no code asks whether a flag exists. Nothing requires or checks that
+      these paths lie outside the data directory (State 5 round 142); they
+      usually pass through directories others may write. Notes: `read_configuration` (and through
       it `current_token_list`) and `resolve_service_credential`.
     - *The data directory* (A18 rule 2). The start's check stands: the
       directory and everything in it private to the kernel's user, no link
@@ -1368,7 +1372,8 @@ the candidate would have followed links.
       locks it). Files the store opens itself are opened
       relative to the data directory descriptor `open_store` holds, each
       component with `O_NOFOLLOW`, and a link met later fails that call,
-      writing no record — rule 3's one permitted trace, an unnamed published
+      writing nothing through the link and no record, as A18's required test
+      4 already checks; rule 3's one permitted trace, an unnamed published
       file, stays permitted (`record_change`). The database file and its journal
       are opened by SQLite, which Python's `sqlite3` cannot ask to refuse a
       link (no URI parameter does it; checked on SQLite 3.45): the start's
@@ -1379,7 +1384,11 @@ the candidate would have followed links.
       earlier note's "the file opened without following links" promised
       what `sqlite3` cannot do. The kernel sets and checks no journal mode;
       the exception covers the database file and every file SQLite creates
-      beside it under its name, in whatever mode the file holds. A18's formal invariant, which refused
+      beside it under its name, in whatever mode the file holds. SQLite opens
+      them by path, so a move of the data directory after start is not
+      followed either; moving it needs write access to its parent, which the
+      host leaves to the kernel's user, unchecked (State 2 round 127, State 5
+      round 142). A18's formal invariant, which refused
       every link inside the directory, now says the three cases: at start the
       start is refused, after start a store-opened path fails its call, and
       SQLite's files are not watched (State 2–5 rounds 125, 112, 101, 140;
