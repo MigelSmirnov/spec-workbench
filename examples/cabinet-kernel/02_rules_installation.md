@@ -165,7 +165,10 @@ Reuses cabinet-flow decision 23, narrowed by K-16.
    no permission for group or others; the kernel refuses to start otherwise.
    Here and in rule 2 the path is opened component by component without
    following a symbolic link at any of them, each component with Linux's
-   `O_NOFOLLOW`, whose presence no code tests (A20 rule 3), and the checks and the read use
+   `O_NOFOLLOW`, whose presence no code tests (A20 rule 3) — the path as
+   given, an absolute one walked from the root directory and a relative one
+   from the working directory, and a component that cannot be opened so, for
+   whatever reason, making the file one that cannot be read —, and the checks and the read use
    that one opened file, so the file checked is the file read.
 2. A credential is resolved only when a request to its service is built: its
    secret file is read then, without following a symbolic link, and must be a
@@ -381,7 +384,10 @@ reads.
    the sandbox runtime (A03); the sandbox interpreter of release v1 is CPython
    3.12, whose `random` module gives A03 rule 4 its list. A vulnerable dependency is answered by a new
    release; a running kernel never updates one. A release runs on Linux and
-   on no other host, no version named (owner, 2026-10-18).
+   on no other host, no version named (owner, 2026-10-18). Another system, or
+   a Linux without `O_NOFOLLOW`, is unsupported: the kernel neither tests for
+   it nor defines what it does there; the sandbox's facilities stay A03's,
+   which the start probes.
 4. A new release may change ceilings. They bind contract versions issued after
    it; a contract version issued earlier keeps its bounds and executes under them
    even when they exceed the new ceilings, and recorded executions are never
