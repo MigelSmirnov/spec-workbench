@@ -135,14 +135,30 @@ def _clear_for(summary: dict[str, Any], key: str) -> bool:
 
 
 def closed(summaries: list[dict[str, Any]], current: dict[str, dict[str, str]]) -> dict[str, bool]:
-    """Per unit: closed by the two latest rounds that reviewed it, on its current text."""
+    """Per unit: closed by the two latest rounds that reviewed it, on its current text,
+    or by an earlier closure on its current text that no later review of that
+    same text blocked: an edit reverted to a closed text leaves nothing to ask
+    (Cabinet Kernel State 2 rounds 129-134, 2026-10-18: A18, edited and then
+    restored word for word, had no diff and was reviewed whole each round)."""
     result = {}
     for key, unit in current.items():
         reviewed = [s for s in summaries if key in (s.get("scope") or []) and key in (s.get("units") or {})]
         last = reviewed[-2:]
-        result[key] = (len(last) == 2 and all(_clear_for(s, key) for s in last)
-                       and all(s["units"][key] == unit["digest"] for s in last))
+        result[key] = ((len(last) == 2 and all(_clear_for(s, key) for s in last)
+                        and all(s["units"][key] == unit["digest"] for s in last))
+                       or _restored(reviewed, key, unit["digest"]))
     return result
+
+
+def _restored(reviewed: list[dict[str, Any]], key: str, digest: str) -> bool:
+    """Whether two consecutive reviews closed the unit on `digest` and every
+    later review of it on that same text was clear for it."""
+    for index in range(len(reviewed) - 1, 0, -1):
+        first, second = reviewed[index - 1], reviewed[index]
+        if (first["units"][key] == second["units"][key] == digest
+                and _clear_for(first, key) and _clear_for(second, key)):
+            return all(_clear_for(s, key) for s in reviewed[index + 1:] if s["units"][key] == digest)
+    return False
 
 
 def blocked(topics: list[dict[str, Any]], scope: list[str]) -> list[str]:
