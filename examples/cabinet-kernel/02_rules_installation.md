@@ -239,9 +239,12 @@ concurrent connections.
    content-addressed area of value bytes and file fixtures named by digest, and
    the run spool, one subdirectory per run. The directory and everything in it
    are private to the kernel's user; the kernel refuses to start otherwise. Every
-   file of the directory is opened without following symbolic links, with
-   Linux's `O_NOFOLLOW` on every open, never first asking whether the flag
-   exists (A20 rule 3); a link
+   file of the directory the store opens itself is opened without following
+   symbolic links, with Linux's `O_NOFOLLOW` on every open, never first asking
+   whether the flag exists (A20 rule 3). The database file and its journal are
+   opened by SQLite, which Python cannot ask to refuse a link: the start's walk
+   finds no link before the database is opened, and afterwards only the
+   kernel's user can place one, the directory being private. A link
    found at start stops the start, and one found later makes that store call
    fail with nothing written.
 3. Only the store module opens the database. Every change is one call to the
@@ -384,8 +387,10 @@ reads.
    the sandbox runtime (A03); the sandbox interpreter of release v1 is CPython
    3.12, whose `random` module gives A03 rule 4 its list. A vulnerable dependency is answered by a new
    release; a running kernel never updates one. A release runs on Linux and on
-   no other host, of any version that runs the sandbox runtime, which the start
-   proves (A03; owner, 2026-10-18).
+   no other host (owner, 2026-10-18). The kernel does not test the host: on any
+   other the sandbox probe of the start sequence (A03) fails and the start
+   stops, and any Linux on which that probe passes is a host; no version is
+   named.
 4. A new release may change ceilings. They bind contract versions issued after
    it; a contract version issued earlier keeps its bounds and executes under them
    even when they exceed the new ceilings, and recorded executions are never
