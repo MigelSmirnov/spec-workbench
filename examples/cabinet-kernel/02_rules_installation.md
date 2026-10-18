@@ -165,17 +165,8 @@ Reuses cabinet-flow decision 23, narrowed by K-16.
    no permission for group or others; the kernel refuses to start otherwise.
    Here and in rule 2 the path is opened component by component without
    following a symbolic link at any of them, each component with Linux's
-   `O_NOFOLLOW` — a directory on the way with `O_PATH` as well, so a directory
-   the kernel's user may only pass through is passed; an absolute path starts
-   at the root directory and a relative one at the kernel's working directory; empty and `.` components are skipped,
-   and `..` is opened as any other component — it names the parent of the
-   directory reached so far and is never a link; the host is Linux (A20 rule 3), so no code asks whether a flag
-   exists and there is no mode without it —, and the checks and the read
-   use that one opened file, so the file checked is the file read. Nothing
-   requires these paths to lie outside the data directory, and nothing checks
-   it; they usually pass through directories other users may write, where a
-   link could be placed, and that is what this rule guards (owner,
-   2026-10-18).
+   `O_NOFOLLOW`, whose presence no code tests (A20 rule 3), and the checks and the read use
+   that one opened file, so the file checked is the file read.
 2. A credential is resolved only when a request to its service is built: its
    secret file is read then, without following a symbolic link, and must be a
    regular file owned by the kernel's user with no permission for group or
@@ -246,25 +237,10 @@ concurrent connections.
 2. The data directory holds one SQLite database with every kernel record, a
    content-addressed area of value bytes and file fixtures named by digest, and
    the run spool, one subdirectory per run. The directory and everything in it
-   are private to the kernel's user; the kernel refuses to start otherwise, and
-   a symbolic link found at start stops the start. The data directory itself
-   is reached as A17 rule 1 reaches the configuration file, component by
-   component with `O_NOFOLLOW`, and opened for reading at its last component.
-   Every file the store opens itself is opened relative to the data directory
-   it holds open from the start, each component with Linux's `O_NOFOLLOW`,
-   never first asking whether the flag exists (A20 rule 3); a link met so later
-   makes that store call fail, writing nothing through the link and no record
-   (rule 3). The database file and its journal are opened by
-   SQLite, which Python cannot ask to refuse a link — the journal being every
-   file SQLite itself creates beside the database under the database's name,
-   in whatever journal mode the database file holds; the kernel sets none and
-   checks none. SQLite opens them by path, not relative to the held directory,
-   so a rename of the directory after start is not followed either; the
-   start's check covers them, and the kernel does not watch them after it: in a private directory
-   only the kernel's user or root can place a link, and either can change any
-   record directly, so a link gives them nothing more; moving the directory
-   itself needs write access to its parent, which the host leaves to the
-   kernel's user, and the kernel does not check it (owner, 2026-10-18).
+   are private to the kernel's user; the kernel refuses to start otherwise. Every
+   file of the directory is opened without following symbolic links; a link
+   found at start stops the start, and one found later makes that store call
+   fail with nothing written.
 3. Only the store module opens the database. Every change is one call to the
    store module and one transaction inside it; callers never open, name or pass a
    transaction (K-17). A call that fails writes and changes no record; the only
@@ -292,9 +268,7 @@ concurrent connections.
 processes_on(data_directory) <= 1
 store_change -> one_call AND one_transaction IN store_module
 file_published -> complete AND digest_verified AND never_overwritten
-symlink_inside(data_directory) at start -> start refused
-symlink met by a store-opened path after start -> that call fails, nothing through the link, no record
-sqlite_files(database) after start -> not watched
+symlink_inside(data_directory) -> refused
 ```
 
 ### Required tests
@@ -304,8 +278,7 @@ sqlite_files(database) after start -> not watched
 2. A crash during a value write leaves either no file or the complete file.
 3. A failed store call leaves no partial record.
 4. A symbolic link in the value area stops the start; one placed there after
-   the start makes the store call that meets it fail, writing nothing through
-   the link and no record.
+   the start makes the store call that meets it fail with nothing written.
    [witness: verification:kernel_a18_symlink_in_data_dir_refused]
 5. A value write whose bytes do not match their digest or size publishes no
    file; writing equal bytes again leaves the published file unchanged.
@@ -407,11 +380,8 @@ reads.
 3. A release pins the exact versions of the kernel's Python dependencies and of
    the sandbox runtime (A03); the sandbox interpreter of release v1 is CPython
    3.12, whose `random` module gives A03 rule 4 its list. A vulnerable dependency is answered by a new
-   release; a running kernel never updates one. A release runs on Linux and on
-   no other host, no version named (owner, 2026-10-18). Another system, or a
-   Linux without `O_PATH` and `O_NOFOLLOW`, is unsupported: the kernel neither
-   tests for it nor defines what it does there. The sandbox's own facilities
-   stay A03's, which the start probes and refuses without.
+   release; a running kernel never updates one. A release runs on Linux and
+   on no other host, no version named (owner, 2026-10-18).
 4. A new release may change ceilings. They bind contract versions issued after
    it; a contract version issued earlier keeps its bounds and executes under them
    even when they exceed the new ceilings, and recorded executions are never

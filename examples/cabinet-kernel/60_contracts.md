@@ -1335,81 +1335,44 @@ knows. A writer that must guarantee the rule and is not told the means
 exists hedges, and the hedge weakens the MUST — on a host without the flag
 the candidate would have followed links.
 
-34. **The kernel runs on Linux; no-follow opening is `O_NOFOLLOW`, where it guards something.**
-    The owner decided on 2026-10-18, after the State 2–5 and 7 rounds of
-    that day (State 2 123–127, State 3 110–114, State 4 99–103, State 5
-    138–142, State 7 68–72) asked who proves the host, how SQLite's own
-    files refuse a link, and how a path is walked:
-    - *Host.* A20 rule 3: the kernel runs on Linux, no version named, and
-      the formal invariants gain `host = linux`. Another host is not
-      supported; the kernel neither tests the host nor defines what it does
-      elsewhere, so no start step and no module owns a host check. Rule 3
-      stays outside the running kernel (State 3): a fact of the release.
-      A Linux without `O_PATH` and `O_NOFOLLOW` is unsupported in the same
-      way; the sandbox's facilities stay A03's, which the start probes and
-      refuses without (State 2 round 127, State 3 round 114). Today's
-      host is the owner's machine, later a home server.
-    - *Configuration and secret files* (A17 rule 1, and rule 2 through
-      "here and in rule 2"). Their paths lie outside the kernel's private
-      directory, where another user may be able to place a link — and a
-      link there could hand the kernel foreign tokens or send a foreign file
-      to a service as a credential. Each component is opened with
-      `O_NOFOLLOW`, a directory on the way with `O_PATH` as well, so that a
-      directory the kernel's user may only pass through (a home directory of
-      mode 0711) is passed; an absolute path starts at the root directory, a
-      relative one at the working directory;
-      empty and `.` components are skipped and `..` is opened as any other
-      component (the parent of the directory reached so far, never a link);
-      no code asks whether a flag exists. Nothing requires or checks that
-      these paths lie outside the data directory (State 5 round 142); they
-      usually pass through directories others may write. Notes: `read_configuration` (and through
-      it `current_token_list`) and `resolve_service_credential`.
-    - *The data directory* (A18 rule 2). The start's check stands: the
-      directory and everything in it private to the kernel's user, no link
-      anywhere, or the start stops. The data directory itself is reached as
-      the configuration file is, component by component with `O_NOFOLLOW`,
-      and opened for reading at its last component (`open_store`, which
-      locks it). Files the store opens itself are opened
-      relative to the data directory descriptor `open_store` holds, each
-      component with `O_NOFOLLOW`, and a link met later fails that call,
-      writing nothing through the link and no record, as A18's required test
-      4 already checks; rule 3's one permitted trace, an unnamed published
-      file, stays permitted (`record_change`). The database file and its journal
-      are opened by SQLite, which Python's `sqlite3` cannot ask to refuse a
-      link (no URI parameter does it; checked on SQLite 3.45): the start's
-      check and `open_store`'s `os.lstat` of the database path cover them,
-      and the kernel does not watch them afterwards. In a private directory
-      only the kernel's user or root can place a link, and either can
-      change any record directly; a link gives them nothing more. The
-      earlier note's "the file opened without following links" promised
-      what `sqlite3` cannot do. The kernel sets and checks no journal mode;
-      the exception covers the database file and every file SQLite creates
-      beside it under its name, in whatever mode the file holds. SQLite opens
-      them by path, so a move of the data directory after start is not
-      followed either; moving it needs write access to its parent, which the
-      host leaves to the kernel's user, unchecked (State 2 round 127, State 5
-      round 142). A18's formal invariant, which refused
-      every link inside the directory, now says the three cases: at start the
-      start is refused, after start a store-opened path fails its call, and
-      SQLite's files are not watched (State 2–5 rounds 125, 112, 101, 140;
-      the data directory's own path, the facilities and the journal mode from
-      State 2 round 126 and State 5 round 141).
-    - Not changed, and why. Each module keeps its own opening of a path: the
-      rule is one, the paths differ, and a shared capability would add an
-      import to two modules for a few lines. `O_CLOEXEC` is not named:
-      Python opens descriptors non-inheritable by default. Running the kernel
-      under an operating-system user of its own, so that no other program of
-      the owner's account can write its directory, is a matter of the
-      installation on the host, not of this specification.
+34. **The kernel runs on Linux, so `O_NOFOLLOW` is never tested for.**
+    The owner decided on 2026-10-18: the kernel runs only on Linux, no
+    version named; another host is unsupported. Today's host is the owner's
+    machine, later a home server.
+    - A20 rule 3 (`02_rules_installation.md`) says so; its formal invariants
+      gain `host = linux`. Rule 3 stays outside the running kernel (State 3).
+    - A17 rule 1 (and through "here and in rule 2" the secret files) opens
+      each component with `O_NOFOLLOW`, whose presence no code tests. Notes:
+      `read_configuration` (and through it `current_token_list`) and
+      `resolve_service_credential`.
+    - `open_store`'s note said the database file is "opened without
+      following links", which Python's `sqlite3` cannot do (it cannot pass
+      SQLite's no-follow flag; checked on SQLite 3.45). It now says what the
+      code does: the database path is checked with `os.lstat` before the
+      connection opens. A18 is unchanged.
+    - Why no more is specified. In between, the State 2–5 and 7 rounds of
+      2026-10-18 (State 2 123–128, State 3 110–115, State 4 99–104, State 5
+      138–143, State 7 68–73) were run on a fuller text that named
+      `O_NOFOLLOW` for every store open, an exception for SQLite's files,
+      `O_PATH` for pass-through directories and the treatment of `.`, `..`
+      and relative paths. Each answer drew a narrower question — renames of
+      the data directory, journal modes, the ordering of checks — about
+      implementation, not about what the kernel guarantees. The owner chose
+      on 2026-10-18 to keep the decision to what the defect needed. The
+      owner's reading of the threat stands as the reason the store needs no
+      more: inside the private data directory only the kernel's user or root
+      can place a link, and either can change any record directly, so a link
+      there gives them nothing more; the configuration and secret files are
+      where another user could place one, and A17 guards them. The agent
+      reaches the kernel only through `surface` and sends bytes, never paths
+      the kernel follows. Running the kernel under an operating-system user
+      of its own is a matter of the installation on the host.
 
 ## Texts of earlier states changed by State 6
 
 - State 2 (2026-10-18, decision 34): A20 rule 3 and its formal invariants —
-  the host is Linux, unsupported elsewhere and tested by no one; A17 rule 1 —
-  configuration and secret paths opened with `O_NOFOLLOW` at each component,
-  `O_PATH` for directories on the way; A18 rule 2 — the store's own opens
-  relative to the held data directory with `O_NOFOLLOW`, SQLite's files
-  checked at start only. Reopens the rounds of States 2–5.
+  the host is Linux; A17 rule 1 — each component opened with `O_NOFOLLOW`,
+  never tested for. Reopens the rounds of States 2–5.
 - State 1 (2026-10-18, decision 33): the enumeration `NodeConclusion` and the
   row models `StatusConclusion`, `ConclusionEffect`, `WaitReasonRestingStatus`
   and `HttpMethodBody`. Reopens the rounds of State 1.

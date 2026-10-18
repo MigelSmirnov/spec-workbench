@@ -1,0 +1,118 @@
+{
+ "open_points": [
+  {
+   "subject": "installation paths inside the managed data directory",
+   "kind": "ownership conflict",
+   "text": "“Nothing requires these paths to lie outside the data directory, and nothing checks it” conflicts with A18’s rules that store-managed paths may be created, replaced, or removed during writes, run cleanup, and startup cleanup.",
+   "question": "What happens when the configuration file or a credential file is placed at a path the store treats as a database file, journal, temporary file, unreferenced value, fixture, or run-spool file?",
+   "options": [
+    "The installation path takes precedence and the store must preserve it",
+    "The store lifecycle takes precedence and may overwrite or remove it",
+    "Such overlap is refused even though containment in the data directory is otherwise allowed"
+   ],
+   "default_guess": "Allow containment but refuse any path that overlaps a store-managed pathname.",
+   "unit": "A17"
+  },
+  {
+   "subject": "SQLite journal mode and transaction guarantees",
+   "kind": "contradiction",
+   "text": "“in whatever journal mode the database file holds; the kernel sets none and checks none” conflicts with “A call that fails writes and changes no record” and the requirement that every change be one atomic transaction.",
+   "question": "Which SQLite journal modes and durability settings are permitted, and how are the no-partial-record and rollback guarantees maintained when the database holds modes such as OFF or MEMORY?",
+   "options": [
+    "Require and verify a fixed safe journal mode and related settings",
+    "Set a fixed mode at startup",
+    "Permit every stored mode and weaken the atomicity guarantee",
+    "Refuse modes that cannot provide the stated guarantees"
+   ],
+   "default_guess": "Require and verify a release-fixed durable journal mode before opening the surface.",
+   "unit": "A18"
+  },
+  {
+   "subject": "SQLite pathname after data-directory rename",
+   "kind": "vague behavior",
+   "text": "“SQLite opens them by path, not relative to the held directory, so a rename of the directory after start is not followed either” does not say which pathname SQLite receives or whether later journal and auxiliary-file opens fail, use the renamed directory, or use a replacement at the original path.",
+   "question": "After the data directory is renamed or replaced, which directory must SQLite use for newly opened journal, WAL, shared-memory, or other auxiliary files, and what must the store call do if that directory is no longer the checked one?",
+   "options": [
+    "Continue using the originally opened directory identity",
+    "Resolve the original configured pathname again",
+    "Fail every SQLite write once the original pathname no longer identifies the opened directory",
+    "Leave the result to SQLite and the host filesystem"
+   ],
+   "default_guess": "Fail the store call if the pathname no longer identifies the directory opened and checked at startup.",
+   "unit": "A18"
+  },
+  {
+   "subject": "exclusive lock after directory rename or replacement",
+   "kind": "invariant gap",
+   "text": "“moving the directory itself needs write access to its parent, which the host leaves to the kernel's user, and the kernel does not check it” leaves the invariant “processes_on(data_directory) <= 1” unverifiable when the original directory is renamed and a new directory and lock file are created at the configured pathname.",
+   "question": "What identifies ‘the same data directory’ for the single-process rule after a rename or replacement, and must a second kernel at the original configured path be refused?",
+   "options": [
+    "Directory inode identity defines it, so the replacement is a different data directory",
+    "Configured pathname defines it, so replacement must still be detected and refused",
+    "Renaming or replacing the directory invalidates the running kernel and makes it stop",
+    "The single-process guarantee ceases after host-side rename or replacement"
+   ],
+   "default_guess": "Treat a changed directory identity as fatal to the running kernel before another store operation.",
+   "unit": "A18"
+  },
+  {
+   "subject": "startup symlink check versus SQLite path open",
+   "kind": "check-use conflict",
+   "text": "“the start's check covers them” conflicts with SQLite opening the database and journals later “by path, not relative to the held directory”; the text gives no binding between the directory and files checked and the paths SQLite subsequently resolves.",
+   "question": "How is it guaranteed that SQLite opens the database and existing journal files that were checked, rather than files substituted by renaming the directory or replacing a component between the check and SQLite’s path open?",
+   "options": [
+    "Open SQLite through a pathname tied to the held directory descriptor",
+    "Revalidate directory and file identities immediately after SQLite opens them",
+    "Serialize and trust the kernel user during startup, making the check non-race-resistant",
+    "Exclude SQLite files from the claim that the checked object is the opened object"
+   ],
+   "default_guess": "Verify after SQLite opens that the database and directory identities equal those checked at startup, and refuse startup otherwise.",
+   "unit": "A18"
+  },
+  {
+   "subject": "files classified as SQLite-managed",
+   "kind": "undefined scope",
+   "text": "“the journal being every file SQLite itself creates beside the database under the database's name, in whatever journal mode the database file holds” does not define whether WAL, shared-memory, rollback, statement, super-journal, temporary, or future SQLite auxiliary files belong to the unwatched exception.",
+   "question": "What exact set of paths is exempt from the post-start no-symlink rule as an SQLite file?",
+   "options": [
+    "Only the main database and conventional rollback-journal pathname",
+    "The main database plus WAL and shared-memory pathnames",
+    "Every file opened by SQLite’s VFS for this connection, wherever located",
+    "A release-fixed enumerated set of SQLite auxiliary path patterns"
+   ],
+   "default_guess": "Use a release-fixed enumeration covering the main database, rollback journal, WAL, and shared-memory files, and refuse configurations requiring any other filesystem path.",
+   "unit": "A18"
+  },
+  {
+   "subject": "unsupported hosts and missing filesystem flags",
+   "kind": "undefined behavior",
+   "text": "“Another system, or a Linux without `O_PATH` and `O_NOFOLLOW`, is unsupported: the kernel neither tests for it nor defines what it does there” explicitly leaves startup and execution behavior open, while later code must still choose how constants, imports, and failing system calls behave.",
+   "question": "What observable result is required when the release is started on non-Linux or on Linux where either flag is unavailable or unusable?",
+   "options": [
+    "The build is unavailable for that platform",
+    "Import or process startup may fail without a kernel-defined response",
+    "Startup must refuse with a defined diagnostic",
+    "Behavior is intentionally unconstrained and need not be tested"
+   ],
+   "default_guess": "Ship only for Linux and let process startup fail before opening the surface if the required constants or calls are unavailable.",
+   "unit": "A20"
+  },
+  {
+   "subject": "supported Linux compatibility boundary",
+   "kind": "missing support boundary",
+   "text": "“A release runs on Linux and on no other host, no version named” does not state whether every Linux providing `O_PATH` and `O_NOFOLLOW` is supported or whether the release has an unstated kernel, libc, architecture, filesystem, or distribution baseline.",
+   "question": "What Linux environments must one release actually support and test?",
+   "options": [
+    "Every Linux environment exposing the named flags and passing the sandbox probe",
+    "One release-defined kernel/libc/architecture baseline",
+    "Only the exact build and deployment image",
+    "No compatibility promise beyond the word Linux"
+   ],
+   "default_guess": "Support the release’s documented build architecture and libc on Linux, with required filesystem flags and a successful sandbox probe.",
+   "unit": "A20"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"installation paths inside the managed data directory\",\"kind\":\"ownership conflict\",\"text\":\"“Nothing requires these paths to lie outside the data directory, and nothing checks it” conflicts with A18’s rules that store-managed paths may be created, replaced, or removed during writes, run cleanup, and startup cleanup.\",\"question\":\"What happens when the configuration file or a credential file is placed at a path the store treats as a database file, journal, temporary file, unreferenced value, fixture, or run-spool file?\",\"options\":[\"The installation path takes precedence and the store must preserve it\",\"The store lifecycle takes precedence and may overwrite or remove it\",\"Such overlap is refused even though containment in the data directory is otherwise allowed\"],\"default_guess\":\"Allow containment but refuse any path that overlaps a store-managed pathname.\",\"unit\":\"A17\"},{\"subject\":\"SQLite journal mode and transaction guarantees\",\"kind\":\"contradiction\",\"text\":\"“in whatever journal mode the database file holds; the kernel sets none and checks none” conflicts with “A call that fails writes and changes no record” and the requirement that every change be one atomic transaction.\",\"question\":\"Which SQLite journal modes and durability settings are permitted, and how are the no-partial-record and rollback guarantees maintained when the database holds modes such as OFF or MEMORY?\",\"options\":[\"Require and verify a fixed safe journal mode and related settings\",\"Set a fixed mode at startup\",\"Permit every stored mode and weaken the atomicity guarantee\",\"Refuse modes that cannot provide the stated guarantees\"],\"default_guess\":\"Require and verify a release-fixed durable journal mode before opening the surface.\",\"unit\":\"A18\"},{\"subject\":\"SQLite pathname after data-directory rename\",\"kind\":\"vague behavior\",\"text\":\"“SQLite opens them by path, not relative to the held directory, so a rename of the directory after start is not followed either” does not say which pathname SQLite receives or whether later journal and auxiliary-file opens fail, use the renamed directory, or use a replacement at the original path.\",\"question\":\"After the data directory is renamed or replaced, which directory must SQLite use for newly opened journal, WAL, shared-memory, or other auxiliary files, and what must the store call do if that directory is no longer the checked one?\",\"options\":[\"Continue using the originally opened directory identity\",\"Resolve the original configured pathname again\",\"Fail every SQLite write once the original pathname no longer identifies the opened directory\",\"Leave the result to SQLite and the host filesystem\"],\"default_guess\":\"Fail the store call if the pathname no longer identifies the directory opened and checked at startup.\",\"unit\":\"A18\"},{\"subject\":\"exclusive lock after directory rename or replacement\",\"kind\":\"invariant gap\",\"text\":\"“moving the directory itself needs write access to its parent, which the host leaves to the kernel's user, and the kernel does not check it” leaves the invariant “processes_on(data_directory) <= 1” unverifiable when the original directory is renamed and a new directory and lock file are created at the configured pathname.\",\"question\":\"What identifies ‘the same data directory’ for the single-process rule after a rename or replacement, and must a second kernel at the original configured path be refused?\",\"options\":[\"Directory inode identity defines it, so the replacement is a different data directory\",\"Configured pathname defines it, so replacement must still be detected and refused\",\"Renaming or replacing the directory invalidates the running kernel and makes it stop\",\"The single-process guarantee ceases after host-side rename or replacement\"],\"default_guess\":\"Treat a changed directory identity as fatal to the running kernel before another store operation.\",\"unit\":\"A18\"},{\"subject\":\"startup symlink check versus SQLite path open\",\"kind\":\"check-use conflict\",\"text\":\"“the start's check covers them” conflicts with SQLite opening the database and journals later “by path, not relative to the held directory”; the text gives no binding between the directory and files checked and the paths SQLite subsequently resolves.\",\"question\":\"How is it guaranteed that SQLite opens the database and existing journal files that were checked, rather than files substituted by renaming the directory or replacing a component between the check and SQLite’s path open?\",\"options\":[\"Open SQLite through a pathname tied to the held directory descriptor\",\"Revalidate directory and file identities immediately after SQLite opens them\",\"Serialize and trust the kernel user during startup, making the check non-race-resistant\",\"Exclude SQLite files from the claim that the checked object is the opened object\"],\"default_guess\":\"Verify after SQLite opens that the database and directory identities equal those checked at startup, and refuse startup otherwise.\",\"unit\":\"A18\"},{\"subject\":\"files classified as SQLite-managed\",\"kind\":\"undefined scope\",\"text\":\"“the journal being every file SQLite itself creates beside the database under the database's name, in whatever journal mode the database file holds” does not define whether WAL, shared-memory, rollback, statement, super-journal, temporary, or future SQLite auxiliary files belong to the unwatched exception.\",\"question\":\"What exact set of paths is exempt from the post-start no-symlink rule as an SQLite file?\",\"options\":[\"Only the main database and conventional rollback-journal pathname\",\"The main database plus WAL and shared-memory pathnames\",\"Every file opened by SQLite’s VFS for this connection, wherever located\",\"A release-fixed enumerated set of SQLite auxiliary path patterns\"],\"default_guess\":\"Use a release-fixed enumeration covering the main database, rollback journal, WAL, and shared-memory files, and refuse configurations requiring any other filesystem path.\",\"unit\":\"A18\"},{\"subject\":\"unsupported hosts and missing filesystem flags\",\"kind\":\"undefined behavior\",\"text\":\"“Another system, or a Linux without `O_PATH` and `O_NOFOLLOW`, is unsupported: the kernel neither tests for it nor defines what it does there” explicitly leaves startup and execution behavior open, while later code must still choose how constants, imports, and failing system calls behave.\",\"question\":\"What observable result is required when the release is started on non-Linux or on Linux where either flag is unavailable or unusable?\",\"options\":[\"The build is unavailable for that platform\",\"Import or process startup may fail without a kernel-defined response\",\"Startup must refuse with a defined diagnostic\",\"Behavior is intentionally unconstrained and need not be tested\"],\"default_guess\":\"Ship only for Linux and let process startup fail before opening the surface if the required constants or calls are unavailable.\",\"unit\":\"A20\"},{\"subject\":\"supported Linux compatibility boundary\",\"kind\":\"missing support boundary\",\"text\":\"“A release runs on Linux and on no other host, no version named” does not state whether every Linux providing `O_PATH` and `O_NOFOLLOW` is supported or whether the release has an unstated kernel, libc, architecture, filesystem, or distribution baseline.\",\"question\":\"What Linux environments must one release actually support and test?\",\"options\":[\"Every Linux environment exposing the named flags and passing the sandbox probe\",\"One release-defined kernel/libc/architecture baseline\",\"Only the exact build and deployment image\",\"No compatibility promise beyond the word Linux\"],\"default_guess\":\"Support the release’s documented build architecture and libc on Linux, with required filesystem flags and a successful sandbox probe.\",\"unit\":\"A20\"}]}",
+ "set_aside": []
+}
