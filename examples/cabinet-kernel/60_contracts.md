@@ -1337,15 +1337,17 @@ the candidate would have followed links.
 
 34. **The kernel runs on Linux; no-follow opening is `O_NOFOLLOW`, where it guards something.**
     The owner decided on 2026-10-18, after the State 2–5 and 7 rounds of
-    that day (State 2 123–125, State 3 110–112, State 4 99–101, State 5
-    138–140, State 7 68–70) asked who proves the host, how SQLite's own
+    that day (State 2 123–126, State 3 110–113, State 4 99–102, State 5
+    138–141, State 7 68–71) asked who proves the host, how SQLite's own
     files refuse a link, and how a path is walked:
     - *Host.* A20 rule 3: the kernel runs on Linux, no version named, and
       the formal invariants gain `host = linux`. Another host is not
       supported; the kernel neither tests the host nor defines what it does
       elsewhere, so no start step and no module owns a host check. Rule 3
       stays outside the running kernel (State 3): a fact of the release.
-      Today's host is the owner's machine, later a home server.
+      A Linux lacking a facility these rules use (`O_PATH`, `O_NOFOLLOW`,
+      A03's namespaces and limits) is unsupported in the same way. Today's
+      host is the owner's machine, later a home server.
     - *Configuration and secret files* (A17 rule 1, and rule 2 through
       "here and in rule 2"). Their paths lie outside the kernel's private
       directory, where another user may be able to place a link — and a
@@ -1360,10 +1362,14 @@ the candidate would have followed links.
       it `current_token_list`) and `resolve_service_credential`.
     - *The data directory* (A18 rule 2). The start's check stands: the
       directory and everything in it private to the kernel's user, no link
-      anywhere, or the start stops. Files the store opens itself are opened
+      anywhere, or the start stops. The data directory itself is reached as
+      the configuration file is, component by component with `O_NOFOLLOW`,
+      and opened for reading at its last component (`open_store`, which
+      locks it). Files the store opens itself are opened
       relative to the data directory descriptor `open_store` holds, each
-      component with `O_NOFOLLOW`, and a link met later fails that call with
-      nothing written (`record_change`). The database file and its journal
+      component with `O_NOFOLLOW`, and a link met later fails that call,
+      writing no record — rule 3's one permitted trace, an unnamed published
+      file, stays permitted (`record_change`). The database file and its journal
       are opened by SQLite, which Python's `sqlite3` cannot ask to refuse a
       link (no URI parameter does it; checked on SQLite 3.45): the start's
       check and `open_store`'s `os.lstat` of the database path cover them,
@@ -1371,12 +1377,14 @@ the candidate would have followed links.
       only the kernel's user or root can place a link, and either can
       change any record directly; a link gives them nothing more. The
       earlier note's "the file opened without following links" promised
-      what `sqlite3` cannot do. SQLite keeps its default rollback-journal
-      mode; the exception covers the database file and every file SQLite
-      creates beside it under its name. A18's formal invariant, which refused
+      what `sqlite3` cannot do. The kernel sets and checks no journal mode;
+      the exception covers the database file and every file SQLite creates
+      beside it under its name, in whatever mode the file holds. A18's formal invariant, which refused
       every link inside the directory, now says the three cases: at start the
       start is refused, after start a store-opened path fails its call, and
-      SQLite's files are not watched (State 2–5 rounds 125, 112, 101, 140).
+      SQLite's files are not watched (State 2–5 rounds 125, 112, 101, 140;
+      the data directory's own path, the facilities and the journal mode from
+      State 2 round 126 and State 5 round 141).
     - Not changed, and why. Each module keeps its own opening of a path: the
       rule is one, the paths differ, and a shared capability would add an
       import to two modules for a few lines. `O_CLOEXEC` is not named:

@@ -1,0 +1,72 @@
+{
+ "open_points": [
+  {
+   "subject": "configuration re-read",
+   "kind": "contradictory file snapshot",
+   "text": "“Before evaluating each request the kernel reads the configuration file and compares the SHA-256 of its bytes with that of the last read; when they differ, or the file cannot be read, it re-reads it” versus “the checks and the read use that one opened file, so the file checked is the file read.”",
+   "question": "Does one securely opened file supply the bytes for change detection, validation and token-list replacement, or is the changed file opened a second time; if twice, how is replacement between the two reads handled?",
+   "options": [
+    "Open once and validate/use the same captured bytes",
+    "Open once to compare and again to validate/use, applying all path and file checks to the second descriptor",
+    "Open twice and require both reads to identify the same file"
+   ],
+   "default_guess": "Open once per request and use that descriptor's bytes for the digest comparison, validation and token-list replacement.",
+   "unit": "context"
+  },
+  {
+   "subject": "store filesystem operations other than open",
+   "kind": "undefined symlink handling",
+   "text": "“Every file the store opens itself is opened relative to the data directory it holds open from the start, each component with Linux's `O_NOFOLLOW`” and “a link met so later makes that store call fail with nothing written.”",
+   "question": "What must happen when a post-start symbolic link is encountered by a store path operation that is not a file open, such as directory creation, temporary-file publication by rename, unlinking, or recursive spool cleanup?",
+   "options": [
+    "All path operations are anchored to the held directory and refuse any symlink component",
+    "Only file opens receive the no-follow guarantee; non-open operations use ordinary pathname behavior",
+    "Removal may unlink a symlink itself without following it, while creation and publication refuse it"
+   ],
+   "default_guess": "Anchor every filesystem operation to the held directory; never follow a symlink, allow unlinking the link itself during cleanup, and otherwise fail the call without publishing or changing records.",
+   "unit": "context"
+  },
+  {
+   "subject": "SQLite database path anchoring",
+   "kind": "unspecified path mechanism",
+   "text": "“Every file the store opens itself is opened relative to the data directory it holds open from the start” but “The database file and its journal are opened by SQLite, which Python cannot ask to refuse a link.”",
+   "question": "By what pathname or descriptor-relative mechanism is SQLite given the database so that it continues to use the data directory held open at start if that directory is renamed or its original pathname is replaced?",
+   "options": [
+    "Pass the original data-directory pathname to SQLite",
+    "Use a path anchored through the held directory descriptor, such as `/proc/self/fd/<fd>`",
+    "Open SQLite before retaining the directory descriptor and rely on directory privacy"
+   ],
+   "default_guess": "Use a Linux path anchored through the held directory descriptor and keep that descriptor open for the connection's lifetime.",
+   "unit": "context"
+  },
+  {
+   "subject": "SQLite journal mode",
+   "kind": "contradictory runtime state",
+   "text": "“in SQLite's default rollback-journal mode, which the kernel does not change”",
+   "question": "What does startup do when an existing or restored database has a persistent non-default journal mode such as WAL, given that the kernel neither changes the mode nor defines those additional SQLite files?",
+   "options": [
+    "Refuse startup unless the database is already in the required rollback-journal mode",
+    "Accept the database's persisted mode, including WAL",
+    "Force rollback-journal mode despite saying the kernel does not change it"
+   ],
+   "default_guess": "Read the current journal mode and refuse startup unless it is the required default rollback-journal mode.",
+   "unit": "context"
+  },
+  {
+   "subject": "SQLite-managed files covered by the exception",
+   "kind": "vague file set",
+   "text": "“the journal being every file SQLite itself creates beside the database under the database's name”",
+   "question": "Which exact SQLite-created filenames are treated as database journal files outside the store's `O_NOFOLLOW` handling—for example `-journal`, `-wal`, `-shm`, statement journals, super-journals, and temporary files?",
+   "options": [
+    "Only the main database and `<database>-journal`",
+    "Every sidecar whose filename begins with the database filename",
+    "A closed enumerated set of SQLite sidecar files for the pinned SQLite build"
+   ],
+   "default_guess": "Use a closed enumerated set for the pinned SQLite build, limited to files possible in the required rollback-journal configuration.",
+   "unit": "context"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"configuration re-read\",\"kind\":\"contradictory file snapshot\",\"text\":\"“Before evaluating each request the kernel reads the configuration file and compares the SHA-256 of its bytes with that of the last read; when they differ, or the file cannot be read, it re-reads it” versus “the checks and the read use that one opened file, so the file checked is the file read.”\",\"question\":\"Does one securely opened file supply the bytes for change detection, validation and token-list replacement, or is the changed file opened a second time; if twice, how is replacement between the two reads handled?\",\"options\":[\"Open once and validate/use the same captured bytes\",\"Open once to compare and again to validate/use, applying all path and file checks to the second descriptor\",\"Open twice and require both reads to identify the same file\"],\"default_guess\":\"Open once per request and use that descriptor's bytes for the digest comparison, validation and token-list replacement.\",\"unit\":\"context\"},{\"subject\":\"store filesystem operations other than open\",\"kind\":\"undefined symlink handling\",\"text\":\"“Every file the store opens itself is opened relative to the data directory it holds open from the start, each component with Linux's `O_NOFOLLOW`” and “a link met so later makes that store call fail with nothing written.”\",\"question\":\"What must happen when a post-start symbolic link is encountered by a store path operation that is not a file open, such as directory creation, temporary-file publication by rename, unlinking, or recursive spool cleanup?\",\"options\":[\"All path operations are anchored to the held directory and refuse any symlink component\",\"Only file opens receive the no-follow guarantee; non-open operations use ordinary pathname behavior\",\"Removal may unlink a symlink itself without following it, while creation and publication refuse it\"],\"default_guess\":\"Anchor every filesystem operation to the held directory; never follow a symlink, allow unlinking the link itself during cleanup, and otherwise fail the call without publishing or changing records.\",\"unit\":\"context\"},{\"subject\":\"SQLite database path anchoring\",\"kind\":\"unspecified path mechanism\",\"text\":\"“Every file the store opens itself is opened relative to the data directory it holds open from the start” but “The database file and its journal are opened by SQLite, which Python cannot ask to refuse a link.”\",\"question\":\"By what pathname or descriptor-relative mechanism is SQLite given the database so that it continues to use the data directory held open at start if that directory is renamed or its original pathname is replaced?\",\"options\":[\"Pass the original data-directory pathname to SQLite\",\"Use a path anchored through the held directory descriptor, such as `/proc/self/fd/<fd>`\",\"Open SQLite before retaining the directory descriptor and rely on directory privacy\"],\"default_guess\":\"Use a Linux path anchored through the held directory descriptor and keep that descriptor open for the connection's lifetime.\",\"unit\":\"context\"},{\"subject\":\"SQLite journal mode\",\"kind\":\"contradictory runtime state\",\"text\":\"“in SQLite's default rollback-journal mode, which the kernel does not change”\",\"question\":\"What does startup do when an existing or restored database has a persistent non-default journal mode such as WAL, given that the kernel neither changes the mode nor defines those additional SQLite files?\",\"options\":[\"Refuse startup unless the database is already in the required rollback-journal mode\",\"Accept the database's persisted mode, including WAL\",\"Force rollback-journal mode despite saying the kernel does not change it\"],\"default_guess\":\"Read the current journal mode and refuse startup unless it is the required default rollback-journal mode.\",\"unit\":\"context\"},{\"subject\":\"SQLite-managed files covered by the exception\",\"kind\":\"vague file set\",\"text\":\"“the journal being every file SQLite itself creates beside the database under the database's name”\",\"question\":\"Which exact SQLite-created filenames are treated as database journal files outside the store's `O_NOFOLLOW` handling—for example `-journal`, `-wal`, `-shm`, statement journals, super-journals, and temporary files?\",\"options\":[\"Only the main database and `<database>-journal`\",\"Every sidecar whose filename begins with the database filename\",\"A closed enumerated set of SQLite sidecar files for the pinned SQLite build\"],\"default_guess\":\"Use a closed enumerated set for the pinned SQLite build, limited to files possible in the required rollback-journal configuration.\",\"unit\":\"context\"}]}",
+ "set_aside": []
+}

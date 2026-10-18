@@ -245,15 +245,17 @@ concurrent connections.
    content-addressed area of value bytes and file fixtures named by digest, and
    the run spool, one subdirectory per run. The directory and everything in it
    are private to the kernel's user; the kernel refuses to start otherwise, and
-   a symbolic link found at start stops the start. Every file the store opens
-   itself is opened relative to the data directory it holds open from the
-   start, each component with Linux's `O_NOFOLLOW`, never first asking whether
-   the flag exists (A20 rule 3); a link met so later makes that store call fail
-   with nothing written. The database file and its journal are opened by
+   a symbolic link found at start stops the start. The data directory itself
+   is reached as A17 rule 1 reaches the configuration file, component by
+   component with `O_NOFOLLOW`, and opened for reading at its last component.
+   Every file the store opens itself is opened relative to the data directory
+   it holds open from the start, each component with Linux's `O_NOFOLLOW`,
+   never first asking whether the flag exists (A20 rule 3); a link met so later
+   makes that store call fail, writing no record (rule 3). The database file and its journal are opened by
    SQLite, which Python cannot ask to refuse a link — the journal being every
    file SQLite itself creates beside the database under the database's name,
-   in SQLite's default rollback-journal mode, which the kernel does not
-   change; the start's check covers them, and the kernel does not watch them after it: in a private directory
+   in whatever journal mode the database file holds; the kernel sets none and
+   checks none; the start's check covers them, and the kernel does not watch them after it: in a private directory
    only the kernel's user or root can place a link, and either can change any
    record directly, so a link gives them nothing more (owner, 2026-10-18).
 3. Only the store module opens the database. Every change is one call to the
@@ -284,7 +286,7 @@ processes_on(data_directory) <= 1
 store_change -> one_call AND one_transaction IN store_module
 file_published -> complete AND digest_verified AND never_overwritten
 symlink_inside(data_directory) at start -> start refused
-symlink met by a store-opened path after start -> that call fails, nothing written
+symlink met by a store-opened path after start -> that call fails, no record written
 sqlite_files(database) after start -> not watched
 ```
 
@@ -398,9 +400,10 @@ reads.
    the sandbox runtime (A03); the sandbox interpreter of release v1 is CPython
    3.12, whose `random` module gives A03 rule 4 its list. A vulnerable dependency is answered by a new
    release; a running kernel never updates one. A release runs on Linux and on
-   no other host, no version named (owner, 2026-10-18). Another host is not
-   supported: the kernel neither tests the host nor defines what it does on
-   another one.
+   no other host, no version named (owner, 2026-10-18). A Linux that lacks a
+   facility these rules use — `O_PATH`, `O_NOFOLLOW`, the namespaces and limits
+   of A03 — is unsupported as another system is: the kernel neither tests the
+   host nor defines what it does on an unsupported one.
 4. A new release may change ceilings. They bind contract versions issued after
    it; a contract version issued earlier keeps its bounds and executes under them
    even when they exceed the new ceilings, and recorded executions are never
