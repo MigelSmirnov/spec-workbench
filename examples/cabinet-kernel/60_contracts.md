@@ -1400,8 +1400,9 @@ the candidate would have followed links.
 - State 2 (2026-10-18, decision 34): A20 rule 3 and its formal invariants —
   the host is Linux; A17 rule 1 — an absolute configuration path, each
   component opened with `O_NOFOLLOW`, never tested for; State 5: the
-  configuration path's input and checks name it absolute. Reopens the rounds
-  of States 2–5.
+  configuration path's input and checks name it absolute; State 4: the start
+  flow's first check is exactly one absolute argument (rounds 111 and 150).
+  Reopens the rounds of States 2–5.
 - State 1 (2026-10-18, decision 33): the enumeration `NodeConclusion` and the
   row models `StatusConclusion`, `ConclusionEffect`, `WaitReasonRestingStatus`
   and `HttpMethodBody`. Reopens the rounds of State 1.

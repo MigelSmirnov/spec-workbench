@@ -3044,7 +3044,7 @@ from the sandbox.
 
 ### Inputs
 
-The configuration file path, absolute, the process's one command-line argument (A17 rule 1).
+The configuration file path, absolute, the process's one command-line argument (A17 rule 1); a command line without exactly one argument stops the start like a failing check of `public_op:installation.load_installation`.
 
 ### Outputs
 

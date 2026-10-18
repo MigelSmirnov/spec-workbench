@@ -160,7 +160,8 @@ Reuses cabinet-flow decision 23, narrowed by K-16.
    address the kernel's one `mcp` entrance listens on, which the host's reverse
    proxy reaches (owner, 2026-10-03, raised by the pre-contract data closure).
    The kernel reads the file's path, an absolute one or the kernel refuses to
-   start, from its one command-line argument and reads
+   start, from its one command-line argument — with none or more than one it
+   refuses to start too — and reads
    no environment variable. The file
    must be a regular file, not a symbolic link, owned by the kernel's user, with
    no permission for group or others; the kernel refuses to start otherwise.
