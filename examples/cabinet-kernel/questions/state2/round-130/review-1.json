@@ -1,0 +1,150 @@
+{
+ "open_points": [
+  {
+   "unit": "A17",
+   "subject": "configuration path component walk",
+   "kind": "path semantics",
+   "text": "“the path as given, an absolute one walked from the root directory and a relative one from the working directory” does not say how empty components, repeated separators, `.` components, `..` components or a trailing separator are handled",
+   "question": "Which lexical path components are accepted, rejected or traversed during the component-by-component walk?",
+   "options": [
+    "Apply normal Linux path semantics to all such components",
+    "Reject `.`, `..`, empty/repeated components and trailing separators",
+    "Normalize the path before walking it"
+   ],
+   "default_guess": "Reject `..`, ignore `.` and repeated separators, and reject a trailing separator for the final regular file."
+  },
+  {
+   "unit": "A17",
+   "subject": "opening path components with O_NOFOLLOW",
+   "kind": "open flags unspecified",
+   "text": "“each component with Linux's `O_NOFOLLOW`” names one flag but not the other flags or required type for intermediate components",
+   "question": "How must intermediate components and the final component be opened, including whether intermediates require `O_DIRECTORY` and whether search-only directories must work through `O_PATH`?",
+   "options": [
+    "Open intermediates with `O_PATH|O_DIRECTORY|O_NOFOLLOW` and the final file read-only with `O_NOFOLLOW`",
+    "Open every component read-only with `O_NOFOLLOW`",
+    "Leave the flag combination implementation-defined"
+   ],
+   "default_guess": "Use `openat` from the preceding descriptor, with `O_PATH|O_DIRECTORY|O_NOFOLLOW` for intermediates and `O_RDONLY|O_NOFOLLOW` for the final file."
+  },
+  {
+   "unit": "A17",
+   "subject": "configuration token-list reread",
+   "kind": "cross-rule ambiguity",
+   "text": "A17 says “the checks and the read use that one opened file”, while A16 says the kernel “reads the configuration file and compares the SHA-256 of its bytes with that of the last read; when they differ ... it re-reads it”",
+   "question": "Does a request-time change check and parsing of the replacement token list use one opened descriptor and one byte snapshot, or may the file be opened and read again between hashing and parsing?",
+   "options": [
+    "Hash and parse the same bytes from one opened file",
+    "Hash one read and reopen for parsing",
+    "Retry until two reads have the same digest"
+   ],
+   "default_guess": "Open once, read one bounded snapshot, hash those bytes and parse those same bytes."
+  },
+  {
+   "unit": "A18",
+   "subject": "data-directory privacy check",
+   "kind": "vague refusal condition",
+   "text": "“The directory and everything in it are private to the kernel's user; the kernel refuses to start otherwise.”",
+   "question": "What exact ownership, permission-bit and file-type conditions make the data directory and each entry “private”, especially for directories versus regular files?",
+   "options": [
+    "Require ownership by the kernel user and no group/other permission bits on every entry",
+    "Require only that group and others cannot write",
+    "Rely on effective access checks rather than ownership and mode bits"
+   ],
+   "default_guess": "Require every entry to be owned by the effective kernel user with no group or other permission bits, and require expected directories and files to have their expected types."
+  },
+  {
+   "unit": "A18",
+   "subject": "data-directory path and symlinks",
+   "kind": "symlink scope",
+   "text": "“Every file of the directory is opened without following symbolic links; a link found at start stops the start” and `symlink_inside(data_directory) -> refused` do not cover the configured data-directory path itself or state whether every ancestor component is walked without following links",
+   "question": "May `data_directory` itself or one of its path ancestors be a symbolic link, and what component-walk rule applies when opening store paths?",
+   "options": [
+    "Reject a symlink at any component from the path root through every store entry",
+    "Reject links only below an already opened data directory",
+    "Reject only the final component of each opened file"
+   ],
+   "default_guess": "Open the configured directory component by component with `O_NOFOLLOW`, then resolve all descendants relative to its descriptor without following any component link."
+  },
+  {
+   "unit": "A18",
+   "subject": "initialization of the store directory",
+   "kind": "missing lifecycle rule",
+   "text": "“The data directory holds one SQLite database” does not say what happens when the configured directory, database, content area, run spool or lock object does not yet exist",
+   "question": "Which missing store objects are created on first start, and which missing objects make startup fail?",
+   "options": [
+    "Create the data directory and all store objects",
+    "Require the data directory to exist but create its internal store objects",
+    "Require the complete store layout to exist"
+   ],
+   "default_guess": "Require the configured data directory to exist with valid ownership and permissions, then create missing internal database, content, spool and lock objects securely."
+  },
+  {
+   "unit": "A18",
+   "subject": "the store's one order",
+   "kind": "identity/order undefined",
+   "text": "“records have one order” and “Activation ... records are identified by their position in the store's one order of records” do not define the position, its allocation, or how mutable records retain it",
+   "question": "What durable global position orders records across all model types, when is it allocated, and does updating a mutable entity preserve its original position or receive another one?",
+   "options": [
+    "Allocate one monotonically increasing global sequence only when a record is first created; updates preserve it",
+    "Use SQLite row identifiers independently within each table",
+    "Give every state transition a new global position"
+   ],
+   "default_guess": "Allocate one transactionally committed, monotonically increasing global sequence for each newly created record across all types; mutations preserve the entity's creation position unless the model explicitly creates a new record."
+  },
+  {
+   "unit": "A18",
+   "subject": "surface request serialization",
+   "kind": "ordering ambiguity",
+   "text": "“Surface requests are handled one at a time in the order they arrive” does not define arrival when requests overlap or become readable simultaneously",
+   "question": "What event fixes the total order of concurrent incoming requests?",
+   "options": [
+    "Order when the complete request message has been received",
+    "Order when the transport accepts or first observes the request",
+    "Order by an explicit sequence assigned by the single surface dispatcher"
+   ],
+   "default_guess": "Assign a monotonically increasing sequence in the single dispatcher when a complete validated message is dequeued for handling."
+  },
+  {
+   "unit": "A18",
+   "subject": "trial file-fixture publication",
+   "kind": "persistence gap",
+   "text": "The data directory contains “a content-addressed area of value bytes and file fixtures named by digest”, but rule 4 specifies atomic temporary-file publication only for “Value bytes and spooled files”",
+   "question": "Are trial file fixtures subject to the same flush, digest-and-size verification, atomic rename, non-overwrite and equal-byte reuse rules, and how are orphan fixtures from a failed store call cleaned up?",
+   "options": [
+    "Apply the value-byte publication and startup orphan cleanup rules to fixtures",
+    "Give fixtures a separate publication and cleanup procedure",
+    "Leave fixture publication to the capture implementation"
+   ],
+   "default_guess": "Apply the same verified temporary-file publication and content-addressed reuse rules to fixtures, and remove unreferenced fixture bytes at startup."
+  },
+  {
+   "unit": "A18",
+   "subject": "startup cleanup failures",
+   "kind": "undefined failure handling",
+   "text": "“On start, temporary files, value bytes no record names ... and the spool directories of runs that ended ... are removed”, but only an unremovable spool directory is given an outcome: “does not stop the start”",
+   "question": "What happens when a temporary file or unreferenced content file cannot be inspected or removed during startup cleanup?",
+   "options": [
+    "Refuse startup",
+    "Continue startup and never serve the leftover file",
+    "Treat every cleanup failure like an unremovable ended-run spool directory"
+   ],
+   "default_guess": "Refuse startup for an uninspectable or unremovable temporary or unreferenced content file; retain the stated continue-and-ignore exception only for ended-run spool directories."
+  },
+  {
+   "unit": "A18",
+   "subject": "startup check precedence",
+   "kind": "check order missing",
+   "text": "A18 requires an exclusive lock, privacy checks, symlink checks, cleanup and store opening during start but gives no order for these checks or for their failures",
+   "question": "In what order are A18's startup actions performed, and which failure is reported when several conditions fail?",
+   "options": [
+    "Lock first, then validate the directory tree, open the database, and clean recoverable artifacts",
+    "Validate first, then lock, open and clean",
+    "No stable first-failure order is promised"
+   ],
+   "default_guess": "Open and validate the data-directory path, acquire the exclusive lock, validate its contents, open and validate the database, then perform cleanup in a fixed path order before recovery."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A17\",\"subject\":\"configuration path component walk\",\"kind\":\"path semantics\",\"text\":\"“the path as given, an absolute one walked from the root directory and a relative one from the working directory” does not say how empty components, repeated separators, `.` components, `..` components or a trailing separator are handled\",\"question\":\"Which lexical path components are accepted, rejected or traversed during the component-by-component walk?\",\"options\":[\"Apply normal Linux path semantics to all such components\",\"Reject `.`, `..`, empty/repeated components and trailing separators\",\"Normalize the path before walking it\"],\"default_guess\":\"Reject `..`, ignore `.` and repeated separators, and reject a trailing separator for the final regular file.\"},{\"unit\":\"A17\",\"subject\":\"opening path components with O_NOFOLLOW\",\"kind\":\"open flags unspecified\",\"text\":\"“each component with Linux's `O_NOFOLLOW`” names one flag but not the other flags or required type for intermediate components\",\"question\":\"How must intermediate components and the final component be opened, including whether intermediates require `O_DIRECTORY` and whether search-only directories must work through `O_PATH`?\",\"options\":[\"Open intermediates with `O_PATH|O_DIRECTORY|O_NOFOLLOW` and the final file read-only with `O_NOFOLLOW`\",\"Open every component read-only with `O_NOFOLLOW`\",\"Leave the flag combination implementation-defined\"],\"default_guess\":\"Use `openat` from the preceding descriptor, with `O_PATH|O_DIRECTORY|O_NOFOLLOW` for intermediates and `O_RDONLY|O_NOFOLLOW` for the final file.\"},{\"unit\":\"A17\",\"subject\":\"configuration token-list reread\",\"kind\":\"cross-rule ambiguity\",\"text\":\"A17 says “the checks and the read use that one opened file”, while A16 says the kernel “reads the configuration file and compares the SHA-256 of its bytes with that of the last read; when they differ ... it re-reads it”\",\"question\":\"Does a request-time change check and parsing of the replacement token list use one opened descriptor and one byte snapshot, or may the file be opened and read again between hashing and parsing?\",\"options\":[\"Hash and parse the same bytes from one opened file\",\"Hash one read and reopen for parsing\",\"Retry until two reads have the same digest\"],\"default_guess\":\"Open once, read one bounded snapshot, hash those bytes and parse those same bytes.\"},{\"unit\":\"A18\",\"subject\":\"data-directory privacy check\",\"kind\":\"vague refusal condition\",\"text\":\"“The directory and everything in it are private to the kernel's user; the kernel refuses to start otherwise.”\",\"question\":\"What exact ownership, permission-bit and file-type conditions make the data directory and each entry “private”, especially for directories versus regular files?\",\"options\":[\"Require ownership by the kernel user and no group/other permission bits on every entry\",\"Require only that group and others cannot write\",\"Rely on effective access checks rather than ownership and mode bits\"],\"default_guess\":\"Require every entry to be owned by the effective kernel user with no group or other permission bits, and require expected directories and files to have their expected types.\"},{\"unit\":\"A18\",\"subject\":\"data-directory path and symlinks\",\"kind\":\"symlink scope\",\"text\":\"“Every file of the directory is opened without following symbolic links; a link found at start stops the start” and `symlink_inside(data_directory) -> refused` do not cover the configured data-directory path itself or state whether every ancestor component is walked without following links\",\"question\":\"May `data_directory` itself or one of its path ancestors be a symbolic link, and what component-walk rule applies when opening store paths?\",\"options\":[\"Reject a symlink at any component from the path root through every store entry\",\"Reject links only below an already opened data directory\",\"Reject only the final component of each opened file\"],\"default_guess\":\"Open the configured directory component by component with `O_NOFOLLOW`, then resolve all descendants relative to its descriptor without following any component link.\"},{\"unit\":\"A18\",\"subject\":\"initialization of the store directory\",\"kind\":\"missing lifecycle rule\",\"text\":\"“The data directory holds one SQLite database” does not say what happens when the configured directory, database, content area, run spool or lock object does not yet exist\",\"question\":\"Which missing store objects are created on first start, and which missing objects make startup fail?\",\"options\":[\"Create the data directory and all store objects\",\"Require the data directory to exist but create its internal store objects\",\"Require the complete store layout to exist\"],\"default_guess\":\"Require the configured data directory to exist with valid ownership and permissions, then create missing internal database, content, spool and lock objects securely.\"},{\"unit\":\"A18\",\"subject\":\"the store's one order\",\"kind\":\"identity/order undefined\",\"text\":\"“records have one order” and “Activation ... records are identified by their position in the store's one order of records” do not define the position, its allocation, or how mutable records retain it\",\"question\":\"What durable global position orders records across all model types, when is it allocated, and does updating a mutable entity preserve its original position or receive another one?\",\"options\":[\"Allocate one monotonically increasing global sequence only when a record is first created; updates preserve it\",\"Use SQLite row identifiers independently within each table\",\"Give every state transition a new global position\"],\"default_guess\":\"Allocate one transactionally committed, monotonically increasing global sequence for each newly created record across all types; mutations preserve the entity's creation position unless the model explicitly creates a new record.\"},{\"unit\":\"A18\",\"subject\":\"surface request serialization\",\"kind\":\"ordering ambiguity\",\"text\":\"“Surface requests are handled one at a time in the order they arrive” does not define arrival when requests overlap or become readable simultaneously\",\"question\":\"What event fixes the total order of concurrent incoming requests?\",\"options\":[\"Order when the complete request message has been received\",\"Order when the transport accepts or first observes the request\",\"Order by an explicit sequence assigned by the single surface dispatcher\"],\"default_guess\":\"Assign a monotonically increasing sequence in the single dispatcher when a complete validated message is dequeued for handling.\"},{\"unit\":\"A18\",\"subject\":\"trial file-fixture publication\",\"kind\":\"persistence gap\",\"text\":\"The data directory contains “a content-addressed area of value bytes and file fixtures named by digest”, but rule 4 specifies atomic temporary-file publication only for “Value bytes and spooled files”\",\"question\":\"Are trial file fixtures subject to the same flush, digest-and-size verification, atomic rename, non-overwrite and equal-byte reuse rules, and how are orphan fixtures from a failed store call cleaned up?\",\"options\":[\"Apply the value-byte publication and startup orphan cleanup rules to fixtures\",\"Give fixtures a separate publication and cleanup procedure\",\"Leave fixture publication to the capture implementation\"],\"default_guess\":\"Apply the same verified temporary-file publication and content-addressed reuse rules to fixtures, and remove unreferenced fixture bytes at startup.\"},{\"unit\":\"A18\",\"subject\":\"startup cleanup failures\",\"kind\":\"undefined failure handling\",\"text\":\"“On start, temporary files, value bytes no record names ... and the spool directories of runs that ended ... are removed”, but only an unremovable spool directory is given an outcome: “does not stop the start”\",\"question\":\"What happens when a temporary file or unreferenced content file cannot be inspected or removed during startup cleanup?\",\"options\":[\"Refuse startup\",\"Continue startup and never serve the leftover file\",\"Treat every cleanup failure like an unremovable ended-run spool directory\"],\"default_guess\":\"Refuse startup for an uninspectable or unremovable temporary or unreferenced content file; retain the stated continue-and-ignore exception only for ended-run spool directories.\"},{\"unit\":\"A18\",\"subject\":\"startup check precedence\",\"kind\":\"check order missing\",\"text\":\"A18 requires an exclusive lock, privacy checks, symlink checks, cleanup and store opening during start but gives no order for these checks or for their failures\",\"question\":\"In what order are A18's startup actions performed, and which failure is reported when several conditions fail?\",\"options\":[\"Lock first, then validate the directory tree, open the database, and clean recoverable artifacts\",\"Validate first, then lock, open and clean\",\"No stable first-failure order is promised\"],\"default_guess\":\"Open and validate the data-directory path, acquire the exclusive lock, validate its contents, open and validate the database, then perform cleanup in a fixed path order before recovery.\"}]}",
+ "set_aside": []
+}

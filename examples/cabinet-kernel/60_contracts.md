@@ -1346,8 +1346,11 @@ the candidate would have followed links.
     - A17 rule 1 (and through "here and in rule 2" the secret files) opens
       each component with `O_NOFOLLOW`, whose presence no code tests; the
       path is walked as given, from the root directory or the working
-      directory, and any component that cannot be opened so makes the file
-      unreadable (State 2 round 129). Notes:
+      directory, each directory on the way with `O_PATH` and `O_DIRECTORY`
+      so that a search-only directory such as a home of mode 0711 is passed,
+      `.` and `..` opened as named and empty components skipped; any
+      component that cannot be opened so makes the file unreadable (State 2
+      rounds 129–130, State 5 round 145). Notes:
       `read_configuration` (and through it `current_token_list`) and
       `resolve_service_credential`.
     - `open_store`'s note said the database file is "opened without
@@ -1356,7 +1359,7 @@ the candidate would have followed links.
       code does: the database path is checked with `os.lstat` before the
       connection opens. A18 is unchanged.
     - Why no more is specified. In between, the State 2–5 and 7 rounds of
-      2026-10-18 (State 2 123–129, State 3 110–115, State 4 99–104, State 5
+      2026-10-18 (State 2 123–130, State 3 110–115, State 4 99–104, State 5
       138–143, State 7 68–73) were run on a fuller text that named
       `O_NOFOLLOW` for every store open, an exception for SQLite's files,
       `O_PATH` for pass-through directories and the treatment of `.`, `..`

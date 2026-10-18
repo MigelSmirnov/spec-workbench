@@ -1,0 +1,151 @@
+{
+ "open_points": [
+  {
+   "subject": "A17 configuration-file reread",
+   "kind": "contradictory checks",
+   "text": "A17 requires the configuration file to be a regular, non-symbolic-link file owned by the kernel user with no group or other permissions, while A16 says \"Exactly four checks apply to a re-read\" and lists no ownership, mode, file-type or symbolic-link check.",
+   "question": "When the token list is reread after startup, must the kernel repeat A17's secure path walk and final-file ownership, mode and type checks, or apply only A16's four checks?",
+   "options": [
+    "Repeat all A17 checks and then A16's four content checks",
+    "Use the no-follow path walk but apply only A16's four checks",
+    "Apply only A16's four checks using an ordinary reread"
+   ],
+   "default_guess": "Repeat A17's no-follow open and final-file security checks on every reread, then apply A16's four token-list checks.",
+   "unit": "A17"
+  },
+  {
+   "subject": "A18 data-directory initialization",
+   "kind": "missing start behavior",
+   "text": "\"At start it takes an exclusive lock in the data directory\" and \"The data directory holds one SQLite database ... and the run spool\" do not say what happens when the data directory or any required child area does not yet exist.",
+   "question": "Does startup create a missing data directory, database, value area, fixture area and spool area, or must an installer create some or all of them beforehand?",
+   "options": [
+    "Create the directory and all required contents securely",
+    "Require the data directory but create its contents",
+    "Require the complete layout and refuse anything missing"
+   ],
+   "default_guess": "Require an existing private data directory, then create the database and required child areas securely when absent.",
+   "unit": "A18"
+  },
+  {
+   "subject": "A18 private filesystem state",
+   "kind": "vague invariant",
+   "text": "\"The directory and everything in it are private to the kernel's user; the kernel refuses to start otherwise.\"",
+   "question": "What exact ownership, permission and file-type conditions make the data directory and each contained object \"private,\" and are hard-linked files allowed?",
+   "options": [
+    "Require kernel-user ownership and no group/other permission on every object, with only expected regular files and directories and no hard links",
+    "Check only the data directory's owner and mode",
+    "Apply different explicit rules to directories, regular files, SQLite sidecars and lock files"
+   ],
+   "default_guess": "Require kernel-user ownership, no group or other permission, expected regular-file/directory types, and reject multiply linked files.",
+   "unit": "A18"
+  },
+  {
+   "subject": "A18 data-directory path traversal",
+   "kind": "undefined symlink scope",
+   "text": "\"Every file of the directory is opened without following symbolic links; a link found at start stops the start\" does not state whether this covers the configured data-directory path itself and every component leading to it.",
+   "question": "May the configured data-directory path or one of its ancestor components be a symbolic link, and from where is a relative data-directory path walked?",
+   "options": [
+    "Reject symbolic links in every component and resolve relative paths from the working directory, as A17 does",
+    "Reject only the final data-directory entry and entries below it",
+    "Allow links in the configured path but reject links inside the resulting directory"
+   ],
+   "default_guess": "Use the same component-by-component no-follow walk as A17, from root for an absolute path and the working directory for a relative path.",
+   "unit": "A18"
+  },
+  {
+   "subject": "A18 startup check precedence",
+   "kind": "missing order",
+   "text": "A18 separately requires acquiring the exclusive lock, checking privacy and symbolic links, and performing startup cleanup, but gives no order among those checks or relative to the other startup checks.",
+   "question": "When several startup conditions fail, which A18 failure is reported first, and at what point relative to configuration validation and the sandbox probe is the data-directory lock acquired and cleanup performed?",
+   "options": [
+    "Define one total startup-check order",
+    "Define only the order of A18 checks",
+    "Allow implementations to report any detected startup failure"
+   ],
+   "default_guess": "Validate the configuration path, validate and lock the data directory, validate its contents, perform recovery cleanup, then probe the sandbox and recover runs.",
+   "unit": "A18"
+  },
+  {
+   "subject": "A18 store record order",
+   "kind": "undefined total order",
+   "text": "\"The store has one writer\" and \"records have one order\" do not define how positions are assigned when one transaction creates several records, or whether changing a mutable record affects its position.",
+   "question": "What is the total store order within a transaction that creates multiple records, and does a later status change retain the record's original position?",
+   "options": [
+    "Assign consecutive positions in a specified model/event order and never move an existing record",
+    "Give all records from one transaction a shared transaction position plus a specified tie-breaker",
+    "Let insertion order chosen by each store call determine their positions"
+   ],
+   "default_guess": "Assign a distinct consecutive position to each newly created record in an explicitly specified event order; updates retain the creation position.",
+   "unit": "A18"
+  },
+  {
+   "subject": "A18 simultaneous surface requests",
+   "kind": "undefined serialization order",
+   "text": "\"Surface requests are handled one at a time in the order they arrive\" does not define the arrival or linearization event when requests are received concurrently.",
+   "question": "Which observable event determines the order of two concurrently received requests?",
+   "options": [
+    "Order when the transport decoder accepts a complete request",
+    "Order when requests enter a single kernel queue",
+    "Use a deterministic transport sequence supplied by MCP",
+    "Permit either order for genuinely simultaneous requests"
+   ],
+   "default_guess": "Serialize by the order complete validated request messages enter one kernel queue, with that queue position fixed before operation checks.",
+   "unit": "A18"
+  },
+  {
+   "subject": "A18 startup cleanup failures",
+   "kind": "incomplete failure policy",
+   "text": "\"A spool directory that cannot be removed does not stop the start\" is specified, but no outcome is given when a temporary file or an unreferenced value file cannot be removed; it also does not resolve a removal failure caused by an object that violates the earlier privacy or symbolic-link checks.",
+   "question": "For each startup-cleanup target, does removal failure stop startup or leave the object for a later start, and which rule wins when the cause also violates a startup security check?",
+   "options": [
+    "Security violations always stop; ordinary cleanup failures never stop",
+    "Any failure except removal of an obsolete spool directory stops",
+    "All cleanup failures stop"
+   ],
+   "default_guess": "Stop for privacy, type or symbolic-link violations; otherwise retain any unremovable cleanup target and continue, never serving it.",
+   "unit": "A18"
+  },
+  {
+   "subject": "A18 unrecorded spool files",
+   "kind": "undefined quota behavior",
+   "text": "A failed store call may leave \"a spooled file no record names, which nothing reads,\" while startup removes only spool directories of ended runs that do not keep their spool and says \"nothing else\" is removed.",
+   "question": "Does an unrecorded spooled file in a live or failed run count toward `spool_run_bytes_max`, and when is it removed if its position is never retried?",
+   "options": [
+    "Count it until replacement or whole-spool removal",
+    "Do not count it but retain it until whole-spool removal",
+    "Remove unrecorded spool files during startup"
+   ],
+   "default_guess": "Count its actual bytes toward the run ceiling and remove it only when replaced at its position or when the run's whole spool is removed.",
+   "unit": "A18"
+  },
+  {
+   "subject": "A18 stored-file integrity on startup and reuse",
+   "kind": "missing corruption behavior",
+   "text": "Files are \"flushed, checked against their digest and size, and then renamed into place,\" but the text gives no check or outcome for an existing named file that is missing, has the wrong type, size or digest, or changes after publication.",
+   "question": "When startup, reuse or a read encounters a database-referenced value or fixture file that is missing or does not match its recorded digest and size, must startup fail, must the individual store call fail, or may the file be trusted by name?",
+   "options": [
+    "Verify at startup and refuse to start on any mismatch",
+    "Verify when read or reused and fail only that store call or request",
+    "Trust existing files after the initial publication check"
+   ],
+   "default_guess": "Verify type, size and digest before serving or reusing an existing file; refuse startup if a referenced file is already invalid during recovery.",
+   "unit": "A18"
+  },
+  {
+   "subject": "A20 supported Linux filesystems",
+   "kind": "unsupported prerequisite",
+   "text": "\"A release runs on Linux and on no other host, no version named\" names only absence of `O_NOFOLLOW` as an unsupported Linux case, while A18 relies on exclusive locking, SQLite locking and transactions, atomic rename and durable flushing.",
+   "question": "Which Linux filesystem semantics are required for A18's guarantees, and must startup probe or refuse data directories on filesystems that cannot provide them?",
+   "options": [
+    "Support only local filesystems providing specified lock, SQLite, atomic-rename and durability guarantees, with startup checks",
+    "Treat those semantics as installation prerequisites without probing",
+    "Claim support on every Linux filesystem and implement compensating mechanisms"
+   ],
+   "default_guess": "State the required filesystem semantics as installation prerequisites and refuse startup when a reliable check shows they are unavailable.",
+   "unit": "A20"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A17 configuration-file reread\",\"kind\":\"contradictory checks\",\"text\":\"A17 requires the configuration file to be a regular, non-symbolic-link file owned by the kernel user with no group or other permissions, while A16 says \\\"Exactly four checks apply to a re-read\\\" and lists no ownership, mode, file-type or symbolic-link check.\",\"question\":\"When the token list is reread after startup, must the kernel repeat A17's secure path walk and final-file ownership, mode and type checks, or apply only A16's four checks?\",\"options\":[\"Repeat all A17 checks and then A16's four content checks\",\"Use the no-follow path walk but apply only A16's four checks\",\"Apply only A16's four checks using an ordinary reread\"],\"default_guess\":\"Repeat A17's no-follow open and final-file security checks on every reread, then apply A16's four token-list checks.\",\"unit\":\"A17\"},{\"subject\":\"A18 data-directory initialization\",\"kind\":\"missing start behavior\",\"text\":\"\\\"At start it takes an exclusive lock in the data directory\\\" and \\\"The data directory holds one SQLite database ... and the run spool\\\" do not say what happens when the data directory or any required child area does not yet exist.\",\"question\":\"Does startup create a missing data directory, database, value area, fixture area and spool area, or must an installer create some or all of them beforehand?\",\"options\":[\"Create the directory and all required contents securely\",\"Require the data directory but create its contents\",\"Require the complete layout and refuse anything missing\"],\"default_guess\":\"Require an existing private data directory, then create the database and required child areas securely when absent.\",\"unit\":\"A18\"},{\"subject\":\"A18 private filesystem state\",\"kind\":\"vague invariant\",\"text\":\"\\\"The directory and everything in it are private to the kernel's user; the kernel refuses to start otherwise.\\\"\",\"question\":\"What exact ownership, permission and file-type conditions make the data directory and each contained object \\\"private,\\\" and are hard-linked files allowed?\",\"options\":[\"Require kernel-user ownership and no group/other permission on every object, with only expected regular files and directories and no hard links\",\"Check only the data directory's owner and mode\",\"Apply different explicit rules to directories, regular files, SQLite sidecars and lock files\"],\"default_guess\":\"Require kernel-user ownership, no group or other permission, expected regular-file/directory types, and reject multiply linked files.\",\"unit\":\"A18\"},{\"subject\":\"A18 data-directory path traversal\",\"kind\":\"undefined symlink scope\",\"text\":\"\\\"Every file of the directory is opened without following symbolic links; a link found at start stops the start\\\" does not state whether this covers the configured data-directory path itself and every component leading to it.\",\"question\":\"May the configured data-directory path or one of its ancestor components be a symbolic link, and from where is a relative data-directory path walked?\",\"options\":[\"Reject symbolic links in every component and resolve relative paths from the working directory, as A17 does\",\"Reject only the final data-directory entry and entries below it\",\"Allow links in the configured path but reject links inside the resulting directory\"],\"default_guess\":\"Use the same component-by-component no-follow walk as A17, from root for an absolute path and the working directory for a relative path.\",\"unit\":\"A18\"},{\"subject\":\"A18 startup check precedence\",\"kind\":\"missing order\",\"text\":\"A18 separately requires acquiring the exclusive lock, checking privacy and symbolic links, and performing startup cleanup, but gives no order among those checks or relative to the other startup checks.\",\"question\":\"When several startup conditions fail, which A18 failure is reported first, and at what point relative to configuration validation and the sandbox probe is the data-directory lock acquired and cleanup performed?\",\"options\":[\"Define one total startup-check order\",\"Define only the order of A18 checks\",\"Allow implementations to report any detected startup failure\"],\"default_guess\":\"Validate the configuration path, validate and lock the data directory, validate its contents, perform recovery cleanup, then probe the sandbox and recover runs.\",\"unit\":\"A18\"},{\"subject\":\"A18 store record order\",\"kind\":\"undefined total order\",\"text\":\"\\\"The store has one writer\\\" and \\\"records have one order\\\" do not define how positions are assigned when one transaction creates several records, or whether changing a mutable record affects its position.\",\"question\":\"What is the total store order within a transaction that creates multiple records, and does a later status change retain the record's original position?\",\"options\":[\"Assign consecutive positions in a specified model/event order and never move an existing record\",\"Give all records from one transaction a shared transaction position plus a specified tie-breaker\",\"Let insertion order chosen by each store call determine their positions\"],\"default_guess\":\"Assign a distinct consecutive position to each newly created record in an explicitly specified event order; updates retain the creation position.\",\"unit\":\"A18\"},{\"subject\":\"A18 simultaneous surface requests\",\"kind\":\"undefined serialization order\",\"text\":\"\\\"Surface requests are handled one at a time in the order they arrive\\\" does not define the arrival or linearization event when requests are received concurrently.\",\"question\":\"Which observable event determines the order of two concurrently received requests?\",\"options\":[\"Order when the transport decoder accepts a complete request\",\"Order when requests enter a single kernel queue\",\"Use a deterministic transport sequence supplied by MCP\",\"Permit either order for genuinely simultaneous requests\"],\"default_guess\":\"Serialize by the order complete validated request messages enter one kernel queue, with that queue position fixed before operation checks.\",\"unit\":\"A18\"},{\"subject\":\"A18 startup cleanup failures\",\"kind\":\"incomplete failure policy\",\"text\":\"\\\"A spool directory that cannot be removed does not stop the start\\\" is specified, but no outcome is given when a temporary file or an unreferenced value file cannot be removed; it also does not resolve a removal failure caused by an object that violates the earlier privacy or symbolic-link checks.\",\"question\":\"For each startup-cleanup target, does removal failure stop startup or leave the object for a later start, and which rule wins when the cause also violates a startup security check?\",\"options\":[\"Security violations always stop; ordinary cleanup failures never stop\",\"Any failure except removal of an obsolete spool directory stops\",\"All cleanup failures stop\"],\"default_guess\":\"Stop for privacy, type or symbolic-link violations; otherwise retain any unremovable cleanup target and continue, never serving it.\",\"unit\":\"A18\"},{\"subject\":\"A18 unrecorded spool files\",\"kind\":\"undefined quota behavior\",\"text\":\"A failed store call may leave \\\"a spooled file no record names, which nothing reads,\\\" while startup removes only spool directories of ended runs that do not keep their spool and says \\\"nothing else\\\" is removed.\",\"question\":\"Does an unrecorded spooled file in a live or failed run count toward `spool_run_bytes_max`, and when is it removed if its position is never retried?\",\"options\":[\"Count it until replacement or whole-spool removal\",\"Do not count it but retain it until whole-spool removal\",\"Remove unrecorded spool files during startup\"],\"default_guess\":\"Count its actual bytes toward the run ceiling and remove it only when replaced at its position or when the run's whole spool is removed.\",\"unit\":\"A18\"},{\"subject\":\"A18 stored-file integrity on startup and reuse\",\"kind\":\"missing corruption behavior\",\"text\":\"Files are \\\"flushed, checked against their digest and size, and then renamed into place,\\\" but the text gives no check or outcome for an existing named file that is missing, has the wrong type, size or digest, or changes after publication.\",\"question\":\"When startup, reuse or a read encounters a database-referenced value or fixture file that is missing or does not match its recorded digest and size, must startup fail, must the individual store call fail, or may the file be trusted by name?\",\"options\":[\"Verify at startup and refuse to start on any mismatch\",\"Verify when read or reused and fail only that store call or request\",\"Trust existing files after the initial publication check\"],\"default_guess\":\"Verify type, size and digest before serving or reusing an existing file; refuse startup if a referenced file is already invalid during recovery.\",\"unit\":\"A18\"},{\"subject\":\"A20 supported Linux filesystems\",\"kind\":\"unsupported prerequisite\",\"text\":\"\\\"A release runs on Linux and on no other host, no version named\\\" names only absence of `O_NOFOLLOW` as an unsupported Linux case, while A18 relies on exclusive locking, SQLite locking and transactions, atomic rename and durable flushing.\",\"question\":\"Which Linux filesystem semantics are required for A18's guarantees, and must startup probe or refuse data directories on filesystems that cannot provide them?\",\"options\":[\"Support only local filesystems providing specified lock, SQLite, atomic-rename and durability guarantees, with startup checks\",\"Treat those semantics as installation prerequisites without probing\",\"Claim support on every Linux filesystem and implement compensating mechanisms\"],\"default_guess\":\"State the required filesystem semantics as installation prerequisites and refuse startup when a reliable check shows they are unavailable.\",\"unit\":\"A20\"}]}",
+ "set_aside": []
+}

@@ -167,8 +167,12 @@ Reuses cabinet-flow decision 23, narrowed by K-16.
    following a symbolic link at any of them, each component with Linux's
    `O_NOFOLLOW`, whose presence no code tests (A20 rule 3) — the path as
    given, an absolute one walked from the root directory and a relative one
-   from the working directory, and a component that cannot be opened so, for
-   whatever reason, making the file one that cannot be read —, and the checks and the read use
+   from the working directory; each directory on the way opened with
+   `O_PATH` and `O_DIRECTORY`, so a directory the kernel's user may only
+   search is passed, and the last component for reading; every component the
+   path names, `.` and `..` included, opened as named, and an empty one, from
+   a repeated or trailing `/`, skipped; a component that cannot be opened so,
+   for whatever reason, making the file one that cannot be read —, and the checks and the read use
    that one opened file, so the file checked is the file read.
 2. A credential is resolved only when a request to its service is built: its
    secret file is read then, without following a symbolic link, and must be a
