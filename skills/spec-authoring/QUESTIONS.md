@@ -261,6 +261,37 @@ command — with `--since` the ref it last closed at, when it did. Stage 9
 admission checks the same as `FA019`. A case with no round for a state is
 blocked too ("no question round yet"): that is the rule, not a migration gap.
 
+### A change of method leaves nothing behind
+
+A blocking topic is what the method of its day found. When the method changes,
+the next round asks under other rules, and a topic the new rules no longer ask
+stops coming back without anyone deciding it. On 2026-10-10 Cabinet Kernel
+State 7 round-01 raised, in three reviews of three, what `installation` does on
+a platform without no-follow opening (`installation:T3`), and `store:T26` the
+same of SQLite; that hour State 7 was changed to ask only for contradictions,
+round-01 was marked "to be asked again", and its 445 gaps were never looked at.
+The units closed, the specification was accepted, and Route B met the very
+guess round-01 had written down: `hasattr(os, "O_NOFOLLOW")`.
+
+So every round keeps the digest of its method (`method` in its summary: the
+state's `question_scope`, the review and judge instructions, and the code
+revision `method.REVISION`, bumped when the code changes what may block). When
+two consecutive rounds of a state were asked under different methods, every
+blocking topic of the earlier one needs a disposition before the state closes:
+
+```bash
+python tools/design_questions.py dispose examples/<case> --state <N> \
+    --topic <round>:<topic id> --as <kind> --why "..." [--where "..."]
+```
+
+with `<kind>` one of `fixed`, `owner`, `convention`, `carried` (each naming
+`--where` the answer stands), `asked_again` (the new method still asks it) or
+`not_needed` (nobody uses it). Dispositions are kept in
+`questions/state<N>/dispositions.json`; `status` lists the topics still
+without one, and `authoring next` and Stage 9 (`FA019`) stop on them like on an
+open unit. Rounds kept before the digest existed have none and are not
+compared: the topics they left are a migration of their own.
+
 ## Closing a question
 
 Ask first who uses what the question is about.

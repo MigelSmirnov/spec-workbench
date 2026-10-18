@@ -256,3 +256,82 @@ def test_without_the_closed_text_in_git_a_changed_unit_is_reviewed_whole(tmp_pat
     (case / "02_rules.md").write_text(RULES.replace("Rule two.", "Rule two, sharper."), encoding="utf-8")
     summary, provider = _ask(case)
     assert summary["changed_units"] == [] and "has changed since" not in provider.instructions[0]
+
+
+def _change_method(monkeypatch):
+    from questions_workbench import method
+    monkeypatch.setattr(method, "REVISION", method.REVISION + 1)
+
+
+def test_every_round_keeps_the_digest_of_its_method(tmp_path):
+    from questions_workbench import method
+    case = _case(tmp_path)
+    summary, _ = _ask(case)
+    assert summary["method"] == method.digest(2)
+
+
+def test_a_change_of_method_leaves_no_blocking_topic_without_a_disposition(tmp_path, monkeypatch):
+    case = _case(tmp_path)
+    first, _ = _ask(case, [_point("first", "A01")], blocking={"first"})
+    _change_method(monkeypatch)
+    _ask(case)
+    summary, _ = _ask(case)
+    key = f"{first['round']}:{first['topics'][0]['id']}"
+    assert summary["open_units"] == [] and summary["closed"] is False
+    assert summary["undisposed_topics"] == [key]
+    result = service.status(case, 2)
+    assert result["closed"] is False and "superseded method" in result["reason"]
+    assert [t["key"] for t in result["undisposed"]] == [key]
+    left = service.dispose(case, 2, [key], "owner", "the owner chose a", "A01 rule one")
+    assert left == [] and service.status(case, 2)["closed"] is True
+
+
+def test_rounds_asked_under_one_method_need_no_disposition(tmp_path):
+    case = _case(tmp_path)
+    _ask(case, [_point("first", "A01")], blocking={"first"})
+    _ask(case)
+    summary, _ = _ask(case)
+    assert summary["closed"] is True and "undisposed_topics" not in summary
+
+
+def test_rounds_kept_before_the_method_digest_are_not_compared(tmp_path, monkeypatch):
+    case = _case(tmp_path)
+    first, _ = _ask(case, [_point("first", "A01")], blocking={"first"})
+    path = service.rounds_dir(case, 2) / first["round"] / "summary.json"
+    old = json.loads(path.read_text(encoding="utf-8"))
+    del old["method"]
+    path.write_text(json.dumps(old), encoding="utf-8")
+    _change_method(monkeypatch)
+    _ask(case)
+    summary, _ = _ask(case)
+    assert summary["closed"] is True
+
+
+def test_a_disposition_names_a_left_topic_its_reason_and_where_its_answer_stands(tmp_path, monkeypatch):
+    from questions_workbench import method
+    case = _case(tmp_path)
+    first, _ = _ask(case, [_point("first", "A01")], blocking={"first"})
+    _change_method(monkeypatch)
+    _ask(case)
+    key = f"{first['round']}:{first['topics'][0]['id']}"
+    with pytest.raises(method.DispositionError, match="not a blocking topic"):
+        service.dispose(case, 2, ["round-09:T1"], "not_needed", "nobody reads it")
+    with pytest.raises(method.DispositionError, match="--where"):
+        service.dispose(case, 2, [key], "fixed", "rule one now says")
+    with pytest.raises(method.DispositionError, match="--why"):
+        service.dispose(case, 2, [key], "not_needed", " ")
+    assert service.dispose(case, 2, [key], "not_needed", "nobody reads it") == []
+
+
+def test_the_dispose_command_records_and_status_lists_what_is_left(tmp_path, monkeypatch, capsys):
+    case = _case(tmp_path)
+    first, _ = _ask(case, [_point("first", "A01")], blocking={"first"})
+    _change_method(monkeypatch)
+    _ask(case)
+    _ask(case)
+    key = f"{first['round']}:{first['topics'][0]['id']}"
+    assert design_questions.main(["status", str(case), "--state", "2"]) == 1
+    assert f"undisposed {key}: first" in capsys.readouterr().out
+    assert design_questions.main(["dispose", str(case), "--state", "2", "--topic", key,
+                                  "--as", "asked_again", "--why", "the new method asks it"]) == 0
+    assert design_questions.main(["status", str(case), "--state", "2"]) == 0

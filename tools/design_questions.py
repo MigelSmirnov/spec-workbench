@@ -6,6 +6,8 @@
 
     python tools/design_questions.py ask examples/<case> --state 1 --since <git-ref>
     python tools/design_questions.py ask examples/<case> --state 1 --provider codex
+    python tools/design_questions.py dispose examples/<case> --state 7 \
+        --topic round-01:installation:T3 --as owner --why "..." --where "..."
 
 `ask` runs one round (several independent reviews, grouped into topics; topics
 raised by two reviews are judged) and keeps it under
@@ -26,7 +28,7 @@ import json
 import sys
 from pathlib import Path
 
-from questions_workbench import service
+from questions_workbench import method, service
 from questions_workbench.provider import CodexCliProvider, OpenAIProvider
 
 
@@ -76,8 +78,20 @@ def main(argv: list[str] | None = None) -> int:
     stat.add_argument("--state", type=int, required=True)
     stat.add_argument("--factory-root", type=Path, help="the Factory that builds the State 7 prompts")
     stat.add_argument("--json", action="store_true")
+    disp = sub.add_parser("dispose", help="record what became of a blocking topic a change of method left behind")
+    disp.add_argument("case", type=Path)
+    disp.add_argument("--state", type=int, required=True)
+    disp.add_argument("--topic", action="append", required=True,
+                      help="<round>:<topic id> as status lists it; repeat for several")
+    disp.add_argument("--as", dest="kind", required=True, choices=sorted(method.KINDS))
+    disp.add_argument("--why", required=True)
+    disp.add_argument("--where", help="where the answer stands (fixed, owner, convention, carried)")
     args = parser.parse_args(argv)
     try:
+        if args.command == "dispose":
+            left = service.dispose(args.case, args.state, args.topic, args.kind, args.why, args.where)
+            print(f"State {args.state}: {len(args.topic)} disposed as {args.kind}; {len(left)} left without disposition")
+            return 0
         if args.command == "ask":
             summary = service.ask_round(args.case, args.state, _provider(args), args.runs, args.since,
                                         args.factory_root)
@@ -93,8 +107,10 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"  reopened since {result['closed_at']}: ask --since {result['closed_at']}")
             for topic in result.get("repeated", []):
                 print(f"  [{len(topic['runs'])}] {topic['topic']}")
+            for topic in result.get("undisposed", []):
+                print(f"  undisposed {topic['key']}: {topic['topic']}")
         return 0 if result["closed"] else 1
-    except (service.QuestionRoundError, ValueError, RuntimeError) as exc:
+    except (service.QuestionRoundError, method.DispositionError, ValueError, RuntimeError) as exc:
         print(f"design_questions: error: {exc}", file=sys.stderr)
         return 2
 

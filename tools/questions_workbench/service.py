@@ -30,7 +30,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
-from . import documents, judge, prompts, units
+from . import documents, judge, method, prompts, units
 from .provider import LATER_DIR, Provider
 
 PROMPTS_DIR = "prompts"
@@ -584,6 +584,7 @@ def ask_round(case: Path, state: int, provider: Provider, runs: int = DEFAULT_RU
         "state": state,
         "round": directory.name,
         "provider": provider.name,
+        "method": method.digest(state),
         "documents": read.digests,
         "reviews": runs,
         "points": [len(r["open_points"]) for r in reviews],
@@ -605,8 +606,11 @@ def ask_round(case: Path, state: int, provider: Provider, runs: int = DEFAULT_RU
         first = previous_summaries[0]
         summary["carried"] = {"from": first["carried_from"], "ref": first["ref"], "units": first["units"]}
     open_after = units.closed(previous_summaries + [summary], read.units)
-    summary["closed"] = all(open_after.values())
+    left = method.undisposed(_summaries(case, state) + [summary], rounds_dir(case, state))
+    summary["closed"] = all(open_after.values()) and not left
     summary["open_units"] = [key for key, done in open_after.items() if not done]
+    if left:
+        summary["undisposed_topics"] = [t["key"] for t in left]
     (directory / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     return summary
 
@@ -650,19 +654,33 @@ def status(case: Path, state: int, factory_root: Path | None = None) -> dict[str
     done = units.closed(summaries, read.units)
     open_units = [key for key, value in done.items() if not value]
     changed = [key for key in open_units if units.closed_digest(summaries, key) is not None]
+    left = method.undisposed(rounds, rounds_dir(case, state))
+    reasons = [] if not open_units else [f"{len(open_units)} of {len(done)} unit(s) open: {', '.join(open_units)}"]
+    if left:
+        reasons.append(f"{len(left)} blocking topic(s) of a round asked under a superseded method have no "
+                       "disposition (design_questions.py dispose)")
     return {
         **base,
-        "closed": not open_units,
+        "closed": not open_units and not left,
         "stale": stale,
         "carried": str(summaries[0].get("round", "")).startswith(CARRIED),
-        "reason": ("every unit closed by two clear rounds on its current text" if not open_units
-                   else f"{len(open_units)} of {len(done)} unit(s) open: {', '.join(open_units)}"),
+        "reason": "; ".join(reasons) or "every unit closed by two clear rounds on its current text",
         "open_units": open_units,
+        "undisposed": left,
         "changed_units": changed,
         "units": len(done),
         "closed_at": _closed_at(case, state, summaries),
         "repeated": repeated,
     }
+
+
+def dispose(case: Path, state: int, keys: list[str], kind: str, why: str,
+            where: str | None = None) -> list[dict[str, Any]]:
+    """Record what became of blocking topics a change of method left behind
+    (method.py); returns those still without a disposition."""
+    summaries = _summaries(case, state)
+    method.dispose(rounds_dir(case, state), summaries, keys, kind, why, where)
+    return method.undisposed(summaries, rounds_dir(case, state))
 
 
 def _open_reason(summary: dict[str, Any]) -> str:
