@@ -1337,8 +1337,8 @@ the candidate would have followed links.
 
 34. **The kernel runs on Linux; no-follow opening is `O_NOFOLLOW`, where it guards something.**
     The owner decided on 2026-10-18, after the State 2–5 and 7 rounds of
-    that day (State 2 123–124, State 3 110–111, State 4 99–100, State 5
-    138–139, State 7 68–69) asked who proves the host, how SQLite's own
+    that day (State 2 123–125, State 3 110–112, State 4 99–101, State 5
+    138–140, State 7 68–70) asked who proves the host, how SQLite's own
     files refuse a link, and how a path is walked:
     - *Host.* A20 rule 3: the kernel runs on Linux, no version named, and
       the formal invariants gain `host = linux`. Another host is not
@@ -1353,8 +1353,10 @@ the candidate would have followed links.
       to a service as a credential. Each component is opened with
       `O_NOFOLLOW`, a directory on the way with `O_PATH` as well, so that a
       directory the kernel's user may only pass through (a home directory of
-      mode 0711) is passed; empty and `.` components are skipped; no code
-      asks whether a flag exists. Notes: `read_configuration` (and through
+      mode 0711) is passed; a relative path starts at the working directory;
+      empty and `.` components are skipped and `..` is opened as any other
+      component (the parent of the directory reached so far, never a link);
+      no code asks whether a flag exists. Notes: `read_configuration` (and through
       it `current_token_list`) and `resolve_service_credential`.
     - *The data directory* (A18 rule 2). The start's check stands: the
       directory and everything in it private to the kernel's user, no link
@@ -1369,7 +1371,12 @@ the candidate would have followed links.
       only the kernel's user or root can place a link, and either can
       change any record directly; a link gives them nothing more. The
       earlier note's "the file opened without following links" promised
-      what `sqlite3` cannot do. No journal mode is chosen for this.
+      what `sqlite3` cannot do. SQLite keeps its default rollback-journal
+      mode; the exception covers the database file and every file SQLite
+      creates beside it under its name. A18's formal invariant, which refused
+      every link inside the directory, now says the three cases: at start the
+      start is refused, after start a store-opened path fails its call, and
+      SQLite's files are not watched (State 2–5 rounds 125, 112, 101, 140).
     - Not changed, and why. Each module keeps its own opening of a path: the
       rule is one, the paths differ, and a shared capability would add an
       import to two modules for a few lines. `O_CLOEXEC` is not named:

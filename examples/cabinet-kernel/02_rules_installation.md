@@ -166,8 +166,10 @@ Reuses cabinet-flow decision 23, narrowed by K-16.
    Here and in rule 2 the path is opened component by component without
    following a symbolic link at any of them, each component with Linux's
    `O_NOFOLLOW` — a directory on the way with `O_PATH` as well, so a directory
-   the kernel's user may only pass through is passed; empty and `.` components
-   are skipped; the host is Linux (A20 rule 3), so no code asks whether a flag
+   the kernel's user may only pass through is passed; a relative path starts
+   at the kernel's working directory; empty and `.` components are skipped,
+   and `..` is opened as any other component — it names the parent of the
+   directory reached so far and is never a link; the host is Linux (A20 rule 3), so no code asks whether a flag
    exists and there is no mode without it —, and the checks and the read
    use that one opened file, so the file checked is the file read. These paths
    lie outside the kernel's private directory, where another user may be able
@@ -248,8 +250,10 @@ concurrent connections.
    start, each component with Linux's `O_NOFOLLOW`, never first asking whether
    the flag exists (A20 rule 3); a link met so later makes that store call fail
    with nothing written. The database file and its journal are opened by
-   SQLite, which Python cannot ask to refuse a link; the start's check covers
-   them, and the kernel does not watch them after it: in a private directory
+   SQLite, which Python cannot ask to refuse a link — the journal being every
+   file SQLite itself creates beside the database under the database's name,
+   in SQLite's default rollback-journal mode, which the kernel does not
+   change; the start's check covers them, and the kernel does not watch them after it: in a private directory
    only the kernel's user or root can place a link, and either can change any
    record directly, so a link gives them nothing more (owner, 2026-10-18).
 3. Only the store module opens the database. Every change is one call to the
@@ -279,7 +283,9 @@ concurrent connections.
 processes_on(data_directory) <= 1
 store_change -> one_call AND one_transaction IN store_module
 file_published -> complete AND digest_verified AND never_overwritten
-symlink_inside(data_directory) -> refused
+symlink_inside(data_directory) at start -> start refused
+symlink met by a store-opened path after start -> that call fails, nothing written
+sqlite_files(database) after start -> not watched
 ```
 
 ### Required tests
