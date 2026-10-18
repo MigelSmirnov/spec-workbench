@@ -891,13 +891,13 @@ EffectAttempt M26 and the concluding NodeExecution M23 written by
 
 ### Steps
 
-1. `capability:surface.serve_kernel` calls, in this order, every step
+1. `capability:surface.serve_kernel`, its command line holding exactly one
+   argument or the start stopping, calls, in this order, every step
    required and stopping the start with its reason on the first failure — a
    run spool that cannot be removed in step 7 is not a failure: it stays until
    a later start removes it (A18 rule 4):
-2. `capability:installation.load_installation`: the command line holds
-   exactly one argument, the configuration file's path, and it is absolute;
-   the file is a regular private
+2. `capability:installation.load_installation`: the configuration file's
+   path, that argument, is absolute; the file is a regular private
    file of the kernel's user, one JSON object of the installation's fields; no
    service twice among the selected instances or the credentials; every
    credential header name an HTTP field-name token and every secret file
@@ -962,7 +962,8 @@ EffectAttempt M26 and the concluding NodeExecution M23 written by
 ### Errors
 
 - Each start check failing stops the start and names why: a command line
-  without exactly one absolute path, configuration file
+  without exactly one argument (`module:surface`); a relative configuration
+  path, configuration file
   mode, owner or token rules (`module:installation`); a credential header
   colliding with a required header or a kernel-set header (`module:bindings`); lock held, directory
   not private, a symbolic link (`module:store`); sandbox missing or probe
