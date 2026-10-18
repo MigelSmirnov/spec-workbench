@@ -1,0 +1,246 @@
+{
+ "open_points": [
+  {
+   "unit": "A17",
+   "subject": "configuration and credential path traversal failure",
+   "kind": "incomplete rule",
+   "text": "“a component that cannot be opened so, for whatever reason, making the file one that cannot be read —, and the checks and the read use” is grammatically incomplete and does not state the resulting action.",
+   "question": "When any path component cannot be opened with the required flags, does configuration access refuse kernel startup and credential access produce `credential_unresolved`, and which failure takes precedence over later file checks?",
+   "options": [
+    "Treat the whole file as unreadable and apply rule 1 or rule 2 accordingly",
+    "Introduce a distinct path-component refusal",
+    "Continue with another path-opening method"
+   ],
+   "default_guess": "Treat the file as unreadable: refuse startup for the configuration file and return `credential_unresolved` for a secret file."
+  },
+  {
+   "unit": "A17",
+   "subject": "paths with no final component",
+   "kind": "uncovered case",
+   "text": "The rule says every empty component from a repeated or trailing `/` is skipped, but does not say what is opened as “the last component for reading” when the path is empty or consists only of slashes.",
+   "question": "What happens for an empty relative path, `/`, or a path made only of repeated slashes after all empty components are skipped?",
+   "options": [
+    "Refuse immediately as an invalid path",
+    "Open the starting directory and then fail the regular-file check",
+    "Apply normal Linux pathname semantics instead of skipping all components"
+   ],
+   "default_guess": "Refuse immediately because there is no file component."
+  },
+  {
+   "unit": "A17",
+   "subject": "configuration re-read consistency",
+   "kind": "cross-rule ambiguity",
+   "text": "A17 says “the checks and the read use that one opened file,” while A16 says the kernel first reads and hashes the configuration and, when the hash differs, “re-reads it.”",
+   "question": "Must change detection, parsing, validation, and token-list replacement all use the same opened file and the same bytes, or may the second read reopen a file that has changed again?",
+   "options": [
+    "Open once, read one byte sequence, hash and parse those same bytes",
+    "Open once for comparison and reopen for parsing",
+    "Retry until two reads have the same digest"
+   ],
+   "default_guess": "Open once per request and hash, parse, and validate the same captured bytes."
+  },
+  {
+   "unit": "A17",
+   "subject": "availability of path-opening facilities",
+   "kind": "support contradiction",
+   "text": "A17 requires `O_PATH` and `O_DIRECTORY`, but A20 declares only “a Linux without `O_NOFOLLOW`” unsupported and says no Linux version is named.",
+   "question": "Is a Linux host lacking usable `O_PATH` or `O_DIRECTORY` unsupported, a startup refusal, or within the supported host set despite the required algorithm being unavailable?",
+   "options": [
+    "Declare such hosts unsupported like hosts without `O_NOFOLLOW`",
+    "Test at startup and refuse",
+    "Provide a fallback path walk"
+   ],
+   "default_guess": "Treat any Linux lacking one of the required flags or semantics as unsupported, with no fallback."
+  },
+  {
+   "unit": "A18",
+   "subject": "data-directory provisioning",
+   "kind": "uncovered lifecycle",
+   "text": "“The data directory holds one SQLite database … a content-addressed area … and the run spool” does not say whether absent directories, subdirectories, or the database are created.",
+   "question": "Must the complete store already exist, may the kernel initialize an empty data directory, and what happens when only part of the expected layout is absent?",
+   "options": [
+    "Create a new store only in an existing empty private directory",
+    "Create the data directory and all store objects when absent",
+    "Require a fully initialized store and refuse otherwise",
+    "Repair missing store objects individually"
+   ],
+   "default_guess": "Create the store layout in an existing private empty directory, but refuse a partially missing existing store."
+  },
+  {
+   "unit": "A18",
+   "subject": "data-directory privacy validation",
+   "kind": "vague refusal condition",
+   "text": "“The directory and everything in it are private to the kernel's user; the kernel refuses to start otherwise.”",
+   "question": "Which exact owner, mode, ACL, file-type, and hard-link conditions constitute “private,” and are Unix-domain sockets, devices, FIFOs, or hard-linked regular files allowed?",
+   "options": [
+    "Require kernel-user ownership and no group/other permission bits on every entry",
+    "Also reject ACL access, hard links, and every unexpected file type",
+    "Check only the top-level directory"
+   ],
+   "default_guess": "Require kernel-user ownership, no group/other permissions, expected file types only, and no externally linkable hard-linked files."
+  },
+  {
+   "unit": "A18",
+   "subject": "data-directory path traversal",
+   "kind": "silent security behavior",
+   "text": "A18 says files “of the directory” are opened without following symbolic links, but does not say whether the `data_directory` path itself and all of its parent components are walked without following links.",
+   "question": "May the configured data-directory path or one of its ancestors be a symbolic link, and how must the path be opened?",
+   "options": [
+    "Walk every component without following links, as A17 does",
+    "Allow links in ancestors but reject the final directory when it is a link",
+    "Use ordinary pathname resolution for the configured directory and enforce no links only inside it"
+   ],
+   "default_guess": "Walk every component without following symbolic links and reject a linked component."
+  },
+  {
+   "unit": "A18",
+   "subject": "exclusive store lock",
+   "kind": "unspecified protocol",
+   "text": "“At start it takes an exclusive lock in the data directory; a second process on the same directory refuses to start.”",
+   "question": "What object and Linux locking primitive define the lock, when is it acquired relative to validation and recovery, and how are stale lock artifacts after a crash treated?",
+   "options": [
+    "Use a process-scoped advisory lock on a fixed regular lock file and acquire it before any mutation",
+    "Use an atomic lock-file creation protocol with stale-lock recovery",
+    "Use SQLite locking as the installation lock"
+   ],
+   "default_guess": "Use a fixed regular lock file with a kernel-released advisory exclusive lock, acquired before cleanup or recovery; an unlocked stale file is reusable."
+  },
+  {
+   "unit": "A18",
+   "subject": "supported data-directory filesystem",
+   "kind": "unverifiable invariant",
+   "text": "A18 requires exclusive locking, atomic rename, SQLite transactions, flushing, and crash recovery, while A20 now supports Linux without naming a filesystem or storage baseline.",
+   "question": "Which filesystem semantics are required, and must the kernel reject network or other filesystems that cannot guarantee the locking, atomic rename, durability, and SQLite behavior A18 assumes?",
+   "options": [
+    "Support only local filesystems providing the required semantics and test or document that precondition",
+    "Support any Linux filesystem and accept its native guarantees",
+    "Add store protocols that work on explicitly named network filesystems"
+   ],
+   "default_guess": "Require a local filesystem with reliable advisory locks, atomic same-directory rename, fsync, and SQLite locking; reject or declare other filesystems unsupported."
+  },
+  {
+   "unit": "A18",
+   "subject": "request serialization order",
+   "kind": "undefined order",
+   "text": "“Surface requests are handled one at a time in the order they arrive.”",
+   "question": "What event establishes arrival order when requests overlap—first byte received, complete MCP message received, successful parsing, listener acceptance, or insertion into an explicit queue?",
+   "options": [
+    "Order by completion of receipt into a kernel queue",
+    "Order by connection/listener acceptance",
+    "Order by successful request validation",
+    "Permit any deterministic serialization chosen by the server"
+   ],
+   "default_guess": "Assign order when a complete request message enters a single kernel queue."
+  },
+  {
+   "unit": "A18",
+   "subject": "store order within multi-record changes",
+   "kind": "undefined total order",
+   "text": "The store has “one order,” but several rules write multiple records in one store call and transaction, without specifying their relative positions.",
+   "question": "How are store positions assigned among records created atomically in the same transaction, and is that order shared across all record types?",
+   "options": [
+    "One global sequence, with a fixed per-call record-type order",
+    "One global sequence, with order explicitly supplied by each store operation",
+    "Separate per-type sequences",
+    "Give the whole transaction one position with subpositions"
+   ],
+   "default_guess": "Use one global sequence and define a fixed record order for every multi-record store operation."
+  },
+  {
+   "unit": "A18",
+   "subject": "filesystem and database crash atomicity",
+   "kind": "missing crash protocol",
+   "text": "Files are flushed and renamed before being named by records, but the text does not specify directory flushing, database durability settings, or recovery when a crash occurs between file publication and transaction durability.",
+   "question": "What write, `fsync`, rename, directory-`fsync`, and database-commit order is required to ensure that no durable record can name a missing or incomplete file after a crash?",
+   "options": [
+    "Durably publish the file and parent directory before committing its referencing record",
+    "Commit the record first and repair missing files during recovery",
+    "Rely on default SQLite and filesystem behavior without a stronger crash guarantee"
+   ],
+   "default_guess": "Flush the temporary file, rename it, fsync the containing directory, and only then durably commit the referencing record."
+  },
+  {
+   "unit": "A18",
+   "subject": "corrupt or missing durable store content",
+   "kind": "uncovered failure",
+   "text": "The rules verify bytes when publishing them but do not say what happens if the database is corrupt, or if a record-named value, fixture, or spool file is later missing, has the wrong type, size, or digest.",
+   "question": "Does startup verify durable store consistency, are files verified again when read, and does detected corruption refuse startup, fail only the affected call, or produce another outcome?",
+   "options": [
+    "Verify the complete store at startup and refuse startup on corruption",
+    "Verify each artifact when read and fail only the affected operation",
+    "Trust all existing files because the data directory is private",
+    "Attempt automatic repair or deletion"
+   ],
+   "default_guess": "Validate structural database integrity at startup and verify artifact size and digest on read; refuse startup for durable-record corruption."
+  },
+  {
+   "unit": "A18",
+   "subject": "orphaned trial fixtures",
+   "kind": "cleanup gap",
+   "text": "A failed store call may leave “a published file no record names,” but startup explicitly removes only temporary files, unreferenced value bytes, and certain spool directories; unreferenced file fixtures are not named.",
+   "question": "What happens to a trial fixture published before a failed transaction leaves it unreferenced?",
+   "options": [
+    "Remove unreferenced file fixtures at startup",
+    "Keep them permanently but never serve them",
+    "Store fixtures in the same content-addressed pool as values so the stated value-byte cleanup covers them"
+   ],
+   "default_guess": "Use one content-addressed byte pool and remove every unreferenced value or fixture object at startup."
+  },
+  {
+   "unit": "A18",
+   "subject": "startup cleanup failures",
+   "kind": "missing failure behavior",
+   "text": "The text says failure to remove an obsolete spool directory does not stop startup, but gives no result when temporary files or unreferenced value bytes cannot be inspected or removed.",
+   "question": "Does failure to clean temporary or unreferenced content stop startup, get ignored like an obsolete spool directory, or quarantine the affected path?",
+   "options": [
+    "Refuse startup",
+    "Continue but never serve the affected files and retry next start",
+    "Ignore all cleanup failures"
+   ],
+   "default_guess": "Continue only for known obsolete spool directories; refuse startup when temporary or content-area cleanup cannot be completed safely."
+  },
+  {
+   "unit": "A18",
+   "subject": "startup-check precedence",
+   "kind": "undefined precedence",
+   "text": "A17, A18, A03, A16 and A09 each specify conditions that refuse startup, but no order is given among configuration path checks, configuration validation, store locking and validation, credential-header conflicts, sandbox probing, cleanup, and recovery.",
+   "question": "When several startup conditions fail, which check is performed and reported first, and which checks may mutate or clean the store before all refusal conditions have passed?",
+   "options": [
+    "Define one global startup sequence",
+    "Allow implementation-defined refusal ordering while forbidding mutation before all checks pass",
+    "Run independent checks and report all failures"
+   ],
+   "default_guess": "Use a fixed sequence: securely read and validate configuration, acquire and validate the store, validate static service-header conflicts, probe the sandbox, then clean and recover before opening the surface."
+  },
+  {
+   "unit": "A20",
+   "subject": "supported Linux baseline",
+   "kind": "ambiguous support boundary",
+   "text": "“A release runs on Linux and on no other host, no version named” does not establish whether every Linux version with `O_NOFOLLOW` is supported or whether unstated kernel, libc, filesystem, SQLite, namespace, and bubblewrap requirements may exclude additional systems.",
+   "question": "What exact conditions define a supported Linux host, and what behavior is required when Linux has `O_NOFOLLOW` but lacks another facility required by A03, A17, or A18?",
+   "options": [
+    "Support every Linux with `O_NOFOLLOW`, requiring fallbacks for all other facilities",
+    "Define a capability baseline and treat hosts below it as unsupported",
+    "Name minimum kernel, libc, filesystem, and runtime versions",
+    "Probe every required capability and refuse startup when one is absent"
+   ],
+   "default_guess": "Define a required capability baseline and refuse startup when a safely probeable required facility is absent."
+  },
+  {
+   "unit": "A20",
+   "subject": "release dependency closure",
+   "kind": "internal contradiction",
+   "text": "The decision is titled “one release fixes every ceiling and every dependency” and says dependencies are pinned exactly, but the added host rule deliberately leaves Linux unversioned.",
+   "question": "Is the host kernel and userspace ABI outside the meaning of “every dependency,” or must a release pin a Linux platform baseline for the dependency-closure claim to remain true?",
+   "options": [
+    "Explicitly exclude the host OS and filesystem from pinned dependencies",
+    "Pin an exact Linux distribution or image",
+    "Pin minimum kernel and userspace ABI versions while allowing newer compatible hosts"
+   ],
+   "default_guess": "Exclude the host from packaged dependencies but specify a minimum tested kernel/userspace capability baseline."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A17\",\"subject\":\"configuration and credential path traversal failure\",\"kind\":\"incomplete rule\",\"text\":\"“a component that cannot be opened so, for whatever reason, making the file one that cannot be read —, and the checks and the read use” is grammatically incomplete and does not state the resulting action.\",\"question\":\"When any path component cannot be opened with the required flags, does configuration access refuse kernel startup and credential access produce `credential_unresolved`, and which failure takes precedence over later file checks?\",\"options\":[\"Treat the whole file as unreadable and apply rule 1 or rule 2 accordingly\",\"Introduce a distinct path-component refusal\",\"Continue with another path-opening method\"],\"default_guess\":\"Treat the file as unreadable: refuse startup for the configuration file and return `credential_unresolved` for a secret file.\"},{\"unit\":\"A17\",\"subject\":\"paths with no final component\",\"kind\":\"uncovered case\",\"text\":\"The rule says every empty component from a repeated or trailing `/` is skipped, but does not say what is opened as “the last component for reading” when the path is empty or consists only of slashes.\",\"question\":\"What happens for an empty relative path, `/`, or a path made only of repeated slashes after all empty components are skipped?\",\"options\":[\"Refuse immediately as an invalid path\",\"Open the starting directory and then fail the regular-file check\",\"Apply normal Linux pathname semantics instead of skipping all components\"],\"default_guess\":\"Refuse immediately because there is no file component.\"},{\"unit\":\"A17\",\"subject\":\"configuration re-read consistency\",\"kind\":\"cross-rule ambiguity\",\"text\":\"A17 says “the checks and the read use that one opened file,” while A16 says the kernel first reads and hashes the configuration and, when the hash differs, “re-reads it.”\",\"question\":\"Must change detection, parsing, validation, and token-list replacement all use the same opened file and the same bytes, or may the second read reopen a file that has changed again?\",\"options\":[\"Open once, read one byte sequence, hash and parse those same bytes\",\"Open once for comparison and reopen for parsing\",\"Retry until two reads have the same digest\"],\"default_guess\":\"Open once per request and hash, parse, and validate the same captured bytes.\"},{\"unit\":\"A17\",\"subject\":\"availability of path-opening facilities\",\"kind\":\"support contradiction\",\"text\":\"A17 requires `O_PATH` and `O_DIRECTORY`, but A20 declares only “a Linux without `O_NOFOLLOW`” unsupported and says no Linux version is named.\",\"question\":\"Is a Linux host lacking usable `O_PATH` or `O_DIRECTORY` unsupported, a startup refusal, or within the supported host set despite the required algorithm being unavailable?\",\"options\":[\"Declare such hosts unsupported like hosts without `O_NOFOLLOW`\",\"Test at startup and refuse\",\"Provide a fallback path walk\"],\"default_guess\":\"Treat any Linux lacking one of the required flags or semantics as unsupported, with no fallback.\"},{\"unit\":\"A18\",\"subject\":\"data-directory provisioning\",\"kind\":\"uncovered lifecycle\",\"text\":\"“The data directory holds one SQLite database … a content-addressed area … and the run spool” does not say whether absent directories, subdirectories, or the database are created.\",\"question\":\"Must the complete store already exist, may the kernel initialize an empty data directory, and what happens when only part of the expected layout is absent?\",\"options\":[\"Create a new store only in an existing empty private directory\",\"Create the data directory and all store objects when absent\",\"Require a fully initialized store and refuse otherwise\",\"Repair missing store objects individually\"],\"default_guess\":\"Create the store layout in an existing private empty directory, but refuse a partially missing existing store.\"},{\"unit\":\"A18\",\"subject\":\"data-directory privacy validation\",\"kind\":\"vague refusal condition\",\"text\":\"“The directory and everything in it are private to the kernel's user; the kernel refuses to start otherwise.”\",\"question\":\"Which exact owner, mode, ACL, file-type, and hard-link conditions constitute “private,” and are Unix-domain sockets, devices, FIFOs, or hard-linked regular files allowed?\",\"options\":[\"Require kernel-user ownership and no group/other permission bits on every entry\",\"Also reject ACL access, hard links, and every unexpected file type\",\"Check only the top-level directory\"],\"default_guess\":\"Require kernel-user ownership, no group/other permissions, expected file types only, and no externally linkable hard-linked files.\"},{\"unit\":\"A18\",\"subject\":\"data-directory path traversal\",\"kind\":\"silent security behavior\",\"text\":\"A18 says files “of the directory” are opened without following symbolic links, but does not say whether the `data_directory` path itself and all of its parent components are walked without following links.\",\"question\":\"May the configured data-directory path or one of its ancestors be a symbolic link, and how must the path be opened?\",\"options\":[\"Walk every component without following links, as A17 does\",\"Allow links in ancestors but reject the final directory when it is a link\",\"Use ordinary pathname resolution for the configured directory and enforce no links only inside it\"],\"default_guess\":\"Walk every component without following symbolic links and reject a linked component.\"},{\"unit\":\"A18\",\"subject\":\"exclusive store lock\",\"kind\":\"unspecified protocol\",\"text\":\"“At start it takes an exclusive lock in the data directory; a second process on the same directory refuses to start.”\",\"question\":\"What object and Linux locking primitive define the lock, when is it acquired relative to validation and recovery, and how are stale lock artifacts after a crash treated?\",\"options\":[\"Use a process-scoped advisory lock on a fixed regular lock file and acquire it before any mutation\",\"Use an atomic lock-file creation protocol with stale-lock recovery\",\"Use SQLite locking as the installation lock\"],\"default_guess\":\"Use a fixed regular lock file with a kernel-released advisory exclusive lock, acquired before cleanup or recovery; an unlocked stale file is reusable.\"},{\"unit\":\"A18\",\"subject\":\"supported data-directory filesystem\",\"kind\":\"unverifiable invariant\",\"text\":\"A18 requires exclusive locking, atomic rename, SQLite transactions, flushing, and crash recovery, while A20 now supports Linux without naming a filesystem or storage baseline.\",\"question\":\"Which filesystem semantics are required, and must the kernel reject network or other filesystems that cannot guarantee the locking, atomic rename, durability, and SQLite behavior A18 assumes?\",\"options\":[\"Support only local filesystems providing the required semantics and test or document that precondition\",\"Support any Linux filesystem and accept its native guarantees\",\"Add store protocols that work on explicitly named network filesystems\"],\"default_guess\":\"Require a local filesystem with reliable advisory locks, atomic same-directory rename, fsync, and SQLite locking; reject or declare other filesystems unsupported.\"},{\"unit\":\"A18\",\"subject\":\"request serialization order\",\"kind\":\"undefined order\",\"text\":\"“Surface requests are handled one at a time in the order they arrive.”\",\"question\":\"What event establishes arrival order when requests overlap—first byte received, complete MCP message received, successful parsing, listener acceptance, or insertion into an explicit queue?\",\"options\":[\"Order by completion of receipt into a kernel queue\",\"Order by connection/listener acceptance\",\"Order by successful request validation\",\"Permit any deterministic serialization chosen by the server\"],\"default_guess\":\"Assign order when a complete request message enters a single kernel queue.\"},{\"unit\":\"A18\",\"subject\":\"store order within multi-record changes\",\"kind\":\"undefined total order\",\"text\":\"The store has “one order,” but several rules write multiple records in one store call and transaction, without specifying their relative positions.\",\"question\":\"How are store positions assigned among records created atomically in the same transaction, and is that order shared across all record types?\",\"options\":[\"One global sequence, with a fixed per-call record-type order\",\"One global sequence, with order explicitly supplied by each store operation\",\"Separate per-type sequences\",\"Give the whole transaction one position with subpositions\"],\"default_guess\":\"Use one global sequence and define a fixed record order for every multi-record store operation.\"},{\"unit\":\"A18\",\"subject\":\"filesystem and database crash atomicity\",\"kind\":\"missing crash protocol\",\"text\":\"Files are flushed and renamed before being named by records, but the text does not specify directory flushing, database durability settings, or recovery when a crash occurs between file publication and transaction durability.\",\"question\":\"What write, `fsync`, rename, directory-`fsync`, and database-commit order is required to ensure that no durable record can name a missing or incomplete file after a crash?\",\"options\":[\"Durably publish the file and parent directory before committing its referencing record\",\"Commit the record first and repair missing files during recovery\",\"Rely on default SQLite and filesystem behavior without a stronger crash guarantee\"],\"default_guess\":\"Flush the temporary file, rename it, fsync the containing directory, and only then durably commit the referencing record.\"},{\"unit\":\"A18\",\"subject\":\"corrupt or missing durable store content\",\"kind\":\"uncovered failure\",\"text\":\"The rules verify bytes when publishing them but do not say what happens if the database is corrupt, or if a record-named value, fixture, or spool file is later missing, has the wrong type, size, or digest.\",\"question\":\"Does startup verify durable store consistency, are files verified again when read, and does detected corruption refuse startup, fail only the affected call, or produce another outcome?\",\"options\":[\"Verify the complete store at startup and refuse startup on corruption\",\"Verify each artifact when read and fail only the affected operation\",\"Trust all existing files because the data directory is private\",\"Attempt automatic repair or deletion\"],\"default_guess\":\"Validate structural database integrity at startup and verify artifact size and digest on read; refuse startup for durable-record corruption.\"},{\"unit\":\"A18\",\"subject\":\"orphaned trial fixtures\",\"kind\":\"cleanup gap\",\"text\":\"A failed store call may leave “a published file no record names,” but startup explicitly removes only temporary files, unreferenced value bytes, and certain spool directories; unreferenced file fixtures are not named.\",\"question\":\"What happens to a trial fixture published before a failed transaction leaves it unreferenced?\",\"options\":[\"Remove unreferenced file fixtures at startup\",\"Keep them permanently but never serve them\",\"Store fixtures in the same content-addressed pool as values so the stated value-byte cleanup covers them\"],\"default_guess\":\"Use one content-addressed byte pool and remove every unreferenced value or fixture object at startup.\"},{\"unit\":\"A18\",\"subject\":\"startup cleanup failures\",\"kind\":\"missing failure behavior\",\"text\":\"The text says failure to remove an obsolete spool directory does not stop startup, but gives no result when temporary files or unreferenced value bytes cannot be inspected or removed.\",\"question\":\"Does failure to clean temporary or unreferenced content stop startup, get ignored like an obsolete spool directory, or quarantine the affected path?\",\"options\":[\"Refuse startup\",\"Continue but never serve the affected files and retry next start\",\"Ignore all cleanup failures\"],\"default_guess\":\"Continue only for known obsolete spool directories; refuse startup when temporary or content-area cleanup cannot be completed safely.\"},{\"unit\":\"A18\",\"subject\":\"startup-check precedence\",\"kind\":\"undefined precedence\",\"text\":\"A17, A18, A03, A16 and A09 each specify conditions that refuse startup, but no order is given among configuration path checks, configuration validation, store locking and validation, credential-header conflicts, sandbox probing, cleanup, and recovery.\",\"question\":\"When several startup conditions fail, which check is performed and reported first, and which checks may mutate or clean the store before all refusal conditions have passed?\",\"options\":[\"Define one global startup sequence\",\"Allow implementation-defined refusal ordering while forbidding mutation before all checks pass\",\"Run independent checks and report all failures\"],\"default_guess\":\"Use a fixed sequence: securely read and validate configuration, acquire and validate the store, validate static service-header conflicts, probe the sandbox, then clean and recover before opening the surface.\"},{\"unit\":\"A20\",\"subject\":\"supported Linux baseline\",\"kind\":\"ambiguous support boundary\",\"text\":\"“A release runs on Linux and on no other host, no version named” does not establish whether every Linux version with `O_NOFOLLOW` is supported or whether unstated kernel, libc, filesystem, SQLite, namespace, and bubblewrap requirements may exclude additional systems.\",\"question\":\"What exact conditions define a supported Linux host, and what behavior is required when Linux has `O_NOFOLLOW` but lacks another facility required by A03, A17, or A18?\",\"options\":[\"Support every Linux with `O_NOFOLLOW`, requiring fallbacks for all other facilities\",\"Define a capability baseline and treat hosts below it as unsupported\",\"Name minimum kernel, libc, filesystem, and runtime versions\",\"Probe every required capability and refuse startup when one is absent\"],\"default_guess\":\"Define a required capability baseline and refuse startup when a safely probeable required facility is absent.\"},{\"unit\":\"A20\",\"subject\":\"release dependency closure\",\"kind\":\"internal contradiction\",\"text\":\"The decision is titled “one release fixes every ceiling and every dependency” and says dependencies are pinned exactly, but the added host rule deliberately leaves Linux unversioned.\",\"question\":\"Is the host kernel and userspace ABI outside the meaning of “every dependency,” or must a release pin a Linux platform baseline for the dependency-closure claim to remain true?\",\"options\":[\"Explicitly exclude the host OS and filesystem from pinned dependencies\",\"Pin an exact Linux distribution or image\",\"Pin minimum kernel and userspace ABI versions while allowing newer compatible hosts\"],\"default_guess\":\"Exclude the host from packaged dependencies but specify a minimum tested kernel/userspace capability baseline.\"}]}",
+ "set_aside": []
+}

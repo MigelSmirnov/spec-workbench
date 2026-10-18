@@ -1,0 +1,189 @@
+{
+ "open_points": [
+  {
+   "subject": "A17 configuration and credential path opening",
+   "kind": "blocking special file",
+   "text": "“the last component for reading” and only afterward “must be a regular file”",
+   "question": "With which flags is the last component opened so that a FIFO, device, socket or other non-regular object cannot block or cause effects before the regular-file check?",
+   "options": [
+    "Open read-only and permit the open itself to block",
+    "Open read-only and nonblocking, then reject anything not regular",
+    "Open for metadata first, but define how the checked object is then read through the same opened file"
+   ],
+   "default_guess": "Open with O_RDONLY, O_NOFOLLOW, O_CLOEXEC and O_NONBLOCK, then use fstat and reject unless regular before reading.",
+   "unit": "?"
+  },
+  {
+   "subject": "A17 configuration and credential path opening",
+   "kind": "degenerate path",
+   "text": "“an empty one, from a repeated or trailing `/`, skipped”",
+   "question": "What object is opened when skipping empty components leaves no last component, as for an empty relative path or `/`?",
+   "options": [
+    "Refuse because the path names no file component",
+    "Treat the starting working directory or root directory as the target and reject it as non-regular",
+    "Give these path forms a separate invalid-path refusal"
+   ],
+   "default_guess": "Refuse because there is no final file component.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 data-directory initialization",
+   "kind": "missing lifecycle",
+   "text": "“The data directory holds one SQLite database with every kernel record, a content-addressed area of value bytes and file fixtures named by digest, and the run spool”",
+   "question": "Must the data directory and each required child already exist, or does the kernel create missing directories, the database and its schema; and what does it do with unknown entries?",
+   "options": [
+    "Create all missing structures and ignore unknown private entries",
+    "Create missing structures but refuse unknown entries",
+    "Require a fully initialized layout and refuse anything missing or unexpected"
+   ],
+   "default_guess": "Create the data directory and required layout when absent, and refuse unexpected entries in kernel-owned subareas.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 private store permissions",
+   "kind": "vague refusal condition",
+   "text": "“The directory and everything in it are private to the kernel's user; the kernel refuses to start otherwise.”",
+   "question": "What exact ownership, mode, ACL and file-type conditions make the data directory and each descendant “private”?",
+   "options": [
+    "Require ownership by the kernel UID and no group-or-other permission bits",
+    "Also reject ACLs or other access mechanisms granting another principal access",
+    "Accept any permissions so long as effective access tests find no other reader"
+   ],
+   "default_guess": "Require kernel-UID ownership, directories with no group-or-other bits, files with no group-or-other bits, and reject access-granting ACLs.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 data-directory path resolution",
+   "kind": "unsafe path ambiguity",
+   "text": "“Every file of the directory is opened without following symbolic links; a link found at start stops the start”",
+   "question": "Are the data-directory path itself, every ancestor component, nested directories and final files all opened component by component relative to retained directory descriptors, or is only each final file protected from symlink following?",
+   "options": [
+    "Protect only final file components",
+    "Walk every component without following links, including the configured data-directory path",
+    "Trust ancestors outside the data directory but walk every component inside it"
+   ],
+   "default_guess": "Open the configured directory and every descendant component through directory descriptors without following any symlink.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 exclusive lock",
+   "kind": "undefined lock semantics",
+   "text": "“At start it takes an exclusive lock in the data directory; a second process on the same directory refuses to start.”",
+   "question": "What lock mechanism and lifetime distinguish a live competing process from a stale lock artifact after a crash, and what happens when lock acquisition fails for another reason?",
+   "options": [
+    "Use a process-held OS advisory lock that is released automatically on exit",
+    "Use the existence of a lock file and define stale-lock recovery",
+    "Use SQLite locking as the installation lock"
+   ],
+   "default_guess": "Hold an OS advisory lock on a private regular lock file for the process lifetime; refuse startup on any acquisition failure and allow restart after automatic release on process death.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 startup sequence",
+   "kind": "missing precedence",
+   "text": "“At start it takes an exclusive lock” and “On start, temporary files, value bytes no record names … are removed”",
+   "question": "What is the exact order of safely opening and checking the data directory, acquiring its lock, scanning for links and permissions, cleaning artifacts, opening or validating SQLite, recovering effects and runs, and performing the other startup probes?",
+   "options": [
+    "Acquire the lock before every scan, cleanup and recovery mutation",
+    "Validate the whole directory before acquiring the lock",
+    "Treat rule order as the complete startup order"
+   ],
+   "default_guess": "Safely open the directory, acquire the exclusive lock, validate it, clean artifacts, validate/open the database, perform recovery, then open the surface.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 startup symlink handling",
+   "kind": "contradictory startup actions",
+   "text": "“a link found at start stops the start” and “On start, temporary files … and the spool directories of runs that ended and do not keep their spool … are removed”",
+   "question": "If a symlink is inside an entry that startup cleanup would otherwise remove, must startup stop because it found the link, or may it remove the containing artifact without following the link?",
+   "options": [
+    "Every discovered symlink stops startup before cleanup",
+    "Cleanup may unlink a symlink inside an otherwise removable artifact",
+    "Cleanup removable artifacts first, then scan what remains"
+   ],
+   "default_guess": "Every discovered symlink stops startup; cleanup occurs only after a successful symlink-safe scan.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 startup cleanup",
+   "kind": "undefined failure behavior",
+   "text": "“temporary files, value bytes no record names … are removed” while only a spool-directory failure is specified: “A spool directory that cannot be removed does not stop the start”",
+   "question": "What happens when a temporary file or unreferenced value byte file cannot be removed?",
+   "options": [
+    "Refuse startup",
+    "Continue startup while leaving it unserved for a later cleanup",
+    "Quarantine or rename it and continue"
+   ],
+   "default_guess": "Refuse startup because the text grants failure tolerance only to obsolete spool directories.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 content-addressed publication",
+   "kind": "collision or corruption",
+   "text": "“a completed file a record names is never overwritten” and “Equal bytes are stored once”",
+   "question": "When the digest-named destination already exists but its type, size or bytes differ from the file being published, does the call verify and refuse, treat the digest as sufficient, or repair the destination despite the no-overwrite rule?",
+   "options": [
+    "Verify the existing regular file byte-for-byte and fail on any mismatch",
+    "Trust the digest-named path without reading the existing file",
+    "Replace a mismatching file as corruption recovery"
+   ],
+   "default_guess": "Verify type, size, digest and bytes as needed; fail without changing either records or the existing artifact on mismatch.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 store integrity at startup",
+   "kind": "unverified invariant",
+   "text": "“file_published -> complete AND digest_verified AND never_overwritten”",
+   "question": "Does startup verify that every database-referenced value, fixture and retained spool file exists, is regular, has the recorded size and digest, and that the SQLite database itself is readable and structurally valid; if not, when and how is corruption reported?",
+   "options": [
+    "Verify the entire store before recovery and refuse startup on inconsistency",
+    "Validate each artifact only when it is read and then stop on internal error",
+    "Trust the protected directory and perform no integrity checks beyond publication"
+   ],
+   "default_guess": "Run SQLite integrity and schema checks at startup and validate referenced artifacts when read, refusing startup for database corruption and stopping on a later artifact mismatch.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 post-start store mutation",
+   "kind": "missing revalidation rule",
+   "text": "“a link found at start stops the start, and one found later makes that store call fail with nothing written”",
+   "question": "After startup, are ownership, permissions, regular-file types and digest integrity rechecked like symlinks on every relevant store call, or are only newly encountered symlinks detected?",
+   "options": [
+    "Recheck all security and integrity properties on every open",
+    "Recheck only that no symlink is followed",
+    "Trust every non-symlink artifact after the startup scan"
+   ],
+   "default_guess": "Use descriptor-relative no-follow opens and recheck ownership, mode and regular-file type whenever an artifact is opened; verify content where its recorded digest is available.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 request serialization",
+   "kind": "undefined ordering",
+   "text": "“Surface requests are handled one at a time in the order they arrive”",
+   "question": "What defines arrival order when the MCP transport delivers concurrent or multiplexed requests without a total order?",
+   "options": [
+    "The order the listener assigns a monotonically increasing receive sequence",
+    "The order complete request messages finish decoding",
+    "An arbitrary scheduler order, recorded as the store order"
+   ],
+   "default_guess": "Assign a sequence atomically when each complete request is accepted by the surface and process that sequence in order.",
+   "unit": "?"
+  },
+  {
+   "subject": "A20 supported Linux hosts",
+   "kind": "support contradiction",
+   "text": "“A release runs on Linux and on no other host, no version named” and “A Linux without `O_NOFOLLOW` is unsupported” while A17 also requires `O_PATH` and `O_DIRECTORY`",
+   "question": "Is a Linux host that provides O_NOFOLLOW but lacks O_PATH, O_DIRECTORY or another required filesystem facility supported, refused at startup, or undefined?",
+   "options": [
+    "Every Linux with O_NOFOLLOW is supported, requiring an alternative implementation for missing flags",
+    "All required flags are prerequisites and their absence is unsupported without a test",
+    "The kernel tests every required facility and refuses startup when one is absent"
+   ],
+   "default_guess": "Treat O_NOFOLLOW, O_PATH and O_DIRECTORY as required Linux facilities and refuse startup with a named prerequisite failure when any is unavailable.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A17 configuration and credential path opening\",\"kind\":\"blocking special file\",\"text\":\"“the last component for reading” and only afterward “must be a regular file”\",\"question\":\"With which flags is the last component opened so that a FIFO, device, socket or other non-regular object cannot block or cause effects before the regular-file check?\",\"options\":[\"Open read-only and permit the open itself to block\",\"Open read-only and nonblocking, then reject anything not regular\",\"Open for metadata first, but define how the checked object is then read through the same opened file\"],\"default_guess\":\"Open with O_RDONLY, O_NOFOLLOW, O_CLOEXEC and O_NONBLOCK, then use fstat and reject unless regular before reading.\"},{\"subject\":\"A17 configuration and credential path opening\",\"kind\":\"degenerate path\",\"text\":\"“an empty one, from a repeated or trailing `/`, skipped”\",\"question\":\"What object is opened when skipping empty components leaves no last component, as for an empty relative path or `/`?\",\"options\":[\"Refuse because the path names no file component\",\"Treat the starting working directory or root directory as the target and reject it as non-regular\",\"Give these path forms a separate invalid-path refusal\"],\"default_guess\":\"Refuse because there is no final file component.\"},{\"subject\":\"A18 data-directory initialization\",\"kind\":\"missing lifecycle\",\"text\":\"“The data directory holds one SQLite database with every kernel record, a content-addressed area of value bytes and file fixtures named by digest, and the run spool”\",\"question\":\"Must the data directory and each required child already exist, or does the kernel create missing directories, the database and its schema; and what does it do with unknown entries?\",\"options\":[\"Create all missing structures and ignore unknown private entries\",\"Create missing structures but refuse unknown entries\",\"Require a fully initialized layout and refuse anything missing or unexpected\"],\"default_guess\":\"Create the data directory and required layout when absent, and refuse unexpected entries in kernel-owned subareas.\"},{\"subject\":\"A18 private store permissions\",\"kind\":\"vague refusal condition\",\"text\":\"“The directory and everything in it are private to the kernel's user; the kernel refuses to start otherwise.”\",\"question\":\"What exact ownership, mode, ACL and file-type conditions make the data directory and each descendant “private”?\",\"options\":[\"Require ownership by the kernel UID and no group-or-other permission bits\",\"Also reject ACLs or other access mechanisms granting another principal access\",\"Accept any permissions so long as effective access tests find no other reader\"],\"default_guess\":\"Require kernel-UID ownership, directories with no group-or-other bits, files with no group-or-other bits, and reject access-granting ACLs.\"},{\"subject\":\"A18 data-directory path resolution\",\"kind\":\"unsafe path ambiguity\",\"text\":\"“Every file of the directory is opened without following symbolic links; a link found at start stops the start”\",\"question\":\"Are the data-directory path itself, every ancestor component, nested directories and final files all opened component by component relative to retained directory descriptors, or is only each final file protected from symlink following?\",\"options\":[\"Protect only final file components\",\"Walk every component without following links, including the configured data-directory path\",\"Trust ancestors outside the data directory but walk every component inside it\"],\"default_guess\":\"Open the configured directory and every descendant component through directory descriptors without following any symlink.\"},{\"subject\":\"A18 exclusive lock\",\"kind\":\"undefined lock semantics\",\"text\":\"“At start it takes an exclusive lock in the data directory; a second process on the same directory refuses to start.”\",\"question\":\"What lock mechanism and lifetime distinguish a live competing process from a stale lock artifact after a crash, and what happens when lock acquisition fails for another reason?\",\"options\":[\"Use a process-held OS advisory lock that is released automatically on exit\",\"Use the existence of a lock file and define stale-lock recovery\",\"Use SQLite locking as the installation lock\"],\"default_guess\":\"Hold an OS advisory lock on a private regular lock file for the process lifetime; refuse startup on any acquisition failure and allow restart after automatic release on process death.\"},{\"subject\":\"A18 startup sequence\",\"kind\":\"missing precedence\",\"text\":\"“At start it takes an exclusive lock” and “On start, temporary files, value bytes no record names … are removed”\",\"question\":\"What is the exact order of safely opening and checking the data directory, acquiring its lock, scanning for links and permissions, cleaning artifacts, opening or validating SQLite, recovering effects and runs, and performing the other startup probes?\",\"options\":[\"Acquire the lock before every scan, cleanup and recovery mutation\",\"Validate the whole directory before acquiring the lock\",\"Treat rule order as the complete startup order\"],\"default_guess\":\"Safely open the directory, acquire the exclusive lock, validate it, clean artifacts, validate/open the database, perform recovery, then open the surface.\"},{\"subject\":\"A18 startup symlink handling\",\"kind\":\"contradictory startup actions\",\"text\":\"“a link found at start stops the start” and “On start, temporary files … and the spool directories of runs that ended and do not keep their spool … are removed”\",\"question\":\"If a symlink is inside an entry that startup cleanup would otherwise remove, must startup stop because it found the link, or may it remove the containing artifact without following the link?\",\"options\":[\"Every discovered symlink stops startup before cleanup\",\"Cleanup may unlink a symlink inside an otherwise removable artifact\",\"Cleanup removable artifacts first, then scan what remains\"],\"default_guess\":\"Every discovered symlink stops startup; cleanup occurs only after a successful symlink-safe scan.\"},{\"subject\":\"A18 startup cleanup\",\"kind\":\"undefined failure behavior\",\"text\":\"“temporary files, value bytes no record names … are removed” while only a spool-directory failure is specified: “A spool directory that cannot be removed does not stop the start”\",\"question\":\"What happens when a temporary file or unreferenced value byte file cannot be removed?\",\"options\":[\"Refuse startup\",\"Continue startup while leaving it unserved for a later cleanup\",\"Quarantine or rename it and continue\"],\"default_guess\":\"Refuse startup because the text grants failure tolerance only to obsolete spool directories.\"},{\"subject\":\"A18 content-addressed publication\",\"kind\":\"collision or corruption\",\"text\":\"“a completed file a record names is never overwritten” and “Equal bytes are stored once”\",\"question\":\"When the digest-named destination already exists but its type, size or bytes differ from the file being published, does the call verify and refuse, treat the digest as sufficient, or repair the destination despite the no-overwrite rule?\",\"options\":[\"Verify the existing regular file byte-for-byte and fail on any mismatch\",\"Trust the digest-named path without reading the existing file\",\"Replace a mismatching file as corruption recovery\"],\"default_guess\":\"Verify type, size, digest and bytes as needed; fail without changing either records or the existing artifact on mismatch.\"},{\"subject\":\"A18 store integrity at startup\",\"kind\":\"unverified invariant\",\"text\":\"“file_published -> complete AND digest_verified AND never_overwritten”\",\"question\":\"Does startup verify that every database-referenced value, fixture and retained spool file exists, is regular, has the recorded size and digest, and that the SQLite database itself is readable and structurally valid; if not, when and how is corruption reported?\",\"options\":[\"Verify the entire store before recovery and refuse startup on inconsistency\",\"Validate each artifact only when it is read and then stop on internal error\",\"Trust the protected directory and perform no integrity checks beyond publication\"],\"default_guess\":\"Run SQLite integrity and schema checks at startup and validate referenced artifacts when read, refusing startup for database corruption and stopping on a later artifact mismatch.\"},{\"subject\":\"A18 post-start store mutation\",\"kind\":\"missing revalidation rule\",\"text\":\"“a link found at start stops the start, and one found later makes that store call fail with nothing written”\",\"question\":\"After startup, are ownership, permissions, regular-file types and digest integrity rechecked like symlinks on every relevant store call, or are only newly encountered symlinks detected?\",\"options\":[\"Recheck all security and integrity properties on every open\",\"Recheck only that no symlink is followed\",\"Trust every non-symlink artifact after the startup scan\"],\"default_guess\":\"Use descriptor-relative no-follow opens and recheck ownership, mode and regular-file type whenever an artifact is opened; verify content where its recorded digest is available.\"},{\"subject\":\"A18 request serialization\",\"kind\":\"undefined ordering\",\"text\":\"“Surface requests are handled one at a time in the order they arrive”\",\"question\":\"What defines arrival order when the MCP transport delivers concurrent or multiplexed requests without a total order?\",\"options\":[\"The order the listener assigns a monotonically increasing receive sequence\",\"The order complete request messages finish decoding\",\"An arbitrary scheduler order, recorded as the store order\"],\"default_guess\":\"Assign a sequence atomically when each complete request is accepted by the surface and process that sequence in order.\"},{\"subject\":\"A20 supported Linux hosts\",\"kind\":\"support contradiction\",\"text\":\"“A release runs on Linux and on no other host, no version named” and “A Linux without `O_NOFOLLOW` is unsupported” while A17 also requires `O_PATH` and `O_DIRECTORY`\",\"question\":\"Is a Linux host that provides O_NOFOLLOW but lacks O_PATH, O_DIRECTORY or another required filesystem facility supported, refused at startup, or undefined?\",\"options\":[\"Every Linux with O_NOFOLLOW is supported, requiring an alternative implementation for missing flags\",\"All required flags are prerequisites and their absence is unsupported without a test\",\"The kernel tests every required facility and refuses startup when one is absent\"],\"default_guess\":\"Treat O_NOFOLLOW, O_PATH and O_DIRECTORY as required Linux facilities and refuse startup with a named prerequisite failure when any is unavailable.\"}]}",
+ "set_aside": []
+}

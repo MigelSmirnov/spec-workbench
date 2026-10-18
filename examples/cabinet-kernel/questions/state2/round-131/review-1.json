@@ -1,0 +1,137 @@
+{
+ "open_points": [
+  {
+   "subject": "A17 rule 1 path-component failure",
+   "kind": "malformed rule",
+   "text": "a component that cannot be opened so, for whatever reason, making the file one that cannot be read —, and the checks and the read use that one opened file",
+   "question": "What exact outcome follows when any path component cannot be opened with the required flags, and does the same rule classify configuration-file and credential-file failures according to their respective contexts?",
+   "options": [
+    "The configuration path refuses startup, while a credential path yields credential_unresolved",
+    "Every component-opening failure refuses startup",
+    "Use the underlying operating-system error"
+   ],
+   "default_guess": "Treat the file as unreadable: refuse startup for the configuration file and return credential_unresolved for a credential file.",
+   "unit": "?"
+  },
+  {
+   "subject": "A17/A20 O_NOFOLLOW support boundary",
+   "kind": "undefined capability",
+   "text": "each component with Linux's `O_NOFOLLOW`, whose presence no code tests (A20 rule 3)",
+   "question": "What exactly counts as a supported host having O_NOFOLLOW: exposure of the constant by CPython, acceptance by the running kernel, or enforcement by the filesystem for every opened component?",
+   "options": [
+    "CPython exposes os.O_NOFOLLOW",
+    "The running kernel accepts the flag",
+    "The kernel and every relevant filesystem enforce no-follow semantics"
+   ],
+   "default_guess": "Require the CPython constant and rely on Linux and the filesystem to enforce its documented no-follow semantics.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 rule 1 exclusive data-directory lock",
+   "kind": "unspecified refusal conditions",
+   "text": "At start it takes an exclusive lock in the data directory; a second process on the same directory refuses to start.",
+   "question": "What lock object and locking mechanism define ownership of the data directory, and how are stale lock artifacts, unsupported locking, and other lock-acquisition errors handled?",
+   "options": [
+    "Use a persistent lock file with an OS advisory lock that is released on process death",
+    "Use an atomically created marker file and remove it on shutdown",
+    "Lock the SQLite database itself"
+   ],
+   "default_guess": "Open a fixed lock file without following links, take a nonblocking OS advisory exclusive lock for the process lifetime, and refuse startup on every acquisition error.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 rule 2 private data-directory tree",
+   "kind": "vague invariant",
+   "text": "The directory and everything in it are private to the kernel's user; the kernel refuses to start otherwise.",
+   "question": "Which ownership, permission, and file-type checks make the directory and every existing entry \"private,\" including directories, regular files, the configured data-directory path itself, and special or hard-linked files?",
+   "options": [
+    "Require ownership by the effective kernel user and no group/other permission bits on every entry",
+    "Require only that group and others cannot read entries",
+    "Apply the explicit A17 regular-file ownership and mode rule to files and an analogous searchable-directory rule to directories"
+   ],
+   "default_guess": "Require the data directory and every entry to be owned by the effective kernel user with no group or other permission bits, and refuse unexpected special files.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 rule 2 data-directory symlink scope",
+   "kind": "ambiguous scope",
+   "text": "Every file of the directory is opened without following symbolic links; a link found at start stops the start",
+   "question": "Does the symlink prohibition also cover the configured data-directory path and every component leading to it, or only entries located below the resolved directory?",
+   "options": [
+    "Reject symlinks in the data-directory path and anywhere below it",
+    "Reject only symlink entries below the resolved data directory",
+    "Reject only symlinks encountered when opening a particular store object"
+   ],
+   "default_guess": "Reject symlinks in the data-directory path and throughout its managed tree.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 rule 3 request serialization",
+   "kind": "undefined ordering",
+   "text": "Surface requests are handled one at a time in the order they arrive",
+   "question": "What event establishes arrival order when requests are received concurrently on different MCP connections or tasks?",
+   "options": [
+    "Order when the complete request message has been received",
+    "Order when transport handling begins",
+    "Order by acquisition of the single request mutex"
+   ],
+   "default_guess": "Assign a monotonic queue position when each complete request has been received and process those positions in order.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 store record order",
+   "kind": "missing ordering rule",
+   "text": "The kernel is one process with one store and one writer.",
+   "question": "How is the single store order assigned when one transaction creates or changes several records, and do updates to mutable entities keep their original position or obtain a new position?",
+   "options": [
+    "Every created record receives a distinct sequence in an explicitly specified write order; updates keep the original position",
+    "All records in one transaction share one position with a secondary order",
+    "Every insert and update receives a new store position"
+   ],
+   "default_guess": "Give each newly created record a distinct monotonically increasing sequence in the store call's specified write order, while updates retain the entity's creation position.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 rules 3–4 database/file crash consistency",
+   "kind": "missing crash rule",
+   "text": "Value bytes and spooled files are written to a temporary file, flushed, checked against their digest and size, and then renamed into place; a completed file a record names is never overwritten",
+   "question": "What commit and durability ordering guarantees that a crash cannot leave a committed record naming a missing or non-durable file, and what must startup do if such a record is nevertheless found?",
+   "options": [
+    "Publish and durably sync the file and directory before committing the database record; refuse startup on a missing or corrupt referenced file",
+    "Commit the database first and repair missing files during recovery",
+    "Permit records whose payload file was lost and fail only when the payload is read"
+   ],
+   "default_guess": "Durably publish and sync the file before committing its referencing record, and refuse startup if a referenced file is missing or fails digest and size verification.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 content-addressed file collision handling",
+   "kind": "missing integrity case",
+   "text": "Equal bytes are stored once.",
+   "question": "What happens when the target digest path already exists but its bytes or size differ from the bytes now being published under the same digest?",
+   "options": [
+    "Verify the existing file and fail the store call on any mismatch",
+    "Assume digest equality proves byte equality and reuse it without reading",
+    "Publish under a secondary collision identity"
+   ],
+   "default_guess": "Verify the existing file's size and digest, reuse it only when equal, and otherwise fail the store call as an integrity error without overwriting it.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 orphan fixture and spool cleanup",
+   "kind": "coverage contradiction",
+   "text": "On start, temporary files, value bytes no record names ... and the spool directories of runs that ended and do not keep their spool ... are removed; nothing else is.",
+   "question": "What happens to an unreferenced trial fixture or a spool directory whose run record was never committed after a failed store call, given that K-10 permits only trial-case fixtures beyond runs and A18 says nothing else is removed?",
+   "options": [
+    "Remove every unreferenced fixture and every spool directory with no live run record at startup",
+    "Keep them forever because rule 4 says nothing else is removed",
+    "Prevent such fixture or spool orphans by a separate atomic publication protocol"
+   ],
+   "default_guess": "Remove unreferenced fixture files and spool directories that have no corresponding run record during startup recovery.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A17 rule 1 path-component failure\",\"kind\":\"malformed rule\",\"text\":\"a component that cannot be opened so, for whatever reason, making the file one that cannot be read —, and the checks and the read use that one opened file\",\"question\":\"What exact outcome follows when any path component cannot be opened with the required flags, and does the same rule classify configuration-file and credential-file failures according to their respective contexts?\",\"options\":[\"The configuration path refuses startup, while a credential path yields credential_unresolved\",\"Every component-opening failure refuses startup\",\"Use the underlying operating-system error\"],\"default_guess\":\"Treat the file as unreadable: refuse startup for the configuration file and return credential_unresolved for a credential file.\"},{\"subject\":\"A17/A20 O_NOFOLLOW support boundary\",\"kind\":\"undefined capability\",\"text\":\"each component with Linux's `O_NOFOLLOW`, whose presence no code tests (A20 rule 3)\",\"question\":\"What exactly counts as a supported host having O_NOFOLLOW: exposure of the constant by CPython, acceptance by the running kernel, or enforcement by the filesystem for every opened component?\",\"options\":[\"CPython exposes os.O_NOFOLLOW\",\"The running kernel accepts the flag\",\"The kernel and every relevant filesystem enforce no-follow semantics\"],\"default_guess\":\"Require the CPython constant and rely on Linux and the filesystem to enforce its documented no-follow semantics.\"},{\"subject\":\"A18 rule 1 exclusive data-directory lock\",\"kind\":\"unspecified refusal conditions\",\"text\":\"At start it takes an exclusive lock in the data directory; a second process on the same directory refuses to start.\",\"question\":\"What lock object and locking mechanism define ownership of the data directory, and how are stale lock artifacts, unsupported locking, and other lock-acquisition errors handled?\",\"options\":[\"Use a persistent lock file with an OS advisory lock that is released on process death\",\"Use an atomically created marker file and remove it on shutdown\",\"Lock the SQLite database itself\"],\"default_guess\":\"Open a fixed lock file without following links, take a nonblocking OS advisory exclusive lock for the process lifetime, and refuse startup on every acquisition error.\"},{\"subject\":\"A18 rule 2 private data-directory tree\",\"kind\":\"vague invariant\",\"text\":\"The directory and everything in it are private to the kernel's user; the kernel refuses to start otherwise.\",\"question\":\"Which ownership, permission, and file-type checks make the directory and every existing entry \\\"private,\\\" including directories, regular files, the configured data-directory path itself, and special or hard-linked files?\",\"options\":[\"Require ownership by the effective kernel user and no group/other permission bits on every entry\",\"Require only that group and others cannot read entries\",\"Apply the explicit A17 regular-file ownership and mode rule to files and an analogous searchable-directory rule to directories\"],\"default_guess\":\"Require the data directory and every entry to be owned by the effective kernel user with no group or other permission bits, and refuse unexpected special files.\"},{\"subject\":\"A18 rule 2 data-directory symlink scope\",\"kind\":\"ambiguous scope\",\"text\":\"Every file of the directory is opened without following symbolic links; a link found at start stops the start\",\"question\":\"Does the symlink prohibition also cover the configured data-directory path and every component leading to it, or only entries located below the resolved directory?\",\"options\":[\"Reject symlinks in the data-directory path and anywhere below it\",\"Reject only symlink entries below the resolved data directory\",\"Reject only symlinks encountered when opening a particular store object\"],\"default_guess\":\"Reject symlinks in the data-directory path and throughout its managed tree.\"},{\"subject\":\"A18 rule 3 request serialization\",\"kind\":\"undefined ordering\",\"text\":\"Surface requests are handled one at a time in the order they arrive\",\"question\":\"What event establishes arrival order when requests are received concurrently on different MCP connections or tasks?\",\"options\":[\"Order when the complete request message has been received\",\"Order when transport handling begins\",\"Order by acquisition of the single request mutex\"],\"default_guess\":\"Assign a monotonic queue position when each complete request has been received and process those positions in order.\"},{\"subject\":\"A18 store record order\",\"kind\":\"missing ordering rule\",\"text\":\"The kernel is one process with one store and one writer.\",\"question\":\"How is the single store order assigned when one transaction creates or changes several records, and do updates to mutable entities keep their original position or obtain a new position?\",\"options\":[\"Every created record receives a distinct sequence in an explicitly specified write order; updates keep the original position\",\"All records in one transaction share one position with a secondary order\",\"Every insert and update receives a new store position\"],\"default_guess\":\"Give each newly created record a distinct monotonically increasing sequence in the store call's specified write order, while updates retain the entity's creation position.\"},{\"subject\":\"A18 rules 3–4 database/file crash consistency\",\"kind\":\"missing crash rule\",\"text\":\"Value bytes and spooled files are written to a temporary file, flushed, checked against their digest and size, and then renamed into place; a completed file a record names is never overwritten\",\"question\":\"What commit and durability ordering guarantees that a crash cannot leave a committed record naming a missing or non-durable file, and what must startup do if such a record is nevertheless found?\",\"options\":[\"Publish and durably sync the file and directory before committing the database record; refuse startup on a missing or corrupt referenced file\",\"Commit the database first and repair missing files during recovery\",\"Permit records whose payload file was lost and fail only when the payload is read\"],\"default_guess\":\"Durably publish and sync the file before committing its referencing record, and refuse startup if a referenced file is missing or fails digest and size verification.\"},{\"subject\":\"A18 content-addressed file collision handling\",\"kind\":\"missing integrity case\",\"text\":\"Equal bytes are stored once.\",\"question\":\"What happens when the target digest path already exists but its bytes or size differ from the bytes now being published under the same digest?\",\"options\":[\"Verify the existing file and fail the store call on any mismatch\",\"Assume digest equality proves byte equality and reuse it without reading\",\"Publish under a secondary collision identity\"],\"default_guess\":\"Verify the existing file's size and digest, reuse it only when equal, and otherwise fail the store call as an integrity error without overwriting it.\"},{\"subject\":\"A18 orphan fixture and spool cleanup\",\"kind\":\"coverage contradiction\",\"text\":\"On start, temporary files, value bytes no record names ... and the spool directories of runs that ended and do not keep their spool ... are removed; nothing else is.\",\"question\":\"What happens to an unreferenced trial fixture or a spool directory whose run record was never committed after a failed store call, given that K-10 permits only trial-case fixtures beyond runs and A18 says nothing else is removed?\",\"options\":[\"Remove every unreferenced fixture and every spool directory with no live run record at startup\",\"Keep them forever because rule 4 says nothing else is removed\",\"Prevent such fixture or spool orphans by a separate atomic publication protocol\"],\"default_guess\":\"Remove unreferenced fixture files and spool directories that have no corresponding run record during startup recovery.\"}]}",
+ "set_aside": []
+}

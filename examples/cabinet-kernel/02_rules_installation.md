@@ -171,7 +171,8 @@ Reuses cabinet-flow decision 23, narrowed by K-16.
    `O_PATH` and `O_DIRECTORY`, so a directory the kernel's user may only
    search is passed, and the last component for reading; every component the
    path names, `.` and `..` included, opened as named, and an empty one, from
-   a repeated or trailing `/`, skipped; a component that cannot be opened so,
+   a repeated or trailing `/`, skipped; a path that names no component, empty
+   or `/` alone, a file that cannot be read; a component that cannot be opened so,
    for whatever reason, making the file one that cannot be read —, and the checks and the read use
    that one opened file, so the file checked is the file read.
 2. A credential is resolved only when a request to its service is built: its
@@ -389,8 +390,9 @@ reads.
    3.12, whose `random` module gives A03 rule 4 its list. A vulnerable dependency is answered by a new
    release; a running kernel never updates one. A release runs on Linux and
    on no other host, no version named (owner, 2026-10-18). Another system, or
-   a Linux without `O_NOFOLLOW`, is unsupported: the kernel neither tests for
-   it nor defines what it does there; the sandbox's facilities stay A03's,
+   a Linux on which an open flag these rules name (`O_NOFOLLOW`, `O_PATH`,
+   `O_DIRECTORY`) does not act as Linux documents it, is unsupported: the
+   kernel neither tests for it nor defines what it does there; the sandbox's facilities stay A03's,
    which the start probes.
 4. A new release may change ceilings. They bind contract versions issued after
    it; a contract version issued earlier keeps its bounds and executes under them
