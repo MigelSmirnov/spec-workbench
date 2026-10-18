@@ -1321,8 +1321,51 @@ enumeration and total over its members.
       `30_trace.json` no longer names `run_graph` a consumer of A19 — a
       remnant of decision 32's split that the State 3 table never had.
 
+## Decision closed at the first Route B with gate observation (2026-10-18)
+
+Route B `cabinet_kernel-route-b-20261018T071028Z` on the spec of decision 33
+stopped at `installation`: the candidate opened each path component with
+`O_NOFOLLOW` and `O_CLOEXEC` only after `hasattr(os, ...)` said the flag
+existed, and the static gate `reflective_attribute_access` rejected it
+without repair (coverage failure, terminal; the prompt forbids `hasattr`).
+The probe was not a slip. A17 rules 1–2 and A18 rule 2 require opening
+"without following a symbolic link", but no decision named the host: Linux
+was said only by the sandbox (A03), which neither `installation` nor `store`
+knows. A writer that must guarantee the rule and is not told the means
+exists hedges, and the hedge weakens the MUST — on a host without the flag
+the candidate would have followed links.
+
+34. **The kernel runs on Linux; no-follow opening is `O_NOFOLLOW`, unconditional.**
+    The owner decided on 2026-10-18: the kernel runs only on Linux, of any
+    version that runs the sandbox runtime — the start already proves the
+    sandbox (A03) and refuses otherwise, so no version is named. Today's host
+    is the owner's machine, later a VPS.
+    - A20 rule 3 (`02_rules_installation.md`) says the host is Linux, and its
+      formal invariants gain `host = linux`. Rule 3 stays outside the running
+      kernel (State 3, no owner): it is a fact of the release.
+    - The runtime half is said by the rules that open paths, under their own
+      owners: A17 rule 1 (`installation`, for the configuration file and,
+      through "here and in rule 2", the secret files) and A18 rule 2
+      (`store`, every file of the data directory) open each component with
+      `O_NOFOLLOW`, never first asking whether the flag exists; there is no
+      mode without it.
+    - The notes that carry those rules name the means: `read_configuration`
+      (and through it `current_token_list`), `resolve_service_credential`,
+      and `store`'s `record_change`, the module's one policy for every open
+      under the data directory.
+    - Not changed, and why. Each module keeps its own opening of a path: the
+      rule is one, the paths differ (one configuration file and secret files
+      named by it; a private data directory walked whole), and a shared
+      capability would add an import to two modules for three lines of
+      code. `O_CLOEXEC` is not named: Python opens descriptors
+      non-inheritable by default, and no rule asks for more.
+
 ## Texts of earlier states changed by State 6
 
+- State 2 (2026-10-18, decision 34): A20 rule 3 and its formal invariants —
+  the host is Linux; A17 rule 1 and A18 rule 2 — opening without following a
+  symbolic link is `O_NOFOLLOW` at each component, unconditional. Reopens the
+  rounds of States 2–5.
 - State 1 (2026-10-18, decision 33): the enumeration `NodeConclusion` and the
   row models `StatusConclusion`, `ConclusionEffect`, `WaitReasonRestingStatus`
   and `HttpMethodBody`. Reopens the rounds of State 1.

@@ -164,8 +164,10 @@ Reuses cabinet-flow decision 23, narrowed by K-16.
    must be a regular file, not a symbolic link, owned by the kernel's user, with
    no permission for group or others; the kernel refuses to start otherwise.
    Here and in rule 2 the path is opened component by component without
-   following a symbolic link at any of them, and the checks and the read use
-   that one opened file, so the file checked is the file read.
+   following a symbolic link at any of them, each component with Linux's
+   `O_NOFOLLOW` — the host is Linux (A20 rule 3), so no code asks whether the
+   flag exists and there is no mode without it —, and the checks and the read
+   use that one opened file, so the file checked is the file read.
 2. A credential is resolved only when a request to its service is built: its
    secret file is read then, without following a symbolic link, and must be a
    regular file owned by the kernel's user with no permission for group or
@@ -237,7 +239,9 @@ concurrent connections.
    content-addressed area of value bytes and file fixtures named by digest, and
    the run spool, one subdirectory per run. The directory and everything in it
    are private to the kernel's user; the kernel refuses to start otherwise. Every
-   file of the directory is opened without following symbolic links; a link
+   file of the directory is opened without following symbolic links, with
+   Linux's `O_NOFOLLOW` on every open, never first asking whether the flag
+   exists (A20 rule 3); a link
    found at start stops the start, and one found later makes that store call
    fail with nothing written.
 3. Only the store module opens the database. Every change is one call to the
@@ -379,7 +383,9 @@ reads.
 3. A release pins the exact versions of the kernel's Python dependencies and of
    the sandbox runtime (A03); the sandbox interpreter of release v1 is CPython
    3.12, whose `random` module gives A03 rule 4 its list. A vulnerable dependency is answered by a new
-   release; a running kernel never updates one.
+   release; a running kernel never updates one. A release runs on Linux and on
+   no other host, of any version that runs the sandbox runtime, which the start
+   proves (A03; owner, 2026-10-18).
 4. A new release may change ceilings. They bind contract versions issued after
    it; a contract version issued earlier keeps its bounds and executes under them
    even when they exceed the new ceilings, and recorded executions are never
@@ -392,6 +398,7 @@ ceiling(name) = RELEASE_CEILING_<NAME>
 override(ceiling) -> never
 over_ceiling -> refusal_or_failure (never truncation)
 dependencies pinned_by_release
+host = linux
 ```
 
 ### Required tests
