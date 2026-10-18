@@ -1,0 +1,189 @@
+{
+ "open_points": [
+  {
+   "subject": "A17 configuration and secret path traversal",
+   "kind": "unsupported host feature",
+   "text": "each component with Linux's `O_NOFOLLOW`, whose presence no code tests (A20 rule 3)",
+   "question": "What must happen if the Linux/Python runtime does not expose or honor `O_NOFOLLOW`, given that the kernel must use it but is forbidden to test for its presence?",
+   "options": [
+    "Such a host is outside the release and the process may fail before normal start checks",
+    "The kernel must refuse start with a defined reason",
+    "The release must name a minimum Linux ABI that guarantees it"
+   ],
+   "default_guess": "Treat `O_NOFOLLOW` as a release prerequisite and refuse start if it cannot be used.",
+   "unit": "A17"
+  },
+  {
+   "subject": "A18 data-directory initialization",
+   "kind": "missing start rule",
+   "text": "At start it takes an exclusive lock in the data directory",
+   "question": "Must the data directory, SQLite database, value area and spool already exist, or does the kernel create any missing part; and what happens when only some of them exist?",
+   "options": [
+    "Require the complete initialized layout and refuse otherwise",
+    "Create every missing component securely",
+    "Require the root directory but create the database and subdirectories"
+   ],
+   "default_guess": "Require an existing private root directory and create missing database and managed subdirectories with private permissions.",
+   "unit": "A18"
+  },
+  {
+   "subject": "A18 exclusive lock",
+   "kind": "vague lock semantics",
+   "text": "At start it takes an exclusive lock in the data directory; a second process on the same directory refuses to start.",
+   "question": "What object and locking semantics define this lock, and how are a stale lock file, an unsupported lock operation, or another lock-acquisition error handled?",
+   "options": [
+    "An OS-released advisory lock held for the process lifetime; stale files do not block",
+    "A lock-file existence rule requiring stale-lock recovery",
+    "Another platform-specific exclusive-lock protocol"
+   ],
+   "default_guess": "Use an OS advisory exclusive lock held by an open descriptor for the process lifetime and refuse start on any acquisition failure except a harmless stale file.",
+   "unit": "A18"
+  },
+  {
+   "subject": "A18 request serialization",
+   "kind": "undefined ordering",
+   "text": "Surface requests are handled one at a time in the order they arrive",
+   "question": "What event establishes arrival order when requests overlap: connection acceptance, first byte, complete message receipt, schema-valid dispatch, or entry into a serialized queue?",
+   "options": [
+    "Order of complete-message receipt",
+    "Order of first byte receipt",
+    "Order assigned atomically when the surface accepts a complete request"
+   ],
+   "default_guess": "Assign a monotonically ordered queue position when a complete request is accepted by the MCP surface.",
+   "unit": "A18"
+  },
+  {
+   "subject": "A18 private filesystem predicate",
+   "kind": "vague refusal condition",
+   "text": "The directory and everything in it are private to the kernel's user; the kernel refuses to start otherwise.",
+   "question": "What exact ownership, mode, ACL, hard-link and object-type conditions make the directory and each contained object \"private\"?",
+   "options": [
+    "Owned by the kernel user with no group/other permission bits",
+    "Effective access limited to the kernel user, including ACL checks",
+    "Only the data-directory root is checked; managed children are trusted"
+   ],
+   "default_guess": "Require every managed object to be owned by the kernel user, reject special objects, and allow no group/other permission bits or ACL access.",
+   "unit": "A18"
+  },
+  {
+   "subject": "A18 post-start permission changes",
+   "kind": "unverified invariant",
+   "text": "The directory and everything in it are private to the kernel's user; the kernel refuses to start otherwise. Every file of the directory is opened without following symbolic links; a link found at start stops the start, and one found later makes that store call fail with nothing written.",
+   "question": "Are ownership and permission checks repeated on later store calls as the symlink check is, and what happens if an object becomes non-private after startup?",
+   "options": [
+    "Recheck every opened component and fail that store call with nothing written",
+    "Check privacy only at startup",
+    "Stop the kernel when later permission or ownership drift is found"
+   ],
+   "default_guess": "Recheck ownership, type and permissions when opening each managed path and fail the store call without writes on drift.",
+   "unit": "A18"
+  },
+  {
+   "subject": "A18 secure path traversal",
+   "kind": "inconsistent path rule",
+   "text": "Every file of the directory is opened without following symbolic links",
+   "question": "Does A18 require component-by-component descriptor-relative traversal with `O_NOFOLLOW`, as the changed A17 now explicitly requires, or only a no-follow check on the final file?",
+   "options": [
+    "Use `O_NOFOLLOW` on every path component",
+    "Use no-follow only on the final component",
+    "Resolve and scan the tree at startup, then trust directory paths"
+   ],
+   "default_guess": "Open every component descriptor-relative with `O_NOFOLLOW` and require intermediate components to be directories.",
+   "unit": "A18"
+  },
+  {
+   "subject": "A18 database and filesystem crash consistency",
+   "kind": "atomicity gap",
+   "text": "Every change is one call to the store module and one transaction inside it; callers never open, name or pass a transaction. A call that fails writes and changes no record; the only trace it can leave is a published file no record names.",
+   "question": "What durability and ordering guarantee must hold across the SQLite commit and publication of one or several files if the process or host crashes, especially whether a committed record may ever name a missing or incomplete file?",
+   "options": [
+    "Records may never name missing or incomplete files; only unreferenced complete files may remain",
+    "Process crashes may leave records naming missing files and startup repairs them",
+    "Atomicity is guaranteed only for ordinary call failures, not crashes"
+   ],
+   "default_guess": "Publish and durably sync complete files before committing their references, so crashes can leave only complete unreferenced files, never dangling records.",
+   "unit": "A18"
+  },
+  {
+   "subject": "A18 meaning of flushed and durable",
+   "kind": "vague durability",
+   "text": "written to a temporary file, flushed, checked against their digest and size, and then renamed into place",
+   "question": "Does \"flushed\" require an OS durability operation on the file and containing directory, and when may a successful store call be acknowledged relative to SQLite and filesystem synchronization?",
+   "options": [
+    "Durably sync the file, rename, sync the directory, commit and durably sync SQLite before success",
+    "Flush only user-space buffers; process-crash safety is sufficient",
+    "Durability settings are an implementation choice"
+   ],
+   "default_guess": "Require file and directory synchronization plus durable SQLite commit before acknowledging success.",
+   "unit": "A18"
+  },
+  {
+   "subject": "A18 startup cleanup failures",
+   "kind": "missing failure behavior",
+   "text": "On start, temporary files, value bytes no record names ... and the spool directories of runs that ended and do not keep their spool ... are removed; nothing else is. A spool directory that cannot be removed does not stop the start",
+   "question": "Does failure to enumerate or remove a temporary file or unreferenced value byte stop startup, get ignored like an unremovable obsolete spool directory, or leave the object quarantined?",
+   "options": [
+    "Refuse startup",
+    "Continue and leave every unremovable orphan unserved",
+    "Continue only for obsolete spool directories; refuse for temporary and value areas"
+   ],
+   "default_guess": "Continue only for obsolete spool cleanup failures, but refuse startup if temporary or unreferenced value cleanup cannot be completed safely.",
+   "unit": "A18"
+  },
+  {
+   "subject": "A18 existing content at a digest path",
+   "kind": "integrity gap",
+   "text": "Equal bytes are stored once. A completed file a record names is never overwritten",
+   "question": "When a digest path already exists, must the kernel verify its type, size and digest before reuse, and what happens if the existing bytes do not match?",
+   "options": [
+    "Verify on every reuse and fail without writes on mismatch",
+    "Trust any existing regular file at the digest path",
+    "Verify the whole content area only at startup and refuse on corruption"
+   ],
+   "default_guess": "Verify the existing regular file before reuse and treat any mismatch as a store failure that stops the kernel after the internal-error response.",
+   "unit": "A18"
+  },
+  {
+   "subject": "A18 store format across releases",
+   "kind": "compatibility gap",
+   "text": "The data directory holds one SQLite database with every kernel record",
+   "question": "How does a release recognize the database schema and filesystem-layout version, and what must it do with a store created by an older, newer or incompatible release?",
+   "options": [
+    "Perform an explicit transactional migration for supported older versions and refuse others",
+    "Require an exact store-format match and refuse every mismatch",
+    "Open compatible schemas without a recorded format version"
+   ],
+   "default_guess": "Record a store-format version, migrate explicitly supported older formats transactionally, and refuse newer or unknown formats.",
+   "unit": "A18"
+  },
+  {
+   "subject": "A20 definition of supported Linux host",
+   "kind": "undefined platform boundary",
+   "text": "A release runs on Linux and on no other host, no version named",
+   "question": "What exactly counts as a supported Linux host—kernel/ABI floor, CPU architecture, libc, distribution, containers, WSL or Android—and is compatibility with every such host promised or only with hosts satisfying unstated prerequisites?",
+   "options": [
+    "Name a tested kernel, architecture and userspace support matrix",
+    "Support any Linux able to run the pinned interpreter, dependencies and bubblewrap probes",
+    "Treat `Linux` only as a build-target label with no runtime compatibility promise"
+   ],
+   "default_guess": "Support Linux hosts that can run the release's pinned interpreter and runtime and pass all explicit startup checks, while rejecting other operating-system kernels.",
+   "unit": "A20"
+  },
+  {
+   "subject": "A20 Linux-only enforcement",
+   "kind": "missing refusal rule",
+   "text": "A release runs on Linux and on no other host",
+   "question": "Is non-Linux exclusion enforced by packaging/build selection or by a kernel startup check, and if a binary is executed on an unsupported host, what observable failure and check precedence apply?",
+   "options": [
+    "Do not produce a runnable artifact for other hosts",
+    "Perform a first startup check and refuse with a defined reason",
+    "Allow dependency or sandbox startup checks to fail incidentally"
+   ],
+   "default_guess": "Enforce it both in release packaging and as the first runtime startup check, refusing before opening the store or surface.",
+   "unit": "A20"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A17 configuration and secret path traversal\",\"kind\":\"unsupported host feature\",\"text\":\"each component with Linux's `O_NOFOLLOW`, whose presence no code tests (A20 rule 3)\",\"question\":\"What must happen if the Linux/Python runtime does not expose or honor `O_NOFOLLOW`, given that the kernel must use it but is forbidden to test for its presence?\",\"options\":[\"Such a host is outside the release and the process may fail before normal start checks\",\"The kernel must refuse start with a defined reason\",\"The release must name a minimum Linux ABI that guarantees it\"],\"default_guess\":\"Treat `O_NOFOLLOW` as a release prerequisite and refuse start if it cannot be used.\" ,\"unit\":\"A17\"},{\"subject\":\"A18 data-directory initialization\",\"kind\":\"missing start rule\",\"text\":\"At start it takes an exclusive lock in the data directory\",\"question\":\"Must the data directory, SQLite database, value area and spool already exist, or does the kernel create any missing part; and what happens when only some of them exist?\",\"options\":[\"Require the complete initialized layout and refuse otherwise\",\"Create every missing component securely\",\"Require the root directory but create the database and subdirectories\"],\"default_guess\":\"Require an existing private root directory and create missing database and managed subdirectories with private permissions.\",\"unit\":\"A18\"},{\"subject\":\"A18 exclusive lock\",\"kind\":\"vague lock semantics\",\"text\":\"At start it takes an exclusive lock in the data directory; a second process on the same directory refuses to start.\",\"question\":\"What object and locking semantics define this lock, and how are a stale lock file, an unsupported lock operation, or another lock-acquisition error handled?\",\"options\":[\"An OS-released advisory lock held for the process lifetime; stale files do not block\",\"A lock-file existence rule requiring stale-lock recovery\",\"Another platform-specific exclusive-lock protocol\"],\"default_guess\":\"Use an OS advisory exclusive lock held by an open descriptor for the process lifetime and refuse start on any acquisition failure except a harmless stale file.\",\"unit\":\"A18\"},{\"subject\":\"A18 request serialization\",\"kind\":\"undefined ordering\",\"text\":\"Surface requests are handled one at a time in the order they arrive\",\"question\":\"What event establishes arrival order when requests overlap: connection acceptance, first byte, complete message receipt, schema-valid dispatch, or entry into a serialized queue?\",\"options\":[\"Order of complete-message receipt\",\"Order of first byte receipt\",\"Order assigned atomically when the surface accepts a complete request\"],\"default_guess\":\"Assign a monotonically ordered queue position when a complete request is accepted by the MCP surface.\",\"unit\":\"A18\"},{\"subject\":\"A18 private filesystem predicate\",\"kind\":\"vague refusal condition\",\"text\":\"The directory and everything in it are private to the kernel's user; the kernel refuses to start otherwise.\",\"question\":\"What exact ownership, mode, ACL, hard-link and object-type conditions make the directory and each contained object \\\"private\\\"?\",\"options\":[\"Owned by the kernel user with no group/other permission bits\",\"Effective access limited to the kernel user, including ACL checks\",\"Only the data-directory root is checked; managed children are trusted\"],\"default_guess\":\"Require every managed object to be owned by the kernel user, reject special objects, and allow no group/other permission bits or ACL access.\",\"unit\":\"A18\"},{\"subject\":\"A18 post-start permission changes\",\"kind\":\"unverified invariant\",\"text\":\"The directory and everything in it are private to the kernel's user; the kernel refuses to start otherwise. Every file of the directory is opened without following symbolic links; a link found at start stops the start, and one found later makes that store call fail with nothing written.\",\"question\":\"Are ownership and permission checks repeated on later store calls as the symlink check is, and what happens if an object becomes non-private after startup?\",\"options\":[\"Recheck every opened component and fail that store call with nothing written\",\"Check privacy only at startup\",\"Stop the kernel when later permission or ownership drift is found\"],\"default_guess\":\"Recheck ownership, type and permissions when opening each managed path and fail the store call without writes on drift.\",\"unit\":\"A18\"},{\"subject\":\"A18 secure path traversal\",\"kind\":\"inconsistent path rule\",\"text\":\"Every file of the directory is opened without following symbolic links\",\"question\":\"Does A18 require component-by-component descriptor-relative traversal with `O_NOFOLLOW`, as the changed A17 now explicitly requires, or only a no-follow check on the final file?\",\"options\":[\"Use `O_NOFOLLOW` on every path component\",\"Use no-follow only on the final component\",\"Resolve and scan the tree at startup, then trust directory paths\"],\"default_guess\":\"Open every component descriptor-relative with `O_NOFOLLOW` and require intermediate components to be directories.\",\"unit\":\"A18\"},{\"subject\":\"A18 database and filesystem crash consistency\",\"kind\":\"atomicity gap\",\"text\":\"Every change is one call to the store module and one transaction inside it; callers never open, name or pass a transaction. A call that fails writes and changes no record; the only trace it can leave is a published file no record names.\",\"question\":\"What durability and ordering guarantee must hold across the SQLite commit and publication of one or several files if the process or host crashes, especially whether a committed record may ever name a missing or incomplete file?\",\"options\":[\"Records may never name missing or incomplete files; only unreferenced complete files may remain\",\"Process crashes may leave records naming missing files and startup repairs them\",\"Atomicity is guaranteed only for ordinary call failures, not crashes\"],\"default_guess\":\"Publish and durably sync complete files before committing their references, so crashes can leave only complete unreferenced files, never dangling records.\",\"unit\":\"A18\"},{\"subject\":\"A18 meaning of flushed and durable\",\"kind\":\"vague durability\",\"text\":\"written to a temporary file, flushed, checked against their digest and size, and then renamed into place\",\"question\":\"Does \\\"flushed\\\" require an OS durability operation on the file and containing directory, and when may a successful store call be acknowledged relative to SQLite and filesystem synchronization?\",\"options\":[\"Durably sync the file, rename, sync the directory, commit and durably sync SQLite before success\",\"Flush only user-space buffers; process-crash safety is sufficient\",\"Durability settings are an implementation choice\"],\"default_guess\":\"Require file and directory synchronization plus durable SQLite commit before acknowledging success.\",\"unit\":\"A18\"},{\"subject\":\"A18 startup cleanup failures\",\"kind\":\"missing failure behavior\",\"text\":\"On start, temporary files, value bytes no record names ... and the spool directories of runs that ended and do not keep their spool ... are removed; nothing else is. A spool directory that cannot be removed does not stop the start\",\"question\":\"Does failure to enumerate or remove a temporary file or unreferenced value byte stop startup, get ignored like an unremovable obsolete spool directory, or leave the object quarantined?\",\"options\":[\"Refuse startup\",\"Continue and leave every unremovable orphan unserved\",\"Continue only for obsolete spool directories; refuse for temporary and value areas\"],\"default_guess\":\"Continue only for obsolete spool cleanup failures, but refuse startup if temporary or unreferenced value cleanup cannot be completed safely.\",\"unit\":\"A18\"},{\"subject\":\"A18 existing content at a digest path\",\"kind\":\"integrity gap\",\"text\":\"Equal bytes are stored once. A completed file a record names is never overwritten\",\"question\":\"When a digest path already exists, must the kernel verify its type, size and digest before reuse, and what happens if the existing bytes do not match?\",\"options\":[\"Verify on every reuse and fail without writes on mismatch\",\"Trust any existing regular file at the digest path\",\"Verify the whole content area only at startup and refuse on corruption\"],\"default_guess\":\"Verify the existing regular file before reuse and treat any mismatch as a store failure that stops the kernel after the internal-error response.\",\"unit\":\"A18\"},{\"subject\":\"A18 store format across releases\",\"kind\":\"compatibility gap\",\"text\":\"The data directory holds one SQLite database with every kernel record\",\"question\":\"How does a release recognize the database schema and filesystem-layout version, and what must it do with a store created by an older, newer or incompatible release?\",\"options\":[\"Perform an explicit transactional migration for supported older versions and refuse others\",\"Require an exact store-format match and refuse every mismatch\",\"Open compatible schemas without a recorded format version\"],\"default_guess\":\"Record a store-format version, migrate explicitly supported older formats transactionally, and refuse newer or unknown formats.\",\"unit\":\"A18\"},{\"subject\":\"A20 definition of supported Linux host\",\"kind\":\"undefined platform boundary\",\"text\":\"A release runs on Linux and on no other host, no version named\",\"question\":\"What exactly counts as a supported Linux host—kernel/ABI floor, CPU architecture, libc, distribution, containers, WSL or Android—and is compatibility with every such host promised or only with hosts satisfying unstated prerequisites?\",\"options\":[\"Name a tested kernel, architecture and userspace support matrix\",\"Support any Linux able to run the pinned interpreter, dependencies and bubblewrap probes\",\"Treat `Linux` only as a build-target label with no runtime compatibility promise\"],\"default_guess\":\"Support Linux hosts that can run the release's pinned interpreter and runtime and pass all explicit startup checks, while rejecting other operating-system kernels.\",\"unit\":\"A20\"},{\"subject\":\"A20 Linux-only enforcement\",\"kind\":\"missing refusal rule\",\"text\":\"A release runs on Linux and on no other host\",\"question\":\"Is non-Linux exclusion enforced by packaging/build selection or by a kernel startup check, and if a binary is executed on an unsupported host, what observable failure and check precedence apply?\",\"options\":[\"Do not produce a runnable artifact for other hosts\",\"Perform a first startup check and refuse with a defined reason\",\"Allow dependency or sandbox startup checks to fail incidentally\"],\"default_guess\":\"Enforce it both in release packaging and as the first runtime startup check, refusing before opening the store or surface.\",\"unit\":\"A20\"}]}",
+ "set_aside": []
+}
