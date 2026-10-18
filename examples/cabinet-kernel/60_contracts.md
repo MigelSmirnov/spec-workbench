@@ -1335,48 +1335,57 @@ knows. A writer that must guarantee the rule and is not told the means
 exists hedges, and the hedge weakens the MUST — on a host without the flag
 the candidate would have followed links.
 
-34. **The kernel runs on Linux; no-follow opening is `O_NOFOLLOW`, unconditional.**
-    The owner decided on 2026-10-18: the kernel runs only on Linux, no
-    version named. Today's host is the owner's machine, later a VPS.
-    - A20 rule 3 (`02_rules_installation.md`) says the host is Linux, and its
-      formal invariants gain `host = linux`. Rule 3 stays outside the running
-      kernel (State 3, no owner): it is a fact of the release. The kernel
-      adds no host check and no module owns one: on another host the sandbox
-      probe of the start sequence (A03, `sandbox.probe_sandbox`) already
-      fails and the start stops; any Linux on which it passes is a host.
-      (State 2–5 rounds 123, 110, 99, 138 asked who proves the host and when.)
-    - The runtime half is said by the rules that open paths, under their own
-      owners: A17 rule 1 (`installation`, for the configuration file and,
-      through "here and in rule 2", the secret files) and A18 rule 2
-      (`store`, every file of the data directory) open each component with
-      `O_NOFOLLOW`, never first asking whether the flag exists; there is no
-      mode without it.
-    - The database file and its journal are the exception A18 rule 2 now
-      names: SQLite opens them, and Python's `sqlite3` cannot pass SQLite's
-      no-follow flag (no URI parameter does it; checked on SQLite 3.45). The
-      start's walk finds no link before the connection opens — `open_store`
-      checks the database path with `os.lstat` just before — and afterwards
-      only the kernel's user can place one in its private directory. The
-      earlier note's "the file opened without following links" promised what
-      `sqlite3` cannot do. (State 5 round 138, State 7 round 68.)
-    - The notes that carry those rules name the means: `read_configuration`
-      (and through it `current_token_list`), `resolve_service_credential`,
-      `store`'s `record_change`, the module's one policy for every open
-      under the data directory, and `open_store` for the database path.
+34. **The kernel runs on Linux; no-follow opening is `O_NOFOLLOW`, where it guards something.**
+    The owner decided on 2026-10-18, after the State 2–5 and 7 rounds of
+    that day (State 2 123–124, State 3 110–111, State 4 99–100, State 5
+    138–139, State 7 68–69) asked who proves the host, how SQLite's own
+    files refuse a link, and how a path is walked:
+    - *Host.* A20 rule 3: the kernel runs on Linux, no version named, and
+      the formal invariants gain `host = linux`. Another host is not
+      supported; the kernel neither tests the host nor defines what it does
+      elsewhere, so no start step and no module owns a host check. Rule 3
+      stays outside the running kernel (State 3): a fact of the release.
+      Today's host is the owner's machine, later a home server.
+    - *Configuration and secret files* (A17 rule 1, and rule 2 through
+      "here and in rule 2"). Their paths lie outside the kernel's private
+      directory, where another user may be able to place a link — and a
+      link there could hand the kernel foreign tokens or send a foreign file
+      to a service as a credential. Each component is opened with
+      `O_NOFOLLOW`, a directory on the way with `O_PATH` as well, so that a
+      directory the kernel's user may only pass through (a home directory of
+      mode 0711) is passed; empty and `.` components are skipped; no code
+      asks whether a flag exists. Notes: `read_configuration` (and through
+      it `current_token_list`) and `resolve_service_credential`.
+    - *The data directory* (A18 rule 2). The start's check stands: the
+      directory and everything in it private to the kernel's user, no link
+      anywhere, or the start stops. Files the store opens itself are opened
+      relative to the data directory descriptor `open_store` holds, each
+      component with `O_NOFOLLOW`, and a link met later fails that call with
+      nothing written (`record_change`). The database file and its journal
+      are opened by SQLite, which Python's `sqlite3` cannot ask to refuse a
+      link (no URI parameter does it; checked on SQLite 3.45): the start's
+      check and `open_store`'s `os.lstat` of the database path cover them,
+      and the kernel does not watch them afterwards. In a private directory
+      only the kernel's user or root can place a link, and either can
+      change any record directly; a link gives them nothing more. The
+      earlier note's "the file opened without following links" promised
+      what `sqlite3` cannot do. No journal mode is chosen for this.
     - Not changed, and why. Each module keeps its own opening of a path: the
-      rule is one, the paths differ (one configuration file and secret files
-      named by it; a private data directory walked whole), and a shared
-      capability would add an import to two modules for three lines of
-      code. `O_CLOEXEC` is not named: Python opens descriptors
-      non-inheritable by default, and no rule asks for more.
+      rule is one, the paths differ, and a shared capability would add an
+      import to two modules for a few lines. `O_CLOEXEC` is not named:
+      Python opens descriptors non-inheritable by default. Running the kernel
+      under an operating-system user of its own, so that no other program of
+      the owner's account can write its directory, is a matter of the
+      installation on the host, not of this specification.
 
 ## Texts of earlier states changed by State 6
 
 - State 2 (2026-10-18, decision 34): A20 rule 3 and its formal invariants —
-  the host is Linux, checked by no one but the sandbox probe; A17 rule 1 and
-  A18 rule 2 — opening without following a symbolic link is `O_NOFOLLOW` at
-  each component, unconditional, except the files SQLite opens. Reopens the
-  rounds of States 2–5.
+  the host is Linux, unsupported elsewhere and tested by no one; A17 rule 1 —
+  configuration and secret paths opened with `O_NOFOLLOW` at each component,
+  `O_PATH` for directories on the way; A18 rule 2 — the store's own opens
+  relative to the held data directory with `O_NOFOLLOW`, SQLite's files
+  checked at start only. Reopens the rounds of States 2–5.
 - State 1 (2026-10-18, decision 33): the enumeration `NodeConclusion` and the
   row models `StatusConclusion`, `ConclusionEffect`, `WaitReasonRestingStatus`
   and `HttpMethodBody`. Reopens the rounds of State 1.

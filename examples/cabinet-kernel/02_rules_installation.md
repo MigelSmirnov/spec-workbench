@@ -165,9 +165,13 @@ Reuses cabinet-flow decision 23, narrowed by K-16.
    no permission for group or others; the kernel refuses to start otherwise.
    Here and in rule 2 the path is opened component by component without
    following a symbolic link at any of them, each component with Linux's
-   `O_NOFOLLOW` — the host is Linux (A20 rule 3), so no code asks whether the
-   flag exists and there is no mode without it —, and the checks and the read
-   use that one opened file, so the file checked is the file read.
+   `O_NOFOLLOW` — a directory on the way with `O_PATH` as well, so a directory
+   the kernel's user may only pass through is passed; empty and `.` components
+   are skipped; the host is Linux (A20 rule 3), so no code asks whether a flag
+   exists and there is no mode without it —, and the checks and the read
+   use that one opened file, so the file checked is the file read. These paths
+   lie outside the kernel's private directory, where another user may be able
+   to place a link; that is what this rule guards (owner, 2026-10-18).
 2. A credential is resolved only when a request to its service is built: its
    secret file is read then, without following a symbolic link, and must be a
    regular file owned by the kernel's user with no permission for group or
@@ -238,15 +242,16 @@ concurrent connections.
 2. The data directory holds one SQLite database with every kernel record, a
    content-addressed area of value bytes and file fixtures named by digest, and
    the run spool, one subdirectory per run. The directory and everything in it
-   are private to the kernel's user; the kernel refuses to start otherwise. Every
-   file of the directory the store opens itself is opened without following
-   symbolic links, with Linux's `O_NOFOLLOW` on every open, never first asking
-   whether the flag exists (A20 rule 3). The database file and its journal are
-   opened by SQLite, which Python cannot ask to refuse a link: the start's walk
-   finds no link before the database is opened, and afterwards only the
-   kernel's user can place one, the directory being private. A link
-   found at start stops the start, and one found later makes that store call
-   fail with nothing written.
+   are private to the kernel's user; the kernel refuses to start otherwise, and
+   a symbolic link found at start stops the start. Every file the store opens
+   itself is opened relative to the data directory it holds open from the
+   start, each component with Linux's `O_NOFOLLOW`, never first asking whether
+   the flag exists (A20 rule 3); a link met so later makes that store call fail
+   with nothing written. The database file and its journal are opened by
+   SQLite, which Python cannot ask to refuse a link; the start's check covers
+   them, and the kernel does not watch them after it: in a private directory
+   only the kernel's user or root can place a link, and either can change any
+   record directly, so a link gives them nothing more (owner, 2026-10-18).
 3. Only the store module opens the database. Every change is one call to the
    store module and one transaction inside it; callers never open, name or pass a
    transaction (K-17). A call that fails writes and changes no record; the only
@@ -387,10 +392,9 @@ reads.
    the sandbox runtime (A03); the sandbox interpreter of release v1 is CPython
    3.12, whose `random` module gives A03 rule 4 its list. A vulnerable dependency is answered by a new
    release; a running kernel never updates one. A release runs on Linux and on
-   no other host (owner, 2026-10-18). The kernel does not test the host: on any
-   other the sandbox probe of the start sequence (A03) fails and the start
-   stops, and any Linux on which that probe passes is a host; no version is
-   named.
+   no other host, no version named (owner, 2026-10-18). Another host is not
+   supported: the kernel neither tests the host nor defines what it does on
+   another one.
 4. A new release may change ceilings. They bind contract versions issued after
    it; a contract version issued earlier keeps its bounds and executes under them
    even when they exceed the new ceilings, and recorded executions are never
