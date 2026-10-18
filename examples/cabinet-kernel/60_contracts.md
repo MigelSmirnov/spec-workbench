@@ -1347,8 +1347,9 @@ the candidate would have followed links.
       stays outside the running kernel (State 3).
     - A17 rule 1 (and through "here and in rule 2" the secret files) opens
       each component with `O_NOFOLLOW`, whose presence no code tests; the
-      path is walked as given, from the root directory or the working
-      directory, each directory on the way with `O_PATH` and `O_DIRECTORY`
+      configuration path must be absolute or the start is refused (as the
+      secret files' paths already were), so the walk always starts at the
+      root directory and no working directory is read; each directory on the way with `O_PATH` and `O_DIRECTORY`
       so that a search-only directory such as a home of mode 0711 is passed,
       `.` and `..` opened as named and empty components skipped, a path
       naming no component unreadable, the last component opened with
@@ -1363,8 +1364,21 @@ the candidate would have followed links.
       SQLite's no-follow flag; checked on SQLite 3.45). It now says what the
       code does: the database path is checked with `os.lstat` before the
       connection opens. A18 is unchanged.
+    - Left open on purpose (owner, 2026-10-18). State 2 round 134 asked
+      which Linux release or documentation fixes "acts as Linux documents
+      it", and what a device file that blocks even under `O_NONBLOCK` at the
+      configuration path does. No version is named, by the owner's
+      decision; a device there can be placed only by whoever already rules
+      the host. Neither is answered here, and a later round that asks again
+      is answered by this paragraph.
+    - The questions tool. From round 129 State 2 reviewed A18 whole although
+      its text was the closed one: restored word for word by the cut-back,
+      it had no closing pair among its two latest reviews and no diff, so
+      it was asked as if never closed (points on A18 12–23 per review
+      against 7–11 before). Fixed in the Workbench tools by PR #129 (a unit
+      restored to its closed text is closed again).
     - Why no more is specified. In between, the State 2–5 and 7 rounds of
-      2026-10-18 (State 2 123–132, State 3 110–115, State 4 99–104, State 5
+      2026-10-18 (State 2 123–134, State 3 110–115, State 4 99–104, State 5
       138–143, State 7 68–73) were run on a fuller text that named
       `O_NOFOLLOW` for every store open, an exception for SQLite's files,
       `O_PATH` for pass-through directories and the treatment of `.`, `..`
@@ -1384,8 +1398,10 @@ the candidate would have followed links.
 ## Texts of earlier states changed by State 6
 
 - State 2 (2026-10-18, decision 34): A20 rule 3 and its formal invariants —
-  the host is Linux; A17 rule 1 — each component opened with `O_NOFOLLOW`,
-  never tested for. Reopens the rounds of States 2–5.
+  the host is Linux; A17 rule 1 — an absolute configuration path, each
+  component opened with `O_NOFOLLOW`, never tested for; State 5: the
+  configuration path's input and checks name it absolute. Reopens the rounds
+  of States 2–5.
 - State 1 (2026-10-18, decision 33): the enumeration `NodeConclusion` and the
   row models `StatusConclusion`, `ConclusionEffect`, `WaitReasonRestingStatus`
   and `HttpMethodBody`. Reopens the rounds of State 1.

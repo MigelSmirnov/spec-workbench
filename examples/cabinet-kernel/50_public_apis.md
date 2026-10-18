@@ -1122,7 +1122,7 @@ Reads the configuration file.
 
 ### Inputs
 
-The configuration file path, the process's one command-line argument (A17 rule 1).
+The configuration file path, absolute, the process's one command-line argument (A17 rule 1).
 
 ### Outputs
 
@@ -1135,8 +1135,8 @@ None.
 
 ### Enforces
 
-Checks in this order, the first failing one named: a regular private file of
-the kernel's user, not a link; one JSON object with exactly the installation's
+Checks in this order, the first failing one named: an absolute path; a regular
+private file of the kernel's user, not a link; one JSON object with exactly the installation's
 fields; no service twice among the selected instances or among the credentials;
 every credential header name an HTTP field-name token; every secret file
 reference an absolute path; tokens of at least 43
@@ -3044,7 +3044,7 @@ from the sandbox.
 
 ### Inputs
 
-The configuration file path, the process's one command-line argument (A17 rule 1).
+The configuration file path, absolute, the process's one command-line argument (A17 rule 1).
 
 ### Outputs
 

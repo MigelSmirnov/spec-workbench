@@ -1,0 +1,229 @@
+{
+ "open_points": [
+  {
+   "subject": "A17 relative configuration path",
+   "kind": "ambiguous anchor",
+   "text": "“a relative one from the working directory” does not say whether later configuration re-reads use the working directory captured at startup or the process's working directory at each re-read.",
+   "question": "What directory anchors a relative configuration-file path for every later re-read?",
+   "options": [
+    "The startup working directory, retained as an opened directory",
+    "The process working directory at each re-read",
+    "Relative configuration paths are accepted only if the process never changes directory"
+   ],
+   "default_guess": "Retain and use the startup working directory.",
+   "unit": "A17"
+  },
+  {
+   "subject": "A17 non-regular final component",
+   "kind": "unverifiable guarantee",
+   "text": "“the last component for reading with `O_NONBLOCK` as well, so a component that is no regular file is refused by the checks rather than waited on” assumes `O_NONBLOCK` prevents blocking for every non-regular Linux file, which Linux does not guarantee for all device types.",
+   "question": "What must happen when opening a non-regular final component can block despite `O_NONBLOCK`?",
+   "options": [
+    "Such Linux filesystems or device types are unsupported",
+    "Inspect the object before opening it for reading while preserving same-object guarantees",
+    "Permit the open to block",
+    "Impose a separate opening deadline"
+   ],
+   "default_guess": "Treat environments containing such a target as unsupported, although the kernel may block before it can refuse it.",
+   "unit": "A17"
+  },
+  {
+   "subject": "A18 data-directory path resolution",
+   "kind": "missing path rule",
+   "text": "“Every file of the directory is opened without following symbolic links” does not define how `data_directory` itself or its ancestor components are opened, whether relative paths are allowed, or whether symlinks in those components are followed.",
+   "question": "How is the configured data-directory path resolved and checked?",
+   "options": [
+    "Walk every component without following symlinks",
+    "Allow symlinks in ancestors but not within the opened data directory",
+    "Resolve the configured path normally and inspect only its contents",
+    "Require an absolute path and reject any symlink component"
+   ],
+   "default_guess": "Require an absolute path and walk every component without following symlinks.",
+   "unit": "A18"
+  },
+  {
+   "subject": "A18 private data-directory requirement",
+   "kind": "vague refusal condition",
+   "text": "“The directory and everything in it are private to the kernel's user; the kernel refuses to start otherwise” does not define private: ownership, permitted mode bits, acceptable object types, recursive scope, or treatment of ACLs and hard links.",
+   "question": "What exact ownership, permissions, ACL, link-count and file-type conditions must every data-directory object satisfy at start?",
+   "options": [
+    "Owner must be the kernel user and group/other mode bits must be zero",
+    "Also reject ACL access for other principals",
+    "Also restrict hard links and object types",
+    "Apply different requirements to directories, database files, spools and temporary files"
+   ],
+   "default_guess": "Require kernel-user ownership and no group or other permission bits recursively, reject symlinks and unexpected special files, but do not inspect ACLs or hard-link exposure.",
+   "unit": "A18"
+  },
+  {
+   "subject": "A18 exclusive lock",
+   "kind": "unspecified locking semantics",
+   "text": "“At start it takes an exclusive lock in the data directory” does not name the lock object, Linux locking primitive, acquisition order, lifetime, or what happens if the lock object is absent, replaced or removed while the process runs.",
+   "question": "What exact lock constitutes ownership of a data directory, and how is it safely created, acquired and retained?",
+   "options": [
+    "A fixed lock file with `flock` held for the process lifetime",
+    "A fixed lock file with POSIX record locking",
+    "A lock on the directory descriptor",
+    "An atomic exclusive-created sentinel file"
+   ],
+   "default_guess": "Open a fixed no-follow lock file and hold an exclusive `flock` for the process lifetime.",
+   "unit": "A18"
+  },
+  {
+   "subject": "A18 SQLite auxiliary files",
+   "kind": "unenforced invariant",
+   "text": "“Every file of the directory is opened without following symbolic links” and “Only the store module opens the database” do not say how SQLite's journal, WAL, shared-memory and temporary files are made to obey the no-follow and privacy requirements.",
+   "question": "How must SQLite-created auxiliary files be opened and checked so that a symlink inserted after startup cannot be followed?",
+   "options": [
+    "Use a custom SQLite VFS enforcing no-follow opens",
+    "Use a journal mode that creates no auxiliary pathnames",
+    "Check paths before each database call and accept the remaining race",
+    "Exclude SQLite-managed auxiliary files from the no-follow promise"
+   ],
+   "default_guess": "Use or configure a SQLite VFS that enforces no-follow and private creation modes for every database-related open.",
+   "unit": "A18"
+  },
+  {
+   "subject": "A18 global store order",
+   "kind": "undefined ordering model",
+   "text": "“one order of records” and “identified by their position in the store's one order of records” do not define which record types receive positions, how several records created by one transaction are ordered, or whether updates retain or receive a position.",
+   "question": "What exactly is a store position and how is the total order assigned across all record types and multi-record transactions?",
+   "options": [
+    "One global monotonically increasing position for every record creation; updates retain it",
+    "One global event position for creations and updates",
+    "Separate per-table positions combined by timestamp or sequence",
+    "Only records used by paging or activation receive positions"
+   ],
+   "default_guess": "Assign one global monotonically increasing position to every record when first created, in the normative write order within a transaction; later updates retain that position.",
+   "unit": "A18"
+  },
+  {
+   "subject": "A18 request arrival order",
+   "kind": "ambiguous serialization",
+   "text": "“Surface requests are handled one at a time in the order they arrive” does not define arrival when requests overlap, are read incrementally, or come through multiplexed MCP connections.",
+   "question": "Which observable event fixes the serialization order of concurrent requests?",
+   "options": [
+    "First byte received",
+    "Complete request message received",
+    "Authentication completed",
+    "Insertion into a single dispatcher queue"
+   ],
+   "default_guess": "Order requests when their complete messages enter a single dispatcher queue.",
+   "unit": "A18"
+  },
+  {
+   "subject": "A18 file and database crash atomicity",
+   "kind": "missing durability protocol",
+   "text": "“written to a temporary file, flushed, checked against their digest and size, and then renamed into place” does not say whether the containing directory is flushed, when the SQLite transaction commits relative to publication, or what SQLite durability settings make a record and its named file survive a crash consistently.",
+   "question": "What publication and flush sequence guarantees that no committed record names a missing or incomplete file after a crash?",
+   "options": [
+    "Flush temporary file, rename, flush directory, then durably commit SQLite",
+    "Commit SQLite before publication and repair missing files on startup",
+    "Use a filesystem transaction or equivalent protocol",
+    "Guarantee only process-crash atomicity, not power-loss durability"
+   ],
+   "default_guess": "Flush the temporary file, rename it, flush the containing directory, and only then durably commit the SQLite transaction; a failed commit leaves an orphan file.",
+   "unit": "A18"
+  },
+  {
+   "subject": "A18 store-call commit boundary",
+   "kind": "undefined failure semantics",
+   "text": "“A call that fails writes and changes no record; the only trace it can leave is a published file no record names” does not define how an error detected after SQLite commit is classified or returned.",
+   "question": "At what point is a store call irrevocably successful, and what happens if cleanup, acknowledgement or another operation fails after commit?",
+   "options": [
+    "SQLite commit is the success point; later errors are recorded or handled as cleanup failures",
+    "Any post-commit error stops the kernel but the call remains successful",
+    "Compensate by deleting or reversing committed records",
+    "Permit an `internal_error` response even though the change committed"
+   ],
+   "default_guess": "Treat successful SQLite commit as the irrevocable success point and never report that store call as failed afterward.",
+   "unit": "A18"
+  },
+  {
+   "subject": "A18 content-address collision",
+   "kind": "unhandled collision",
+   "text": "“Equal bytes are stored once” and files are “named by digest,” but the rules do not say what happens when a file already at a digest path has different bytes or size.",
+   "question": "How does the store handle an existing digest-named file whose content does not equal the bytes being published?",
+   "options": [
+    "Fail the store call as corruption or digest collision",
+    "Stop the kernel immediately",
+    "Overwrite the existing file",
+    "Reuse the existing file based only on its name"
+   ],
+   "default_guess": "Verify the existing file and stop or fail as store corruption if its bytes or size differ.",
+   "unit": "A18"
+  },
+  {
+   "subject": "A18 initial and damaged store layout",
+   "kind": "missing start behavior",
+   "text": "“The data directory holds one SQLite database with every kernel record, a content-addressed area … and the run spool” does not say whether a missing directory or area is created, or what happens to an unexpected entry, corrupt database, incompatible schema, or malformed content-addressed file.",
+   "question": "Which absent or damaged store conditions are initialized, refused, ignored or repaired at startup?",
+   "options": [
+    "Create only a wholly new empty store; refuse every inconsistency in an existing store",
+    "Create missing areas independently and refuse database corruption",
+    "Repair or quarantine inconsistent artifacts",
+    "Ignore unexpected entries unless a later call reaches them"
+   ],
+   "default_guess": "Create the complete layout only for a new empty data directory and refuse corruption or missing required parts in an existing store.",
+   "unit": "A18"
+  },
+  {
+   "subject": "A18 startup cleanup targets and failures",
+   "kind": "incomplete cleanup rule",
+   "text": "“temporary files, value bytes no record names … and the spool directories of runs that ended … are removed” defines neither how temporary files are recognized nor what happens when removal of a temporary file or unreferenced value fails; only failed spool-directory removal is explicitly tolerated.",
+   "question": "What exact names count as kernel temporary files, and does failure to remove a temporary or unreferenced value stop startup?",
+   "options": [
+    "A closed naming pattern; any such cleanup failure stops startup",
+    "A closed naming pattern; all cleanup failures are tolerated and retried later",
+    "Remove only artifacts listed in durable cleanup records",
+    "Treat unrecognized files as corruption and refuse startup"
+   ],
+   "default_guess": "Use a closed kernel-owned temporary naming pattern, refuse unexpected entries, and stop startup if temporary or orphan-value cleanup fails.",
+   "unit": "A18"
+  },
+  {
+   "subject": "A18 startup sequencing",
+   "kind": "missing precedence",
+   "text": "A18 says “On start” cleanup occurs, while A14 says startup derives lagging run state and advances running runs, but neither text orders locking, privacy and symlink checks, database opening, orphan cleanup, run-state derivation and recovery.",
+   "question": "What is the exact startup order, especially whether ended-run spool cleanup uses stored status or the state derived by A14?",
+   "options": [
+    "Lock and validate, open store, recover and derive runs, then clean artifacts, then advance runs",
+    "Lock and validate, clean artifacts using stored records, then recover runs",
+    "Clean filesystem artifacts before opening the database",
+    "Perform cleanup and recovery in one specified interleaving"
+   ],
+   "default_guess": "Acquire the lock and validate paths first, open the database, recover attempts and derive run states, clean artifacts from that derived state, then advance running runs.",
+   "unit": "A18"
+  },
+  {
+   "subject": "A20 non-Linux host behavior",
+   "kind": "contradictory start policy",
+   "text": "“A release runs on Linux and on no other host” suggests exclusion, while “Another system … is unsupported: the kernel neither tests for it nor defines what it does there” says there is no test or defined refusal.",
+   "question": "Must the kernel explicitly refuse to start on a non-Linux host, or may it attempt to run with wholly undefined behavior?",
+   "options": [
+    "No host check; non-Linux behavior is outside the contract",
+    "Check the operating system and refuse startup",
+    "The build must be unavailable for non-Linux targets, with no runtime check"
+   ],
+   "default_guess": "Make the release/build Linux-only and perform no runtime host check.",
+   "unit": "A20"
+  },
+  {
+   "subject": "A20 Linux compatibility baseline",
+   "kind": "vague platform contract",
+   "text": "“on Linux … no version named” and “acts as Linux documents it” do not identify which Linux ABI, kernel documentation version, filesystem semantics or minimum feature set defines conformance.",
+   "question": "Against which Linux semantics must opening, locking, renaming and flushing be implemented and tested when different kernel and filesystem versions provide different guarantees?",
+   "options": [
+    "The release build host's Linux and filesystem behavior",
+    "A stated minimum kernel and supported-filesystem matrix",
+    "Only stable documented syscall semantics, with all filesystem-specific deviations unsupported",
+    "Whatever behavior the installation happens to provide, without a testable baseline"
+   ],
+   "default_guess": "Rely only on stable documented Linux syscall semantics and treat filesystem-specific deviations as unsupported, without a version check.",
+   "unit": "A20"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A17 relative configuration path\",\"kind\":\"ambiguous anchor\",\"text\":\"“a relative one from the working directory” does not say whether later configuration re-reads use the working directory captured at startup or the process's working directory at each re-read.\",\"question\":\"What directory anchors a relative configuration-file path for every later re-read?\",\"options\":[\"The startup working directory, retained as an opened directory\",\"The process working directory at each re-read\",\"Relative configuration paths are accepted only if the process never changes directory\"],\"default_guess\":\"Retain and use the startup working directory.\" ,\"unit\":\"A17\"},{\"subject\":\"A17 non-regular final component\",\"kind\":\"unverifiable guarantee\",\"text\":\"“the last component for reading with `O_NONBLOCK` as well, so a component that is no regular file is refused by the checks rather than waited on” assumes `O_NONBLOCK` prevents blocking for every non-regular Linux file, which Linux does not guarantee for all device types.\",\"question\":\"What must happen when opening a non-regular final component can block despite `O_NONBLOCK`?\",\"options\":[\"Such Linux filesystems or device types are unsupported\",\"Inspect the object before opening it for reading while preserving same-object guarantees\",\"Permit the open to block\",\"Impose a separate opening deadline\"],\"default_guess\":\"Treat environments containing such a target as unsupported, although the kernel may block before it can refuse it.\",\"unit\":\"A17\"},{\"subject\":\"A18 data-directory path resolution\",\"kind\":\"missing path rule\",\"text\":\"“Every file of the directory is opened without following symbolic links” does not define how `data_directory` itself or its ancestor components are opened, whether relative paths are allowed, or whether symlinks in those components are followed.\",\"question\":\"How is the configured data-directory path resolved and checked?\",\"options\":[\"Walk every component without following symlinks\",\"Allow symlinks in ancestors but not within the opened data directory\",\"Resolve the configured path normally and inspect only its contents\",\"Require an absolute path and reject any symlink component\"],\"default_guess\":\"Require an absolute path and walk every component without following symlinks.\",\"unit\":\"A18\"},{\"subject\":\"A18 private data-directory requirement\",\"kind\":\"vague refusal condition\",\"text\":\"“The directory and everything in it are private to the kernel's user; the kernel refuses to start otherwise” does not define private: ownership, permitted mode bits, acceptable object types, recursive scope, or treatment of ACLs and hard links.\",\"question\":\"What exact ownership, permissions, ACL, link-count and file-type conditions must every data-directory object satisfy at start?\",\"options\":[\"Owner must be the kernel user and group/other mode bits must be zero\",\"Also reject ACL access for other principals\",\"Also restrict hard links and object types\",\"Apply different requirements to directories, database files, spools and temporary files\"],\"default_guess\":\"Require kernel-user ownership and no group or other permission bits recursively, reject symlinks and unexpected special files, but do not inspect ACLs or hard-link exposure.\",\"unit\":\"A18\"},{\"subject\":\"A18 exclusive lock\",\"kind\":\"unspecified locking semantics\",\"text\":\"“At start it takes an exclusive lock in the data directory” does not name the lock object, Linux locking primitive, acquisition order, lifetime, or what happens if the lock object is absent, replaced or removed while the process runs.\",\"question\":\"What exact lock constitutes ownership of a data directory, and how is it safely created, acquired and retained?\",\"options\":[\"A fixed lock file with `flock` held for the process lifetime\",\"A fixed lock file with POSIX record locking\",\"A lock on the directory descriptor\",\"An atomic exclusive-created sentinel file\"],\"default_guess\":\"Open a fixed no-follow lock file and hold an exclusive `flock` for the process lifetime.\",\"unit\":\"A18\"},{\"subject\":\"A18 SQLite auxiliary files\",\"kind\":\"unenforced invariant\",\"text\":\"“Every file of the directory is opened without following symbolic links” and “Only the store module opens the database” do not say how SQLite's journal, WAL, shared-memory and temporary files are made to obey the no-follow and privacy requirements.\",\"question\":\"How must SQLite-created auxiliary files be opened and checked so that a symlink inserted after startup cannot be followed?\",\"options\":[\"Use a custom SQLite VFS enforcing no-follow opens\",\"Use a journal mode that creates no auxiliary pathnames\",\"Check paths before each database call and accept the remaining race\",\"Exclude SQLite-managed auxiliary files from the no-follow promise\"],\"default_guess\":\"Use or configure a SQLite VFS that enforces no-follow and private creation modes for every database-related open.\",\"unit\":\"A18\"},{\"subject\":\"A18 global store order\",\"kind\":\"undefined ordering model\",\"text\":\"“one order of records” and “identified by their position in the store's one order of records” do not define which record types receive positions, how several records created by one transaction are ordered, or whether updates retain or receive a position.\",\"question\":\"What exactly is a store position and how is the total order assigned across all record types and multi-record transactions?\",\"options\":[\"One global monotonically increasing position for every record creation; updates retain it\",\"One global event position for creations and updates\",\"Separate per-table positions combined by timestamp or sequence\",\"Only records used by paging or activation receive positions\"],\"default_guess\":\"Assign one global monotonically increasing position to every record when first created, in the normative write order within a transaction; later updates retain that position.\",\"unit\":\"A18\"},{\"subject\":\"A18 request arrival order\",\"kind\":\"ambiguous serialization\",\"text\":\"“Surface requests are handled one at a time in the order they arrive” does not define arrival when requests overlap, are read incrementally, or come through multiplexed MCP connections.\",\"question\":\"Which observable event fixes the serialization order of concurrent requests?\",\"options\":[\"First byte received\",\"Complete request message received\",\"Authentication completed\",\"Insertion into a single dispatcher queue\"],\"default_guess\":\"Order requests when their complete messages enter a single dispatcher queue.\",\"unit\":\"A18\"},{\"subject\":\"A18 file and database crash atomicity\",\"kind\":\"missing durability protocol\",\"text\":\"“written to a temporary file, flushed, checked against their digest and size, and then renamed into place” does not say whether the containing directory is flushed, when the SQLite transaction commits relative to publication, or what SQLite durability settings make a record and its named file survive a crash consistently.\",\"question\":\"What publication and flush sequence guarantees that no committed record names a missing or incomplete file after a crash?\",\"options\":[\"Flush temporary file, rename, flush directory, then durably commit SQLite\",\"Commit SQLite before publication and repair missing files on startup\",\"Use a filesystem transaction or equivalent protocol\",\"Guarantee only process-crash atomicity, not power-loss durability\"],\"default_guess\":\"Flush the temporary file, rename it, flush the containing directory, and only then durably commit the SQLite transaction; a failed commit leaves an orphan file.\",\"unit\":\"A18\"},{\"subject\":\"A18 store-call commit boundary\",\"kind\":\"undefined failure semantics\",\"text\":\"“A call that fails writes and changes no record; the only trace it can leave is a published file no record names” does not define how an error detected after SQLite commit is classified or returned.\",\"question\":\"At what point is a store call irrevocably successful, and what happens if cleanup, acknowledgement or another operation fails after commit?\",\"options\":[\"SQLite commit is the success point; later errors are recorded or handled as cleanup failures\",\"Any post-commit error stops the kernel but the call remains successful\",\"Compensate by deleting or reversing committed records\",\"Permit an `internal_error` response even though the change committed\"],\"default_guess\":\"Treat successful SQLite commit as the irrevocable success point and never report that store call as failed afterward.\",\"unit\":\"A18\"},{\"subject\":\"A18 content-address collision\",\"kind\":\"unhandled collision\",\"text\":\"“Equal bytes are stored once” and files are “named by digest,” but the rules do not say what happens when a file already at a digest path has different bytes or size.\",\"question\":\"How does the store handle an existing digest-named file whose content does not equal the bytes being published?\",\"options\":[\"Fail the store call as corruption or digest collision\",\"Stop the kernel immediately\",\"Overwrite the existing file\",\"Reuse the existing file based only on its name\"],\"default_guess\":\"Verify the existing file and stop or fail as store corruption if its bytes or size differ.\",\"unit\":\"A18\"},{\"subject\":\"A18 initial and damaged store layout\",\"kind\":\"missing start behavior\",\"text\":\"“The data directory holds one SQLite database with every kernel record, a content-addressed area … and the run spool” does not say whether a missing directory or area is created, or what happens to an unexpected entry, corrupt database, incompatible schema, or malformed content-addressed file.\",\"question\":\"Which absent or damaged store conditions are initialized, refused, ignored or repaired at startup?\",\"options\":[\"Create only a wholly new empty store; refuse every inconsistency in an existing store\",\"Create missing areas independently and refuse database corruption\",\"Repair or quarantine inconsistent artifacts\",\"Ignore unexpected entries unless a later call reaches them\"],\"default_guess\":\"Create the complete layout only for a new empty data directory and refuse corruption or missing required parts in an existing store.\",\"unit\":\"A18\"},{\"subject\":\"A18 startup cleanup targets and failures\",\"kind\":\"incomplete cleanup rule\",\"text\":\"“temporary files, value bytes no record names … and the spool directories of runs that ended … are removed” defines neither how temporary files are recognized nor what happens when removal of a temporary file or unreferenced value fails; only failed spool-directory removal is explicitly tolerated.\",\"question\":\"What exact names count as kernel temporary files, and does failure to remove a temporary or unreferenced value stop startup?\",\"options\":[\"A closed naming pattern; any such cleanup failure stops startup\",\"A closed naming pattern; all cleanup failures are tolerated and retried later\",\"Remove only artifacts listed in durable cleanup records\",\"Treat unrecognized files as corruption and refuse startup\"],\"default_guess\":\"Use a closed kernel-owned temporary naming pattern, refuse unexpected entries, and stop startup if temporary or orphan-value cleanup fails.\",\"unit\":\"A18\"},{\"subject\":\"A18 startup sequencing\",\"kind\":\"missing precedence\",\"text\":\"A18 says “On start” cleanup occurs, while A14 says startup derives lagging run state and advances running runs, but neither text orders locking, privacy and symlink checks, database opening, orphan cleanup, run-state derivation and recovery.\",\"question\":\"What is the exact startup order, especially whether ended-run spool cleanup uses stored status or the state derived by A14?\",\"options\":[\"Lock and validate, open store, recover and derive runs, then clean artifacts, then advance runs\",\"Lock and validate, clean artifacts using stored records, then recover runs\",\"Clean filesystem artifacts before opening the database\",\"Perform cleanup and recovery in one specified interleaving\"],\"default_guess\":\"Acquire the lock and validate paths first, open the database, recover attempts and derive run states, clean artifacts from that derived state, then advance running runs.\",\"unit\":\"A18\"},{\"subject\":\"A20 non-Linux host behavior\",\"kind\":\"contradictory start policy\",\"text\":\"“A release runs on Linux and on no other host” suggests exclusion, while “Another system … is unsupported: the kernel neither tests for it nor defines what it does there” says there is no test or defined refusal.\",\"question\":\"Must the kernel explicitly refuse to start on a non-Linux host, or may it attempt to run with wholly undefined behavior?\",\"options\":[\"No host check; non-Linux behavior is outside the contract\",\"Check the operating system and refuse startup\",\"The build must be unavailable for non-Linux targets, with no runtime check\"],\"default_guess\":\"Make the release/build Linux-only and perform no runtime host check.\",\"unit\":\"A20\"},{\"subject\":\"A20 Linux compatibility baseline\",\"kind\":\"vague platform contract\",\"text\":\"“on Linux … no version named” and “acts as Linux documents it” do not identify which Linux ABI, kernel documentation version, filesystem semantics or minimum feature set defines conformance.\",\"question\":\"Against which Linux semantics must opening, locking, renaming and flushing be implemented and tested when different kernel and filesystem versions provide different guarantees?\",\"options\":[\"The release build host's Linux and filesystem behavior\",\"A stated minimum kernel and supported-filesystem matrix\",\"Only stable documented syscall semantics, with all filesystem-specific deviations unsupported\",\"Whatever behavior the installation happens to provide, without a testable baseline\"],\"default_guess\":\"Rely only on stable documented Linux syscall semantics and treat filesystem-specific deviations as unsupported, without a version check.\",\"unit\":\"A20\"}]}",
+ "set_aside": []
+}

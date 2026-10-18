@@ -1,0 +1,137 @@
+{
+ "open_points": [
+  {
+   "subject": "A17 non-regular final path component",
+   "kind": "unmet guarantee",
+   "text": "the last component for reading with `O_NONBLOCK` as well, so a component that is no regular file is refused by the checks rather than waited on",
+   "question": "How is the kernel guaranteed not to block or cause device-specific effects when it must open the final component before checking that it is a regular file, given that Linux does not make `O_NONBLOCK` effective for every file type?",
+   "options": [
+    "Open with the stated flags and accept that some non-regular files may block or have effects before refusal",
+    "Inspect the final component through a non-reading descriptor before opening it for reading",
+    "Restrict supported file systems and file types further"
+   ],
+   "default_guess": "Inspect the final component without reading it, verify that it is regular, and then open the same object safely for reading.",
+   "unit": "A17"
+  },
+  {
+   "subject": "A17 relative configuration path",
+   "kind": "unstable path base",
+   "text": "a relative one from the working directory",
+   "question": "Is a relative configuration path resolved from the process working directory captured at startup, or from whatever the working directory is on each later token-list reread?",
+   "options": [
+    "Capture the startup working directory and reuse it",
+    "Resolve from the current working directory on every open",
+    "Refuse relative configuration paths"
+   ],
+   "default_guess": "Capture the startup working directory and use it for every reread.",
+   "unit": "A17"
+  },
+  {
+   "subject": "A18 data-directory initialization",
+   "kind": "missing refusal condition",
+   "text": "At start it takes an exclusive lock in the data directory",
+   "question": "If the data directory, database, content areas, spool area, or lock object does not yet exist, which objects does the kernel create and which missing objects make startup fail?",
+   "options": [
+    "Create a complete empty store when the data directory is absent",
+    "Require the data directory to exist but create its internal store objects",
+    "Require every store object to be provisioned already"
+   ],
+   "default_guess": "Require an existing private data directory and create the database and internal areas within it.",
+   "unit": "A18"
+  },
+  {
+   "subject": "A18 exclusive store lock",
+   "kind": "mechanism ambiguity",
+   "text": "At start it takes an exclusive lock in the data directory; a second process on the same directory refuses to start.",
+   "question": "What Linux locking primitive and lock object define exclusivity, when is the lock acquired and released, and how are stale lock artifacts after a crash treated?",
+   "options": [
+    "Hold an advisory `flock` on a dedicated regular lock file for the process lifetime",
+    "Hold a POSIX record lock on a dedicated file",
+    "Use exclusive creation of a lock file and define stale-lock recovery"
+   ],
+   "default_guess": "Hold an advisory `flock` on a securely opened dedicated lock file for the kernel process lifetime.",
+   "unit": "A18"
+  },
+  {
+   "subject": "A18 private store permissions",
+   "kind": "vague invariant",
+   "text": "The directory and everything in it are private to the kernel's user; the kernel refuses to start otherwise.",
+   "question": "What exact ownership, mode, file-type and traversal checks make the data directory and everything in it “private,” and are those properties checked again when entries are opened or created after startup?",
+   "options": [
+    "Require ownership by the kernel user and no group/other permission on every entry, checking at startup and use",
+    "Check only the data directory at startup and create descendants with private modes",
+    "Use a specified allowlist of modes and entry types for each store area"
+   ],
+   "default_guess": "Require every store directory and file to be owned by the kernel user with no group or other permissions, verify existing entries at startup, and enforce the same conditions on later opens and creations.",
+   "unit": "A18"
+  },
+  {
+   "subject": "A18 symlink-safe access",
+   "kind": "path traversal ambiguity",
+   "text": "Every file of the directory is opened without following symbolic links; a link found at start stops the start, and one found later makes that store call fail with nothing written.",
+   "question": "Does the no-symlink rule cover the configured data-directory path itself and every path component, or only final entries inside an already opened data directory, and what opening procedure prevents check-to-open races?",
+   "options": [
+    "Walk the data-directory path and every descendant component through directory descriptors without following links",
+    "Securely open the data-directory root once, then protect only descendant components",
+    "Check entries for symlinks before ordinary pathname opens"
+   ],
+   "default_guess": "Securely open the data-directory root component by component, retain its directory descriptor, and resolve all descendants relative to trusted directory descriptors without following links.",
+   "unit": "A18"
+  },
+  {
+   "subject": "A18 file and database crash durability",
+   "kind": "atomicity gap",
+   "text": "Value bytes and spooled files are written to a temporary file, flushed, checked against their digest and size, and then renamed into place; a completed file a record names is never overwritten",
+   "question": "What does “flushed” mean, where is the temporary file created, what directories are synchronized, and in what order do file publication and the SQLite commit occur so that a crash or power loss cannot leave a durable record naming a missing or incomplete file?",
+   "options": [
+    "Require same-filesystem temporary files, file synchronization, atomic rename, directory synchronization, then a durable database commit",
+    "Rely on rename and SQLite defaults without a power-loss durability guarantee",
+    "Make the database commit first and repair missing files during recovery"
+   ],
+   "default_guess": "Create the temporary file in the destination filesystem, synchronize it, rename atomically, synchronize the containing directory, and only then durably commit the referencing database record.",
+   "unit": "A18"
+  },
+  {
+   "subject": "A18 startup cleanup failure",
+   "kind": "undefined failure handling",
+   "text": "On start, temporary files, value bytes no record names ... and the spool directories of runs that ended and do not keep their spool ... are removed; nothing else is. A spool directory that cannot be removed does not stop the start",
+   "question": "Does failure to remove a temporary file or unreferenced value byte stop startup, get ignored like an unremovable ended-run spool directory, or leave the affected object quarantined?",
+   "options": [
+    "Stop startup on temporary-file or orphan-value cleanup failure",
+    "Continue startup and never serve the leftover objects",
+    "Quarantine leftovers and continue only when they cannot conflict with live paths"
+   ],
+   "default_guess": "Continue startup, never serve an unreferenced leftover, and retry its removal on a later start.",
+   "unit": "A18"
+  },
+  {
+   "subject": "A18 content-address collision",
+   "kind": "unhandled collision",
+   "text": "Equal bytes are stored once.",
+   "question": "What happens when a file already exists at a content digest but its bytes or recorded size differ from the bytes now being published with that same digest?",
+   "options": [
+    "Treat it as store corruption and fail the store call or startup",
+    "Overwrite it when no record names it and otherwise fail",
+    "Assume SHA-256 collisions cannot occur and perform no comparison"
+   ],
+   "default_guess": "Compare the existing bytes and size; on any mismatch treat the store as corrupt and refuse the operation without overwriting the file.",
+   "unit": "A18"
+  },
+  {
+   "subject": "A20 supported Linux baseline",
+   "kind": "undefined compatibility boundary",
+   "text": "A release runs on Linux and on no other host, no version named ... a Linux or file system on which a call these rules rely on ... does not act as Linux documents it, is unsupported",
+   "question": "Which Linux documentation and syscall semantics define the supported baseline when kernel versions and file-system implementations differ, particularly for `O_PATH`, `O_NOFOLLOW`, locking, rename and persistence after flushing?",
+   "options": [
+    "Name a minimum Linux kernel and supported filesystem semantics",
+    "Support any Linux exposing all required calls with the semantics of a specified manual/API version",
+    "Leave compatibility to the installation and define no reproducible support boundary"
+   ],
+   "default_guess": "Require a documented minimum Linux kernel and local filesystem semantics that provide the named operations and crash guarantees.",
+   "unit": "A20"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A17 non-regular final path component\",\"kind\":\"unmet guarantee\",\"text\":\"the last component for reading with `O_NONBLOCK` as well, so a component that is no regular file is refused by the checks rather than waited on\",\"question\":\"How is the kernel guaranteed not to block or cause device-specific effects when it must open the final component before checking that it is a regular file, given that Linux does not make `O_NONBLOCK` effective for every file type?\",\"options\":[\"Open with the stated flags and accept that some non-regular files may block or have effects before refusal\",\"Inspect the final component through a non-reading descriptor before opening it for reading\",\"Restrict supported file systems and file types further\"],\"default_guess\":\"Inspect the final component without reading it, verify that it is regular, and then open the same object safely for reading.\",\"unit\":\"A17\"},{\"subject\":\"A17 relative configuration path\",\"kind\":\"unstable path base\",\"text\":\"a relative one from the working directory\",\"question\":\"Is a relative configuration path resolved from the process working directory captured at startup, or from whatever the working directory is on each later token-list reread?\",\"options\":[\"Capture the startup working directory and reuse it\",\"Resolve from the current working directory on every open\",\"Refuse relative configuration paths\"],\"default_guess\":\"Capture the startup working directory and use it for every reread.\",\"unit\":\"A17\"},{\"subject\":\"A18 data-directory initialization\",\"kind\":\"missing refusal condition\",\"text\":\"At start it takes an exclusive lock in the data directory\",\"question\":\"If the data directory, database, content areas, spool area, or lock object does not yet exist, which objects does the kernel create and which missing objects make startup fail?\",\"options\":[\"Create a complete empty store when the data directory is absent\",\"Require the data directory to exist but create its internal store objects\",\"Require every store object to be provisioned already\"],\"default_guess\":\"Require an existing private data directory and create the database and internal areas within it.\",\"unit\":\"A18\"},{\"subject\":\"A18 exclusive store lock\",\"kind\":\"mechanism ambiguity\",\"text\":\"At start it takes an exclusive lock in the data directory; a second process on the same directory refuses to start.\",\"question\":\"What Linux locking primitive and lock object define exclusivity, when is the lock acquired and released, and how are stale lock artifacts after a crash treated?\",\"options\":[\"Hold an advisory `flock` on a dedicated regular lock file for the process lifetime\",\"Hold a POSIX record lock on a dedicated file\",\"Use exclusive creation of a lock file and define stale-lock recovery\"],\"default_guess\":\"Hold an advisory `flock` on a securely opened dedicated lock file for the kernel process lifetime.\",\"unit\":\"A18\"},{\"subject\":\"A18 private store permissions\",\"kind\":\"vague invariant\",\"text\":\"The directory and everything in it are private to the kernel's user; the kernel refuses to start otherwise.\",\"question\":\"What exact ownership, mode, file-type and traversal checks make the data directory and everything in it “private,” and are those properties checked again when entries are opened or created after startup?\",\"options\":[\"Require ownership by the kernel user and no group/other permission on every entry, checking at startup and use\",\"Check only the data directory at startup and create descendants with private modes\",\"Use a specified allowlist of modes and entry types for each store area\"],\"default_guess\":\"Require every store directory and file to be owned by the kernel user with no group or other permissions, verify existing entries at startup, and enforce the same conditions on later opens and creations.\",\"unit\":\"A18\"},{\"subject\":\"A18 symlink-safe access\",\"kind\":\"path traversal ambiguity\",\"text\":\"Every file of the directory is opened without following symbolic links; a link found at start stops the start, and one found later makes that store call fail with nothing written.\",\"question\":\"Does the no-symlink rule cover the configured data-directory path itself and every path component, or only final entries inside an already opened data directory, and what opening procedure prevents check-to-open races?\",\"options\":[\"Walk the data-directory path and every descendant component through directory descriptors without following links\",\"Securely open the data-directory root once, then protect only descendant components\",\"Check entries for symlinks before ordinary pathname opens\"],\"default_guess\":\"Securely open the data-directory root component by component, retain its directory descriptor, and resolve all descendants relative to trusted directory descriptors without following links.\",\"unit\":\"A18\"},{\"subject\":\"A18 file and database crash durability\",\"kind\":\"atomicity gap\",\"text\":\"Value bytes and spooled files are written to a temporary file, flushed, checked against their digest and size, and then renamed into place; a completed file a record names is never overwritten\",\"question\":\"What does “flushed” mean, where is the temporary file created, what directories are synchronized, and in what order do file publication and the SQLite commit occur so that a crash or power loss cannot leave a durable record naming a missing or incomplete file?\",\"options\":[\"Require same-filesystem temporary files, file synchronization, atomic rename, directory synchronization, then a durable database commit\",\"Rely on rename and SQLite defaults without a power-loss durability guarantee\",\"Make the database commit first and repair missing files during recovery\"],\"default_guess\":\"Create the temporary file in the destination filesystem, synchronize it, rename atomically, synchronize the containing directory, and only then durably commit the referencing database record.\",\"unit\":\"A18\"},{\"subject\":\"A18 startup cleanup failure\",\"kind\":\"undefined failure handling\",\"text\":\"On start, temporary files, value bytes no record names ... and the spool directories of runs that ended and do not keep their spool ... are removed; nothing else is. A spool directory that cannot be removed does not stop the start\",\"question\":\"Does failure to remove a temporary file or unreferenced value byte stop startup, get ignored like an unremovable ended-run spool directory, or leave the affected object quarantined?\",\"options\":[\"Stop startup on temporary-file or orphan-value cleanup failure\",\"Continue startup and never serve the leftover objects\",\"Quarantine leftovers and continue only when they cannot conflict with live paths\"],\"default_guess\":\"Continue startup, never serve an unreferenced leftover, and retry its removal on a later start.\",\"unit\":\"A18\"},{\"subject\":\"A18 content-address collision\",\"kind\":\"unhandled collision\",\"text\":\"Equal bytes are stored once.\",\"question\":\"What happens when a file already exists at a content digest but its bytes or recorded size differ from the bytes now being published with that same digest?\",\"options\":[\"Treat it as store corruption and fail the store call or startup\",\"Overwrite it when no record names it and otherwise fail\",\"Assume SHA-256 collisions cannot occur and perform no comparison\"],\"default_guess\":\"Compare the existing bytes and size; on any mismatch treat the store as corrupt and refuse the operation without overwriting the file.\",\"unit\":\"A18\"},{\"subject\":\"A20 supported Linux baseline\",\"kind\":\"undefined compatibility boundary\",\"text\":\"A release runs on Linux and on no other host, no version named ... a Linux or file system on which a call these rules rely on ... does not act as Linux documents it, is unsupported\",\"question\":\"Which Linux documentation and syscall semantics define the supported baseline when kernel versions and file-system implementations differ, particularly for `O_PATH`, `O_NOFOLLOW`, locking, rename and persistence after flushing?\",\"options\":[\"Name a minimum Linux kernel and supported filesystem semantics\",\"Support any Linux exposing all required calls with the semantics of a specified manual/API version\",\"Leave compatibility to the installation and define no reproducible support boundary\"],\"default_guess\":\"Require a documented minimum Linux kernel and local filesystem semantics that provide the named operations and crash guarantees.\",\"unit\":\"A20\"}]}",
+ "set_aside": []
+}

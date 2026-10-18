@@ -159,15 +159,15 @@ Reuses cabinet-flow decision 23, narrowed by K-16.
    requests, rule 2); and the
    address the kernel's one `mcp` entrance listens on, which the host's reverse
    proxy reaches (owner, 2026-10-03, raised by the pre-contract data closure).
-   The kernel reads the file's path from its one command-line argument and reads
+   The kernel reads the file's path, an absolute one or the kernel refuses to
+   start, from its one command-line argument and reads
    no environment variable. The file
    must be a regular file, not a symbolic link, owned by the kernel's user, with
    no permission for group or others; the kernel refuses to start otherwise.
    Here and in rule 2 the path is opened component by component without
    following a symbolic link at any of them, each component with Linux's
    `O_NOFOLLOW`, whose presence no code tests (A20 rule 3) — the path as
-   given, an absolute one walked from the root directory and a relative one
-   from the working directory; each directory on the way opened with
+   given, walked from the root directory; each directory on the way opened with
    `O_PATH` and `O_DIRECTORY`, so a directory the kernel's user may only
    search is passed, and the last component for reading with `O_NONBLOCK`
    as well, so a component that is no regular file is refused by the checks
