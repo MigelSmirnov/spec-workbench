@@ -114,6 +114,31 @@ def _read_base_source(project: Path, base_ref: str) -> str:
     return result.stdout
 
 
+def _read_base_assembled_notes(project: Path, base_ref: str) -> list[str] | None:
+    """Assembled notes at ``base_ref``, or None when the base has no assembled file."""
+    root = _repo_root(project)
+    relative = (project / DEFAULT_ASSEMBLED).resolve().relative_to(root)
+    result = subprocess.run(
+        ["git", "-C", str(root), "show", f"{base_ref}:{relative.as_posix()}"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        return None
+    try:
+        notes = json.loads(result.stdout).get("notes")
+    except (json.JSONDecodeError, AttributeError) as exc:
+        raise NotesPropagationError(
+            f"invalid assembled specification at {base_ref}: {exc}"
+        ) from exc
+    if not isinstance(notes, list) or not all(isinstance(item, str) for item in notes):
+        raise NotesPropagationError(
+            f"assembled specification 'notes' at {base_ref} must be a list of strings"
+        )
+    return notes
+
+
 def _load_spec(project: Path) -> dict[str, Any]:
     path = project / DEFAULT_ASSEMBLED
     try:
@@ -172,6 +197,8 @@ def _prepare(
     *,
     base_ref: str,
     base_text: str | None,
+    base_assembled_notes: list[str] | None = None,
+    prune_stale: bool = False,
 ) -> tuple[dict[str, Any], dict[str, Any], list[str]]:
     source_path = project / DEFAULT_SOURCE
     try:
@@ -194,6 +221,48 @@ def _prepare(
     removed = [note for note in old if note not in current_set]
     added = [note for note in current if note not in old_set]
     paired_removed: set[str] = set()
+
+    # A note an earlier, uncommitted propagation wrote is in neither the base
+    # nor the current canonical source, so the diff above never removes it.
+    # It is recognised against the assembled notes at the same base: added to
+    # the assembled file since the base, gone from the canonical source, and
+    # under a scope/class the canonical source owns. Without --prune-stale it
+    # blocks (the module fails closed); with it, it is deleted.
+    if base_assembled_notes is None and base_text is None:
+        base_assembled_notes = _read_base_assembled_notes(project, base_ref)
+    stale: list[str] = []
+    if base_assembled_notes is not None:
+        base_assembled = set(base_assembled_notes)
+        owned_keys = {_note_key(note) for note in old} | {_note_key(note) for note in current}
+        for note in before:
+            if (
+                note not in base_assembled
+                and note not in current_set
+                and note not in old_set
+                and note not in stale
+                and _note_key(note) in owned_keys
+            ):
+                stale.append(note)
+    if stale and not prune_stale:
+        for note in stale:
+            findings.append(_finding(
+                "stale_propagated_note",
+                "Assembled note was added after the base revision and is no longer in "
+                "the canonical source: an earlier propagation of an uncommitted edit. "
+                "Rerun with --prune-stale, or restore global_spec.json from the base "
+                "revision, and propagate again.",
+                note=note,
+            ))
+    elif stale:
+        for note in stale:
+            for index in reversed(_indices(working, note)):
+                del working[index]
+                operations.append({
+                    "kind": "delete",
+                    "reason": "stale_propagated_note",
+                    "index": index,
+                    "old": note,
+                })
 
     old_key_counts = Counter(_note_key(note) for note in old)
     current_key_counts = Counter(_note_key(note) for note in current)
@@ -415,6 +484,7 @@ def _prepare(
             ),
             "insertions": sum(item["kind"] == "insert" for item in changes),
             "deletions": sum(item["kind"] == "delete" for item in changes),
+            "stale_notes": len(stale),
             "blocks": len(findings),
             "factory_coverage_blocks_before": coverage_before,
             "factory_coverage_blocks_after": coverage_after,
@@ -436,9 +506,12 @@ def plan(
     *,
     base_ref: str = "HEAD",
     base_text: str | None = None,
+    base_assembled_notes: list[str] | None = None,
+    prune_stale: bool = False,
 ) -> dict[str, Any]:
     report, _spec, _working = _prepare(
-        project, base_ref=base_ref, base_text=base_text
+        project, base_ref=base_ref, base_text=base_text,
+        base_assembled_notes=base_assembled_notes, prune_stale=prune_stale,
     )
     return report
 
@@ -449,9 +522,12 @@ def propagate(
     base_ref: str = "HEAD",
     write: bool = True,
     base_text: str | None = None,
+    base_assembled_notes: list[str] | None = None,
+    prune_stale: bool = False,
 ) -> dict[str, Any]:
     report, spec, working = _prepare(
-        project, base_ref=base_ref, base_text=base_text
+        project, base_ref=base_ref, base_text=base_text,
+        base_assembled_notes=base_assembled_notes, prune_stale=prune_stale,
     )
     if not report["ready"] or not write or not report["changed"]:
         return report
