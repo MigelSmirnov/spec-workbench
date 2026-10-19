@@ -534,6 +534,10 @@ Decision 35 declares every shown copy of a record and the fields empty until the
 
 Route B on the spec of decision 35 stopped at `store`: the candidate tested `os.O_NOFOLLOW` and `os.O_DIRECTORY` with `hasattr` in four helpers and `open_store`, rejected by `reflective_attribute_access`. The store's path note (`record_change`, `[PATH_OR_ARTIFACT_POLICY]`) said only "without following symbolic links"; it now names the flags, never tested for (A20), as the `installation` notes do since decision 34. Only the `store` slice moved. Question 1: with the means named, a hedging and a non-hedging candidate no longer both satisfy the note. State 7 rounds 86–87 closed; the one topic raised (SQLite's own opens) was answered by the existing `open_store` `os.lstat` note. No verdict changed; hash recomputed.
 
+## Decision 37 delta (2026-10-19)
+
+Route B on the spec of decision 36 stopped at the linker on `run_values` (`model_field_type_mismatch`, a value seeded `None` passed to `JsonCandidate.canonical_json` under a check of another variable); with the same check on the draft (code-factory PR #129) three fresh candidates out of three repeated the shape or dropped imports. `deliver_input` now resolves its source to one of two results, each checked and returned where it is resolved. Only the `run_values` slice moved. Question 1: two implementations — one carrying results across source kinds in variables seeded `None`, one checking each where it is resolved — no longer both satisfy the notes; the behaviour is unchanged. State 7 rounds 88–89 closed clear. No verdict changed; hash recomputed.
+
 ## Remarks, not blocking
 
 - **Published `inputSchema` and null.** By decision 22's closed rule, the published `inputSchema`

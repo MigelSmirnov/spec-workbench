@@ -1441,6 +1441,25 @@ links"; the earlier Route B never reached a `store` candidate that hedged.
     `installation` notes — `os.O_NOFOLLOW`, and for a directory also
     `os.O_DIRECTORY`, whose presence is never tested (A20).
 
+## Decision closed at the linker of decision 36 (2026-10-19)
+
+Route B on the spec of decision 36 generated every module and stopped at the
+linker: `run_values.py:345` passed a value seeded `None` and set in branches
+to `JsonCandidate.canonical_json`, used under a check of another variable
+(`model_field_type_mismatch`; the same class stopped the run of 2026-10-18 at
+`run_values.py:231`). Once the Factory ran the same check on the draft
+(code-factory PR #129), three fresh `deliver_input` candidates out of three
+repeated the shape — at `JsonCandidate.canonical_json` and
+`BytesContent.content` — or dropped imports: four source kinds converge on one
+check with two possible results, and the generator carries them across the
+kinds in variables seeded `None`.
+
+37. **`deliver_input` checks each result where it is resolved.** No new
+    behaviour: the note says the source resolves to one of two results — a
+    written StoredValue with its canonical bytes, or a SpooledFilesRef — each
+    checked and returned with what it was resolved with, so no possibly-None
+    value reaches `fit_port_value`, a `JsonCandidate` or a `BytesContent`.
+
 ## Texts of earlier states changed by State 6
 
 - State 1 (2026-10-19, decision 35): M02 and M12 name the source of
