@@ -105,7 +105,8 @@ Candidate fields:
   which is refused without one; a later contract version naming the slot with
   the same purpose, or with none, is accepted, and with a different one is
   refused (State 2, A01 rule 5);
-- `created_by`, `created_at`.
+- `created_by`, `created_at`: the `issued_by` and `issued_at` of the slot's
+  first contract version, which creates it.
 
 ### Identity
 
@@ -529,7 +530,9 @@ Candidate fields:
   supplied by the proposer;
 - `inputs`, `outputs`: Ports (M01);
 - `status`: `proposed` or `accepted`;
-- `proposed_by`, `proposed_at`, `accepted_by`, `accepted_at`.
+- `proposed_by`, `proposed_at`;
+- `accepted_by`, `accepted_at`: the owner and the time of acceptance, present
+  exactly when `accepted`.
 
 ### Identity
 
@@ -575,7 +578,8 @@ Candidate fields:
   composed under a new name creates the flow — there is no separate create
   action;
 - `purpose`;
-- `created_by`, `created_at`.
+- `created_by`, `created_at`: the `authored_by` and `authored_at` of the flow's
+  first version, which creates it.
 
 ### Identity
 
@@ -1149,7 +1153,9 @@ Candidate fields:
   agents may read approvals, and an agent receives personal-data values only as
   digest and class (K-14);
 - `status`: `requested`, `approved`, `refused` or `used`;
-- `requested_at`, `decided_by`, `decided_at`.
+- `requested_at`;
+- `decided_by`, `decided_at`: the owner and the time of the decision, present
+  exactly when the approval is no longer `requested`.
 
 ### Identity
 
@@ -1202,7 +1208,8 @@ Candidate fields:
   grant exists for one node of one flow version;
 - `flow_version_id`, `node_id`;
 - `status`: `active` or `revoked`;
-- `granted_by`, `granted_at`, `revoked_by`, `revoked_at`.
+- `granted_by`, `granted_at`;
+- `revoked_by`, `revoked_at`: present exactly when `revoked`.
 
 ### Identity
 
@@ -1271,7 +1278,10 @@ Candidate fields:
   reference ambiguous;
 - `status`: `in_flight`, `applied`, `not_applied`, `not_sent` or `unknown` —
   `not_sent` when the service could not be reached before anything was sent;
-- `recorded_at`, `concluded_at`;
+- `recorded_at`;
+- `concluded_at`: when the attempt left `in_flight`, present exactly from then;
+  the owner's later resolution of an `unknown` attempt keeps it and records no
+  time of its own;
 - `resolved_by`: the owner, when an `unknown` was resolved.
 
 ### Identity

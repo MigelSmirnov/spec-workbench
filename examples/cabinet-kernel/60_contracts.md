@@ -1395,8 +1395,42 @@ the candidate would have followed links.
       the kernel follows. Running the kernel under an operating-system user
       of its own is a matter of the installation on the host.
 
+## Decision closed by the model-copy analysis (2026-10-19)
+
+An analysis of the models that copy another model's fields (code-factory
+`analysis/cabinet-kernel-model-copies`, `collab/cabinet-kernel`) found no copy
+against a written rule, but found the copies undeclared: of the shown models
+only `ShownEffectAttempt` and `ShownRun` had a note saying every other field is
+copied, so a generated `surface` could drop an optional field or swap two of
+one type with no gate seeing it. It also found `ShownTrialExecution` without
+`executed_by`: the field reached M07 on 2026-10-04 (5aadf37) after the shown
+model was written, and no rule hides it — K-15, decision 10 and State 5
+("Records reach a caller as they are") require it shown. Closed by the texts,
+not by a new owner decision.
+
+35. **Every shown copy of a record is declared, and a field empty until its
+    event says so.**
+    - `ShownTrialExecution` gains `executed_by: Actor`.
+    - The builder of each shown model carries a `[FIELD_PROJECTION]` note:
+      every field of the record copied, except the fields it names and their
+      one rule (A07, K-12) — `handle_compose_flow_version`,
+      `handle_list_records`, `handle_get_repair_view`,
+      `handle_add_trial_case`, `handle_try_implementation`,
+      `handle_get_implementation`.
+    - State 1 says which by- and time-fields are empty until a later event
+      (M11, M24, M25, M26), as M18 already said for a run, and that a slot's
+      and a flow's `created_by`/`created_at` are those of the first version
+      that creates it (M02, M12). `record_change` says the same as a
+      `[FIELD_ASSIGNMENT]` note.
+    - Not changed here: `FlowEdgeKey` (only `ProofFailure.edge`) stays as it
+      is; replacing it by `FlowEdge` changes the answer of
+      `prove_flow_version` and waits for the standard's projection rule.
+
 ## Texts of earlier states changed by State 6
 
+- State 1 (2026-10-19, decision 35): M02 and M12 name the source of
+  `created_by`/`created_at`; M11, M24, M25 and M26 say when their decision,
+  revocation and conclusion fields are present. Reopens the rounds of State 1.
 - State 2 (2026-10-18, decision 34): A20 rule 3 and its formal invariants —
   the host is Linux; A17 rule 1 — an absolute configuration path, each
   component opened with `O_NOFOLLOW`, never tested for; State 5: the
