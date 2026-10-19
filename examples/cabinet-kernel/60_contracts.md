@@ -1426,6 +1426,21 @@ not by a new owner decision.
       is; replacing it by `FlowEdge` changes the answer of
       `prove_flow_version` and waits for the standard's projection rule.
 
+## Decision closed at the Route B of decision 35 (2026-10-19)
+
+Route B on the spec of decision 35 stopped at `store`: the candidate tested
+`os.O_NOFOLLOW` and `os.O_DIRECTORY` with `hasattr` in four helpers and
+`open_store`, rejected by `reflective_attribute_access` (coverage failure,
+terminal). Decision 34 had told `installation` that the flag is never tested
+for, but the store's own path note said only "without following symbolic
+links"; the earlier Route B never reached a `store` candidate that hedged.
+
+36. **The store opens with the Linux flags, never tested for.** No new
+    decision: A20 rule 3 already names Linux and says no code tests for
+    `O_NOFOLLOW`. The store's path note now says so in the words of the
+    `installation` notes — `os.O_NOFOLLOW`, and for a directory also
+    `os.O_DIRECTORY`, whose presence is never tested (A20).
+
 ## Texts of earlier states changed by State 6
 
 - State 1 (2026-10-19, decision 35): M02 and M12 name the source of
