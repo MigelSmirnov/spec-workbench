@@ -72,6 +72,14 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     parser.add_argument(
+        "--prune-stale",
+        action="store_true",
+        help=(
+            "With --propagate, delete assembled notes an earlier uncommitted "
+            "propagation wrote that are no longer in 80_notes.md (otherwise they block)"
+        ),
+    )
+    parser.add_argument(
         "--check",
         action="store_true",
         help="With --propagate or --author-accept, report without writing.",
@@ -103,6 +111,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.base_ref != "HEAD" and not args.propagate:
         print("design_notes: error: --base-ref is valid only with --propagate", file=sys.stderr)
         return 2
+    if args.prune_stale and not args.propagate:
+        print("design_notes: error: --prune-stale is valid only with --propagate", file=sys.stderr)
+        return 2
     try:
         if args.gate:
             payload = gate.coverage(args.project)
@@ -115,6 +126,7 @@ def main(argv: list[str] | None = None) -> int:
                 args.project,
                 base_ref=args.base_ref,
                 write=not args.check,
+                prune_stale=args.prune_stale,
             )
         else:
             payload = service.module_slice(args.project, args.module) if args.slice else service.module_review(args.project, args.module)
