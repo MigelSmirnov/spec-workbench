@@ -1481,6 +1481,36 @@ checks, on two notes the generator read otherwise than the decisions say.
     error (`kernel_a09_read_5xx_service_unreachable`). The note now names the
     element's latest NodeExecution, read with ExecutionsOfElement.
 
+## Decision closed at the verification of decisions 38–39 (2026-10-20)
+
+Route B on the spec of decisions 38–39 built, linked and deployed every module;
+verification 20261020_200558 passed the 46 checks decision 37's spec failed and
+failed one that had passed: `kernel_a03_deadline_and_limits_classified`, the
+fork loop concluding `sandbox_violation` instead of `resource_exhausted`. The
+`sandbox_runner` draft was reused unchanged; the assembler rewrote the
+program's task count.
+
+40. **The audit hook counts tasks by listing them, opening no file; the proc
+    mount is named on both sides.** `runner_source`'s process-count note said
+    what is counted — the tasks of the environment's proc, bubblewrap's own
+    processes excepted — never how. The assembled program kept only the
+    runner's descendants and read each process's `stat` file to find its
+    parent; that read is an open outside the exchange directory and the
+    readable_paths, so the audit hook's own count hit the open trap. With
+    the runner as the namespace's init (decision 18 of the first
+    verification) no process of bubblewrap is in the environment's proc, so
+    there is nothing to tell apart: every listed task counts, and the count
+    lists each process's task directory, opening no file there. State 7
+    round 92 then found that the runner may hold no path of its own and
+    that neither side named where the proc is: `execute_function` mounted
+    "bubblewrap's own fresh proc" without a place, and `runner_arguments`
+    passed none. The place is now `SANDBOX_PROC_MOUNT` in the data provider
+    (`/proc`): `execute_function` mounts the proc there, `runner_arguments`
+    passes it as the member `proc_directory`, and the runner lists it. Why: as
+    with the runner's peak memory (decision 22), a means left unnamed is
+    chosen anew by every assembly, and a split hands a decision across a
+    seam that both ends must name.
+
 ## Texts of earlier states changed by State 6
 
 - State 1 (2026-10-19, decision 35): M02 and M12 name the source of
