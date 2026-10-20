@@ -170,3 +170,97 @@ def test_removed_canonical_note_is_deleted_by_exact_identity(tmp_path):
         "keep: [BEHAVIOR] MUST keep the value.",
         modular,
     ]
+
+
+# --- stale propagated notes (collab letter 005) --------------------------------
+#
+# Propagation diffs 80_notes.md at the base revision against the working tree.
+# A note that an earlier, uncommitted propagation wrote into global_spec.json is
+# in neither of the two, so a second run never removed it: rewriting a note
+# between two runs left both versions, and --check reported in_sync.
+
+import subprocess
+
+SIBLING = "show: [FIELD_PROJECTION] MUST show an attempt with every field copied."
+V1 = "show: [FIELD_PROJECTION] MUST show every other record with every field copied."
+V2 = "show: [FIELD_PROJECTION] MUST show each other record as its own handler shows it."
+
+
+def _git(cwd, *args):
+    subprocess.run(["git", "-C", str(cwd), *args], check=True, capture_output=True, text=True)
+
+
+def _committed_case(tmp_path):
+    """A case committed with one canonical note under show/[FIELD_PROJECTION]."""
+    case = tmp_path / "case"
+    case.mkdir()
+    _project(case, source=SIBLING + "\n", notes=[SIBLING])
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "-c", "user.email=t@t", "-c", "user.name=t", "add", ".")
+    _git(tmp_path, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "base")
+    return case
+
+
+def test_rewriting_a_note_between_two_uncommitted_runs_leaves_no_stale_version(tmp_path):
+    case = _committed_case(tmp_path)
+
+    (case / "80_notes.md").write_text(SIBLING + "\n" + V1 + "\n", encoding="utf-8")
+    first = propagation.propagate(case, base_ref="HEAD")
+    assert first["status"] == "applied"
+    assert _assembled_notes(case) == [SIBLING, V1]
+
+    (case / "80_notes.md").write_text(SIBLING + "\n" + V2 + "\n", encoding="utf-8")
+    second = propagation.propagate(case, base_ref="HEAD")
+
+    # Fails closed: before the fix this run wrote [SIBLING, V2, V1].
+    assert second["status"] == "blocked"
+    assert [f["note"] for f in second["findings"] if f["code"] == "stale_propagated_note"] == [V1]
+    assert _assembled_notes(case) == [SIBLING, V1]
+
+    third = propagation.propagate(case, base_ref="HEAD", prune_stale=True)
+
+    assert third["status"] == "applied"
+    assert third["summary"]["stale_notes"] == 1
+    assert _assembled_notes(case) == [SIBLING, V2]
+    assert propagation.propagate(case, base_ref="HEAD", write=False)["status"] == "in_sync"
+
+
+def test_check_does_not_report_in_sync_while_a_stale_version_remains(tmp_path):
+    case = _committed_case(tmp_path)
+    # The state the defect left behind: both versions in the assembled notes.
+    (case / "80_notes.md").write_text(SIBLING + "\n" + V2 + "\n", encoding="utf-8")
+    spec = json.loads((case / "global_spec.json").read_text(encoding="utf-8"))
+    spec["notes"] = [SIBLING, V1, V2]
+    (case / "global_spec.json").write_text(json.dumps(spec, indent=2) + "\n", encoding="utf-8")
+
+    report = propagation.propagate(case, base_ref="HEAD", write=False)
+
+    assert report["status"] != "in_sync"
+    assert report["ready"] is False
+    assert [f["note"] for f in report["findings"] if f["code"] == "stale_propagated_note"] == [V1]
+
+
+def test_note_added_then_removed_before_commit_is_reported(tmp_path):
+    case = _committed_case(tmp_path)
+    extra = "show: [FIELD_PROJECTION] MUST show a draft with every field copied."
+    (case / "80_notes.md").write_text(SIBLING + "\n" + extra + "\n", encoding="utf-8")
+    assert propagation.propagate(case, base_ref="HEAD")["status"] == "applied"
+
+    (case / "80_notes.md").write_text(SIBLING + "\n", encoding="utf-8")
+    report = propagation.propagate(case, base_ref="HEAD", write=False)
+
+    assert report["status"] == "blocked"
+    assert [f["note"] for f in report["findings"] if f["code"] == "stale_propagated_note"] == [extra]
+
+
+def test_assembled_note_of_another_scope_added_since_base_is_left_alone(tmp_path):
+    case = _committed_case(tmp_path)
+    modular = "Other.method: [BEHAVIOR] MUST remain untouched."
+    spec = json.loads((case / "global_spec.json").read_text(encoding="utf-8"))
+    spec["notes"] = [SIBLING, modular]
+    (case / "global_spec.json").write_text(json.dumps(spec, indent=2) + "\n", encoding="utf-8")
+
+    report = propagation.propagate(case, base_ref="HEAD", write=False)
+
+    assert report["status"] == "in_sync"
+    assert report["findings"] == []

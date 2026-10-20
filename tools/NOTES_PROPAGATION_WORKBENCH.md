@@ -35,6 +35,15 @@ python tools/design_notes.py examples/<case> \
 A different explicit Git revision may be supplied when the pre-edit source is
 not `HEAD` or `HEAD^`.
 
+Propagating twice before a commit is safe. The second run finds the notes the first one wrote
+and that are no longer in `80_notes.md` (a rewritten or removed note) and blocks on them with
+`stale_propagated_note`. To delete them in the same run, add `--prune-stale`:
+
+```bash
+python tools/design_notes.py examples/<case> \
+  --propagate --base-ref HEAD --prune-stale
+```
+
 ## Safety model
 
 The propagator:
@@ -48,6 +57,11 @@ The propagator:
   candidate is already proven invalid by the notes dependency checker and the
   replacement is valid;
 - fails closed on ambiguous same-scope/class matches;
+- blocks on a stale propagated note: one that is in the assembled notes but not in the
+  assembled notes at the base revision, is in neither the base nor the current canonical
+  source, and has a scope/class the canonical source owns. `--prune-stale` deletes such notes
+  instead. An assembled note added since the base under a scope/class the canonical source
+  does not own is left alone;
 - verifies that every current canonical note occurs exactly once after the
   proposed propagation;
 - refuses a change that would increase Factory callable-coverage or dependency
