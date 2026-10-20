@@ -1460,6 +1460,27 @@ kinds in variables seeded `None`.
     checked and returned with what it was resolved with, so no possibly-None
     value reaches `fit_port_value`, a `JsonCandidate` or a `BytesContent`.
 
+## Decisions closed at the first verification of decision 37 (2026-10-20)
+
+Route B on the spec of decision 37 (after code-factory PRs #129–#131) built,
+linked and deployed every module; verification failed 46 of 130 semantic
+checks, on two notes the generator read otherwise than the decisions say.
+
+38. **An absent idempotency key is accepted for every effect class.** A08
+    rule 4 says `null` means no key and the EffectAttempt's key is absent
+    when the manifest declares none; `read_manifest_operation`'s refusal note
+    listed only the checks of a key's text, and the generated `bindings`
+    refused a non-read operation without a key
+    (`manifest_mismatch: idempotency_key_invalid`) — 45 checks failed in their
+    set-up. The note now says an `idempotency_key` of None passes for every
+    effect class.
+39. **A resend takes the element's inputs from its latest NodeExecution.**
+    `resume_run`'s note said "with its current inputs" without their source;
+    the generated `runs` took them from the latest EffectAttempt, which a
+    `read` never writes (A10), and a resumed read failed as an internal
+    error (`kernel_a09_read_5xx_service_unreachable`). The note now names the
+    element's latest NodeExecution, read with ExecutionsOfElement.
+
 ## Texts of earlier states changed by State 6
 
 - State 1 (2026-10-19, decision 35): M02 and M12 name the source of
