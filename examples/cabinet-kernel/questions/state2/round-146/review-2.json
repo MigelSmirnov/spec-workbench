@@ -1,0 +1,113 @@
+{
+ "open_points": [
+  {
+   "subject": "request JSON validation order",
+   "kind": "contradictory precedence",
+   "text": "A16 says every carried JSON text is checked as “canonical and within `json_depth_max`”, while its first-failure convention checks conditions in written order; A20 instead requires depth to be measured “before anything else walks it” and before parsing.",
+   "question": "For an embedded JSON text that is both non-canonical and over the depth limit, which failure is checked and named first?",
+   "options": [
+    "Measure depth first, then parse and check canonical form",
+    "Check canonical form first, then depth",
+    "Treat both as one indistinguishable `invalid_request` condition"
+   ],
+   "default_guess": "Measure depth first, then parse and check canonical form.",
+   "unit": "A16"
+  },
+  {
+   "subject": "pre-parse request depth check",
+   "kind": "undefined malformed case",
+   "text": "The request message “nests no deeper than `json_depth_max`, measured before the message is parsed”, but no rule defines depth measurement when the bytes are malformed JSON, invalid UTF-8, truncated, or contain unmatched delimiters.",
+   "question": "How is the pre-parse depth check ordered and classified when no valid JSON value exists from which to compute depth?",
+   "options": [
+    "A syntax-aware non-recursive scanner reports malformed input before any depth result",
+    "A lexical scanner may report over-depth before later syntax validation",
+    "Any malformed input bypasses the depth check and fails operation-schema validation"
+   ],
+   "default_guess": "Use a non-recursive lexical scan that can refuse over-depth first; otherwise let parsing reject malformed input as `invalid_request`.",
+   "unit": "A16"
+  },
+  {
+   "subject": "request-message boundary",
+   "kind": "undefined measurement scope",
+   "text": "A20 measures “a request message as the surface receives it”, while A16 separately describes an operation request and says the token travels in a header; the exact MCP framing or envelope included in the measured JSON text is not named.",
+   "question": "Which JSON value is the request message for depth purposes: the complete MCP/JSON-RPC envelope, the operation arguments object, or another decoded surface value?",
+   "options": [
+    "The complete MCP/JSON-RPC message",
+    "Only the typed operation request object",
+    "Both envelope and operation arguments as separate texts"
+   ],
+   "default_guess": "Measure the complete MCP/JSON-RPC JSON message, then separately measure embedded JSON texts.",
+   "unit": "A16"
+  },
+  {
+   "subject": "JSON texts carried inside requests",
+   "kind": "undefined representation",
+   "text": "A16 refers to “every JSON text it carries as a string” and A20 gives examples — “a value, a constant, a schema, a guard value” — but the existing action rules describe these as values and do not enumerate which request fields are JSON-text strings or which surrounding collections are separate JSON texts.",
+   "question": "Exactly which request fields use embedded JSON-text strings, and is each port value measured independently or is an enclosing input/output map or list also an embedded JSON text?",
+   "options": [
+    "Every schema and each individual value or guard is a separate JSON-text string",
+    "Whole value maps and collections are JSON-text strings",
+    "These fields remain native JSON values and only specially declared fields are strings"
+   ],
+   "default_guess": "Treat every schema and each individual logical value, constant, or guard value as its own embedded canonical JSON-text string; do not additionally measure its enclosing typed request collection as an embedded text.",
+   "unit": "A16"
+  },
+  {
+   "subject": "bounds for embedded JSON strings",
+   "kind": "conflicting bound applicability",
+   "text": "A16 newly makes values, schemas and guard values JSON texts “carried as a string”, while unchanged rule 4 limits “every other string anywhere in the request” to `bounded_text_bytes_max` and gives `stored_value_bytes_max` only to a trial value, constant or run input.",
+   "question": "Does the generic string ceiling also apply to encoded JSON texts, especially schemas and guard values, and which bytes are counted for each applicable ceiling?",
+   "options": [
+    "Only the semantic field-specific ceiling applies to an embedded JSON string",
+    "Both the field-specific ceiling and `bounded_text_bytes_max` apply",
+    "All embedded JSON strings use `stored_value_bytes_max`",
+    "Schemas and guards use `bounded_text_bytes_max`, while value fields use their stated value ceiling"
+   ],
+   "default_guess": "Apply the specifically stated value ceiling to value fields and `bounded_text_bytes_max` to schemas and guards that have no more specific ceiling, counting the decoded inner text's UTF-8 bytes; the whole request separately uses `surface_request_bytes_max`.",
+   "unit": "A16"
+  },
+  {
+   "subject": "function output depth validation",
+   "kind": "missing representation rule",
+   "text": "A03 says Python `run` returns a dict of Python objects, but A20 requires “each value output of a function, as its own text” to be measured before anything else walks it and refers to “the bytes of its text as returned”. No text representation is defined for a returned Python object.",
+   "question": "How does a Python return value become the text whose depth and byte count are checked, and what happens for a cyclic, non-JSON, or unexpected extra returned value before the output dict can be safely traversed?",
+   "options": [
+    "The sandbox runner serializes each declared output independently and reports serialization failures as `contract_violation`",
+    "The entire returned dict is serialized first and depth-checked as one text",
+    "The parent receives a Python-specific encoding and derives separate JSON texts after decoding it"
+   ],
+   "default_guess": "Have the sandbox runner safely serialize each declared output independently; non-JSON, cyclic, and extra outputs conclude `contract_violation`, while the parent measures each emitted output text before parsing it.",
+   "unit": "A20"
+  },
+  {
+   "subject": "grandfathering stored records across releases",
+   "kind": "unverifiable invariant",
+   "text": "A20 says “every record stored under an earlier release” keeps its old depth treatment, but no model records the release or `json_depth_max` under which a record entered, and the store rules name no durable release boundary or migration marker.",
+   "question": "What durable fact lets the kernel determine that a stored record predates a lowered `json_depth_max`, including across several upgrades and later restarts?",
+   "options": [
+    "Each record stores its admitting release or depth ceiling",
+    "The store records release-transition positions and compares record order",
+    "All records present during an upgrade are permanently marked exempt",
+    "No per-record distinction is needed because stored records are never measured again"
+   ],
+   "default_guess": "No per-record distinction is needed for reading existing records; persist a store release marker only if later rules need to prove when a record entered.",
+   "unit": "A20"
+  },
+  {
+   "subject": "lower depth ceiling and execution of old records",
+   "kind": "ambiguous grandfathering",
+   "text": "A20 says a lower ceiling “bounds only what enters after it” but also says earlier records — “its values, constants and schemas” — are “read, executed with and returned as before”. A function output or mapped list newly produced from such an old deep value enters after the release and may exceed the new ceiling.",
+   "question": "When an old flow executes after the ceiling is lowered, do newly produced function outputs and mapped lists use the new ceiling or the ceiling under which the old contract, flow or inputs were stored?",
+   "options": [
+    "Every newly produced output or list uses the current release ceiling",
+    "An old contract or flow retains its earlier depth ceiling for all execution products",
+    "Old stored inputs are exempt, but every derived value uses the current ceiling"
+   ],
+   "default_guess": "Old stored inputs and schemas remain usable, but every newly produced function output or assembled list uses the current release ceiling.",
+   "unit": "A20"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"request JSON validation order\",\"kind\":\"contradictory precedence\",\"text\":\"A16 says every carried JSON text is checked as “canonical and within `json_depth_max`”, while its first-failure convention checks conditions in written order; A20 instead requires depth to be measured “before anything else walks it” and before parsing.\",\"question\":\"For an embedded JSON text that is both non-canonical and over the depth limit, which failure is checked and named first?\",\"options\":[\"Measure depth first, then parse and check canonical form\",\"Check canonical form first, then depth\",\"Treat both as one indistinguishable `invalid_request` condition\"],\"default_guess\":\"Measure depth first, then parse and check canonical form.\",\"unit\":\"A16\"},{\"subject\":\"pre-parse request depth check\",\"kind\":\"undefined malformed case\",\"text\":\"The request message “nests no deeper than `json_depth_max`, measured before the message is parsed”, but no rule defines depth measurement when the bytes are malformed JSON, invalid UTF-8, truncated, or contain unmatched delimiters.\",\"question\":\"How is the pre-parse depth check ordered and classified when no valid JSON value exists from which to compute depth?\",\"options\":[\"A syntax-aware non-recursive scanner reports malformed input before any depth result\",\"A lexical scanner may report over-depth before later syntax validation\",\"Any malformed input bypasses the depth check and fails operation-schema validation\"],\"default_guess\":\"Use a non-recursive lexical scan that can refuse over-depth first; otherwise let parsing reject malformed input as `invalid_request`.\",\"unit\":\"A16\"},{\"subject\":\"request-message boundary\",\"kind\":\"undefined measurement scope\",\"text\":\"A20 measures “a request message as the surface receives it”, while A16 separately describes an operation request and says the token travels in a header; the exact MCP framing or envelope included in the measured JSON text is not named.\",\"question\":\"Which JSON value is the request message for depth purposes: the complete MCP/JSON-RPC envelope, the operation arguments object, or another decoded surface value?\",\"options\":[\"The complete MCP/JSON-RPC message\",\"Only the typed operation request object\",\"Both envelope and operation arguments as separate texts\"],\"default_guess\":\"Measure the complete MCP/JSON-RPC JSON message, then separately measure embedded JSON texts.\",\"unit\":\"A16\"},{\"subject\":\"JSON texts carried inside requests\",\"kind\":\"undefined representation\",\"text\":\"A16 refers to “every JSON text it carries as a string” and A20 gives examples — “a value, a constant, a schema, a guard value” — but the existing action rules describe these as values and do not enumerate which request fields are JSON-text strings or which surrounding collections are separate JSON texts.\",\"question\":\"Exactly which request fields use embedded JSON-text strings, and is each port value measured independently or is an enclosing input/output map or list also an embedded JSON text?\",\"options\":[\"Every schema and each individual value or guard is a separate JSON-text string\",\"Whole value maps and collections are JSON-text strings\",\"These fields remain native JSON values and only specially declared fields are strings\"],\"default_guess\":\"Treat every schema and each individual logical value, constant, or guard value as its own embedded canonical JSON-text string; do not additionally measure its enclosing typed request collection as an embedded text.\",\"unit\":\"A16\"},{\"subject\":\"bounds for embedded JSON strings\",\"kind\":\"conflicting bound applicability\",\"text\":\"A16 newly makes values, schemas and guard values JSON texts “carried as a string”, while unchanged rule 4 limits “every other string anywhere in the request” to `bounded_text_bytes_max` and gives `stored_value_bytes_max` only to a trial value, constant or run input.\",\"question\":\"Does the generic string ceiling also apply to encoded JSON texts, especially schemas and guard values, and which bytes are counted for each applicable ceiling?\",\"options\":[\"Only the semantic field-specific ceiling applies to an embedded JSON string\",\"Both the field-specific ceiling and `bounded_text_bytes_max` apply\",\"All embedded JSON strings use `stored_value_bytes_max`\",\"Schemas and guards use `bounded_text_bytes_max`, while value fields use their stated value ceiling\"],\"default_guess\":\"Apply the specifically stated value ceiling to value fields and `bounded_text_bytes_max` to schemas and guards that have no more specific ceiling, counting the decoded inner text's UTF-8 bytes; the whole request separately uses `surface_request_bytes_max`.\",\"unit\":\"A16\"},{\"subject\":\"function output depth validation\",\"kind\":\"missing representation rule\",\"text\":\"A03 says Python `run` returns a dict of Python objects, but A20 requires “each value output of a function, as its own text” to be measured before anything else walks it and refers to “the bytes of its text as returned”. No text representation is defined for a returned Python object.\",\"question\":\"How does a Python return value become the text whose depth and byte count are checked, and what happens for a cyclic, non-JSON, or unexpected extra returned value before the output dict can be safely traversed?\",\"options\":[\"The sandbox runner serializes each declared output independently and reports serialization failures as `contract_violation`\",\"The entire returned dict is serialized first and depth-checked as one text\",\"The parent receives a Python-specific encoding and derives separate JSON texts after decoding it\"],\"default_guess\":\"Have the sandbox runner safely serialize each declared output independently; non-JSON, cyclic, and extra outputs conclude `contract_violation`, while the parent measures each emitted output text before parsing it.\",\"unit\":\"A20\"},{\"subject\":\"grandfathering stored records across releases\",\"kind\":\"unverifiable invariant\",\"text\":\"A20 says “every record stored under an earlier release” keeps its old depth treatment, but no model records the release or `json_depth_max` under which a record entered, and the store rules name no durable release boundary or migration marker.\",\"question\":\"What durable fact lets the kernel determine that a stored record predates a lowered `json_depth_max`, including across several upgrades and later restarts?\",\"options\":[\"Each record stores its admitting release or depth ceiling\",\"The store records release-transition positions and compares record order\",\"All records present during an upgrade are permanently marked exempt\",\"No per-record distinction is needed because stored records are never measured again\"],\"default_guess\":\"No per-record distinction is needed for reading existing records; persist a store release marker only if later rules need to prove when a record entered.\",\"unit\":\"A20\"},{\"subject\":\"lower depth ceiling and execution of old records\",\"kind\":\"ambiguous grandfathering\",\"text\":\"A20 says a lower ceiling “bounds only what enters after it” but also says earlier records — “its values, constants and schemas” — are “read, executed with and returned as before”. A function output or mapped list newly produced from such an old deep value enters after the release and may exceed the new ceiling.\",\"question\":\"When an old flow executes after the ceiling is lowered, do newly produced function outputs and mapped lists use the new ceiling or the ceiling under which the old contract, flow or inputs were stored?\",\"options\":[\"Every newly produced output or list uses the current release ceiling\",\"An old contract or flow retains its earlier depth ceiling for all execution products\",\"Old stored inputs are exempt, but every derived value uses the current ceiling\"],\"default_guess\":\"Old stored inputs and schemas remain usable, but every newly produced function output or assembled list uses the current release ceiling.\",\"unit\":\"A20\"}]}",
+ "set_aside": []
+}
