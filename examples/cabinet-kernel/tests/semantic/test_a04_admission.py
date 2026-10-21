@@ -494,3 +494,34 @@ def test_corpus_order_is_first_added(semantic_runtime):
     assert _history(semantic_runtime, slot_id, cv).corpus_digest == _corpus_digest(
         [c1, c2, c3, c4_id]
     )
+
+
+SHOUT = """
+def run(inputs):
+    return {"y": inputs["x"].upper()}
+"""
+
+
+def test_mismatch_with_unstored_output_refused(semantic_runtime):
+    """[witness: verification:kernel_a04_mismatch_with_unstored_output_refused]
+
+    A04 Required test 8: an implementation whose output for a case differs
+    from the expected value, and is a value the store has never held, is
+    refused `failing_case` with outcome `output_mismatch` naming that case —
+    never answered as an unknown reference (State 6 decision 44).
+
+    `kernel_a04_refusal_names_first_failing_case` echoes its input, a value
+    the case already stored; here the output "WORLD" is new to the store.
+    """
+    cv = _function(semantic_runtime, "a04_unstored_output")
+    case = _case(semantic_runtime, cv, "world", "not the echo")
+
+    submission, implementation_id = _submit(semantic_runtime, cv, SHOUT)
+    verdict = submission.verdict
+    assert _value(verdict.verdict) == "refused"
+    assert verdict.reason.reason_kind == "failing_case"
+    assert verdict.reason.trial_case_id == case
+    assert _value(verdict.reason.outcome) == "output_mismatch"
+    assert submission.activation is None
+    (execution,) = _trial_executions(semantic_runtime, implementation_id)
+    assert _value(execution.outcome) == "output_mismatch"

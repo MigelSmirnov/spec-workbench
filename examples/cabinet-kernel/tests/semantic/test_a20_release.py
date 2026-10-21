@@ -17,8 +17,11 @@ Fixture surface used here:
   resource_bounds)`` -> contract_version_id (acts as agent ``author``; the
   bounds are sent as given);
 - ``page_records(record_type, page_size=None)`` -> RecordPageAnswer;
+- ``add_trial_case(contract_version_id, inputs)`` -> ShownAddedTrialCase, as
+  agent ``author``; values are RequestJsonValue dicts;
 - capabilities: ``host.set_env``, ``restart()``, ``mcp_request`` (with
-  ``raw=``), ``installation.agent_token``, ``release``, ``kernel_sources()``.
+  ``raw=``), ``installation.agent_token``, ``release``, ``kernel_sources()``,
+  ``kernel_exited()``.
 """
 
 import ast
@@ -50,6 +53,7 @@ CEILINGS = {
     "failure_detail_bytes_max": 4096,
     "page_size_default": 50,
     "page_size_max": 200,
+    "json_depth_max": 64,
 }
 BOUNDS = ("wall_time_ms", "memory_bytes", "output_bytes", "process_count")
 
@@ -385,3 +389,66 @@ def test_dependencies_pinned_by_release(semantic_runtime):
     }
     pinned = {_distribution_key(name) for name in dependencies}
     assert {name for name in third_party if _distribution_key(name) not in pinned} == set()
+
+
+ANY_VALUE = "{}"
+
+
+def _nested(depth):
+    """A JSON array text of exactly `depth` levels: `[]` is 1, a scalar 0."""
+    return "[" * depth + "]" * depth
+
+
+def test_json_depth_over_ceiling_refused(semantic_runtime):
+    """[witness: verification:kernel_a20_json_depth_over_ceiling_refused]
+
+    A20 Required test 5: a request whose arguments nest deeper than
+    `json_depth_max`, however deep, is refused `invalid_request` and the kernel
+    answers the next request; a run input value nested exactly
+    `json_depth_max` deep is accepted and one level deeper is refused (State 6
+    decision 42).
+    """
+    ceiling = CEILINGS["json_depth_max"]
+    author_token = semantic_runtime.installation.agent_token("author")
+
+    # A request of a few kilobytes nested far deeper than the interpreter's
+    # recursion: the depth is checked before any walk of the arguments, so it
+    # is a refusal the kernel decides, never an internal error that stops it.
+    # The message is written as bytes: no Python value of that depth is built
+    # on the test's side, so only the kernel meets it.
+    for depth in (ceiling + 1, 2300):
+        slot_id = f"a20_deep_request_{depth}"
+        raw = (
+            '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":'
+            '{"name":"issue_contract_version","arguments":'
+            f'{{"slot_id":"{slot_id}","purpose":"A20 witness: a deep request",'
+            f'"inputs":{_nested(depth)},"outputs":[]}}}}}}'
+        ).encode("utf-8")
+        with pytest.raises(Exception) as exc:
+            semantic_runtime.mcp_request(
+                "issue_contract_version", {}, token=author_token, raw=raw
+            )
+        assert exc.value.code == "invalid_request", depth
+        assert semantic_runtime.kernel_exited() is None
+        # The kernel still answers: the next request is served, and nothing
+        # of the refused one was recorded.
+        slots = {s.slot_id for s in semantic_runtime.page_records("slot").records.slots}
+        assert slot_id not in slots
+
+    # A value of a port whose schema constrains nothing: the depth is the only
+    # bound it can meet. At the ceiling it is a trial case like any other ...
+    contract = semantic_runtime.issue_contract_version(
+        "a20_deep_value",
+        purpose="A20 witness: a deep value",
+        inputs=[_port("x", "input", ANY_VALUE, "open")],
+        outputs=[_port("y", "output", ANY_VALUE)],
+        resource_bounds={name: CEILINGS[name] for name in BOUNDS},
+    )
+    at_ceiling = {"payload_kind": "json", "port": "x", "json_text": _nested(ceiling)}
+    semantic_runtime.add_trial_case(contract, inputs=[at_ceiling])
+
+    # ... and one level deeper it is refused, with no case added.
+    over = {"payload_kind": "json", "port": "x", "json_text": _nested(ceiling + 1)}
+    with pytest.raises(Exception) as exc:
+        semantic_runtime.add_trial_case(contract, inputs=[over])
+    assert exc.value.code in ("invalid_request", "refused")

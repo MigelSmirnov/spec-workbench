@@ -188,6 +188,7 @@ is not written around.
 | `kernel_a14_cancel_owner_only_unended_only` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `run_spool()` |
 | `kernel_a14_spool_emptied_on_succeeded_refused` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `run_spool()` |
 | `kernel_a14_recovery_completes_before_surface` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, stub action `kill_kernel`, `KernelStopped`, `restart()`, `clock.set` |
+| `kernel_a14_ended_run_has_no_waiting_points` | `manifest.write_record`, `installation.select_instance`, `installation.set_credential`, `stub_service()` |
 | `kernel_a15_node_execution_immutable` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `stub.set_down`, stub action `drop_after_request`, `restart()` |
 | `kernel_a15_failure_detail_bounded_no_secret` | `store_dump()` |
 | `kernel_a15_spool_file_ceiling` | `run_spool()` |
@@ -216,4 +217,5 @@ is not written around.
 | `kernel_a20_over_ceiling_refused_not_truncated` | `mcp_request(raw=)` |
 | `kernel_a20_ceilings_equal_release_constants` | `release`, `kernel_sources()`: static facts of the release |
 | `kernel_a20_dependencies_pinned_by_release` | `release`, `kernel_sources()`: static facts of the release |
+| `kernel_a20_json_depth_over_ceiling_refused` | `mcp_request` with `raw=` (a message nested deeper than the test process builds), `installation.agent_token`, `kernel_exited()` |
 | `kernel_a16_agent_code_not_run_in_kernel` | `host_scratch_directory()`: where a marker would appear if the kernel process imported or evaluated agent code |

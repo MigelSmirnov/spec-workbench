@@ -381,9 +381,16 @@ reads.
    | `failure_detail_bytes_max` | 4096 |
    | `page_size_default` | 50 |
    | `page_size_max` | 200 |
+   | `json_depth_max` | 64 |
 
    The first four are the ceilings of the ResourceBounds M04 fields of the same
-   name. Bytes are exact integers; times are integer milliseconds.
+   name. Bytes are exact integers; times are integer milliseconds. The depth of
+   a JSON value is 0 for a scalar and, for an array or an object, one more than
+   the deepest of its members, 1 when it has none; `json_depth_max` bounds every
+   JSON value the kernel reads — a request, a stored or constant value, a schema,
+   a service's answer, a function's output — and is checked before any other
+   walk of that value (owner, 2026-10-21, after an authenticated request of
+   2301 bytes nested deeper than the interpreter's recursion stopped the kernel).
 2. Over a ceiling is always a refusal or a failure, never a truncation — for
    code, values, files, requests, responses and outputs. The exceptions are
    diagnostic texts, not values: `failure_detail`, cut to
@@ -410,6 +417,7 @@ reads.
 ceiling(name) = RELEASE_CEILING_<NAME>
 override(ceiling) -> never
 over_ceiling -> refusal_or_failure (never truncation)
+json_depth(value) <= json_depth_max, checked before any other walk of value
 dependencies pinned_by_release
 host = linux
 ```
@@ -427,6 +435,11 @@ host = linux
 4. The release pins an exact version of every Python dependency and of the
    sandbox runtime, and the sandbox interpreter is CPython 3.12.
    [witness: verification:kernel_a20_dependencies_pinned_by_release]
+5. A request whose arguments nest deeper than `json_depth_max`, however deep,
+   is refused `invalid_request` and the kernel answers the next request; a run
+   input value nested exactly `json_depth_max` deep is accepted and one level
+   deeper is refused.
+   [witness: verification:kernel_a20_json_depth_over_ceiling_refused]
 
 ### Consequence
 

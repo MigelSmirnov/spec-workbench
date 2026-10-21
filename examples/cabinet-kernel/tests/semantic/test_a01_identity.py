@@ -31,6 +31,8 @@ Fixture surface used here:
   constants)`` -> ComposedFlowVersion; ``active_flow_version(flow_id)`` ->
   FlowAnswer;
 - ``page_records(record_type, record_filter)`` -> RecordPageAnswer;
+- ``activate_flow_version(flow_version_id)`` and ``start_run(flow_id, inputs)``
+  -> ShownRun, as the owner;
 - capabilities: ``installation.set_agent_tokens`` and
   ``installation.agent_token`` (a second author agent), ``clock.set`` and
   ``clock.advance`` (the kernel clock), ``mcp_request`` (a request with a field
@@ -565,3 +567,66 @@ def test_activation_identity_is_store_position(semantic_runtime):
     (history,) = semantic_runtime.read_slot(slot_id).contract_versions
     assert history.serving_activation.store_position == rolled_back.store_position
     assert history.serving_activation.implementation_id == i1_id
+
+
+ANY_NUMBER = '{"type":"number"}'
+COPY = 'def run(inputs):\n    return {"y": inputs["x"]}\n'
+
+
+def test_canonical_bytes_are_a_fixed_point(semantic_runtime):
+    """[witness: verification:kernel_a01_canonical_bytes_are_a_fixed_point]
+
+    A01 Required test 9: every JSON text the kernel canonicalises gives
+    canonical bytes that canonicalise again to themselves, a number outside
+    ±(2^53 − 1) in exponent form included; an integer spelling a double
+    neither holds exactly nor writes as its shortest round-trip form is
+    refused, and one it holds exactly is still accepted (State 6 decision 41).
+
+    A run input is canonicalised where the request enters and its canonical
+    bytes parsed again where the function node's port judges it
+    (fit_port_value), so a copy flow passes each spelling through both.
+    """
+    contract = semantic_runtime.issue_contract_version(
+        "a01_fixed_point",
+        purpose="A01 witness: canonical fixed point",
+        inputs=[_port("x", "input", ANY_NUMBER, "open")],
+        outputs=[_port("y", "output", ANY_NUMBER)],
+    )
+    semantic_runtime.add_trial_case(contract, inputs=[_json("x", "1")])
+    submission = semantic_runtime.submit_implementation(contract, COPY)
+    assert _value(submission.verdict.verdict) == "admitted"
+    composed = semantic_runtime.compose_flow_version(
+        "a01_fixed_point",
+        purpose="A01 witness: canonical fixed point",
+        inputs=[_port("x", "input", ANY_NUMBER, "open")],
+        outputs=[_port("out", "output", ANY_NUMBER)],
+        nodes=[_node("copy", contract)],
+        edges=[
+            {"from_node": "", "from_port": "x", "to_node": "copy", "to_port": "x", "guard": None},
+            {"from_node": "copy", "from_port": "y", "to_node": "", "to_port": "out", "guard": None},
+        ],
+        constants=[],
+    )
+    semantic_runtime.activate_flow_version(composed.flow_version.flow_version_id)
+
+    def copied(json_text):
+        run = semantic_runtime.start_run("a01_fixed_point", inputs=[_json("x", json_text)])
+        assert _value(run.status) == "succeeded"
+        (output,) = [output for output in run.outputs if output.port == "out"]
+        return output.value.json_text
+
+    # 1.801439850948199e+16 is the double 18014398509481992; JCS writes it
+    # 18014398509481990, which a double does not hold exactly.
+    assert copied("1.801439850948199e+16") == "18014398509481990"
+    # Its canonical form is accepted again and canonicalises to itself.
+    assert copied("18014398509481990") == "18014398509481990"
+    # 2^60, which a double holds exactly, is still accepted (decision 30
+    # item 17); JCS writes that double 1152921504606847000, itself accepted.
+    assert copied("1152921504606846976") == "1152921504606847000"
+    assert copied("1152921504606847000") == "1152921504606847000"
+
+    # Neither exact nor the double's shortest form: the spelling would lose a
+    # digit silently, so it is refused and no run starts.
+    with pytest.raises(Exception) as exc:
+        semantic_runtime.start_run("a01_fixed_point", inputs=[_json("x", "18014398509481991")])
+    assert exc.value.code in ("invalid_request", "refused")

@@ -32,7 +32,7 @@ is the one mapping;
 | A17 | `installation` | `service_invoker`, `sandbox` |
 | A18 | `store` | `runs`, `surface`, `store_persistence` |
 | A19 | `clock` | `sandbox`, `service_invoker`, `functions`, `effects`, `runs`, `bindings`, `flows` |
-| A20 | `data_provider` | `functions`, `sandbox`, `sandbox_runner`, `service_invoker`, `store`, `runs`, `run_values`, `surface` |
+| A20 | `data_provider` | `canonical_values`, `functions`, `sandbox`, `sandbox_runner`, `service_invoker`, `store`, `runs`, `run_values`, `surface` |
 
 The kernel is one process with one writer (K-17), so modules are not services:
 they are the parts of one program, and only `store` touches the database and the

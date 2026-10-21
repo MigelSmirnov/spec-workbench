@@ -1052,3 +1052,49 @@ def test_recovery_completes_before_surface(semantic_runtime):
     assert recovered and all(t_recovery <= t < t_surface for t in recovered)
     # The kernel did not ask the service again (A11 rule 4).
     assert len(vault.requests) == 1
+
+
+def test_ended_run_has_no_waiting_points(semantic_runtime):
+    """[witness: verification:kernel_a14_ended_run_has_no_waiting_points]
+
+    A14 Required test 11: a run of a mapped approval node whose owner refuses
+    one element ends `refused` with no waiting point, though its other elements
+    were still waiting; one whose elements are all approved ends `succeeded`
+    with none (A14 rule 1, State 6 decision 43).
+    """
+    notify = _service(
+        semantic_runtime, "notify", [("send", "POST", "/messages", "external-effect")]
+    )
+    notify.on("POST", "/messages", json={})
+    send = _note_binding(semantic_runtime, "notify", "send")
+    fanout = dict(_op_node("send", send), map_over="note")
+    _active_flow(
+        semantic_runtime,
+        "a14_fanout",
+        inputs=[_port("notes", "input", TEXT, "open", cardinality="many")],
+        outputs=[],
+        nodes=[fanout],
+        edges=[_edge("", "notes", "send", "note")],
+    )
+
+    # Every element of an external-effect node waits for its own approval.
+    run = semantic_runtime.start_run("a14_fanout", inputs=[_json("notes", ["a", "b", "c"])])
+    assert _v(run.status) == "awaiting_approval"
+    waits = {map_index: approval_id for _, map_index, _, approval_id in _waits(run)}
+    assert sorted(waits) == [0, 1, 2]
+
+    # A13 rule 7: one refusal ends the run; A14 rule 1: when a run ends, its
+    # waiting points are removed — elements 0 and 2 included.
+    refused = semantic_runtime.continue_after_approval(waits[1], "refuse")
+    assert _v(refused.status) == "refused"
+    assert _waits(refused) == []
+    assert _waits(semantic_runtime.read_run(run.run_id)) == []
+    assert notify.requests == []
+
+    # Control: all three approved, the run ends `succeeded`, nothing waits.
+    run = semantic_runtime.start_run("a14_fanout", inputs=[_json("notes", ["d", "e", "f"])])
+    for _, _, _, approval_id in _waits(run):
+        last = semantic_runtime.continue_after_approval(approval_id, "approve")
+    assert _v(last.status) == "succeeded"
+    assert _waits(semantic_runtime.read_run(run.run_id)) == []
+    assert len(notify.requests) == 3

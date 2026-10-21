@@ -83,6 +83,13 @@ purpose(slot | flow) fixed_at_creation
    third a new record, not the first again; rolling back to i1 once more records
    nothing.
    [witness: verification:kernel_a01_activation_identity_is_store_position]
+9. Every JSON text the kernel canonicalises gives canonical bytes that
+   canonicalise again to themselves, a number outside ±(2^53 − 1) written in
+   exponent form (`1.801439850948199e+16`) included; an integer spelling that an
+   IEEE double neither holds exactly nor writes as its shortest round-trip form
+   (`18014398509481991`) is refused, and one it holds exactly
+   (`1152921504606846976`) is still accepted.
+   [witness: verification:kernel_a01_canonical_bytes_are_a_fixed_point]
 
 ### Consequence
 
@@ -388,6 +395,11 @@ verdict -> set_only_by_kernel
 7. Adding a case equal to c1 after c3 returns c1, keeps it first in the corpus,
    and leaves the corpus digest unchanged.
    [witness: verification:kernel_a04_corpus_order_is_first_added]
+8. An implementation whose output for a case differs from the expected value,
+   and is a value the store has never held, is refused `failing_case` with
+   outcome `output_mismatch` naming that case — never answered as an unknown
+   reference.
+   [witness: verification:kernel_a04_mismatch_with_unstored_output_refused]
 
 ### Consequence
 

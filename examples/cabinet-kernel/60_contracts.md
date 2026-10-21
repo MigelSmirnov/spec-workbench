@@ -1511,8 +1511,75 @@ program's task count.
     chosen anew by every assembly, and a split hands a decision across a
     seam that both ends must name.
 
+## Decisions closed by the exploratory checks after assembly (2026-10-21)
+
+The deployed kernel of decision 40 (verification 20261021_000848) passed every
+witness; checks outside them, then the operator scenarios of code-factory
+`projects/cabinet_kernel/operator_tests/` and an agent experiment on the same
+deploy, found four gaps. None is a code fault the notes did not cause or allow.
+
+41. **Canonical bytes are a fixed point for every number, not only the exact
+    ones.** Decision 30 item 17 made an integer an IEEE double holds exactly
+    that double, so that `100000000000000000000`, the JCS form of `1e20`,
+    parses again. It missed the doubles whose JCS form is not exact:
+    `1.801439850948199e+16` is written `18014398509481990`, the double is
+    18014398509481992, and that integer spelling was refused —
+    `canonical_bytes` refused its own output, and `fit_port_value`, which
+    parses `canonical_json` again, failed values the kernel had accepted.
+    An integer written without a fraction or exponent outside ±(2^53 − 1) is
+    now accepted when an IEEE double holds it exactly, as before, or when it is
+    the ECMAScript shortest round-trip form of the double it rounds to, which
+    is how JCS writes that double; any other spelling still loses digits
+    silently and is refused. Nothing accepted before is refused now. Why: A01
+    rule 1 fixes JCS as the one canonical form, and a canonical form the
+    canonicaliser refuses is not one.
+42. **One depth ceiling bounds every JSON value, checked before any other
+    walk.** An authenticated request of 2301 bytes nested deeper than the
+    interpreter's recursion made the surface's bounds walk raise
+    RecursionError; it is no InvalidRequestError, so it was answered
+    `internal_error`, which stops the kernel (A16 rule 7), and the kernel
+    exited. `canonical_bytes` broke the same way at about 500 levels. A20
+    now has `json_depth_max` (64, owner 2026-10-21) and the data provider
+    `RELEASE_CEILING_JSON_DEPTH_MAX`. `canonical_bytes` refuses a value
+    deeper than it with NonCanonicalValueError, so every value, schema,
+    service answer and function output the kernel canonicalises is bounded
+    where it enters; `answer_request` checks the depth of a request's
+    arguments without recursion before any other bound is walked and answers
+    a deeper one `invalid_request`. Raising the interpreter's recursion limit
+    is no answer: a limit reached is still an error the kernel did not
+    decide. Why: A20 rule 2 — over a ceiling is a refusal, decided by the
+    kernel, never a crash.
+43. **A run that has ended has no waiting points, whichever note ends it.**
+    A14 rule 1 removes a run's waiting points when it ends. `cancel_run`'s
+    note kept that; `plan_run`'s status note made a run with a
+    `refused_by_owner` record `refused` and still listed every waiting
+    element, and `advance_run` writes plan_run's waiting points. Operator
+    scenario N2 (three recipients, one refused) ended `refused` with two
+    elements still listed as waiting for the owner — nothing was sent and no
+    record was wrong, but a reader building an inbox from `run.waiting`
+    showed a finished run as waiting. `plan_run` now derives no waiting
+    point for a run whose status has ended. Only `refused` could end with
+    waits: a run with a waiting element otherwise rests (A13 rule 8).
+44. **A mismatching trial output answers its verdict, not an unknown
+    reference; the witness now has an output never stored.** A submission
+    whose case produced a value different from the expected one, and held by
+    no stored value, was answered `unknown_reference` instead of `refused`,
+    `failing_case`, `output_mismatch`: the generated `execute_trial_case`
+    read the output's StoredValue back before `record_change` had written it.
+    The note already says the output's digest is compared with the expected
+    one; the generator erred. `kernel_a04_refusal_names_first_failing_case`
+    passed only because its echo function returns its own input, already
+    stored. A04 required test 8 names an output the store never held. No note
+    changes.
+
 ## Texts of earlier states changed by State 6
 
+- State 2 (2026-10-21, decisions 41–44): A20 — the row `json_depth_max`
+  (64, owner), the depth of a JSON value defined, its formal invariant and
+  required test 5; required tests A01 9, A04 8 and A14 11. State 3: the A20
+  row and `30_trace.json` name `canonical_values` a consumer of A20 (it reads
+  `RELEASE_CEILING_JSON_DEPTH_MAX`; it already knew `data_provider`). Reopens
+  the rounds of States 2–3.
 - State 1 (2026-10-19, decision 35): M02 and M12 name the source of
   `created_by`/`created_at`; M11, M24, M25 and M26 say when their decision,
   revocation and conclusion fields are present. Reopens the rounds of State 1.

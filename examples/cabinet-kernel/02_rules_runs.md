@@ -322,6 +322,10 @@ startup: in_flight -> unknown; running runs advanced by kernel before surface op
     EffectAttempt `in_flight` and every run that derivation left `running`
     already advanced by the kernel.
     [witness: verification:kernel_a14_recovery_completes_before_surface]
+11. A run of a mapped approval node whose owner refuses one element ends
+    `refused` with no waiting point, though its other elements were still
+    waiting; one whose elements are all approved ends `succeeded` with none.
+    [witness: verification:kernel_a14_ended_run_has_no_waiting_points]
 
 ### Consequence
 
