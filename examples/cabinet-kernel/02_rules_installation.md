@@ -389,8 +389,13 @@ reads.
    the deepest of its members, 1 when it has none; `json_depth_max` bounds every
    JSON value the kernel reads — a request, a stored or constant value, a schema,
    a service's answer, a function's output — and is checked before any other
-   walk of that value (owner, 2026-10-21, after an authenticated request of
-   2301 bytes nested deeper than the interpreter's recursion stopped the kernel).
+   walk of that value. A deeper value is a value JCS cannot represent, refused
+   where it enters as A01 rule 1 says: each place a value enters already
+   concludes such a value — a request `invalid_request`, a function's output or
+   a service's answer as its own decision says of an unrepresentable one — and
+   the depth adds no outcome of its own (owner, 2026-10-21, after an
+   authenticated request of 2301 bytes nested deeper than the interpreter's
+   recursion stopped the kernel).
 2. Over a ceiling is always a refusal or a failure, never a truncation — for
    code, values, files, requests, responses and outputs. The exceptions are
    diagnostic texts, not values: `failure_detail`, cut to
@@ -409,7 +414,9 @@ reads.
 4. A new release may change ceilings. They bind contract versions issued after
    it; a contract version issued earlier keeps its bounds and executes under them
    even when they exceed the new ceilings, and recorded executions are never
-   reinterpreted.
+   reinterpreted. Likewise a value recorded under an earlier release is never
+   judged again by a lower `json_depth_max`: the depth bounds what enters, not
+   what the store already holds.
 
 ### Formal invariants
 

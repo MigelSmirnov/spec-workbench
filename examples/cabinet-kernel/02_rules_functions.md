@@ -16,8 +16,9 @@ Reuses cabinet-flow decision 05, narrowed to the records this kernel keeps.
    `flow_version_id` M13 and `value_id` M21 are computed by the kernel from the
    facts State 1 names for each, as the SHA-256 of their canonical JSON — RFC 8785
    (JCS), which fixes number formatting, string escaping and key order; a value
-   JCS cannot represent (a non-finite number, a duplicate key) is refused where
-   it enters, and no Unicode normalization is applied. Lists
+   JCS cannot represent (a non-finite number, a duplicate key), or nested deeper
+   than `json_depth_max` (A20 rule 1), is refused where it enters, and no
+   Unicode normalization is applied. Lists
    whose order carries no meaning are sorted before hashing — ports by
    (`direction`, `name`), nodes by `node_id`, edges in the edge order of A05,
    constants by (`to_node`, `to_port`) — so the same content in another order has

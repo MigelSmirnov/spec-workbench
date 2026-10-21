@@ -1059,8 +1059,9 @@ def test_ended_run_has_no_waiting_points(semantic_runtime):
 
     A14 Required test 11: a run of a mapped approval node whose owner refuses
     one element ends `refused` with no waiting point, though its other elements
-    were still waiting; one whose elements are all approved ends `succeeded`
-    with none (A14 rule 1, State 6 decision 43).
+    were still waiting; one whose elements are all approved, each send
+    answered with success and nothing downstream, ends `succeeded` with none
+    (A14 rule 1, State 6 decision 43).
     """
     notify = _service(
         semantic_runtime, "notify", [("send", "POST", "/messages", "external-effect")]
