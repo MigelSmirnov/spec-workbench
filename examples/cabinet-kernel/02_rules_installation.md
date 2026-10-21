@@ -19,7 +19,9 @@ Reuses cabinet-flow decisions 21 and 22, narrowed by K-11 and K-15.
    nests no deeper than `json_depth_max`, measured before the message is
    parsed (A20 rule 1; the token travels in a header, so nothing before this
    walks the message), else `invalid_request`; it names a known
-   operation and fits that operation's schema (rule 4); its actor may call that
+   operation and fits that operation's schema (rule 4), every JSON text it
+   carries as a string canonical and within `json_depth_max` (A01 rule 1, A20
+   rule 1), else `invalid_request`; its actor may call that
    operation at all (rule 3);
    then the operation's own checks, in the order its decision gives — a restriction
    that depends on the record named, such as A06's refusal of an agent asking for
@@ -397,15 +399,18 @@ reads.
    guard value —, measured on its own, so the message around it adds nothing;
    each value output of a function, as its own text; the body of a service's
    answer that A09 parses, the object whose members the output ports take —
-   a body A09 does not parse is not measured —; and a list the kernel assembles
-   from mapped elements (A13). A record the store holds entered that way, so
+   a body A09 does not parse is not measured —; a list the kernel assembles
+   from mapped elements (A13); and the owner's documents the kernel reads, the
+   installation's configuration file and each manifest service record. A record the store holds entered that way, so
    its values and schemas are never measured again. A deeper text is a value
    JCS cannot represent, refused where it enters as A01 rule 1 says: each place
    already concludes such a value — a request `invalid_request`, a function's
    output `contract_violation` (A03 rule 5, which counts an output without
    canonical bytes by the bytes of its text as returned), a service's answer
    `contract_violation` (A09), an assembled list as a list over
-   `stored_value_bytes_max` (A13) — and the depth adds no outcome of its own (owner, 2026-10-21, after an
+   `stored_value_bytes_max` (A13), the configuration as a file that does not
+   parse — refused at start, a failed re-read at a request (A16 rule 2) —, a
+   manifest record as one that is not valid JSON (A08 rule 5) — and the depth adds no outcome of its own (owner, 2026-10-21, after an
    authenticated request of 2301 bytes nested deeper than the interpreter's
    recursion stopped the kernel).
 2. Over a ceiling is always a refusal or a failure, never a truncation — for
