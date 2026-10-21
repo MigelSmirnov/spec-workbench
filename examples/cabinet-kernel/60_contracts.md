@@ -1545,8 +1545,8 @@ deploy, found four gaps. None is a code fault the notes did not cause or allow.
     service answer and function output the kernel canonicalises is bounded
     where it enters; `answer_request` checks the depth of a request's
     arguments without recursion before any other bound is walked and answers
-    a deeper one `invalid_request`. The depth is measured on each JSON text the
-    kernel parses, as a whole: the request message, each JSON text a request
+    a deeper one `invalid_request`. The depth is measured on each JSON text where
+    it enters the kernel, as a whole: the request message, each JSON text a request
     carries as a string (its own measure, the message adds nothing), each
     value output of a function, a service answer body that A09 parses, and a
     list assembled from mapped elements; a member's name adds no level. Each

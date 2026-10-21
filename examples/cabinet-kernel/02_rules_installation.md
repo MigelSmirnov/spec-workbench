@@ -20,8 +20,9 @@ Reuses cabinet-flow decisions 21 and 22, narrowed by K-11 and K-15.
    parsed (A20 rule 1; the token travels in a header, so nothing before this
    walks the message), else `invalid_request`; it names a known
    operation and fits that operation's schema (rule 4), every JSON text it
-   carries as a string canonical and within `json_depth_max` (A01 rule 1, A20
-   rule 1), else `invalid_request`; its actor may call that
+   carries as a string one JCS can represent and within `json_depth_max` (A01
+   rule 1, A20 rule 1) — the kernel then keeps its canonical form, the text
+   itself need not be canonical —, else `invalid_request`; its actor may call that
    operation at all (rule 3);
    then the operation's own checks, in the order its decision gives — a restriction
    that depends on the record named, such as A06's refusal of an agent asking for
@@ -392,8 +393,8 @@ reads.
    name. Bytes are exact integers; times are integer milliseconds. The depth of
    a JSON value is 0 for a scalar and, for an array or an object, one more than
    the deepest of its elements or member values — a member's name adds no
-   level —, 1 when it has none. `json_depth_max` bounds each JSON text the
-   kernel parses, measured on that text as a whole, without recursion, before
+   level —, 1 when it has none. `json_depth_max` bounds each JSON text where
+   it enters the kernel, measured on that text as a whole, without recursion, before
    anything else walks it: a request message as the surface receives it; each
    JSON text a request carries as a string — a value, a constant, a schema, a
    guard value —, measured on its own, so the message around it adds nothing;
@@ -441,7 +442,8 @@ reads.
 ceiling(name) = RELEASE_CEILING_<NAME>
 override(ceiling) -> never
 over_ceiling -> refusal_or_failure (never truncation)
-json_depth(text) <= json_depth_max for each JSON text the kernel parses, measured whole, without recursion, before any other walk
+json_depth(text) <= json_depth_max for each JSON text where it enters the kernel, measured whole, without recursion, before any other walk
+stored record -> never measured again, under any later json_depth_max
 dependencies pinned_by_release
 host = linux
 ```
