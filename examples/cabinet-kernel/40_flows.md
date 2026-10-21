@@ -511,7 +511,8 @@ records are the trace and the rest state.
   `crashed`, `contract_violation`: produced by `module:sandbox`, recorded by
   `module:runs`; port violations on delivery: found by `module:run_values`,
   recorded by `module:runs`; `value_too_large`: produced and recorded by
-  `module:runs`; a mapped list over `stored_value_bytes_max`: measured by
+  `module:runs`; a mapped list over `stored_value_bytes_max` or nested deeper
+  than `json_depth_max`: measured by
   `module:run_values`, its node failed by `module:run_graph` with no record.
 - Pre-send failures: `binding_stale` by `module:bindings`, instance, credential
   and input placement by `module:service_invoker`; both concluded

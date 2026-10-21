@@ -1556,8 +1556,10 @@ deploy, found four gaps. None is a code fault the notes did not cause or allow.
     of its text as returned so A03's order is unchanged; a parsed service
     answer `contract_violation`; an assembled list `ListsOverCeiling`, as a
     list over `stored_value_bytes_max`. A stored record entered that way and
-    is never measured again; a later release that lowers the ceiling bounds
-    only what enters after it (A20 rule 4). Raising the interpreter's recursion limit
+    is never measured again. Because no record states a list's failure and
+    every reader derives it again, no release changes `json_depth_max` or
+    `stored_value_bytes_max` until it decides how runs already ended are read
+    (A20 rule 4). Raising the interpreter's recursion limit
     is no answer: a limit reached is still an error the kernel did not
     decide. Why: A20 rule 2 — over a ceiling is a refusal, decided by the
     kernel, never a crash.

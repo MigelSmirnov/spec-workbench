@@ -432,9 +432,12 @@ reads.
 4. A new release may change ceilings. They bind contract versions issued after
    it; a contract version issued earlier keeps its bounds and executes under them
    even when they exceed the new ceilings, and recorded executions are never
-   reinterpreted. Likewise a lower `json_depth_max` bounds only what enters after
-   it: every record stored under an earlier release — its values, constants and
-   schemas — is read, executed with and returned as before.
+   reinterpreted. Two ceilings no release changes: `stored_value_bytes_max`
+   and `json_depth_max` also decide a mapped list's failure, which no record
+   states and every reader of the trace derives again (A13 rule 6), so a
+   changed value would reread runs already ended. A release that must change
+   one first decides how those runs are read; until then both keep their
+   release v1 values.
 
 ### Formal invariants
 
@@ -443,7 +446,8 @@ ceiling(name) = RELEASE_CEILING_<NAME>
 override(ceiling) -> never
 over_ceiling -> refusal_or_failure (never truncation)
 json_depth(text) <= json_depth_max for each JSON text where it enters the kernel, measured whole, without recursion, before any other walk
-stored record -> never measured again, under any later json_depth_max
+stored record -> never measured again
+stored_value_bytes_max, json_depth_max -> unchanged by every release (trace derivation, A13)
 dependencies pinned_by_release
 host = linux
 ```
