@@ -1,0 +1,111 @@
+{
+ "open_points": [
+  {
+   "subject": "request-carried JSON texts",
+   "kind": "representation ambiguity",
+   "text": "“every JSON text it carries as a string — a value, a constant, a schema, a guard value” conflicts with models and rules that describe these as JSON values or schemas, without saying they are JSON-encoded string fields",
+   "question": "Which request fields contain embedded JSON text strings, which contain direct JSON values, and is the list of value, constant, schema and guard value exhaustive?",
+   "options": [
+    "All such fields are JSON-encoded strings and are decoded, depth-checked and canonicalized separately",
+    "They are direct JSON members; “as a string” means only their wire representation",
+    "Only fields explicitly typed as embedded JSON text by the operation schema receive the separate check"
+   ],
+   "default_guess": "Treat them as direct JSON members unless an operation schema explicitly declares an embedded JSON-text string.",
+   "unit": "A16"
+  },
+  {
+   "subject": "pre-parse request depth check",
+   "kind": "undefined precedence",
+   "text": "“nests no deeper than `json_depth_max`, measured before the message is parsed” defines depth only for a JSON value, but a malformed or non-UTF-8 request message is not a JSON value",
+   "question": "How is the pre-parse depth check classified and ordered when the request is malformed, has unbalanced delimiters, invalid escaping or invalid UTF-8?",
+   "options": [
+    "A streaming validator checks syntax and depth together, with a specified precedence",
+    "Only well-formed structure contributes to depth; malformed syntax is handled by schema validation",
+    "Any observed nesting beyond the ceiling wins even if the message is otherwise malformed"
+   ],
+   "default_guess": "Use one non-recursive validating scan and report over-depth as soon as it is established; otherwise report malformed input.",
+   "unit": "A16"
+  },
+  {
+   "subject": "JCS validity of the outer request",
+   "kind": "scope ambiguity",
+   "text": "The added rule requires the request message to satisfy the depth limit, but requires JCS representability only of “every JSON text it carries as a string”",
+   "question": "Must the outer request message itself be JCS-representable, including having no duplicate object keys and no non-finite numbers, or are those checks limited to embedded JSON-text fields?",
+   "options": [
+    "The entire request and every embedded JSON text must be JCS-representable",
+    "Only embedded JSON-text fields must be JCS-representable; the outer request need only fit its operation schema",
+    "The outer request has separate JSON parsing rules that must be stated"
+   ],
+   "default_guess": "Require the entire request and every embedded JSON text to be JCS-representable.",
+   "unit": "A16"
+  },
+  {
+   "subject": "canonicalized JSON text versus verbatim agent text",
+   "kind": "contradiction",
+   "text": "The change says “the kernel then keeps its canonical form, the text itself need not be canonical”, while A16 rule 5 says agent-supplied text is data that the kernel never “formats or interprets” and is stored and returned verbatim",
+   "question": "Are JSON-text request fields an explicit exception to the verbatim-text rule, and does the kernel retain only canonical bytes or both the submitted text and its canonical form?",
+   "options": [
+    "JSON-text fields are an exception and only canonical form is retained",
+    "Both original and canonical forms are retained",
+    "Rule 5 applies, so the original text is retained and canonical form is used only transiently"
+   ],
+   "default_guess": "Treat structured JSON-text fields as an exception and retain only their canonical form.",
+   "unit": "A16"
+  },
+  {
+   "subject": "installation configuration depth",
+   "kind": "missing format",
+   "text": "A20 calls the installation configuration file a JSON text whose depth is measured and says an over-deep configuration is treated as “a file that does not parse”, but M28 and A16 specify no configuration serialization format",
+   "question": "Is the installation configuration file required to be one JSON document, and what decoding, duplicate-key and top-level-shape rules apply before its depth can be measured?",
+   "options": [
+    "It is UTF-8 JSON with duplicate keys refused",
+    "It uses another specified format with a defined conversion to a JSON value for depth",
+    "Only the token-list portion is JSON and depth-checked"
+   ],
+   "default_guess": "Treat the entire configuration as one UTF-8 JSON document and refuse duplicate keys.",
+   "unit": "A20"
+  },
+  {
+   "subject": "function output depth boundary",
+   "kind": "model contradiction",
+   "text": "A20 speaks of “each value output of a function, as its own text” and of counting “the bytes of its text as returned”, while A03 defines `run` as returning a Python dict containing Python values, not JSON texts",
+   "question": "At what exact boundary is each Python output converted to a JSON text and depth-checked, and how are cyclic objects, shared references, custom objects or objects that trigger recursion during traversal classified without first walking them?",
+   "options": [
+    "The sandbox runner serializes each output independently with a non-recursive bounded encoder and reports failures to the kernel",
+    "The returned dict is serialized as one protocol message, then each member is checked separately",
+    "Only JSON-native acyclic Python objects are permitted and the exact pre-serialization validation algorithm is specified"
+   ],
+   "default_guess": "Have the sandbox runner validate and serialize each declared output independently with a non-recursive bounded encoder; any non-JSON or cyclic value is `contract_violation`.",
+   "unit": "A20"
+  },
+  {
+   "subject": "lower depth ceiling and previously stored values",
+   "kind": "release-semantics conflict",
+   "text": "A20 says both that every new function output and assembled mapped list is measured under `json_depth_max` and that every earlier stored record “is read, executed with and returned as before” and “never measured again”",
+   "question": "After a release lowers the ceiling, what happens when an old over-limit StoredValue is echoed by a function, incorporated into a newly assembled mapped list, or produced again with bytes equal to the existing stored value?",
+   "options": [
+    "Every newly produced output or assembled list uses the new ceiling even when equal to old stored content",
+    "Content already stored is exempt wherever reused or reproduced",
+    "The run uses the ceiling of the contract or flow version that it executes"
+   ],
+   "default_guess": "Apply the new ceiling to every newly received function output and newly assembled list, but not to a stored value merely read or returned directly.",
+   "unit": "A20"
+  },
+  {
+   "subject": "manifest depth versus operation-local binding pin",
+   "kind": "contradiction",
+   "text": "A20 measures “each manifest service record” as a whole and treats an over-deep record as invalid JSON, while K-03 and A08 say a binding pins only its operation entry and “an edit to another capability of the same service changes nothing for this binding”",
+   "question": "If an unrelated capability or other unrelated part makes the whole service record exceed `json_depth_max`, must an existing binding become stale even though its pinned operation entry is unchanged?",
+   "options": [
+    "Yes; whole-record depth invalidates every operation in that service record",
+    "No; depth is measured separately on the operation entry and the selected instance facts used by the binding",
+    "Proposal reads enforce whole-record depth, but existing bindings inspect only their relevant slices"
+   ],
+   "default_guess": "Follow the new whole-record rule, making the binding stale, despite the operation-local isolation statement.",
+   "unit": "A20"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"request-carried JSON texts\",\"kind\":\"representation ambiguity\",\"text\":\"“every JSON text it carries as a string — a value, a constant, a schema, a guard value” conflicts with models and rules that describe these as JSON values or schemas, without saying they are JSON-encoded string fields\",\"question\":\"Which request fields contain embedded JSON text strings, which contain direct JSON values, and is the list of value, constant, schema and guard value exhaustive?\",\"options\":[\"All such fields are JSON-encoded strings and are decoded, depth-checked and canonicalized separately\",\"They are direct JSON members; “as a string” means only their wire representation\",\"Only fields explicitly typed as embedded JSON text by the operation schema receive the separate check\"],\"default_guess\":\"Treat them as direct JSON members unless an operation schema explicitly declares an embedded JSON-text string.\",\"unit\":\"A16\"},{\"subject\":\"pre-parse request depth check\",\"kind\":\"undefined precedence\",\"text\":\"“nests no deeper than `json_depth_max`, measured before the message is parsed” defines depth only for a JSON value, but a malformed or non-UTF-8 request message is not a JSON value\",\"question\":\"How is the pre-parse depth check classified and ordered when the request is malformed, has unbalanced delimiters, invalid escaping or invalid UTF-8?\",\"options\":[\"A streaming validator checks syntax and depth together, with a specified precedence\",\"Only well-formed structure contributes to depth; malformed syntax is handled by schema validation\",\"Any observed nesting beyond the ceiling wins even if the message is otherwise malformed\"],\"default_guess\":\"Use one non-recursive validating scan and report over-depth as soon as it is established; otherwise report malformed input.\",\"unit\":\"A16\"},{\"subject\":\"JCS validity of the outer request\",\"kind\":\"scope ambiguity\",\"text\":\"The added rule requires the request message to satisfy the depth limit, but requires JCS representability only of “every JSON text it carries as a string”\",\"question\":\"Must the outer request message itself be JCS-representable, including having no duplicate object keys and no non-finite numbers, or are those checks limited to embedded JSON-text fields?\",\"options\":[\"The entire request and every embedded JSON text must be JCS-representable\",\"Only embedded JSON-text fields must be JCS-representable; the outer request need only fit its operation schema\",\"The outer request has separate JSON parsing rules that must be stated\"],\"default_guess\":\"Require the entire request and every embedded JSON text to be JCS-representable.\",\"unit\":\"A16\"},{\"subject\":\"canonicalized JSON text versus verbatim agent text\",\"kind\":\"contradiction\",\"text\":\"The change says “the kernel then keeps its canonical form, the text itself need not be canonical”, while A16 rule 5 says agent-supplied text is data that the kernel never “formats or interprets” and is stored and returned verbatim\",\"question\":\"Are JSON-text request fields an explicit exception to the verbatim-text rule, and does the kernel retain only canonical bytes or both the submitted text and its canonical form?\",\"options\":[\"JSON-text fields are an exception and only canonical form is retained\",\"Both original and canonical forms are retained\",\"Rule 5 applies, so the original text is retained and canonical form is used only transiently\"],\"default_guess\":\"Treat structured JSON-text fields as an exception and retain only their canonical form.\",\"unit\":\"A16\"},{\"subject\":\"installation configuration depth\",\"kind\":\"missing format\",\"text\":\"A20 calls the installation configuration file a JSON text whose depth is measured and says an over-deep configuration is treated as “a file that does not parse”, but M28 and A16 specify no configuration serialization format\",\"question\":\"Is the installation configuration file required to be one JSON document, and what decoding, duplicate-key and top-level-shape rules apply before its depth can be measured?\",\"options\":[\"It is UTF-8 JSON with duplicate keys refused\",\"It uses another specified format with a defined conversion to a JSON value for depth\",\"Only the token-list portion is JSON and depth-checked\"],\"default_guess\":\"Treat the entire configuration as one UTF-8 JSON document and refuse duplicate keys.\",\"unit\":\"A20\"},{\"subject\":\"function output depth boundary\",\"kind\":\"model contradiction\",\"text\":\"A20 speaks of “each value output of a function, as its own text” and of counting “the bytes of its text as returned”, while A03 defines `run` as returning a Python dict containing Python values, not JSON texts\",\"question\":\"At what exact boundary is each Python output converted to a JSON text and depth-checked, and how are cyclic objects, shared references, custom objects or objects that trigger recursion during traversal classified without first walking them?\",\"options\":[\"The sandbox runner serializes each output independently with a non-recursive bounded encoder and reports failures to the kernel\",\"The returned dict is serialized as one protocol message, then each member is checked separately\",\"Only JSON-native acyclic Python objects are permitted and the exact pre-serialization validation algorithm is specified\"],\"default_guess\":\"Have the sandbox runner validate and serialize each declared output independently with a non-recursive bounded encoder; any non-JSON or cyclic value is `contract_violation`.\",\"unit\":\"A20\"},{\"subject\":\"lower depth ceiling and previously stored values\",\"kind\":\"release-semantics conflict\",\"text\":\"A20 says both that every new function output and assembled mapped list is measured under `json_depth_max` and that every earlier stored record “is read, executed with and returned as before” and “never measured again”\",\"question\":\"After a release lowers the ceiling, what happens when an old over-limit StoredValue is echoed by a function, incorporated into a newly assembled mapped list, or produced again with bytes equal to the existing stored value?\",\"options\":[\"Every newly produced output or assembled list uses the new ceiling even when equal to old stored content\",\"Content already stored is exempt wherever reused or reproduced\",\"The run uses the ceiling of the contract or flow version that it executes\"],\"default_guess\":\"Apply the new ceiling to every newly received function output and newly assembled list, but not to a stored value merely read or returned directly.\",\"unit\":\"A20\"},{\"subject\":\"manifest depth versus operation-local binding pin\",\"kind\":\"contradiction\",\"text\":\"A20 measures “each manifest service record” as a whole and treats an over-deep record as invalid JSON, while K-03 and A08 say a binding pins only its operation entry and “an edit to another capability of the same service changes nothing for this binding”\",\"question\":\"If an unrelated capability or other unrelated part makes the whole service record exceed `json_depth_max`, must an existing binding become stale even though its pinned operation entry is unchanged?\",\"options\":[\"Yes; whole-record depth invalidates every operation in that service record\",\"No; depth is measured separately on the operation entry and the selected instance facts used by the binding\",\"Proposal reads enforce whole-record depth, but existing bindings inspect only their relevant slices\"],\"default_guess\":\"Follow the new whole-record rule, making the binding stale, despite the operation-local isolation statement.\",\"unit\":\"A20\"}]}",
+ "set_aside": []
+}
