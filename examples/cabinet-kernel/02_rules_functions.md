@@ -216,7 +216,8 @@ and no detection promises the runtime cannot keep.
    deadline and output count; how is the sandbox's own (decision 30). A limit
    that cannot be set means the code is not loaded and the execution is
    `crashed`. The output count is the sum of the canonical JSON bytes of every
-   `value` output and the bytes of every `file` output of the one call of `run` —
+   `value` output — for an output that has none, the bytes of its JSON text as
+   returned — and the bytes of every `file` output of the one call of `run` —
    for a `many` file output, the sum of its elements' bytes. Outcomes are closed and checked in this order, the first that holds
    deciding: wall deadline passed — `timeout`; a limit hit (memory, process count,
    scratch, `output_bytes`) — `resource_exhausted`; a trap of rule 4 raised —

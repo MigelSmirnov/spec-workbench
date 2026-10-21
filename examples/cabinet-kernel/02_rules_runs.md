@@ -132,12 +132,13 @@ worker.
    written when the list is first delivered — never in an element's
    own store change, which for an operation element is `effects'` — and
    named, like any value, by the records that receive it; a list whose
-   canonical bytes exceed `stored_value_bytes_max` is not written: the node is
+   canonical bytes exceed `stored_value_bytes_max`, or which nests deeper than
+   `json_depth_max` (A20 rule 1), is not written: the node is
    then failed for its dependants, which conclude `upstream_failed` and write
    that record (A15 rule 1), derived like the list from the elements'
    records, which stay as they are (A15 rule 4). No record of the node states
    that failure: like the list, it is derived from the elements' records and
-   `stored_value_bytes_max`, the same way by every reader of the trace (A15;
+   those two ceilings, the same way by every reader of the trace (A15;
    owner, 2026-10-05, as the advance_run note decides). By the same
    derivation the node counts as failed when the run ends (rule 7), so a list
    that feeds only a flow output ends the run `failed`. Only a list that is

@@ -1,0 +1,137 @@
+{
+ "open_points": [
+  {
+   "subject": "A20 JSON depth definition for objects",
+   "kind": "ambiguous definition",
+   "text": "“for an array or an object, one more than the deepest of its members” does not define the depth of an object member, which consists of a name and a value",
+   "question": "For an object, is depth computed only from each member value, or do member names or member pairs contribute another level?",
+   "options": [
+    "Use only the depths of member values; property names do not contribute",
+    "Treat each name/value member as an additional container level",
+    "Take the maximum of the property-name scalar and the member value"
+   ],
+   "default_guess": "Use only the depths of member values; property names do not contribute.",
+   "unit": "?"
+  },
+  {
+   "subject": "A20 request depth measurement root",
+   "kind": "contradiction",
+   "text": "Rule 1 bounds “a request, with every value, constant and schema it submits”, while required test 5 says “a run input value nested exactly `json_depth_max` deep is accepted”; the containing request is necessarily deeper than that input",
+   "question": "Is the limit applied to the complete MCP request document, separately to submitted argument values, constants and schemas, or both?",
+   "options": [
+    "Measure submitted values, constants and schemas separately and exclude the fixed request envelope",
+    "Measure only the complete request document",
+    "Measure both the complete request and each submitted JSON value"
+   ],
+   "default_guess": "Measure submitted values, constants and schemas separately and exclude the fixed request envelope, so the required boundary test can pass.",
+   "unit": "?"
+  },
+  {
+   "subject": "A20 depth check versus A16 request authentication order",
+   "kind": "precedence contradiction",
+   "text": "A20 says depth “is checked there before any other walk of that value” and an over-deep request is `invalid_request`, but A16 rule 1 requires size, configuration/token, operation schema and actor checks in that order and gives an unknown token one uniform refusal",
+   "question": "For a request that is both over-depth and missing, unknown or revoked-token, which refusal wins, and how much of the request may be parsed before authentication?",
+   "options": [
+    "Preserve A16: check size and authenticate from the envelope before depth-checking arguments",
+    "Depth-check the complete request before reading or checking its token",
+    "Check size, perform a bounded envelope parse for the token, authenticate, then depth-check every submitted JSON argument before schema validation"
+   ],
+   "default_guess": "Check size, perform only the bounded envelope parsing needed to authenticate, then depth-check submitted arguments before schema validation; an unknown token keeps A16's uniform token refusal.",
+   "unit": "?"
+  },
+  {
+   "subject": "A20 coverage of manifest and configuration JSON",
+   "kind": "undefined scope",
+   "text": "The rule says `json_depth_max` bounds “every JSON value where it enters the kernel” but enumerates only “a request ... a service's answer, a function's output”; the platform manifest is also external JSON, and the configuration format may be JSON",
+   "question": "Does `json_depth_max` apply to manifest records and installation configuration, and if so which existing refusal or start/send outcome represents an over-deep document?",
+   "options": [
+    "Apply it to manifest JSON and configuration JSON, mapping failures to their existing parse/start, manifest-mismatch or `binding_stale` outcomes",
+    "Apply it to manifest JSON but not installation configuration",
+    "Treat the enumeration as exhaustive and apply it only to requests, submitted values/constants/schemas, service answers and function outputs"
+   ],
+   "default_guess": "Apply it to every external JSON document, including manifest JSON and JSON configuration, using the existing outcome for an unrepresentable document at that ingress.",
+   "unit": "?"
+  },
+  {
+   "subject": "A20 function-output measurement",
+   "kind": "undefined measurement boundary",
+   "text": "A20 bounds “a function's output”, while A03 defines the function result as one returned dict containing every output port and separately canonicalises each `value` output",
+   "question": "Is depth measured on the returned output dict, on each output-port value, or on both, and can a port value at depth exactly `json_depth_max` be accepted despite the dict wrapper?",
+   "options": [
+    "Measure each output-port value independently and exclude the required returned-dict wrapper",
+    "Measure the complete returned dict",
+    "Measure both, requiring both the dict and every port value to fit"
+   ],
+   "default_guess": "Measure each output-port value independently and exclude the returned-dict wrapper.",
+   "unit": "?"
+  },
+  {
+   "subject": "A20 function-output failure precedence",
+   "kind": "precedence contradiction",
+   "text": "A20 requires depth to be checked “before any other walk” and makes an over-deep output unrepresentable, while A03 rule 5 checks `output_bytes` resource exhaustion before contract violation and calculates value output size from canonical JSON bytes",
+   "question": "When a function result is both over-depth and would exceed `output_bytes`, or cannot be canonicalised far enough to determine its byte count, is the outcome `contract_violation` or `resource_exhausted`?",
+   "options": [
+    "Depth is checked first and the result is `contract_violation`",
+    "Preserve A03 precedence by measuring output bytes first and return `resource_exhausted` when both hold",
+    "Measure depth and byte count in one bounded traversal and define an explicit tie-breaking outcome"
+   ],
+   "default_guess": "Depth is checked first; an over-deep function output is `contract_violation`, even when its full canonical byte count might also exceed `output_bytes`.",
+   "unit": "?"
+  },
+  {
+   "subject": "A20 service-answer depth scope",
+   "kind": "rule conflict",
+   "text": "A20 bounds “a service's answer”, but A09 says members no output port names are ignored, a binding without output ports “does not parse or validate” its body, and non-used response bodies are not interpreted",
+   "question": "Which response bodies are JSON-depth checked: every body that happens to contain JSON, only a 2xx JSON body whose outputs are used, or only the selected output-member values?",
+   "options": [
+    "Check the complete parsed 2xx JSON object when the binding has JSON outputs, including otherwise ignored members",
+    "Check only values selected for declared output ports, leaving ignored members unwalked",
+    "Parse and depth-check every service response body that is syntactically JSON, including bindings without outputs and non-2xx answers"
+   ],
+   "default_guess": "Check the complete 2xx JSON object only when A09 already requires it to be parsed; over-deep ignored members therefore cause `contract_violation`, while bodies A09 says not to parse remain unchecked.",
+   "unit": "?"
+  },
+  {
+   "subject": "A20 internally constructed canonical JSON",
+   "kind": "undefined scope",
+   "text": "A20 says “A deeper value is a value JCS cannot represent”, while A01, A08, A10 and M26 canonicalise internally constructed identity facts, request descriptions and idempotency-key objects whose wrapper depth can exceed the depth of each admitted external value",
+   "question": "Does `json_depth_max` limit only JSON crossing into the kernel, or also every internally constructed value passed to JCS; if internal canonicalisation is limited, what outcome applies when its wrapper pushes it over the ceiling?",
+   "options": [
+    "Limit only ingress values; internal identity and digest structures may be deeper",
+    "Apply the ceiling to every JCS invocation, including internal identity and digest structures",
+    "Define separate measurement roots that exclude fixed internal wrappers while limiting embedded ingress values"
+   ],
+   "default_guess": "Limit only ingress values; fixed internal identity and digest structures are not new values entering the kernel and are not rejected by `json_depth_max`.",
+   "unit": "?"
+  },
+  {
+   "subject": "A20 legacy records under a lower ceiling",
+   "kind": "invariant contradiction",
+   "text": "Rule 4 says every earlier record “is read, executed with and returned as before”, while the formal invariant unconditionally says `json_depth(value) <= json_depth_max`, and rule 1 treats every function output and service answer as a new ingress",
+   "question": "Does grandfathering cover only direct use and return of the stored record, or also a newly produced function output, mapped aggregate or service output whose content equals or contains a grandfathered over-depth value?",
+   "options": [
+    "Only the stored record itself is grandfathered; every newly produced output or aggregate is checked against the current ceiling",
+    "Grandfathering propagates through execution whenever output content derives from an earlier stored value",
+    "Any content equal to an earlier stored value is grandfathered even when newly submitted or produced"
+   ],
+   "default_guess": "Only direct reading, execution with, and surface return of the existing stored record are grandfathered; every newly produced function output, service output or mapped aggregate is checked against the current ceiling.",
+   "unit": "?"
+  },
+  {
+   "subject": "A20 formal invariant domain",
+   "kind": "unqualified invariant",
+   "text": "The formal invariant states `json_depth(value) <= json_depth_max` without limiting `value` to values entering under the current release, but rule 4 expressly permits deeper records stored under an earlier release to be read, executed with and returned",
+   "question": "What is the exact quantified domain of the formal invariant?",
+   "options": [
+    "Values newly entering under the current release only",
+    "All values except records stored under an earlier release",
+    "All values in the kernel, making rule 4 invalid for records above the new ceiling"
+   ],
+   "default_guess": "Values newly entering under the current release only; previously stored records are explicitly outside the invariant.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A20 JSON depth definition for objects\",\"kind\":\"ambiguous definition\",\"text\":\"“for an array or an object, one more than the deepest of its members” does not define the depth of an object member, which consists of a name and a value\",\"question\":\"For an object, is depth computed only from each member value, or do member names or member pairs contribute another level?\",\"options\":[\"Use only the depths of member values; property names do not contribute\",\"Treat each name/value member as an additional container level\",\"Take the maximum of the property-name scalar and the member value\"],\"default_guess\":\"Use only the depths of member values; property names do not contribute.\"},{\"subject\":\"A20 request depth measurement root\",\"kind\":\"contradiction\",\"text\":\"Rule 1 bounds “a request, with every value, constant and schema it submits”, while required test 5 says “a run input value nested exactly `json_depth_max` deep is accepted”; the containing request is necessarily deeper than that input\",\"question\":\"Is the limit applied to the complete MCP request document, separately to submitted argument values, constants and schemas, or both?\",\"options\":[\"Measure submitted values, constants and schemas separately and exclude the fixed request envelope\",\"Measure only the complete request document\",\"Measure both the complete request and each submitted JSON value\"],\"default_guess\":\"Measure submitted values, constants and schemas separately and exclude the fixed request envelope, so the required boundary test can pass.\"},{\"subject\":\"A20 depth check versus A16 request authentication order\",\"kind\":\"precedence contradiction\",\"text\":\"A20 says depth “is checked there before any other walk of that value” and an over-deep request is `invalid_request`, but A16 rule 1 requires size, configuration/token, operation schema and actor checks in that order and gives an unknown token one uniform refusal\",\"question\":\"For a request that is both over-depth and missing, unknown or revoked-token, which refusal wins, and how much of the request may be parsed before authentication?\",\"options\":[\"Preserve A16: check size and authenticate from the envelope before depth-checking arguments\",\"Depth-check the complete request before reading or checking its token\",\"Check size, perform a bounded envelope parse for the token, authenticate, then depth-check every submitted JSON argument before schema validation\"],\"default_guess\":\"Check size, perform only the bounded envelope parsing needed to authenticate, then depth-check submitted arguments before schema validation; an unknown token keeps A16's uniform token refusal.\"},{\"subject\":\"A20 coverage of manifest and configuration JSON\",\"kind\":\"undefined scope\",\"text\":\"The rule says `json_depth_max` bounds “every JSON value where it enters the kernel” but enumerates only “a request ... a service's answer, a function's output”; the platform manifest is also external JSON, and the configuration format may be JSON\",\"question\":\"Does `json_depth_max` apply to manifest records and installation configuration, and if so which existing refusal or start/send outcome represents an over-deep document?\",\"options\":[\"Apply it to manifest JSON and configuration JSON, mapping failures to their existing parse/start, manifest-mismatch or `binding_stale` outcomes\",\"Apply it to manifest JSON but not installation configuration\",\"Treat the enumeration as exhaustive and apply it only to requests, submitted values/constants/schemas, service answers and function outputs\"],\"default_guess\":\"Apply it to every external JSON document, including manifest JSON and JSON configuration, using the existing outcome for an unrepresentable document at that ingress.\"},{\"subject\":\"A20 function-output measurement\",\"kind\":\"undefined measurement boundary\",\"text\":\"A20 bounds “a function's output”, while A03 defines the function result as one returned dict containing every output port and separately canonicalises each `value` output\",\"question\":\"Is depth measured on the returned output dict, on each output-port value, or on both, and can a port value at depth exactly `json_depth_max` be accepted despite the dict wrapper?\",\"options\":[\"Measure each output-port value independently and exclude the required returned-dict wrapper\",\"Measure the complete returned dict\",\"Measure both, requiring both the dict and every port value to fit\"],\"default_guess\":\"Measure each output-port value independently and exclude the returned-dict wrapper.\"},{\"subject\":\"A20 function-output failure precedence\",\"kind\":\"precedence contradiction\",\"text\":\"A20 requires depth to be checked “before any other walk” and makes an over-deep output unrepresentable, while A03 rule 5 checks `output_bytes` resource exhaustion before contract violation and calculates value output size from canonical JSON bytes\",\"question\":\"When a function result is both over-depth and would exceed `output_bytes`, or cannot be canonicalised far enough to determine its byte count, is the outcome `contract_violation` or `resource_exhausted`?\",\"options\":[\"Depth is checked first and the result is `contract_violation`\",\"Preserve A03 precedence by measuring output bytes first and return `resource_exhausted` when both hold\",\"Measure depth and byte count in one bounded traversal and define an explicit tie-breaking outcome\"],\"default_guess\":\"Depth is checked first; an over-deep function output is `contract_violation`, even when its full canonical byte count might also exceed `output_bytes`.\"},{\"subject\":\"A20 service-answer depth scope\",\"kind\":\"rule conflict\",\"text\":\"A20 bounds “a service's answer”, but A09 says members no output port names are ignored, a binding without output ports “does not parse or validate” its body, and non-used response bodies are not interpreted\",\"question\":\"Which response bodies are JSON-depth checked: every body that happens to contain JSON, only a 2xx JSON body whose outputs are used, or only the selected output-member values?\",\"options\":[\"Check the complete parsed 2xx JSON object when the binding has JSON outputs, including otherwise ignored members\",\"Check only values selected for declared output ports, leaving ignored members unwalked\",\"Parse and depth-check every service response body that is syntactically JSON, including bindings without outputs and non-2xx answers\"],\"default_guess\":\"Check the complete 2xx JSON object only when A09 already requires it to be parsed; over-deep ignored members therefore cause `contract_violation`, while bodies A09 says not to parse remain unchecked.\"},{\"subject\":\"A20 internally constructed canonical JSON\",\"kind\":\"undefined scope\",\"text\":\"A20 says “A deeper value is a value JCS cannot represent”, while A01, A08, A10 and M26 canonicalise internally constructed identity facts, request descriptions and idempotency-key objects whose wrapper depth can exceed the depth of each admitted external value\",\"question\":\"Does `json_depth_max` limit only JSON crossing into the kernel, or also every internally constructed value passed to JCS; if internal canonicalisation is limited, what outcome applies when its wrapper pushes it over the ceiling?\",\"options\":[\"Limit only ingress values; internal identity and digest structures may be deeper\",\"Apply the ceiling to every JCS invocation, including internal identity and digest structures\",\"Define separate measurement roots that exclude fixed internal wrappers while limiting embedded ingress values\"],\"default_guess\":\"Limit only ingress values; fixed internal identity and digest structures are not new values entering the kernel and are not rejected by `json_depth_max`.\"},{\"subject\":\"A20 legacy records under a lower ceiling\",\"kind\":\"invariant contradiction\",\"text\":\"Rule 4 says every earlier record “is read, executed with and returned as before”, while the formal invariant unconditionally says `json_depth(value) <= json_depth_max`, and rule 1 treats every function output and service answer as a new ingress\",\"question\":\"Does grandfathering cover only direct use and return of the stored record, or also a newly produced function output, mapped aggregate or service output whose content equals or contains a grandfathered over-depth value?\",\"options\":[\"Only the stored record itself is grandfathered; every newly produced output or aggregate is checked against the current ceiling\",\"Grandfathering propagates through execution whenever output content derives from an earlier stored value\",\"Any content equal to an earlier stored value is grandfathered even when newly submitted or produced\"],\"default_guess\":\"Only direct reading, execution with, and surface return of the existing stored record are grandfathered; every newly produced function output, service output or mapped aggregate is checked against the current ceiling.\"},{\"subject\":\"A20 formal invariant domain\",\"kind\":\"unqualified invariant\",\"text\":\"The formal invariant states `json_depth(value) <= json_depth_max` without limiting `value` to values entering under the current release, but rule 4 expressly permits deeper records stored under an earlier release to be read, executed with and returned\",\"question\":\"What is the exact quantified domain of the formal invariant?\",\"options\":[\"Values newly entering under the current release only\",\"All values except records stored under an earlier release\",\"All values in the kernel, making rule 4 invalid for records above the new ceiling\"],\"default_guess\":\"Values newly entering under the current release only; previously stored records are explicitly outside the invariant.\"}]}",
+ "set_aside": []
+}

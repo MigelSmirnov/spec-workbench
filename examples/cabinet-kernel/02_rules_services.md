@@ -190,7 +190,8 @@ outcomes map to NodeExecution statuses.
    is `one` — a proposal otherwise is refused — and the body is that file, whose `Content-Type`, compared on type and subtype without regard to case and
    ignoring parameters, must equal the port's media type — a response with no
    `Content-Type` or with two is a `contract_violation`; otherwise the body must be UTF-8 text that
-   parses as one JSON object without duplicate member names — its
+   parses as one JSON object without duplicate member names, nested no deeper
+   than `json_depth_max` (A20 rule 1) — its
    `Content-Type` is not checked — and each output port takes the member of the same name, which
    must validate against the port. Members no port names are ignored, and a
    binding without output ports reads the body only up to

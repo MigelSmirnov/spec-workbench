@@ -1545,9 +1545,18 @@ deploy, found four gaps. None is a code fault the notes did not cause or allow.
     service answer and function output the kernel canonicalises is bounded
     where it enters; `answer_request` checks the depth of a request's
     arguments without recursion before any other bound is walked and answers
-    a deeper one `invalid_request`. A stored record entered that way and is
-    never measured again; a later release that lowers the ceiling bounds only
-    what enters after it (A20 rule 4). Raising the interpreter's recursion limit
+    a deeper one `invalid_request`. The depth is measured on each JSON text the
+    kernel parses, as a whole: the request message, each JSON text a request
+    carries as a string (its own measure, the message adds nothing), each
+    value output of a function, a service answer body that A09 parses, and a
+    list assembled from mapped elements; a member's name adds no level. Each
+    place keeps the outcome it has for an unrepresentable value: a function
+    output `contract_violation`, counted toward `output_bytes` by the bytes
+    of its text as returned so A03's order is unchanged; a parsed service
+    answer `contract_violation`; an assembled list `ListsOverCeiling`, as a
+    list over `stored_value_bytes_max`. A stored record entered that way and
+    is never measured again; a later release that lowers the ceiling bounds
+    only what enters after it (A20 rule 4). Raising the interpreter's recursion limit
     is no answer: a limit reached is still an error the kernel did not
     decide. Why: A20 rule 2 — over a ceiling is a refusal, decided by the
     kernel, never a crash.

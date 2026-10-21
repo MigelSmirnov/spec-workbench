@@ -386,15 +386,23 @@ reads.
    The first four are the ceilings of the ResourceBounds M04 fields of the same
    name. Bytes are exact integers; times are integer milliseconds. The depth of
    a JSON value is 0 for a scalar and, for an array or an object, one more than
-   the deepest of its members, 1 when it has none; `json_depth_max` bounds every
-   JSON value where it enters the kernel — a request, with every value, constant
-   and schema it submits, a service's answer, a function's output — and is
-   checked there before any other walk of that value. A record the store holds
-   entered that way, so its values and schemas are never measured again. A deeper value is a value JCS cannot represent, refused
-   where it enters as A01 rule 1 says: each place a value enters already
-   concludes such a value — a request `invalid_request`, a function's output or
-   a service's answer as its own decision says of an unrepresentable one — and
-   the depth adds no outcome of its own (owner, 2026-10-21, after an
+   the deepest of its elements or member values — a member's name adds no
+   level —, 1 when it has none. `json_depth_max` bounds each JSON text the
+   kernel parses, measured on that text as a whole, without recursion, before
+   anything else walks it: a request message as the surface receives it; each
+   JSON text a request carries as a string — a value, a constant, a schema, a
+   guard value —, measured on its own, so the message around it adds nothing;
+   each value output of a function, as its own text; the body of a service's
+   answer that A09 parses, the object whose members the output ports take —
+   a body A09 does not parse is not measured —; and a list the kernel assembles
+   from mapped elements (A13). A record the store holds entered that way, so
+   its values and schemas are never measured again. A deeper text is a value
+   JCS cannot represent, refused where it enters as A01 rule 1 says: each place
+   already concludes such a value — a request `invalid_request`, a function's
+   output `contract_violation` (A03 rule 5, which counts an output without
+   canonical bytes by the bytes of its text as returned), a service's answer
+   `contract_violation` (A09), an assembled list as a list over
+   `stored_value_bytes_max` (A13) — and the depth adds no outcome of its own (owner, 2026-10-21, after an
    authenticated request of 2301 bytes nested deeper than the interpreter's
    recursion stopped the kernel).
 2. Over a ceiling is always a refusal or a failure, never a truncation — for
@@ -425,7 +433,7 @@ reads.
 ceiling(name) = RELEASE_CEILING_<NAME>
 override(ceiling) -> never
 over_ceiling -> refusal_or_failure (never truncation)
-json_depth(value) <= json_depth_max, checked where value enters, before any other walk of value
+json_depth(text) <= json_depth_max for each JSON text the kernel parses, measured whole, without recursion, before any other walk
 dependencies pinned_by_release
 host = linux
 ```
