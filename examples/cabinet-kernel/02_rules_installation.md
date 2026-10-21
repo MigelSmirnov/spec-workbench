@@ -387,9 +387,10 @@ reads.
    name. Bytes are exact integers; times are integer milliseconds. The depth of
    a JSON value is 0 for a scalar and, for an array or an object, one more than
    the deepest of its members, 1 when it has none; `json_depth_max` bounds every
-   JSON value the kernel reads — a request, a stored or constant value, a schema,
-   a service's answer, a function's output — and is checked before any other
-   walk of that value. A deeper value is a value JCS cannot represent, refused
+   JSON value where it enters the kernel — a request, with every value, constant
+   and schema it submits, a service's answer, a function's output — and is
+   checked there before any other walk of that value. A record the store holds
+   entered that way, so its values and schemas are never measured again. A deeper value is a value JCS cannot represent, refused
    where it enters as A01 rule 1 says: each place a value enters already
    concludes such a value — a request `invalid_request`, a function's output or
    a service's answer as its own decision says of an unrepresentable one — and
@@ -414,9 +415,9 @@ reads.
 4. A new release may change ceilings. They bind contract versions issued after
    it; a contract version issued earlier keeps its bounds and executes under them
    even when they exceed the new ceilings, and recorded executions are never
-   reinterpreted. Likewise a value recorded under an earlier release is never
-   judged again by a lower `json_depth_max`: the depth bounds what enters, not
-   what the store already holds.
+   reinterpreted. Likewise a lower `json_depth_max` bounds only what enters after
+   it: every record stored under an earlier release — its values, constants and
+   schemas — is read, executed with and returned as before.
 
 ### Formal invariants
 
@@ -424,7 +425,7 @@ reads.
 ceiling(name) = RELEASE_CEILING_<NAME>
 override(ceiling) -> never
 over_ceiling -> refusal_or_failure (never truncation)
-json_depth(value) <= json_depth_max, checked before any other walk of value
+json_depth(value) <= json_depth_max, checked where value enters, before any other walk of value
 dependencies pinned_by_release
 host = linux
 ```

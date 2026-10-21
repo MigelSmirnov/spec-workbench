@@ -1533,8 +1533,8 @@ deploy, found four gaps. None is a code fault the notes did not cause or allow.
     silently and is refused. Nothing accepted before is refused now. Why: A01
     rule 1 fixes JCS as the one canonical form, and a canonical form the
     canonicaliser refuses is not one.
-42. **One depth ceiling bounds every JSON value, checked before any other
-    walk.** An authenticated request of 2301 bytes nested deeper than the
+42. **One depth ceiling bounds every JSON value where it enters, checked
+    before any other walk.** An authenticated request of 2301 bytes nested deeper than the
     interpreter's recursion made the surface's bounds walk raise
     RecursionError; it is no InvalidRequestError, so it was answered
     `internal_error`, which stops the kernel (A16 rule 7), and the kernel
@@ -1545,7 +1545,9 @@ deploy, found four gaps. None is a code fault the notes did not cause or allow.
     service answer and function output the kernel canonicalises is bounded
     where it enters; `answer_request` checks the depth of a request's
     arguments without recursion before any other bound is walked and answers
-    a deeper one `invalid_request`. Raising the interpreter's recursion limit
+    a deeper one `invalid_request`. A stored record entered that way and is
+    never measured again; a later release that lowers the ceiling bounds only
+    what enters after it (A20 rule 4). Raising the interpreter's recursion limit
     is no answer: a limit reached is still an error the kernel did not
     decide. Why: A20 rule 2 — over a ceiling is a refusal, decided by the
     kernel, never a crash.
