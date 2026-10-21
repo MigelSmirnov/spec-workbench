@@ -15,7 +15,10 @@ Reuses cabinet-flow decisions 21 and 22, narrowed by K-11 and K-15.
 1. A request is handled in this order, the first failing check deciding: its
    size, counted as the bytes of the request message as received, is within
    `surface_request_bytes_max`; the configuration re-read of rule 2 passes and
-   its token is known — both with the one token refusal; it names a known
+   its token is known — both with the one token refusal; the request message
+   nests no deeper than `json_depth_max`, measured before the message is
+   parsed (A20 rule 1; the token travels in a header, so nothing before this
+   walks the message), else `invalid_request`; it names a known
    operation and fits that operation's schema (rule 4); its actor may call that
    operation at all (rule 3);
    then the operation's own checks, in the order its decision gives — a restriction
