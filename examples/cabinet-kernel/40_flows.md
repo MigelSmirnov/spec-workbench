@@ -11,7 +11,8 @@ State 3.
 
 Every flow enters through `module:surface`, which handles one request at a time
 to its end (A18 rule 3) and applies A16 rule 1 in its order — size, token,
-operation schema, actor — before any operation's own check. A refusal there
+message depth, operation schema with the JSON texts the request carries,
+actor — before any operation's own check. A refusal there
 reaches no other module and records nothing. A request naming a record that
 does not exist is refused as an unknown reference by the module that owns the
 record, recording nothing (State 0) — a contract version or binding named

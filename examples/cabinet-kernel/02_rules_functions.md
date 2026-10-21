@@ -43,7 +43,7 @@ Reuses cabinet-flow decision 05, narrowed to the records this kernel keeps.
    refused; one with the same purpose, or none, is accepted. A request that
    would create a slot or a flow without a purpose is refused. This check comes
    first among the operation's own checks, after the checks every request
-   passes (A16 rule 1: size, token, schema, actor).
+   passes (A16 rule 1: size, token, depth, schema, actor).
 6. No issued contract version, implementation, trial case, flow version, value,
    verdict, activation or trace record is edited or deleted by any operation.
 

@@ -250,7 +250,8 @@ each the narrowest the MCP specification allows.
       decided once the operation is known — fit, bounds, permission, or the
       operation's own — is a tool result with `isError` true whose text is
       the `RefusalAnswer` as JSON, so the agent reads the reason. A refusal
-      decided before — size, token, a malformed message, unknown method or
+      decided before — size, token, a message nested too deep, a malformed
+      message, unknown method or
       tool — is a JSON-RPC error with the code JSON-RPC defines for it, the
       refusal code as its message and the `RefusalAnswer` as its data;
       `internal_error` is `-32603`. The kernel defines no error number of

@@ -1122,7 +1122,7 @@ capture_failed_execution
 ### Owns
 
 A16: the one MCP entrance — request size, token comparison in constant time
-against the installation's current list, the operation schemas and their
+against the installation's current list, the depth of the message (A20), the operation schemas and their
 bounds, the actor table of A16 rule 3, handling one request at a time to its
 end, run advancement included (A18 rule 3), paging parameters, the reads of
 inspection, traces and the repair view of a slot (A15 rule 6), and responses that
