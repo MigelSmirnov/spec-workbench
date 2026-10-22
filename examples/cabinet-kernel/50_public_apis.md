@@ -436,8 +436,9 @@ normalization (A01 rule 1).
 
 ### Errors
 
-`refused` for a value JCS cannot represent: a non-finite number, a duplicate
-key.
+`refused` for a value JCS cannot represent — a non-finite number, a duplicate
+key — and for a value whose `json_depth` exceeds `json_depth_max` (A20
+rule 1).
 
 ### State impact
 
