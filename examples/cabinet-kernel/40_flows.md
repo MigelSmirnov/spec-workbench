@@ -475,9 +475,9 @@ records are the trace and the rest state.
    Otherwise `capability:service_invoker.send_prepared_request` sends once,
    within the transport deadline set from a
    `capability:clock.monotonic_ns` reading — no redirect, proxy or retry — and names the outcome from the `read` column of
-   the A09 rule 5 table; a 2xx answer with value outputs whose depth, measured
-   before it is parsed with `capability:canonical_values.json_depth`, exceeds
-   `json_depth_max` is `contract_violation` (A20 rule 1). `module:effects` writes the concluding NodeExecution
+   the A09 rule 5 table; a 2xx answer with value output ports whose body, measured
+   as a whole before it is parsed with `capability:canonical_values.json_depth`,
+   is deeper than `json_depth_max` is `contract_violation` (A20 rule 1). `module:effects` writes the concluding NodeExecution
    and the output values, class from the binding, a returned file going to the
    run's spool. `module:runs` reads the
    element's conclusion through
@@ -614,10 +614,10 @@ call; the run's status and WaitingPoints M20 written by `module:runs`.
    sends once, within the transport deadline set from a
    `capability:clock.monotonic_ns` reading, the key fields travelling as the
    inputs themselves; a file the service returns goes to the run's spool
-   through `capability:store.spool_file`; a 2xx answer with value outputs
-   nested deeper than `json_depth_max`, measured before it is parsed with
-   `capability:canonical_values.json_depth`, is `contract_violation` (A20
-   rule 1). A second
+   through `capability:store.spool_file`; a 2xx answer with value output ports
+   whose body, measured as a whole before it is parsed with
+   `capability:canonical_values.json_depth`, is deeper than `json_depth_max` is
+   `contract_violation` (A20 rule 1). A second
    store call writes the outcome: the attempt's conclusion from the non-`read`
    column of A09 rule 5, the next NodeExecution, the output values, and the
    approval `used` — unless the attempt ended `not_sent`.
