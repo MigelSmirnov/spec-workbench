@@ -1607,6 +1607,51 @@ deploy, found four gaps. None is a code fault the notes did not cause or allow.
     its response's id is null. Why: A20 rule 1 defines depth once, so the
     kernel has one function that computes it.
 
+## Decision closed at the verification of decisions 41–45 (2026-10-22)
+
+Verification 20261022_073605 of the Route B for decisions 41–45 failed 11 of
+134 witnesses where the deploy of decision 40 had passed all 130. Run against
+the generator's drafts instead of the assembled build, four of them pass —
+the factory's assembler broke them and is the factory's to repair — and a
+fifth cluster comes from a prompt that showed no discriminated union's
+variants. The rest the notes allowed.
+
+46. **Four notes say what the generator read wrongly; decision 44 is
+    revised.**
+    - `canonical_bytes`: decision 41's condition was one clause, "neither held
+      exactly … nor written as the shortest form", inside a parenthesis, and
+      the generated parser refused a spelling failing *either* test, so
+      `18014398509481990` and 2^60 were refused again (A01 required test 9).
+      The note now names the two tests, says that passing either accepts and
+      that only a spelling passing neither is refused.
+    - `execute_trial_case`: decision 44 held that the note already said the
+      output's digest is compared and that the generator erred, and changed no
+      note. The second generation erred the same way — it read the output's
+      StoredValue back before writing it — so the note allowed it. It now says
+      where each digest comes from: a value output's from its canonical bytes
+      and a file output's from its facts, as the sandbox returned them; the
+      expected output's from its stored record; the outcome is decided before
+      any output is written. Decision 44's witness stands; its "no note
+      changes" does not.
+    - `answer_request`: decision 45 put the replacement of every JSON text by
+      its canonical form "as part of the fit check", before "every bound
+      below", while the bound note counts "the field as received"; the
+      generated surface measured the canonical text and answered
+      `invalid_request` for a run input whose text was within
+      `stored_value_bytes_max` as received and above it only once canonical,
+      which A12 rule 1 refuses at the start (`refused`). The bounds are now
+      checked on the fitted request before any replacement, and the
+      replacement is the last step of the fit; a canonical form that outgrows
+      a bound is judged by the module that judges the value.
+    - `plan_run`: "a ListElementSource with the list's own source" now names
+      that source — the RecordedSource or MappedListSource that delivers the
+      list to the map_over port, unchanged — and says that a
+      StoredValueSource or SpooledFileSource only names bytes and is never a
+      ListSource (the union `ListSource` of State 6).
+    No rule, model, contract, ceiling or outcome changes. Why: A01 rule 1, A04
+    rule 3, A12 rule 1 and A16 rule 4 already decide each case; the notes now
+    leave the generator one reading of each.
+
 ## Texts of earlier states changed by State 6
 
 - State 4 (2026-10-22, decision 45 completed): the reviewed flows
