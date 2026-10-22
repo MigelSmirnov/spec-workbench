@@ -1586,8 +1586,35 @@ deploy, found four gaps. None is a code fault the notes did not cause or allow.
     stored. A04 required test 8 names an output the store never held. No note
     changes.
 
+## Decision closed by the State 7 round on the depth ceiling (2026-10-22)
+
+45. **One operation measures depth; every pre-parse check calls it.**
+    Decision 42 made five modules measure a JSON text's depth before parsing
+    it — `installation` its configuration file, `bindings` a manifest record,
+    `service_invoker` a parsed service answer, `surface` the request message,
+    and `canonical_bytes` every value — and each note said "depth as
+    `canonical_bytes` defines it". `canonical_bytes` returns only bytes, so
+    four modules were told to use a measure no contract exposed, and five
+    generated copies of one scan could disagree on a string's escapes
+    (State 7 round 95). `canonical_values` now has the public operation
+    `json_depth(json_bytes: bytes) -> int`: one pass counting brackets
+    and braces outside strings, no parse, no recursion, never raising; every
+    pre-parse check and `canonical_bytes` itself use it, and `installation`
+    now knows `canonical_values`. Two contradictions of the same round go with
+    it: `assemble_mapped_lists` gives `canonical_bytes` the JSON array text
+    made of the elements' stored bytes, since the operation takes text, not a
+    list; and a request body refused by the depth check is never parsed, so
+    its response's id is null. Why: A20 rule 1 defines depth once, so the
+    kernel has one function that computes it.
+
 ## Texts of earlier states changed by State 6
 
+- States 3, 4 and 5 (2026-10-22, decision 45): `canonical_values` gains the
+  capability `json_depth` and `installation` knows `canonical_values` (State
+  3); the flows that bind, run and start name
+  `capability:canonical_values.json_depth` (State 4);
+  `public_op:canonical_values.json_depth` (State 5). Reopens the rounds of
+  States 3–5.
 - State 2 (2026-10-21, decisions 41–44): A20 — the row `json_depth_max`
   (64, owner), the depth of a JSON value defined, its formal invariant and
   required test 5; required tests A01 9, A04 8 and A14 11. State 3: the A20

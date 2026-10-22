@@ -443,6 +443,44 @@ key.
 
 Pure; touches no record.
 
+## `public_op:canonical_values.json_depth`
+
+### Owner
+
+`module:canonical_values`. Measure the nesting depth of one JSON text without
+parsing it or recursing.
+
+### Callers
+
+`module:installation`, `module:service_invoker`, `module:bindings`, `module:surface`.
+
+### Inputs
+
+One JSON text as its UTF-8 bytes, well-formed or not.
+
+### Outputs
+
+Its depth as A20 rule 1 defines it.
+
+### Observable effect
+
+None.
+
+### Enforces
+
+The one definition of depth (A20 rule 1): every place that bounds a JSON text
+by `json_depth_max` before it parses it measures with this operation, and
+`canonical_bytes` refuses by the same measure.
+
+### Errors
+
+None; a text that is not JSON is measured all the same and refused by
+whoever parses it.
+
+### State impact
+
+Pure; touches no record.
+
 ## `public_op:canonical_values.content_identity`
 
 ### Owner

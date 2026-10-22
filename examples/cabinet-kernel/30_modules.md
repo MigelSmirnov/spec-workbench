@@ -438,7 +438,8 @@ HTTP_METHOD_BODIES
 
 ### Owns
 
-A01 rules 1 and 4: canonical JSON (RFC 8785) and the SHA-256 identities of
+A01 rules 1 and 4: canonical JSON (RFC 8785), the one measure of a JSON text's
+depth (A20 rule 1), and the SHA-256 identities of
 content records and values computed from it, with order-free lists sorted as
 A01 rule 1 says. The supported `value_schema` subset and validation of a value
 against a port: presence, carriage, schema, size, a `many` value as an array
@@ -464,6 +465,7 @@ sorting keys of each content record, the schema subset interpreter.
 
 ```text
 canonical_bytes
+json_depth
 content_identity
 fit_port_value
 highest_disclosure_class
@@ -688,7 +690,7 @@ credential only when a request to that service is built.
 
 ### Knows
 
-`models`, `data_provider`.
+`models`, `data_provider`, `canonical_values`.
 
 ### Must not own
 
