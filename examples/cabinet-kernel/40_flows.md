@@ -215,8 +215,8 @@ accepts (A16 rule 3). `module:bindings` owns reading the manifest record, the
 proposal checks in their order, the digest pin and acceptance (A08).
 `module:service_invoker` owns the request-shape rules a binding's ports must
 satisfy (A09 rules 2 and 3) and offers them to `module:bindings`; it sends
-nothing in this flow. `module:canonical_values` computes the digest of the
-operation's capability entry.
+nothing in this flow. `module:canonical_values` measures the manifest
+record's depth and computes the digest of the operation's capability entry.
 
 `module:installation` gives the token list, the manifest source and the
 selected instance.
@@ -237,7 +237,9 @@ come from the installation.
    rule 5). It refuses a malformed `service_id` before a path is built, reads
    `<manifest_location>/<service_id>.json` at the configured revision, both
    from `capability:installation.manifest_source` (A08 rule 1), and runs the A08 rule 5 checks in their order, naming the first
-   failing one: record, duplicate entry names, operation present, effect class
+   failing one: record — valid JSON whose depth, measured before it is parsed
+   with `capability:canonical_values.json_depth`, is within `json_depth_max`
+   (A20 rule 1) —, duplicate entry names, operation present, effect class
    one of the five, invocable (A08 rule 3, A09 rule 1), the key syntax for an
    operation other than `read`, the instance
    `capability:installation.selected_instance_name` selects, with an
@@ -473,7 +475,9 @@ records are the trace and the rest state.
    Otherwise `capability:service_invoker.send_prepared_request` sends once,
    within the transport deadline set from a
    `capability:clock.monotonic_ns` reading — no redirect, proxy or retry — and names the outcome from the `read` column of
-   the A09 rule 5 table. `module:effects` writes the concluding NodeExecution
+   the A09 rule 5 table; a 2xx answer with value outputs whose depth, measured
+   before it is parsed with `capability:canonical_values.json_depth`, exceeds
+   `json_depth_max` is `contract_violation` (A20 rule 1). `module:effects` writes the concluding NodeExecution
    and the output values, class from the binding, a returned file going to the
    run's spool. `module:runs` reads the
    element's conclusion through
@@ -610,7 +614,10 @@ call; the run's status and WaitingPoints M20 written by `module:runs`.
    sends once, within the transport deadline set from a
    `capability:clock.monotonic_ns` reading, the key fields travelling as the
    inputs themselves; a file the service returns goes to the run's spool
-   through `capability:store.spool_file`. A second
+   through `capability:store.spool_file`; a 2xx answer with value outputs
+   nested deeper than `json_depth_max`, measured before it is parsed with
+   `capability:canonical_values.json_depth`, is `contract_violation` (A20
+   rule 1). A second
    store call writes the outcome: the attempt's conclusion from the non-`read`
    column of A09 rule 5, the next NodeExecution, the output values, and the
    approval `used` — unless the attempt ended `not_sent`.
@@ -874,7 +881,8 @@ kernel stopped itself on unconfirmed sandbox cleanup (A03 rule 7).
 ### Boundary
 
 `module:surface` owns the start order and opens the entrance only at its end
-(A16, A18). `module:installation` loads and checks the configuration (A17).
+(A16, A18). `module:installation` loads and checks the configuration (A17);
+`module:canonical_values` measures its depth.
 `module:bindings` checks the installed instances against the manifest (A09 rule
 1). `module:store` takes the lock, checks the data directory and removes
 temporary files and the spools it is told to (A18). `module:sandbox` probes
@@ -900,7 +908,9 @@ EffectAttempt M26 and the concluding NodeExecution M23 written by
    a later start removes it (A18 rule 4):
 2. `capability:installation.load_installation`: the configuration file's
    path, that argument, is absolute; the file is a regular private
-   file of the kernel's user, one JSON object of the installation's fields; no
+   file of the kernel's user, its depth, measured before it is parsed with
+   `capability:canonical_values.json_depth` of `module:canonical_values`,
+   within `json_depth_max` (A20 rule 1), one JSON object of the installation's fields; no
    service twice among the selected instances or the credentials; every
    credential header name an HTTP field-name token and every secret file
    reference an absolute path; tokens at least 43 characters and pairwise

@@ -1609,6 +1609,14 @@ deploy, found four gaps. None is a code fault the notes did not cause or allow.
 
 ## Texts of earlier states changed by State 6
 
+- State 4 (2026-10-22, decision 45 completed): the reviewed flows
+  `propose_and_accept_binding`, `run_read_only_flow`,
+  `run_effect_with_approval` and `start_and_recover_kernel` now name
+  `capability:canonical_values.json_depth` where a manifest record, a service
+  answer and the configuration file are measured, and
+  `start_and_recover_kernel` names `module:canonical_values`; decision 45 had
+  changed only `40_flow_plan.json`, so `design_stage4.py --lint` reported five
+  plan mismatches. Reopens the rounds of State 4.
 - States 3, 4 and 5 (2026-10-22, decision 45): `canonical_values` gains the
   capability `json_depth` and `installation` knows `canonical_values` (State
   3); the flows that bind, run and start name
