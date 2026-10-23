@@ -402,6 +402,67 @@ def test_guard_skip_transitive_run_succeeds(semantic_runtime):
     assert _enum(_only_record(fresh_trace, "save").status) == "succeeded"
 
 
+def test_edge_delivery_exhaustive(semantic_runtime):
+    """[witness: verification:kernel_a13_edge_delivery_exhaustive]
+
+    A13 Required test 10: only a mismatching guard of a succeeded source makes
+    an edge disabled. Edges from failed, upstream-failed and skipped sources
+    remain undecided, even after the run has ended. The public consequence is
+    `not_produced` behind failed and upstream-failed sources, versus
+    `skipped_by_guard` behind a skipped source.
+    """
+    fragile = _x_to_y(semantic_runtime, "a13_edge_fragile", FAIL_AT_ZERO)
+    copy = _x_to_y(semantic_runtime, "a13_edge_copy", COPY_X)
+    screen = _function(
+        semantic_runtime,
+        "a13_edge_screen",
+        inputs=[_port("x", "input", NUMBER, "open")],
+        outputs=[_port("item", "output", NUMBER), _port("verdict", "output", VERDICT)],
+        case_inputs=[_value("x", "1")],
+        code=SCREEN_NUMBER,
+    )
+
+    _compose_active(
+        semantic_runtime,
+        "a13_edge_failure_chain",
+        inputs=[_port("x", "input", NUMBER, "open")],
+        outputs=[_port("out", "output", NUMBER)],
+        nodes=[_function_node("a", fragile), _function_node("b", copy)],
+        edges=[
+            _edge("", "x", "a", "x"),
+            _edge("a", "y", "b", "x"),
+            _edge("b", "y", "", "out"),
+        ],
+    )
+    _compose_active(
+        semantic_runtime,
+        "a13_edge_skip_chain",
+        inputs=[_port("x", "input", NUMBER, "open")],
+        outputs=[_port("out", "output", NUMBER)],
+        nodes=[_function_node("g", screen), _function_node("s", copy)],
+        edges=[
+            _edge("", "x", "g", "x"),
+            _edge("g", "item", "s", "x", guard=_guard("verdict", '"new"')),
+            _edge("s", "y", "", "out"),
+        ],
+    )
+
+    failed = semantic_runtime.start_run(
+        "a13_edge_failure_chain", inputs=[_value("x", "0")]
+    )
+    assert _enum(failed.status) == "failed"
+    assert _enum(_only_record(_trace(semantic_runtime, failed.run_id), "a").status) == "crashed"
+    assert _enum(_only_record(_trace(semantic_runtime, failed.run_id), "b").status) == "upstream_failed"
+    assert _missing(failed, "out") == "not_produced"
+
+    skipped = semantic_runtime.start_run(
+        "a13_edge_skip_chain", inputs=[_value("x", "0")]
+    )
+    assert _enum(skipped.status) == "succeeded"
+    assert _enum(_only_record(_trace(semantic_runtime, skipped.run_id), "s").status) == "skipped_by_guard"
+    assert _missing(skipped, "out") == "skipped_by_guard"
+
+
 def test_failed_input_gives_upstream_failed(semantic_runtime):
     """[witness: verification:kernel_a13_failed_input_gives_upstream_failed]
 

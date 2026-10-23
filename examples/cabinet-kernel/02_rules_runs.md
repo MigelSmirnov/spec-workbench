@@ -175,6 +175,22 @@ worker.
    request (K-09); the run then rests `awaiting_approval` when any element waits
    for the owner's approval, otherwise `pending`.
 
+9. Every edge has exactly one delivery state, derived from whether its source
+   concluded succeeded and, only then, from its guard:
+
+   | Source state | Guard | Delivery |
+   |---|---|---|
+   | not reached, waiting, failed, refused, `skipped_by_guard` or `upstream_failed` | absent or present | `undecided` |
+   | succeeded | absent | `enabled` |
+   | succeeded | present and equal | `enabled` |
+   | succeeded | present and unequal | `disabled` |
+
+   A flow input counts as a succeeded source from the start. `disabled` means
+   only that a guard of a succeeded source did not match; a source that did not
+   succeed never makes an edge disabled. A `skipped_by_guard` source remains a
+   separate fact used by rule 4 and rule 7; its outgoing edge is still
+   `undecided`.
+
 ### Formal invariants
 
 ```text
@@ -186,6 +202,12 @@ port_unreachable_by_guard -> skipped_by_guard   (transitive)
 input_from(failed | upstream_failed) -> upstream_failed   (wins over skip)
 conclusion(element) = status(node_execution) unless resolved(outcome_unknown) -> A11
 run.succeeded <-> for_all node: conclusion IN {succeeded, skipped_by_guard}
+```
+
+```text
+edge.disabled <-> source_concluded_succeeded AND guard_present AND guard_value_mismatch
+edge.enabled <-> source_concluded_succeeded AND (guard_absent OR guard_value_match)
+edge.undecided <-> NOT source_concluded_succeeded
 ```
 
 ### Required tests
@@ -220,6 +242,12 @@ run.succeeded <-> for_all node: conclusion IN {succeeded, skipped_by_guard}
    `applied` for a binding with output ports, its dependants conclude
    `upstream_failed`; its NodeExecution keeps `outcome_unknown` throughout.
    [witness: verification:kernel_a13_resolved_unknown_conclusion]
+
+10. An edge from a failed, `upstream_failed` or `skipped_by_guard` source is
+    reported `undecided`, never `disabled`; the first two leave an ended flow
+    output `not_produced`, while the skipped source leaves it
+    `skipped_by_guard` by rule 7.
+    [witness: verification:kernel_a13_edge_delivery_exhaustive]
 
 ### Consequence
 

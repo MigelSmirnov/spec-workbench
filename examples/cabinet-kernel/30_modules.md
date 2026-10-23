@@ -424,6 +424,7 @@ SERVICE_ID_PATTERN
 MANIFEST_RECORD_FILE_SUFFIX
 EXECUTION_STATUS_CONCLUSIONS
 NODE_CONCLUSION_EFFECTS
+EDGE_DELIVERY_RULES
 WAIT_REASON_RESTING_STATUSES
 HTTP_METHOD_BODIES
 ```
@@ -1038,7 +1039,7 @@ and the reason of every missing one.
 
 ### Knows
 
-`models`, `data_provider` (conclusion tables), `store` (value bytes),
+`models`, `data_provider` (conclusion and edge-delivery tables), `store` (value bytes),
 `run_values` (mapped lists), `effects` (an operation element's conclusion); no
 clock — the time of a draft is the `now` `runs` passes.
 

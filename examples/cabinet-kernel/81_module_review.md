@@ -37,6 +37,15 @@ underspec gate, and every symbol a note names is in that module's Factory import
 
 ## Module results
 
+Decision 47–48 delta (2026-10-23): the eleven slices whose hashes changed were
+rebuilt and reviewed with `--review`; every structural result has zero blocks.
+`models`, `data_provider` and `run_graph` carry the new typed edge-delivery
+relation. `functions` and `effects` carry the two explicit writer invariants
+found by the reopened State 7 review. The remaining changed slices were checked
+as transitive-context deltas and gained no behavior. State 7 closed after two
+clear reviews of every changed prompt, and the `run_graph` prompt exposes only
+the `EDGE_DELIVERY_RULES` access signature, never its rows.
+
 | Module | Mode | Contracts | Notes | Structural findings | Semantic result |
 |---|---|---:|---:|---:|---|
 | `models` | deterministic | 101 | 101 | 0 | PASS (decision 24 types) |
@@ -44,19 +53,19 @@ underspec gate, and every symbol a note names is in that module's Factory import
 | `canonical_values` | behavioral | 4 | 18 | 0 | PASS |
 | `clock` | behavioral | 5 | 8 | 0 | PASS |
 | `store_persistence` | deterministic | 103 | 0 | 0 | PASS |
-| `store` | behavioral | 11 | 55 | 0 | PASS (N11; decision 24; decision 32) |
+| `store` | behavioral | 11 | 56 | 0 | PASS (N11; decision 24; decision 32) |
 | `installation` | behavioral | 6 | 13 | 0 | PASS (N01–N03) |
 | `sandbox_runner` | behavioral | 3 | 9 | 0 | PASS (decision 32) |
-| `sandbox` | behavioral | 3 | 14 | 0 | PASS (N15, N16; decision 32) |
+| `sandbox` | behavioral | 3 | 15 | 0 | PASS (N15, N16; decision 32) |
 | `service_invoker` | behavioral | 3 | 24 | 0 | PASS (N17–N19) |
-| `run_values` | behavioral | 4 | 10 | 0 | PASS (decision 32) |
+| `run_values` | behavioral | 4 | 12 | 0 | PASS (decision 32) |
 | `functions` | behavioral | 13 | 39 | 0 | PASS (Q1, decision 24); repaired N00, N06–N08 |
 | `bindings` | behavioral | 7 | 18 | 0 | PASS (N00) |
 | `flows` | behavioral | 6 | 19 | 0 | PASS (N00, N14) |
-| `effects` | behavioral | 9 | 32 | 0 | PASS (N04, N05) |
+| `effects` | behavioral | 9 | 33 | 0 | PASS (N04, N05; decision 48) |
 | `run_graph` | behavioral | 1 | 8 | 0 | PASS (decision 32) |
 | `runs` | behavioral | 12 | 33 | 0 | PASS (Q2, decision 24); repaired N09, N10; decision 32 |
-| `surface` | behavioral | 36 | 108 | 0 | PASS (Q3, decision 24); repaired N00, N12, N13 |
+| `surface` | behavioral | 36 | 117 | 0 | PASS (Q3, decision 24); repaired N00, N12, N13 |
 
 "Structural findings" means the blocks reported by `--review`. The note counts are the ones after
 the repairs; `store` gained the one new note (N11).

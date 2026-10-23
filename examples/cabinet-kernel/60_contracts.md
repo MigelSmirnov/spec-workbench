@@ -1652,6 +1652,49 @@ variants. The rest the notes allowed.
     rule 3, A12 rule 1 and A16 rule 4 already decide each case; the notes now
     leave the generator one reading of each.
 
+## Decision closed by the A13 edge-delivery regression (2026-10-23)
+
+47. **Edge delivery is one total provider relation, never a table in a
+    note.** Verification `20261022_232630` showed a generated `plan_run`
+    treating every concluded non-successful source as a disabled edge. A13
+    already reserved `disabled` for a guard that rejects a succeeded source,
+    but the State 7 prose left the other concluded cases implicit.
+    - A13 rule 9 now states the exhaustive product behavior without changing
+      an outcome: only a succeeded source can enable or disable an edge; every
+      other source state leaves it `undecided`.
+    - `EdgeDeliveryRule` is the value row with `source_succeeded`,
+      `guard_present`, `guard_matches` and `delivery`.
+      `EDGE_DELIVERY_RULES` is a version 2 `record_tuple`, keyed by all three
+      booleans and total over their combinations. Its rows live only in
+      `70_data_provider_closure.json` and are emitted deterministically.
+    - `run_graph` imports the constant. The `plan_run` note names the row
+      fields used to select one row and takes `EdgeState.delivery` from that
+      row; it neither repeats nor paraphrases the correspondence.
+    - A13 required test 10 directly observes that failed, upstream-failed and
+      skipped sources never produce a disabled edge. The existing output
+      witnesses remain the end-to-end guard against confusing
+      `not_produced` with `skipped_by_guard`.
+    Why: SPEC_STANDARD 2, 6.10 and 15.9 forbid a machine-consumed table in the
+    generated module's prose prompt. The deterministic provider is the one
+    owner of the relation and makes every boolean combination explicit.
+
+48. **Broad payload unions do not widen the values their writers can
+    produce.** The State 7 re-review after decision 47 exposed two old prompt
+    ambiguities, without changing A04 or A09.
+    - `add_trial_case` is the only writer of authored `TrialCase.expected_outputs`
+      and writes every expected value or file fixture as a `StoredValuesRef`;
+      captured cases have no expected outputs. `execute_trial_case` may
+      therefore read the referenced `StoredValue` for every expected output;
+      the other `PortRef` variants are not possible in that field.
+    - A09 rule 3 admits a binding with a file output only when that output is
+      cardinality `one`, and `send_prepared_request` consequently returns one
+      `FilePayload`, never `FileListPayload`, for a file output. The broader
+      `PortPayload` union remains necessary for function execution and request
+      inputs; it does not expand `SendResult.outputs` at this seam.
+    Why: a generated consumer must receive the producer invariant that narrows
+    a shared union, or it is forced either to invent behavior for unreachable
+    variants or to reject a value the accepted writer produces.
+
 ## Texts of earlier states changed by State 6
 
 - State 4 (2026-10-22, decision 45 completed): the reviewed flows
