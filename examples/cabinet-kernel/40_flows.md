@@ -811,8 +811,11 @@ page of NodeExecutions cross into `module:surface`.
    with the record's executed implementation, the contract version named and
    the record's inputs as references, spooled files as their SpooledFiles.
    `module:functions` reads that implementation's own record and checks that
-   its contract version is the one named, fits each value with
-   `capability:canonical_values.fit_port_value` and each file by its facts
+   its contract version is the one named. It then refuses a FileFactsRef
+   anywhere in the input tuple, even with no files, naming FileFactsRef and
+   the smallest offending port by Unicode code-point order, before any input
+   value or spooled-file lookup or input-byte read. With no facts-only ref,
+   it fits each value with `capability:canonical_values.fit_port_value` and each file by its facts
    against `trial_fixture_bytes_max` (A04 rule 1), and only then copies each
    spooled file into the content-addressed area — read through
    `capability:store.read_value_bytes`, stored through

@@ -1695,6 +1695,22 @@ variants. The rest the notes allowed.
     a shared union, or it is forced either to invent behavior for unreachable
     variants or to reject a value the accepted writer produces.
 
+## Capture-reference contract closure (2026-10-23)
+
+49. **A facts-only reference is refused at the capture capability.** Owner
+    confirmed retaining `inputs: tuple[PortRef, ...]` and explicitly refusing
+    FileFactsRef, preserving the existing implementation lookup and contract
+    mismatch precedence. A04 rule 7 owns the behavior; States 3–5 and State 7
+    carry it to the functions capability and its prompt. No model, signature,
+    readable-input behavior or store operation changes. The whole tuple is
+    checked before looking up any input or reading bytes; an empty facts list
+    is still facts-only, and the refusal names the smallest offending port by
+    Unicode code-point order. A04 required test 9 instruments the store
+    boundary in a separate subprocess; the ordinary capture witness remains.
+    This replaces the unauthorized Factory-only note edit, which incorrectly
+    moved facts-only refusal ahead of implementation lookup. It is authored
+    and validated here before export; a Factory editor PASS never closed R11.
+
 ## Texts of earlier states changed by State 6
 
 - State 4 (2026-10-22, decision 45 completed): the reviewed flows

@@ -159,8 +159,12 @@ record checked by `design_lint --state 2`, recorded as such in `30_trace.json`.
   `functions.add_captured_trial_case` with the record's inputs as references,
   spooled files as their SpooledFiles, and its executed implementation.
   `functions` reads that implementation's own record, checks that its
-  contract version is the one named, and checks the case's fit and sizes to it
-  on the values and the files' facts, and only then copies each spooled file's
+  contract version is the one named, then checks the complete input tuple and
+  refuses any FileFactsRef, even an empty one, before looking up any input
+  value or spooled file or reading input bytes. That refusal names FileFactsRef
+  and the smallest offending port by Unicode code-point order. Only readable
+  references continue to the case's existing fit and size checks on values and
+  file facts; only then does it copy each spooled file's
   bytes into the content-addressed area through `store` and adds the case to
   the corpus (A04 rule 1, M06). A refused capture copies nothing.
 - **NodeExecution records.** The record's shape is M23 in `models`. The record

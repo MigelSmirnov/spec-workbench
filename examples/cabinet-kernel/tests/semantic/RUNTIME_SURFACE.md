@@ -219,3 +219,20 @@ is not written around.
 | `kernel_a20_dependencies_pinned_by_release` | `release`, `kernel_sources()`: static facts of the release |
 | `kernel_a20_json_depth_over_ceiling_refused` | `mcp_request` with `raw=` (a message nested deeper than the test process builds), `installation.agent_token`, `kernel_exited()` |
 | `kernel_a16_agent_code_not_run_in_kernel` | `host_scratch_directory()`: where a marker would appear if the kernel process imported or evaluated agent code |
+
+
+## Capture capability witness (A04/R11)
+
+`test_a04_admission.py` additionally checks the callable contract of
+`functions.add_captured_trial_case` directly in an isolated subprocess. Its
+PortRef input is broader than the MCP capture request can construct. The probe
+imports the candidate's models and function without replacing anything in the
+MCP runtime, supplies typed implementation/contract records at the store
+boundary, and observes that unknown implementation lookup propagates unchanged,
+contract mismatch precedes input checks, and FileFactsRef is refused before any
+input lookup, input-byte read, publication or change. Empty/non-empty facts,
+all tuple positions and deterministic offending-port order are covered.
+The default module directory is the Factory project's `cabinet_kernel/`;
+`CABINET_KERNEL_WITNESS_MODULE_DIR` selects a candidate directory for diagnosis.
+This probe needs no new semantic_runtime call; normal capture through MCP stays
+covered by `kernel_a04_resubmission_readmits_grown_corpus`.

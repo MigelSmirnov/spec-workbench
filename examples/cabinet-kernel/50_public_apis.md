@@ -1668,7 +1668,10 @@ The case is in the corpus; the corpus digest changed when new.
 ### Enforces
 
 The executed implementation exists and its contract version, read from its own
-record, is the one named; fit of every value; every file within
+record, is the one named; then the complete input tuple is checked for any
+FileFactsRef, including an empty list, which is refused naming FileFactsRef
+and the smallest offending port in Unicode code-point order before any input
+value or spooled-file lookup or input-byte read; then fit of every value; every file within
 `trial_fixture_bytes_max` by its facts, read from its SpooledFile through
 `store.read_records`; all before any byte is copied — only
 then each spooled file is copied into the content-addressed area, so a refusal
@@ -1676,7 +1679,11 @@ copies nothing; inputs take the port's class (A04 rule 1, A15 rule 5, M21).
 
 ### Errors
 
-`refused` naming the first failing check.
+`unknown_reference` for the executed implementation, before local checks;
+`refused` naming the first failing check. The local order is implementation
+lookup, contract-version match, complete facts-only-reference check, then the
+existing input fit and size checks. The request checks of A16 and the caller's
+execution/run checks of A15 precede this capability and are unchanged.
 
 ### State impact
 

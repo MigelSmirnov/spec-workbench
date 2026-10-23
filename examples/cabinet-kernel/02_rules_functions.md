@@ -359,6 +359,22 @@ admission order and of resubmitting an equal implementation.
    changes the corpus digest; the serving implementation keeps serving. It
    visibly lacks a verdict over the current corpus when the slot is inspected,
    and serves until another implementation is activated.
+   The functions capability keeps the broad PortRef input contract. The
+   following order is local to that callable, after the external request
+   checks of A16 and the capture caller's execution and run checks of A15;
+   it does not replace or reorder those boundary checks. The callable first
+   resolves the executed implementation, then checks its contract version
+   against the named version. An unknown implementation remains
+   `unknown_reference`; a contract mismatch is refused before input checks.
+   Next it checks the complete input tuple for facts-only file references,
+   before looking up any input value or spooled file. Any FileFactsRef,
+   including an empty file list, is refused: facts alone name no readable
+   bytes and cannot become a fixture. The refusal names FileFactsRef and the
+   first offending port in Unicode code-point name order. It reads no input
+   bytes, publishes no bytes and records no change. StoredValuesRef and
+   SpooledFilesRef continue through the existing fit, size and copy checks.
+   Owner-confirmed R11 closure, 2026-10-23; it preserves A04's existing
+   validation ownership and the prior unknown-reference precedence.
 8. No actor records, edits or waives a verdict. Admission requires no human:
    a function has no effect for a human to weigh (K-02).
 
@@ -373,6 +389,10 @@ submit(impl) AND verdict(impl, current_corpus) = admitted
   AND current_activation != impl  -> new Activation(by kernel)
 rollback(impl) -> exists verdict(impl, current_corpus) = admitted
 verdict -> set_only_by_kernel
+capture(unknown_implementation, any_inputs) -> unknown_reference
+capture(contract_mismatch, any_inputs) -> refused_before_input_checks
+capture(matching_implementation, inputs_containing_FileFactsRef)
+  -> refused AND no_input_lookup AND no_input_byte_read AND no_publication AND no_change
 ```
 
 ### Required tests
@@ -402,6 +422,15 @@ verdict -> set_only_by_kernel
    outcome `output_mismatch` naming that case — never answered as an unknown
    reference.
    [witness: verification:kernel_a04_mismatch_with_unstored_output_refused]
+
+9. Calling the capture capability with a matching implementation and any
+   facts-only file reference, empty or non-empty, alone or among readable
+   refs, refuses naming its port and FileFactsRef without looking up inputs,
+   reading input bytes, publishing bytes or recording a change. An unknown
+   implementation still raises unknown_reference, and a contract mismatch
+   still wins before the input refusal. Several facts-only refs name the
+   smallest port, independent of tuple order.
+   [witness: verification:kernel_a04_capture_file_facts_refused]
 
 ### Consequence
 

@@ -525,3 +525,123 @@ def test_mismatch_with_unstored_output_refused(semantic_runtime):
     assert submission.activation is None
     (execution,) = _trial_executions(semantic_runtime, implementation_id)
     assert _value(execution.outcome) == "output_mismatch"
+
+
+"""A04/R11: the capture capability closes every PortRef variant.
+
+[witness: verification:kernel_a04_capture_file_facts_refused]
+
+This capability-level witness imports the candidate in a separate process and
+instruments its store boundary. It never starts or changes the MCP runtime.
+The implementation lookup remains real application code; only store results
+and forbidden side effects are controlled. The ordinary capture path remains
+covered by test_a04_admission.py.
+"""
+from pathlib import Path
+import os
+import subprocess
+import sys
+
+import pytest
+
+
+_CAPTURE_REF_PROBE = r'''
+import importlib
+from pathlib import Path
+import sys
+import types
+from unittest.mock import patch
+
+package = types.ModuleType("cabinet_kernel")
+package.__path__ = [str(Path(sys.argv[1]).resolve())]
+sys.modules["cabinet_kernel"] = package
+f = importlib.import_module("cabinet_kernel.functions")
+m = importlib.import_module("cabinet_kernel.models")
+s = importlib.import_module("cabinet_kernel.store")
+scenario, facts_kind, position = sys.argv[2], sys.argv[3], int(sys.argv[4])
+actor = m.Actor(kind="owner", agent_name=None)
+instant = m.KernelInstant(epoch_us=0)
+implementation = m.Implementation(implementation_id="implementation",
+    contract_version_id="contract", code="def run(inputs): return {}",
+    submitted_by=actor, submitted_at=instant)
+facts = () if facts_kind == "empty" else (
+    m.FileFacts(content_digest="digest", size_bytes=1,
+                media_type="application/octet-stream"),)
+def bad(port):
+    return m.FileFactsRef(ref_kind="file_facts", port=port, files=facts,
+                          disclosure_class="open")
+readable = (
+    m.StoredValuesRef(ref_kind="stored_values", port="a", value_id="missing-value"),
+    m.SpooledFilesRef(ref_kind="spooled_files", port="z", files=(),
+                      disclosure_class="open"),)
+inputs = (bad("unreadable"),) if position == -1 else (
+    readable[:position] + (bad("unreadable"),) + readable[position:])
+if scenario == "order":
+    inputs = (bad("omega"), bad("beta"))
+    if position == 1:
+        inputs = tuple(reversed(inputs))
+ports = tuple(m.Port(name=name, direction="input", value_schema="{}",
+    carriage="file", media_type="application/octet-stream", cardinality="many",
+    disclosure_class="open") for name in {ref.port for ref in inputs})
+contract = m.ContractVersion(contract_version_id="contract", slot_id="slot",
+    inputs=ports, outputs=(), resource_bounds=m.ResourceBounds(wall_time_ms=1,
+    memory_bytes=1, output_bytes=1, process_count=1), issued_by=actor, issued_at=instant)
+lookups = []
+missing = s.UnknownReferenceError("implementation")
+def read_records(query):
+    kind = getattr(query.record_type, "value", query.record_type)
+    assert kind == "implementation", "R11: looked up input before facts-only refusal"
+    assert query.record_ids == ("implementation",)
+    assert getattr(query.when_missing, "value", query.when_missing) == "unknown_reference"
+    lookups.append(kind)
+    if scenario == "unknown":
+        raise missing
+    fields = {field: () for field in m.RecordSet.model_fields}
+    fields["implementations"] = (implementation,)
+    return m.RecordSet(**fields)
+def no_side_effect(*args, **kwargs):
+    raise AssertionError("R11: read input bytes, published bytes, or recorded a change")
+with patch.multiple(f, read_records=read_records, read_value_bytes=no_side_effect,
+                    put_value_bytes=no_side_effect, record_change=no_side_effect), \
+     patch.object(f, "read_contract_version", return_value=contract):
+    try:
+        f.add_captured_trial_case("implementation",
+            "other-contract" if scenario == "mismatch" else "contract", inputs,
+            m.AttemptKey(run_id="run", node_id="node", attempt_number=1), actor)
+    except s.UnknownReferenceError as error:
+        assert scenario == "unknown" and error is missing
+    except s.RefusedError as error:
+        assert scenario != "unknown", "R11: facts refusal hid unknown implementation"
+        reason = str(error)
+        if scenario == "mismatch":
+            assert "contract_version_id" in reason and "FileFactsRef" not in reason
+        else:
+            assert "FileFactsRef" in reason, reason
+            assert ("beta" if scenario == "order" else "unreadable") in reason, reason
+    else:
+        raise AssertionError("R11: accepted facts-only capture input")
+assert lookups == ["implementation"], lookups
+'''
+
+
+def _capture_ref_probe(scenario, facts, position):
+    modules = Path(os.environ["CABINET_KERNEL_WITNESS_MODULE_DIR"]) if "CABINET_KERNEL_WITNESS_MODULE_DIR" in os.environ else Path(__file__).resolve().parents[2] / "cabinet_kernel"
+    result = subprocess.run([sys.executable, "-c", _CAPTURE_REF_PROBE, str(modules),
+        scenario, facts, str(position)], capture_output=True, text=True, timeout=30)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+@pytest.mark.parametrize("facts", ["empty", "nonempty"])
+@pytest.mark.parametrize("position", [-1, 0, 1, 2], ids=["alone", "first", "middle", "last"])
+def test_capture_file_facts_refused(facts, position):
+    _capture_ref_probe("facts", facts, position)
+
+
+@pytest.mark.parametrize("scenario", ["unknown", "mismatch"])
+def test_capture_implementation_checks_win(scenario):
+    _capture_ref_probe(scenario, "nonempty", 1)
+
+
+@pytest.mark.parametrize("position", [0, 1], ids=["reversed", "sorted"])
+def test_capture_file_facts_port_order(position):
+    _capture_ref_probe("order", "empty", position)
