@@ -525,10 +525,14 @@
     "runner_source: [BEHAVIOR] The program MUST, before it loads the code, replace every entry point named in raise_on_call with one that raises, those in raise_without_argument with ones that raise when called without an argument, every method of the class named by raise_on_every_method, and the class named by raise_unseeded when constructed without a seed or with None, and that class's seed method when called on an instance without a seed or with None (A03 rule 4: an explicitly seeded instance draws no entropy and stays usable); and install an audit hook that raises on socket, subprocess and ctypes use and on opening any path outside the exchange directory and the readable_paths. Each trap first writes its hit to the channel, which the code cannot unsend. A replacement is installed in one of two ways, chosen for every path of every list by the object the path names before its last dot: when that object is a class (isinstance of type) — datetime.datetime.now, datetime.datetime.utcnow, datetime.datetime.today and datetime.date.today, and the trapped class's methods — the method is trapped as a method, otherwise the module attribute is; an attribute of a module is replaced with setattr on that module; a method of a class or of a built-in type is replaced by setting, on the class's module, the class's name to a subclass that defines the trapping method, since the __dict__ of a type is read-only and is never written.",
     "runner_source: [BEHAVIOR] process_count bounds the code's tasks alive at once: the main thread counts as the first, every live thread and every process forked with os.fork counts with its threads; with the runner as the namespace's init every task the environment's proc lists is one of them, so every listed task counts and none is told apart by its parent. Process creation other than os.fork — subprocess, os.system, os.posix_spawn, os.posix_spawnp and the os.exec family — is subprocess use and raises in the audit hook as a trap hit (A03 rule 4). On os.fork and on starting a thread the audit hook MUST count the tasks by listing the task directory of every process listed in the proc directory its configuration's proc_directory names, opening no file there — an open outside the exchange directory and the readable_paths is itself a trap hit —, and, when the new task would exceed process_count, write a resource hit to the channel and raise, so the execution concludes resource_exhausted even when the code catches the error; a creation the outer limit refuses is reported the same way (A03 required test 2).",
     "runner_source: [BEHAVIOR] The program MUST load the code file as a module and call its top-level run once with a dict holding one entry per input port, read from the files its configuration names: a value port has exactly one file, its JSON decoded to Python — for cardinality many that file holds the JSON array, which decodes to the list itself and is never wrapped in another —; a file port of cardinality one its one file's bytes; a file port of cardinality many a list of its files' bytes in order; it writes a crashed message, with the type and message of the exception when one escaped, when the module fails to load, has no run, or run raises. A MemoryError, or an OSError with errno EFBIG for a file past the file-size limit, that escaped run is written as a resource hit with that type and message, while ENOSPC or EDQUOT from exhausted host storage is an ordinary raised error; code that catches such an error and returns is judged by what it returned.",
-    "runner_source: [BEHAVIOR] When run returned, the program MUST write one returned message: whether the value is a dict with only str keys and, for each key, its form — json for a value port whose value json.dumps accepts with sort_keys=True, separators (',', ':'), ensure_ascii=False and allow_nan=False (for a many value port, a list), file for a file port whose value is bytes, file_list for a many file port whose value is a list of bytes, not_representable otherwise and for a key that is no output port. Before it builds that message it MUST pre-count the representable outputs against output_bytes — each value output as the UTF-8 bytes of that json.dumps, each file as its bytes — and when the pre-count exceeds output_bytes write a resource hit and no outputs; a MemoryError while it pre-counts, encodes or writes the outputs is a resource hit too, so an output too large to send concludes resource_exhausted rather than crashed. It writes nothing to standard output or standard error.",
+    "runner_source: [BEHAVIOR] When run returned, the program MUST emit a returned message conforming to = models.RunnerReturnedMessage, with each output represented by its variant of = models.RunnerWireOutput. Whether a value is representable is decided by the declared output port: a value port accepts json.dumps with sort_keys=True, compact separators, ensure_ascii=False and allow_nan=False, and requires a list when its cardinality is many; a file port accepts bytes, or a list of bytes when many. An undeclared output port or a value not representable for its port uses = models.RunnerWireUnrepresentableOutput. Before constructing the message it MUST pre-count representable outputs against output_bytes, counting value outputs as the UTF-8 bytes of that JSON encoding and files as their original bytes; exceeding the bound writes a resource message and no outputs. MemoryError during pre-counting, encoding or writing outputs is a resource hit too. It writes nothing to standard output or standard error.",
+    "runner_source: [MODEL_REFERENCE] Every channel message the returned program writes MUST conform to = models.RunnerWireMessage, including its variant fields, tags and requiredness, without extra fields. The program implements that shape with the standard library; it imports no kernel model or third-party package. The model declarations are the shared source for the writer and reader, never independently chosen wire conventions.",
+    "runner_source: [FIELD_PROJECTION] MUST encode original file bytes into the base64-text fields of = models.RunnerWireFileOutput and = models.RunnerWireFileListOutput with the standard library base64 encoder, as ASCII text with padding and without line wrapping, preserving file-list order. Every message is written completely as one UTF-8 JSON object followed by a newline; nullable fields are explicit null. Resource diagnostics conform to = models.RunnerResourceMessage, with explicit null when no error caused the notification.",
     "runner_arguments: [BEHAVIOR] MUST return exactly two arguments: the decimal number launch.channel_fd, the descriptor the program writes every message to, which is the parent's own pipe end inherited at that number; and one JSON text with the members exchange_directory, code_file, inputs (each port, carriage, cardinality and files), output_ports (each name, carriage and cardinality), and memory_bytes, process_count and output_bytes of launch.bounds; its member file_size_limit is the imported RELEASE_CEILING_SANDBOX_SCRATCH_BYTES_MAX constant; its member environment is the imported SANDBOX_ENVIRONMENT constant; its member readable_paths is the imported SANDBOX_RUNTIME_PATHS constant; its member raise_on_call is the imported SANDBOX_TRAPPED_FUNCTIONS constant; its member raise_without_argument is the imported SANDBOX_TRAPPED_WITHOUT_ARGUMENT constant; its member raise_on_every_method is the imported SANDBOX_TRAPPED_CLASS constant; its member raise_unseeded is the imported SANDBOX_UNSEEDED_CONSTRUCTOR constant; its member proc_directory is the imported SANDBOX_PROC_MOUNT constant; the program reads exactly these two arguments after its own path.",
-    "read_runner_report: [BEHAVIOR] The program writes each message as one line of UTF-8 JSON ended by a newline, an object whose kind is trap (with the trapped name), resource, crashed (with failure, the exception's type and message or null) or returned (with is_dict and outputs, each port, form, json_text and contents, the bytes base64-encoded). read_runner_report MUST decode the lines in order: trap names in the order written, resource_hit true when any resource line is present, crashed and failure from a crashed line, returned only from one complete returned line; a line that is not complete JSON of a known kind, the last line cut short included, ends the decoding and what follows is ignored.",
-    "read_runner_report: [RETURN_SHAPE] Returns RunnerReport with trap_hits, resource_hit, crashed, failure and returned (None when no complete returned line was read), each ReturnedOutput's json_text set only for form json and contents holding the file's bytes, or the list's in order, only for file and file_list.",
+    "read_runner_report: [BEHAVIOR] MUST decode complete newline-terminated UTF-8 JSON messages in channel order, validating each against = models.RunnerWireMessage with strict JSON types and no extra fields before projecting any of it into = models.RunnerReport. Trap names keep arrival order; a resource message sets the resource hit; a crashed message supplies the crashed flag and failure; only one complete returned message supplies the returned result. Invalid shape, invalid base64 or a duplicate returned message ends decoding, retaining only earlier complete messages; the invalid message and everything after it contribute nothing. An incomplete final line is ignored. Nothing missing or unreadable is fabricated as outputs.",
+    "read_runner_report: [FIELD_PROJECTION] MUST decode the base64-text fields of = models.RunnerWireFileOutput and = models.RunnerWireFileListOutput using the standard library base64 decoder with validation enabled and ASCII input, preserving every byte and list position, then construct = models.ReturnedOutput for the same port and form. A single-file variant yields its one decoded byte string in the contents tuple, including an empty file; a file-list variant yields the decoded tuple, including an empty list. JSON text is preserved as supplied by = models.RunnerWireJsonOutput; = models.RunnerWireUnrepresentableOutput supplies no JSON text or contents. The fields irrelevant to the decoded form remain None or empty as declared by = models.ReturnedOutput.",
+    "read_runner_report: [DEPENDENCY_BOUNDARY] MAY use TypeAdapter from pydantic to validate = models.RunnerWireMessage in JSON mode in the kernel process; this adds no import to the standard-library-only program returned by runner_source.",
+    "read_runner_report: [RETURN_SHAPE] MUST return = models.RunnerReport from the messages decoded before the first invalid one, with returned absent when no complete valid returned message was decoded. Message variants are defined by = models.RunnerWireMessage; decoded output fields are defined by = models.ReturnedOutput.",
     "execute_function: [SECURITY_BOUNDARY] Agent code is untrusted: it MUST only ever run inside a fresh bubblewrap environment created for that one execution, never in the kernel process and never through a faster path, and the environment never receives a credential (A03 rule 1, decision 25).",
     "execute_function: [SECURITY_BOUNDARY] MUST start bubblewrap with new user, PID, IPC, UTS and network namespaces and no network interface but the new namespace's own loopback, which bubblewrap brings up, with no capability option, the environment cleared and then set exactly to the imported SANDBOX_ENVIRONMENT constant, exactly the host paths of the imported SANDBOX_RUNTIME_PATHS constant bound read-only, inside the new root the symbolic links of the imported SANDBOX_ROOT_SYMLINKS constant (each name linking to its target, made by bubblewrap --symlink), one fresh private exchange directory bound read-write, bubblewrap's own fresh proc mounted at the imported SANDBOX_PROC_MOUNT constant and minimal dev mounts, and no other host directory; the child dies with its parent, and the runner is the init of the new PID namespace (bubblewrap --as-pid-1), so bubblewrap exits only after the host kernel has killed and reaped every other process of that namespace. The interpreter it starts there is os.path.realpath(sys.executable), the kernel's own CPython under a path of the imported SANDBOX_RUNTIME_PATHS constant, never a launcher such as a virtual environment's.",
     "execute_function: [SECURITY_BOUNDARY] Every descriptor the environment needs from the parent — the write end of the runner's channel, the --info-fd pipe — MUST reach bubblewrap by inheritance, passed with subprocess pass_fds, and keeps the number it has in the parent: the module never renumbers a descriptor (no os.dup2, no preexec_fn), --info-fd names the pipe's own number, and the runner learns the channel's number from runner_arguments. bubblewrap has no option naming a descriptor to keep. The sandboxed process's standard input, standard output and standard error MUST be connected to /dev/null, so nothing the code prints is read, kept or counted; code that writes without end concludes timeout (A03 rules 5 and 6).",
@@ -3995,6 +3999,86 @@
         "guard_matches": "bool",
         "delivery": "EdgeDelivery"
       }
+    },
+    "RunnerWireJsonOutput": {
+      "identity": "value",
+      "fields": {
+        "form": "Literal['json']",
+        "port": "str",
+        "json_text": "str"
+      }
+    },
+    "RunnerWireFileOutput": {
+      "identity": "value",
+      "fields": {
+        "form": "Literal['file']",
+        "port": "str",
+        "content_base64": "str"
+      }
+    },
+    "RunnerWireFileListOutput": {
+      "identity": "value",
+      "fields": {
+        "form": "Literal['file_list']",
+        "port": "str",
+        "contents_base64": "tuple[str, ...]"
+      }
+    },
+    "RunnerWireUnrepresentableOutput": {
+      "identity": "value",
+      "fields": {
+        "form": "Literal['not_representable']",
+        "port": "str"
+      }
+    },
+    "RunnerWireOutput": {
+      "kind": "discriminated_union",
+      "discriminator": "form",
+      "variants": [
+        "RunnerWireJsonOutput",
+        "RunnerWireFileOutput",
+        "RunnerWireFileListOutput",
+        "RunnerWireUnrepresentableOutput"
+      ]
+    },
+    "RunnerTrapMessage": {
+      "identity": "value",
+      "fields": {
+        "kind": "Literal['trap']",
+        "name": "str"
+      }
+    },
+    "RunnerResourceMessage": {
+      "identity": "value",
+      "fields": {
+        "kind": "Literal['resource']",
+        "failure": "str | None"
+      }
+    },
+    "RunnerCrashedMessage": {
+      "identity": "value",
+      "fields": {
+        "kind": "Literal['crashed']",
+        "failure": "str | None"
+      }
+    },
+    "RunnerReturnedMessage": {
+      "identity": "value",
+      "fields": {
+        "kind": "Literal['returned']",
+        "is_dict": "bool",
+        "outputs": "tuple[RunnerWireOutput, ...]"
+      }
+    },
+    "RunnerWireMessage": {
+      "kind": "discriminated_union",
+      "discriminator": "kind",
+      "variants": [
+        "RunnerTrapMessage",
+        "RunnerResourceMessage",
+        "RunnerCrashedMessage",
+        "RunnerReturnedMessage"
+      ]
     }
   },
   "rules": {
@@ -8324,7 +8408,17 @@
         "ConclusionEffect",
         "WaitReasonRestingStatus",
         "HttpMethodBody",
-        "EdgeDeliveryRule"
+        "EdgeDeliveryRule",
+        "RunnerWireJsonOutput",
+        "RunnerWireFileOutput",
+        "RunnerWireFileListOutput",
+        "RunnerWireUnrepresentableOutput",
+        "RunnerWireOutput",
+        "RunnerTrapMessage",
+        "RunnerResourceMessage",
+        "RunnerCrashedMessage",
+        "RunnerReturnedMessage",
+        "RunnerWireMessage"
       ]
     },
     "module_internal": {
@@ -8403,7 +8497,17 @@
         "models": [
           "ReturnedOutput",
           "RunnerLaunch",
-          "RunnerReport"
+          "RunnerReport",
+          "RunnerWireJsonOutput",
+          "RunnerWireFileOutput",
+          "RunnerWireFileListOutput",
+          "RunnerWireUnrepresentableOutput",
+          "RunnerWireOutput",
+          "RunnerTrapMessage",
+          "RunnerResourceMessage",
+          "RunnerCrashedMessage",
+          "RunnerReturnedMessage",
+          "RunnerWireMessage"
         ],
         "data_provider": [
           "RELEASE_CEILING_SANDBOX_SCRATCH_BYTES_MAX",
@@ -9402,6 +9506,9 @@
     "third_party_by_module": {
       "surface": [
         "from pydantic import BaseModel"
+      ],
+      "sandbox_runner": [
+        "from pydantic import TypeAdapter"
       ]
     }
   },
@@ -9743,7 +9850,17 @@
       "ConclusionEffect",
       "WaitReasonRestingStatus",
       "HttpMethodBody",
-      "EdgeDeliveryRule"
+      "EdgeDeliveryRule",
+      "RunnerWireJsonOutput",
+      "RunnerWireFileOutput",
+      "RunnerWireFileListOutput",
+      "RunnerWireUnrepresentableOutput",
+      "RunnerWireOutput",
+      "RunnerTrapMessage",
+      "RunnerResourceMessage",
+      "RunnerCrashedMessage",
+      "RunnerReturnedMessage",
+      "RunnerWireMessage"
     ],
     "data_provider": [
       "ACCESS_TOKEN_LENGTH_MIN",

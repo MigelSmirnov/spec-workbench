@@ -33,6 +33,7 @@ One capability: ``mcp_request`` with ``installation.owner_token`` and
 shape (an unknown operation, an unknown field).
 """
 
+import base64
 import hashlib
 import json
 
@@ -650,3 +651,55 @@ def test_capture_implementation_checks_win(scenario):
 @pytest.mark.parametrize("position", [0, 1], ids=["reversed", "sorted"])
 def test_capture_file_facts_port_order(position):
     _capture_ref_probe("order", "empty", position)
+
+
+@pytest.mark.parametrize(
+    "files,cardinality",
+    [
+        ((b"",), "one"),
+        ((bytes(range(256)),), "one"),
+        ((), "many"),
+        ((b"", bytes(range(256)), b"last"), "many"),
+    ],
+    ids=["empty-file", "binary-file", "empty-list", "ordered-binary-list"],
+)
+def test_runner_file_outputs_roundtrip(semantic_runtime, files, cardinality):
+    """[witness: verification:kernel_a04_admitted_submission_activates_once]
+
+    State 6 decision 50: the generated runner's file bytes must cross its
+    report channel unchanged before admission can pass the expected outputs.
+    A mixed JSON output is carried in the same returned message.
+    """
+    file_port = {
+        "name": "photo", "direction": "output", "value_schema": "{}",
+        "carriage": "file", "media_type": "application/octet-stream",
+        "cardinality": cardinality, "disclosure_class": None,
+    }
+    cv = semantic_runtime.issue_contract_version(
+        "a04_runner_wire", purpose="Runner channel binary roundtrip",
+        inputs=[_port("x", "input", TEXT, "open")],
+        outputs=[file_port, _port("echo", "output", TEXT)],
+    )
+    if cardinality == "one":
+        produced = files[0]
+        expected = {
+            "payload_kind": "file", "port": "photo",
+            "content_base64": base64.b64encode(files[0]).decode("ascii"),
+        }
+    else:
+        produced = list(files)
+        expected = {
+            "payload_kind": "file_list", "port": "photo",
+            "contents_base64": [base64.b64encode(f).decode("ascii") for f in files],
+        }
+    semantic_runtime.add_trial_case(
+        cv, inputs=[_json("x", "mixed-output")],
+        expected_outputs=[expected, _json("echo", "mixed-output")],
+    )
+    code = 'def run(inputs):\n    return {"photo": ' + repr(produced) + ', "echo": inputs["x"]}\n'
+    submission = semantic_runtime.submit_implementation(cv, code)
+    assert _value(submission.verdict.verdict) == "admitted"
+    assert submission.activation is not None
+    executions = _trial_executions(semantic_runtime, submission.implementation.implementation_id)
+    assert len(executions) == 1
+    assert _value(executions[0].outcome) == "passed"

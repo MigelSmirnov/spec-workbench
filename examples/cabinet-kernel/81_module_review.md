@@ -654,3 +654,60 @@ warnings; the Factory slice probe cuts and checks all 18 modules cleanly.
 The generic Workbench tool suite reports 1003 passed, 16 failed, 3 skipped,
 1 xfailed; the 16 frontend-tool failures require the unavailable TypeScript
 compiler `tsc`. No generic tool source was changed by this R11 repair.
+
+
+## Decision 50 runner-channel structure (2026-10-24)
+
+The failed candidate `20261023_235003` demonstrated that locating both ends
+inside sandbox_runner did not prevent wire-format drift (the earlier decision
+32 review's argument). Ownership stays there. State 6 decision 50 adds ten
+contract-only transport models: closed tagged message and output unions with
+base64 text at the file boundary, distinct from decoded ReturnedOutput bytes.
+The model closure is the single field/tag declaration; the notes reference it.
+No new public operation, domain entity, stored record or release dependency.
+Pydantic TypeAdapter is allowed only in the kernel-side decoder; the runner
+continues to import only the standard library and never the kernel package.
+
+Behavior graph reviewed: submit implementation -> corpus execution -> isolated
+runner encodes the returned file bytes -> decoder validates one complete
+message and projects bytes -> sandbox judges -> functions compares expected
+output digests -> admitted verdict and activation. Empty file and empty list
+have different structural variants, file-list order survives, mixed JSON
+survives the same message. An invalid or partial message contributes no output;
+prior complete messages remain and decoding stops at the first invalid line.
+Resource diagnostic text is preserved on the wire and does not replace the
+report's crashed failure text. Output-byte accounting remains on original
+bytes before base64, and no malformed transport result becomes success.
+
+Four subprocess/public-surface probes were added to the existing A04 witness
+file, comparing trial expected outputs through normal admission. Against the
+old immutable candidate, both single-file probes fail (empty and all byte
+values), an empty expected file list returns internal_error, and the ordered
+multi-file probe passes. This is diagnostic evidence, not post-repair proof;
+the empty-list expected-output path is also exercised, and remains a runtime
+question until the newly generated line is verified. No assertion was relaxed.
+
+Stage 7 rounds 114 and 115 each asked three reviews of the changed
+sandbox_runner prompt with Codex gpt-5.6-sol / medium. Both are clear with no
+points, and State 7 is closed. Changed notes also pass the per-note gate and
+L2-L5 lint (7 notes, zero findings); older untouched notes are not claimed
+clean under the newer writing-agent lint.
+
+Stage 8.1 classifications:
+- models: PASS. New transient wire DTOs and unions are deterministic;
+  existing decoded result models, model identities and persistence are intact.
+- sandbox_runner: PASS. The reconstructed behavior above preserves A03/A20;
+  both producer and decoder see the same model declarations. A trivial or
+  byte-losing decoder violates the model/projection notes and admission probes.
+- All other modules: prior semantic PASS carried only after mechanically
+  comparing the packets with the pre-change canonical commit bc73697c.
+  Lowered specifications and note scope/class/text are identical. Packet hashes
+  move where assembled note indices shifted; this is not a semantic rewrite.
+
+Factory's first prompt attempt exposed a classifier defect: unions and
+interfaces without fields were classified as product data despite SPEC_STANDARD
+section 5. Factory commit 40f94d4c fixes the shared classifier, resolver and
+prompt path with one classifier change and an integration regression. The
+related suite passes 50 tests; one older accepted-spec test still asserts an
+obsolete address count (114 rather than the baseline's 123) and is recorded
+separately. The gate corpus passes 23/23. No product-data guard was bypassed.

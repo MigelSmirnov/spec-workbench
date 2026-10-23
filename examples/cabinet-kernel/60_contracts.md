@@ -1711,6 +1711,54 @@ variants. The rest the notes allowed.
     moved facts-only refusal ahead of implementation lookup. It is authored
     and validated here before export; a Factory editor PASS never closed R11.
 
+## Runner channel structural closure (2026-10-24)
+
+50. **One structural contract for the runner channel.** Verification
+    `20261023_235003` refused file-producing implementations before the A14/A15
+    scenarios: the producer wrote a file's contents as a JSON array while the
+    decoder required a string. Decision 32's ownership stays with
+    `sandbox_runner`; co-location alone, contrary to the Stage 8.1 argument,
+    does not close the representation shared by its two sides.
+
+    The contract-only transport models in `60_model_closure_operations.json`
+    are the sole source of message and output shape: `RunnerWireMessage` and
+    its tagged message variants, with `RunnerWireOutput` and its tagged output
+    variants for the returned payload. Their identity is value; they are
+    transient, neither stored records nor new product entities. The models
+    separate wire text from decoded `ReturnedOutput.contents`, whose bytes
+    and existing public result shape remain unchanged. This separate boundary
+    is necessary because the standard-library-only sandbox cannot import the
+    kernel's Pydantic models, and no declared backend supplies a bytes-to-JSON
+    projection for those result models.
+
+    The codec is standard base64 of the original file bytes, encoded as ASCII
+    text with padding and without line wrapping. Encoding and decoding preserve
+    every byte and file-list position; the decoder accepts only valid ASCII
+    base64 with validation enabled. Empty file bytes are distinct from an
+    empty file list by their wire variants. A message is one UTF-8 JSON object
+    followed by a newline; model fields are required, nullable fields are
+    explicit null, unknown fields and wrong JSON types are rejected. No
+    alternative legacy wire shape is accepted. These are hidden execution
+    messages of one release, not an external compatibility boundary.
+
+    `runner_source` implements these schemas with the standard library inside
+    its returned program, with no kernel import. `read_runner_report` validates
+    the same schemas in the kernel before projecting the decoded report;
+    Pydantic TypeAdapter is allowed there, using the already pinned dependency,
+    never in the sandbox. A resource message retains the runner diagnostic
+    when an error caused the hit, otherwise null; it sets resource_hit in the
+    decoded report but does not replace failure text from a crashed message.
+    Invalid shape, invalid base64 or a duplicate returned message ends decoding;
+    earlier complete messages remain, and the invalid message contributes
+    nothing. A partial final line contributes nothing. No report line after
+    the first invalid one is consumed. Outcome judgement remains sandbox's.
+
+    State 7 references the transport models instead of redeclaring their
+    fields or tags in prose. The file admission regression supplies expected
+    bytes through the public trial-corpus path and checks activation for an
+    empty file, arbitrary binary bytes and file lists, including an empty list;
+    a mixed JSON output must survive the same returned message.
+
 ## Texts of earlier states changed by State 6
 
 - State 4 (2026-10-22, decision 45 completed): the reviewed flows
