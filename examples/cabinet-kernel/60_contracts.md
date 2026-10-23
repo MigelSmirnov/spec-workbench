@@ -1652,7 +1652,7 @@ variants. The rest the notes allowed.
     rule 3, A12 rule 1 and A16 rule 4 already decide each case; the notes now
     leave the generator one reading of each.
 
-## Decision closed by the A13 edge-delivery regression (2026-10-23)
+## Edge-delivery regression closure (2026-10-23)
 
 47. **Edge delivery is one total provider relation, never a table in a
     note.** Verification `20261022_232630` showed a generated `plan_run`
