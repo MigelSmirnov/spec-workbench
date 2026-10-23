@@ -590,14 +590,19 @@ lookups = []
 missing = s.UnknownReferenceError("implementation")
 def read_records(query):
     kind = getattr(query.record_type, "value", query.record_type)
-    assert kind == "implementation", "R11: looked up input before facts-only refusal"
-    assert query.record_ids == ("implementation",)
-    assert getattr(query.when_missing, "value", query.when_missing) == "unknown_reference"
+    assert kind in {"implementation", "contract_version"}, "R11: looked up input before facts-only refusal"
+    assert lookups or kind == "implementation", "R11: implementation lookup was not first"
     lookups.append(kind)
-    if scenario == "unknown":
-        raise missing
     fields = {field: () for field in m.RecordSet.model_fields}
-    fields["implementations"] = (implementation,)
+    if kind == "implementation":
+        assert query.record_ids == ("implementation",)
+        assert getattr(query.when_missing, "value", query.when_missing) == "unknown_reference"
+        if scenario == "unknown":
+            raise missing
+        fields["implementations"] = (implementation,)
+    else:
+        assert query.record_ids == ("contract",)
+        fields["contract_versions"] = (contract,)
     return m.RecordSet(**fields)
 def no_side_effect(*args, **kwargs):
     raise AssertionError("R11: read input bytes, published bytes, or recorded a change")
@@ -620,7 +625,7 @@ with patch.multiple(f, read_records=read_records, read_value_bytes=no_side_effec
             assert ("beta" if scenario == "order" else "unreadable") in reason, reason
     else:
         raise AssertionError("R11: accepted facts-only capture input")
-assert lookups == ["implementation"], lookups
+assert lookups and lookups[0] == "implementation", lookups
 '''
 
 

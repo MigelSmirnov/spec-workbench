@@ -1654,8 +1654,12 @@ corpus.
 ### Inputs
 
 The implementation the record executed, the contract version named, the
-record's inputs as references — StoredValues, and spooled files as their
-SpooledFiles —, the source NodeExecution, the actor.
+record's input references as the full PortRef union, the source NodeExecution,
+the actor. StoredValuesRef and SpooledFilesRef are readable inputs;
+FileFactsRef is also accepted at the callable boundary but is refused by the
+checks below, even when its files list is empty. The caller's ordinary capture
+path passes the recorded inputs unchanged; that producer invariant does not
+narrow this callable's input contract.
 
 ### Outputs
 

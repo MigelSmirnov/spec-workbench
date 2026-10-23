@@ -596,3 +596,61 @@ Verification 20261022_073605 of decisions 41–45 failed 11 of 134 witnesses; ag
    `global_spec.json`, and `--check` then reports `in_sync`; State 7 round 83 judged both versions and
    raised three false contradictions (decision 35). Worked around by restoring `global_spec.json` and
    propagating once; handed to the cloud session for a `tools/*` fix.
+
+
+## Decision 49 / R11 delta review — 2026-10-23
+
+Compared each of the 18 final packets with the packet reconstructed from
+`bf2a6309`; every baseline packet reproduced its previously accepted ledger
+hash. All structural module reviews report zero blocks. Twelve packet hashes
+changed: canonical_values, clock, store, installation, sandbox, functions,
+bindings, flows, effects, run_graph, runs and surface. All 18 lowered
+specifications are unchanged. Only functions has a generation-constraint
+change, its existing add_captured_trial_case validation note; the remaining
+packet changes are accepted A04/capture-flow/API context and source positions.
+
+The adversarial delta review applied the four questions above:
+
+1. The new local order is explicit: implementation lookup (unknown-reference
+   propagation), contract mismatch, complete facts-only scan, then existing
+   readable-input checks. The external A16 request boundary and A15 caller
+   checks keep their prior ownership. A FileFactsRef with an empty list is
+   still refused; multiple such refs name the smallest port by Unicode order.
+2. Returning an empty case, ignoring FileFactsRef or processing only the first
+   input violates the positive validation requirement and the new witness.
+3. The refusal precedes all input lookups and input-byte reads and writes
+   nothing; the existing readable StoredValuesRef/SpooledFilesRef fit, copy,
+   identity and corpus behavior remains required. Implementation lookup is
+   intentionally allowed and required before that refusal.
+4. This behavior originates in the owner's explicit confirmation, recorded in
+   A04 rule 7 and decision 49, propagated through States 3–5 before State 7.
+   The Factory-only note and its pre-lookup refusal are superseded evidence,
+   not authority. No new model, signature, helper API or store operation is
+   introduced. No machine-consumed policy value is invented in prose.
+
+The new witness's 12 probes are independent subprocess calls of the candidate
+capability, with typed store results and observed input/write boundaries. The
+old linked build fails its 10 facts-only cases and passes both implementation
+precedence cases; this is diagnostic red evidence, not post-fix Route B proof.
+The ordinary successful capture path remains covered by A04 required test 4.
+State question closure, Factory admission/export and implementation evidence
+are separate gates; this packet review alone does not declare R11 closed.
+
+
+State 5 follow-up: the capture API Inputs section now explicitly names its full
+PortRef domain and distinguishes acceptance at the callable boundary from
+successful readable capture. This removes the old two-variant description
+without changing a signature. The final packets were rebuilt and compared
+again: no lowered specification changed, and only the previously reviewed
+functions note changes generation constraints. The probe permits contract
+record lookup; it forbids input lookup/bytes and writes, so it does not
+prescribe an internal helper-call strategy.
+
+
+R11 question closure on the final texts: State 2 rounds 156–157, State 3
+135–136, State 4 129–130, State 5 167–168, and State 7 functions prompt
+112–113 are clear and closed. Final assembly is 14/14 with no errors or
+warnings; the Factory slice probe cuts and checks all 18 modules cleanly.
+The generic Workbench tool suite reports 1003 passed, 16 failed, 3 skipped,
+1 xfailed; the 16 frontend-tool failures require the unavailable TypeScript
+compiler `tsc`. No generic tool source was changed by this R11 repair.
