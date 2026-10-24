@@ -757,3 +757,30 @@ packets, so their hashes moved mechanically: `sandbox_runner`, `installation`,
 `sandbox`, `service_invoker`, `run_values`, `functions`, `bindings`, `flows`,
 `effects`, `run_graph`, `runs` and `surface`. Their lowered specifications and
 generation constraints did not change; their existing PASS verdicts remain.
+
+## Decision 53 request-fit closure (2026-10-24)
+
+Verification 20261024_204651 answered a request carrying `contract_version_id`
+with `internal_error`: the generated `answer_request` passed pydantic's
+ValidationError to `translate_failure`. Decision 51 had made every check before
+the handler raise for `translate_failure` to classify, and the fit's conversion
+was left as a clause inside the first `answer_request` note — the one check
+whose failure is not a kernel exception.
+
+`surface` now owns the internal contract `fit_request(request_model:
+type[BaseModel], arguments_json: bytes) -> BaseModel`. Its notes make it the
+only place a fit failure becomes `InvalidRequestError`; `answer_request` calls
+it with the canonical bytes of the arguments and keeps the remaining order
+(bounds, canonical replacement, actor). `translate_failure` is unchanged, so a
+ValidationError raised inside a handler remains `internal_error` (A16 rule 7).
+A stub that returns `model_validate_json` unguarded contradicts the
+`[VALIDATION_ERROR]` note. No other note of the slice names ValueError,
+ValidationError or the fit. `imports.third_party` lists
+`from pydantic import BaseModel` as the type's origin; the Factory keeps it
+only for modules naming `BaseModel`, which is `surface` alone, and the State 7
+prompt of `surface` shows it.
+
+The complete `surface` packet has 37 contracts, 119 notes and zero structural
+blocks; its semantic verdict remains PASS. State 7 rounds 121–122 each returned
+three clear reviews with no points or topics. Every other module's slice hash
+is unchanged.

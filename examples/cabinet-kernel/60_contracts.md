@@ -1782,6 +1782,41 @@ variants. The rest the notes allowed.
     whose channel descriptor agent code cannot access; this change does not
     introduce that larger process and resource-accounting boundary.
 
+## Decision closed at the verification of decision 51 (2026-10-24)
+
+53. **The request fit is one callable that refuses as `invalid_request`.**
+    Verification 20261024_204651 failed the A01 witness "caller-supplied
+    identity": a request carrying `contract_version_id` was answered
+    `internal_error`. The generated `answer_request` passed pydantic's
+    ValidationError straight to `translate_failure`. The note had carried the
+    conversion since decision 31, item 2, as one clause between dashes in the
+    middle of the first `answer_request` note, and every generated `surface`
+    from 2026-10-11 to the morning of 2026-10-24 kept it. Decision 51 made the
+    actor check raise `NotPermittedError` for `translate_failure` to classify,
+    so every check before the handler raises and one function classifies;
+    the fit's conversion was then the only exception to that pattern, and
+    the first `surface` generated on decision 51 folded the fit, bounds,
+    canonical form and actor check into one handler and dropped it. Decision
+    51 was not finished: it gave the actor check its exception but left the
+    fit, whose failure is a foreign exception, without a place of its own.
+    `surface` now has the internal function
+    `fit_request(request_model: type[BaseModel], arguments_json: bytes) ->
+    BaseModel`: pydantic's strict JSON-mode fit, every ValueError it raises
+    raised again as `InvalidRequestError`, so the fit fails only with a
+    kernel refusal. `answer_request` calls it with the canonical bytes of the
+    arguments; `translate_failure` stays unchanged and still answers any
+    other ValueError `internal_error`, because a ValidationError raised by a
+    handler's own model construction is a kernel fault, not a refused
+    request (A16 rule 7). A type named in a contract needs an origin in the
+    import catalog (SPEC_STANDARD §12), so `imports.third_party` now lists
+    `from pydantic import BaseModel`; decision 25 kept the catalog empty
+    because no generated module named pydantic, which decision 27 already
+    ended for `surface`. The Factory narrows the catalog to the symbols each
+    module's slice names (§7), and only `surface` names `BaseModel`, so no
+    other module gains the import. Why: A16 rules 1 and 4 make a request that
+    does not fit its schema `invalid_request`; the conversion that makes it so
+    is now a contract, not a clause.
+
 ## Texts of earlier states changed by State 6
 
 - State 4 (2026-10-22, decision 45 completed): the reviewed flows
