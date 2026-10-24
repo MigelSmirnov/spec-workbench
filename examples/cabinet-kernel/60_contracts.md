@@ -1817,6 +1817,47 @@ variants. The rest the notes allowed.
     does not fit its schema `invalid_request`; the conversion that makes it so
     is now a contract, not a clause.
 
+## Decision closed by measuring the effects generation (2026-10-24)
+
+Verification 20261024_215202 timed out 25 witnesses (A06, A07, A10–A15,
+A17), every one at a run that reaches an operation element needing the
+owner's approval: the kernel loops, taking the same element again and
+again. The deployed `effects.operation_element_conclusion` returned
+`ElementNotReached` for an element with no NodeExecution before it looked
+at the element's approvals, so the requested approval never made the
+element wait.
+
+54. **An element with no NodeExecution is decided by its approvals.** The
+    note did not change between the green kernel and this one. Ten fresh
+    generations of `effects` from the identical prompt gave 6 correct and
+    4 with that early return; asked the question directly, the same model
+    answered correctly 10 times and 9 times named the phrase that could be
+    misread. The note opened with "Decides from the latest NodeExecution",
+    which code must guard when there is none, and said what an element
+    without one concludes only in its last "otherwise" clause between
+    dashes, so the guard took that conclusion. No note said that the first
+    approval of an element is requested before it has any NodeExecution.
+    The note is now five numbered steps: the latest NodeExecution decides
+    only when one exists; a requested approval decides whether or not one
+    exists; the element is not reached only when steps 2 to 4 found
+    nothing; and it may never conclude merely because there is no
+    NodeExecution. `reach_operation_element` states that requesting an
+    approval writes no NodeExecution, so an element waiting for its first
+    approval has none. State 5's outputs of
+    `public_op:effects.operation_element_conclusion` carried the same
+    reading: "not reached when the element has no NodeExecution yet, or
+    when … `not_applied` and no fresh approval is requested" bound the
+    approval condition to the second case only; it now reads "not reached
+    when no approval of the element is requested and it either has no
+    NodeExecution yet or its latest attempt the owner resolved
+    `not_applied`". Behaviour, order and every other conclusion are
+    unchanged. Measured before export on the Factory's prompt for `effects`
+    with only these two notes replaced, ten generations each with the
+    Factory's system prompt: the previous text 5 correct of 10, this text
+    10 of 10. Why: A10 rule 2 makes a gated element wait for the owner;
+    the conclusion that makes it wait must not depend on a record the wait
+    itself precludes.
+
 ## Texts of earlier states changed by State 6
 
 - State 4 (2026-10-22, decision 45 completed): the reviewed flows

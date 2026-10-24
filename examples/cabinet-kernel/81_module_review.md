@@ -784,3 +784,31 @@ The complete `surface` packet has 37 contracts, 119 notes and zero structural
 blocks; its semantic verdict remains PASS. State 7 rounds 121–122 each returned
 three clear reviews with no points or topics. Every other module's slice hash
 is unchanged.
+
+## Decision 54 approval-before-execution closure (2026-10-24)
+
+Verification 20261024_215202 timed out 25 witnesses at runs reaching an
+operation element that needs the owner's approval: the deployed
+`operation_element_conclusion` returned `ElementNotReached` for an element
+with no NodeExecution before reading its approvals, so `advance_run` took the
+same element forever. The note was unchanged since the green kernel; ten
+generations of `effects` from the identical prompt gave the early return four
+times, so the note, not one draft, was the defect.
+
+The `effects` packet now carries the five-step note: the latest NodeExecution
+decides only when one exists, a requested approval decides whether or not one
+exists, not reached is the last step and is never concluded merely from the
+absence of a NodeExecution. `reach_operation_element` states that requesting an
+approval writes no NodeExecution. State 5's outputs of the operation now bind
+the approval condition to both not-reached cases. No contract, model, order of
+conclusions or caller responsibility changes. The packets of `runs`,
+`run_graph` and `surface` moved only by the source positions of accepted State 5
+context two lines lower; their lowered specifications and notes are unchanged
+and their PASS verdicts remain.
+
+The complete `effects` packet has 9 contracts, 33 notes and zero structural
+blocks; its semantic verdict remains PASS. Measured on the Factory's prompt
+with only the two notes replaced, ten generations each: previous text 5/10
+correct, this text 10/10. State 7 rounds 123–124 and State 5 rounds 172–173
+are clear; one single-review point of round 172 (an element awaiting its first
+approval after its run has ended) was not repeated and is outside this change.

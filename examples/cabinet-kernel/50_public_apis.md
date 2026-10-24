@@ -2515,9 +2515,11 @@ Its conclusion: succeeded with outputs; failed with its status, or with
 `applied_outputs_unknown` for an attempt resolved applied whose binding has
 outputs; waiting with its reason and, for `owner_approval`, the `approval_id`
 of the element's `requested` approval, so `runs` builds the run's answer
-(Conventions) without reading approval records itself; or not reached when the
-element has no NodeExecution yet, or when its latest attempt the owner
-resolved `not_applied` and no fresh approval is requested: the advance then
+(Conventions) without reading approval records itself — an element waiting
+for its first approval has no NodeExecution yet, and the requested approval
+decides it; or not reached when no approval of the element is requested and
+it either has no NodeExecution yet or its latest attempt the owner resolved
+`not_applied`: the advance then
 reaches it again, the send needs a fresh approval, and the element waits
 `owner_approval` for it (A11 rule 3, decision 32).
 
