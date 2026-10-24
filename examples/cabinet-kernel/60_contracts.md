@@ -1812,6 +1812,28 @@ variants. The rest the notes allowed.
     existing notes now name the model boundaries they consume. Signatures,
     records, persistence and accepted behavior remain unchanged.
 
+53. **The startup sandbox probe obeys the function calling convention**
+    (2026-10-24, verification 20261024_091307). A03 requires a real bounded
+    execution at startup; decision 32 gives sandbox_runner ownership of the
+    call into a user function. Its run always receives the input dictionary.
+    A probe with no input ports therefore still accepts that positional
+    dictionary, empty in this case, and returns an empty output dictionary.
+    No ports does not mean a zero-argument Python function.
+
+    The failed candidate used run() and the real executor returned crashed
+    with TypeError because its runner supplied the input dictionary. An
+    isolated diagnostic through the immutable candidate's public
+    execute_function returned succeeded for the conforming argument shape
+    with the same empty ports and bounds. That probe evidence is diagnostic,
+    not replacement verification or permission to patch generated code.
+
+    The existing probe_sandbox validation note now makes the parameter and
+    empty dictionaries explicit. It retains real execution, every release
+    check and every failure path. No fallback, probe bypass, runner change,
+    public signature, model or persistence change is introduced.
+    A03/A20 provenance and the existing startup/sandbox witnesses remain
+    authoritative; a new full Route B must demonstrate actual startup.
+
 ## Texts of earlier states changed by State 6
 
 - State 4 (2026-10-22, decision 45 completed): the reviewed flows

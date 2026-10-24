@@ -771,3 +771,30 @@ Codex / gpt-5.6-sol / medium reviews with zero points.
 
 Semantic result for this specification delta: PASS. No rejected generated
 candidate was modified; runtime proof requires a new complete Route B.
+
+## Decision 53 delta — sandbox probe calling convention (2026-10-24)
+
+Only sandbox's final packet changes: one existing probe_sandbox note clarifies
+that run accepts the input dictionary even when there are no ports, and returns
+an empty output dictionary. The other seventeen packet hashes are unchanged.
+No model, signature, dependency or other specification surface changes.
+
+The Stage 8.1 adversarial review checked the real startup path:
+- A zero-argument callable cannot satisfy the clarified note. The shared runner
+  convention remains the source; the sandbox module does not invent a special
+  probe calling convention.
+- The probe still executes through execute_function under release bounds and
+  must succeed. A trivial success or skipping the sandbox cannot meet the note.
+- Every executable, version, interpreter-path, runtime-binding and execution
+  failure remains a startup refusal; the repair introduces no fallback.
+- The only new precision explains an existing accepted A03 startup requirement.
+  The immutable-candidate diagnostic confirms the mismatch and the conforming
+  argument form; it is not runtime acceptance of a new generated candidate.
+
+The final draft passes check_note_draft. Assembly is 14/14 ready, with no
+errors or warnings; sandbox --review and the Factory slice probe have no
+findings. State 7 rounds 120 and 121 each have three
+Codex / gpt-5.6-sol / medium reviews with zero points.
+
+Semantic result for the specification delta: PASS. A new complete Route B must
+prove startup before the cleanup, permission and file witnesses can be accepted.
