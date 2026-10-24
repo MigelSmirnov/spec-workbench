@@ -711,3 +711,28 @@ prompt path with one classifier change and an integration regression. The
 related suite passes 50 tests; one older accepted-spec test still asserts an
 obsolete address count (114 rather than the baseline's 123) and is recorded
 separately. The gate corpus passes 23/23. No product-data guard was bypassed.
+
+## Decision 51 simplified responsibility closure (2026-10-24)
+
+The review radius is four behavioral modules: `sandbox`, `functions`, `runs`
+and `surface`; `sandbox_runner` is unchanged. `sandbox` alone decides the
+`SandboxResult.stop_required` signal, true exactly for unconfirmed cleanup.
+`functions` and `runs` record the failed execution first and propagate that
+signal without interpreting `detail_code`. `surface` alone owns process exit:
+it sends and flushes the internal-error response, returns from the handler and
+lets the outer one-request-at-a-time loop close the listener and exit nonzero.
+It never calls `HTTPServer.shutdown` from the request thread.
+
+The actor boundary is likewise singular: `surface` owns `NotPermittedError`
+for its actor table; operation-owned `RefusedError` remains a domain refusal.
+In particular every authenticated agent reaches `activate_flow_version`, and
+A06 refuses an effectful version inside the operation. The State 5 catalogue
+was aligned to that accepted decision.
+
+A semantic pass over the four complete current slices found no behavior with
+two owners, no trivial implementation satisfying the notes, and no new
+business behavior. State 7 rounds 117–118 are clear and closed; the aggregate
+assembly is 14/14. Slice hashes were recomputed from the admission workbench's
+canonical JSON rendering. Fatal runner-protocol classification remains
+deliberately absent: the current runner executes agent code in the same process
+that owns the channel descriptor, so it is not a trusted supervisor boundary.
