@@ -752,3 +752,8 @@ missing-record policy, repository operation or caller responsibility changes.
 The complete `store` packet has 11 contracts, 57 notes and zero structural
 blocks; its semantic verdict remains PASS. State 7 rounds 119–120 each returned
 three clear reviews with no points or topics, closing the changed prompt.
+The `store` note is also quoted as accepted context by twelve other behavioral
+packets, so their hashes moved mechanically: `sandbox_runner`, `installation`,
+`sandbox`, `service_invoker`, `run_values`, `functions`, `bindings`, `flows`,
+`effects`, `run_graph`, `runs` and `surface`. Their lowered specifications and
+generation constraints did not change; their existing PASS verdicts remain.
