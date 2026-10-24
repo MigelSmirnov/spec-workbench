@@ -23,7 +23,8 @@ Reuses cabinet-flow decisions 21 and 22, narrowed by K-11 and K-15.
    carries as a string one JCS can represent and within `json_depth_max` (A01
    rule 1, A20 rule 1) — the kernel then keeps its canonical form, the text
    itself need not be canonical —, else `invalid_request`; its actor may call that
-   operation at all (rule 3);
+   operation at all (rule 3), whose failure is `not_permitted` and is distinct
+   from an operation's own `refused` result;
    then the operation's own checks, in the order its decision gives — a restriction
    that depends on the record named, such as A06's refusal of an agent asking for
    a version above `read`, is one of those. One convention covers every

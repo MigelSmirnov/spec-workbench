@@ -36,9 +36,11 @@ not review fields, classes or formats, so each is the agent's and says why.
   symbol. Start-only refusals belong to their module (`InstallationRejectedError`,
   `SandboxUnavailableError`); `CredentialUnresolvedError` stays inside
   `service_invoker`, which turns it into the detail `credential_unresolved`;
-  `NonCanonicalValueError` is `canonical_values`'. `StopRequiredError` is owned
-  by `sandbox`, whose unconfirmed cleanup it names, and raised by the module that
-  wrote the execution's record (State 3, "Unconfirmed cleanup").
+  `NonCanonicalValueError` is `canonical_values`'. `NotPermittedError` is owned
+  by `surface` and names only failure of its actor table, never an operation's
+  own refusal. `StopRequiredError` is owned by `sandbox`; `SandboxResult` decides
+  whether it is required, and the module that wrote the execution's record raises
+  it without reinterpreting the detail code (State 3, "A sandbox result that requires stop").
   `surface.translate_failure` maps every symbol to its State 5 code; any other
   exception is `internal_error` without detail (A16 rule 7). A checking
   operation answers, it raises nothing (State 5, "Checks answer").
@@ -208,7 +210,7 @@ agent's and says why; the owner-facing rules they rest on are in State 2.
 21. **A stop during a request.** `surface` lets `StopRequiredError` pass out of
     `answer_request`; `serve_kernel` sends that request the `internal_error`
     answer and then ends the process with a non-zero status (State 3,
-    "Unconfirmed cleanup").
+    "A sandbox result that requires stop").
 
 ## Decision closed at assembly (2026-10-10)
 
@@ -559,7 +561,7 @@ contradiction gate is `questions/state7/round-02`.
       and a failed element of a mapped node does not stop the next one; the
       `cleanup_failed` note of the same function writes its exception in full
       ("that one execution … execute and reach nothing more … raise
-      StopRequiredError"), which A03 rule 7 and State 3 "Unconfirmed cleanup"
+      StopRequiredError"), which A03 rule 7 and State 3 "A sandbox result that requires stop"
       require.
     - *runs T6.* "No record of its own holds" a mapped node's file output, yet
       over an empty list the node's one NodeExecution holds every output as an
@@ -1758,6 +1760,33 @@ variants. The rest the notes allowed.
     bytes through the public trial-corpus path and checks activation for an
     empty file, arbitrary binary bytes and file lists, including an empty list;
     a mixed JSON output must survive the same returned message.
+
+## Responsibility closure after verification 20261023_235003 (2026-10-24)
+
+51. **Infrastructure failure crosses each boundary once.** The twelve observed
+    failures are three groups, not one sandbox defect. Eight A14/A15 witnesses
+    never reached their scenario because an invalid runner file message became
+    an ordinary crashed trial and then a refused implementation. One A03 witness
+    reached the required-stop path but the request handler called
+    `HTTPServer.shutdown` from the same serving thread. Three A10/A16 witnesses
+    lost the distinction between the surface actor gate and a domain refusal.
+
+    `sandbox_runner` remains the sole owner of runner wire decoding and adds only
+    the fact `RunnerReport.channel_valid`; it does not classify an execution.
+    `sandbox` remains the sole owner of execution classification and adds
+    `SandboxResult.stop_required`. An invalid complete runner message is
+    `crashed` with `runner_protocol_failed` and requires stop; unconfirmed cleanup
+    remains `crashed` with `cleanup_failed` and requires stop. Callers record the
+    result and propagate `StopRequiredError` solely from `stop_required`, so an
+    infrastructure failure cannot become an AdmissionVerdict.
+
+    `surface` owns `NotPermittedError` for the actor table; domain modules keep
+    `RefusedError`. `translate_failure` maps the two symbols independently. The
+    serving owner sends and flushes the internal-error response, marks its outer
+    one-request-at-a-time loop to stop, returns from the handler and exits
+    non-zero; it never invokes `HTTPServer.shutdown` from that handler. Thus the
+    record, response and process-exit order has one owner at each step and no
+    layer infers a neighbour's decision from an absent value or generic error.
 
 ## Texts of earlier states changed by State 6
 

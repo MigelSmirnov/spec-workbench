@@ -230,10 +230,14 @@ and no detection promises the runtime cannot keep.
    at most `failure_detail_bytes_max` of it as `failure_detail`, and only for the
    exception type and message, never stdout.
 7. An execution completes only after every process of the environment is reaped
-   and the exchange directory is removed. If that cannot be confirmed the output
-   is discarded, the execution is recorded `crashed` with detail
-   `cleanup_failed`, and the kernel process stops; runs it left `running` are
-   recovered on the next start (A14 rule 5).
+   and the exchange directory is removed. The sandbox also distinguishes a valid
+   runner channel from an invalid complete message; an absent returned message on
+   an otherwise valid channel remains an ordinary `crashed` execution. If cleanup
+   cannot be confirmed, or a complete runner message is invalid, output is
+   discarded, the execution is recorded `crashed` with detail `cleanup_failed` or
+   `runner_protocol_failed` respectively, and the sandbox result requires the
+   kernel process to stop after that record is written; runs it left `running`
+   are recovered on the next start (A14 rule 5).
 8. The kernel checks at start, before recovery and before the surface opens,
    that `bubblewrap` is present and that one probe execution succeeds; without
    both it does not start, and says why. A running kernel therefore always has
@@ -249,7 +253,7 @@ network(environment) = own_loopback_only AND env_vars(environment) = {PYTHONHASH
 trap_raised -> outcome = sandbox_violation   (even if output conforms)
 outcome = first_of(timeout, resource_exhausted, sandbox_violation, crashed,
                    contract_violation, succeeded)
-cleanup_unconfirmed -> output_discarded AND kernel_process_stops
+cleanup_unconfirmed OR runner_channel_invalid -> output_discarded AND kernel_process_stops
 ```
 
 ### Required tests
@@ -292,6 +296,10 @@ cleanup_unconfirmed -> output_discarded AND kernel_process_stops
     recorded `crashed` with detail `cleanup_failed`, its output is discarded and
     the kernel process stops.
     [witness: verification:kernel_a03_unconfirmed_cleanup_stops_kernel]
+12. A complete runner message with an invalid shape is recorded `crashed` with
+    detail `runner_protocol_failed`; it cannot produce an admission verdict, and
+    the response is flushed before the kernel process stops.
+    [witness: verification:kernel_a03_runner_protocol_failure_stops_kernel]
 
 ### Consequence
 

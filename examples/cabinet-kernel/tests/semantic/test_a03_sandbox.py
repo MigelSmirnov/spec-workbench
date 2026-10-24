@@ -583,3 +583,45 @@ def run(inputs):
     ]
     assert history.serving_activation.store_position == serving.store_position
     assert history.serving_activation.implementation_id == control_id
+
+
+def test_runner_protocol_failure_stops_kernel(semantic_runtime):
+    """[witness: verification:kernel_a03_runner_protocol_failure_stops_kernel]
+
+    A03 Required test 12: an invalid complete runner message is an
+    infrastructure failure, not a failing implementation verdict.
+    """
+    cv = _function(semantic_runtime, "a03_runner_protocol")
+    semantic_runtime.faults.invalid_runner_message(nth=1)
+
+    with pytest.raises(Exception) as exc:
+        semantic_runtime.submit_implementation(cv, CONFORMING)
+    assert exc.value.code == "internal_error"
+    assert semantic_runtime.kernel_exited() is not None
+
+    started = semantic_runtime.restart()
+    assert started.started is True
+
+    implementations = semantic_runtime.page_records(
+        "implementation",
+        {"filter_kind": "equals", "field": "contract_version_id", "value": cv},
+        page_size=200,
+    ).records.implementations
+    assert len(implementations) == 1
+    implementation_id = implementations[0].implementation_id
+
+    (execution,) = semantic_runtime.page_records(
+        "trial_execution",
+        {"filter_kind": "equals", "field": "implementation_id", "value": implementation_id},
+        page_size=200,
+    ).records.trial_executions
+    assert _value(execution.outcome) == "crashed"
+    assert _value(execution.detail_code) == "runner_protocol_failed"
+    assert not execution.outputs
+
+    verdicts = semantic_runtime.page_records(
+        "admission_verdict",
+        {"filter_kind": "equals", "field": "implementation_id", "value": implementation_id},
+        page_size=200,
+    ).records.admission_verdicts
+    assert len(verdicts) == 0

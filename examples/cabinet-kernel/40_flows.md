@@ -185,13 +185,14 @@ AdmissionVerdict M08 and Activation M09 are written by `module:functions`.
   and its outcome (`timeout`, `resource_exhausted`, `sandbox_violation`,
   `crashed`, `contract_violation` from `module:sandbox`, or `output_mismatch`
   from `module:functions`). No failure is ever success (State 0).
-- Cleanup duty: `module:sandbox` completes an execution only after every
-  process is reaped and the exchange directory removed. If it cannot confirm
-  that, it reports the execution `crashed` with `cleanup_failed`, output
-  discarded (A03 rule 7), and stops nothing itself. `module:functions` writes
+- Sandbox stop duty: `module:sandbox` completes an execution only after every
+  process is reaped and the exchange directory removed and after classifying the
+  runner channel. An unconfirmed cleanup or invalid complete runner message is
+  reported `crashed` with its detail and `stop_required`, output discarded (A03
+  rule 7), and the sandbox stops nothing itself. `module:functions` writes
   that TrialExecution, then executes no further case and writes no verdict and
   no activation; `module:surface` answers with an internal error and ends the
-  process (State 3, "Unconfirmed cleanup"). What was written stays; the next
+  process (State 3, "A sandbox result that requires stop"). What was written stays; the next
   submission of the same implementation finds no verdict and runs admission
   again (A04 rule 2).
   No spool is involved: trial values live in the content-addressed area.
@@ -529,11 +530,12 @@ records are the trace and the rest state.
   `service_unreachable` is a wait, not a failure (A13 rule 5).
 - A failed node stops only its dependants (`upstream_failed`); independent
   branches finish (K-09).
-- Cleanup duty: `module:sandbox` confirms cleanup of each execution or
-  reports it `crashed` with `cleanup_failed` (A03 rule 7). `module:runs` then
+- Sandbox stop duty: `module:sandbox` confirms cleanup and runner-channel validity
+  for each execution or reports it `crashed` with `stop_required` and the owning
+  detail (A03 rule 7). `module:runs` then
   writes that element's NodeExecution, advances nothing further and writes no
   run status; `module:surface` answers with an internal error and ends the
-  process (State 3, "Unconfirmed cleanup"). The run, left `running`, is
+  process (State 3, "A sandbox result that requires stop"). The run, left `running`, is
   advanced at the next start (`flow:start_and_recover_kernel`) with that
   element concluded failed. A `failed` run keeps its spool until it is
   released (`flow:capture_failure_and_repair_slot`).
@@ -997,6 +999,6 @@ EffectAttempt M26 and the concluding NodeExecution M23 written by
 - Cleanup duty: if a re-executed function's cleanup cannot be confirmed,
   `module:runs` writes its NodeExecution `crashed` with `cleanup_failed`,
   advances nothing further, and `module:surface` stops the start (State 3,
-  "Unconfirmed cleanup"). The next start finds that element concluded and does
+  "A sandbox result that requires stop"). The next start finds that element concluded and does
   not execute it again: its dependants conclude `upstream_failed`, so a cleanup
   failure stops the kernel at most once per element and never loops.

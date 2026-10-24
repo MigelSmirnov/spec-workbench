@@ -291,10 +291,12 @@ record checked by `design_lint --state 2`, recorded as such in `30_trace.json`.
   waiting point"), rewriting a stored status or waiting point that lags
   them, and advances every run that derivation leaves `running`; and only then
   the first request (A03 rule 8, A14 rule 5, A18 rule 4).
-- **Unconfirmed cleanup.** A03 rule 7 records the execution `crashed` with
-  `cleanup_failed` and then stops the kernel; the record comes first, so that
+- **A sandbox result that requires stop.** A03 rule 7 records the execution
+  `crashed` and then stops the kernel when `SandboxResult.stop_required` is true;
+  `detail_code` distinguishes `cleanup_failed` from `runner_protocol_failed`.
+  The record comes first, so that
   start-up recovery finds the element concluded and never executes it again.
-  `sandbox` only reports that outcome; it stops nothing. The module that called
+  `sandbox` alone decides `stop_required` and stops nothing. The module that called
   `sandbox.execute_function` writes the execution's record in its usual store
   call — `runs` the NodeExecution, `functions` the TrialExecution — then does
   nothing more in that request: no further element, no further case, no
@@ -638,7 +640,9 @@ code, counts the code's tasks against `process_count`, loads the code, calls
 `run` once as A03 rule 3 says, pre-counts the outputs and sends them —; the
 text of that program, the command line it is started with, and the reading of
 the report it sent to the parent: trap hits, resource hits, the exception that
-escaped, the returned outputs.
+escaped, the returned outputs, and whether every consumed complete message
+conformed to the runner channel. It reports channel validity and never decides
+what invalidity means for an execution.
 
 ### Knows
 
@@ -734,7 +738,9 @@ the command line `sandbox_runner` gives; the wall deadline and the output
 count kept from outside, the closed outcome order, the bounded
 `failure_detail`, confirmed cleanup, reporting an execution whose cleanup
 cannot be confirmed as `crashed` with `cleanup_failed` (above, "Unconfirmed
-cleanup"), and the start probe. What happens inside the environment is
+cleanup"), reporting an invalid runner channel as `crashed` with
+`runner_protocol_failed`, and deciding the one `stop_required` signal for either
+infrastructure failure, and the start probe. What happens inside the environment is
 `sandbox_runner`'s (above, "The runner").
 
 ### Knows
@@ -1135,7 +1141,7 @@ end, run advancement included (A18 rule 3), paging parameters, the reads of
 inspection, traces and the repair view of a slot (A15 rule 6), and responses that
 carry no secret, path or stack trace; ending the process when a module returns
 the stop of an unconfirmed cleanup, after that module has written its record
-(above, "Unconfirmed cleanup"). The single rule that an agent receives a
+(above, "A sandbox result that requires stop"). The single rule that an agent receives a
 `personal_data` value or file only as digest and class, and a classified
 `failure_detail` only as length and class (A07 rules 4 and 5). The order of
 process start, every step required, as "Start" above lists it: installation,
