@@ -741,3 +741,33 @@ Adversarial review of the delta:
 
 Semantic result for the delta: PASS. This is specification review, not runtime
 acceptance; only the next complete Route B can prove the new candidate.
+
+## Decision 52 delta — explicit run model seams (2026-10-24)
+
+The failed Route B candidate introduced reflection over ElementConclusion and
+undeclared FitCheck accesses. Only runs' final packet changes after repair:
+two existing notes are rewritten, and direct model wiring adds exactly
+ElementWaiting and FitCheck. All other seventeen packet hashes match the
+previous accepted ledger. Model shapes, signatures, persistence, request
+ordering and actor decisions are unchanged.
+
+The delta was reviewed against the four Stage 8.1 questions:
+- derive_run_answer must narrow the closed conclusion union to ElementWaiting
+  before reading approval_id directly; it cannot discover the field through
+  reflection or invent it on another variant. The existing RunWait optional
+  identifier carries absence for other cases.
+- start_run retains its ordered refusals and creates no run on failure; the
+  check's name comes from the existing FitCheck enumeration. File payloads
+  are rejected before constructing JsonCandidate.
+- Both named models are present in runs' direct prompt imports, not merely
+  hidden in transitive model context. Other imports are unchanged.
+- No new outcome, model, helper contract or runtime dependency is introduced.
+  Empty-success or forwarding implementations cannot meet the existing notes.
+
+Both final draft notes pass check_note_draft. Assembly is 14/14 ready, with
+zero errors/warnings. The runs structural review has zero blocks and review
+prompts. State 7 rounds 118 and 119 each contain three
+Codex / gpt-5.6-sol / medium reviews with zero points.
+
+Semantic result for this specification delta: PASS. No rejected generated
+candidate was modified; runtime proof requires a new complete Route B.

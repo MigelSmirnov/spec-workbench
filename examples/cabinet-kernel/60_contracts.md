@@ -1789,6 +1789,29 @@ variants. The rest the notes allowed.
     acceptance checks; a new full Route B must also prove the file scenarios
     that were unreachable in the previous candidate.
 
+52. **Run answers narrow the declared conclusion; fit refusals name their enum**
+    (2026-10-24, rejected Route B generation of runs). Decision 33 already
+    declares ElementConclusion as a closed discriminated union. Only its
+    ElementWaiting variant has approval_id. derive_run_answer must narrow the
+    value returned by operation_element_conclusion to that variant before
+    reading the field directly; a different variant supplies no approval
+    identifier. Other stored waiting reasons supply no approval identifier.
+    Runtime reflection is not the source of the variant's field surface.
+
+    start_run already refuses file payloads for a flow's value-only inputs
+    before constructing JsonCandidate, and names the port and failed check
+    when fit_port_value rejects a candidate. FitCheck is the existing
+    enumeration owning those check names. The two notes address these models;
+    Stage 8 import wiring adds exactly ElementWaiting and FitCheck to the
+    direct models imports of runs, so its prompt can implement these accesses. No new enum or duplicate failure taxonomy
+    is introduced, and check precedence stays unchanged.
+
+    This engages A05/A14/A16 and the existing start_run and derive_run_answer
+    provenance. The rejected candidate's hasattr call and undeclared FitCheck
+    accesses are diagnostic evidence, not implementation authority. The two
+    existing notes now name the model boundaries they consume. Signatures,
+    records, persistence and accepted behavior remain unchanged.
+
 ## Texts of earlier states changed by State 6
 
 - State 4 (2026-10-22, decision 45 completed): the reviewed flows
