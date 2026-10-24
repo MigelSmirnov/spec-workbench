@@ -327,7 +327,7 @@ rules 4–5. Field schemas and bounds are State 6's. "Agent" means any agent,
 | `accept_binding` | owner | `bindings.accept_binding` |
 | `compose_flow_version` | agent | `flows.compose_flow_version` |
 | `prove_flow_version` | agent | `flows.prove_flow_version` |
-| `activate_flow_version` | owner, agent (`read` only, A06) | `flows.activate_flow_version` |
+| `activate_flow_version` | owner, agent (A06; an agent's effectful version reaches the operation and is refused there) | `flows.activate_flow_version` |
 | `start_run` | owner, agent | `runs.start_run` |
 | `resume_run` | owner, agent | `runs.resume_run` |
 | `release_run` | owner, agent | `runs.release_run` |
