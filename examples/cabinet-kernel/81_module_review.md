@@ -750,4 +750,5 @@ keeps the first equal value, and may not serialize, format or reflect on a value
 to manufacture another key. No query variant, model, field, return order,
 missing-record policy, repository operation or caller responsibility changes.
 The complete `store` packet has 11 contracts, 57 notes and zero structural
-blocks; its semantic verdict remains PASS.
+blocks; its semantic verdict remains PASS. State 7 rounds 119–120 each returned
+three clear reviews with no points or topics, closing the changed prompt.
