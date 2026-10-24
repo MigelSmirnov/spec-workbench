@@ -736,3 +736,18 @@ assembly is 14/14. Slice hashes were recomputed from the admission workbench's
 canonical JSON rendering. Fatal runner-protocol classification remains
 deliberately absent: the current runner executes agent code in the same process
 that owns the channel descriptor, so it is not a trusted supervisor boundary.
+
+## Decision 52 identity-value deduplication closure (2026-10-24)
+
+The rejected Route B store candidate derived a generic equality key with
+`model_dump_json` guarded by `hasattr`. That was not host probing, but it was the
+same forbidden reflective implementation pattern and exposed an underspecified
+meaning of "repeated identity". Ownership remains in `store.read_records`.
+
+The added State 7 note closes only that gap: every identity query compares the
+declared identity values directly under their models' existing value identity,
+keeps the first equal value, and may not serialize, format or reflect on a value
+to manufacture another key. No query variant, model, field, return order,
+missing-record policy, repository operation or caller responsibility changes.
+The complete `store` packet has 11 contracts, 57 notes and zero structural
+blocks; its semantic verdict remains PASS.
