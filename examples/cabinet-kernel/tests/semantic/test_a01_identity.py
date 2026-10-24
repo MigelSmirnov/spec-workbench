@@ -615,6 +615,13 @@ def test_canonical_bytes_are_a_fixed_point(semantic_runtime):
         (output,) = [output for output in run.outputs if output.port == "out"]
         return output.value.json_text
 
+    # Integral and fractional spellings exercise the number-rendering seam
+    # directly. In particular, an integer must not acquire a non-significant
+    # ``.0`` when the implementation renders its IEEE-double value.
+    assert copied("30000") == "30000"
+    assert copied("1.5") == "1.5"
+    assert copied("-0") == "0"
+
     # 1.801439850948199e+16 is the double 18014398509481992; JCS writes it
     # 18014398509481990, which a double does not hold exactly.
     assert copied("1.801439850948199e+16") == "18014398509481990"

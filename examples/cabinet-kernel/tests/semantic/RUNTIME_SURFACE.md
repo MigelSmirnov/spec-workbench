@@ -199,6 +199,7 @@ is not written around.
 | `kernel_a16_unknown_token_uniform_refusal` | `mcp_request` (unknown and missing token), `surface_answers()` |
 | `kernel_a16_revoked_token_refused_without_restart` | `mcp_request`, `installation` (token list rewritten) |
 | `kernel_a16_schema_checked_before_record_read` | `mcp_request` (an unknown field) |
+| `kernel_a16_integer_request_survives_canonical_validation` | `mcp_request`: integer fields pass through the same canonicalisation and strict JSON-model validation as every tools/call request |
 | `kernel_a16_tokens_unique` | `mcp_request`, `installation`, `restart()` |
 | `kernel_a16_request_size_and_field_bounds` | `mcp_request(raw=)` (a message over the request ceiling), `installation` |
 | `kernel_a17_canary_credential_never_written` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `store_dump()`, `host_output()`, `process_arguments()`, `surface_answers()` |

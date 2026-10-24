@@ -141,10 +141,14 @@ page_size <= page_size_max
 10. A list request with a page size of `page_size_max` + 1 or of 0 is refused;
     one without a size returns at most `page_size_default` items.
     [witness: verification:kernel_a16_page_size_bounded]
-11. Authoring an implementation whose code would write a marker file when
+11. A request whose strict request model has integer fields accepts JSON
+    integers after the surface canonicalises its arguments; canonicalisation
+    does not turn them into fractional JSON numbers.
+    [witness: verification:kernel_a16_integer_request_survives_canonical_validation]
+12. Authoring an implementation whose code would write a marker file when
     imported or evaluated writes no marker.
     [witness: verification:kernel_a16_agent_code_not_run_in_kernel]
-12. A token is compared in constant time with the owner token and with each
+13. A token is compared in constant time with the owner token and with each
     agent token.
 
 ### Consequence
