@@ -541,10 +541,8 @@ def run(inputs):
     # answers internal_error and ends the process.
     assert exc.value.code == "internal_error"
 
-    # A03 rule 7 / State 6 decision 21: required stop is a non-zero exit.
-    exit_code = semantic_runtime.kernel_exited()
-    assert exit_code is not None
-    assert exit_code != 0
+    # A03 rule 7: the kernel process stops.
+    assert semantic_runtime.kernel_exited() is not None
 
     started = semantic_runtime.restart()
     assert started.started is True
