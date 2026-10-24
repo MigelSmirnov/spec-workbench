@@ -115,7 +115,7 @@ Python signatures are State 6's.
   the separate internal result `stop_required`, returned up the call chain
   after the caller wrote its record; `module:surface` answers
   `internal_error` — here, unlike any other internal error, that record was
-  written — and ends the process (State 3, "A sandbox result that requires stop").
+  written — and ends the process (State 3, "Unconfirmed cleanup").
 
 ## Closed set of refusal codes
 
@@ -1320,7 +1320,7 @@ used; a bounded `failure_detail` otherwise.
 
 ### Observable effect
 
-A fresh environment was created and cleanup was confirmed unless the result is `crashed` with `cleanup_failed`; runner-channel validity is reported independently.
+A fresh environment was created and, on every result but `crashed` with `cleanup_failed`, confirmed removed.
 
 ### Enforces
 
@@ -1332,9 +1332,9 @@ succeeded (A15 rules 3 and 4).
 
 ### Errors
 
-None: unconfirmed cleanup or an invalid complete runner message is the result
-`crashed` with its detail and `stop_required`; the caller writes the record and
-propagates the required stop without interpreting the detail (Conventions; State 3).
+None: an unconfirmed cleanup is the result `crashed` with detail
+`cleanup_failed`; the caller writes the record and returns `stop_required`
+(Conventions; State 3).
 
 ### State impact
 
