@@ -67,8 +67,9 @@ Reuses cabinet-flow decisions 21 and 22, narrowed by K-11 and K-15.
      back;
    - any agent only: try an implementation, propose a binding, compose and prove a
      flow;
-   - owner or any agent: inspect, activate a flow (an agent only a `read` version,
-     A06), run, resume, release a failed run, read a trace — except that reading
+   - owner or any agent: inspect, call activate on a flow, run, resume, release a
+     failed run, read a trace — the activate call passes this actor table and A06
+     then refuses an agent's version above `read` as the operation's own refusal — except that reading
      a spooled file's or a trial fixture's bytes is owner only (A10 rule 2).
    No request field names or changes the actor.
 4. The surface is one fixed set of typed operations (K-11). Every request is

@@ -328,8 +328,9 @@ Candidate fields:
   a repeated file kept as often as it occurs;
 - `resources_used`;
 - `detail_code`: the closed detail of State 5 when the outcome has one —
-  `cleanup_failed` for a `crashed` execution whose cleanup was not confirmed
-  (A03 rule 7), `value_too_large` (A15 rule 4) — none otherwise;
+  `cleanup_failed` for a `crashed` execution whose cleanup was not confirmed,
+  `runner_protocol_failed` for a `crashed` execution with an invalid complete
+  runner message (A03 rule 7), `value_too_large` (A15 rule 4) — none otherwise;
 - `executed_at`;
 - `executed_by` (K-15): the agent whose explicit try ran it, or `kernel` for
   admission.
@@ -1102,6 +1103,8 @@ Candidate fields:
   `upstream_failed` — `succeeded` only after output validation;
 - `failure_detail`: bounded, without secrets, when not succeeded;
 - `resources_used`: for a function node;
+- `detail_code`: the closed detail of the concluded attempt, including
+  `cleanup_failed` and `runner_protocol_failed` for A03 rule 7;
 - `started_at`, `ended_at`.
 
 ### Identity

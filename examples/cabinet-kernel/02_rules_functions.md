@@ -218,7 +218,7 @@ and no detection promises the runtime cannot keep.
    `crashed`. The output count is the sum of the canonical JSON bytes of every
    `value` output — for an output that has none, the bytes of its JSON text as
    returned — and the bytes of every `file` output of the one call of `run` —
-   for a `many` file output, the sum of its elements' bytes. Outcomes are closed and checked in this order, the first that holds
+   for a `many` file output, the sum of its elements' bytes. After cleanup is confirmed and the runner channel is valid, outcomes are closed and checked in this order, the first that holds
    deciding: wall deadline passed — `timeout`; a limit hit (memory, process count,
    scratch, `output_bytes`) — `resource_exhausted`; a trap of rule 4 raised —
    `sandbox_violation`; the module failed to load, has no `run`, raised, or the
@@ -233,10 +233,14 @@ and no detection promises the runtime cannot keep.
    and the exchange directory is removed. The sandbox also distinguishes a valid
    runner channel from an invalid complete message; an absent returned message on
    an otherwise valid channel remains an ordinary `crashed` execution. If cleanup
-   cannot be confirmed, or a complete runner message is invalid, output is
-   discarded, the execution is recorded `crashed` with detail `cleanup_failed` or
-   `runner_protocol_failed` respectively, and the sandbox result requires the
-   kernel process to stop after that record is written; runs it left `running`
+   cannot be confirmed, output is discarded and the execution is recorded
+   `crashed` with detail `cleanup_failed`, whether or not the channel is also
+   invalid. Otherwise, if a complete runner message is invalid, output is
+   discarded and the execution is recorded `crashed` with detail
+   `runner_protocol_failed`, ahead of the ordinary outcome order of rule 5. In
+   either case the sandbox result requires the kernel process to stop after that
+   record is written. An incomplete final line alone is ignored and is not this
+   protocol failure; runs it left `running`
    are recovered on the next start (A14 rule 5).
 8. The kernel checks at start, before recovery and before the surface opens,
    that `bubblewrap` is present and that one probe execution succeeds; without
@@ -330,10 +334,10 @@ admission order and of resubmitting an equal implementation.
    corpus digest is the content identity (State 6, decision 14) of the list of
    its `trial_case_id`s in corpus order.
    Admission executes the implementation on every case of the corpus, in corpus
-   order, each as one TrialExecution M07, and never stops early — save for an
-   execution whose cleanup cannot be confirmed: it is recorded `crashed` with
-   `cleanup_failed` and the kernel stops (A03 rule 7), with no verdict
-   recorded; after the restart a submission runs admission afresh.
+   order, each as one TrialExecution M07, and never stops early — save for an execution whose sandbox result requires
+   stop: it is recorded `crashed` with its A03 rule 7 detail and the kernel
+   stops, with no verdict recorded; TrialExecutions already written remain, and
+   after the restart a submission runs the whole admission afresh.
 3. A case passes when the execution succeeded and, if the case states expected
    outputs, every output's digest equals the expected one — a file output is
    recorded in the TrialExecution by digest, size and media type, keeps no bytes,
