@@ -159,6 +159,37 @@ def test_plan_projects_registered_surfaces_and_preserves_unowned_rules(
     assert projected["module_functions"]["alpha"] == ["KeepError", "new", "Thing"]
 
 
+def test_exception_taxonomy_projects_owned_exception(tmp_path, monkeypatch) -> None:
+    project = _project(tmp_path)
+    _patch_ready_sources(monkeypatch)
+    (project / "60_exception_taxonomy.json").write_text(
+        json.dumps(
+            {
+                "schema_version": "spec_workbench_state6_exception_taxonomy.v1",
+                "status": "closed",
+                "exceptions": [
+                    {
+                        "symbol": "NotPermittedError",
+                        "module": "module:alpha",
+                        "meaning": "The actor table rejected the call.",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    _, projected, findings, sources = service._project(project)
+
+    assert findings == []
+    assert "NotPermittedError" in projected["module_functions"]["alpha"]
+    assert "NotPermittedError" in projected["imports"]["internal"]["alpha"]
+    assert any(
+        row["source"] == "60_exception_taxonomy.json" and row["ready"] is True
+        for row in sources
+    )
+
+
 def test_model_closure_projects_new_model_ownership(tmp_path, monkeypatch) -> None:
     project = _project(tmp_path)
     current = json.loads((project / "global_spec.json").read_text(encoding="utf-8"))
