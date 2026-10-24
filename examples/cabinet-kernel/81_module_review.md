@@ -711,3 +711,33 @@ prompt path with one classifier change and an integration regression. The
 related suite passes 50 tests; one older accepted-spec test still asserts an
 obsolete address count (114 rather than the baseline's 123) and is recorded
 separately. The gate corpus passes 23/23. No product-data guard was bypassed.
+
+## Decision 51 delta — required stop and actor-table refusal (2026-10-24)
+
+Only surface's final packet changes. The other seventeen packet hashes are
+identical to the previous accepted ledger; contracts, models, imports and
+every non-note part of global_spec.json are unchanged. Three existing notes
+were rewritten, with no additions or reordered notes. All three drafts pass
+MCP check_note_draft. Assembly is 14/14 ready, with no error or warning;
+surface --review reports zero blocks and review prompts. State 7 rounds
+116 and 117 each run three Codex / gpt-5.6-sol / medium reviews on the final
+surface prompt, with no topics.
+
+Adversarial review of the delta:
+- A required stop cannot satisfy the notes by normal loop exit, self-blocking
+  shutdown or processing another request. The error response is attempted
+  and flushed first; failure to write does not cancel the non-zero stop.
+  HTTPServer remains sequential, as A18 and decision 22 require.
+- A denied actor cannot satisfy the notes with a domain RefusedError, a handler
+  call or record lookup. The existing RefusalAnswer and RefusalCode declare
+  the result; request checks keep their order and the actor table is unchanged.
+- Existing translate_failure notes retain domain refused and unexpected
+  internal_error behavior; no exception symbol, signature or dependency was
+  added. Initialization and other non-catalogue methods retain their scope.
+- The existing A03 witness still checks internal_error, stopping and recovery;
+  it now also requires a non-zero process exit. A10/A16 witnesses continue
+  checking the permission code. The runner-channel decision 50 and its
+  arbitrary-byte and empty-file witnesses remain unchanged.
+
+Semantic result for the delta: PASS. This is specification review, not runtime
+acceptance; only the next complete Route B can prove the new candidate.

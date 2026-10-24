@@ -1759,6 +1759,36 @@ variants. The rest the notes allowed.
     empty file, arbitrary binary bytes and file lists, including an empty list;
     a mixed JSON output must survive the same returned message.
 
+51. **Required stop and actor-table refusal are surface control flow**
+    (2026-10-24, Route B causes A03/A10/A16). Decision 21 and A03/A14
+    already require an internal_error response followed by non-zero process
+    exit; decision 22 and A18 preserve a single sequential HTTPServer.
+    The failed candidate called blocking shutdown from the same thread as
+    serve_forever, preventing that exit. The required-stop path must send
+    and flush the response, close the connection and listener, leave request
+    serving without accepting another request, and return a non-zero status.
+    A failed write or flush still takes that stop path. It must not call
+    blocking HTTPServer.shutdown from the request-serving thread. This
+    specifies termination without introducing parallel request processing.
+
+    A16 already fixes actor-table denial as not_permitted before the handler.
+    Decision 21's exception propagation and the common refusal taxonomy do
+    not turn that denial into RefusedError: that symbol still means refused
+    for domain operations. answer_request constructs the permission
+    RefusalAnswer directly from the existing RefusalCode member and returns
+    the existing tool-refusal envelope, with no handler call or lookup of
+    the records named by the denied request. Request fitting, bound checks
+    and canonicalisation keep their earlier precedence. No exception symbol,
+    model, public signature or actor-table entry changes.
+
+    Provenance was checked for serve_kernel, answer_request and
+    translate_failure. The existing A03/A14/A18/A16 decisions are retained;
+    State 7 refines the control flow that previously failed to implement them.
+    Decision 50 already closes the runner-channel structure and remains
+    unchanged. Existing A03/A10/A16 semantic witnesses remain the runtime
+    acceptance checks; a new full Route B must also prove the file scenarios
+    that were unreachable in the previous candidate.
+
 ## Texts of earlier states changed by State 6
 
 - State 4 (2026-10-22, decision 45 completed): the reviewed flows
