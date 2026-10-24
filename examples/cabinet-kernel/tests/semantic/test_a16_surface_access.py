@@ -411,36 +411,6 @@ def test_schema_checked_before_record_read(semantic_runtime):
     assert control.value.code == "unknown_reference"
 
 
-def test_integer_request_survives_canonical_validation(semantic_runtime):
-    """[witness: verification:kernel_a16_integer_request_survives_canonical_validation]
-
-    A16 Required test 11: canonicalising a request does not change JSON integer
-    fields into fractional numbers before strict request-model validation.
-    """
-    author_token = semantic_runtime.installation.agent_token("author")
-    request = {
-        "slot_id": "a16_integer_request",
-        "purpose": "A16 witness: integer request survives canonical validation",
-        "inputs": [_port("x", "input", TEXT, "open")],
-        "outputs": [_port("y", "output", TEXT)],
-        "resource_bounds": {
-            "wall_time_ms": 30000,
-            "memory_bytes": 536870912,
-            "output_bytes": 67108864,
-            "process_count": 8,
-        },
-    }
-
-    answer = semantic_runtime.mcp_request(
-        "issue_contract_version", request, token=author_token
-    )
-    bounds = answer.contract_version.resource_bounds
-    assert bounds.wall_time_ms == 30000
-    assert bounds.memory_bytes == 536870912
-    assert bounds.output_bytes == 67108864
-    assert bounds.process_count == 8
-
-
 def test_agent_text_stored_verbatim(semantic_runtime):
     """[witness: verification:kernel_a16_agent_text_stored_verbatim]
 

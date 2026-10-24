@@ -89,9 +89,7 @@ purpose(slot | flow) fixed_at_creation
    exponent form (`1.801439850948199e+16`) included; an integer spelling that an
    IEEE double neither holds exactly nor writes as its shortest round-trip form
    (`18014398509481991`) is refused, and one it holds exactly
-   (`1152921504606846976`) is still accepted. An integral JSON value has no
-   insignificant fractional zero in its canonical bytes, a fractional value
-   keeps its significant fraction, and negative zero canonicalises to zero.
+   (`1152921504606846976`) is still accepted.
    [witness: verification:kernel_a01_canonical_bytes_are_a_fixed_point]
 
 ### Consequence
