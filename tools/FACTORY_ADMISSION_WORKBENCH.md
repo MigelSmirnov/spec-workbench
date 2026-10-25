@@ -77,6 +77,14 @@ nobody made.
   specification at validation; one that ignored the flag would drop the enum
   order silently, and one without the note constant would accept the
   `= rules.*` / `= config.*` notes v3 refuses.
+- `FA021` — every standard backend the source declares in `rules` that owns a
+  fixed set of module functions (`ModuleContracts` in
+  `tools/standard_backends.py`, today `keyed_file_spool_backend`) owns exactly
+  the functions the target Factory emitter writes: the keys of its
+  `REQUIRED_CONTRACTS` and `OPTIONAL_CONTRACTS` literals, read without running
+  Factory code, equal the Workbench mirror the notes gate exempts from notes.
+  A missing emitter or a different table blocks; no such backend is not
+  applicable.
 
 `FA019` exists because a late decision passed every other check. On
 2026-10-10 Cabinet Kernel decision 25 added a note allowing pydantic to a

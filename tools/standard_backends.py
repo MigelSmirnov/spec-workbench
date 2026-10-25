@@ -14,6 +14,66 @@ from typing import Any
 
 
 @dataclass(frozen=True)
+class ModuleContracts:
+    """A fixed set of module-level callables an emitter writes into the wired module.
+
+    ``required`` functions are always emitted; an ``optional`` one is emitted
+    exactly when the case declares its contract (``60_contracts.json``). When
+    the backend IR object ``errors_key`` names the wired module as its
+    ``module``, the emitter also defines the exception classes its
+    ``error_members`` name there. The function names mirror the contract tables
+    of the Factory emitter ``factory_tool``; admission FA021 holds them equal to
+    the target Factory, read without running Factory code.
+    """
+
+    required: tuple[str, ...]
+    optional: tuple[str, ...] = ()
+    errors_key: str | None = None
+    error_members: tuple[str, ...] = ()
+    factory_tool: str | None = None
+    factory_required_constant: str = "REQUIRED_CONTRACTS"
+    factory_optional_constant: str = "OPTIONAL_CONTRACTS"
+
+    def well_formed(self, backend: dict[str, Any]) -> bool:
+        """The IR names its module and, when declared, distinct error classes.
+
+        Only what ownership is computed from is checked here; the Factory
+        validator remains the judge of the rest of the closed form.
+        """
+        wiring = backend.get("wiring")
+        if not isinstance(wiring, dict) or not _name(wiring.get("module")):
+            return False
+        if self.errors_key is None:
+            return True
+        errors = backend.get(self.errors_key)
+        if not isinstance(errors, dict) or not _name(errors.get("module")):
+            return False
+        members = [errors.get(member) for member in self.error_members]
+        return all(_name(member) for member in members) and len(set(members)) == len(members)
+
+    def owned(self, backend: dict[str, Any], declared: set[str]) -> set[str]:
+        result = set(self.required) | {name for name in self.optional if name in declared}
+        if self.errors_key is not None:
+            errors = backend[self.errors_key]
+            if errors["module"] == backend["wiring"]["module"]:
+                result |= {errors[member] for member in self.error_members}
+        return result
+
+
+def _name(value: Any) -> bool:
+    return isinstance(value, str) and bool(value)
+
+
+def _declared_contracts(project: Path) -> set[str]:
+    path = project / "60_contracts.json"
+    try:
+        contracts = json.loads(path.read_text(encoding="utf-8")).get("contracts")
+    except (OSError, AttributeError, ValueError):
+        return set()
+    return set(contracts) if isinstance(contracts, dict) else set()
+
+
+@dataclass(frozen=True)
 class StandardBackend:
     id: str
     closure_file: str
@@ -23,6 +83,7 @@ class StandardBackend:
     concrete_methods: tuple[str, ...] = ()
     function_wiring_key: str | None = None
     function_wiring_keys: tuple[str, ...] = ()
+    module_contracts: ModuleContracts | None = None
 
     def _load(self, path: Path) -> Any:
         return json.loads(path.read_text(encoding="utf-8"))
@@ -43,6 +104,11 @@ class StandardBackend:
             closure.get("schema_version") != self.closure_schema
             or closure.get("status") != "closed"
             or not isinstance(backend, dict)
+        ):
+            return None
+        if self.module_contracts is not None and (
+            backend.get("kind") != self.rule_key
+            or not self.module_contracts.well_formed(backend)
         ):
             return None
         return backend
@@ -101,6 +167,8 @@ class StandardBackend:
         mapping = self._mapping(backend)
         if mapping is not None:
             return set(mapping)
+        if self.module_contracts is not None:
+            return self.module_contracts.owned(backend, _declared_contracts(project))
         wiring = backend.get("wiring")
         if self.function_wiring_keys and isinstance(wiring, dict):
             functions = {
@@ -166,6 +234,27 @@ STANDARD_BACKENDS = (
         closure_file="70_data_provider_closure.json",
         closure_schema="spec_workbench_data_provider_backend_closure.v1",
         rule_key="data_provider_backend",
+    ),
+    StandardBackend(
+        id="keyed_file_spool",
+        closure_file="70_keyed_file_spool_closure.json",
+        closure_schema="spec_workbench_keyed_file_spool_backend_closure.v1",
+        rule_key="keyed_file_spool_backend",
+        module_contracts=ModuleContracts(
+            required=(
+                "spool_entry_name",
+                "spool_attempt_prefix",
+                "publish_spool_entry",
+                "read_spool_entry",
+                "discard_spool_attempt",
+                "remove_spool_group",
+                "remove_spool_temporaries",
+            ),
+            optional=("spool_group_bytes", "list_spool_groups"),
+            errors_key="errors",
+            error_members=("refused", "internal"),
+            factory_tool="tools/generate_keyed_file_spool_draft.py",
+        ),
     ),
 )
 
