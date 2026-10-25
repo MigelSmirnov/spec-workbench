@@ -277,6 +277,65 @@ def _sync_model_exports(imports: Any, models: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
+def _sync_exception_ownership(
+    module_functions: dict[str, list[str]], imports: Any, taxonomy: dict[str, Any]
+) -> tuple[dict[str, list[str]], dict[str, Any]]:
+    if not isinstance(imports, dict):
+        raise SpecProjectionError("global_spec.imports must be an object")
+    result_functions = copy.deepcopy(module_functions)
+    result_imports = copy.deepcopy(imports)
+    internal = result_imports.get("internal")
+    if not isinstance(internal, dict):
+        raise SpecProjectionError("global_spec.imports.internal must be an object")
+
+    owned: list[tuple[str, str]] = []
+    for index, entry in enumerate(taxonomy.get("exceptions", [])):
+        if not isinstance(entry, dict):
+            raise SpecProjectionError(
+                f"60_exception_taxonomy.json exceptions[{index}] must be an object"
+            )
+        symbol = entry.get("symbol")
+        raw_module = entry.get("module")
+        if not isinstance(symbol, str) or not symbol:
+            raise SpecProjectionError(
+                f"60_exception_taxonomy.json exceptions[{index}] lacks symbol"
+            )
+        if not isinstance(raw_module, str) or not raw_module.startswith("module:"):
+            raise SpecProjectionError(
+                f"60_exception_taxonomy.json exception {symbol!r} has invalid module"
+            )
+        owned.append((symbol, raw_module.removeprefix("module:")))
+
+    owners = dict(owned)
+    for module, exports in result_functions.items():
+        result_functions[module] = [
+            symbol for symbol in exports
+            if symbol not in owners or owners[symbol] == module
+        ]
+    for module, exports in internal.items():
+        if not isinstance(exports, list) or not all(isinstance(symbol, str) for symbol in exports):
+            raise SpecProjectionError(
+                f"global_spec.imports.internal.{module} must be a string list"
+            )
+        internal[module] = [
+            symbol for symbol in exports
+            if symbol not in owners or owners[symbol] == module
+        ]
+
+    for symbol, module in owned:
+        module_symbols = result_functions.setdefault(module, [])
+        if symbol not in module_symbols:
+            module_symbols.append(symbol)
+        module_exports = internal.setdefault(module, [])
+        if not isinstance(module_exports, list):
+            raise SpecProjectionError(
+                f"global_spec.imports.internal.{module} must be a string list"
+            )
+        if symbol not in module_exports:
+            module_exports.append(symbol)
+    return result_functions, result_imports
+
+
 def _finding(
     severity: str,
     code: str,
@@ -546,6 +605,37 @@ def _project(project: Path) -> tuple[dict[str, Any], dict[str, Any], list[dict[s
             )
             projected["imports"] = _sync_model_exports(
                 current.get("imports"), projected_models
+            )
+
+    exception_path = project / "60_exception_taxonomy.json"
+    if exception_path.is_file():
+        taxonomy = _read_json(exception_path, exception_path.name)
+        taxonomy_ready = (
+            taxonomy.get("schema_version") == "spec_workbench_state6_exception_taxonomy.v1"
+            and taxonomy.get("status") == "closed"
+            and isinstance(taxonomy.get("exceptions"), list)
+        )
+        source_checks.append(
+            _source_check(
+                exception_path.name,
+                enabled=True,
+                ready=taxonomy_ready,
+                status=taxonomy.get("status") if isinstance(taxonomy.get("status"), str) else None,
+                errors=0 if taxonomy_ready else 1,
+            )
+        )
+        if not taxonomy_ready:
+            findings.append(
+                _finding(
+                    "block",
+                    "exception_taxonomy_not_ready",
+                    "State 6 exception taxonomy must be closed and schema-valid before projection",
+                    source=exception_path.name,
+                )
+            )
+        elif isinstance(projected.get("module_functions"), dict):
+            projected["module_functions"], projected["imports"] = _sync_exception_ownership(
+                projected["module_functions"], projected.get("imports"), taxonomy
             )
 
     persistence_artifacts = _phase_artifacts(
