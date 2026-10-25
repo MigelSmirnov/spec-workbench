@@ -35,8 +35,8 @@ is the one mapping;
 | A20 | `data_provider` | `canonical_values`, `functions`, `sandbox`, `sandbox_runner`, `service_invoker`, `store`, `runs`, `run_values`, `surface`, `installation`, `bindings`, `store_spool` |
 
 The kernel is one process with one writer (K-17), so modules are not services:
-they are the parts of one program, and only `store` touches the database and the
-data directory. `store` holds the connection and the transaction and decides
+they are the parts of one program, and only the store module — `store` and its
+two companions below — touches the database and the data directory. `store` holds the connection and the transaction and decides
 which record goes into which row; the row statements themselves are executed by
 `store_persistence`, its companion, which only `store` calls, over that
 connection (below). The run spool's files are written, read and removed by
