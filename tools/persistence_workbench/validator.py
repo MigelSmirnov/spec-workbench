@@ -52,7 +52,11 @@ STORAGE_REPRESENTATIONS_V3 = STORAGE_REPRESENTATIONS | {"json_model", "json_valu
 TABLE_QUERY_FIELDS_V3_EXTRA: dict[str, frozenset[str]] = {
     "upsert_many": frozenset({"table", "columns", "conflict", "updates"}),
     "list_all": frozenset({"table", "select", "order_by"}),
+    # §6.3: a paged read whose equality column a declared enum argument selects.
+    "list_selected": frozenset({"table", "selector", "select", "order_by"}),
 }
+SELECTOR_FIELDS = frozenset({"enum", "field_argument", "value_argument", "cases"})
+SELECTOR_CASE_FIELDS = frozenset({"member", "column"})
 TABLE_QUERY_FIELDS: dict[str, frozenset[str]] = {
     "insert": frozenset({"table", "columns"}),
     "insert_many": frozenset({"table", "columns"}),
@@ -265,6 +269,50 @@ def _validate_aggregate(row: Any, index: int, table_names: set[str]) -> tuple[li
     return findings, aggregate
 
 
+def _validate_selector(
+    selector: Any,
+    *,
+    repository: str | None,
+    location: str,
+    table: Any,
+    table_columns: dict[str, set[str]],
+) -> list[Finding]:
+    """Shape and column references of a list_selected selector.
+
+    Enum membership, the contract's arguments and the column storage are the
+    factory's (tools/persistence_ir.py); this checks only what the IR resolves.
+    """
+    findings = _shape(selector, SELECTOR_FIELDS, location=location, code_prefix="selector", repository=repository)
+    if not isinstance(selector, dict):
+        return findings
+    for cell in ("enum", "field_argument", "value_argument"):
+        if not _text(selector.get(cell)):
+            findings.append(Finding("error", "invalid_selector_field", f"selector.{cell} must be a non-empty string", repository, location + f".{cell}"))
+    if _text(selector.get("field_argument")) and selector.get("field_argument") == selector.get("value_argument"):
+        findings.append(Finding("error", "invalid_selector_field", "selector.value_argument must differ from field_argument", repository, location + ".value_argument"))
+    cases = selector.get("cases")
+    if not isinstance(cases, list):
+        findings.append(Finding("error", "invalid_selector_cases", "selector.cases must be a list (may be empty)", repository, location + ".cases"))
+        return findings
+    members: set[Any] = set()
+    case_columns: set[Any] = set()
+    for position, case in enumerate(cases):
+        case_location = location + f".cases[{position}]"
+        findings.extend(_shape(case, SELECTOR_CASE_FIELDS, location=case_location, code_prefix="selector_case", repository=repository))
+        if not isinstance(case, dict):
+            continue
+        member, column = case.get("member"), case.get("column")
+        if not _text(member) or member in members:
+            findings.append(Finding("error", "invalid_selector_member", f"case member must be a unique non-empty string: {member!r}", repository, case_location + ".member"))
+        members.add(member)
+        if not _text(column) or column in case_columns:
+            findings.append(Finding("error", "invalid_selector_column", f"case column must be a unique non-empty string: {column!r}", repository, case_location + ".column"))
+        elif _text(table) and table in table_columns and column not in table_columns[table]:
+            findings.append(Finding("error", "unknown_method_column", f"unknown column {column!r} for table {table!r}", repository, case_location + ".column"))
+        case_columns.add(column)
+    return findings
+
+
 def _validate_method(
     row: Any,
     *,
@@ -312,6 +360,8 @@ def _validate_method(
                 for name in names:
                     if name not in table_columns[table]:
                         findings.append(Finding("error", "unknown_method_column", f"unknown column {name!r} for table {table!r}", repository, location + ".columns"))
+        if query == "list_selected":
+            findings.extend(_validate_selector(row.get("selector"), repository=repository, location=location + ".selector", table=table, table_columns=table_columns))
     else:
         aggregate = row.get("aggregate")
         if not _text(aggregate):

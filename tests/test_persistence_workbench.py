@@ -455,3 +455,63 @@ def test_v3_unique_paths_and_extra_kinds_are_version_keyed() -> None:
     payload["backend"] = {"engine": "sqlite", "emitter": "sqlite_sync_v2"}
     codes = {item.code for item in validate(payload)}
     assert "unsupported_query" in codes
+
+
+def _selected_backend() -> dict:
+    payload = _v3_backend()
+    payload["backend"] = {"engine": "sqlite", "emitter": "sqlite_sync_v2"}
+    payload["tables"][0]["columns"].append({
+        "column": "status", "field": "status", "storage": "enum",
+        "nullable": False, "check": None, "element_model": None,
+    })
+    payload["repositories"][0]["methods"].append({
+        "method": "page_invoice_rows", "query": "list_selected", "table": "invoices",
+        "selector": {
+            "enum": "InvoiceFilterField", "field_argument": "field", "value_argument": "value",
+            "cases": [{"member": "invoice_id", "column": "invoice_id"}, {"member": "status", "column": "status"}],
+        },
+        "select": ["invoice_id", "status"],
+        "order_by": [{"column": "invoice_id", "direction": "asc"}],
+    })
+    return payload
+
+
+def _selector(payload: dict) -> dict:
+    return payload["repositories"][0]["methods"][-1]["selector"]
+
+
+def test_v3_list_selected_is_valid_and_version_keyed() -> None:
+    payload = _selected_backend()
+    assert validate(payload) == []
+    _selector(payload)["cases"] = []
+    assert validate(payload) == []
+    payload["schema_version"] = 2
+    assert "unsupported_query" in {item.code for item in validate(payload)}
+
+
+def test_v3_list_selected_refuses_a_missing_selector_and_a_filter() -> None:
+    payload = _selected_backend()
+    method = payload["repositories"][0]["methods"][-1]
+    del method["selector"]
+    method["filter"] = {"invoice_id": "invoice_id"}
+    codes = {item.code for item in validate(payload)}
+    assert {"missing_method_field", "unknown_method_field"} <= codes
+
+
+def test_v3_list_selected_refuses_malformed_cases() -> None:
+    payload = _selected_backend()
+    _selector(payload)["cases"] = {"member": "status"}
+    assert "invalid_selector_cases" in {item.code for item in validate(payload)}
+
+    payload = _selected_backend()
+    _selector(payload)["cases"].append({"member": "status", "column": "status"})
+    codes = {item.code for item in validate(payload)}
+    assert {"invalid_selector_member", "invalid_selector_column"} <= codes
+
+    payload = _selected_backend()
+    _selector(payload)["cases"].append({"member": "total", "column": "total"})
+    assert "unknown_method_column" in {item.code for item in validate(payload)}
+
+    payload = _selected_backend()
+    _selector(payload)["value_argument"] = "field"
+    assert "invalid_selector_field" in {item.code for item in validate(payload)}
