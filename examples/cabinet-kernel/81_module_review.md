@@ -914,3 +914,19 @@ index only.
 
 All 19 packets review with zero structural blocks; the ledger records 19 of
 19 PASS with the current slice hashes.
+
+## send_under_authority and put_value_bytes' answer (2026-10-25)
+
+Route B 20261025_195049, generated through the Codex CLI (gpt-5.6-sol), failed
+16 semantic tests with internal_error: the generated `send_under_authority`
+compared the answer of `put_value_bytes` with the StoredValue's `value_id` and
+raised `StoreInternalError` on every service output. `put_value_bytes` answers
+the value digest; the `effects` note named both identities in one parenthesis
+without saying which one the call returns, and the `effects` prompt carries
+only the callee's signature.
+
+The `effects` packet now says the value digest is what `put_value_bytes`
+returns and the `value_id` is computed in `send_under_authority` and never
+compared with it. Reviewed against A15 rule 4 and decision 23: no contract,
+model or caller responsibility changes; no other module's slice moved.
+State 7 rounds 134–135 are clear. `effects` remains PASS.
