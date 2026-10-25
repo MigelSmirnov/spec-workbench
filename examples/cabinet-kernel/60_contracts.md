@@ -2028,8 +2028,12 @@ why.
       the emitter and its focused check instead of by prose.
     - *`run_id` form.* 32 lowercase hexadecimal characters drawn from a
       cryptographically secure source, declared as the spool group's closed
-      form (`group`: `lowercase_hex`, length 32); `record_change`'s identity
-      note names that address. Why: the run directory's name is checked
+      form (`group`: `lowercase_hex`, length 32). `store` draws it as
+      `secrets.token_hex` of the data_provider constant `STORE_RUN_ID_TOKEN_BYTES`
+      (16), which its identity note names: generated code receives a constant,
+      never a `rules` value (SPEC_STANDARD 15.9), so the closure's length 32 and
+      the constant 16 are two homes of one fact, kept equal by this decision and
+      caught by the emitted spool refusing any other run directory. Why: the run directory's name is checked
       against a closed form, which closes path traversal, and A01 rule 2 asks
       only that the identity be random; 128 random bits keep collisions out of
       reach, and a collision is drawn again.
