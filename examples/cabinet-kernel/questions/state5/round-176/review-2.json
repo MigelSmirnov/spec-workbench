@@ -1,0 +1,137 @@
+{
+ "open_points": [
+  {
+   "subject": "Record-type keys shared by data_provider, surface and store",
+   "kind": "undefined shared taxonomy",
+   "text": "“a table keyed by the record type and total over its members” and “One record type”",
+   "question": "What exact closed type and member names identify listable record types in LISTABLE_RECORD_TYPES, PAGE_FILTERS, the MCP request and store.page_records?",
+   "options": [
+    "A models RecordType enumeration with one member per listable type",
+    "The plural strings shown in the MCP catalogue",
+    "Model classes or table-specific typed selectors"
+   ],
+   "default_guess": "Use a models RecordType enumeration with singular members corresponding to the State 1 record models.",
+   "unit": "context"
+  },
+  {
+   "subject": "store_spool naming capabilities",
+   "kind": "missing operation contract",
+   "text": "“spool_entry_name” and “spool_attempt_prefix”",
+   "question": "What do these two public capabilities take and return, can they fail, and are their results opaque identifiers or filesystem-relative names that store may inspect or join?",
+   "options": [
+    "SpooledFileKey or attempt key to opaque bounded name/prefix",
+    "SpooledFileKey or attempt key to relative filesystem path text",
+    "Remove them from the public boundary and use them only inside store_spool"
+   ],
+   "default_guess": "Take typed spool keys and return opaque bounded relative-name components; they are pure and cannot fail for valid keys.",
+   "unit": "context"
+  },
+  {
+   "subject": "store_spool.publish_spool_entry",
+   "kind": "missing operation contract",
+   "text": "“publish_spool_entry”",
+   "question": "What exact inputs, output, failures and effects does publish_spool_entry have, including the spool root or handle, SpooledFileKey, bytes, expected digest and size, and the distinction between a ceiling refusal and an I/O, link or integrity failure?",
+   "options": [
+    "Take key, bytes and expected facts; return published facts or ceiling/refusal/internal failure",
+    "Take key and bytes; compute and return digest and size, with typed ceiling and storage failures",
+    "Accept an already-created temporary file and publish it"
+   ],
+   "default_guess": "Take a spool-area handle, SpooledFileKey, bytes, expected digest and size; return digest and size, distinguish a ceiling refusal from integrity, symlink and I/O failures, and leave no visible partial entry.",
+   "unit": "context"
+  },
+  {
+   "subject": "Ceiling refusal and attempt discard coordination",
+   "kind": "ambiguous caller and atomic effect",
+   "text": "“on a refusal keeps nothing of that file or of any file the same attempt spooled before it” and “discard_spool_attempt”",
+   "question": "Does publish_spool_entry itself discard all earlier files of the refused attempt before returning, or must store call discard_spool_attempt after a ceiling result; and what is the result if that discard cannot be completed?",
+   "options": [
+    "Publishing performs the discard and returns only after it succeeds",
+    "Publishing reports the ceiling and store must call discard_spool_attempt",
+    "Publishing records a pending cleanup that open_store completes later"
+   ],
+   "default_guess": "Publishing performs the whole attempt discard before returning the ceiling refusal; inability to complete it is an internal error rather than a successful refusal.",
+   "unit": "context"
+  },
+  {
+   "subject": "Run-spool ceiling when replacing an unnamed entry",
+   "kind": "ambiguous accounting",
+   "text": "“the run's spooled files plus this one against spool_run_bytes_max” and “replacing a file at the same position”",
+   "question": "When an unnamed completed file already occupies the same SpooledFileKey, is the run ceiling checked against the post-replacement total, subtracting the old entry, or against the old total plus the full new file size?",
+   "options": [
+    "Post-replacement total, subtracting the replaced entry",
+    "Old total plus the new file size",
+    "Remove the old entry first and treat failure after removal as leaving the position empty"
+   ],
+   "default_guess": "Check the post-replacement total while retaining the old complete entry until the new one can be atomically installed.",
+   "unit": "context"
+  },
+  {
+   "subject": "store_spool.read_spool_entry",
+   "kind": "missing operation contract",
+   "text": "“read_spool_entry” and “reading a file back checked against a digest and size”",
+   "question": "Which key and expected facts are inputs, what is returned, and how does the operation distinguish an absent entry, a symlink, unreadable bytes and a digest or size mismatch so store can implement read_value_bytes' error contract?",
+   "options": [
+    "Take SpooledFileKey plus expected digest and size and return bytes with typed storage failures",
+    "Take the complete SpooledFile record and return bytes",
+    "Take only a generated entry name and let store verify the returned bytes"
+   ],
+   "default_guess": "Take the spool-area handle, SpooledFileKey, expected digest and size; return verified bytes, with distinct absent and corrupt/unsafe storage results that store maps to its public errors.",
+   "unit": "context"
+  },
+  {
+   "subject": "store_spool removal operations",
+   "kind": "missing operation contract",
+   "text": "“discard_spool_attempt”, “remove_spool_group”, and “remove_spool_temporaries”",
+   "question": "What identifies an attempt and a group, which operation is idempotent, what exact files each may remove, and how do missing directories, symbolic links and I/O failures return to store?",
+   "options": [
+    "Typed attempt/run keys; all removals idempotent, with unsafe or I/O failures reported",
+    "Relative prefix/directory names supplied by store",
+    "Best-effort procedures with no reported failures"
+   ],
+   "default_guess": "Use typed attempt and run keys; missing targets succeed, only the named attempt, run, or temporary files may be removed, and symlink or I/O failures are reported for store to map according to the calling operation.",
+   "unit": "context"
+  },
+  {
+   "subject": "Startup use of remove_spool_temporaries",
+   "kind": "unspecified caller effect",
+   "text": "“start-time removal of temporary files” and “remove_spool_temporaries”",
+   "question": "Does store.open_store always call remove_spool_temporaries over the entire spool area, and does any failure or discovered symbolic link stop startup or remain for a later start?",
+   "options": [
+    "Scan the whole spool area before reads and fail startup on any error or link",
+    "Remove reachable temporaries best-effort and continue",
+    "Remove temporaries only inside run directories runs separately names"
+   ],
+   "default_guess": "Have open_store scan the complete spool area before records are read; a symlink or removal failure fails startup, while inability to remove an ended run's complete spool remains the separately defined non-fatal case.",
+   "unit": "context"
+  },
+  {
+   "subject": "StoreRepository page routing",
+   "kind": "ownership contradiction",
+   "text": "“store ... keeps ... which table a page reads for its record type” while store_persistence “Must not own ... which table a page reads” and the port “accepts no table name”",
+   "question": "How does store select the record type's table through StoreRepository without passing a table name or making store_persistence choose the table?",
+   "options": [
+    "One typed paging method per record type, selected by store",
+    "A RecordType argument dispatched to a table by store_persistence",
+    "A typed repository/table handle selected by store and passed to a generic page operation"
+   ],
+   "default_guess": "Expose one typed paging method per listable record type so store chooses the method and store_persistence only lowers that fixed method to SQL.",
+   "unit": "context"
+  },
+  {
+   "subject": "StoreRepository list versus page row operation",
+   "kind": "ambiguous operation set",
+   "text": "“list by an equality filter in store order” and, additionally, “for a listed record type, its rows in store order, all of them or those whose column for one filter field equals a value”",
+   "question": "Is the newly described page-row access the existing equality-list operation, a distinct operation, or a family of per-record-type operations; and which caller may use each form?",
+   "options": [
+    "A distinct paging scan used only by store.page_records",
+    "The existing equality-list operation extended to all listable record types",
+    "Per-record-type operations shared by relations and paging"
+   ],
+   "default_guess": "Make it a distinct typed paging scan used only by store.page_records; retain relation reads as separate fixed repository operations.",
+   "unit": "context"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"Record-type keys shared by data_provider, surface and store\",\"kind\":\"undefined shared taxonomy\",\"text\":\"“a table keyed by the record type and total over its members” and “One record type”\",\"question\":\"What exact closed type and member names identify listable record types in LISTABLE_RECORD_TYPES, PAGE_FILTERS, the MCP request and store.page_records?\",\"options\":[\"A models RecordType enumeration with one member per listable type\",\"The plural strings shown in the MCP catalogue\",\"Model classes or table-specific typed selectors\"],\"default_guess\":\"Use a models RecordType enumeration with singular members corresponding to the State 1 record models.\",\"unit\":\"context\"},{\"subject\":\"store_spool naming capabilities\",\"kind\":\"missing operation contract\",\"text\":\"“spool_entry_name” and “spool_attempt_prefix”\",\"question\":\"What do these two public capabilities take and return, can they fail, and are their results opaque identifiers or filesystem-relative names that store may inspect or join?\",\"options\":[\"SpooledFileKey or attempt key to opaque bounded name/prefix\",\"SpooledFileKey or attempt key to relative filesystem path text\",\"Remove them from the public boundary and use them only inside store_spool\"],\"default_guess\":\"Take typed spool keys and return opaque bounded relative-name components; they are pure and cannot fail for valid keys.\",\"unit\":\"context\"},{\"subject\":\"store_spool.publish_spool_entry\",\"kind\":\"missing operation contract\",\"text\":\"“publish_spool_entry”\",\"question\":\"What exact inputs, output, failures and effects does publish_spool_entry have, including the spool root or handle, SpooledFileKey, bytes, expected digest and size, and the distinction between a ceiling refusal and an I/O, link or integrity failure?\",\"options\":[\"Take key, bytes and expected facts; return published facts or ceiling/refusal/internal failure\",\"Take key and bytes; compute and return digest and size, with typed ceiling and storage failures\",\"Accept an already-created temporary file and publish it\"],\"default_guess\":\"Take a spool-area handle, SpooledFileKey, bytes, expected digest and size; return digest and size, distinguish a ceiling refusal from integrity, symlink and I/O failures, and leave no visible partial entry.\",\"unit\":\"context\"},{\"subject\":\"Ceiling refusal and attempt discard coordination\",\"kind\":\"ambiguous caller and atomic effect\",\"text\":\"“on a refusal keeps nothing of that file or of any file the same attempt spooled before it” and “discard_spool_attempt”\",\"question\":\"Does publish_spool_entry itself discard all earlier files of the refused attempt before returning, or must store call discard_spool_attempt after a ceiling result; and what is the result if that discard cannot be completed?\",\"options\":[\"Publishing performs the discard and returns only after it succeeds\",\"Publishing reports the ceiling and store must call discard_spool_attempt\",\"Publishing records a pending cleanup that open_store completes later\"],\"default_guess\":\"Publishing performs the whole attempt discard before returning the ceiling refusal; inability to complete it is an internal error rather than a successful refusal.\",\"unit\":\"context\"},{\"subject\":\"Run-spool ceiling when replacing an unnamed entry\",\"kind\":\"ambiguous accounting\",\"text\":\"“the run's spooled files plus this one against spool_run_bytes_max” and “replacing a file at the same position”\",\"question\":\"When an unnamed completed file already occupies the same SpooledFileKey, is the run ceiling checked against the post-replacement total, subtracting the old entry, or against the old total plus the full new file size?\",\"options\":[\"Post-replacement total, subtracting the replaced entry\",\"Old total plus the new file size\",\"Remove the old entry first and treat failure after removal as leaving the position empty\"],\"default_guess\":\"Check the post-replacement total while retaining the old complete entry until the new one can be atomically installed.\",\"unit\":\"context\"},{\"subject\":\"store_spool.read_spool_entry\",\"kind\":\"missing operation contract\",\"text\":\"“read_spool_entry” and “reading a file back checked against a digest and size”\",\"question\":\"Which key and expected facts are inputs, what is returned, and how does the operation distinguish an absent entry, a symlink, unreadable bytes and a digest or size mismatch so store can implement read_value_bytes' error contract?\",\"options\":[\"Take SpooledFileKey plus expected digest and size and return bytes with typed storage failures\",\"Take the complete SpooledFile record and return bytes\",\"Take only a generated entry name and let store verify the returned bytes\"],\"default_guess\":\"Take the spool-area handle, SpooledFileKey, expected digest and size; return verified bytes, with distinct absent and corrupt/unsafe storage results that store maps to its public errors.\",\"unit\":\"context\"},{\"subject\":\"store_spool removal operations\",\"kind\":\"missing operation contract\",\"text\":\"“discard_spool_attempt”, “remove_spool_group”, and “remove_spool_temporaries”\",\"question\":\"What identifies an attempt and a group, which operation is idempotent, what exact files each may remove, and how do missing directories, symbolic links and I/O failures return to store?\",\"options\":[\"Typed attempt/run keys; all removals idempotent, with unsafe or I/O failures reported\",\"Relative prefix/directory names supplied by store\",\"Best-effort procedures with no reported failures\"],\"default_guess\":\"Use typed attempt and run keys; missing targets succeed, only the named attempt, run, or temporary files may be removed, and symlink or I/O failures are reported for store to map according to the calling operation.\",\"unit\":\"context\"},{\"subject\":\"Startup use of remove_spool_temporaries\",\"kind\":\"unspecified caller effect\",\"text\":\"“start-time removal of temporary files” and “remove_spool_temporaries”\",\"question\":\"Does store.open_store always call remove_spool_temporaries over the entire spool area, and does any failure or discovered symbolic link stop startup or remain for a later start?\",\"options\":[\"Scan the whole spool area before reads and fail startup on any error or link\",\"Remove reachable temporaries best-effort and continue\",\"Remove temporaries only inside run directories runs separately names\"],\"default_guess\":\"Have open_store scan the complete spool area before records are read; a symlink or removal failure fails startup, while inability to remove an ended run's complete spool remains the separately defined non-fatal case.\",\"unit\":\"context\"},{\"subject\":\"StoreRepository page routing\",\"kind\":\"ownership contradiction\",\"text\":\"“store ... keeps ... which table a page reads for its record type” while store_persistence “Must not own ... which table a page reads” and the port “accepts no table name”\",\"question\":\"How does store select the record type's table through StoreRepository without passing a table name or making store_persistence choose the table?\",\"options\":[\"One typed paging method per record type, selected by store\",\"A RecordType argument dispatched to a table by store_persistence\",\"A typed repository/table handle selected by store and passed to a generic page operation\"],\"default_guess\":\"Expose one typed paging method per listable record type so store chooses the method and store_persistence only lowers that fixed method to SQL.\",\"unit\":\"context\"},{\"subject\":\"StoreRepository list versus page row operation\",\"kind\":\"ambiguous operation set\",\"text\":\"“list by an equality filter in store order” and, additionally, “for a listed record type, its rows in store order, all of them or those whose column for one filter field equals a value”\",\"question\":\"Is the newly described page-row access the existing equality-list operation, a distinct operation, or a family of per-record-type operations; and which caller may use each form?\",\"options\":[\"A distinct paging scan used only by store.page_records\",\"The existing equality-list operation extended to all listable record types\",\"Per-record-type operations shared by relations and paging\"],\"default_guess\":\"Make it a distinct typed paging scan used only by store.page_records; retain relation reads as separate fixed repository operations.\",\"unit\":\"context\"}]}",
+ "set_aside": []
+}
