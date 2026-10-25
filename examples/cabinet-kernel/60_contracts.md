@@ -1858,6 +1858,61 @@ element wait.
     the conclusion that makes it wait must not depend on a record the wait
     itself precludes.
 
+## Decision closed by the full project test run of decision 54 (2026-10-25)
+
+Verification 20261025_003703 passed every witness and 226 of 227 project
+tests in 315 s; the one failure was
+`test_runner_file_outputs_roundtrip[empty-list]` (decision 50): admitting an
+implementation whose many-file output is an empty list answered
+`internal_error`. `execute_trial_case` read the expected output's StoredValues
+with one `read_records` call over the port's refs, and an expected file list
+with no files has none, so the query carried an empty identity list, which
+`read_records` refuses as malformed by its own validation note.
+
+55. **A caller reads only identities it has.** `read_records` keeps refusing
+    an empty identity list: it is a caller defect the store must not hide.
+    `deliver_input` and `empty_list_outputs` already said that their reads are
+    made only when there is something to name; `execute_trial_case` and
+    `show_port_refs`, the other two notes that read a list which can be
+    empty, did not. `execute_trial_case` now reads no StoredValue for an input
+    or expected output of a file list with no files, and an expected empty
+    file list matches an empty output file list; `show_port_refs` shows a
+    `SpooledFilesRef` with no files as its port with no item and makes no read.
+    A `StoredValuesRef` names exactly one value and is never empty;
+    `assemble_mapped_lists` receives only lists of executed elements, an empty
+    mapped list taking `empty_list_outputs`. The deployed `surface` had the same
+    defect in `show_port_refs`, which no witness reached.
+
+    Measured before export on the Factory's `functions` prompt, ten
+    generations each and the whole A04 file (24 tests) run on every
+    candidate: the previous notes passed it 6 times of 10. Two further
+    readings varied. An expected file list with no files has no ref, so a
+    candidate comparing expected outputs per port the refs name lost that
+    port; the note now compares per output port of the contract version.
+    And `add_captured_trial_case`'s "naming the first failing check" let four
+    of eighteen candidates describe the contract mismatch in their own words;
+    the refusal now names `contract_version_id` and both identities, as the
+    facts-only refusal already named `FileFactsRef`. With the three notes:
+    10 of 10 passed the whole A04 file. `surface` with its note: 10 of 10
+    showed an empty file list without a read.
+
+    State 7 round 125 then found the representation those notes assumed
+    unstated: `add_trial_case` said a trial case "names exactly every output
+    port" while storing a many file port as one StoredValuesRef per file, so a
+    stored case names an empty list's port by no ref. The sentence now speaks
+    of the request, and `add_trial_case` states that the stored case names such
+    a port by no ref and that `execute_trial_case` reads every unnamed port of
+    the contract version as a file list with no files. `show_port_refs`' field
+    projection now reads a SpooledFilesRef only "with at least one file". A
+    further measurement, 8 of 10, failed twice on one reading: "otherwise the
+    sandbox outcome of the same name" was applied to `succeeded`, which
+    `TrialOutcome` does not have; `succeeded` is now never converted by name.
+    With every note of this decision: 20 of 20 generations passed the whole
+    A04 file.
+    Why: A13 rule 6 makes
+    an empty list an ordinary value; a value the kernel accepts must not turn
+    into an internal error where it is read.
+
 ## Texts of earlier states changed by State 6
 
 - State 4 (2026-10-22, decision 45 completed): the reviewed flows

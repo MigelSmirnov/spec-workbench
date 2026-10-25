@@ -812,3 +812,27 @@ with only the two notes replaced, ten generations each: previous text 5/10
 correct, this text 10/10. State 7 rounds 123–124 and State 5 rounds 172–173
 are clear; one single-review point of round 172 (an element awaiting its first
 approval after its run has ended) was not repeated and is outside this change.
+
+## Decision 55 empty-list reads and functions stability (2026-10-25)
+
+Verification 20261025_003703 passed every witness and 226 of 227 project tests;
+`test_runner_file_outputs_roundtrip[empty-list]` failed because
+`execute_trial_case` sent `read_records` an empty identity list, which the store
+refuses as malformed by its own note. The deployed `show_port_refs` had the same
+defect for a `SpooledFilesRef` with no files, unreached by any witness.
+
+The `functions` packet now says that reads are made only for identities that
+exist, that expected outputs are compared per output port of the contract
+version with an unnamed port read as an empty file list, how `add_trial_case`
+stores an empty list (by no ref), that the contract-mismatch refusal of
+`add_captured_trial_case` names `contract_version_id`, and that `succeeded` is
+never converted to a `TrialOutcome` by name. Each was found by sampling: the
+previous notes passed the whole A04 file in 6 of 10 generations; the final notes
+in 20 of 20. The `surface` packet reads a `SpooledFilesRef` only with at least
+one file and shows an empty one with no item: 10 of 10. State 7 rounds 125–126
+found the unstated stored representation (blocking) and the unqualified field
+projection; both were rewritten and rounds 127–130 are clear.
+
+No contract, model or caller responsibility changes. `effects`, `runs` and
+`run_graph` moved only by note indices and source positions; their notes are
+unchanged and their PASS verdicts remain. `functions` and `surface` remain PASS.
