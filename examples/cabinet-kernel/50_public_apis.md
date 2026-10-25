@@ -222,7 +222,7 @@ minting again on a collision.
    token to it — on one record type, the
    field one of those the MCP catalogue below allows for that type; any other
    field, or a second condition, is `invalid_request` from `module:surface`,
-   which owns the catalogue; `store` checks only the continuation token, bound
+   which refuses by the catalogue's values that `data_provider` holds; `store` checks only the continuation token, bound
    to that record type and filter.
 6. **The owner reading a spooled file's bytes** (A10 rule 2): an inspection
    read of `module:surface` through `store.read_value_bytes`, refused to an

@@ -200,8 +200,8 @@ record checked by `design_lint --state 2`, recorded as such in `30_trace.json`.
   element's next ordinal, refusing the call otherwise. Requests are handled one at a time (A18 rule 3), so nothing writes
   a record for that element in between; start-up recovery uses the
   EffectAttempt's number too (A11 rule 4).
-- **Spool ceilings.** `store.spool_file` alone checks both ceilings of A15
-  rule 3 — the file against `spool_file_bytes_max`, the run's spooled files
+- **Spool ceilings.** Both ceilings of A15 rule 3 are checked only when
+  `store.spool_file` publishes through `store_spool`, which checks them — the file against `spool_file_bytes_max`, the run's spooled files
   plus this one against `spool_run_bytes_max` — and on a refusal keeps nothing
   of that file or of any file the same attempt spooled before it; files of
   earlier attempts stay. The module that spooled concludes the element:
