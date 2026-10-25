@@ -717,17 +717,26 @@ state принадлежит policy/use case или порту и не расш�
 boundary.
 
 Версия backend является частью значения. Новая форма relation, query,
-constraint или storage representation требует новой поддерживаемой версии.
-Владение транзакцией, второй движок, блокировка и множественные фильтры
-введены версией 3 (§6.3); в версии 2 они остаются невалидными.
+constraint или storage representation требует новой поддерживаемой версии,
+если она меняет смысл хотя бы одной валидной спеки. Аддитивная форма может
+войти в текущую поддерживаемую версию, только если не меняет смысла ни одной
+валидной спеки: до неё такая форма отвергалась валидатором, и эмиссия каждой
+спеки и каждой фикстуры репозитория — байт в байт и отказ в отказ, через оба
+emitter-а — остаётся прежней. Это доказывает тест-пин эмиссии
+(`test_persistence_emission_compat.py`); форма, сдвигающая хотя бы один пин,
+требует новой версии, а не правки пина. Форма вносится в текст своей версии
+вместе с пином (решение владельца 2026-10-25). Владение транзакцией, второй
+движок, блокировка и множественные фильтры введены версией 3 (§6.3); в версии
+2 они остаются невалидными.
 
 ---
 
 ### 6.3 `persistence_backend/v3`
 
 Версия 3 — надмножество версии 2. Форма таблиц, колонок, агрегатов, видов
-запросов и конвенций не меняется; v3 добавляет ровно семь вещей, каждая из
-которых в v2 останавливала сборку репозиториев, чьи контракты уже приняты:
+запросов и конвенций не меняется; v3 добавляет ровно восемь вещей, каждая из
+которых в v2 останавливала сборку репозиториев, чьи контракты уже приняты
+(восьмая вошла аддитивно по правилу §6.2):
 
 1. второй движок — PostgreSQL;
 2. владение транзакцией репозиторием;
@@ -736,7 +745,9 @@ constraint или storage representation требует новой поддер�
 5. формы хранения `json_model` и `json_value` для вложенных значений;
 6. адресация ключей внутри вложенных значений (`path`) в фильтрах и
    `unique`;
-7. виды запросов `upsert_many` и `list_all`.
+7. виды запросов `upsert_many` и `list_all`;
+8. вид запроса `list_selected` — одно чтение таблицы, чью колонку равенства
+   выбирает аргумент-перечисление.
 
 Всё остальное читается по §6.2. Версия — часть значения: спека с
 `schema_version: 3` валидируется только правилами v3, спека с
@@ -761,8 +772,8 @@ constraint или storage representation требует новой поддер�
 
 | emitter | понижает из v3 | DEFECT |
 |---|---|---|
-| `postgres_sync_v1` | `transaction: "owned"`, `lock`, оба новых bind-а, `json_model`, `json_value`, `path`, `upsert_many`, `list_all` | `transaction: "external"`, агрегаты |
-| `sqlite_sync_v2` | всё из v2 (включая агрегаты), `transaction: "external"`, `json_model`, `json_value` | `transaction: "owned"`, `lock`, `argument_set`, `optional_argument`, `path` в фильтре и в `unique`, `upsert_many`, `list_all` |
+| `postgres_sync_v1` | `transaction: "owned"`, `lock`, оба новых bind-а, `json_model`, `json_value`, `path`, `upsert_many`, `list_all` | `transaction: "external"`, агрегаты, `list_selected` |
+| `sqlite_sync_v2` | всё из v2 (включая агрегаты), `transaction: "external"`, `json_model`, `json_value`, `list_selected` | `transaction: "owned"`, `lock`, `argument_set`, `optional_argument`, `path` в фильтре и в `unique`, `upsert_many`, `list_all` |
 
 #### Владение транзакцией
 
@@ -891,6 +902,51 @@ list_all                            -> table, select, order_by
 `upsert_many` — `upsert` над аргументом-коллекцией моделей; пустая коллекция
 не выполняет запрос. `list_all` — единственный вид без `filter`: он
 объявляет чтение всей таблицы явно, поэтому `order_by` обязателен.
+
+#### Чтение с выбором колонки
+
+```text
+list_selected                       -> table, selector, select, order_by
+selector                            -> enum, field_argument, value_argument, cases
+case                                -> member, column
+```
+
+```json
+{
+  "method": "page_run_rows", "query": "list_selected", "table": "run_rows",
+  "selector": {
+    "enum": "FilterField", "field_argument": "field", "value_argument": "value",
+    "cases": [
+      {"member": "FLOW_VERSION_ID", "column": "flow_version_id"},
+      {"member": "STATUS", "column": "status"}
+    ]
+  },
+  "select": ["store_position", "record_type", "run_id", "flow_version_id", "status", "record"],
+  "order_by": [{"column": "store_position", "direction": "asc"}]
+}
+```
+
+Соответствие члена перечисления колонке равенства — правило backend-а
+(§6.10), а не код вызывающего. `enum` — объявленное перечисление; контракт
+метода — ровно `(self, <field_argument>: <enum> | None, <value_argument>:
+str | None)` и возвращает `tuple[<model>, ...]` или `list[<model>]` модели
+таблицы; `select` — вся модель. `cases` — список (может быть пустым) пар
+`member`/`column`: член резолвится в `enum` по тем же именам членов, что и
+`constant`-терм фильтра, колонка — в таблицу со storage `text` или `enum`;
+члены и колонки уникальны. Ячеек `filter` и `path` у вида нет.
+
+При обоих аргументах `None` метод возвращает всю таблицу в `order_by`; при
+члене из `cases` и значении — строки, чья колонка равна значению: для `text`
+значение связывается как есть, для `enum` значение — value члена
+перечисления колонки (`<Enum>(value).value`), и неизвестное значение —
+ошибка. Любой другой вызов — член вне `cases` или ровно один аргумент
+`None` — поднимает `ValueError` в теле метода (при конструкторе с контекстом
+— через тот же guard, что и прочие ошибки метода), без запасной ветви.
+Равенство со значением не совпадает с NULL nullable-колонки.
+
+Лимита, диапазона и множественного условия у вида нет: страница, порядок
+вывода и объединение множеств остаются у вызывающего, который вызывает метод
+по одному разу на значение.
 
 #### Что остаётся вне v3
 
