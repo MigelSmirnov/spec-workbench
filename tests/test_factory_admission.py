@@ -937,3 +937,59 @@ def test_fa004_blocks_when_the_index_is_missing_on_one_side(tmp_path: Path) -> N
 
     result = _standard_check(*_standard_pair(tmp_path, factory_index=None))
     assert result.status == "BLOCK" and result.evidence["missing"][0].endswith("SPEC_STANDARD_INDEX.md")
+
+
+# ── FA021: declared standard-backend module functions match the Factory emitter ──
+
+SPOOL_EMITTER = '''
+REQUIRED_CONTRACTS = {
+    "spool_entry_name": "(key: <K>) -> str",
+    "spool_attempt_prefix": "(attempt: <A>) -> str",
+    "publish_spool_entry": "(base_directory: str, key: <K>, content: bytes) -> str",
+    "read_spool_entry": "(base_directory: str, key: <K>, expected_digest: str, expected_size: int) -> bytes",
+    "discard_spool_attempt": "(base_directory: str, attempt: <A>) -> int",
+    "remove_spool_group": "(base_directory: str, group: str) -> None",
+    "remove_spool_temporaries": "(base_directory: str) -> int",
+}
+OPTIONAL_CONTRACTS = {
+    "spool_group_bytes": "(base_directory: str, group: str) -> int",
+    "list_spool_groups": "(base_directory: str) -> tuple[str, ...]",
+}
+'''
+
+
+def _fa021(tmp_path: Path, rules: dict, emitter: str | None) -> dict:
+    from factory_admission_workbench.service import _standard_backend_contracts_check
+
+    factory = tmp_path / "cf"
+    if emitter is not None:
+        _write(factory / "tools/generate_keyed_file_spool_draft.py", emitter)
+    return _standard_backend_contracts_check(factory, {"rules": rules}).to_dict()
+
+
+def test_fa021_is_not_applicable_without_a_declared_spool(tmp_path: Path) -> None:
+    result = _fa021(tmp_path, {"system_clock_backend": {}}, None)
+    assert result["id"] == "FA021" and result["status"] == "NOT_APPLICABLE"
+
+
+def test_fa021_passes_when_the_factory_emitter_owns_the_mirrored_functions(tmp_path: Path) -> None:
+    result = _fa021(tmp_path, {"keyed_file_spool_backend": {}}, SPOOL_EMITTER)
+    assert result["status"] == "PASS"
+    assert result["evidence"]["keyed_file_spool_backend"]["factory_optional"] == [
+        "list_spool_groups", "spool_group_bytes",
+    ]
+
+
+@pytest.mark.parametrize("emitter", [
+    None,
+    SPOOL_EMITTER.replace('"list_spool_groups"', '"list_spool_runs"'),
+    SPOOL_EMITTER.replace("REQUIRED_CONTRACTS = {", "REQUIRED_CONTRACTS = dict(_TABLE) or {"),
+])
+def test_fa021_blocks_a_factory_without_the_same_emitter_tables(tmp_path: Path, emitter) -> None:
+    result = _fa021(tmp_path, {"keyed_file_spool_backend": {}}, emitter)
+    assert result["status"] == "BLOCK"
+    assert "keyed_file_spool" in result["summary"]
+
+
+def test_fa021_runs_in_every_admission_report(tmp_path: Path) -> None:
+    assert _fa(_run(tmp_path), "FA021")["status"] == "NOT_APPLICABLE"

@@ -24,6 +24,7 @@ from interface_workbench import implementation_obligation_findings
 from interface_workbench.service import _annotation_mentions
 from spec_language_workbench import SpecLanguageError, verify_payload as verify_language_payload
 import semantic_test_subject
+from standard_backends import standard_backends
 
 from factory_admission_workbench.model import (
     CHECK_BLOCK,
@@ -1177,6 +1178,79 @@ def _factory_standard_version_check(factory_root: Path, standard_version: Any) -
     )
 
 
+def _factory_contract_names(path: Path, constant: str) -> set[str]:
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    literal = _factory_literal(tree, constant)
+    if not isinstance(literal, dict) or not all(isinstance(key, str) for key in literal):
+        raise ValueError(f"{constant} is not a literal mapping keyed by function name")
+    return set(literal)
+
+
+def _standard_backend_contracts_check(factory_root: Path, source_spec: object) -> AdmissionCheck:
+    """FA021: the module functions a declared standard backend owns are the
+    ones the target Factory's emitter writes.
+
+    The notes gate exempts those functions from State 7 notes by the
+    Workbench's mirror of the emitter's contract tables; a Factory whose
+    emitter names other functions would leave a function with neither a note
+    nor an emitter. The tables are read as literals, without running Factory
+    code.
+    """
+    rules = source_spec.get("rules") if isinstance(source_spec, dict) else None
+    rules = rules if isinstance(rules, dict) else {}
+    declared = [
+        backend for backend in standard_backends()
+        if backend.module_contracts is not None
+        and backend.module_contracts.factory_tool is not None
+        and backend.rule_key in rules
+    ]
+    if not declared:
+        return AdmissionCheck(
+            "FA021",
+            CHECK_NOT_APPLICABLE,
+            "Source declares no standard backend that owns a fixed set of module functions.",
+            {},
+        )
+    evidence: dict[str, Any] = {}
+    problems: list[str] = []
+    for backend in declared:
+        contracts = backend.module_contracts
+        path = factory_root / contracts.factory_tool
+        row: dict[str, Any] = {
+            "factory_tool": str(path),
+            "required": sorted(contracts.required),
+            "optional": sorted(contracts.optional),
+        }
+        evidence[backend.rule_key] = row
+        try:
+            required = _factory_contract_names(path, contracts.factory_required_constant)
+            optional = _factory_contract_names(path, contracts.factory_optional_constant)
+        except FileNotFoundError:
+            problems.append(f"target Factory has no {contracts.factory_tool} for rules.{backend.rule_key}")
+            continue
+        except (OSError, SyntaxError, ValueError, MemoryError, RecursionError) as exc:
+            row["error"] = str(exc)
+            problems.append(
+                f"{contracts.factory_tool} declares its contract tables in a form admission cannot read"
+            )
+            continue
+        row["factory_required"] = sorted(required)
+        row["factory_optional"] = sorted(optional)
+        if required != set(contracts.required) or optional != set(contracts.optional):
+            problems.append(
+                f"rules.{backend.rule_key}: the target Factory emitter owns other module functions "
+                "than the Workbench exempts from notes"
+            )
+    if problems:
+        return AdmissionCheck("FA021", CHECK_BLOCK, "; ".join(problems) + ".", evidence)
+    return AdmissionCheck(
+        "FA021",
+        CHECK_PASS,
+        "Every declared standard backend owns the module functions the target Factory emits.",
+        evidence,
+    )
+
+
 def _factory_toolchain_check(factory_root: Path) -> AdmissionCheck:
     metadata = git_metadata(factory_root)
     required = [
@@ -1231,6 +1305,7 @@ def check(
         _standard_check(workbench_root, factory_root),
         _language_check(source),
         _factory_standard_version_check(factory_root, source_standard_version),
+        _standard_backend_contracts_check(factory_root, source_spec),
         _implementation_obligations_check(source),
         _runtime_persistence_check(source_spec, case_root),
         _runtime_carrier_check(source_spec),
