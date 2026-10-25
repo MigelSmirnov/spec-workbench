@@ -27,25 +27,27 @@ is the one mapping;
 | A12 | `runs` | `functions`, `flows`, `canonical_values` |
 | A13 | `run_graph` | `runs`, `run_values`, `sandbox`, `effects`, `canonical_values`, `data_provider` |
 | A14 | `runs` | `run_graph`, `effects`, `store`, `surface` |
-| A15 | `runs` | `run_graph`, `run_values`, `store`, `functions`, `effects`, `surface` |
+| A15 | `runs` | `run_graph`, `run_values`, `store`, `functions`, `effects`, `surface`, `store_spool` |
 | A16 | `surface` | `installation`, `store`, `data_provider` |
 | A17 | `installation` | `service_invoker`, `sandbox` |
-| A18 | `store` | `runs`, `surface`, `store_persistence` |
+| A18 | `store` | `runs`, `surface`, `store_persistence`, `store_spool` |
 | A19 | `clock` | `sandbox`, `service_invoker`, `functions`, `effects`, `runs`, `bindings`, `flows` |
-| A20 | `data_provider` | `canonical_values`, `functions`, `sandbox`, `sandbox_runner`, `service_invoker`, `store`, `runs`, `run_values`, `surface`, `installation`, `bindings` |
+| A20 | `data_provider` | `canonical_values`, `functions`, `sandbox`, `sandbox_runner`, `service_invoker`, `store`, `runs`, `run_values`, `surface`, `installation`, `bindings`, `store_spool` |
 
 The kernel is one process with one writer (K-17), so modules are not services:
 they are the parts of one program, and only `store` touches the database and the
 data directory. `store` holds the connection and the transaction and decides
 which record goes into which row; the row statements themselves are executed by
 `store_persistence`, its companion, which only `store` calls, over that
-connection (below). The dependency direction is fixed,
+connection (below). The run spool's files are written, read and removed by
+`store_spool`, its second companion, which only `store` calls; "the store
+module" of A18 is `store` with both companions. The dependency direction is fixed,
 from the bottom up:
 
 ```text
 models
 data_provider
-canonical_values, clock, store_persistence, sandbox_runner
+canonical_values, clock, store_persistence, store_spool, sandbox_runner
 store, installation
 sandbox, service_invoker, run_values
 functions, bindings
@@ -526,9 +528,11 @@ monotonic_ns
 
 A18: the data directory and the one SQLite database — the one connection, opened
 at start, and the one transaction of every change — the exclusive start lock,
-the content-addressed area of value bytes and file fixtures, the per-run spool,
-publishing a file only complete and digest-checked, refusal of symbolic links,
-start-time removal of temporary files, and removal of the spools `runs` names.
+the content-addressed area of value bytes and file fixtures, the per-run spool
+— its files through `store_spool` —, publishing a value file only complete and
+digest-checked, refusal of symbolic links, start-time removal of temporary
+files, and removal of the spools `runs` names. Before a file is spooled, that
+no SpooledFile record names its position is `store`'s check.
 `attempt_number` as the ordinal of an element's NodeExecutions, computed inside
 the transaction that writes one (A11 rule 1). Every
 change is one call and one transaction (K-17). The one store order of records:
@@ -538,7 +542,7 @@ deleted.
 
 ### Knows
 
-`models`, `canonical_values`, `data_provider`, `store_persistence`.
+`models`, `canonical_values`, `data_provider`, `store_persistence`, `store_spool`.
 
 ### Must not own
 
@@ -550,8 +554,9 @@ may change what, when a run's spool is emptied or released (that is
 ### Hides
 
 The SQLite connection and its transactions, which record goes into which row
-and in what order rows are read, file layout under the data directory, atomic
-rename, opening without following links.
+and in what order rows are read, the layout of the content-addressed area,
+atomic rename, opening without following links; the spool's layout is hidden
+one level lower, in `store_spool`.
 
 ### Candidate public capabilities
 
@@ -636,6 +641,54 @@ create_store_schema
 
 - kind: deep
 - hidden mechanism: version-bound SQLite lowering from persistence_backend/v3
+
+## `store_spool`
+
+### Owns
+
+Only the deterministic module emitted by `keyed_file_spool` for the run spool
+(A15 rule 3, A18 rules 2–4): the name of a spooled file inside its run's spool
+directory, made from its SpooledFileKey; publishing one file complete,
+fsynced and digest-checked by a temporary and a rename, replacing a file at the
+same position; the two spool ceilings of A20, checked on publishing, and
+discarding every file of the refused attempt; reading a file back checked
+against a digest and size; removing one run's spool; removing the temporaries
+an interrupted publish left; refusing a symbolic link anywhere below the spool
+area.
+
+### Knows
+
+`models`, `data_provider`.
+
+### Must not own
+
+Any record, the database, the data directory's other areas, attempt numbers,
+which runs' spools are removed, or whether a SpooledFile record names a
+position — all `store`'s or its callers'. It is part of the store module of
+A18: only `store` calls it, so no other module touches the spool.
+
+### Hides
+
+The spool's on-disk layout below the spool area and the run directory, the
+temporary names, the ceiling accounting and the attempt discard.
+
+### Candidate public capabilities
+
+```text
+spool_entry_name
+spool_attempt_prefix
+publish_spool_entry
+read_spool_entry
+discard_spool_attempt
+remove_spool_group
+remove_spool_temporaries
+```
+
+### Depth assessment
+
+- kind: deep
+- hidden mechanism: an emitted, injective file layout with exact attempt
+  prefixes and bounded names
 
 ## `sandbox_runner`
 
@@ -1155,8 +1208,8 @@ A18).
 
 ### Knows
 
-Every module's public capabilities, except `store_persistence`, which only
-`store` calls.
+Every module's public capabilities, except `store_persistence` and
+`store_spool`, which only `store` calls.
 
 ### Must not own
 
