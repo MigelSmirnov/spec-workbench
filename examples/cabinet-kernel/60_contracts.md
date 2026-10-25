@@ -10,7 +10,8 @@ enumerations, the platform manifest record) and `60_model_closure_operations.jso
 (contract-only values), `60_model_closure_store.json` (the store's rows, its
 counter and the `StoreRepository` port, contract-only), the exception symbols
 `60_exception_taxonomy.json`, the State 5 exposure `50_exposure_plan.json`, and
-the store's tables `70_persistence_closure.json` (decision 23). The store's row
+the store's tables `70_persistence_closure.json` (decision 23), the store's
+spool `70_keyed_file_spool_closure.json` (decision 57). The store's row
 models, port contracts, table names and IR are expanded from one row table by
 `experiments/cabinet-kernel/build_store_persistence.py`.
 This text records the technical decisions those files rest on; the owner does
@@ -1983,6 +1984,74 @@ classes or formats: each point below is the agent's and says why.
       enumerations, and a member-to-enumeration correspondence has no provider
       form. State 2 and State 5 texts are unchanged; the State 5 table of
       `list_records` is the source the builder restates.
+
+## Decision closed for the store's spool (2026-10-25)
+
+The store review (REPORT.md, R3) found the spool's on-disk layout left to
+prose, and four generations each invented a name format and a cleanup that
+then had to agree with it: a prefix slice one part too long, a hash of the
+whole key so one attempt's files could not be found, keys rebuilt only for
+the current port, and a name longer than NAME_MAX. The Factory now has the
+emitter `keyed_file_spool` (rule `keyed_file_spool_backend` v1, code_factory
+#148, `docs/KEYED_FILE_SPOOL_EMITTER_DESIGN.md`), which the Workbench admits as
+a standard backend (spec-workbench #132, admission FA021). The owner asked on
+2026-10-25 for every part that can be deterministic to be emitted
+deterministically; as in decision 23, each point below is the agent's and says
+why.
+
+57. **The spool is an emitted companion of `store`.**
+    - *`store_spool`.* A new module, emitted by `keyed_file_spool` with no
+      model, from `70_keyed_file_spool_closure.json`. It owns the seven
+      required functions of the emitter (`spool_entry_name`,
+      `spool_attempt_prefix`, `publish_spool_entry`, `read_spool_entry`,
+      `discard_spool_attempt`, `remove_spool_group`,
+      `remove_spool_temporaries`) with `<K>` = `SpooledFileKey` and `<A>` =
+      `AttemptKey`, and no optional one: the emitter enforces the ceilings
+      itself and no caller lists spools of unknown runs. Only `store` calls it;
+      it knows `models` and `data_provider` and sits below `store`, next to
+      `store_persistence`. Why: the layout and the cleanup must be one
+      structure, and an emitter writes whole modules.
+    - *The store module.* "The store module" of A18 is `store` with its two
+      companions, `store_persistence` and `store_spool`, as decision 23 read
+      it for the first; A18's text is unchanged. Why: A18 rules 2–4 speak of
+      the module that owns the data directory, not of a file of code.
+    - *Layout.* Decision 25 stands: the spool area is the directory named by
+      `STORE_SPOOL_AREA_DIRECTORY` directly inside `data_directory`, and a run's
+      spool directory is named by its `run_id`. Inside it the emitter's flat
+      entry names (`hex_sha256_text_dot_decimal_or_underscore_v1`: the producer
+      and the port as SHA-256 hex, indexes as decimals or `_`), so one
+      attempt's files share an exact prefix and every name fits NAME_MAX.
+      Why: this keeps "one subdirectory per run" of A18 rule 2 without an
+      owner amendment; A15 rule 3 (only the refused attempt's files are
+      discarded) and A18 rules 2–4 (private modes, no link followed,
+      temporary, flush, check, rename, replace at a position, removal) hold by
+      the emitter and its focused check instead of by prose.
+    - *`run_id` form.* 32 lowercase hexadecimal characters drawn from a
+      cryptographically secure source, declared as the spool group's closed
+      form (`group`: `lowercase_hex`, length 32); `record_change`'s identity
+      note names that address. Why: the run directory's name is checked
+      against a closed form, which closes path traversal, and A01 rule 2 asks
+      only that the identity be random; 128 random bits keep collisions out of
+      reach, and a collision is drawn again.
+    - *Errors.* The emitted module defines `SpoolRefusedError` and
+      `SpoolInternalError` (exception taxonomy, `module:store_spool`); `store`
+      re-raises the first as `RefusedError` with its reason and the second as
+      `StoreInternalError`. Why: `RefusedError` and `StoreInternalError` are
+      owned by `store`, which imports the spool, so the spool importing them
+      back would be a cycle; moving them below `store` would change the
+      taxonomy for every importer. The taxonomy callers see is unchanged.
+    - *Ceilings.* `publish_spool_entry` refuses by the existing provider
+      constants `RELEASE_CEILING_SPOOL_FILE_BYTES_MAX` and
+      `RELEASE_CEILING_SPOOL_RUN_BYTES_MAX`, discarding the attempt's files
+      first and raising the internal error when that discard fails. Why: the
+      discard must use exactly the emitter's prefix — where generations
+      failed — and the accounting (dot names excluded, a file at the same
+      position subtracted, `>` not `>=`) is part of the layout.
+    - *What stays in `store`.* The check that no SpooledFile record names the
+      position, made before publishing (a named file is never overwritten,
+      A18 rule 4); attempt numbers; which runs' spools are removed (`runs`);
+      `FileFacts` from the returned digest, the content's length and the media
+      type; and the reading of a record before its bytes.
 
 ## Texts of earlier states changed by State 6
 
