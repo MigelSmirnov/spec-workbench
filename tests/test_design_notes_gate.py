@@ -472,3 +472,31 @@ def test_scalar_constants_stay_exempt(tmp_path):
     )
     report = gate.coverage(project)
     assert "table_access_unnamed" not in _codes(report)
+
+
+def _spool_project(tmp_path, *, status: str = "closed"):
+    from test_standard_backends import SPOOL_REQUIRED, spool_ir, write_spool
+
+    project = _project(tmp_path, "parse: [BEHAVIOR] MUST return normalized content.\n")
+    contracts = json.loads((tmp_path / "60_contracts.json").read_text(encoding="utf-8"))
+    for name in SPOOL_REQUIRED | {"spool_group_bytes"}:
+        contracts["contracts"][name] = "(base_directory: str) -> int"
+    (tmp_path / "60_contracts.json").write_text(json.dumps(contracts), encoding="utf-8")
+    write_spool(project, spool_ir(), status=status)
+    return project, SPOOL_REQUIRED | {"spool_group_bytes"}
+
+
+def test_keyed_file_spool_functions_are_deterministic_callables(tmp_path):
+    project, owned = _spool_project(tmp_path)
+    report = gate.coverage(project)
+    assert "missing_callable_note" not in _codes(report)
+    assert set(report["deterministic_callables"]) == owned
+    assert report["summary"]["handoff_ready"] is True
+
+
+def test_open_keyed_file_spool_closure_exempts_nothing(tmp_path):
+    project, owned = _spool_project(tmp_path, status="open")
+    report = gate.coverage(project)
+    missing = {item["scope"] for item in report["findings"] if item["code"] == "missing_callable_note"}
+    assert missing == owned
+    assert report["deterministic_callables"] == []

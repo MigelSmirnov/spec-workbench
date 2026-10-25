@@ -505,3 +505,44 @@ def test_refused_enum_already_in_the_specification_is_attributed_to_it(tmp_path,
     assert [(row["code"], row["source"]) for row in findings] == [
         ("enum_values_duplicate", "global_spec.json")
     ]
+
+
+def test_keyed_file_spool_closure_is_projected_into_rules(tmp_path, monkeypatch) -> None:
+    from test_standard_backends import spool_ir, write_spool
+
+    project = _project(tmp_path)
+    _patch_ready_sources(monkeypatch)
+    write_spool(project, spool_ir())
+
+    plan = service.build_plan(project)
+    _, projected, findings, source_checks = service._project(project)
+
+    assert findings == []
+    assert projected["rules"]["keyed_file_spool_backend"] == spool_ir()
+    assert "rules.keyed_file_spool_backend" in {row["address"] for row in plan["changes"]}
+    assert {
+        "source": "70_keyed_file_spool_closure.json",
+        "enabled": True,
+        "ready": True,
+        "status": "closed",
+        "errors": 0,
+    } in source_checks
+
+
+@pytest.mark.parametrize("malformed", ["open", "no_errors_object"])
+def test_malformed_keyed_file_spool_closure_blocks_projection(tmp_path, monkeypatch, malformed) -> None:
+    from test_standard_backends import spool_ir, write_spool
+
+    project = _project(tmp_path)
+    _patch_ready_sources(monkeypatch)
+    backend_ir = spool_ir()
+    if malformed == "no_errors_object":
+        del backend_ir["errors"]
+    write_spool(project, backend_ir, status="open" if malformed == "open" else "closed")
+
+    plan = service.build_plan(project)
+
+    assert plan["ready_to_apply"] is False
+    assert [row["code"] for row in plan["findings"]] == ["standard_backend_closure_not_closed"]
+    _, projected, _, _ = service._project(project)
+    assert "keyed_file_spool_backend" not in projected["rules"]

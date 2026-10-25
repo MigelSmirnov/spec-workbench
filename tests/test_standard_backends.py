@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from project_extensions import deterministic_backends
 
 
@@ -262,3 +264,135 @@ def test_assembled_spec_without_the_backend_fails_closed(tmp_path: Path) -> None
     (project / "global_spec.json").write_text(json.dumps({"rules": {}}), encoding="utf-8")
 
     assert _clock(project).deterministic_method_scopes(project) == set()
+
+
+# ── keyed_file_spool: a fixed set of module functions plus emitter-defined errors ──
+
+SPOOL_REQUIRED = {
+    "spool_entry_name",
+    "spool_attempt_prefix",
+    "publish_spool_entry",
+    "read_spool_entry",
+    "discard_spool_attempt",
+    "remove_spool_group",
+    "remove_spool_temporaries",
+}
+
+
+def spool_ir(*, errors_module: str = "store_spool") -> dict:
+    return {
+        "kind": "keyed_file_spool_backend",
+        "schema_version": 1,
+        "backend": {"emitter": "python_keyed_file_spool_v1"},
+        "wiring": {
+            "module": "store_spool",
+            "models_module": "kernel.models",
+            "data_provider_module": "kernel.data_provider",
+        },
+        "area": {"directory_constant": "STORE_SPOOL_AREA_DIRECTORY"},
+        "group": {"alphabet": "lowercase_hex", "length": 32},
+        "key": {"model": "SpooledFileKey", "fields": {"group": "run_id"}},
+        "attempt": {"model": "AttemptKey", "fields": {"group": "run_id"}},
+        "ceilings": {"entry_bytes_max": "SPOOL_FILE_BYTES_MAX", "group_bytes_max": "SPOOL_RUN_BYTES_MAX"},
+        "errors": {"module": errors_module, "refused": "SpoolRefusedError", "internal": "SpoolInternalError"},
+        "layout": {},
+    }
+
+
+def write_spool(project: Path, backend_ir: dict, *, status: str = "closed",
+                schema: str = "spec_workbench_keyed_file_spool_backend_closure.v1") -> None:
+    project.mkdir(exist_ok=True)
+    (project / "70_keyed_file_spool_closure.json").write_text(
+        json.dumps({"schema_version": schema, "status": status, "backend_ir": backend_ir}),
+        encoding="utf-8",
+    )
+
+
+def _spool(project: Path):
+    return next(item for item in deterministic_backends(project) if item.id == "keyed_file_spool")
+
+
+def test_spool_owns_its_required_functions_and_its_error_classes(tmp_path: Path) -> None:
+    project = tmp_path / "spool"
+    backend_ir = spool_ir()
+    write_spool(project, backend_ir)
+    (project / "global_spec.json").write_text(
+        json.dumps({"rules": {"keyed_file_spool_backend": backend_ir}}), encoding="utf-8"
+    )
+
+    backend = _spool(project)
+    owned = SPOOL_REQUIRED | {"SpoolRefusedError", "SpoolInternalError"}
+    assert backend.structured_addresses(project) == {"rules.keyed_file_spool_backend"}
+    assert backend.deterministic_method_scopes(project) == owned
+    assert backend.module_slice(project, "store_spool") == {
+        "enabled": True,
+        "backend_ir": backend_ir,
+        "deterministic_method_scopes": sorted(owned),
+    }
+    assert backend.module_slice(project, "store") is None
+
+
+def test_spool_owns_an_optional_function_only_when_its_contract_is_declared(tmp_path: Path) -> None:
+    project = tmp_path / "spool"
+    write_spool(project, spool_ir(errors_module="kernel.errors"))
+    contracts = {name: "(...)" for name in SPOOL_REQUIRED | {"list_spool_groups", "store_value"}}
+    (project / "60_contracts.json").write_text(json.dumps({"contracts": contracts}), encoding="utf-8")
+
+    # errors defined elsewhere are not the spool module's callables
+    assert _spool(project).deterministic_method_scopes(project) == SPOOL_REQUIRED | {"list_spool_groups"}
+
+
+@pytest.mark.parametrize("mutate", [
+    lambda ir: ir.update(kind="system_clock_backend"),
+    lambda ir: ir.pop("wiring"),
+    lambda ir: ir["wiring"].update(module=""),
+    lambda ir: ir.pop("errors"),
+    lambda ir: ir["errors"].pop("module"),
+    lambda ir: ir["errors"].update(refused=7),
+    lambda ir: ir["errors"].update(refused="SpoolInternalError"),
+])
+def test_malformed_spool_ir_owns_nothing(tmp_path: Path, mutate) -> None:
+    project = tmp_path / "spool"
+    backend_ir = spool_ir()
+    mutate(backend_ir)
+    write_spool(project, backend_ir)
+
+    backend = _spool(project)
+    assert backend.authored_backend(project) is None
+    assert backend.deterministic_method_scopes(project) == set()
+
+
+@pytest.mark.parametrize("closure", [
+    {"status": "open"},
+    {"schema": "spec_workbench_system_clock_backend_closure.v1"},
+])
+def test_unclosed_spool_closure_owns_nothing(tmp_path: Path, closure: dict) -> None:
+    project = tmp_path / "spool"
+    write_spool(project, spool_ir(), **closure)
+
+    assert _spool(project).deterministic_method_scopes(project) == set()
+
+
+def test_spool_drifted_from_the_assembled_spec_owns_nothing(tmp_path: Path) -> None:
+    project = tmp_path / "spool"
+    write_spool(project, spool_ir())
+    (project / "global_spec.json").write_text(
+        json.dumps({"rules": {"keyed_file_spool_backend": spool_ir(errors_module="kernel.errors")}}),
+        encoding="utf-8",
+    )
+
+    assert _spool(project).deterministic_method_scopes(project) == set()
+
+
+def test_spool_mirror_equals_the_factory_emitter_tables() -> None:
+    from factory_admission_workbench.service import _factory_contract_names
+    from questions_workbench import documents
+    from standard_backends import STANDARD_BACKENDS
+
+    factory = documents.factory_root()
+    contracts = next(item for item in STANDARD_BACKENDS if item.id == "keyed_file_spool").module_contracts
+    tool = factory / contracts.factory_tool if factory is not None else None
+    if tool is None or not tool.is_file():
+        pytest.skip("no Factory checkout with the keyed_file_spool emitter")
+    assert _factory_contract_names(tool, "REQUIRED_CONTRACTS") == set(contracts.required) == SPOOL_REQUIRED
+    assert _factory_contract_names(tool, "OPTIONAL_CONTRACTS") == set(contracts.optional)
