@@ -836,3 +836,81 @@ projection; both were rewritten and rounds 127–130 are clear.
 No contract, model or caller responsibility changes. `effects`, `runs` and
 `run_graph` moved only by note indices and source positions; their notes are
 unchanged and their PASS verdicts remain. `functions` and `surface` remain PASS.
+
+## Decisions 56–57 and the store review (2026-10-25)
+
+Since the accepted baseline 591799d8 the case took the store review's R1–R4
+(code_factory `analysis/cabinet-kernel-store-review`): the store notes were
+rewritten one rule per note without cross-references and without a status check
+in `record_change` (R2/R4), `put_value_bytes` fsyncs the area directory,
+decision 56 replaced the whole-type and page-only reads by `list_selected` page
+reads with the allow-lists as provider tables, and decision 57 moved the spool
+layout into the emitted companion `store_spool`. State 3 rounds 139–143, State 4
+rounds 133–136, State 5 rounds 174–176 and State 7 rounds 131–133 closed those
+changes. The packets were rebuilt from an archive of 591799d8 and from the
+current tree and compared per section, note texts compared without their
+assembled index.
+
+**Moved only by note indices (PASS stands, hash restamped).** `canonical_values`,
+`sandbox_runner`, `installation`, `sandbox`, `service_invoker`, `run_values`,
+`functions`, `bindings`, `flows`, `effects`, `run_graph` and `runs`: accepted
+evidence and lowered specification are equal as JSON values, the notes are the
+same texts in the same order, and only their `index` moved (the store notes and
+the StoreRepository notes before them changed in number). `clock` is
+byte-identical.
+
+**models** (deterministic, PASS). `StoreRepository` loses the 14
+`list_<row>_rows` and the 10 equality lists only a page filter read
+(bindings by status and service_id, runs by flow_version_id, node executions by
+executed implementation and binding, approvals by run_id and status, grants by
+flow_version_id and status, effect attempts by run_id) and gains 14
+`page_<row>_rows(field: FilterField | None, value: str | None)`; 91 operations,
+91 notes from the one row table, each note stating both-None as the whole table
+and otherwise the selected column's equality, in ascending store_position.
+`PageFilter` and `RecordTypeListing` are the provider tables' row models.
+
+**data_provider** (deterministic, PASS). `LISTABLE_RECORD_TYPES` is total over
+`RecordType` (14 listable; activation, flow_activation, stored_value,
+spooled_file not), `PAGE_FILTERS` holds exactly the 20 (type, field) pairs of
+the State 5 `list_records` table that the previous `handle_list_records` note
+restated, and `STORE_RUN_ID_TOKEN_BYTES` is 16, so `token_hex` gives the 32
+lowercase hex characters the spool group's closed form declares (decision 57).
+
+**store_persistence** (deterministic, PASS). 93 contracts: 91 operations,
+`__init__`, `create_store_schema`. The 14 `list_selected` selectors pair
+exactly the `PAGE_FILTERS` rows with their columns (`EXECUTED_IMPLEMENTATION`
+and `EXECUTED_BINDING` with the `*_id` columns; slot and flow have no case).
+SPEC_STANDARD §6.3 closes the remaining calls: one argument None or a member
+outside the cases raises ValueError, an enum column binds through its
+enumeration. The 20 remaining `list_by` reads are those relations use.
+
+**store_spool** (new, deterministic, PASS). Emitted by `keyed_file_spool`
+from `70_keyed_file_spool_closure.json`: the seven required functions over
+`SpooledFileKey`/`AttemptKey`, the two error classes, area
+`STORE_SPOOL_AREA_DIRECTORY`, group `run_id` lowercase hex of length 32, flat
+SHA-256 entry names, 0700/0600, links refused, ceilings by the two existing
+spool constants. It imports models and data_provider only; no note is scoped
+to it, by design, and every behaviour decision 57 assigns it is the emitter's.
+
+**store** (PASS; 11 contracts, 58 notes). Adversarial questions on the current
+packet: every repository operation a note names exists in the port and none of
+the removed names occurs in any packet's notes; `page_records` states each
+filter form's call, the merge without repeats, reversal, the token cut and the
+refusal of a type with no page operation; `record_change` states which
+invariants it checks and that it checks no status (the caller's rule, A18
+serial requests), with the immutable records written once; `run_id` has its
+home in the provider constant; the spool calls map `SpoolRefusedError` to
+`RefusedError` (publish only, the emitter's sole refusal) and
+`SpoolInternalError` to `StoreInternalError` everywhere, the SpooledFile check
+stays first in `spool_file` (A18 rule 4), and `open_store` counts the spool
+temporaries in `temporary_files_removed`. No value without a home, no
+contradiction with decisions 23, 25, 56 or 57.
+
+**surface** (PASS). Only the `handle_list_records` validation note changed: it
+names the imported `LISTABLE_RECORD_TYPES` and `PAGE_FILTERS`, both now in its
+data_provider imports, instead of the restated lists; the status-enumeration
+clause stays (decision 56, no provider form). The other 119 notes moved by
+index only.
+
+All 19 packets review with zero structural blocks; the ledger records 19 of
+19 PASS with the current slice hashes.
