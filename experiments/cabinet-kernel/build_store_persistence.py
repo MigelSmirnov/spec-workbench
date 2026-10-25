@@ -2,8 +2,8 @@
 
 The one table below (ROWS) is the design: per record type of
 `store.read_records`, the row's key, the fields a lookup filters on, whether the
-row is paged by `list_records`, which equality lists `store` reads, and whether
-the row's lifecycle fields change. Everything else is expanded from it by fixed
+row is paged by `list_records` and on which filter fields, which equality lists
+the relations of `store` read, and whether the row's lifecycle fields change. Everything else is expanded from it by fixed
 rules, so the row models, the repository port, its contracts and the
 persistence IR cannot disagree:
 
@@ -13,6 +13,7 @@ Writes (each wholly regenerated, nothing else touched):
 - 60_model_closure_store.json   row models, the counter, StoreRepository
 - 70_persistence_closure.json   persistence_backend/v3, sqlite_sync_v2
 and rewrites only its own entries of
+- 70_data_provider_closure.json  (PAGE_FILTERS, LISTABLE_RECORD_TYPES)
 - 60_contract_plan.json / 60_contracts.json  (StoreRepository.*,
   SqliteStoreRepository.*, create_store_schema, next_store_position)
 - 60_data_closure.json  (config.persistence.* and their placements)
@@ -23,9 +24,11 @@ Fixed rules:
   key is store_position itself. The counter row is not a record.
 - Every list is ordered by store_position ascending (store order); `store`
   reverses for a page.
-- A paged row gets `list_<x>_rows` (constant filter on its own record_type:
-  the whole table, sqlite_sync_v2 has no list_all) and
-  `find_<x>_row_at_position` (continuation token check).
+- A paged row gets `page_<x>_rows` (list_selected: the whole table, or the
+  rows whose column for the given FilterField member equals the value; the
+  dispatch field -> column is the IR's, decision 56) and
+  `find_<x>_row_at_position` (continuation token check). The same page list
+  gives surface's allow-lists PAGE_FILTERS and LISTABLE_RECORD_TYPES.
 - A changing row gets `update_<x>_row`, which rewrites status and record.
 """
 from __future__ import annotations
@@ -41,48 +44,58 @@ STR, INT = "str", "int"
 ELEMENT, ATTEMPT, FILE = "ElementKey", "AttemptKey", "SpooledFileKey"
 OPTIONAL_STR = "str | None"
 
-# model, record_type member, key fields, lookup fields, paged, lists (field tuples), changes
+# model, record_type member, key fields, lookup fields,
+# page (None: list_records never pages the type; else the FilterField members a
+# page may filter on, each with the row column it compares), relation lists
+# (field tuples: the equality lists read_records reads), changes
 ROWS = [
-    ("Slot", "slot", [("slot_id", STR)], [], True, [], False),
+    ("Slot", "slot", [("slot_id", STR)], [], [], [], False),
     ("ContractVersion", "contract_version", [("contract_version_id", STR)],
-     [("slot_id", STR)], True, [("slot_id",)], False),
+     [("slot_id", STR)], [("SLOT_ID", "slot_id")], [("slot_id",)], False),
     ("Implementation", "implementation", [("implementation_id", STR)],
-     [("contract_version_id", STR)], True, [("contract_version_id",)], False),
+     [("contract_version_id", STR)], [("CONTRACT_VERSION_ID", "contract_version_id")],
+     [("contract_version_id",)], False),
     ("TrialCase", "trial_case", [("trial_case_id", STR)],
-     [("contract_version_id", STR)], True, [("contract_version_id",)], False),
+     [("contract_version_id", STR)], [("CONTRACT_VERSION_ID", "contract_version_id")],
+     [("contract_version_id",)], False),
     ("TrialExecution", "trial_execution", [("trial_execution_id", STR)],
-     [("implementation_id", STR), ("trial_case_id", STR)], True,
+     [("implementation_id", STR), ("trial_case_id", STR)],
+     [("IMPLEMENTATION_ID", "implementation_id"), ("TRIAL_CASE_ID", "trial_case_id")],
      [("implementation_id",), ("trial_case_id",)], False),
     ("AdmissionVerdict", "admission_verdict", [("implementation_id", STR), ("corpus_digest", STR)],
-     [], True, [("implementation_id",)], False),
+     [], [("IMPLEMENTATION_ID", "implementation_id")], [("implementation_id",)], False),
     ("Activation", "activation", [("store_position", INT)],
-     [("contract_version_id", STR)], False, [("contract_version_id",)], False),
+     [("contract_version_id", STR)], None, [("contract_version_id",)], False),
     ("OperationBinding", "binding", [("binding_id", STR)],
-     [("service_id", STR), ("status", "BindingStatus")], True, [("status",), ("service_id",)], True),
-    ("Flow", "flow", [("flow_id", STR)], [], True, [], False),
+     [("service_id", STR), ("status", "BindingStatus")],
+     [("STATUS", "status"), ("SERVICE_ID", "service_id")], [], True),
+    ("Flow", "flow", [("flow_id", STR)], [], [], [], False),
     ("FlowVersion", "flow_version", [("flow_version_id", STR)],
-     [("flow_id", STR)], True, [("flow_id",)], False),
+     [("flow_id", STR)], [("FLOW_ID", "flow_id")], [("flow_id",)], False),
     ("FlowActivation", "flow_activation", [("store_position", INT)],
-     [("flow_id", STR), ("flow_version_id", STR)], False, [("flow_id",), ("flow_version_id",)], False),
+     [("flow_id", STR), ("flow_version_id", STR)], None, [("flow_id",), ("flow_version_id",)], False),
     ("Run", "run", [("run_id", STR)],
-     [("flow_version_id", STR), ("status", "RunStatus")], True, [("status",), ("flow_version_id",)], True),
+     [("flow_version_id", STR), ("status", "RunStatus")],
+     [("FLOW_VERSION_ID", "flow_version_id"), ("STATUS", "status")], [("status",)], True),
     ("NodeExecution", "node_execution", [("attempt", ATTEMPT)],
      [("element", ELEMENT), ("run_id", STR), ("executed_implementation_id", OPTIONAL_STR),
-      ("executed_binding_id", OPTIONAL_STR)], True,
-     [("run_id",), ("element",), ("executed_implementation_id",), ("executed_binding_id",)], False),
+      ("executed_binding_id", OPTIONAL_STR)],
+     [("RUN_ID", "run_id"), ("EXECUTED_IMPLEMENTATION", "executed_implementation_id"),
+      ("EXECUTED_BINDING", "executed_binding_id")],
+     [("run_id",), ("element",)], False),
     ("StoredValue", "stored_value", [("value_id", STR)],
-     [("value_digest", STR)], False, [("value_digest",)], False),
+     [("value_digest", STR)], None, [("value_digest",)], False),
     ("SpooledFile", "spooled_file", [("file", FILE)],
-     [("attempt", ATTEMPT), ("run_id", STR)], False, [("attempt",), ("run_id",)], False),
+     [("attempt", ATTEMPT), ("run_id", STR)], None, [("attempt",), ("run_id",)], False),
     ("EffectApproval", "approval", [("approval_id", STR)],
-     [("element", ELEMENT), ("run_id", STR), ("status", "ApprovalStatus")], True,
-     [("run_id",), ("status",), ("element",)], True),
+     [("element", ELEMENT), ("run_id", STR), ("status", "ApprovalStatus")],
+     [("RUN_ID", "run_id"), ("STATUS", "status")], [("element",)], True),
     ("StandingGrant", "grant", [("grant_id", STR)],
-     [("flow_version_id", STR), ("node_id", STR), ("status", "GrantStatus")], True,
-     [("flow_version_id",), ("status",)], True),
+     [("flow_version_id", STR), ("node_id", STR), ("status", "GrantStatus")],
+     [("FLOW_VERSION_ID", "flow_version_id"), ("STATUS", "status")], [], True),
     ("EffectAttempt", "effect_attempt", [("attempt", ATTEMPT)],
-     [("element", ELEMENT), ("run_id", STR), ("status", "AttemptStatus")], True,
-     [("run_id",), ("status",), ("element",)], True),
+     [("element", ELEMENT), ("run_id", STR), ("status", "AttemptStatus")],
+     [("RUN_ID", "run_id"), ("STATUS", "status")], [("status",), ("element",)], True),
 ]
 # The one extra read no equality list covers: the active grant of a flow
 # version's node (status is the constant `active`).
@@ -95,6 +108,11 @@ SCHEMA_FUNCTION = "create_store_schema"
 COUNTER_MODEL = "StorePositionCounter"
 COUNTER_ENUM = "StoreCounterName"
 NEXT_POSITION = "next_store_position"
+FILTER_ENUM = "FilterField"
+PAGE_FILTERS = "PAGE_FILTERS"
+LISTABLE = "LISTABLE_RECORD_TYPES"
+PAGE_FILTER_MODEL = "PageFilter"
+LISTING_MODEL = "RecordTypeListing"
 ENUMS = {"BindingStatus", "RunStatus", "ApprovalStatus", "GrantStatus", "AttemptStatus", "RecordType", COUNTER_ENUM}
 JSON_MODELS = {ELEMENT, ATTEMPT, FILE}
 
@@ -146,13 +164,15 @@ def main() -> None:
     contracts: dict = {}           # method -> (arguments, return)
     purposes: dict = {}
     config: dict = {}
+    page_filters: list = []        # PAGE_FILTERS rows: (record_type, field) a page may filter on
+    listings: list = []            # LISTABLE_RECORD_TYPES rows: every record type, listable or not
 
     def add(method: dict, arguments: str, returns: str, purpose: str) -> None:
         methods.append(method)
         contracts[method["method"]] = (arguments, returns)
         purposes[method["method"]] = purpose
 
-    for model, member, keys, lookups, paged, lists, changes in ROWS:
+    for model, member, keys, lookups, page, lists, changes in ROWS:
         assert model in domain, model
         row = f"{model}Row"
         name = snake(model)
@@ -184,16 +204,21 @@ def main() -> None:
         add({"method": f"load_{name}_row", "query": "get_by_key", "table": table,
              "filter": by(primary), "select": all_columns},
             key_args, f"{row} | None", f"Load the {model} row with this complete key, or none.")
-        if paged:
+        if page is not None:
             add({"method": f"find_{name}_row_at_position", "query": "get_unique", "table": table,
                  "filter": by(["store_position"]), "select": all_columns, "on_multiple": "error"},
                 "store_position: int", f"{row} | None",
                 f"Find the {model} row at this store position, or none.")
-            add({"method": f"list_{name}_rows", "query": "list_by", "table": table,
-                 "filter": [{"column": "record_type", "bind": "constant", "enum": "RecordType",
-                             "member": member.upper()}],
+            add({"method": f"page_{name}_rows", "query": "list_selected", "table": table,
+                 "selector": {"enum": FILTER_ENUM, "field_argument": "field", "value_argument": "value",
+                              "cases": [{"member": m, "column": c} for m, c in page]},
                  "select": all_columns, "order_by": order},
-                "", f"tuple[{row}, ...]", f"List every {model} row in store order.")
+                f"field: {FILTER_ENUM} | None, value: str | None", f"tuple[{row}, ...]",
+                f"List the {model} rows in store order, all of them or those whose column for the filter field equals the value.")
+            for filter_member, filter_column in page:
+                assert filter_column in all_columns, (model, filter_column)
+                page_filters.append({"record_type": member, "field": filter_member.lower()})
+        listings.append({"record_type": member, "listable": page is not None})
         for cols in lists:
             add({"method": f"list_{name}_rows_by_{'_and_'.join(cols)}", "query": "list_by", "table": table,
                  "filter": by(cols), "select": all_columns, "order_by": order},
@@ -234,6 +259,9 @@ def main() -> None:
         f"row: {COUNTER_MODEL}", "None", "Write the store-position counter's last position.")
 
     models[INTERFACE] = {"kind": "interface"}
+    models[PAGE_FILTER_MODEL] = {"identity": "value", "fields": {"record_type": "RecordType", "field": FILTER_ENUM}}
+    models[LISTING_MODEL] = {"identity": "value", "fields": {"record_type": "RecordType", "listable": "bool"}}
+    assert {row["record_type"] for row in listings} == set(domain["RecordType"]["values"]), "RecordType rows"
 
     def signature(arguments: str, returns: str) -> str:
         return f"(self{', ' + arguments if arguments else ''}) -> {returns}"
@@ -278,13 +306,35 @@ def main() -> None:
 
     data = load("60_data_closure.json")
     data["sections"]["config"]["persistence"] = config
-    data["placements"] = [p for p in data["placements"] if not p["address"].startswith("config.persistence.")] + [
+    ours_placements = [
         {"address": f"config.persistence.{key}", "source_refs": ["decision:A18", "module:store_persistence"],
          "reason": "SQLite table identifier of the store's one database (A18 rule 2), owned by store_persistence "
                    "and referenced only by persistence_backend/v3."}
         for key in config
     ]
+    placements, inserted = [], False
+    for placement in data["placements"]:
+        if placement["address"].startswith("config.persistence."):
+            if not inserted:
+                placements.extend(ours_placements)
+                inserted = True
+            continue
+        placements.append(placement)
+    if not inserted:
+        placements.extend(ours_placements)
+    data["placements"] = placements
     dump("60_data_closure.json", data)
+
+    provider = load("70_data_provider_closure.json")
+    provider["backend_ir"]["constants"][PAGE_FILTERS] = {
+        "value_type": "record_tuple", "row_model": PAGE_FILTER_MODEL, "key": ["record_type", "field"],
+        "value": page_filters,
+    }
+    provider["backend_ir"]["constants"][LISTABLE] = {
+        "value_type": "record_tuple", "row_model": LISTING_MODEL, "key": ["record_type"], "total": True,
+        "value": listings,
+    }
+    dump("70_data_provider_closure.json", provider)
 
     dump("70_persistence_closure.json", {
         "schema_version": "spec_workbench_persistence_closure.v1",
@@ -339,6 +389,10 @@ def interface_note(method: dict) -> str:
             term in {"element", "attempt", "file"} for term in terms) else ""
         return (f"{scope}: [DETERMINISM_OR_ORDERING] MUST return exactly the rows {matched}{compared}, in "
                 f"ascending store_position, {inside}; it changes nothing.")
+    if query == "list_selected":
+        return (f"{scope}: [DETERMINISM_OR_ORDERING] MUST return, in ascending store_position {inside}, every "
+                "row of its record type when field and value are both None, and otherwise exactly the rows whose "
+                "column its backend selector pairs with field equals value; it changes nothing.")
     if query == "update_fields":
         return (f"{scope}: [DEPENDENCY_BOUNDARY] MUST rewrite only status and record of the existing row with "
                 f"the given row's key {inside}, keeping its store_position, record_type and every other column, "

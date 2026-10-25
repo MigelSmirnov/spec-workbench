@@ -282,20 +282,23 @@ precedent); State 3 split `store_persistence` off `store` for it.
       `AttemptKey` (and a spooled file its `SpooledFileKey`), compared whole as
       their JSON form, which is equal exactly when the keys are equal.
     - *What the port offers.* Per row: insert; load by the complete key; for a
-      type `list_records` pages, the whole type in store order (an equality on
-      its own `record_type`, the one whole-table read `sqlite_sync_v2` lowers)
+      type `list_records` pages, one page read `page_<row>_rows(field, value)`
+      in store order — the whole table, or the rows whose column for the given
+      `FilterField` member equals the value (`list_selected`, decision 56) —
       and find by store position (the continuation token's check); the equality
-      lists a relation or a page filter reads, in store order; and, for the five
+      lists a relation reads, in store order; and, for the five
       records whose lifecycle fields change, an update of `status` and `record`
       in place, which keeps the store position. No other record type has an
       update, so A01 rule 6 holds by the port's shape.
     - *What stays in `store`.* The transaction (`transaction: external`: `store`
       begins, commits and rolls back on its one connection), store positions
       (`next_store_position`, the one internal function that takes the port),
-      attempt numbers, minted identities, which rows a relation or a page reads
-      and how they combine — latest as the last of a list, a set filter as one
-      list per value merged by position, a page as the reverse of the list below
-      the token's position — the files, their durability and the lock (State 7).
+      attempt numbers, minted identities, which rows a relation reads and how
+      they combine — latest as the last of a list —, and for a page which table
+      its record type reads, a set filter as one page read per value merged by
+      position, the reverse of that list below the token's position, the page
+      size and the tokens (decision 56); the files, their durability and the
+      lock (State 7).
     - *Implementation.* `StoreRepository` is a `kind: interface` of `models`;
       `implementation_obligations` names `SqliteStoreRepository` its `local`
       implementation, and `store` builds that class over its connection.
@@ -1912,6 +1915,74 @@ with no files has none, so the query carried an empty identity list, which
     Why: A13 rule 6 makes
     an empty list an ordinary value; a value the kernel accepts must not turn
     into an internal error where it is read.
+
+## Decision closed for the store's page reads (2026-10-25)
+
+The store review (code_factory `analysis/cabinet-kernel-store-review`,
+REPORT.md, R1) found `page_records` written from prose that enumerated by
+example: the twenty (record type, filter field) pairs reached the generator as
+"list_run_rows_by_status, list_node_execution_rows_by_run_id, …", and three of
+thirty generations missed a pair (`approval.run_id`, `effect_attempt.run_id`,
+`grant.flow_version_id`); `handle_list_records` restated the same twenty
+pairs and the four unlisted types in its validation note. The owner asked on
+2026-10-25 for every part that can be deterministic to be emitted
+deterministically. `persistence_backend/v3` now has the query kind
+`list_selected` (code_factory #147, SPEC_STANDARD §6.3 "Чтение с выбором
+колонки"; spec-workbench #131), a read whose one equality column an enum
+argument selects. As in decision 23, the owner does not review fields,
+classes or formats: each point below is the agent's and says why.
+
+56. **A page read per record type; the allow-lists are provider tables.**
+    - *One page read per listed type.* `StoreRepository` gains
+      `page_<row>_rows(field: FilterField | None, value: str | None)` for each
+      of the fourteen record types `list_records` lists (decision 20), with
+      `query: list_selected`, and loses the whole-type read `list_<row>_rows`
+      it replaces. Its selector pairs each `FilterField` member a page of that
+      type may filter on with the row column it compares — the State 5 table
+      of `list_records` — so the dispatch (record type, filter field) → column
+      is emitted, not generated. Why: that dispatch is a correspondence of
+      enum members to columns, which SPEC_STANDARD §6.10 calls a backend rule,
+      not data and not prose; it is exactly the part the generations got
+      wrong. The record-type level (fourteen one-line choices of a method)
+      stays in `store`: lifting it into the port would need a union row type,
+      a form v3 does not have.
+    - *Generated from the one row table.* Each row of
+      `experiments/cabinet-kernel/build_store_persistence.py` gains its page
+      list (`None` for a type that is never listed); the selector, the
+      contracts and the two tables below are expanded from it. Why: one source,
+      so the port, its IR and surface's allow-lists cannot disagree.
+    - *Equality lists only a relation reads.* The lists that only a page
+      filter read are gone: bindings by status and by service_id, runs by
+      flow_version_id, node executions by executed_implementation_id and by
+      executed_binding_id, approvals by run_id and by status, grants by
+      flow_version_id and by status, effect attempts by run_id. Why: the page
+      read covers them, and a port operation nobody calls is a promise the
+      emitter must keep for nothing. The lookup columns stay: the page read
+      compares them.
+    - *What stays in `store`.* Which table a record type reads, an `in_set`
+      filter as one page read per value merged by store position without
+      repeats, reversing, cutting below the token's position, the page size
+      and the tokens (decision 23, amended here). A status value is passed as
+      the request's text: the emitted read binds it through the column's
+      enumeration, and `surface` has refused a non-member before any read.
+    - *The allow-lists are `data_provider` tables.* `LISTABLE_RECORD_TYPES`
+      (row `RecordTypeListing`: `record_type`, `listable`; key `record_type`,
+      total) and `PAGE_FILTERS` (row `PageFilter`: `record_type`, `field`;
+      key both fields) are generated from the same page lists.
+      `handle_list_records` refuses a type whose row is not listable and a
+      (type, field) pair that is no row, naming the imported constants. Why:
+      which types are listed and which fields each may filter on are
+      correspondences over the members of `RecordType` and `FilterField`
+      (decision 33, SPEC_STANDARD §6.10 v2); a total table makes a new record
+      type a build failure until it is classified. The pair set is also the
+      selector's cases: both are expanded from one row table, the IR telling
+      the port which column to compare and the table telling `surface` what
+      it may ask, so neither is a hand-kept copy of the other.
+    - *Not changed.* Which status enumeration a type's `status` value belongs
+      to stays in `handle_list_records`' note: it names five `models`
+      enumerations, and a member-to-enumeration correspondence has no provider
+      form. State 2 and State 5 texts are unchanged; the State 5 table of
+      `list_records` is the source the builder restates.
 
 ## Texts of earlier states changed by State 6
 
