@@ -391,9 +391,13 @@ members of such an enumeration — the conclusion each NodeExecution status give
 dependants (A13 rules 5 and 7), the status a run rests in for each wait reason
 (A13 rule 8), whether an HTTP method carries a body (A09 rule 2) — is a
 correspondence over that taxonomy (SPEC_STANDARD 15.2): a table here keyed by
-the enumeration, total over its members, whose cells name members. The rules
-that read these tables stay their owners': A13's are `run_graph`'s, A09's
-`service_invoker`'s; this module holds only the values.
+the enumeration, total over its members, whose cells name members. So are the
+record types `list_records` lists and the filter fields each may be listed by
+(A16 rule 6, the State 5 table of `list_records`): a table keyed by the record
+type and total over its members, and a relation between record types and filter
+fields. The rules that read these tables stay their owners': A13's are
+`run_graph`'s, A09's `service_invoker`'s, the refusal of an unlisted type or
+field `surface`'s; this module holds only the values.
 
 ### Knows
 
@@ -431,6 +435,8 @@ NODE_CONCLUSION_EFFECTS
 EDGE_DELIVERY_RULES
 WAIT_REASON_RESTING_STATUSES
 HTTP_METHOD_BODIES
+LISTABLE_RECORD_TYPES
+PAGE_FILTERS
 ```
 
 ### Depth assessment
@@ -572,15 +578,19 @@ Every read and write of a row goes through one typed record port,
 of the closed record types — load by the complete key, find by store position,
 list by an equality filter in store order, insert, and, for the five records
 whose lifecycle fields change (OperationBinding, Run, EffectApproval,
-StandingGrant, EffectAttempt), update of the row in place — and nothing else.
+StandingGrant, EffectAttempt), update of the row in place, and, for a listed
+record type, its rows in store order, all of them or those whose column for one
+filter field equals a value — and nothing else.
 It accepts no table name, SQL fragment, untyped payload or path. Its one
 implementation is `SqliteStoreRepository`, owned by `store_persistence` and
 lowered from `persistence_backend/v3` (`implementation_obligations`,
 disposition `local`). `store` builds it over its own connection inside the
 transaction it opened, and keeps everything a row operation does not say:
 opening, committing and rolling back the transaction, the order of store
-positions, attempt numbers and minted identities, which rows a relation or a
-page reads and how they combine, the files and their durability, and the lock.
+positions, attempt numbers and minted identities, which rows a relation reads,
+which table a page reads for its record type and how a page is cut from its
+rows, the files and their durability, and the lock. Which column a filter field
+compares is the port's, lowered with it.
 
 ### Depth assessment
 
@@ -605,15 +615,15 @@ fields a lookup filters on, and the record itself, whole.
 ### Must not own
 
 The connection or its transaction, store positions, attempt numbers, minted
-identities, which rows a relation or a page reads, any file, or any rule of
-another module — all of these are `store`'s. It is part of the store module of
+identities, which rows a relation reads, which table a page reads and how it is
+cut, any file, or any rule of another module — all of these are `store`'s. It is part of the store module of
 A18: only `store` calls it, inside the transaction `store` opened, so no other
 module touches the database through it.
 
 ### Hides
 
 SQLite table creation, row codecs and the typed insert, load, list and update
-statements.
+statements, including which column each filter field of a page compares.
 
 ### Candidate public capabilities
 
