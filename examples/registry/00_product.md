@@ -36,11 +36,14 @@ payments, photos and planner documents stay in the services that own them
 - **Consumer services** — PresuPro, Client Portal, Cabinet Kernel, the Cabinet
   Web mirror. They validate a project id and read its context; today Cabinet
   Kernel and the operator also create projects and rooms, and publish artifacts as
-  producers (below). They reach Registry over HTTP on the host's loopback or
-  private network; a service that writes holds a service token (R0-09).
+  producers (below). They reach Registry over HTTP on the host's loopback or the
+  deployment's internal network (R0-19); a service that writes holds a
+  service token (R0-09).
 - **Producers** — any caller that publishes an artifact pointer: today
-  PresuPro (estimates), Cabinet Kernel and the operator script; planners by
-  name only. The pointer names its owner service, which is the authority for
+  PresuPro (estimates), Cabinet Kernel and the operator script. No planner
+  publishes today: a planner may be the owner service of a configured type
+  (R0-08), and its pointers are then published by staff until the planner
+  itself holds a service token. The pointer names its owner service, which is the authority for
   the artifact itself; Registry holds the pointer (V1-4). The type must belong
   to the pointer's owner service (R0-08). A service publishing with its token
   publishes only as the service the token names; staff, and the operator
@@ -49,11 +52,12 @@ payments, photos and planner documents stay in the services that own them
   that origin.
 - **Customer** — the person or company a project is for. Never reaches
   Registry; staff record their contact data in a Customer record (R0-06).
-- **Network surface** — one HTTP API on loopback and the private network.
-  Reading projects, rooms, artifacts, `validate` and `context` needs no
+- **Network surface** — one HTTP API, listening only on loopback or on the
+  deployment's internal network (R0-19). Reading projects, rooms, artifacts, `validate` and `context` needs no
   credential there; every write and every read of contact data does (R0-09).
 - **Secrets** — service tokens and the staff credential, in the instance's
-  protected configuration; never in a record, a log line or an answer.
+  configuration, which only the owner changes, outside the API (R0-20);
+  never in a record, a log line or an answer.
 - **Personal data** — the customer's contact data (R0-06); readable by staff
   only (R0-09).
 
@@ -146,8 +150,8 @@ is not that type's owner, is refused.
 Each writing service holds a service token that names it; staff hold a staff
 credential. Every write needs one of them; recording, correcting, reading or
 erasing a customer needs the staff credential. Reads of projects, rooms,
-artifacts, `validate` and `context` stay open on loopback and the private
-network. How the frontend obtains the staff credential belongs to the frontend.
+artifacts, `validate` and `context` stay open on loopback and the deployment's
+internal network (R0-19). How the frontend obtains the staff credential belongs to the frontend.
 
 ### R0-10 — Rooms stay as they are (owner, 2026-10-26; closes OQ-05)
 
@@ -211,6 +215,24 @@ downstream service needs to open: `project_id` and the rooms with their ids.
 Registry has no action that builds, validates or returns a launch context, and
 calls no downstream service. V1-3's `source=registry` is the opening client's
 concern.
+
+### R0-19 — Open reads stay inside the host (owner, 2026-10-27)
+
+An instance listens only on the host's loopback or on its deployment's
+internal network — on the VPS the compose network, where Client Portal reaches
+it as `registry:8000` — and that network publishes no Registry port beyond the
+host. The deployment enforces this; Registry itself does not tell callers
+apart by address. An instance reachable from beyond its host is a wrong
+deployment, not an allowed configuration: every unauthenticated read assumes
+the caller is inside.
+
+### R0-20 — The owner changes the configuration, outside the API (owner, 2026-10-27)
+
+Service tokens, the staff credential, the artifact vocabulary (R0-08) and the
+frontend origin are the instance's configuration. The owner, as the host's
+administrator, changes it outside Registry; a change takes effect when the
+instance restarts, and a replaced token stops working at that restart, with no
+overlap. Registry has no action that reads or changes its configuration.
 
 ## Explicit exclusions
 
