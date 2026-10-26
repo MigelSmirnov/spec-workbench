@@ -28,6 +28,9 @@ payments, photos and planner documents stay in the services that own them
   through the Registry frontend or an operator script (`onboard_object`). They
   authenticate with a staff credential (R0-09); today no route authenticates
   anyone (L15).
+- **Operator** — `onboard_object`, or an agent preparing a client message for
+  the owner. It acts for the owner and holds the staff credential for every
+  action it takes, publishing included; it holds no service token.
 - **Consumer services** — PresuPro, Client Portal, Cabinet Kernel, the Cabinet
   Web mirror. They validate a project id and read its context; Cabinet Kernel
   and the operator also create projects and rooms, and publish artifacts as
@@ -36,9 +39,10 @@ payments, photos and planner documents stay in the services that own them
 - **Producers** — any caller that publishes an artifact pointer: today
   PresuPro (estimates), Cabinet Kernel and the operator script; planners by
   name only. The pointer names its owner service, which is the authority for
-  the artifact itself; Registry holds the pointer (V1-4). The owner service
-  must be the service the caller's token names, and the type must belong to
-  that service (R0-08, R0-09).
+  the artifact itself; Registry holds the pointer (V1-4). The type must belong
+  to the pointer's owner service (R0-08). A service publishing with its token
+  publishes only as the service the token names; staff, and the operator
+  acting as staff, publish for any owner service (R0-09).
 - **Browser** — the Registry frontend from its own origin; CORS admits exactly
   that origin.
 - **Customer** — the person or company a project is for. Never reaches
@@ -64,12 +68,13 @@ payments, photos and planner documents stay in the services that own them
 | read a project context | consumer service | the snapshot a consumer keeps: id, display name, status, address, customer, created and updated times | unknown id refused |
 | record a customer | staff | the Customer with its identity (`customer_ref`) and contact data | missing name refused |
 | correct a customer | staff | the Customer with the new contact data | unknown customer refused; an erased customer cannot be corrected |
-| read a customer | staff, operator preparing a client message | name, phone, e-mail, language | unknown customer refused; an erased customer answers that it was erased, with no contact data |
-| erase a customer's contact data | staff | the Customer keeps its identity, its contact data is gone; projects still name it (R0-06) | unknown customer refused |
+| read a customer | staff, operator | name, phone, e-mail, language | unknown customer refused; an erased customer answers that it was erased, with no contact data |
+| list customers | staff, operator | the customers, each with its `customer_ref` and name; erased ones only as erased, without contact data — this is how a customer is found for a new project | — |
+| erase a customer's contact data | staff | the Customer keeps only its identity and the fact that it was erased; name, phone, e-mail and language are gone; projects still name it (R0-06) | unknown customer refused; erasing an erased customer returns it unchanged |
 | add a room | staff, consumer service | the room in the project (R0-10) | unknown or archived project refused |
 | list rooms | staff, consumer service | the project's rooms in a declared order | unknown project refused as not found (replaces L21) |
 | publish an artifact pointer | producer service | the new version, `published`; the previous published version of that type becomes `superseded` | unknown or archived project refused; a type not in the configured vocabulary, or not the caller's service's, refused (R0-08) |
-| withdraw an artifact pointer | the producer service that owns it | the pointer, status `withdrawn`; it stays in the history (R0-14) | unknown pointer refused; a pointer of another service, or already withdrawn or superseded, refused |
+| withdraw an artifact pointer | the producer service that owns it, or staff | the pointer, status `withdrawn`; it stays in the history (R0-14) | unknown pointer refused; a pointer of another service, or already withdrawn or superseded, refused |
 | list artifacts | consumer service | every pointer of the project — published, superseded and withdrawn — each with its type, version and status; this is how history is read (R0-02) | unknown project refused as not found |
 | read the latest artifact of a type | consumer service | the one published pointer of that type | unknown project; no published pointer of that type — also after a withdrawal, which never falls back to an earlier version (R0-14) |
 
@@ -109,8 +114,11 @@ Registry holds a Customer record: who the project is for and how to reach
 them — name, phone, e-mail, language. `customer_ref` becomes the Customer's
 identity, and a project names its customer by it. Fiscal data (NIF, legal
 name) stays in PresuPro, which changes for a different reason. The Factory's
-WhatsApp link reads the phone from here. The contact data is personal data and
-can be erased or anonymised: an explicit exception to R0-03, the only one.
+WhatsApp link reads the phone from here. Name, phone, e-mail and language are
+all the customer's contact data: personal data, readable by staff only (R0-09),
+and erasable as a whole. Erasing leaves the Customer's identity and the fact
+that it was erased, nothing else — the name does not survive. Erasure is an
+explicit exception to R0-03, the only one.
 Option (b), PresuPro `Client`, and option (c), nowhere, were declined.
 
 ### R0-07 — The caller may supply a project's identity (owner, 2026-10-26; closes OQ-02, replaces V1-5, L01, L02)
@@ -162,7 +170,7 @@ array. A project's answer carries its id at the top level, rooms beside it.
 
 ### R0-14 — A producer may withdraw its pointer (owner, 2026-10-26; closes OQ-09, replaces L22)
 
-The owner service of a pointer may withdraw it. A withdrawn pointer stays in the
+The owner service of a pointer, or staff, may withdraw it. A withdrawn pointer stays in the
 history; "latest of a type" then answers that none is published and never falls
 back to an earlier version.
 
