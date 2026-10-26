@@ -2,7 +2,8 @@
 
 ## Status
 
-Draft of 2026-10-26, **not accepted by the owner**. Reverse-engineered from the
+Draft of 2026-10-26, **not accepted by the owner**; R0-06 and R0-07 are the
+owner's decisions of 2026-10-26. Reverse-engineered from the
 running Registry and its v1 specification (`SOURCE.md`): every decision below
 names the v1 decision (V1-n) or the legacy finding (Ln) it keeps, narrows or
 replaces. Nothing the code does is a decision until it is written here or in a
@@ -39,24 +40,29 @@ payments, photos and planner documents stay in the services that own them
 - **Browser** — the Registry frontend from its own origin; CORS admits exactly
   that origin.
 - **Customer** — the person or company a project is for. Never reaches
-  Registry. What Registry holds about them is OQ-01.
+  Registry; staff record their contact data in a Customer record (R0-06).
 - **Network surface** — one HTTP API. Whether it is reachable from anything
   but loopback and the private network is OQ-04.
 - **Secrets** — none today. If OQ-04 introduces credentials, they live in the
   instance's protected configuration and never in a record or an answer.
-- **Personal data** — the customer's contact data, if OQ-01 brings it here.
+- **Personal data** — the customer's contact data (R0-06). Who may read it is
+  OQ-04.
 
 ## Primary actions
 
 | action | who | output | failure |
 |---|---|---|---|
-| create a project | staff, consumer service | the project with its identity, status `active` | missing name or address refused; the replay of an equal request: OQ-02 |
+| create a project | staff, consumer service | the project with its identity — supplied by the caller or minted (R0-07) — status `active` | missing name or address refused; an equal replay returns the existing project, a different one with the same id is refused (R0-07) |
 | read a project | anyone allowed by OQ-04 | the project card (any status, V1-7) and its rooms | unknown id refused as not found |
 | list projects | staff, consumer service | the projects, archived only when asked, in a declared order (L10) | — |
 | correct a project | staff | the project with the new name, address or customer | unknown id refused; correcting an archived project: OQ-07 |
 | archive a project | staff | the project, status `archived`; nothing is deleted (V1-7) | unknown id refused; repeat and reversal: OQ-07 |
 | validate a project reference | consumer service | exists, active, and why not (`not_found`, `archived`) | — (the answer carries the failure) |
 | read a project context | consumer service | the snapshot a consumer keeps: id, display name, status, address, customer, created and updated times | unknown id refused |
+| record a customer | staff | the Customer with its identity (`customer_ref`) and contact data | missing name refused |
+| correct a customer | staff | the Customer with the new contact data | unknown customer refused; an erased customer cannot be corrected |
+| read a customer | staff, operator preparing a client message | name, phone, e-mail, language | unknown customer refused; an erased customer answers that it was erased, with no contact data |
+| erase a customer's contact data | staff | the Customer keeps its identity, its contact data is gone; projects still name it (R0-06) | unknown customer refused |
 | add a room | staff, consumer service | the room in the project | unknown or archived project refused; OQ-05 |
 | list rooms | staff, consumer service | the project's rooms in a declared order | unknown project refused as not found (replaces L21) |
 | publish an artifact pointer | producer service | the new version, `published`; the previous published version of that type becomes `superseded` | unknown or archived project, unknown type or owner refused (OQ-03) |
@@ -91,7 +97,28 @@ owner decides otherwise under OQ-08.
 ### R0-05 — One instance, one store (narrows L19)
 
 An instance holds its own store. Two instances share nothing; the same physical
-object in two instances is two projects unless OQ-02 gives it one identity.
+object in two instances is two projects unless the caller gives both the same
+id (R0-07).
+
+### R0-06 — The customer is a Registry record (owner, 2026-10-26; closes OQ-01, L03)
+
+Registry holds a Customer record: who the project is for and how to reach
+them — name, phone, e-mail, language. `customer_ref` becomes the Customer's
+identity, and a project names its customer by it. Fiscal data (NIF, legal
+name) stays in PresuPro, which changes for a different reason. The Factory's
+WhatsApp link reads the phone from here. The contact data is personal data and
+can be erased or anonymised: an explicit exception to R0-03, the only one.
+Option (b), PresuPro `Client`, and option (c), nowhere, were declined.
+
+### R0-07 — The caller may supply a project's identity (owner, 2026-10-26; closes OQ-02, replaces V1-5, L01, L02)
+
+A caller may give the `project_id` when creating a project. A repeated create
+with that id and equal content returns the existing project; with different
+content it is refused, and nothing changes. Without an id the server still
+mints one. One physical object can therefore carry one id across instances
+(R0-05). V1-5 ("MUST NOT reuse caller-supplied identifiers") is replaced.
+Options (b), a per-instance idempotency key, and (c), keeping server minting,
+were declined.
 
 ## Explicit exclusions
 
@@ -107,29 +134,15 @@ object in two instances is two projects unless OQ-02 gives it one identity.
 
 ## Open questions
 
-- **OQ-01 — Customer and contact data.** BLOCK: where does the customer's
-  contact data (phone, e-mail, language) live? (a) a Customer record in Registry,
-  with `customer_ref` becoming its identity; (b) PresuPro `Client`, with
-  `customer_ref` pointing there and a phone added; (c) nowhere — the owner picks
-  the contact by hand. Factory `AGENTS.md` already assumes (a); nothing
-  implements it (L03). Option (a) brings personal data into Registry and so
-  needs a way to erase or anonymise a customer's contact data — an explicit
-  exception to R0-03, which otherwise forbids deleting. Recommendation: (a) — the customer is project identity
-  (R0-01), it changes for a different reason than fiscal data, and the WhatsApp
-  link needs one place to read.
-- **OQ-02 — One object, one identity.** BLOCK: may the caller supply the
-  project's identity? Today the server mints it (V1-5), so a replay duplicates
-  (L02) and two instances disagree (L01). Options: (a) caller-supplied
-  `project_id`, an equal replay returns the project and a different one is
-  refused; (b) an idempotency key per instance only; (c) keep server minting and
-  give up replay. Recommendation: (a) — it closes both L01 and L02 and replaces
-  V1-5 explicitly.
+- **OQ-01** and **OQ-02** — decided by the owner on 2026-10-26: R0-06, R0-07.
 - **OQ-03 — Artifact vocabulary.** BLOCK: closed list in the spec (today, L08),
   a list in configuration, or any type named by its owner service? Must a type
   belong to exactly one owner service?
 - **OQ-04 — Who may call.** BLOCK: does Registry authenticate callers (a service
   token for writes, staff login for the frontend), or stay unauthenticated
   behind loopback and the private network?
+  Since R0-06, an unauthenticated Registry hands customers' phone numbers to
+  any caller on that network.
 - **OQ-05 — Rooms.** Who uses rooms today beyond the kernel test (L12)? Keep,
   extend (rename, remove), or drop.
 - **OQ-06 — `project.list_active`.** No consumer found (L11). Keep or drop.
