@@ -3,9 +3,9 @@
 ## Status
 
 Accepted by the owner as a whole on 2026-10-26 (R0-15); every action,
-decision and exclusion below is input of the later states. R0-06 to R0-20 are
-the owner's decisions, each dated in its heading — R0-19 and R0-20 came after
-the acceptance and join it on their date. R0-01 to R0-05 were drafted from the
+decision and exclusion below is input of the later states. R0-06 onward are the
+owner's decisions, each dated in its heading; one dated after 2026-10-26 joins
+the accepted whole on its date. R0-01 to R0-05 were drafted from the
 v1 specification and accepted with the whole. Reverse-engineered from the
 running Registry and its v1 specification (`SOURCE.md`): a decision that keeps,
 narrows or replaces a v1 decision (V1-n) or a legacy finding (Ln) names it; an
@@ -38,7 +38,7 @@ payments, photos and planner documents stay in the services that own them
   Web mirror. They validate a project id and read its context; today Cabinet
   Kernel and the operator also create projects and rooms, and publish artifacts as
   producers (below). They reach Registry over HTTP on the host's loopback or the
-  deployment's internal network (R0-19); a service that writes holds a
+  host's internal network (R0-19); a service that writes holds a
   service token (R0-09).
 - **Producers** — any caller that publishes an artifact pointer: today
   PresuPro (estimates), Cabinet Kernel and the operator script. No planner
@@ -49,12 +49,13 @@ payments, photos and planner documents stay in the services that own them
   to the pointer's owner service (R0-08). A service publishing with its token
   publishes only as the service the token names; staff, and the operator
   acting as staff, publish for any owner service (R0-09).
-- **Browser** — the Registry frontend from its own origin; CORS admits exactly
-  that origin.
+- **Browser** — the Registry frontend from its own origin, on Registry's own
+  host; CORS admits exactly that origin. A frontend used from another machine
+  reaches Registry through its own server on Registry's host (R0-22).
 - **Customer** — the person or company a project is for. Never reaches
   Registry; staff record their contact data in a Customer record (R0-06).
 - **Network surface** — one HTTP API, listening only on loopback or on the
-  deployment's internal network (R0-19). Reading projects, rooms, artifacts, `validate` and `context` needs no
+  host's internal network (R0-19). Reading projects, rooms, artifacts, `validate` and `context` needs no
   credential there; every write and every read of contact data does (R0-09).
 - **Secrets** — service tokens and the staff credential, in the instance's
   configuration, which only the owner changes, outside the API (R0-20);
@@ -151,7 +152,7 @@ is not that type's owner, is refused.
 Each writing service holds a service token that names it; staff hold a staff
 credential. Every write needs one of them; recording, correcting, reading or
 erasing a customer needs the staff credential. Reads of projects, rooms,
-artifacts, `validate` and `context` stay open on loopback and the deployment's
+artifacts, `validate` and `context` stay open on loopback and the host's
 internal network (R0-19). How the frontend obtains the staff credential belongs to the frontend.
 
 ### R0-10 — Rooms stay as they are (owner, 2026-10-26; closes OQ-05)
@@ -219,10 +220,11 @@ concern.
 
 ### R0-19 — Open reads stay inside the host (owner, 2026-10-27)
 
-An instance listens only on the host's loopback or on its deployment's
-internal network — on the VPS the compose network, where Client Portal reaches
+An instance listens only on its host's loopback or on an internal network of
+that same host — on the VPS the compose network, where Client Portal reaches
 it as `registry:8000` — and that network publishes no Registry port beyond the
-host. The deployment enforces this; Registry itself does not tell callers
+host. Only processes and containers of that host belong to it; a private
+network spanning several hosts does not. The deployment enforces this; Registry itself does not tell callers
 apart by address. An instance reachable from beyond its host is a wrong
 deployment, not an allowed configuration: every unauthenticated read assumes
 the caller is inside.
@@ -234,6 +236,23 @@ frontend origin are the instance's configuration. The owner, as the host's
 administrator, changes it outside Registry; a change takes effect when the
 instance restarts, and a replaced token stops working at that restart, with no
 overlap. Registry has no action that reads or changes its configuration.
+
+### R0-21 — One id in two instances is a link, not one record (owner, 2026-10-27; narrows R0-05, R0-07)
+
+When two instances hold a project under the same id, they hold two
+independent records of one physical object. Each instance is the only owner of
+its record (R0-01); the records may differ, and Registry neither copies,
+synchronises nor compares them. A consumer reads the instance it is configured
+with.
+
+### R0-22 — The browser reaches Registry only on its host (owner, 2026-10-27)
+
+The Registry frontend calls the API from the browser, admitted by CORS, only
+where the browser runs on Registry's own host and reaches it on loopback. A
+frontend used from another machine goes through a server of its own on
+Registry's host; that server is a caller inside the host's network like any
+other, holds the staff credential for staff actions, and is designed with the
+frontend, not here.
 
 ## Explicit exclusions
 
