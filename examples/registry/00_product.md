@@ -2,8 +2,9 @@
 
 ## Status
 
-Draft of 2026-10-26, **not accepted by the owner**; R0-06 and R0-07 are the
-owner's decisions of 2026-10-26. Reverse-engineered from the
+Draft of 2026-10-26, **not accepted by the owner** as a whole; R0-06 to R0-14
+are the owner's decisions of 2026-10-26 (the recommendations of OQ-01 to OQ-09,
+accepted). Reverse-engineered from the
 running Registry and its v1 specification (`SOURCE.md`): every decision below
 names the v1 decision (V1-n) or the legacy finding (Ln) it keeps, narrows or
 replaces. Nothing the code does is a decision until it is written here or in a
@@ -23,51 +24,54 @@ payments, photos and planner documents stay in the services that own them
 
 ## Actors and trust boundaries
 
-- **Owner / staff** — create, correct and archive projects, through the Registry
-  frontend or an operator script (`onboard_object`). Today no route
-  authenticates anyone (L15): OQ-04.
+- **Owner / staff** — create, correct and archive projects and record customers,
+  through the Registry frontend or an operator script (`onboard_object`). They
+  authenticate with a staff credential (R0-09); today no route authenticates
+  anyone (L15).
 - **Consumer services** — PresuPro, Client Portal, Cabinet Kernel, the Cabinet
   Web mirror. They validate a project id and read its context; Cabinet Kernel
   and the operator also create projects and rooms, and publish artifacts as
-  producers (below). They
-  reach Registry over HTTP on the host's loopback or private network.
+  producers (below). They reach Registry over HTTP on the host's loopback or
+  private network; a service that writes holds a service token (R0-09).
 - **Producers** — any caller that publishes an artifact pointer: today
   PresuPro (estimates), Cabinet Kernel and the operator script; planners by
   name only. The pointer names its owner service, which is the authority for
-  the artifact itself; Registry holds the pointer (V1-4). The owner service is
-  declared by the caller and checked only against the vocabulary (OQ-03);
-  whether Registry verifies who the caller is belongs to OQ-04.
+  the artifact itself; Registry holds the pointer (V1-4). The owner service
+  must be the service the caller's token names, and the type must belong to
+  that service (R0-08, R0-09).
 - **Browser** — the Registry frontend from its own origin; CORS admits exactly
   that origin.
 - **Customer** — the person or company a project is for. Never reaches
   Registry; staff record their contact data in a Customer record (R0-06).
-- **Network surface** — one HTTP API. Whether it is reachable from anything
-  but loopback and the private network is OQ-04.
-- **Secrets** — none today. If OQ-04 introduces credentials, they live in the
-  instance's protected configuration and never in a record or an answer.
-- **Personal data** — the customer's contact data (R0-06). Who may read it is
-  OQ-04.
+- **Network surface** — one HTTP API on loopback and the private network.
+  Reading projects, rooms, artifacts, `validate` and `context` needs no
+  credential there; every write and every read of contact data does (R0-09).
+- **Secrets** — service tokens and the staff credential, in the instance's
+  protected configuration; never in a record, a log line or an answer.
+- **Personal data** — the customer's contact data (R0-06); readable by staff
+  only (R0-09).
 
 ## Primary actions
 
 | action | who | output | failure |
 |---|---|---|---|
 | create a project | staff, consumer service | the project with its identity — supplied by the caller or minted (R0-07) — status `active` | missing name or address refused; an equal replay returns the existing project, a different one with the same id is refused (R0-07) |
-| read a project | anyone allowed by OQ-04 | the project card (any status, V1-7) and its rooms | unknown id refused as not found |
-| list projects | staff, consumer service | the projects, archived only when asked, in a declared order (L10) | — |
-| correct a project | staff | the project with the new name, address or customer | unknown id refused; correcting an archived project: OQ-07 |
-| archive a project | staff | the project, status `archived`; nothing is deleted (V1-7) | unknown id refused; repeat and reversal: OQ-07 |
+| read a project | any caller | the project card (any status, V1-7) with its rooms; the project's id stands at the top of the answer (R0-13) | unknown id refused as not found |
+| list projects | any caller | the projects, archived only when asked, in a declared order (L10), as one answer object (R0-13) | — |
+| correct a project | staff | the project with the new name, address or customer | unknown id refused; an archived project refused (R0-12) |
+| archive a project | staff | the project, status `archived`; nothing is deleted (V1-7); archiving an archived project returns it unchanged (R0-12) | unknown id refused |
 | validate a project reference | consumer service | exists, active, and why not (`not_found`, `archived`) | — (the answer carries the failure) |
 | read a project context | consumer service | the snapshot a consumer keeps: id, display name, status, address, customer, created and updated times | unknown id refused |
 | record a customer | staff | the Customer with its identity (`customer_ref`) and contact data | missing name refused |
 | correct a customer | staff | the Customer with the new contact data | unknown customer refused; an erased customer cannot be corrected |
 | read a customer | staff, operator preparing a client message | name, phone, e-mail, language | unknown customer refused; an erased customer answers that it was erased, with no contact data |
 | erase a customer's contact data | staff | the Customer keeps its identity, its contact data is gone; projects still name it (R0-06) | unknown customer refused |
-| add a room | staff, consumer service | the room in the project | unknown or archived project refused; OQ-05 |
+| add a room | staff, consumer service | the room in the project (R0-10) | unknown or archived project refused |
 | list rooms | staff, consumer service | the project's rooms in a declared order | unknown project refused as not found (replaces L21) |
-| publish an artifact pointer | producer service | the new version, `published`; the previous published version of that type becomes `superseded` | unknown or archived project, unknown type or owner refused (OQ-03) |
-| list artifacts | consumer service | every pointer of the project, published and superseded, each with its type, version and status — this is how history is read (R0-02) | unknown project refused as not found |
-| read the latest artifact of a type | consumer service | the one published pointer of that type | unknown project; no published artifact of that type |
+| publish an artifact pointer | producer service | the new version, `published`; the previous published version of that type becomes `superseded` | unknown or archived project refused; a type not in the configured vocabulary, or not the caller's service's, refused (R0-08) |
+| withdraw an artifact pointer | the producer service that owns it | the pointer, status `withdrawn`; it stays in the history (R0-14) | unknown pointer refused; a pointer of another service, or already withdrawn or superseded, refused |
+| list artifacts | consumer service | every pointer of the project — published, superseded and withdrawn — each with its type, version and status; this is how history is read (R0-02) | unknown project refused as not found |
+| read the latest artifact of a type | consumer service | the one published pointer of that type | unknown project; no published pointer of that type — also after a withdrawal, which never falls back to an earlier version (R0-14) |
 
 ## Decisions
 
@@ -91,8 +95,7 @@ readable by id; lists leave archived projects out unless asked.
 ### R0-04 — The context and validate answers are external contracts (new, from the consumer table in `SOURCE.md`)
 
 PresuPro and Client Portal read `validate` and `context` and pin their field
-names. The re-authored Registry keeps both answers field for field unless the
-owner decides otherwise under OQ-08.
+names. The re-authored Registry keeps both answers field for field (R0-13).
 
 ### R0-05 — One instance, one store (narrows L19)
 
@@ -120,12 +123,54 @@ mints one. One physical object can therefore carry one id across instances
 Options (b), a per-instance idempotency key, and (c), keeping server minting,
 were declined.
 
+### R0-08 — The artifact vocabulary is configured, one owner per type (owner, 2026-10-26; closes OQ-03, replaces L08)
+
+The artifact types an instance accepts, and the one owner service of each, are
+a list in the instance's configuration, not in the specification: adding a type
+needs no spec change. A pointer whose type is not listed, or whose owner service
+is not that type's owner, is refused.
+
+### R0-09 — Writes and contact data need a credential (owner, 2026-10-26; closes OQ-04, replaces L15)
+
+Each writing service holds a service token that names it; staff hold a staff
+credential. Every write needs one of them; recording, correcting, reading or
+erasing a customer needs the staff credential. Reads of projects, rooms,
+artifacts, `validate` and `context` stay open on loopback and the private
+network. How the frontend obtains the staff credential belongs to the frontend.
+
+### R0-10 — Rooms stay as they are (owner, 2026-10-26; closes OQ-05)
+
+A room is created in a project and listed; it is never renamed or removed.
+Nothing more is added until a consumer needs it.
+
+### R0-11 — `project.list_active` is dropped (owner, 2026-10-26; closes OQ-06)
+
+No consumer reads it (L11); `list projects` without archived answers the same
+question.
+
+### R0-12 — Archive is final (owner, 2026-10-26; closes OQ-07, replaces L05, L06)
+
+An archived project never returns to `active` and cannot be corrected.
+Archiving it again returns it unchanged — its updated time does not move.
+
+### R0-13 — Lists answer an object; the project answer leads with its id (owner, 2026-10-26; closes OQ-08, replaces L09, L20)
+
+Every list answers one object whose items are in a named field, never a bare
+array. A project's answer carries its id at the top level, rooms beside it.
+`validate` and `context` do not change (R0-04). The Registry frontend and
+`onboard_object` follow the new shapes.
+
+### R0-14 — A producer may withdraw its pointer (owner, 2026-10-26; closes OQ-09, replaces L22)
+
+The owner service of a pointer may withdraw it. A withdrawn pointer stays in the
+history; "latest of a type" then answers that none is published and never falls
+back to an earlier version.
+
 ## Explicit exclusions
 
 - The Registry frontend and the operator script `onboard_object`. This case
   designs the HTTP service; both are clients of its API, like any consumer, and
-  are designed elsewhere. Their reads are kept compatible under OQ-08.
-
+  are designed elsewhere; they follow R0-13.
 - Drawings, measurements, planner documents, estimates, payments, photos (R0-01).
 - Orchestrating downstream services: Registry gives the launch context
   (`project_id`, optional `room_id`) and nothing else (V1-3).
@@ -134,24 +179,5 @@ were declined.
 
 ## Open questions
 
-- **OQ-01** and **OQ-02** — decided by the owner on 2026-10-26: R0-06, R0-07.
-- **OQ-03 — Artifact vocabulary.** BLOCK: closed list in the spec (today, L08),
-  a list in configuration, or any type named by its owner service? Must a type
-  belong to exactly one owner service?
-- **OQ-04 — Who may call.** BLOCK: does Registry authenticate callers (a service
-  token for writes, staff login for the frontend), or stay unauthenticated
-  behind loopback and the private network?
-  Since R0-06, an unauthenticated Registry hands customers' phone numbers to
-  any caller on that network.
-- **OQ-05 — Rooms.** Who uses rooms today beyond the kernel test (L12)? Keep,
-  extend (rename, remove), or drop.
-- **OQ-06 — `project.list_active`.** No consumer found (L11). Keep or drop.
-- **OQ-07 — Archive lifecycle.** Is archive final? May an archived project be
-  corrected (L05)? Is a repeated archive a no-op or a refusal (L06)?
-- **OQ-08 — Breaking the wire.** Lists answer bare arrays (L09, kernel R5) and
-  the project answer nests the id (L20). May the re-authored Registry change
-  these shapes, given the frontend and `onboard_object` read them?
-- **OQ-09 — Withdrawing a pointer.** May a producer withdraw a pointer whose
-  artifact it deleted, and what does "latest of a type" answer then — the
-  previous version, or none? Today nothing withdraws (L22); a stale pointer
-  stays `published`.
+None open. OQ-01 to OQ-09 were decided by the owner on 2026-10-26: R0-06 to
+R0-14.
