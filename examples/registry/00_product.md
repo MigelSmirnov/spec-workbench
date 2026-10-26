@@ -2,9 +2,10 @@
 
 ## Status
 
-Draft of 2026-10-26, **not accepted by the owner** as a whole; R0-06 to R0-14
-are the owner's decisions of 2026-10-26 (the recommendations of OQ-01 to OQ-09,
-accepted). Reverse-engineered from the
+Accepted by the owner as a whole on 2026-10-26 (R0-15): every action,
+decision and exclusion below is input of the later states. R0-06 to R0-18 are
+the owner's decisions of 2026-10-26; R0-01 to R0-05 were drafted from the v1
+specification and accepted with the whole. Reverse-engineered from the
 running Registry and its v1 specification (`SOURCE.md`): every decision below
 names the v1 decision (V1-n) or the legacy finding (Ln) it keeps, narrows or
 replaces. Nothing the code does is a decision until it is written here or in a
@@ -29,11 +30,12 @@ payments, photos and planner documents stay in the services that own them
   authenticate with a staff credential (R0-09); today no route authenticates
   anyone (L15).
 - **Operator** — `onboard_object`, or an agent preparing a client message for
-  the owner. It acts for the owner and holds the staff credential for every
-  action it takes, publishing included; it holds no service token.
+  the owner (the WhatsApp link of the Factory's `AGENTS.md`). It acts for the
+  owner and holds the staff credential for every action it takes, publishing
+  and reading a customer's phone included; it holds no service token.
 - **Consumer services** — PresuPro, Client Portal, Cabinet Kernel, the Cabinet
-  Web mirror. They validate a project id and read its context; Cabinet Kernel
-  and the operator also create projects and rooms, and publish artifacts as
+  Web mirror. They validate a project id and read its context; today Cabinet
+  Kernel and the operator also create projects and rooms, and publish artifacts as
   producers (below). They reach Registry over HTTP on the host's loopback or
   private network; a service that writes holds a service token (R0-09).
 - **Producers** — any caller that publishes an artifact pointer: today
@@ -59,24 +61,24 @@ payments, photos and planner documents stay in the services that own them
 
 | action | who | output | failure |
 |---|---|---|---|
-| create a project | staff, consumer service | the project with its identity — supplied by the caller or minted (R0-07) — status `active` | missing name or address refused; an equal replay returns the existing project, a different one with the same id is refused (R0-07) |
+| create a project | staff, a service with a service token (today Cabinet Kernel) | the project with its identity — supplied by the caller or minted (R0-07) — status `active` | missing name or address refused; a customer reference that is unknown or erased refused (R0-16); an equal replay returns the existing project, a different one with the same id is refused (R0-07) |
 | read a project | any caller | the project card (any status, V1-7) with its rooms; the project's id stands at the top of the answer (R0-13) | unknown id refused as not found |
-| list projects | any caller | the projects, archived only when asked, in a declared order (L10), as one answer object (R0-13) | — |
-| correct a project | staff | the project with the new name, address or customer | unknown id refused; an archived project refused (R0-12) |
+| list projects | any caller | the active projects, and when asked the archived ones together with them (never the archived alone), in a declared order (L10), as one answer object (R0-13) | — |
+| correct a project | staff | the project with the new name, address or customer | unknown id refused; an archived project refused (R0-12); a customer reference that is unknown or erased refused (R0-16) |
 | archive a project | staff | the project, status `archived`; nothing is deleted (V1-7); archiving an archived project returns it unchanged (R0-12) | unknown id refused |
-| validate a project reference | consumer service | exists, active, and why not (`not_found`, `archived`) | — (the answer carries the failure) |
-| read a project context | consumer service | the snapshot a consumer keeps: id, display name, status, address, customer, created and updated times | unknown id refused |
-| record a customer | staff | the Customer with its identity (`customer_ref`) and contact data | missing name refused |
+| validate a project reference | any caller | exists, active, and why not (`not_found`, `archived`) | — (the answer carries the failure) |
+| read a project context | any caller | the snapshot a consumer keeps: id, display name, status, address, customer, created and updated times | unknown id refused |
+| record a customer | staff | the Customer with the identity (`customer_ref`) Registry minted for it (R0-16) and its contact data | missing name refused; recording the same person again makes a second Customer (R0-16) |
 | correct a customer | staff | the Customer with the new contact data | unknown customer refused; an erased customer cannot be corrected |
 | read a customer | staff, operator | name, phone, e-mail, language | unknown customer refused; an erased customer answers that it was erased, with no contact data |
 | list customers | staff, operator | the customers, each with its `customer_ref` and name; erased ones only as erased, without contact data — this is how a customer is found for a new project | — |
 | erase a customer's contact data | staff | the Customer keeps only its identity and the fact that it was erased; name, phone, e-mail and language are gone; projects still name it (R0-06) | unknown customer refused; erasing an erased customer returns it unchanged |
-| add a room | staff, consumer service | the room in the project (R0-10) | unknown or archived project refused |
-| list rooms | staff, consumer service | the project's rooms in a declared order | unknown project refused as not found (replaces L21) |
-| publish an artifact pointer | producer service | the new version, `published`; the previous published version of that type becomes `superseded` | unknown or archived project refused; a type not in the configured vocabulary, or not the caller's service's, refused (R0-08) |
-| withdraw an artifact pointer | the producer service that owns it, or staff | the pointer, status `withdrawn`; it stays in the history (R0-14) | unknown pointer refused; a pointer of another service, or already withdrawn or superseded, refused |
-| list artifacts | consumer service | every pointer of the project — published, superseded and withdrawn — each with its type, version and status; this is how history is read (R0-02) | unknown project refused as not found |
-| read the latest artifact of a type | consumer service | the one published pointer of that type | unknown project; no published pointer of that type — also after a withdrawal, which never falls back to an earlier version (R0-14) |
+| add a room | staff, a service with a service token (today Cabinet Kernel) | the room: an identity Registry mints, the given name, its project (R0-10) | missing name refused; unknown or archived project refused; a second room of the same name is a second room (R0-10) |
+| list rooms | any caller | the project's rooms in a declared order | unknown project refused as not found (replaces L21) |
+| publish an artifact pointer | producer service; staff for any owner service (R0-09) | the new pointer with the identity and version Registry assigns (R0-17), `published`; the previous published version of that type becomes `superseded` | unknown or archived project refused; a type not in the configured vocabulary, or not the owner service's, refused (R0-08); neither `uri` nor `payload_ref` given refused (R0-17) |
+| withdraw an artifact pointer | the producer service that owns it, or staff | the pointer, status `withdrawn`; it stays in the history (R0-14) | unknown pointer refused; a pointer of another service, or already withdrawn or superseded, refused; a pointer of an archived project refused (R0-17) |
+| list artifacts | any caller | every pointer of the project — published, superseded and withdrawn — each with its type, version and status; this is how history is read (R0-02) | unknown project refused as not found |
+| read the latest artifact of a type | any caller | the one published pointer of that type | unknown project refused as not found; a type not in the configured vocabulary refused as an unknown type (R0-17); a configured type with no published pointer answers that none is published — also after a withdrawal, which never falls back to an earlier version (R0-14) |
 
 ## Decisions
 
@@ -88,8 +90,9 @@ it back. Registry stores no service domain data.
 
 ### R0-02 — Artifacts are pointers (keeps V1-4)
 
-An artifact is catalogue metadata and a service-owned reference (`uri`,
-`payload_ref`). Registry never reads or stores the payload. Publishing a new
+An artifact is catalogue metadata and a service-owned reference: `uri`,
+`payload_ref`, at least one of them (R0-17). Registry never reads or stores the
+payload. Publishing a new
 version of a type supersedes the previous one; the history stays readable.
 
 ### R0-03 — Archived is readable (keeps V1-7)
@@ -113,8 +116,8 @@ id (R0-07).
 Registry holds a Customer record: who the project is for and how to reach
 them — name, phone, e-mail, language. `customer_ref` becomes the Customer's
 identity, and a project names its customer by it. Fiscal data (NIF, legal
-name) stays in PresuPro, which changes for a different reason. The Factory's
-WhatsApp link reads the phone from here. Name, phone, e-mail and language are
+name) stays in PresuPro, which changes for a different reason. The operator
+preparing the owner's WhatsApp link reads the phone from here, as staff. Name, phone, e-mail and language are
 all the customer's contact data: personal data, readable by staff only (R0-09),
 and erasable as a whole. Erasing leaves the Customer's identity and the fact
 that it was erased, nothing else — the name does not survive. Erasure is an
@@ -174,18 +177,76 @@ The owner service of a pointer, or staff, may withdraw it. A withdrawn pointer s
 history; "latest of a type" then answers that none is published and never falls
 back to an earlier version.
 
+### R0-15 — State 0 is accepted as a whole (owner, 2026-10-26)
+
+The whole of this document, not only the numbered owner decisions, is the
+product frame the later states build on. A change to it is a new owner decision
+here.
+
+### R0-16 — Registry mints `customer_ref`; a project's customer is optional (owner, 2026-10-26)
+
+Recording a customer makes a new Customer whose `customer_ref` Registry mints;
+a caller never supplies one, and recording the same person twice makes two
+Customers — staff find an existing one with 'list customers' before recording.
+A project may name no customer. When it names one, at creation or correction,
+that Customer exists and is not erased; a project whose customer is erased
+later keeps naming it (R0-06).
+
+### R0-17 — Artifact pointers: references, versions, archive (owner, 2026-10-26)
+
+A pointer carries `uri`, `payload_ref` or both; one with neither is refused.
+Registry mints the pointer's identity and its version: 1 for the first pointer
+of a type in a project, then one more than that type's last. Every accepted
+publish is a new version, a repeat with equal content included; the previous
+one is superseded and nothing is merged. Archiving a project freezes its
+pointers: publishing and withdrawing on it are refused, reading stays open
+(R0-03). Asking for the latest pointer of a type the instance does not
+configure is refused as an unknown type, distinct from a configured type with
+nothing published.
+
+### R0-18 — No launch-context action (owner, 2026-10-26; narrows V1-3)
+
+Registry is the entrypoint only in that its project card holds what a
+downstream service needs to open: `project_id` and the rooms with their ids.
+Registry has no action that builds, validates or returns a launch context, and
+calls no downstream service. V1-3's `source=registry` is the opening client's
+concern.
+
 ## Explicit exclusions
 
 - The Registry frontend and the operator script `onboard_object`. This case
   designs the HTTP service; both are clients of its API, like any consumer, and
   are designed elsewhere; they follow R0-13.
 - Drawings, measurements, planner documents, estimates, payments, photos (R0-01).
-- Orchestrating downstream services: Registry gives the launch context
-  (`project_id`, optional `room_id`) and nothing else (V1-3).
+- Orchestrating downstream services and building their launch context: a
+  client that opens a downstream service takes `project_id` and `room_id` from
+  the project card (R0-18).
 - Fiscal customer data (NIF, legal name): PresuPro owns it.
 - Sending anything to a customer.
 
 ## Open questions
 
 None open. OQ-01 to OQ-09 were decided by the owner on 2026-10-26: R0-06 to
-R0-14.
+R0-14; the product choices of the first question round (Codex): R0-15 to R0-18.
+
+## Carried to later states
+
+Questions the rounds judged to belong to a later state. Each is closed there,
+not here.
+
+- **State 1 (models).** The fields of Project, Customer, Room and artifact
+  pointer and of each create request; the format of every identity (R0-07,
+  R0-16, R0-17); timestamps and which actions move a project's updated time
+  (L16); how an erased Customer is represented in reads and lists.
+- **State 2 (rules).** What counts as equal content in a project-create replay,
+  and a replay of an archived project's id; correction semantics of projects
+  and customers — partial or whole, clearing a field (L04); the declared orders
+  of every list (L10); how a credential's holder is checked against the 'who'
+  of each action, and what each service token may do; the shape and checks of
+  the configured artifact vocabulary, and what a change of it does to existing
+  pointers; publication as one transaction (L07).
+- **States 5 and 6 (public APIs, contracts).** The field names of every list
+  answer and of the project card; the exact `validate` and `context` answers
+  (R0-04, the consumer table in `SOURCE.md`); the fields of the artifact
+  history; the error answer (L14); how a credential is presented and refused;
+  the configured frontend origin of CORS.
