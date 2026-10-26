@@ -2,13 +2,14 @@
 
 ## Status
 
-Accepted by the owner as a whole on 2026-10-26 (R0-15): every action,
-decision and exclusion below is input of the later states. R0-06 to R0-18 are
-the owner's decisions of 2026-10-26; R0-01 to R0-05 were drafted from the v1
-specification and accepted with the whole. Reverse-engineered from the
-running Registry and its v1 specification (`SOURCE.md`): every decision below
-names the v1 decision (V1-n) or the legacy finding (Ln) it keeps, narrows or
-replaces. Nothing the code does is a decision until it is written here or in a
+Accepted by the owner as a whole on 2026-10-26 (R0-15); every action,
+decision and exclusion below is input of the later states. R0-06 to R0-20 are
+the owner's decisions, each dated in its heading — R0-19 and R0-20 came after
+the acceptance and join it on their date. R0-01 to R0-05 were drafted from the
+v1 specification and accepted with the whole. Reverse-engineered from the
+running Registry and its v1 specification (`SOURCE.md`): a decision that keeps,
+narrows or replaces a v1 decision (V1-n) or a legacy finding (Ln) names it; an
+owner decision on a question the v1 never raised names none. Nothing the code does is a decision until it is written here or in a
 later state; the open questions are the owner's.
 
 ## Product statement
