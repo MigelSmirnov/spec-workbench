@@ -7,7 +7,7 @@ frame was accepted as a whole on 2026-10-26 (R0-15) and closed after question
 round 17. The owner's requirements document
 `sources/registry_vnext_requirements_20261027.md` ("Registry — Project Identity
 & Trusted Context", cited as vNext §n) and the owner's answers of 2026-10-27 on
-its conflicts with that frame are recorded as R0-24 to R0-45; each names the
+its conflicts with that frame are recorded as R0-24 to R0-46; each names the
 earlier decisions it replaces or narrows, and a replaced decision says so under
 its heading. In decisions before R0-24, "staff" reads "the owner" (R0-30) and
 "the Registry frontend" reads "the owner interface" (R0-29). The sections above
@@ -26,13 +26,13 @@ Registry is the platform's trusted entry point for project identity. It says
 which projects exist, which customer each is for, which object it renovates and
 which rooms it has; it keeps a catalogue of the documents other services
 published about a project; and it lets the owner choose the project the agent
-works on, handing the agent a bounded working context and nothing more
+works on, handing each agent session a bounded set of projects and nothing more
 (vNext §1, §6). Every other service names a project by the Registry's identity
 and reads that identity as a snapshot; none of them writes it back (V1-2).
 
 Registry stores only identity — projects, their objects and rooms, customers
-with their contact data — the working context of each agent session and its
-pending switch request, artifact pointers, and its own audit log. Drawings, measurements, estimates, invoices, payments, funds, photos,
+with their contact data — the project access of each agent session and its
+pending request, artifact pointers, and its own audit log. Drawings, measurements, estimates, invoices, payments, funds, photos,
 client publications, planner documents, Kernel functions and flows stay in the
 services that own them (V1-1, V1-4, vNext §2). Registry is not a CRM, an ERP,
 a ledger, a flow orchestrator, a runtime for agent code, a deployment manager
@@ -48,10 +48,10 @@ or the platform's general permission system (vNext §17).
   trusted surface of the owner, never a tool of an agent (vNext §5).
 - **Agent** — any language-model agent acting for the owner. It reaches
   Registry only through Cabinet Kernel, with agent authority (R0-25, R0-31): it
-  works only on the project the owner chose for its session (R0-32, R0-41,
-  R0-42), sees that project through a minimal projection without personal
-  values (R0-43), creates no project and never sees the catalogue (R0-41), and
-  may ask the owner to switch projects but never confirms a switch itself. It holds no owner credential and no Registry
+  works only on the projects the owner granted its session (R0-41, R0-46),
+  sees each through a minimal projection without personal values (R0-43),
+  creates no project, never sees the catalogue and never adds a project to its
+  own set (R0-41, R0-46); it may ask the owner for access but never grants it. It holds no owner credential and no Registry
   service token, never receives a `personal_data` value (R0-26), and has no
   administrative access to the production host, its store, configuration,
   secrets or deployment (R0-25). Preparing the owner's WhatsApp link no longer
@@ -109,7 +109,7 @@ or the platform's general permission system (vNext §17).
 | list projects | owner; a trusted service whose token allows `personal_data`; never Kernel for the agent (R0-41, R0-43) | the active projects, and when asked the archived ones together with them (never the archived alone), in a declared order (L10), as one answer object (R0-13) | — |
 | correct a project | owner | the project with the new name, customer or object — address, kind, characteristics (R0-45) — next revision of the project | unknown id refused; an archived project refused (R0-12); a customer reference that is unknown or erased refused (R0-16); a stale revision refused, nothing changes (R0-35) |
 | archive a project | owner, after confirming | the project, status `archived`; nothing is deleted (V1-7); archiving an archived project returns it unchanged (R0-12) | unknown id refused |
-| validate a project reference | owner; a trusted service; Kernel for the agent on its session's project only (R0-41) | exists, active, and why not (`not_found`, `archived`) | — (the answer carries the failure) |
+| validate a project reference | owner; a trusted service; Kernel for the agent on a project its session is granted (R0-46) (R0-41) | exists, active, and why not (`not_found`, `archived`) | — (the answer carries the failure) |
 | read a project context | owner; a trusted service whose token allows `personal_data` (R0-43) | the snapshot a consumer keeps: id, display name, status, address, `customer_ref` (never contact data), created and updated times (R0-04) | unknown id refused; a caller whose token does not allow `personal_data` refused |
 | record a customer | owner | the Customer with the identity (`customer_ref`) Registry minted for it (R0-16), its kind — person or company — and its contact data (R0-06, R0-37) | missing name or kind refused; recording the same person again makes a second Customer (R0-16) |
 | correct a customer | owner | the Customer with the new contact data, next revision | unknown customer refused; an erased customer cannot be corrected; a stale revision refused (R0-35) |
@@ -117,18 +117,18 @@ or the platform's general permission system (vNext §17).
 | list customers | owner | the customers, each with its `customer_ref` and name; erased ones only as erased, without contact data — this is how a customer is found for a new project | — |
 | erase a customer's contact data | owner | the Customer keeps only its identity and the fact that it was erased; name, phone, e-mail and language are gone; projects still name it (R0-06) | unknown customer refused; erasing an erased customer returns it unchanged |
 | restrict processing of a customer | owner | the Customer marked restricted: its contact data stays stored but leaves Registry to no one but the owner (R0-37) | unknown or erased customer refused |
-| read the agent projection | Cabinet Kernel for the agent, on its session's project only (R0-41, R0-43) | the minimal projection of the working project: its id, display name, status, rooms and artifact pointers — no address, customer or other personal value | no working context for the session, or another project named, refused |
-| add a room | owner; Cabinet Kernel for the agent, on its session's project only (R0-41) | the room: an identity Registry mints, the given name, its project (R0-10) | missing name refused; unknown or archived project refused; a second room of the same name is a second room (R0-10); another project than the session's refused |
-| list rooms | owner; a trusted service; Kernel for the agent on its session's project only | the project's rooms in a declared order | unknown project refused as not found (replaces L21) |
+| read the agent projection | Cabinet Kernel for the agent, on a project its session is granted (R0-46) (R0-41, R0-43) | the minimal projection of that project: its id, display name, status, rooms and artifact pointers — no address, customer or other personal value | a project the session is not granted refused |
+| add a room | owner; Cabinet Kernel for the agent, on a project its session is granted (R0-46) (R0-41) | the room: an identity Registry mints, the given name, its project (R0-10) | missing name refused; unknown or archived project refused; a second room of the same name is a second room (R0-10); a project the session is not granted refused |
+| list rooms | owner; a trusted service; Kernel for the agent on a project its session is granted (R0-46) | the project's rooms in a declared order | unknown project refused as not found (replaces L21) |
 | publish an artifact pointer | producer service; the owner for any owner service | the new pointer with the identity and version Registry assigns (R0-17), its content digest when given (R0-33), `published`; the previous published version of that type becomes `superseded` | unknown or archived project refused; a type the specification does not declare, or not the owner service's, refused (R0-33); neither `uri` nor `payload_ref` given refused (R0-17) |
 | withdraw an artifact pointer | the producer service that owns it, or the owner | the pointer, status `withdrawn`; it stays in the history (R0-14) | unknown pointer refused; a pointer of another service, or already withdrawn or superseded, refused; a pointer of an archived project refused (R0-17) |
-| list artifacts | owner; a trusted service; Kernel for the agent on its session's project only | every pointer of the project — published, superseded and withdrawn — each with its type, version and status; this is how history is read (R0-02) | unknown project refused as not found |
+| list artifacts | owner; a trusted service; Kernel for the agent on a project its session is granted (R0-46) | every pointer of the project — published, superseded and withdrawn — each with its type, version and status; this is how history is read (R0-02) | unknown project refused as not found |
 | read the latest artifact of a type | owner; a service | the one published pointer of that type | unknown project refused as not found; a type the specification does not declare refused as an unknown type (R0-17); a declared type with no published pointer answers that none is published — also after a withdrawal, which never falls back to an earlier version (R0-14) |
-| choose the working project | owner, for one agent session | the session's working context: an opaque reference to the project, whether it is active, the context's version, the scope it allows and its expiry (R0-32, R0-42) | unknown or archived project refused; unknown session refused |
-| read the working context | Cabinet Kernel for one agent session; owner | that session's working context, without any `personal_data` value | none chosen, expired or withdrawn answers that there is none |
-| request a project switch | Cabinet Kernel for one agent session | a pending request of that session the owner sees in the owner interface, replacing the session's earlier pending one; the working context does not change (R0-42) | unknown project refused |
-| confirm or decline a switch request | owner | confirming chooses the requested project for that session (a new context version); declining leaves the context; the session reads the outcome in its context (R0-42) | a request no longer pending refused |
-| withdraw a working context | owner | the session has no working context; flows already running keep the project they pinned (R0-42) | none to withdraw answers that there is none |
+| grant a project to an agent session | owner | the project joins the session's granted set; the owner may also make it the session's active project (R0-46) | unknown or archived project refused; unknown session refused |
+| read the session's access | Cabinet Kernel for one agent session; owner | the session's granted project ids, its active project if any, and the access version — no `personal_data` value (R0-32, R0-46) | an unknown session answers that it has no access |
+| request access to a project | Cabinet Kernel for one agent session | a pending request of that session the owner sees in the owner interface, replacing the session's earlier pending one; the session's access does not change (R0-46) | — (how the agent names the project is OQ-16) |
+| answer an access request | owner | granting adds the project to the session's set (and, if asked, makes it active); declining changes nothing; the session reads the outcome in its access (R0-46) | a request no longer pending refused |
+| change the active project or revoke a project | owner | the session's active project changes, which revokes nothing; or the project leaves the session's set, and every later operation on it in that session — a running flow's next step included — is refused (R0-46) | a project not in the set answers that it is not granted |
 | import a project with its identity | owner, confirming | the project under the identity it carries in its source, with its customer, object, rooms and pointers (R0-34, R0-44) | an id already held refused as a conflict, nothing changes; an import the owner has not confirmed refused |
 | read the audit log | owner | the audit entries of significant operations, in time order (R0-37) | — |
 
@@ -463,6 +463,10 @@ agent authority on a project are confined to the project of the current context;
 naming another `project_id` does not switch the context. The agent may request
 a switch; only the owner confirms it.
 
+Narrowed by R0-46: the owner grants each agent session a set of projects, one
+of them optionally active; "the project of the current context" reads "a
+project of the session's set".
+
 ### R0-33 — The artifact vocabulary is declared in the specification (owner, 2026-10-27; replaces R0-08, narrows R0-17)
 
 The artifact types Registry accepts, and the one owner service of each, are
@@ -557,6 +561,9 @@ owner decision here.
 
 ### R0-41 — The agent works on its session's project only (owner, 2026-10-27; round 3 T1; narrows R0-31, R0-32)
 
+Narrowed by R0-46: "its session's project" reads "a project its session is
+granted".
+
 Through Cabinet Kernel the agent reads and writes only the project the owner
 chose for its session: it reads the agent projection (R0-43), validates that
 project, lists and adds its rooms, publishes and withdraws Kernel's pointers on
@@ -565,6 +572,8 @@ project list, other projects, customers — stay with the owner. Kernel no longe
 creates projects (v1 kernel scenarios R1–R3 are history).
 
 ### R0-42 — A working context belongs to one agent session (owner, 2026-10-27; round 3 T13, T3; narrows R0-32)
+
+Replaced by R0-46.
 
 There is no global working project. Each agent session Kernel names has its own
 working context, which the owner chooses, confirms on request or withdraws. A
@@ -578,7 +587,8 @@ names a session, and what ends one, belong to State 2.
 
 `context` keeps its fields (R0-04) and answers only a trusted service whose
 token allows `personal_data` — today PresuPro and Client Portal. The agent,
-through Kernel, reads a separate minimal projection of its session's project
+through Kernel, reads a separate minimal projection of a project its session
+is granted (R0-46)
 with no personal value: id, display name, status, rooms and artifact pointers.
 No answer mixes the two. The same holds for 'read a project' and 'list
 projects': they carry the object's address and answer only a caller cleared
@@ -599,6 +609,23 @@ A project is created with its object, and the object's address is required, as
 in v1; `context` therefore always has an address. The object is part of the
 project card: it changes through 'correct a project' and moves the project's
 revision. The owner interface carries every action whose 'who' names the owner.
+
+### R0-46 — An agent session is granted a set of projects (owner, 2026-10-27; round 4 T1–T3; replaces R0-42, narrows R0-32, R0-41)
+
+The owner grants an agent session, in the owner interface, access to one or
+more projects. Registry keeps for each session the set of granted
+`project_id`s and at most one active project, the default when the agent names
+none. The agent never receives the catalogue and never adds a project to its
+set; it may request access, which only the owner grants. Comparing several
+projects in one session is allowed within its set.
+
+Kernel checks on every call that the `project_id` belongs to the session's
+set, and Registry refuses an agent-authority operation outside it (R0-32).
+Changing the active project revokes nothing. Revoking a project blocks every
+later operation on it in that session. A flow pins its project ids when it
+starts; after a revocation each further step is checked again and refused for
+the revoked project. Archiving a project keeps it in a set but refuses agent
+writes on it (R0-12).
 
 ## Explicit exclusions
 
@@ -629,19 +656,35 @@ revision. The owner interface carries every action whose 'who' names the owner.
 
 None open. OQ-01 to OQ-09 were decided by the owner on 2026-10-26 (R0-06 to
 R0-14); OQ-10 to OQ-12, raised by the vNext reopening, on 2026-10-27 (R0-38 to
-R0-40). Raised by the emulated question round 3
+R0-40). Raised by the emulated question rounds 3 and 4
 (`experiments/registry-pochemuchka/state0/round-3`) and still open:
 
 - **OQ-13 — where imports come from.** R0-44 makes import a confirmed operation
-  that keeps identity and refuses conflicts. Open: is it (a) a one-time
+  that keeps identity and refuses conflicts. Open: whether it keeps the
+  source's `customer_ref`, room and pointer ids or remaps them (round 4 T11), and
+  whether it is (a) a one-time
   migration of the projects the running instances hold today (VPS and rig),
   uploaded as an export through the owner interface, with nothing imported
   from test instances, or (b) a lasting operation for any instance; and what
   the export carries (customers and pointers included or not).
 - **OQ-14 — the restriction's lifecycle.** Can the owner lift a restriction
-  (R0-37), and may a restricted customer be corrected, erased, or named by a new
-  project? Recommended: the owner lifts it; correction and erasure stay
+  (R0-37), what it changes that callers notice (round 4 T10), and may a
+  restricted customer be corrected, erased, or named by a new project? Recommended: the owner lifts it; correction and erasure stay
   allowed; a new project may not name a restricted customer.
+- **OQ-16 — how sessions and requested projects are named.** How an agent
+  session becomes known to Registry so the owner can grant it projects (Kernel
+  registers it, or the owner enters its identifier), and how the agent names a
+  project it asks access to without seeing the catalogue (free text the owner
+  resolves, or a `project_id`, whose refusal would tell the agent which ids
+  exist) (round 4 T1, T2).
+- **OQ-17 — where the services run.** On which host Cabinet Kernel, Cabinet
+  and PresuPro run and over which channel each reaches the service API, and how
+  the owner reaches the owner interface from outside (a public HTTPS port, or
+  only through the VPN) (round 4 T4).
+- **OQ-18 — the end of a customer relationship.** Who records it — the owner by
+  an explicit action, or derived when all of the customer's projects are
+  archived — and that Registry itself erases or anonymises on expiry (round 4
+  T8, R0-40).
 - **OQ-15 — what survives retention.** When an archived project's period ends
   (R0-40), is it (a) anonymised — id, status and artifact pointers stay, name,
   address and characteristics go, `validate` answers `archived` — or (b) erased
@@ -654,7 +697,7 @@ Questions the rounds judged to belong to a later state. Each is closed there,
 not here.
 
 - **State 1 (models).** The fields of Project, Customer, Object, Room, artifact
-  pointer, working context, switch request and audit entry, and of each create
+  pointer, agent session access, access request and audit entry, and of each create
   request; the format of every identity (R0-07, R0-16, R0-17), and how a test
   instance's identity space is told apart from production's (R0-34); how the
   end of a customer relationship is recorded, and what an anonymised project,
@@ -667,7 +710,7 @@ not here.
   replay-safe (R0-36); correction semantics of projects, customers and objects —
   partial or whole, clearing a field (L04); the declared orders of every list
   (L10); what each service token and Kernel's agent authority may do, and which
-  disclosure class each may receive (R0-27, R0-31); the working context's scope
+  disclosure class each may receive (R0-27, R0-31); the session access's scope
   values, expiry and what ends it (R0-32); the owner session's lifetime and
   sign-in throttling (R0-30); the declared artifact vocabulary and what a change
   of it does to existing pointers (R0-33); publication as one transaction
