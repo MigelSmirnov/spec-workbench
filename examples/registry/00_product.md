@@ -106,10 +106,10 @@ or the platform's general permission system (vNext §17).
 
 | action | who | output | failure |
 |---|---|---|---|
-| create a project | owner | the project with the identity Registry mints (R0-44), its object (R0-45), status `active`, revision 1 | missing name, or an object without an address, refused (R0-45); a customer reference that is unknown or erased refused (R0-16); a retried create never makes a second project (R0-36) |
+| create a project | owner | the project with the identity Registry mints (R0-44), its object (R0-45), status `active`, revision 1 | missing name, or an object without an address, refused (R0-45); a customer reference that is unknown, erased, restricted or ended refused (R0-16, R0-51, R0-57); a retried create never makes a second project (R0-36) |
 | read a project | owner; a trusted service whose token allows `personal_data` (R0-43) | the project card (any status, V1-7) with its object and rooms, its revision; the project's id stands at the top of the answer (R0-13) | unknown id refused as not found; any other caller refused — Kernel for the agent reads the agent projection (R0-43) |
 | list projects | owner; a trusted service whose token allows `personal_data`; never Kernel for the agent (R0-41, R0-43) | the active projects, and when asked the archived ones together with them (never the archived alone), in a declared order (L10), as one answer object (R0-13) | — |
-| correct a project | owner | the project with the new name, customer or object — address, kind, characteristics (R0-45) — next revision of the project | unknown id refused; an archived project refused (R0-12); a customer reference that is unknown or erased refused (R0-16); a stale revision refused, nothing changes (R0-35) |
+| correct a project | owner | the project with the new name, customer or object — address, kind, characteristics (R0-45) — next revision of the project | unknown id refused; an archived project refused (R0-12); newly naming a customer that is unknown, erased, restricted or ended refused (R0-16, R0-51, R0-57); a stale revision refused, nothing changes (R0-35) |
 | archive a project | owner, after confirming | the project, status `archived`; nothing is deleted (V1-7); archiving an archived project returns it unchanged (R0-12) | unknown id refused |
 | validate a project reference | owner; a trusted service; Kernel for the agent on a project its session is granted (R0-41, R0-46) | exists, active, and why not (`not_found`, `archived`) | — (the answer carries the failure) |
 | read a project context | owner; a trusted service whose token allows `personal_data` (R0-43) | the snapshot a consumer keeps: id, display name, status, address, `customer_ref` (never contact data), created and updated times (R0-04) | unknown id refused; a caller whose token does not allow `personal_data` refused |
@@ -633,7 +633,8 @@ projects in one session is allowed within its set.
 Kernel checks on every call that the `project_id` belongs to the session's
 set, and Registry checks it again on every call, independently of Kernel, and
 refuses an agent-authority operation outside it (R0-32, R0-47).
-Changing the active project revokes nothing. Revoking a project blocks every
+Changing the active project revokes nothing; the owner may also clear it, and
+revoking the active project clears it (round 6 T10). Revoking a project blocks every
 later operation on it in that session. A flow pins its project ids when it
 starts; after a revocation each further step is checked again and refused for
 the revoked project. Archiving a project keeps it in a set but refuses agent
@@ -702,7 +703,10 @@ service authenticates with its own token — being inside VM Platform
 authenticates nothing (R0-27); the session it names is registered; and the
 `project_id` is in that session's set. Sessions carry no secret of their own:
 Kernel, in the trusted VM Platform, is trusted to name the session it acts
-for. A compromised Kernel is outside Registry's guarantees.
+for. A compromised Kernel is outside Registry's guarantees. A call naming a
+session that is not registered is refused like a call outside the set (R0-47),
+an access request included; registering a session already registered returns
+it unchanged (round 6 T2).
 
 ### R0-54 — The migration's sources and retry (owner, 2026-10-27; round 5 T2; narrows R0-50)
 
@@ -710,7 +714,10 @@ The sources are the instances on the VPS and on the test rig; the owner picks
 one for each import. An import is atomic: a conflict refuses all of it, and the
 owner may retry after correcting the cause. The first successful import into
 production closes the operation for good. Nothing of a test instance comes
-over unless the owner picks it as a source.
+over unless the owner picks it as a source. The owner exports the chosen
+source and uploads the export through the owner interface; production Registry
+never calls the source instance and holds no credential for it (R0-18; round 6
+T7).
 
 ### R0-55 — What a restriction stops (owner, 2026-10-27; round 5 T6; narrows R0-51)
 
@@ -730,7 +737,9 @@ again: the owner records a new ground and date, or the data is erased.
 
 ### R0-57 — An ended relationship (owner, 2026-10-27; round 5 T9; narrows R0-49)
 
-A customer whose relationship has ended cannot be named by a new project. Its
+A customer whose relationship has ended cannot be newly named by a project, at
+its creation or by a correction — as for a restricted customer (R0-51; round 6
+T4). Its
 contact data may still be corrected. Until its record is deleted the owner may
 resume the relationship; its deletion date is then reconsidered for the new
 purpose of processing.
