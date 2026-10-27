@@ -33,7 +33,11 @@ payments, photos and planner documents stay in the services that own them
 - **Operator** — `onboard_object`, or an agent preparing a client message for
   the owner (the WhatsApp link of the Factory's `AGENTS.md`). It acts for the
   owner and holds the staff credential for every action it takes, publishing
-  and reading a customer's phone included; it holds no service token.
+  and reading a customer's phone included; it holds no service token. An
+  agent works with the owner's own access to Registry's host and could read
+  the store itself, so the credential does not keep contact data from it:
+  whatever it records or reads passes through its model provider, and the
+  owner accepts this (owner, 2026-10-27).
 - **Consumer services** — PresuPro, Client Portal, Cabinet Kernel, the Cabinet
   Web mirror. They validate a project id and read its context; today Cabinet
   Kernel and the operator also create projects and rooms, and publish artifacts as
@@ -57,6 +61,8 @@ payments, photos and planner documents stay in the services that own them
 - **Network surface** — one HTTP API, listening only on loopback or on the
   host's internal network (R0-19). Reading projects, rooms, artifacts, `validate` and `context` needs no
   credential there; every write and every read of contact data does (R0-09).
+  Every process and container on Registry's host is the owner's and trusted;
+  traffic inside the host is plain HTTP (owner, 2026-10-27).
 - **Secrets** — service tokens and the staff credential, in the instance's
   configuration, which only the owner changes, outside the API (R0-20). The
   owner generates every secret, keeps its original in the owner's own password
