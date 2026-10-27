@@ -7,7 +7,7 @@ frame was accepted as a whole on 2026-10-26 (R0-15) and closed after question
 round 17. The owner's requirements document
 `sources/registry_vnext_requirements_20261027.md` ("Registry — Project Identity
 & Trusted Context", cited as vNext §n) and the owner's answers of 2026-10-27 on
-its conflicts with that frame are recorded as R0-24 to R0-59; each names the
+its conflicts with that frame are recorded as R0-24 to R0-60; each names the
 earlier decisions it replaces or narrows, and a replaced decision says so under
 its heading. In decisions before R0-24, "staff" reads "the owner" (R0-30) and
 "the Registry frontend" reads "the owner interface" (R0-29). The sections above
@@ -133,8 +133,8 @@ or the platform's general permission system (vNext §17).
 | change the active project or revoke a project | owner | the session's active project changes, which revokes nothing; or the project leaves the session's set, and every later operation on it in that session — a running flow's next step included — is refused (R0-46) | a project not in the set answers that it is not granted |
 | import projects with their identity | owner, confirming, from the source the owner picks — the VPS or the test rig (R0-50, R0-54) | the projects of that source under the identities they carry, with their customers (`customer_ref` kept), objects, rooms and pointers (ids kept), links intact (R0-34, R0-44, R0-50) | any conflict with an id production holds refuses the whole import, nothing applied, and the owner may retry after correcting it; after the first successful production import the operation is closed and refused (R0-54) |
 | register an agent session | Cabinet Kernel | the session Registry knows, with no granted project; the owner sees it in the owner interface (R0-47) | — |
-| end or resume a customer relationship | owner | the Customer marked as ended on that date, its retention period running from it; or, before the record is deleted, resumed for a new purpose, its deletion date reconsidered (R0-40, R0-49, R0-57) | unknown or erased customer refused; resuming a customer not ended refused |
-| record a retention holdback | owner | a documented lawful ground and a holdback date on a customer or project; until that date the data is not erased, then its need is assessed again (R0-56) | unknown customer or project refused; a holdback without ground or date refused |
+| end or resume a customer relationship | owner | the Customer marked as ended on that date, or the mark cleared; archiving its projects does not end it (R0-49, R0-57, R0-60) | unknown or erased customer refused |
+| erase an archived project | owner, confirming | the project anonymised — its id, status and artifact pointers stay, its name, object and customer link go, `validate` answers `archived` — or deleted whole, `validate` answering `not_found`; the owner chooses (R0-60) | unknown or active project refused |
 | read the audit log | owner | the entries of significant changes of state, in time order (R0-58) | — |
 
 ## Decisions
@@ -160,8 +160,8 @@ version of a type supersedes the previous one; the history stays readable.
 Archiving never deletes. An archived project, its rooms and its artifacts stay
 readable by id; lists leave archived projects out unless asked.
 
-Narrowed by R0-40: when an archived project's retention ends it is erased or
-anonymised; what then stays readable is R0-52.
+Narrowed by R0-60: the owner may erase an archived project, anonymised or
+whole.
 
 ### R0-04 — The context and validate answers are external contracts (new, from the consumer table in `SOURCE.md`)
 
@@ -195,8 +195,8 @@ Option (b), PresuPro `Client`, and option (c), nowhere, were declined.
 
 Narrowed by R0-25 (no operator reads the phone; only the owner reads contact
 data) and R0-37 (the customer's kind joins the record; restriction of
-processing joins erasure) and R0-40 (retention adds a second exception to
-R0-03, so erasure is no longer the only one).
+processing joins erasure) and R0-60 (erasing an archived project is a second
+exception to R0-03, so erasure is no longer the only one).
 
 ### R0-07 — The caller may supply a project's identity (owner, 2026-10-26; closes OQ-02, replaces V1-5, L01, L02)
 
@@ -524,8 +524,8 @@ exclusions).
 - **Subject rights.** The owner can read, correct and erase a customer's contact
   data (R0-06), and restrict its processing: a restricted customer's data stays
   stored and reaches only the owner.
-- **Retention.** Each kind of personal data and the audit log has a retention
-  period after which it is erased; the periods are the owner's (R0-40).
+- **Retention.** The periods are the owner's policy in the governance, applied
+  by the owner's periodic review with Registry's erase actions (R0-60).
 - **Audit.** A minimal log of significant changes of state (R0-58): time, the
   acting principal (owner, which service, agent through Kernel), the change,
   the project or customer, the outcome, the contract and release version, and
@@ -557,6 +557,8 @@ projection holds and how old it may be is Portal's design, bounded by the
 disclosure classes its token allows (R0-26).
 
 ### R0-40 — Retention periods (owner, 2026-10-27; closes OQ-12; provisional, subject to legal review)
+
+Replaced by R0-60: the periods move to the governance's retention schedule.
 
 - A customer's contact data: until the relationship with the customer ends,
   plus one year.
@@ -671,6 +673,8 @@ explicit action; archiving the customer's projects does not end it. When the
 applicable period ends, Registry itself erases or anonymises the data, keeping
 it longer only where a lawful ground for further retention applies.
 
+Narrowed by R0-60: the mark stays; Registry erases nothing on its own.
+
 ### R0-50 — One controlled migration (owner, 2026-10-27; closes OQ-13; narrows R0-34, R0-44)
 
 Import is a one-time, controlled migration of the data the running instances
@@ -695,6 +699,9 @@ only where it is shown that they no longer allow re-identification and a
 justified purpose for keeping them is recorded; `validate` then answers
 `archived`. Otherwise the record is deleted whole, and `validate` answers
 `not_found`.
+
+Narrowed by R0-60: the owner chooses between the two when erasing; the showing
+and the purpose are recorded in the governance.
 
 ### R0-53 — Registry trusts Kernel to name the session, not the network (owner, 2026-10-27; round 5 T1; narrows R0-46, R0-47)
 
@@ -735,6 +742,10 @@ customer or a project, a documented lawful ground and the date until which the
 data is held back. When that date comes, the need to keep the data is assessed
 again: the owner records a new ground and date, or the data is erased.
 
+Replaced by R0-60: the erasure entry stays (R0-58); holdbacks are not
+Registry's — the restriction (R0-51) serves while data must be kept but not
+used.
+
 ### R0-57 — An ended relationship (owner, 2026-10-27; round 5 T9; narrows R0-49)
 
 A customer whose relationship has ended cannot be newly named by a project, at
@@ -744,27 +755,46 @@ contact data may still be corrected. Until its record is deleted the owner may
 resume the relationship; its deletion date is then reconsidered for the new
 purpose of processing.
 
+Narrowed by R0-60: resuming clears the mark; Registry keeps no deletion date.
+
 ### R0-58 — A minimal log of significant changes (owner, 2026-10-27; round 6 T12; narrows R0-37, R0-56)
 
 Registry records only significant changes of state: changes to projects and
 customer records, granting and revoking an agent session's projects,
-restricting processing and lifting it, erasures and anonymisations, and
-recorded holdbacks. Ordinary reads, agent calls and the inner steps of flows
+restricting processing and lifting it, and erasures and anonymisations. Ordinary reads, agent calls and the inner steps of flows
 are not recorded in Registry; security events of the infrastructure are
 handled by the infrastructure, outside Registry. The log holds no personal
-value, no whole request and no secret, and is kept for a limited, documented
-period (R0-40). The platform manifest describes Registry's capabilities and
+value, no whole request and no secret, and is kept for a limited period the
+governance documents (R0-60). The platform manifest describes Registry's capabilities and
 contracts; the log records changes of state only.
 
 ### R0-59 — The simplest answers to round 6 T1, T3, T5 (drafted 2026-10-27 under the owner's instruction "do not complicate, add no responsibilities"; to be confirmed)
 
-- Erasure at the end of a period or of a holdback is Registry's own act on
-  that date, recorded in the log (R0-49, R0-56, R0-58); Registry sends no
-  notice and keeps no reminder.
 - A restriction (R0-51, R0-55) covers the customer's contact data; the object's
   address stays project data and is served as before.
 - The migration closes per source: the VPS and the test rig may each be
   imported successfully once (R0-54).
+
+### R0-60 — Retention is the owner's policy, not Registry's clock (owner, 2026-10-27; replaces R0-40, R0-56; narrows R0-03, R0-49, R0-52, R0-57)
+
+GDPR asks that retention periods be set, documented and kept (Art. 5(1)(e),
+Art. 30, Recital 39); it does not ask Registry to count them. The periods —
+the owner's provisional ones of R0-40 among them, to be checked against
+accounting, tax, claim and building-warranty periods — are the governance's
+retention schedule, applied by the owner's periodic review (once a year, say).
+Registry gives that review what it needs and nothing more:
+
+- the date a project was archived, and the owner's mark that a customer
+  relationship has ended (R0-49), which the owner may clear (R0-57);
+- erasing a customer's contact data (R0-06) and restricting processing while
+  data must be kept but not used (R0-51, the Spanish *bloqueo*);
+- erasing an archived project: anonymised (id, status and pointers stay, name,
+  object and customer link go; `validate` answers `archived`) or deleted whole
+  (`validate` answers `not_found`), as the owner chooses (R0-52);
+- a log entry for every erasure, without the erased values (R0-58).
+
+Registry erases nothing on its own, keeps no deletion dates or holdbacks, and
+sends no reminders.
 
 ## Explicit exclusions
 
@@ -806,9 +836,8 @@ not here.
 - **State 1 (models).** The fields of Project, Customer, Object, Room, artifact
   pointer, agent session access, access request and audit entry, and of each create
   request; the format of every identity (R0-07, R0-16, R0-17), and how a test
-  instance's identity space is told apart from production's (R0-34); how the
-  end of a customer relationship is recorded, and what an anonymised project,
-  object or customer keeps (R0-40); revisions
+  instance's identity space is told apart from production's (R0-34); what an
+  anonymised project keeps exactly (R0-60); revisions
   (R0-35); timestamps and which actions move a project's updated time (L16);
   how an erased or restricted Customer is represented in reads and lists; the
   disclosure class of each field (R0-26).
@@ -822,10 +851,7 @@ not here.
   sign-in throttling (R0-30); the declared artifact vocabulary and what a change
   of it does to existing pointers (R0-33); publication as one transaction
   (L07); the import's mapping check (R0-34); how the audit log is protected
-  (R0-37); when and how expired data is erased or anonymised, and how linked
-  documents' mandatory retention holds it back (R0-40, R0-49); how the
-  non-re-identification and purpose of a kept identity are shown and recorded
-  (R0-52); how Kernel registers a session and what ends one (R0-47); backup and tested
+  (R0-37); how Kernel registers a session and what ends one (R0-47); backup and tested
   restore (vNext §11).
 - **States 5 and 6 (public APIs, contracts).** The field names of every list
   answer and of the project card; the exact `validate` and `context` answers
