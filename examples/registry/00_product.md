@@ -36,8 +36,10 @@ payments, photos and planner documents stay in the services that own them
   and reading a customer's phone included; it holds no service token. An
   agent works with the owner's own access to Registry's host and could read
   the store and the instance's configuration, service tokens included, itself:
-  "holds no service token" means none is given to it, not that it cannot read
-  one, and the owner trusts it as the owner's own hand. Nor does the
+  what runs with the owner's access reads as the owner, so the configuration
+  "readable only by the owner" (R0-23) is readable by it. "Holds no service
+  token" means none is given to it, not that it cannot read one; the owner
+  trusts it as the owner's own hand. Nor does the
   credential keep contact data from it:
   every contact field it records or reads passes to the provider of the
   model the owner runs it on — today Anthropic for Claude Code, OpenAI for
