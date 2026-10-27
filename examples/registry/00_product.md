@@ -35,7 +35,10 @@ payments, photos and planner documents stay in the services that own them
   owner and holds the staff credential for every action it takes, publishing
   and reading a customer's phone included; it holds no service token. An
   agent works with the owner's own access to Registry's host and could read
-  the store itself, so the credential does not keep contact data from it:
+  the store and the instance's configuration, service tokens included, itself:
+  "holds no service token" means none is given to it, not that it cannot read
+  one, and the owner trusts it as the owner's own hand. Nor does the
+  credential keep contact data from it:
   every contact field it records or reads passes to the provider of the
   model the owner runs it on — today Anthropic for Claude Code, OpenAI for
   Codex — under that provider's own terms. Registry does not limit which
