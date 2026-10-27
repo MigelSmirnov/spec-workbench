@@ -1,0 +1,175 @@
+{
+ "open_points": [
+  {
+   "subject": "owner authentication",
+   "kind": "missing action contract",
+   "text": "“The owner signs in to the owner interface with the owner credential and gets a protected session” has no primary action with an observable success result or failure.",
+   "question": "What action signs the owner in, what does success establish or return, and what happens when the credential is absent or wrong?",
+   "options": [
+    "Establish a protected owner session and return the owner interface; refuse invalid credentials without revealing why",
+    "Use HTTP authentication on every owner-interface request instead of a separate sign-in action"
+   ],
+   "default_guess": "A successful sign-in establishes a protected owner session and redirects to the project list; an invalid credential is refused with one generic authentication failure.",
+   "unit": "00_product.md:Decisions"
+  },
+  {
+   "subject": "WhatsApp contact handoff",
+   "kind": "unresolved alternative",
+   "text": "“the agent emits the link without a number and the owner picks the contact, or the owner interface supplies the number to the owner”",
+   "question": "Which of these two behaviours is the accepted product behaviour, and does Registry need a dedicated owner-interface action for it?",
+   "options": [
+    "The agent emits a numberless link and the owner uses the existing customer read to choose the contact",
+    "The owner interface presents the customer's phone together with the prepared link",
+    "Both behaviours are supported"
+   ],
+   "default_guess": "The agent emits a numberless link; the owner obtains the phone through the existing customer view, with no dedicated Registry action.",
+   "unit": "00_product.md:Decisions"
+  },
+  {
+   "subject": "customer erasure",
+   "kind": "contradictory retained data",
+   "text": "“The Customer keeps only its identity and the fact that it was erased; name, phone, e-mail and language are gone” conflicts with R0-67's “the Customer keeps its identity and the fact that it was erased, and projects keep naming it” and R0-80's addition of tax id and legal name to the Customer record: the action never says whether fiscal data is erased.",
+   "question": "When the owner erases a customer's contact data, are tax id, legal name, kind, restriction state and relationship-end date also removed, or does some of that data survive?",
+   "options": [
+    "Remove every customer value except customer_ref and the erased fact",
+    "Remove only name, phone, e-mail and language, retaining fiscal and lifecycle data",
+    "Provide separate contact-data and full-personal-data erasure actions"
+   ],
+   "default_guess": "Remove every customer value except customer_ref and the erased fact, matching R0-67's stated terminal representation.",
+   "unit": "00_product.md:Primary actions"
+  },
+  {
+   "subject": "project and customer revisions",
+   "kind": "undefined concurrency coverage",
+   "text": "R0-35 says “A project, a customer and an object carry a revision that every accepted change moves. A change states the revision it was made against”, while only project correction and customer correction explicitly return the next revision or refuse a stale revision; archive, project erasure, customer erasure, restriction and relationship changes do not.",
+   "question": "Exactly which primary actions must carry an expected project or customer revision, which actions advance it, and which stale attempts are refused?",
+   "options": [
+    "Every mutation of an existing project or Customer requires its expected revision and advances it when state changes",
+    "Only correction actions use revisions",
+    "Corrections plus selected destructive actions use revisions"
+   ],
+   "default_guess": "Every mutation of an existing project or Customer requires the expected revision; a real state change advances it, while an idempotent no-op does not.",
+   "unit": "00_product.md:Primary actions"
+  },
+  {
+   "subject": "customer revision visibility",
+   "kind": "missing observable input source",
+   "text": "“correct a customer” refuses “a stale revision”, but “read a customer” and “list customers” do not say that they return the customer's revision.",
+   "question": "Through which owner-visible output does the owner obtain the current Customer revision required for a change?",
+   "options": [
+    "Return the revision from read customer and optionally list customers",
+    "Return it only from read customer",
+    "Do not require callers to supply a Customer revision"
+   ],
+   "default_guess": "Return the current revision from read customer; correction and other Customer mutations submit that value.",
+   "unit": "00_product.md:Primary actions"
+  },
+  {
+   "subject": "agent-session access version",
+   "kind": "undefined version semantics",
+   "text": "“read the session's access” returns “the access version”, but no text says its initial value, which changes advance it, whether owner changes state an expected version, or what a stale version does.",
+   "question": "What is the access version's concurrency contract across registration, grants, revocations, active-project changes, access requests and answers?",
+   "options": [
+    "It is an optimistic-concurrency revision advanced by every session-access state change",
+    "It is an informational sequence advanced by changes but never supplied by writers",
+    "It versions only the granted set and active project, not pending requests"
+   ],
+   "default_guess": "Registration creates version 1; every change to grants, active project or pending request advances it, and owner mutations require the expected version and refuse stale attempts.",
+   "unit": "00_product.md:Primary actions"
+  },
+  {
+   "subject": "repeated customer restriction changes",
+   "kind": "undefined replay result",
+   "text": "“restrict or lift a restriction on a customer” defines the resulting state but does not say what happens when an already restricted customer is restricted again or an unrestricted customer is lifted again.",
+   "question": "Are repeated restriction or lift requests successful no-ops or failures, and do they advance the Customer revision or create audit entries?",
+   "options": [
+    "Return the unchanged Customer as an idempotent no-op",
+    "Refuse because the requested transition is not available",
+    "Accept and advance the revision even though the state is unchanged"
+   ],
+   "default_guess": "Return the unchanged Customer as an idempotent no-op, without advancing its revision or adding a change audit entry.",
+   "unit": "00_product.md:Primary actions"
+  },
+  {
+   "subject": "repeated session-access changes",
+   "kind": "undefined no-op semantics",
+   "text": "“the project joins the session's granted set” and “the session's active project changes, or is cleared” do not define granting an already granted project, selecting the already active project, or clearing an already empty active project.",
+   "question": "What observable result, access-version effect and audit effect do these repeated session-access requests have?",
+   "options": [
+    "Succeed as unchanged idempotent results",
+    "Refuse as invalid transitions",
+    "Succeed and advance the access version"
+   ],
+   "default_guess": "They succeed as unchanged idempotent results and move neither the access version nor the audit log.",
+   "unit": "00_product.md:Primary actions"
+  },
+  {
+   "subject": "audit of agent-authority writes",
+   "kind": "contradictory audit scope",
+   "text": "R0-58 says Registry records “changes to projects and customer records” but also says “Ordinary reads, agent calls and the inner steps of flows are not recorded in Registry”; agent calls can add rooms and publish or withdraw artifact pointers, which are state changes.",
+   "question": "Are successful state-changing agent-authority calls recorded in the audit log, or does the exclusion of “agent calls” cover writes as well as reads?",
+   "options": [
+    "Audit every successful significant state change regardless of whether the actor is an agent through Kernel",
+    "Audit owner and service writes but no agent-authority call",
+    "Audit only the specifically enumerated grant, revoke, restriction and erasure events"
+   ],
+   "default_guess": "Audit successful state-changing agent calls; interpret “agent calls” as excluding ordinary non-mutating calls and flow-internal steps.",
+   "unit": "00_product.md:Decisions"
+  },
+  {
+   "subject": "significant audit events",
+   "kind": "vague action set",
+   "text": "“Registry records only significant changes of state: changes to projects and customer records, granting and revoking an agent session's projects, restricting processing and lifting it, and erasures and anonymisations.”",
+   "question": "Which primary actions count as significant changes—specifically room changes, artifact publication or withdrawal, imports, session registration, pending access requests and active-project changes?",
+   "options": [
+    "Declare an exhaustive action-by-action audit set",
+    "Audit every successful state mutation",
+    "Audit only the categories literally enumerated, treating all unmentioned actions as unaudited"
+   ],
+   "default_guess": "Declare an exhaustive mapping and include every successful durable mutation except creation or replacement of a pending free-text access request.",
+   "unit": "00_product.md:Decisions"
+  },
+  {
+   "subject": "audit of refused changes",
+   "kind": "contradictory outcome scope",
+   "text": "R0-37 says an audit entry carries “the outcome”, while R0-58 says “the log records changes of state only.”",
+   "question": "Does the audit log contain refused or failed attempts at significant changes, or only accepted changes that altered state?",
+   "options": [
+    "Only accepted state changes; outcome records success or the resulting transition",
+    "Accepted changes and refused attempts for the audited action set",
+    "Only security-relevant refusals, with infrastructure handling the rest"
+   ],
+   "default_guess": "Only accepted state changes are recorded; refused attempts are diagnostics or infrastructure security events, not Registry audit entries.",
+   "unit": "00_product.md:Decisions"
+  },
+  {
+   "subject": "imported project renaming",
+   "kind": "contradictory requirement",
+   "text": "R0-85 says “the owner may give each a new display name and an alias”, while R0-82 says projects imported under a person's name “are renamed in the import itself”; the primary action says “each with a new display name and alias when the owner gives them”.",
+   "question": "For each selected project, when is a replacement display name mandatory, and may an imported project retain its old display name?",
+   "options": [
+    "Require a new display name whenever the source name identifies a person; otherwise allow retention",
+    "Require a new display name for every imported project",
+    "Always make renaming optional and rely on the owner to obey the naming rule"
+   ],
+   "default_guess": "Require a replacement display name for every source project whose old name identifies a person; allow other source names to remain, and keep alias optional.",
+   "unit": "00_product.md:Primary actions"
+  },
+  {
+   "subject": "imported record state",
+   "kind": "incomplete output semantics",
+   "text": "The import output promises projects “with their customers, objects, rooms and pointers (ids kept), links intact” but does not say whether project status, archive date, timestamps, revisions, customer restriction or relationship state are preserved, reset or newly assigned.",
+   "question": "Which non-identity state is preserved from the VPS export, and which values are initialized by production during import?",
+   "options": [
+    "Preserve every representable source fact and initialize only fields absent from v1",
+    "Preserve identities, links and domain values but initialize production revisions and lifecycle metadata",
+    "Treat each imported project as a newly created active production project"
+   ],
+   "default_guess": "Preserve source status, archive date, timestamps and domain values when present; initialize production revisions to 1 and initialize vNext-only customer flags as unrestricted and not ended.",
+   "unit": "00_product.md:Primary actions"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"owner authentication\",\"kind\":\"missing action contract\",\"text\":\"“The owner signs in to the owner interface with the owner credential and gets a protected session” has no primary action with an observable success result or failure.\",\"question\":\"What action signs the owner in, what does success establish or return, and what happens when the credential is absent or wrong?\",\"options\":[\"Establish a protected owner session and return the owner interface; refuse invalid credentials without revealing why\",\"Use HTTP authentication on every owner-interface request instead of a separate sign-in action\"],\"default_guess\":\"A successful sign-in establishes a protected owner session and redirects to the project list; an invalid credential is refused with one generic authentication failure.\",\"unit\":\"00_product.md:Decisions\"},{\"subject\":\"WhatsApp contact handoff\",\"kind\":\"unresolved alternative\",\"text\":\"“the agent emits the link without a number and the owner picks the contact, or the owner interface supplies the number to the owner”\",\"question\":\"Which of these two behaviours is the accepted product behaviour, and does Registry need a dedicated owner-interface action for it?\",\"options\":[\"The agent emits a numberless link and the owner uses the existing customer read to choose the contact\",\"The owner interface presents the customer's phone together with the prepared link\",\"Both behaviours are supported\"],\"default_guess\":\"The agent emits a numberless link; the owner obtains the phone through the existing customer view, with no dedicated Registry action.\",\"unit\":\"00_product.md:Decisions\"},{\"subject\":\"customer erasure\",\"kind\":\"contradictory retained data\",\"text\":\"“The Customer keeps only its identity and the fact that it was erased; name, phone, e-mail and language are gone” conflicts with R0-67's “the Customer keeps its identity and the fact that it was erased, and projects keep naming it” and R0-80's addition of tax id and legal name to the Customer record: the action never says whether fiscal data is erased.\",\"question\":\"When the owner erases a customer's contact data, are tax id, legal name, kind, restriction state and relationship-end date also removed, or does some of that data survive?\",\"options\":[\"Remove every customer value except customer_ref and the erased fact\",\"Remove only name, phone, e-mail and language, retaining fiscal and lifecycle data\",\"Provide separate contact-data and full-personal-data erasure actions\"],\"default_guess\":\"Remove every customer value except customer_ref and the erased fact, matching R0-67's stated terminal representation.\",\"unit\":\"00_product.md:Primary actions\"},{\"subject\":\"project and customer revisions\",\"kind\":\"undefined concurrency coverage\",\"text\":\"R0-35 says “A project, a customer and an object carry a revision that every accepted change moves. A change states the revision it was made against”, while only project correction and customer correction explicitly return the next revision or refuse a stale revision; archive, project erasure, customer erasure, restriction and relationship changes do not.\",\"question\":\"Exactly which primary actions must carry an expected project or customer revision, which actions advance it, and which stale attempts are refused?\",\"options\":[\"Every mutation of an existing project or Customer requires its expected revision and advances it when state changes\",\"Only correction actions use revisions\",\"Corrections plus selected destructive actions use revisions\"],\"default_guess\":\"Every mutation of an existing project or Customer requires the expected revision; a real state change advances it, while an idempotent no-op does not.\",\"unit\":\"00_product.md:Primary actions\"},{\"subject\":\"customer revision visibility\",\"kind\":\"missing observable input source\",\"text\":\"“correct a customer” refuses “a stale revision”, but “read a customer” and “list customers” do not say that they return the customer's revision.\",\"question\":\"Through which owner-visible output does the owner obtain the current Customer revision required for a change?\",\"options\":[\"Return the revision from read customer and optionally list customers\",\"Return it only from read customer\",\"Do not require callers to supply a Customer revision\"],\"default_guess\":\"Return the current revision from read customer; correction and other Customer mutations submit that value.\",\"unit\":\"00_product.md:Primary actions\"},{\"subject\":\"agent-session access version\",\"kind\":\"undefined version semantics\",\"text\":\"“read the session's access” returns “the access version”, but no text says its initial value, which changes advance it, whether owner changes state an expected version, or what a stale version does.\",\"question\":\"What is the access version's concurrency contract across registration, grants, revocations, active-project changes, access requests and answers?\",\"options\":[\"It is an optimistic-concurrency revision advanced by every session-access state change\",\"It is an informational sequence advanced by changes but never supplied by writers\",\"It versions only the granted set and active project, not pending requests\"],\"default_guess\":\"Registration creates version 1; every change to grants, active project or pending request advances it, and owner mutations require the expected version and refuse stale attempts.\",\"unit\":\"00_product.md:Primary actions\"},{\"subject\":\"repeated customer restriction changes\",\"kind\":\"undefined replay result\",\"text\":\"“restrict or lift a restriction on a customer” defines the resulting state but does not say what happens when an already restricted customer is restricted again or an unrestricted customer is lifted again.\",\"question\":\"Are repeated restriction or lift requests successful no-ops or failures, and do they advance the Customer revision or create audit entries?\",\"options\":[\"Return the unchanged Customer as an idempotent no-op\",\"Refuse because the requested transition is not available\",\"Accept and advance the revision even though the state is unchanged\"],\"default_guess\":\"Return the unchanged Customer as an idempotent no-op, without advancing its revision or adding a change audit entry.\",\"unit\":\"00_product.md:Primary actions\"},{\"subject\":\"repeated session-access changes\",\"kind\":\"undefined no-op semantics\",\"text\":\"“the project joins the session's granted set” and “the session's active project changes, or is cleared” do not define granting an already granted project, selecting the already active project, or clearing an already empty active project.\",\"question\":\"What observable result, access-version effect and audit effect do these repeated session-access requests have?\",\"options\":[\"Succeed as unchanged idempotent results\",\"Refuse as invalid transitions\",\"Succeed and advance the access version\"],\"default_guess\":\"They succeed as unchanged idempotent results and move neither the access version nor the audit log.\",\"unit\":\"00_product.md:Primary actions\"},{\"subject\":\"audit of agent-authority writes\",\"kind\":\"contradictory audit scope\",\"text\":\"R0-58 says Registry records “changes to projects and customer records” but also says “Ordinary reads, agent calls and the inner steps of flows are not recorded in Registry”; agent calls can add rooms and publish or withdraw artifact pointers, which are state changes.\",\"question\":\"Are successful state-changing agent-authority calls recorded in the audit log, or does the exclusion of “agent calls” cover writes as well as reads?\",\"options\":[\"Audit every successful significant state change regardless of whether the actor is an agent through Kernel\",\"Audit owner and service writes but no agent-authority call\",\"Audit only the specifically enumerated grant, revoke, restriction and erasure events\"],\"default_guess\":\"Audit successful state-changing agent calls; interpret “agent calls” as excluding ordinary non-mutating calls and flow-internal steps.\",\"unit\":\"00_product.md:Decisions\"},{\"subject\":\"significant audit events\",\"kind\":\"vague action set\",\"text\":\"“Registry records only significant changes of state: changes to projects and customer records, granting and revoking an agent session's projects, restricting processing and lifting it, and erasures and anonymisations.”\",\"question\":\"Which primary actions count as significant changes—specifically room changes, artifact publication or withdrawal, imports, session registration, pending access requests and active-project changes?\",\"options\":[\"Declare an exhaustive action-by-action audit set\",\"Audit every successful state mutation\",\"Audit only the categories literally enumerated, treating all unmentioned actions as unaudited\"],\"default_guess\":\"Declare an exhaustive mapping and include every successful durable mutation except creation or replacement of a pending free-text access request.\",\"unit\":\"00_product.md:Decisions\"},{\"subject\":\"audit of refused changes\",\"kind\":\"contradictory outcome scope\",\"text\":\"R0-37 says an audit entry carries “the outcome”, while R0-58 says “the log records changes of state only.”\",\"question\":\"Does the audit log contain refused or failed attempts at significant changes, or only accepted changes that altered state?\",\"options\":[\"Only accepted state changes; outcome records success or the resulting transition\",\"Accepted changes and refused attempts for the audited action set\",\"Only security-relevant refusals, with infrastructure handling the rest\"],\"default_guess\":\"Only accepted state changes are recorded; refused attempts are diagnostics or infrastructure security events, not Registry audit entries.\",\"unit\":\"00_product.md:Decisions\"},{\"subject\":\"imported project renaming\",\"kind\":\"contradictory requirement\",\"text\":\"R0-85 says “the owner may give each a new display name and an alias”, while R0-82 says projects imported under a person's name “are renamed in the import itself”; the primary action says “each with a new display name and alias when the owner gives them”.\",\"question\":\"For each selected project, when is a replacement display name mandatory, and may an imported project retain its old display name?\",\"options\":[\"Require a new display name whenever the source name identifies a person; otherwise allow retention\",\"Require a new display name for every imported project\",\"Always make renaming optional and rely on the owner to obey the naming rule\"],\"default_guess\":\"Require a replacement display name for every source project whose old name identifies a person; allow other source names to remain, and keep alias optional.\",\"unit\":\"00_product.md:Primary actions\"},{\"subject\":\"imported record state\",\"kind\":\"incomplete output semantics\",\"text\":\"The import output promises projects “with their customers, objects, rooms and pointers (ids kept), links intact” but does not say whether project status, archive date, timestamps, revisions, customer restriction or relationship state are preserved, reset or newly assigned.\",\"question\":\"Which non-identity state is preserved from the VPS export, and which values are initialized by production during import?\",\"options\":[\"Preserve every representable source fact and initialize only fields absent from v1\",\"Preserve identities, links and domain values but initialize production revisions and lifecycle metadata\",\"Treat each imported project as a newly created active production project\"],\"default_guess\":\"Preserve source status, archive date, timestamps and domain values when present; initialize production revisions to 1 and initialize vNext-only customer flags as unrestricted and not ended.\",\"unit\":\"00_product.md:Primary actions\"}]}",
+ "set_aside": []
+}
