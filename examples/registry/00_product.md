@@ -7,7 +7,7 @@ frame was accepted as a whole on 2026-10-26 (R0-15) and closed after question
 round 17. The owner's requirements document
 `sources/registry_vnext_requirements_20261027.md` ("Registry — Project Identity
 & Trusted Context", cited as vNext §n) and the owner's answers of 2026-10-27 on
-its conflicts with that frame are recorded as R0-24 to R0-52; each names the
+its conflicts with that frame are recorded as R0-24 to R0-57; each names the
 earlier decisions it replaces or narrows, and a replaced decision says so under
 its heading. In decisions before R0-24, "staff" reads "the owner" (R0-30) and
 "the Registry frontend" reads "the owner interface" (R0-29). The sections above
@@ -118,7 +118,7 @@ or the platform's general permission system (vNext §17).
 | read a customer | owner | name, kind, phone, e-mail, language | unknown customer refused; an erased customer answers that it was erased, with no contact data |
 | list customers | owner | the customers, each with its `customer_ref` and name; erased ones only as erased, without contact data — this is how a customer is found for a new project | — |
 | erase a customer's contact data | owner | the Customer keeps only its identity and the fact that it was erased; name, phone, e-mail and language are gone; projects still name it (R0-06) | unknown customer refused; erasing an erased customer returns it unchanged |
-| restrict or lift a restriction on a customer | owner | the Customer marked restricted, or no longer restricted where a lawful ground allows it; while restricted, its data stays stored, reaches no one but the owner, and no new project or correction of a project may name it (R0-37, R0-51) | unknown or erased customer refused |
+| restrict or lift a restriction on a customer | owner | the Customer marked restricted, or no longer restricted where a lawful ground allows it; while restricted, its contact data stays stored and reaches no one but the owner, no project may newly name it, and any operation using its restricted personal data is refused unless the law provides an exception; corrections of its existing projects that do not use that data go on, and `context` keeps its `customer_ref` (R0-37, R0-51, R0-55) | unknown or erased customer refused |
 | read the agent projection | Cabinet Kernel for the agent, on a project its session is granted (R0-46) (R0-41, R0-43) | the minimal projection of that project: its id, display name, status, rooms and artifact pointers — no address, customer or other personal value | a project the session is not granted refused |
 | add a room | owner; Cabinet Kernel for the agent, on a project its session is granted (R0-41, R0-46) | the room: an identity Registry mints, the given name, its project (R0-10) | missing name refused; unknown or archived project refused; a second room of the same name is a second room (R0-10); a project the session is not granted refused |
 | list rooms | owner; a trusted service; Kernel for the agent on a project its session is granted (R0-46) | the project's rooms in a declared order | unknown project refused as not found (replaces L21) |
@@ -131,9 +131,10 @@ or the platform's general permission system (vNext §17).
 | request access to a project | Cabinet Kernel for one agent session | a pending request of that session, in free text, the owner sees in the owner interface, replacing the session's earlier pending one; the session's access does not change, and the answer says nothing about which projects exist (R0-46, R0-47) | — |
 | answer an access request | owner | granting adds the project the owner picks from the catalogue to the session's set (and, if asked, makes it active); declining changes nothing; the session reads the outcome in its access (R0-46, R0-47) | a request no longer pending refused |
 | change the active project or revoke a project | owner | the session's active project changes, which revokes nothing; or the project leaves the session's set, and every later operation on it in that session — a running flow's next step included — is refused (R0-46) | a project not in the set answers that it is not granted |
-| import projects with their identity | owner, confirming, once (R0-50) | the projects of the running instances under the identities they carry, with their customers (`customer_ref` kept), objects, rooms and pointers (ids kept), links intact (R0-34, R0-44, R0-50) | any conflict with an id production holds refuses the whole import, nothing applied; an import the owner has not confirmed refused |
+| import projects with their identity | owner, confirming, from the source the owner picks — the VPS or the test rig (R0-50, R0-54) | the projects of that source under the identities they carry, with their customers (`customer_ref` kept), objects, rooms and pointers (ids kept), links intact (R0-34, R0-44, R0-50) | any conflict with an id production holds refuses the whole import, nothing applied, and the owner may retry after correcting it; after the first successful production import the operation is closed and refused (R0-54) |
 | register an agent session | Cabinet Kernel | the session Registry knows, with no granted project; the owner sees it in the owner interface (R0-47) | — |
-| end a customer relationship | owner | the Customer marked as ended on that date; its retention period runs from it (R0-40, R0-49) | unknown or erased customer refused |
+| end or resume a customer relationship | owner | the Customer marked as ended on that date, its retention period running from it; or, before the record is deleted, resumed for a new purpose, its deletion date reconsidered (R0-40, R0-49, R0-57) | unknown or erased customer refused; resuming a customer not ended refused |
+| record a retention holdback | owner | a documented lawful ground and a holdback date on a customer or project; until that date the data is not erased, then its need is assessed again (R0-56) | unknown customer or project refused; a holdback without ground or date refused |
 | read the audit log | owner | the audit entries of significant operations, in time order (R0-37) | — |
 
 ## Decisions
@@ -693,6 +694,46 @@ only where it is shown that they no longer allow re-identification and a
 justified purpose for keeping them is recorded; `validate` then answers
 `archived`. Otherwise the record is deleted whole, and `validate` answers
 `not_found`.
+
+### R0-53 — Registry trusts Kernel to name the session, not the network (owner, 2026-10-27; round 5 T1; narrows R0-46, R0-47)
+
+On every agent-authority call Registry checks three things: the calling
+service authenticates with its own token — being inside VM Platform
+authenticates nothing (R0-27); the session it names is registered; and the
+`project_id` is in that session's set. Sessions carry no secret of their own:
+Kernel, in the trusted VM Platform, is trusted to name the session it acts
+for. A compromised Kernel is outside Registry's guarantees.
+
+### R0-54 — The migration's sources and retry (owner, 2026-10-27; round 5 T2; narrows R0-50)
+
+The sources are the instances on the VPS and on the test rig; the owner picks
+one for each import. An import is atomic: a conflict refuses all of it, and the
+owner may retry after correcting the cause. The first successful import into
+production closes the operation for good. Nothing of a test instance comes
+over unless the owner picks it as a source.
+
+### R0-55 — What a restriction stops (owner, 2026-10-27; round 5 T6; narrows R0-51)
+
+A restriction stops every operation that uses the restricted customer's
+personal data, except where the law provides otherwise; it does not stop
+changes to the customer's existing projects that do not use that data. `context`
+keeps answering the customer's `customer_ref` to PresuPro and Client Portal,
+without contact data.
+
+### R0-56 — Retention erasures are recorded; holdbacks are documented (owner, 2026-10-27; round 5 T7; narrows R0-37, R0-49, R0-52)
+
+Every erasure or anonymisation at the end of a period leaves an audit entry that
+names what was erased, never the erased values. The owner may record, for a
+customer or a project, a documented lawful ground and the date until which the
+data is held back. When that date comes, the need to keep the data is assessed
+again: the owner records a new ground and date, or the data is erased.
+
+### R0-57 — An ended relationship (owner, 2026-10-27; round 5 T9; narrows R0-49)
+
+A customer whose relationship has ended cannot be named by a new project. Its
+contact data may still be corrected. Until its record is deleted the owner may
+resume the relationship; its deletion date is then reconsidered for the new
+purpose of processing.
 
 ## Explicit exclusions
 
