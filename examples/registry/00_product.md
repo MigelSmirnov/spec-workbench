@@ -30,8 +30,9 @@ works on, handing the agent a bounded working context and nothing more
 (vNext §1, §6). Every other service names a project by the Registry's identity
 and reads that identity as a snapshot; none of them writes it back (V1-2).
 
-Registry stores identity, the owner's choice of working project and pointers
-only. Drawings, measurements, estimates, invoices, payments, funds, photos,
+Registry stores only identity — projects, their objects and rooms, customers
+with their contact data — the working context of each agent session and its
+pending switch request, artifact pointers, and its own audit log. Drawings, measurements, estimates, invoices, payments, funds, photos,
 client publications, planner documents, Kernel functions and flows stay in the
 services that own them (V1-1, V1-4, vNext §2). Registry is not a CRM, an ERP,
 a ledger, a flow orchestrator, a runtime for agent code, a deployment manager
@@ -104,12 +105,12 @@ or the platform's general permission system (vNext §17).
 | action | who | output | failure |
 |---|---|---|---|
 | create a project | owner | the project with the identity Registry mints (R0-44), its object (R0-45), status `active`, revision 1 | missing name, or an object without an address, refused (R0-45); a customer reference that is unknown or erased refused (R0-16); a retried create never makes a second project (R0-36) |
-| read a project | owner; a trusted service, in its disclosure class (R0-26) | the project card (any status, V1-7) with its object and rooms, its revision; the project's id stands at the top of the answer (R0-13) | unknown id refused as not found; a caller without access refused; Kernel for the agent refused — it reads the agent projection (R0-43) |
-| list projects | owner; a trusted service, in its disclosure class; never Kernel for the agent (R0-41) | the active projects, and when asked the archived ones together with them (never the archived alone), in a declared order (L10), as one answer object (R0-13) | — |
+| read a project | owner; a trusted service whose token allows `personal_data` (R0-43) | the project card (any status, V1-7) with its object and rooms, its revision; the project's id stands at the top of the answer (R0-13) | unknown id refused as not found; any other caller refused — Kernel for the agent reads the agent projection (R0-43) |
+| list projects | owner; a trusted service whose token allows `personal_data`; never Kernel for the agent (R0-41, R0-43) | the active projects, and when asked the archived ones together with them (never the archived alone), in a declared order (L10), as one answer object (R0-13) | — |
 | correct a project | owner | the project with the new name, customer or object — address, kind, characteristics (R0-45) — next revision of the project | unknown id refused; an archived project refused (R0-12); a customer reference that is unknown or erased refused (R0-16); a stale revision refused, nothing changes (R0-35) |
 | archive a project | owner, after confirming | the project, status `archived`; nothing is deleted (V1-7); archiving an archived project returns it unchanged (R0-12) | unknown id refused |
 | validate a project reference | owner; a trusted service; Kernel for the agent on its session's project only (R0-41) | exists, active, and why not (`not_found`, `archived`) | — (the answer carries the failure) |
-| read a project context | owner; a trusted service whose token allows `personal_data` (R0-43) | the snapshot a consumer keeps: id, display name, status, address, customer, created and updated times (R0-04) | unknown id refused; a caller whose token does not allow `personal_data` refused |
+| read a project context | owner; a trusted service whose token allows `personal_data` (R0-43) | the snapshot a consumer keeps: id, display name, status, address, `customer_ref` (never contact data), created and updated times (R0-04) | unknown id refused; a caller whose token does not allow `personal_data` refused |
 | record a customer | owner | the Customer with the identity (`customer_ref`) Registry minted for it (R0-16), its kind — person or company — and its contact data (R0-06, R0-37) | missing name or kind refused; recording the same person again makes a second Customer (R0-16) |
 | correct a customer | owner | the Customer with the new contact data, next revision | unknown customer refused; an erased customer cannot be corrected; a stale revision refused (R0-35) |
 | read a customer | owner | name, kind, phone, e-mail, language | unknown customer refused; an erased customer answers that it was erased, with no contact data |
@@ -579,7 +580,10 @@ names a session, and what ends one, belong to State 2.
 token allows `personal_data` — today PresuPro and Client Portal. The agent,
 through Kernel, reads a separate minimal projection of its session's project
 with no personal value: id, display name, status, rooms and artifact pointers.
-No answer mixes the two.
+No answer mixes the two. The same holds for 'read a project' and 'list
+projects': they carry the object's address and answer only a caller cleared
+for `personal_data`. `context` names the customer by `customer_ref` only; no
+contact data leaves Registry except to the owner.
 
 ### R0-44 — Production mints identities; import keeps them (owner, 2026-10-27; round 3 T10; narrows R0-07, R0-34)
 
