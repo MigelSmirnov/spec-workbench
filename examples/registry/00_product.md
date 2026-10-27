@@ -58,8 +58,10 @@ payments, photos and planner documents stay in the services that own them
   host's internal network (R0-19). Reading projects, rooms, artifacts, `validate` and `context` needs no
   credential there; every write and every read of contact data does (R0-09).
 - **Secrets** — service tokens and the staff credential, in the instance's
-  configuration, which only the owner changes, outside the API (R0-20);
-  never in a record, a log line or an answer.
+  configuration, which only the owner changes, outside the API (R0-20). The
+  owner generates every secret, keeps its original in the owner's own password
+  vault (Bitwarden) and writes it by hand into Registry's configuration and the
+  holder's (R0-23); never in a record, a log line or an answer.
 - **Personal data** — the customer's contact data (R0-06); readable by staff
   only (R0-09).
 
@@ -253,6 +255,19 @@ frontend used from another machine goes through a server of its own on
 Registry's host; that server is a caller inside the host's network like any
 other, holds the staff credential for staff actions, and is designed with the
 frontend, not here.
+
+### R0-23 — Configuration is a file on the host; secrets travel by the owner's hand (owner, 2026-10-27)
+
+An instance's configuration is a file on its host, readable only by the owner
+and the Registry process: on the VPS the compose environment file, on a local
+instance the environment it is started with. The owner generates each service
+token and the staff credential, keeps the original in the owner's own password
+vault (Bitwarden), and writes it into Registry's configuration and into the
+configuration of the one holder it is for — a service, the operator, a
+frontend server. Neither Registry nor any holder reaches the vault; the
+platform has no secret manager. A secret crosses from the owner to a host only
+by the owner's hand, so the owner is that trust boundary. A token the owner has
+not written into Registry's configuration is refused like any wrong one.
 
 ## Explicit exclusions
 
