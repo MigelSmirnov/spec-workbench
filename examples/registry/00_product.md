@@ -768,7 +768,7 @@ value, no whole request and no secret, and is kept for a limited period the
 governance documents (R0-60). The platform manifest describes Registry's capabilities and
 contracts; the log records changes of state only.
 
-### R0-59 — The simplest answers to round 6 T1, T3, T5 (drafted 2026-10-27 under the owner's instruction "do not complicate, add no responsibilities"; to be confirmed)
+### R0-59 — The simplest answers to round 6 T3, T5 (drafted 2026-10-27 under the owner's instruction "do not complicate, add no responsibilities"; confirmed by the owner 2026-10-27)
 
 - A restriction (R0-51, R0-55) covers the customer's contact data; the object's
   address stays project data and is served as before.
