@@ -36,8 +36,10 @@ payments, photos and planner documents stay in the services that own them
   and reading a customer's phone included; it holds no service token. An
   agent works with the owner's own access to Registry's host and could read
   the store itself, so the credential does not keep contact data from it:
-  whatever it records or reads passes through its model provider, and the
-  owner accepts this (owner, 2026-10-27).
+  every contact field it records or reads passes to the provider of the
+  model the owner runs it on — today Anthropic for Claude Code, OpenAI for
+  Codex — under that provider's own terms. Registry does not limit which
+  fields or which provider, and the owner accepts this (owner, 2026-10-27).
 - **Consumer services** — PresuPro, Client Portal, Cabinet Kernel, the Cabinet
   Web mirror. They validate a project id and read its context; today Cabinet
   Kernel and the operator also create projects and rooms, and publish artifacts as
