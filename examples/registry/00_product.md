@@ -33,18 +33,8 @@ payments, photos and planner documents stay in the services that own them
 - **Operator** — `onboard_object`, or an agent preparing a client message for
   the owner (the WhatsApp link of the Factory's `AGENTS.md`). It acts for the
   owner and holds the staff credential for every action it takes, publishing
-  and reading a customer's phone included; it holds no service token. An
-  agent works with the owner's own access to Registry's host and could read
-  the store and the instance's configuration, service tokens included, itself:
-  what runs with the owner's access reads as the owner, so the configuration
-  "readable only by the owner" (R0-23) is readable by it. "Holds no service
-  token" means none is given to it, not that it cannot read one; the owner
-  trusts it as the owner's own hand. Nor does the
-  credential keep contact data from it:
-  every contact field it records or reads passes to the provider of the
-  model the owner runs it on — today Anthropic for Claude Code, OpenAI for
-  Codex — under that provider's own terms. Registry does not limit which
-  fields or which provider, and the owner accepts this (owner, 2026-10-27).
+  and reading a customer's phone included; no service token is given to it. On
+  the host it is the owner (Host, below).
 - **Consumer services** — PresuPro, Client Portal, Cabinet Kernel, the Cabinet
   Web mirror. They validate a project id and read its context; today Cabinet
   Kernel and the operator also create projects and rooms, and publish artifacts as
@@ -68,8 +58,19 @@ payments, photos and planner documents stay in the services that own them
 - **Network surface** — one HTTP API, listening only on loopback or on the
   host's internal network (R0-19). Reading projects, rooms, artifacts, `validate` and `context` needs no
   credential there; every write and every read of contact data does (R0-09).
-  Every process and container on Registry's host is the owner's and trusted;
-  traffic inside the host is plain HTTP (owner, 2026-10-27).
+- **Host** — Registry's guarantees hold against callers of its API, and only
+  against them. Everything that runs with the owner's access to Registry's
+  host is the owner: the owner, an agent the owner runs, `onboard_object`
+  run by either, any process or container the owner started. Each may read
+  and change the store, the configuration and every secret directly, around
+  the API, and the configuration "readable only by the owner" (R0-23) is
+  readable by each. What such a component sends elsewhere is the owner's act,
+  not Registry's: an agent passes whatever it reads — contact data,
+  configuration, secrets — to the provider of the model the owner runs it on
+  (today Anthropic for Claude Code, OpenAI for Codex) under that provider's
+  own terms, and Registry limits nothing of it. Traffic inside the host is
+  plain HTTP. The credentials tell callers of the API apart; they protect
+  nothing from the host. The owner accepts this (owner, 2026-10-27).
 - **Secrets** — service tokens and the staff credential, in the instance's
   configuration, which only the owner changes, outside the API (R0-20). The
   owner generates every secret, keeps its original in the owner's own password
