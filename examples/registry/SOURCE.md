@@ -26,7 +26,7 @@ All Factory paths are at `code_factory` commit `f5d700b3` (`main`, 2026-10-26).
 | `platform/manifest/registry.json` | 14 declared capabilities, known defects `identity-per-instance`, `closed-artifact-vocabulary`; surface gate `GATE PASS` on 2026-10-26 |
 | Factory branch `agent/cabinet-kernel-store-determinism`, `projects/cabinet_kernel/operator_tests/live/` (commit `bd787fbb`) | Cabinet Kernel run against a live Registry rig, scenarios R1–R6, M1–M4 |
 | consumers (below) | which operations and fields leave the service |
-| `sources/registry_vnext_requirements_20261027.md` | the owner's requirements for Registry vNext (2026-10-27): not evidence of behaviour but owner input; recorded as State 0 decisions R0-24 to R0-37 |
+| `sources/registry_vnext_requirements_20261027.md` | the owner's requirements for Registry vNext (2026-10-27): not evidence of behaviour but owner input; recorded as State 0 decisions R0-24 to R0-40 |
 
 ### Consumers observed in code
 

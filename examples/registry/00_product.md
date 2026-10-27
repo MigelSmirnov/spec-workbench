@@ -7,11 +7,11 @@ frame was accepted as a whole on 2026-10-26 (R0-15) and closed after question
 round 17. The owner's requirements document
 `sources/registry_vnext_requirements_20261027.md` ("Registry — Project Identity
 & Trusted Context", cited as vNext §n) and the owner's answers of 2026-10-27 on
-its conflicts with that frame are recorded as R0-24 to R0-37; each names the
+its conflicts with that frame are recorded as R0-24 to R0-40; each names the
 earlier decisions it replaces or narrows, and a replaced decision says so under
 its heading. The sections above the decisions describe the frame as it stands
-after them. State 0 closes again when its question rounds are clear and the
-open questions below are decided; the owner then accepts it as a whole.
+after them. State 0 closes again when its question rounds are clear; the owner
+then accepts it as a whole.
 
 Reverse-engineered from the running Registry and its v1 specification
 (`SOURCE.md`): a decision that keeps, narrows or replaces a v1 decision (V1-n)
@@ -60,7 +60,7 @@ or the platform's general permission system (vNext §17).
   mirror. Each authenticates with its own service token (R0-27), validates a
   project id and reads its context in the disclosure class its token allows.
   Client Portal runs on the VPS and reaches the production Registry over a
-  protected channel between the two hosts (R0-28, OQ-11).
+  WireGuard channel the home server opens (R0-28, R0-39).
 - **Producers** — any service publishing an artifact pointer with its own
   token: today PresuPro (estimates) and Cabinet Kernel. The pointer names its
   owner service, which is the authority for the artifact itself; Registry
@@ -110,7 +110,7 @@ or the platform's general permission system (vNext §17).
 | list customers | owner | the customers, each with its `customer_ref` and name; erased ones only as erased, without contact data — this is how a customer is found for a new project | — |
 | erase a customer's contact data | owner | the Customer keeps only its identity and the fact that it was erased; name, phone, e-mail and language are gone; projects still name it (R0-06) | unknown customer refused; erasing an erased customer returns it unchanged |
 | restrict processing of a customer | owner | the Customer marked restricted: its contact data stays stored but leaves Registry to no one but the owner (R0-37) | unknown or erased customer refused |
-| record or correct a project's object | owner | the object: its address, kind and the characteristics the specification declares (R0-37, OQ-10) | unknown or archived project refused; a stale revision refused |
+| record or correct a project's object | owner | the object: its address, kind and the characteristics the specification declares; one object per project (R0-38) | unknown or archived project refused; a stale revision refused |
 | add a room | owner; a service with a service token (today Cabinet Kernel) | the room: an identity Registry mints, the given name, its project (R0-10) | missing name refused; unknown or archived project refused; a second room of the same name is a second room (R0-10) |
 | list rooms | owner; a service | the project's rooms in a declared order | unknown project refused as not found (replaces L21) |
 | publish an artifact pointer | producer service; the owner for any owner service | the new pointer with the identity and version Registry assigns (R0-17), its content digest when given (R0-33), `published`; the previous published version of that type becomes `superseded` | unknown or archived project refused; a type the specification does not declare, or not the owner service's, refused (R0-33); neither `uri` nor `payload_ref` given refused (R0-17) |
@@ -401,9 +401,10 @@ read only if it receives a token of its own.
 The one authoritative production instance runs on the owner's home server, a
 machine on which no agent runs and to which no agent has administrative access
 (R0-25). Client Portal stays on the VPS and reaches it over a protected channel
-between the two hosts (OQ-11). When the home server or the channel is down,
-Portal and every other consumer get no answer, never a stale or partial one,
-and nothing changes in Registry because of it (vNext §10). The service API is
+between the two hosts (R0-39). When the home server or the channel is down,
+Registry gives no consumer a stale or partial answer, and nothing changes in
+Registry because of it (vNext §10); what a consumer then shows from its own
+snapshot is its own (R0-39). The service API is
 reachable only on the production host and over that channel.
 
 ### R0-29 — Registry serves the owner interface (owner, 2026-10-27; replaces R0-22 and the frontend exclusion)
@@ -492,7 +493,7 @@ exclusions).
   data (R0-06), and restrict its processing: a restricted customer's data stays
   stored and reaches only the owner.
 - **Retention.** Each kind of personal data and the audit log has a retention
-  period after which it is erased; the periods are the owner's (OQ-12).
+  period after which it is erased; the periods are the owner's (R0-40).
 - **Audit.** Every significant operation leaves an audit entry: time, the
   acting principal (owner, which service, agent through Kernel), the operation,
   the project, the outcome, the contract and release version, and a
@@ -501,6 +502,41 @@ exclusions).
   protected; it is kept for its retention period.
 - **Diagnostics.** Logs other than the audit log carry no personal value and no
   secret.
+
+### R0-38 — One project, one object (owner, 2026-10-27; closes OQ-10)
+
+A project has exactly one object: its address, its kind and the technical
+characteristics the specification declares. The address moves from the project
+to the object; `context` keeps answering `address`, read from the object
+(R0-04). Rooms stay on the project (R0-10). Options (b), an object carrying
+several projects with the rooms on it, and (c), no separate object, were
+declined.
+
+### R0-39 — WireGuard from home; Portal keeps its own projection (owner, 2026-10-27; closes OQ-11, narrows R0-28)
+
+Client Portal on the VPS reaches the production Registry over a WireGuard
+tunnel that the home server initiates; the home server publishes no listening
+port to the internet for it. The tunnel carries the service API only, with
+Portal's service token as on any other request (R0-27). When home is
+unreachable, Portal serves the last projection it was permitted to keep
+locally: Portal's own snapshot of what its contract allowed (V1-2), never an
+answer of Registry, and Portal changes nothing in Registry meanwhile. What the
+projection holds and how old it may be is Portal's design, bounded by the
+disclosure classes its token allows (R0-26).
+
+### R0-40 — Retention periods (owner, 2026-10-27; closes OQ-12; provisional, subject to legal review)
+
+- A customer's contact data: until the relationship with the customer ends,
+  plus one year.
+- The object's address and characteristics, and archived projects: five years
+  after the project is closed (archived), unless another legal obligation
+  requires longer.
+- The audit log: two years.
+
+When a period ends the data is erased or anonymised, respecting the mandatory
+retention of the documents linked to it. The periods are provisional: the
+legal review of the governance (Explicit exclusions) may change them, by a new
+owner decision here.
 
 ## Explicit exclusions
 
@@ -529,24 +565,9 @@ exclusions).
 
 ## Open questions
 
-OQ-01 to OQ-09 were decided by the owner on 2026-10-26 (R0-06 to R0-14).
-
-- **OQ-10 — the object and its cardinality.** vNext §3.3 adds an object: its
-  address, kind and needed technical characteristics, linked to the project.
-  Options: (a) one object per project, the address moves from the project to
-  it, rooms stay on the project, `context` keeps `address`; (b) an object may
-  carry several projects (repeated renovations of one flat) and the rooms
-  belong to the object; (c) no separate object — kind and characteristics
-  become project fields. Recommended: (a). The owner expressed no preference on
-  2026-10-27.
-- **OQ-11 — the protected channel between the VPS and the home server.** How
-  Client Portal on the VPS reaches the production Registry (a VPN such as
-  WireGuard, a tunnel the home server opens outward, or something else), and
-  which side opens it. Until decided, the trust boundary between the hosts is
-  unknown.
-- **OQ-12 — retention periods.** How long the customer's contact data, the
-  object's address and characteristics, archived projects and the audit log
-  are kept, given the obligations to keep documents.
+None open. OQ-01 to OQ-09 were decided by the owner on 2026-10-26 (R0-06 to
+R0-14); OQ-10 to OQ-12, raised by the vNext reopening, on 2026-10-27 (R0-38 to
+R0-40).
 
 ## Carried to later states
 
@@ -556,7 +577,9 @@ not here.
 - **State 1 (models).** The fields of Project, Customer, Object, Room, artifact
   pointer, working context, switch request and audit entry, and of each create
   request; the format of every identity (R0-07, R0-16, R0-17), and how a test
-  instance's identity space is told apart from production's (R0-34); revisions
+  instance's identity space is told apart from production's (R0-34); how the
+  end of a customer relationship is recorded, and what an anonymised project,
+  object or customer keeps (R0-40); revisions
   (R0-35); timestamps and which actions move a project's updated time (L16);
   how an erased or restricted Customer is represented in reads and lists; the
   disclosure class of each field (R0-26).
@@ -570,7 +593,9 @@ not here.
   sign-in throttling (R0-30); the declared artifact vocabulary and what a change
   of it does to existing pointers (R0-33); publication as one transaction
   (L07); the import's mapping check (R0-34); audit-log integrity protection
-  (R0-37); backup and tested restore (vNext §11).
+  (R0-37); when and how expired data is erased or anonymised, and how linked
+  documents' mandatory retention holds it back (R0-40); backup and tested
+  restore (vNext §11).
 - **States 5 and 6 (public APIs, contracts).** The field names of every list
   answer and of the project card; the exact `validate` and `context` answers
   (R0-04, the consumer table in `SOURCE.md`) and their disclosure classes; the
