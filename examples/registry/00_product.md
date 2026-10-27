@@ -7,7 +7,7 @@ frame was accepted as a whole on 2026-10-26 (R0-15) and closed after question
 round 17. The owner's requirements document
 `sources/registry_vnext_requirements_20261027.md` ("Registry — Project Identity
 & Trusted Context", cited as vNext §n) and the owner's answers of 2026-10-27 on
-its conflicts with that frame are recorded as R0-24 to R0-57; each names the
+its conflicts with that frame are recorded as R0-24 to R0-59; each names the
 earlier decisions it replaces or narrows, and a replaced decision says so under
 its heading. In decisions before R0-24, "staff" reads "the owner" (R0-30) and
 "the Registry frontend" reads "the owner interface" (R0-29). The sections above
@@ -135,7 +135,7 @@ or the platform's general permission system (vNext §17).
 | register an agent session | Cabinet Kernel | the session Registry knows, with no granted project; the owner sees it in the owner interface (R0-47) | — |
 | end or resume a customer relationship | owner | the Customer marked as ended on that date, its retention period running from it; or, before the record is deleted, resumed for a new purpose, its deletion date reconsidered (R0-40, R0-49, R0-57) | unknown or erased customer refused; resuming a customer not ended refused |
 | record a retention holdback | owner | a documented lawful ground and a holdback date on a customer or project; until that date the data is not erased, then its need is assessed again (R0-56) | unknown customer or project refused; a holdback without ground or date refused |
-| read the audit log | owner | the audit entries of significant operations, in time order (R0-37) | — |
+| read the audit log | owner | the entries of significant changes of state, in time order (R0-58) | — |
 
 ## Decisions
 
@@ -526,12 +526,12 @@ exclusions).
   stored and reaches only the owner.
 - **Retention.** Each kind of personal data and the audit log has a retention
   period after which it is erased; the periods are the owner's (R0-40).
-- **Audit.** Every significant operation leaves an audit entry: time, the
-  acting principal (owner, which service, agent through Kernel), the operation,
-  the project, the outcome, the contract and release version, and a
-  confirmation id where the owner confirmed. No password, token, whole card or
-  unneeded personal value enters it. Only the owner reads it; its integrity is
-  protected; it is kept for its retention period.
+- **Audit.** A minimal log of significant changes of state (R0-58): time, the
+  acting principal (owner, which service, agent through Kernel), the change,
+  the project or customer, the outcome, the contract and release version, and
+  a confirmation id where the owner confirmed. No personal value, whole request
+  or secret enters it. Only the owner reads it; it is kept for its documented
+  period.
 - **Diagnostics.** Logs other than the audit log carry no personal value and no
   secret.
 
@@ -712,8 +712,8 @@ it unchanged (round 6 T2).
 
 The sources are the instances on the VPS and on the test rig; the owner picks
 one for each import. An import is atomic: a conflict refuses all of it, and the
-owner may retry after correcting the cause. The first successful import into
-production closes the operation for good. Nothing of a test instance comes
+owner may retry after correcting the cause. Each source's first successful
+import into production closes the operation for that source (R0-59). Nothing of a test instance comes
 over unless the owner picks it as a source. The owner exports the chosen
 source and uploads the export through the owner interface; production Registry
 never calls the source instance and holds no credential for it (R0-18; round 6
@@ -743,6 +743,28 @@ T4). Its
 contact data may still be corrected. Until its record is deleted the owner may
 resume the relationship; its deletion date is then reconsidered for the new
 purpose of processing.
+
+### R0-58 — A minimal log of significant changes (owner, 2026-10-27; round 6 T12; narrows R0-37, R0-56)
+
+Registry records only significant changes of state: changes to projects and
+customer records, granting and revoking an agent session's projects,
+restricting processing and lifting it, erasures and anonymisations, and
+recorded holdbacks. Ordinary reads, agent calls and the inner steps of flows
+are not recorded in Registry; security events of the infrastructure are
+handled by the infrastructure, outside Registry. The log holds no personal
+value, no whole request and no secret, and is kept for a limited, documented
+period (R0-40). The platform manifest describes Registry's capabilities and
+contracts; the log records changes of state only.
+
+### R0-59 — The simplest answers to round 6 T1, T3, T5 (drafted 2026-10-27 under the owner's instruction "do not complicate, add no responsibilities"; to be confirmed)
+
+- Erasure at the end of a period or of a holdback is Registry's own act on
+  that date, recorded in the log (R0-49, R0-56, R0-58); Registry sends no
+  notice and keeps no reminder.
+- A restriction (R0-51, R0-55) covers the customer's contact data; the object's
+  address stays project data and is served as before.
+- The migration closes per source: the VPS and the test rig may each be
+  imported successfully once (R0-54).
 
 ## Explicit exclusions
 
@@ -799,7 +821,7 @@ not here.
   values, expiry and what ends it (R0-32); the owner session's lifetime and
   sign-in throttling (R0-30); the declared artifact vocabulary and what a change
   of it does to existing pointers (R0-33); publication as one transaction
-  (L07); the import's mapping check (R0-34); audit-log integrity protection
+  (L07); the import's mapping check (R0-34); how the audit log is protected
   (R0-37); when and how expired data is erased or anonymised, and how linked
   documents' mandatory retention holds it back (R0-40, R0-49); how the
   non-re-identification and purpose of a kept identity are shown and recorded
