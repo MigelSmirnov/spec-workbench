@@ -92,7 +92,12 @@ or the platform's general permission system (vNext §17).
   declares (R0-33). A pointer is a link between services, and links are the
   agent's: the agent publishes and withdraws pointers through Cabinet Kernel,
   and the owner does in the owner interface; a service publishes none
-  (R0-88).
+  (R0-88). The catalogue records links as they were made, not that the
+  documents still exist: a pointer whose document was deleted or moved stays
+  as it is until the agent or the owner withdraws it or publishes a new
+  version; Registry watches no service and changes no pointer on its own
+  (R0-60), and whether a document exists is answered by its owner service
+  (V1-4).
 - **Browser** — the owner's browser, on the owner interface only, over HTTPS
   when it is not on Registry's host (R0-29). No other browser origin reaches
   Registry; the old frontend on its own origin is retired (R0-29).
