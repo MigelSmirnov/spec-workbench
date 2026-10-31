@@ -193,7 +193,12 @@ card it showed, and what the owner emptied is cleared.
 3. An action that would change nothing (A03 rule 4, A05) still states the
    revision and is refused when it is stale. An anonymised project and an
    erased Customer have no revision (M01, M04): an action on them states
-   none.
+   none. A revision stated for one is not its current one, and the action is
+   refused as stale (rule 2): stage (5) of rule 6 applies to it, and comes
+   before stage (6) and the refusals of A05 rule 4 — a resubmitted erasure that
+   states the revision the record was erased from included; read again, the
+   record shows no revision, and the action stating none is answered as
+   State 0 and A05 say.
 4. Every action is atomic: it applies all its changes or none.
 5. Actions on records without a revision — adding a room, publishing or
    withdrawing a pointer, session actions — state none; the session's owner
@@ -227,6 +232,7 @@ for action a on record r in {Project, Customer} that may move r.revision:
                           => r.revision' = r.revision + 1
                              and r.last_changed' = now
   accepted erasure, anonymisation or deletion => r has no revision after
+  r has no revision and a.stated_revision present => refused as stale
   accepted and not changed(r) => r.revision' = r.revision
 ```
 
@@ -241,6 +247,11 @@ for action a on record r in {Project, Customer} that may move r.revision:
    not as archived.
 5. Kernel naming a project outside its set with a blank room name receives the
    not-found answer, not the missing-name refusal.
+6. Erasing a Customer's contact data again from the form that erased it,
+   stating that revision, is refused as stale and changes nothing; erasing it
+   stating no revision answers it unchanged.
+7. Restricting an erased Customer from a card read before its erasure is
+   refused as stale, not as erased.
 
 ### Consequence
 
