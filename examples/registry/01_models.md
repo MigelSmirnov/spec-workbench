@@ -427,9 +427,10 @@ None. Settled by the owner on 2026-10-31:
 
 ### Meaning
 
-Catalogue metadata and a service-owned reference to a document another service
-published about a project (V1-4, R0-02). Registry holds the pointer, never the
-payload, and never reads or checks the digest (R0-33).
+Catalogue metadata and a reference to a document a service holds about a
+project (V1-4, R0-02): a link the agent makes through Kernel, or the owner
+makes, between the project and that document (R0-88). Registry holds the
+pointer, never the payload, and never reads or checks the digest (R0-33).
 
 Facts a pointer carries:
 
@@ -440,15 +441,16 @@ Facts a pointer carries:
 - its version within the project and type, minted by Registry: 1, then one
   more than the type's last (R0-17);
 - its reference: `uri`, `payload_ref`, at least one (R0-17); its content
-  digest when the producer gave one (R0-33); all as their writer wrote them
+  digest when its publisher gave one (R0-33); all as their writer wrote them
   (R0-68);
 - its status: `published`, `superseded` or `withdrawn` (R0-02, R0-14);
 - written once: the instant it was published and its publisher — the
-  principal (M07) for a pointer published in Registry: a producer service as
-  its token names it, Kernel for the agent naming its session, or the owner
-  for any owner service; the import (M10) for a pointer the import brought in
-  (below); the instant it was superseded;
-  the instant it was withdrawn and by which principal (R0-14).
+  principal (M07) for a pointer published in Registry: Kernel for the agent
+  naming its session, or the owner (R0-88); the import (M10) for a pointer the
+  import brought in (below); the request id of its publish, as Kernel or the
+  owner interface gave it (R0-88; State 2 A01), absent for an imported
+  pointer; the instant it was superseded; the instant it was withdrawn and by
+  which principal (R0-14).
 
 A pointer the import brings in (R0-50) was published before Registry recorded
 principals: the v1 Registry keeps no publisher (its `owner_service` is the
@@ -465,8 +467,8 @@ entity
 
 ### Identity evidence
 
-Substitution: a repeated publish with equal content is a new pointer with a
-new version, and the previous one is superseded, nothing merged (R0-17), so
+Substitution: a new publish with equal content — another request id — is a
+new pointer with a new version, and the previous one is superseded, nothing merged (R0-17), so
 equal content does not make one pointer. Continuity: the pointer keeps its id
 and version while its status moves from `published` to `superseded` or
 `withdrawn`, stays in the history (R0-14), survives the project's archiving
@@ -475,13 +477,13 @@ and version while its status moves from `published` to `superseded` or
 ### Source of truth
 
 Registry for the pointer; the owner service named by its type for the artifact
-itself (V1-4). The digest is the producer's claim, stored as given (R0-33).
+itself (V1-4). The digest is its publisher's claim, stored as given (R0-33).
 
 ### Lifecycle candidate
 
 ```text
 published -> superseded   (by the next publish of the same type on the project, R0-17)
-published -> withdrawn    (by its owner service, Kernel for the agent, or the owner; R0-14)
+published -> withdrawn    (by Kernel for the agent, or the owner; R0-14, R0-88)
 ```
 
 Both are final. A `superseded` or `withdrawn` pointer cannot be withdrawn
@@ -825,12 +827,11 @@ These are closed sets the specification declares; in State 6 they become
   customers in; its entries are the owner's, listed in State 6 (round 1 T10).
 - Artifact pointer status: `published`, `superseded`, `withdrawn` (R0-14).
 - Principal kind: `owner`, `service`, `agent_via_kernel` (M07).
-- Artifact type vocabulary: each type with its one owner service (R0-33). The
-  entries are the specification's; the v1 sets (`domain/registry/rules.py`,
-  L08) are evidence of the types in use today — `estimate` by PresuPro and
-  Kernel's types — not the vocabulary. Which types are declared is the owner's
-  State 2 decision (carried: "the declared artifact vocabulary and what a
-  change of it does to existing pointers").
+- Artifact type vocabulary: each type with its one owner service, where its
+  documents live (R0-33). The first release declares one: `estimate` by
+  PresuPro (R0-88); the v1 sets (`domain/registry/rules.py`, L08) are evidence,
+  not the vocabulary. What a change of it does to existing pointers is State
+  2's (A22).
 - Audit change vocabulary: one entry per significant change R0-58 names,
   declared in State 6.
 - Disclosure classes: `open`, `business_confidential`, `personal_data`
