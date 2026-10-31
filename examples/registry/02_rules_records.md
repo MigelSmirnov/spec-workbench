@@ -202,8 +202,8 @@ card it showed, and what the owner emptied is cleared.
    checks in one order, and the first failure is its answer; a stage that
    does not apply to it is skipped, and each check an operation states belongs
    to the stage of its kind: (1) the caller's authentication and its right to
-   the operation (A09) — for the owner, a valid owner session, then for a
-   change its CSRF value (R0-29), then a confirmation value where one is
+   the operation (A09) — for the owner, a valid owner session (sign-in
+   excepted, A13 rule 4), then for a change its CSRF value (R0-29), then a confirmation value where one is
    asked (A13);
    (2) for agent authority, the session and its set (A10), whose refusal
    hides every later failure; (3) that every record the action names exists —

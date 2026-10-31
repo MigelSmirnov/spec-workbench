@@ -79,7 +79,8 @@ security review of States 0–2.
    (R0-79).
 9. A refused import may be retried with a corrected file; nothing of a refused
    attempt remains.
-10. The import answers once its transaction commits; right after it — or, in
+10. The import answers once its transaction commits, listing for each
+   Customer it made its v1 value and the `customer_ref` minted for it (R0-89); right after it — or, in
    an owner-only start, at the next start with the tokens (A18 rule 10) —
    Registry makes a backup run outside the daily schedule (A18), so the import
    reaches a checked backup as soon as it can, and the owner interface shows
@@ -134,7 +135,10 @@ closure is the one proof of success.
    and refuses every service call (A18 rule 10).
 2. Registry checks the configuration when it starts and serves nothing until
    every check passes; a failed check stops the start with a diagnostic that
-   names the failed item and never its value (R0-37).
+   names the failed item and never its value (R0-37). The checks run in the
+   order of these rules and the first that fails stops the start; a new store
+   is made only after every other check has passed, and a failed start
+   leaves no file it made.
 3. A secret — each token, the owner credential and the backup key — is at
    least 32 bytes long; a shorter one fails the start. That the owner's vault
    generates it at random is the owner's duty (R0-23), which Registry cannot
@@ -199,7 +203,8 @@ secret cannot be shared between holders.
    is made even when the day already has a backup, and keeps both; it is not
    that day's ordinary backup, which is still made at 03:00 or at the next
    start. Besides it, at most one backup is made per UTC day, the kept backups themselves
-   saying which days have one, and runs never overlap. Each run writes its
+   saying which days have one, and runs never overlap: a run that falls due
+   while another runs waits for it, and both are made. Each run writes its
    outcome and instant to a status file in the backup location, which a
    restart keeps; it is written after the backup is kept or the run fails,
    and a status file missing, unreadable or older than the newest kept backup
@@ -208,7 +213,8 @@ secret cannot be shared between holders.
    and that last outcome, so the owner sees when a backup holds the import
    (A16 rule 10). A backup records, readable without
    its key, its instant, the release that made it, the last audit sequence
-   number it holds and a digest of the key it was made with (never the key);
+   number it holds, whether it is the day's ordinary backup or the one after
+   an import, and a digest of the key it was made with (never the key);
    its age is counted from that instant.
 2. A backup holds every record but the agent sessions (M06): a store restored
    from it has no session, Kernel registers its sessions again and the owner

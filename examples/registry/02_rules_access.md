@@ -217,7 +217,10 @@ sees every change as a new version.
    owner session, and a restart clears them. Concurrent sign-ins are counted
    one at a time.
 4. A refused sign-in answers the same whatever was wrong, and never echoes
-   the credential.
+   the credential. Sign-in is the one owner request made without a session:
+   it is checked for the credential and the lockout only, carries no CSRF
+   value, and the session cookie it sets is sent only to Registry's origin
+   (rule 1).
 5. Every change in the owner interface carries the CSRF protection bound to
    its session (R0-29); one from another session or none is refused.
 6. An action that asks for confirmation (Identity formats) is submitted with a
