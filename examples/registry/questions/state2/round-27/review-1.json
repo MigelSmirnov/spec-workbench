@@ -1,0 +1,245 @@
+{
+ "open_points": [
+  {
+   "subject": "Owner-session expiry pass",
+   "kind": "schedule ambiguity",
+   "text": "“a pass over the sessions it makes every 60 seconds from the start”",
+   "question": "When is the first pass, and after a delayed pass is the next pass tied to the original 60-second schedule or to completion of the delayed pass?",
+   "options": [
+    "Run immediately at process start and then on fixed 60-second boundaries",
+    "Run first 60 seconds after start and then on fixed boundaries",
+    "Wait 60 seconds after each completed pass"
+   ],
+   "default_guess": "Run first 60 seconds after start and then on fixed 60-second boundaries.",
+   "unit": "?"
+  },
+  {
+   "subject": "Owner request versus expiry pass",
+   "kind": "race undefined",
+   "text": "“its arrival restarts the 30 minutes” and “the pass alone ends sessions by their limits, taking the import lock and then each session's lock and deciding under them”",
+   "question": "How is an arriving request's validity check and last-request update ordered atomically against the expiry pass's decision, and does the request take the session lock for that operation?",
+   "options": [
+    "The request takes the session lock and either refreshes the session before the pass or finds it ended",
+    "Arrival refreshes the timestamp without the session lock, with a separately defined atomic ordering",
+    "The pass may end a session concurrently with a request that has just refreshed it"
+   ],
+   "default_guess": "Take the session lock for the validity check and last-request update, giving the request or the pass one definite order.",
+   "unit": "?"
+  },
+  {
+   "subject": "Admitted file request versus expiry cleanup",
+   "kind": "rule conflict",
+   "text": "“a request that passes it completes even if a limit or a sign-out comes while it runs” and “the upload of a session ended by its limits goes with the session, when Registry ends it”",
+   "question": "If an upload, mapping, confirmation or sign-out passes the session check but waits for the import/session locks, may the expiry pass end and remove that session before the admitted request acquires the locks, and if so how can that request still complete without recreating state in an ended session?",
+   "options": [
+    "An admitted request prevents expiry cleanup until it finishes",
+    "Cleanup may end the session and the admitted request is then cancelled despite having passed the check",
+    "Cleanup may end the session, but the admitted request completes without retaining any session state",
+    "The request may recreate or retain state after the session was ended"
+   ],
+   "default_guess": "Count an admitted request as in flight and prevent expiry cleanup from removing its session until it finishes.",
+   "unit": "?"
+  },
+  {
+   "subject": "Expiry-pass lock scope",
+   "kind": "locking ambiguity",
+   "text": "“taking the import lock and then each session's lock”",
+   "question": "Does one pass hold the import lock while it visits every session, or release and reacquire it for each session; and which sessions belong to the pass when sessions are created or signed out during iteration?",
+   "options": [
+    "Hold the import lock for the whole pass and visit a snapshot of sessions taken under it",
+    "Reacquire the import lock per session and visit a snapshot",
+    "Reacquire per session and use a live collection"
+   ],
+   "default_guess": "Hold the import lock for the whole pass and visit a snapshot taken after acquiring it.",
+   "unit": "?"
+  },
+  {
+   "subject": "Import-lock request admission",
+   "kind": "linearization gap",
+   "text": "“take the instance's one import lock first, then their session's lock, check the closure while holding them, and hold both until done”",
+   "question": "After an owner request has passed the session check but before it acquires the import lock, what event is its semantic ordering point against an accepted import or session expiry: session-check time, import-lock acquisition, session-lock acquisition, or transaction commit?",
+   "options": [
+    "Import-lock acquisition determines its order",
+    "Session-lock acquisition determines its order",
+    "The initial session check determines its order",
+    "The database commit determines its order"
+   ],
+   "default_guess": "Import-lock acquisition determines its order against import closure, while the session lock determines its order against other changes to that session.",
+   "unit": "?"
+  },
+  {
+   "subject": "Configuration well-formedness",
+   "kind": "undefined validation",
+   "text": "“each well formed”",
+   "question": "What exact syntax and validity checks make the store location, backup location, owner credential, backup key and service tokens well formed beyond the separately stated length, distinctness and path checks?",
+   "options": [
+    "Only successful decoding plus the explicitly listed checks",
+    "A declared character encoding and syntax for each item",
+    "Arbitrary environment strings or byte sequences are accepted for secrets, with paths parsed by the host platform"
+   ],
+   "default_guess": "Treat configuration as UTF-8 strings, require nonempty valid paths, and apply only the explicitly listed checks to secrets.",
+   "unit": "?"
+  },
+  {
+   "subject": "Secret byte length and equality",
+   "kind": "representation ambiguity",
+   "text": "“A secret ... is at least 32 bytes long” and “No two secrets are equal”",
+   "question": "How are environment-variable text values converted to bytes for the 32-byte check, constant-time comparison and distinctness check, including non-ASCII text and any normalization?",
+   "options": [
+    "UTF-8 encode exactly as supplied with no Unicode normalization",
+    "Restrict secrets to an ASCII encoding",
+    "Measure characters rather than encoded bytes",
+    "Decode a declared binary encoding such as base64 before checking"
+   ],
+   "default_guess": "Require ASCII secrets and compare their exact encoded bytes.",
+   "unit": "?"
+  },
+  {
+   "subject": "Configuration check precedence in owner-only mode",
+   "kind": "precedence ambiguity",
+   "text": "“one service token for each service ... or, for an owner-only start, none of the four” and “every item of rule 1 present”",
+   "question": "At what point is all-four versus owner-only mode selected, and which deterministic failure is reported when only some service-token variables are present or one is malformed?",
+   "options": [
+    "Select owner-only only when all four variables are absent; otherwise require and validate all four in table order",
+    "Validate every present token first, then decide whether the set is complete",
+    "Treat any incomplete token set as an unknown configuration mode"
+   ],
+   "default_guess": "Select owner-only only when all four are absent; otherwise require and validate all four in A09 table order.",
+   "unit": "?"
+  },
+  {
+   "subject": "Store integrity check",
+   "kind": "unverifiable invariant",
+   "text": "“pass the store's own integrity check”",
+   "question": "What exact integrity procedure and pass criteria are required at startup and during backup checking?",
+   "options": [
+    "Use only the database engine's built-in full integrity check",
+    "Check engine integrity plus Registry schema, constraints and referential invariants",
+    "Use a release-specific Registry integrity procedure declared elsewhere"
+   ],
+   "default_guess": "Run the database engine's full integrity check and validate the release's schema and foreign-key constraints.",
+   "unit": "?"
+  },
+  {
+   "subject": "Concurrent Registry starts",
+   "kind": "concurrency gap",
+   "text": "“Registry makes a new, empty store ... under a temporary name ... that it renames to the store's name only once the store is complete”",
+   "question": "What happens if two Registry processes start concurrently against the same store and backup locations, including competing probe files, temporary-store cleanup and final rename?",
+   "options": [
+    "An instance-level lock permits only one process to start",
+    "Atomic create/rename makes one process win and the other fail without deleting the winner's temporary files",
+    "Concurrent processes are an excluded deployment error"
+   ],
+   "default_guess": "Acquire an exclusive instance lock covering startup, serving and backup work.",
+   "unit": "?"
+  },
+  {
+   "subject": "Startup probe cleanup",
+   "kind": "failure semantics",
+   "text": "“A failed start leaves no file it made but a probe it could not remove, which the next start or run removes with the other temporary files”",
+   "question": "What exact name identifies a probe, when does the next start remove it, and does failure to remove an old probe stop startup or merely produce a diagnostic?",
+   "options": [
+    "Probe files use the backup temporary prefix and inability to remove any of them stops startup",
+    "A unique probe name is removed opportunistically and failure is only reported",
+    "The next backup run, not startup, owns cleanup"
+   ],
+   "default_guess": "Use the backup temporary prefix; remove all such files before probing, and stop startup if any cannot be removed.",
+   "unit": "?"
+  },
+  {
+   "subject": "Backup encryption",
+   "kind": "cryptography unspecified",
+   "text": "“Each backup is encrypted with the backup key”",
+   "question": "Which authenticated-encryption algorithm, key derivation or key interpretation, nonce generation, versioning and associated-data rules must implementations use?",
+   "options": [
+    "A specified AEAD format with a fresh random nonce and authenticated metadata",
+    "Backend-selected authenticated encryption",
+    "Encryption without authenticated integrity, relying on the later store check"
+   ],
+   "default_guess": "Use a versioned AEAD format with a fresh random nonce and authenticate all cleartext metadata as associated data.",
+   "unit": "?"
+  },
+  {
+   "subject": "Backup cleartext metadata",
+   "kind": "integrity ambiguity",
+   "text": "“It records, readable without its key, its instant, the release that made it, the last audit sequence number it holds and a digest of the key”",
+   "question": "Is the cleartext record authenticated by the encrypted backup, what digest algorithm and encoding identify the key, and what validation prevents parseable but false metadata such as a future instant or wrong sequence number from counting as valid?",
+   "options": [
+    "Authenticate canonical metadata as AEAD associated data and validate all fields against the decrypted store",
+    "Leave metadata unauthenticated and validate only that its fields parse",
+    "Put a signed or keyed authentication tag on the metadata separately"
+   ],
+   "default_guess": "Encode metadata canonically, authenticate it as AEAD associated data, and compare its release and sequence facts with the decrypted store while rejecting impossible instants.",
+   "unit": "?"
+  },
+  {
+   "subject": "Empty or pruned audit log in a backup",
+   "kind": "validation gap",
+   "text": "“checks ... that its audit log ends at the recorded sequence number”",
+   "question": "How is the recorded last sequence number defined and checked when the store has never written an audit entry, or when old entries were erased and the durable next-sequence counter is greater than the highest remaining entry?",
+   "options": [
+    "Record and verify the durable last-issued counter, using 0 before the first entry",
+    "Record the greatest sequence number still present, using 0 when none remains",
+    "Record both the last-issued counter and greatest retained entry"
+   ],
+   "default_guess": "Record and verify the durable last-issued sequence counter, with 0 before any entry, independently of which entries remain.",
+   "unit": "?"
+  },
+  {
+   "subject": "Backup file format and kept name",
+   "kind": "format ambiguity",
+   "text": "“A kept name is made from the backup's instant and is never overwritten”",
+   "question": "What canonical timestamp precision, filename encoding and collision rule are used when two backups have the same recorded instant or when different textual instants map to the same filesystem name?",
+   "options": [
+    "Use a fixed UTC format with sufficient precision plus a unique random suffix",
+    "Use the instant alone and fail on any collision as stated",
+    "Use the instant plus the audit sequence number"
+   ],
+   "default_guess": "Use a canonical UTC timestamp plus the snapshot's last sequence number, and fail rather than overwrite if that name exists.",
+   "unit": "?"
+  },
+  {
+   "subject": "Backup retention bound",
+   "kind": "contradictory guarantee",
+   "text": "“at most 31 days after the erasure” and “Registry bounds neither how long a run takes”",
+   "question": "Is 31 days a hard bound, or can an overlapping, delayed or arbitrarily long run extend retention even when runs do not otherwise fail?",
+   "options": [
+    "31 days is a hard bound, requiring a bound on run duration and scheduling delay",
+    "31 days applies only when a successful deletion step completes daily; any missed, overlapping or long run extends it",
+    "There is no maximum retention bound"
+   ],
+   "default_guess": "Treat 31 days as conditional on a successful deletion step completing each day; every missed, overlapping, failed or long-running backup extends retention.",
+   "unit": "?"
+  },
+  {
+   "subject": "Backup check coverage",
+   "kind": "undefined verification",
+   "text": "“opens that for reading only, checks that it is the store version of its release, that the store's own integrity check passes and that its audit log ends at the recorded sequence number”",
+   "question": "Does a checked backup also have to prove that every required Registry record, schema constraint and cross-record invariant is readable and valid, including the deliberate absence of agent sessions, or are engine integrity, version and sequence checks sufficient?",
+   "options": [
+    "Validate the full release schema and all durable domain invariants",
+    "Validate only engine integrity, store version and audit sequence",
+    "Validate engine and schema constraints but not higher-level domain invariants"
+   ],
+   "default_guess": "Validate engine integrity, the exact release schema, foreign-key and uniqueness constraints, absence of agent sessions, and the recorded audit counter.",
+   "unit": "?"
+  },
+  {
+   "subject": "Backup-key rotation and restorability",
+   "kind": "ownership gap",
+   "text": "“older backups stay encrypted with the key they were made with” and “decrypting an older one, with the key it was made with, is part of a restore, outside Registry”",
+   "question": "What requirement ensures that the owner retains and can identify every old backup key for as long as a backup encrypted with it is kept, and what should happen to an old backup whose key is unavailable?",
+   "options": [
+    "The owner must retain old keys outside Registry until their backups expire",
+    "Registry retains old keys in protected configuration state",
+    "Backups whose key is unavailable remain kept but are not guaranteed restorable",
+    "Backups whose key is unavailable are deleted"
+   ],
+   "default_guess": "Require the owner to retain old keys outside Registry until every backup made with them has expired; Registry keeps such backups unchanged.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"Owner-session expiry pass\",\"kind\":\"schedule ambiguity\",\"text\":\"“a pass over the sessions it makes every 60 seconds from the start”\",\"question\":\"When is the first pass, and after a delayed pass is the next pass tied to the original 60-second schedule or to completion of the delayed pass?\",\"options\":[\"Run immediately at process start and then on fixed 60-second boundaries\",\"Run first 60 seconds after start and then on fixed boundaries\",\"Wait 60 seconds after each completed pass\"],\"default_guess\":\"Run first 60 seconds after start and then on fixed 60-second boundaries.\"},{\"subject\":\"Owner request versus expiry pass\",\"kind\":\"race undefined\",\"text\":\"“its arrival restarts the 30 minutes” and “the pass alone ends sessions by their limits, taking the import lock and then each session's lock and deciding under them”\",\"question\":\"How is an arriving request's validity check and last-request update ordered atomically against the expiry pass's decision, and does the request take the session lock for that operation?\",\"options\":[\"The request takes the session lock and either refreshes the session before the pass or finds it ended\",\"Arrival refreshes the timestamp without the session lock, with a separately defined atomic ordering\",\"The pass may end a session concurrently with a request that has just refreshed it\"],\"default_guess\":\"Take the session lock for the validity check and last-request update, giving the request or the pass one definite order.\"},{\"subject\":\"Admitted file request versus expiry cleanup\",\"kind\":\"rule conflict\",\"text\":\"“a request that passes it completes even if a limit or a sign-out comes while it runs” and “the upload of a session ended by its limits goes with the session, when Registry ends it”\",\"question\":\"If an upload, mapping, confirmation or sign-out passes the session check but waits for the import/session locks, may the expiry pass end and remove that session before the admitted request acquires the locks, and if so how can that request still complete without recreating state in an ended session?\",\"options\":[\"An admitted request prevents expiry cleanup until it finishes\",\"Cleanup may end the session and the admitted request is then cancelled despite having passed the check\",\"Cleanup may end the session, but the admitted request completes without retaining any session state\",\"The request may recreate or retain state after the session was ended\"],\"default_guess\":\"Count an admitted request as in flight and prevent expiry cleanup from removing its session until it finishes.\"},{\"subject\":\"Expiry-pass lock scope\",\"kind\":\"locking ambiguity\",\"text\":\"“taking the import lock and then each session's lock”\",\"question\":\"Does one pass hold the import lock while it visits every session, or release and reacquire it for each session; and which sessions belong to the pass when sessions are created or signed out during iteration?\",\"options\":[\"Hold the import lock for the whole pass and visit a snapshot of sessions taken under it\",\"Reacquire the import lock per session and visit a snapshot\",\"Reacquire per session and use a live collection\"],\"default_guess\":\"Hold the import lock for the whole pass and visit a snapshot taken after acquiring it.\"},{\"subject\":\"Import-lock request admission\",\"kind\":\"linearization gap\",\"text\":\"“take the instance's one import lock first, then their session's lock, check the closure while holding them, and hold both until done”\",\"question\":\"After an owner request has passed the session check but before it acquires the import lock, what event is its semantic ordering point against an accepted import or session expiry: session-check time, import-lock acquisition, session-lock acquisition, or transaction commit?\",\"options\":[\"Import-lock acquisition determines its order\",\"Session-lock acquisition determines its order\",\"The initial session check determines its order\",\"The database commit determines its order\"],\"default_guess\":\"Import-lock acquisition determines its order against import closure, while the session lock determines its order against other changes to that session.\"},{\"subject\":\"Configuration well-formedness\",\"kind\":\"undefined validation\",\"text\":\"“each well formed”\",\"question\":\"What exact syntax and validity checks make the store location, backup location, owner credential, backup key and service tokens well formed beyond the separately stated length, distinctness and path checks?\",\"options\":[\"Only successful decoding plus the explicitly listed checks\",\"A declared character encoding and syntax for each item\",\"Arbitrary environment strings or byte sequences are accepted for secrets, with paths parsed by the host platform\"],\"default_guess\":\"Treat configuration as UTF-8 strings, require nonempty valid paths, and apply only the explicitly listed checks to secrets.\"},{\"subject\":\"Secret byte length and equality\",\"kind\":\"representation ambiguity\",\"text\":\"“A secret ... is at least 32 bytes long” and “No two secrets are equal”\",\"question\":\"How are environment-variable text values converted to bytes for the 32-byte check, constant-time comparison and distinctness check, including non-ASCII text and any normalization?\",\"options\":[\"UTF-8 encode exactly as supplied with no Unicode normalization\",\"Restrict secrets to an ASCII encoding\",\"Measure characters rather than encoded bytes\",\"Decode a declared binary encoding such as base64 before checking\"],\"default_guess\":\"Require ASCII secrets and compare their exact encoded bytes.\"},{\"subject\":\"Configuration check precedence in owner-only mode\",\"kind\":\"precedence ambiguity\",\"text\":\"“one service token for each service ... or, for an owner-only start, none of the four” and “every item of rule 1 present”\",\"question\":\"At what point is all-four versus owner-only mode selected, and which deterministic failure is reported when only some service-token variables are present or one is malformed?\",\"options\":[\"Select owner-only only when all four variables are absent; otherwise require and validate all four in table order\",\"Validate every present token first, then decide whether the set is complete\",\"Treat any incomplete token set as an unknown configuration mode\"],\"default_guess\":\"Select owner-only only when all four are absent; otherwise require and validate all four in A09 table order.\"},{\"subject\":\"Store integrity check\",\"kind\":\"unverifiable invariant\",\"text\":\"“pass the store's own integrity check”\",\"question\":\"What exact integrity procedure and pass criteria are required at startup and during backup checking?\",\"options\":[\"Use only the database engine's built-in full integrity check\",\"Check engine integrity plus Registry schema, constraints and referential invariants\",\"Use a release-specific Registry integrity procedure declared elsewhere\"],\"default_guess\":\"Run the database engine's full integrity check and validate the release's schema and foreign-key constraints.\"},{\"subject\":\"Concurrent Registry starts\",\"kind\":\"concurrency gap\",\"text\":\"“Registry makes a new, empty store ... under a temporary name ... that it renames to the store's name only once the store is complete”\",\"question\":\"What happens if two Registry processes start concurrently against the same store and backup locations, including competing probe files, temporary-store cleanup and final rename?\",\"options\":[\"An instance-level lock permits only one process to start\",\"Atomic create/rename makes one process win and the other fail without deleting the winner's temporary files\",\"Concurrent processes are an excluded deployment error\"],\"default_guess\":\"Acquire an exclusive instance lock covering startup, serving and backup work.\"},{\"subject\":\"Startup probe cleanup\",\"kind\":\"failure semantics\",\"text\":\"“A failed start leaves no file it made but a probe it could not remove, which the next start or run removes with the other temporary files”\",\"question\":\"What exact name identifies a probe, when does the next start remove it, and does failure to remove an old probe stop startup or merely produce a diagnostic?\",\"options\":[\"Probe files use the backup temporary prefix and inability to remove any of them stops startup\",\"A unique probe name is removed opportunistically and failure is only reported\",\"The next backup run, not startup, owns cleanup\"],\"default_guess\":\"Use the backup temporary prefix; remove all such files before probing, and stop startup if any cannot be removed.\"},{\"subject\":\"Backup encryption\",\"kind\":\"cryptography unspecified\",\"text\":\"“Each backup is encrypted with the backup key”\",\"question\":\"Which authenticated-encryption algorithm, key derivation or key interpretation, nonce generation, versioning and associated-data rules must implementations use?\",\"options\":[\"A specified AEAD format with a fresh random nonce and authenticated metadata\",\"Backend-selected authenticated encryption\",\"Encryption without authenticated integrity, relying on the later store check\"],\"default_guess\":\"Use a versioned AEAD format with a fresh random nonce and authenticate all cleartext metadata as associated data.\"},{\"subject\":\"Backup cleartext metadata\",\"kind\":\"integrity ambiguity\",\"text\":\"“It records, readable without its key, its instant, the release that made it, the last audit sequence number it holds and a digest of the key”\",\"question\":\"Is the cleartext record authenticated by the encrypted backup, what digest algorithm and encoding identify the key, and what validation prevents parseable but false metadata such as a future instant or wrong sequence number from counting as valid?\",\"options\":[\"Authenticate canonical metadata as AEAD associated data and validate all fields against the decrypted store\",\"Leave metadata unauthenticated and validate only that its fields parse\",\"Put a signed or keyed authentication tag on the metadata separately\"],\"default_guess\":\"Encode metadata canonically, authenticate it as AEAD associated data, and compare its release and sequence facts with the decrypted store while rejecting impossible instants.\"},{\"subject\":\"Empty or pruned audit log in a backup\",\"kind\":\"validation gap\",\"text\":\"“checks ... that its audit log ends at the recorded sequence number”\",\"question\":\"How is the recorded last sequence number defined and checked when the store has never written an audit entry, or when old entries were erased and the durable next-sequence counter is greater than the highest remaining entry?\",\"options\":[\"Record and verify the durable last-issued counter, using 0 before the first entry\",\"Record the greatest sequence number still present, using 0 when none remains\",\"Record both the last-issued counter and greatest retained entry\"],\"default_guess\":\"Record and verify the durable last-issued sequence counter, with 0 before any entry, independently of which entries remain.\"},{\"subject\":\"Backup file format and kept name\",\"kind\":\"format ambiguity\",\"text\":\"“A kept name is made from the backup's instant and is never overwritten”\",\"question\":\"What canonical timestamp precision, filename encoding and collision rule are used when two backups have the same recorded instant or when different textual instants map to the same filesystem name?\",\"options\":[\"Use a fixed UTC format with sufficient precision plus a unique random suffix\",\"Use the instant alone and fail on any collision as stated\",\"Use the instant plus the audit sequence number\"],\"default_guess\":\"Use a canonical UTC timestamp plus the snapshot's last sequence number, and fail rather than overwrite if that name exists.\"},{\"subject\":\"Backup retention bound\",\"kind\":\"contradictory guarantee\",\"text\":\"“at most 31 days after the erasure” and “Registry bounds neither how long a run takes”\",\"question\":\"Is 31 days a hard bound, or can an overlapping, delayed or arbitrarily long run extend retention even when runs do not otherwise fail?\",\"options\":[\"31 days is a hard bound, requiring a bound on run duration and scheduling delay\",\"31 days applies only when a successful deletion step completes daily; any missed, overlapping or long run extends it\",\"There is no maximum retention bound\"],\"default_guess\":\"Treat 31 days as conditional on a successful deletion step completing each day; every missed, overlapping, failed or long-running backup extends retention.\"},{\"subject\":\"Backup check coverage\",\"kind\":\"undefined verification\",\"text\":\"“opens that for reading only, checks that it is the store version of its release, that the store's own integrity check passes and that its audit log ends at the recorded sequence number”\",\"question\":\"Does a checked backup also have to prove that every required Registry record, schema constraint and cross-record invariant is readable and valid, including the deliberate absence of agent sessions, or are engine integrity, version and sequence checks sufficient?\",\"options\":[\"Validate the full release schema and all durable domain invariants\",\"Validate only engine integrity, store version and audit sequence\",\"Validate engine and schema constraints but not higher-level domain invariants\"],\"default_guess\":\"Validate engine integrity, the exact release schema, foreign-key and uniqueness constraints, absence of agent sessions, and the recorded audit counter.\"},{\"subject\":\"Backup-key rotation and restorability\",\"kind\":\"ownership gap\",\"text\":\"“older backups stay encrypted with the key they were made with” and “decrypting an older one, with the key it was made with, is part of a restore, outside Registry”\",\"question\":\"What requirement ensures that the owner retains and can identify every old backup key for as long as a backup encrypted with it is kept, and what should happen to an old backup whose key is unavailable?\",\"options\":[\"The owner must retain old keys outside Registry until their backups expire\",\"Registry retains old keys in protected configuration state\",\"Backups whose key is unavailable remain kept but are not guaranteed restorable\",\"Backups whose key is unavailable are deleted\"],\"default_guess\":\"Require the owner to retain old keys outside Registry until every backup made with them has expired; Registry keeps such backups unchanged.\"}]}",
+ "set_aside": []
+}

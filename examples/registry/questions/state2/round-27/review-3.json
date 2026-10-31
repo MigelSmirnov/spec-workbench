@@ -1,0 +1,189 @@
+{
+ "open_points": [
+  {
+   "subject": "A13 owner-session expiry and destruction",
+   "kind": "contradictory timing",
+   "text": "“The session ends at the first of” a limit, but “the pass alone ends sessions by their limits” and only then drops their pending confirmation and uploaded file.",
+   "question": "Does a session end logically at the exact deadline with its state merely awaiting disposal, or does it remain an ended-but-stored session until the cleanup pass?",
+   "options": [
+    "It ends at the deadline; requests are refused immediately and state is disposed by the next pass.",
+    "It ends only during the pass, although requests are refused from the deadline.",
+    "The first request or pass observing expiry ends and disposes it."
+   ],
+   "default_guess": "It ends logically at the deadline, is unusable immediately, and its runtime state is physically removed by the next pass.",
+   "unit": "?"
+  },
+  {
+   "subject": "A13 request admission versus session locking",
+   "kind": "race contradiction",
+   "text": "“a request that passes [validity] completes even if a limit or a sign-out comes while it runs”, but state-changing requests take their locks only “after passing the session check”, and the expiry pass or sign-out can take those locks first and remove the session.",
+   "question": "What reserves an admitted request’s right to finish between its session check and its later acquisition of the import/session locks?",
+   "options": [
+    "The validity check and acquisition of all required locks are one atomic admission step.",
+    "An admitted-request counter or lease prevents session removal until the request finishes.",
+    "Lock acquisition decides order, so a request that merely passed the earlier check may still be refused."
+   ],
+   "default_guess": "Treat the session check and acquisition of the request’s required locks as one atomic admission step.",
+   "unit": "?"
+  },
+  {
+   "subject": "A13 last-request update and expiry pass",
+   "kind": "unspecified synchronization",
+   "text": "“its arrival restarts the 30 minutes — of concurrent requests the latest arrival counts”, while the pass decides expiry under the import and session locks, but the text does not say when or under which lock an arrival records `last_request`.",
+   "question": "How is `last_request` updated atomically against the expiry pass and concurrent arrivals?",
+   "options": [
+    "Update it while holding the session lock as part of admission.",
+    "Record arrival before taking locks using an atomic maximum operation.",
+    "Record it only after the request acquires all of its operational locks."
+   ],
+   "default_guess": "Update it under the session lock during atomic request admission, using the latest arrival instant.",
+   "unit": "?"
+  },
+  {
+   "subject": "A13 cleanup-pass schedule",
+   "kind": "underspecified schedule",
+   "text": "“a pass over the sessions it makes every 60 seconds from the start” does not define whether the first pass is at start or 60 seconds later, or what happens to missed or delayed passes.",
+   "question": "What are the exact first-run, delay, overlap and catch-up rules for the 60-second cleanup pass?",
+   "options": [
+    "First pass after 60 seconds; delayed passes run once when possible with no catch-up.",
+    "First pass at process start and then on fixed 60-second boundaries.",
+    "Run 60 seconds after the preceding pass completes."
+   ],
+   "default_guess": "Run the first pass 60 seconds after start, never overlap passes, and run one delayed pass when possible without catch-up.",
+   "unit": "?"
+  },
+  {
+   "subject": "A16 accepted import clearing other sessions’ uploads",
+   "kind": "lock ownership ambiguity",
+   "text": "Requests that change an uploaded file “take the instance's one import lock first, then their session's lock” and hold both, but an accepted import holding those two locks for its own session “drops every session's upload” without saying whether it locks the other sessions.",
+   "question": "Must an accepted import acquire every affected session’s lock before clearing that session’s upload, or is the import lock alone sufficient for uploads belonging to other sessions?",
+   "options": [
+    "The import lock alone protects every uploaded-file value; only the confirming session’s lock is needed.",
+    "Acquire the import lock and then every affected session lock in a declared order.",
+    "Clear other uploads through separate per-session operations after committing the import."
+   ],
+   "default_guess": "Use the import lock as the global guard for all uploaded-file values and hold only the confirming session’s session lock.",
+   "unit": "?"
+  },
+  {
+   "subject": "A17 owner-only configuration",
+   "kind": "direct contradiction",
+   "text": "Rule 1 permits “for an owner-only start, none of the four” service tokens, while rule 2 requires “every item of rule 1 present” and rule 5 says “A missing ... item fails the start”.",
+   "question": "How does the presence check distinguish a valid owner-only configuration from an invalid configuration missing all four tokens?",
+   "options": [
+    "Either all four service-token variables are present or all four are absent; both modes are valid.",
+    "All four variables must exist, with a declared sentinel value selecting owner-only mode.",
+    "An explicit mode variable selects whether service tokens are required."
+   ],
+   "default_guess": "Accept exactly all four tokens or none of them, and refuse every partial set.",
+   "unit": "?"
+  },
+  {
+   "subject": "A17 configuration schema",
+   "kind": "undefined refusal conditions",
+   "text": "The configuration holds named conceptual items and “each [must be] well formed”, but the exact `REGISTRY_` variable names and the syntax and admissible values of each item are not declared.",
+   "question": "What are the complete variable names and exact well-formedness rules for the store path, backup path, backup key, owner credential and four service tokens?",
+   "options": [
+    "Declare all names and encodings in State 2.",
+    "Delegate a complete configuration schema to State 6.",
+    "Let each implementation choose names and parsing rules."
+   ],
+   "default_guess": "Declare a fixed configuration schema later in the specification and make A17 reference it.",
+   "unit": "?"
+  },
+  {
+   "subject": "A17 secret length and equality",
+   "kind": "undefined byte representation",
+   "text": "Each secret must be “at least 32 bytes long” and secrets are compared for equality, but environment variables are text and no decoding or character encoding is stated.",
+   "question": "Which bytes are measured and compared: encoded environment text, decoded hexadecimal/base64 data, or another representation?",
+   "options": [
+    "UTF-8 bytes of the environment-variable value.",
+    "Strictly decoded base64 bytes.",
+    "Strictly decoded hexadecimal bytes."
+   ],
+   "default_guess": "Use a declared base64 encoding and measure and compare the decoded bytes.",
+   "unit": "?"
+  },
+  {
+   "subject": "A17 startup check precedence",
+   "kind": "ambiguous check order",
+   "text": "Checks run in a fixed order, unknown items are ordered by Unicode code point, and “Within one check, items go in the order rule 1 lists them”, but rule 1 groups the backup location with its key and groups four tokens without defining a complete item order.",
+   "question": "What is the total order of all individual configuration checks, including the four tokens and the owner-only alternative, so the first diagnostic is deterministic?",
+   "options": [
+    "List every individual item in one explicit ordered sequence.",
+    "Order every individual variable by its exact variable name.",
+    "Only check categories are ordered; the first failure within a category is implementation-defined."
+   ],
+   "default_guess": "Order individual variables by exact variable name within each already-declared check category.",
+   "unit": "?"
+  },
+  {
+   "subject": "A17 store opening and integrity",
+   "kind": "vague acceptance test",
+   "text": "An existing store must “pass the store's own integrity check” and a new store is renamed once it “is complete”, without defining the integrity operation, required result, or completeness criteria.",
+   "question": "What exact checks make an existing store acceptable and a newly created store complete enough to publish?",
+   "options": [
+    "Declare backend-specific integrity and schema checks with exact passing results.",
+    "Require only successful read/write opening and an exact store-version value.",
+    "Leave the selected storage backend to define both tests."
+   ],
+   "default_guess": "Require the chosen backend’s full integrity check, exact schema/store version, and successful transactional creation of all required schema and metadata.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 backup encryption and key identification",
+   "kind": "unspecified cryptographic contract",
+   "text": "“Each backup is encrypted with the backup key” and records “a digest of the key”, but no encryption construction, nonce handling, authentication, key encoding, digest algorithm or covered metadata is stated.",
+   "question": "What exact authenticated backup format and key-digest construction must every implementation use?",
+   "options": [
+    "A versioned authenticated-encryption format covering both metadata and ciphertext.",
+    "Encryption of the store body with unauthenticated readable metadata.",
+    "An implementation-specific encrypted container identified only by release."
+   ],
+   "default_guess": "Use a versioned authenticated-encryption format with a fresh nonce, authenticate the readable metadata, and identify the key with a declared cryptographic digest.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 readable backup record",
+   "kind": "vague validity rule",
+   "text": "A kept record is valid when its instant, release, last sequence number and key digest “can all be read”, and an unreadable record is deleted, but valid encodings, ranges and cross-checks are not stated.",
+   "question": "Exactly which malformed, impossible, unknown or inconsistent metadata values make a kept backup record unreadable or invalid?",
+   "options": [
+    "Validate a fully declared schema, ranges, release identity and authenticated binding to the encrypted body.",
+    "Treat any syntactically decodable values as readable.",
+    "Validate syntax and ranges but allow unknown releases and unmatched key digests."
+   ],
+   "default_guess": "Require a declared schema and ranges, authenticated binding to the body, a known release identifier, and a valid key-digest encoding.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 backup snapshot instant",
+   "kind": "undefined timestamp point",
+   "text": "The backup’s “recorded instant ... [is] that of that snapshot”, but a snapshot spans acquisition, serialization, encryption and checking and no exact instant is selected.",
+   "question": "At what event is the backup instant captured for its filename, UTC date, newest-backup display and 30-day retention age?",
+   "options": [
+    "When the read transaction or snapshot is opened.",
+    "When the snapshot read transaction commits or closes.",
+    "When the checked temporary backup is renamed to its kept name."
+   ],
+   "default_guess": "Capture the instant when the consistent store snapshot transaction is opened.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 erasure-retention bound",
+   "kind": "ambiguous guarantee",
+   "text": "Rule 6 says successful daily runs remove erased values “at most 31 days after the erasure”, while rules 1 and 5 allow overlapping dates to be skipped and rule 6 says Registry “bounds neither how long a run takes”.",
+   "question": "Does the 31-day statement include backup-run duration and skipped runs caused by a still-running successful run, or is it only a scheduling estimate under an additional completion-time assumption?",
+   "options": [
+    "Guarantee 31 elapsed days by bounding run duration and ensuring retention cleanup independently.",
+    "Make the bound conditional on at least one fully completed run per UTC day.",
+    "Remove the elapsed-time bound and state only that the next successful deletion step after the 30-day cutoff removes the backup."
+   ],
+   "default_guess": "Treat it as conditional on one completed run per UTC day; otherwise removal occurs at the next successful deletion step.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A13 owner-session expiry and destruction\",\"kind\":\"contradictory timing\",\"text\":\"“The session ends at the first of” a limit, but “the pass alone ends sessions by their limits” and only then drops their pending confirmation and uploaded file.\",\"question\":\"Does a session end logically at the exact deadline with its state merely awaiting disposal, or does it remain an ended-but-stored session until the cleanup pass?\",\"options\":[\"It ends at the deadline; requests are refused immediately and state is disposed by the next pass.\",\"It ends only during the pass, although requests are refused from the deadline.\",\"The first request or pass observing expiry ends and disposes it.\"],\"default_guess\":\"It ends logically at the deadline, is unusable immediately, and its runtime state is physically removed by the next pass.\"},{\"subject\":\"A13 request admission versus session locking\",\"kind\":\"race contradiction\",\"text\":\"“a request that passes [validity] completes even if a limit or a sign-out comes while it runs”, but state-changing requests take their locks only “after passing the session check”, and the expiry pass or sign-out can take those locks first and remove the session.\",\"question\":\"What reserves an admitted request’s right to finish between its session check and its later acquisition of the import/session locks?\",\"options\":[\"The validity check and acquisition of all required locks are one atomic admission step.\",\"An admitted-request counter or lease prevents session removal until the request finishes.\",\"Lock acquisition decides order, so a request that merely passed the earlier check may still be refused.\"],\"default_guess\":\"Treat the session check and acquisition of the request’s required locks as one atomic admission step.\"},{\"subject\":\"A13 last-request update and expiry pass\",\"kind\":\"unspecified synchronization\",\"text\":\"“its arrival restarts the 30 minutes — of concurrent requests the latest arrival counts”, while the pass decides expiry under the import and session locks, but the text does not say when or under which lock an arrival records `last_request`.\",\"question\":\"How is `last_request` updated atomically against the expiry pass and concurrent arrivals?\",\"options\":[\"Update it while holding the session lock as part of admission.\",\"Record arrival before taking locks using an atomic maximum operation.\",\"Record it only after the request acquires all of its operational locks.\"],\"default_guess\":\"Update it under the session lock during atomic request admission, using the latest arrival instant.\"},{\"subject\":\"A13 cleanup-pass schedule\",\"kind\":\"underspecified schedule\",\"text\":\"“a pass over the sessions it makes every 60 seconds from the start” does not define whether the first pass is at start or 60 seconds later, or what happens to missed or delayed passes.\",\"question\":\"What are the exact first-run, delay, overlap and catch-up rules for the 60-second cleanup pass?\",\"options\":[\"First pass after 60 seconds; delayed passes run once when possible with no catch-up.\",\"First pass at process start and then on fixed 60-second boundaries.\",\"Run 60 seconds after the preceding pass completes.\"],\"default_guess\":\"Run the first pass 60 seconds after start, never overlap passes, and run one delayed pass when possible without catch-up.\"},{\"subject\":\"A16 accepted import clearing other sessions’ uploads\",\"kind\":\"lock ownership ambiguity\",\"text\":\"Requests that change an uploaded file “take the instance's one import lock first, then their session's lock” and hold both, but an accepted import holding those two locks for its own session “drops every session's upload” without saying whether it locks the other sessions.\",\"question\":\"Must an accepted import acquire every affected session’s lock before clearing that session’s upload, or is the import lock alone sufficient for uploads belonging to other sessions?\",\"options\":[\"The import lock alone protects every uploaded-file value; only the confirming session’s lock is needed.\",\"Acquire the import lock and then every affected session lock in a declared order.\",\"Clear other uploads through separate per-session operations after committing the import.\"],\"default_guess\":\"Use the import lock as the global guard for all uploaded-file values and hold only the confirming session’s session lock.\"},{\"subject\":\"A17 owner-only configuration\",\"kind\":\"direct contradiction\",\"text\":\"Rule 1 permits “for an owner-only start, none of the four” service tokens, while rule 2 requires “every item of rule 1 present” and rule 5 says “A missing ... item fails the start”.\",\"question\":\"How does the presence check distinguish a valid owner-only configuration from an invalid configuration missing all four tokens?\",\"options\":[\"Either all four service-token variables are present or all four are absent; both modes are valid.\",\"All four variables must exist, with a declared sentinel value selecting owner-only mode.\",\"An explicit mode variable selects whether service tokens are required.\"],\"default_guess\":\"Accept exactly all four tokens or none of them, and refuse every partial set.\"},{\"subject\":\"A17 configuration schema\",\"kind\":\"undefined refusal conditions\",\"text\":\"The configuration holds named conceptual items and “each [must be] well formed”, but the exact `REGISTRY_` variable names and the syntax and admissible values of each item are not declared.\",\"question\":\"What are the complete variable names and exact well-formedness rules for the store path, backup path, backup key, owner credential and four service tokens?\",\"options\":[\"Declare all names and encodings in State 2.\",\"Delegate a complete configuration schema to State 6.\",\"Let each implementation choose names and parsing rules.\"],\"default_guess\":\"Declare a fixed configuration schema later in the specification and make A17 reference it.\"},{\"subject\":\"A17 secret length and equality\",\"kind\":\"undefined byte representation\",\"text\":\"Each secret must be “at least 32 bytes long” and secrets are compared for equality, but environment variables are text and no decoding or character encoding is stated.\",\"question\":\"Which bytes are measured and compared: encoded environment text, decoded hexadecimal/base64 data, or another representation?\",\"options\":[\"UTF-8 bytes of the environment-variable value.\",\"Strictly decoded base64 bytes.\",\"Strictly decoded hexadecimal bytes.\"],\"default_guess\":\"Use a declared base64 encoding and measure and compare the decoded bytes.\"},{\"subject\":\"A17 startup check precedence\",\"kind\":\"ambiguous check order\",\"text\":\"Checks run in a fixed order, unknown items are ordered by Unicode code point, and “Within one check, items go in the order rule 1 lists them”, but rule 1 groups the backup location with its key and groups four tokens without defining a complete item order.\",\"question\":\"What is the total order of all individual configuration checks, including the four tokens and the owner-only alternative, so the first diagnostic is deterministic?\",\"options\":[\"List every individual item in one explicit ordered sequence.\",\"Order every individual variable by its exact variable name.\",\"Only check categories are ordered; the first failure within a category is implementation-defined.\"],\"default_guess\":\"Order individual variables by exact variable name within each already-declared check category.\"},{\"subject\":\"A17 store opening and integrity\",\"kind\":\"vague acceptance test\",\"text\":\"An existing store must “pass the store's own integrity check” and a new store is renamed once it “is complete”, without defining the integrity operation, required result, or completeness criteria.\",\"question\":\"What exact checks make an existing store acceptable and a newly created store complete enough to publish?\",\"options\":[\"Declare backend-specific integrity and schema checks with exact passing results.\",\"Require only successful read/write opening and an exact store-version value.\",\"Leave the selected storage backend to define both tests.\"],\"default_guess\":\"Require the chosen backend’s full integrity check, exact schema/store version, and successful transactional creation of all required schema and metadata.\"},{\"subject\":\"A18 backup encryption and key identification\",\"kind\":\"unspecified cryptographic contract\",\"text\":\"“Each backup is encrypted with the backup key” and records “a digest of the key”, but no encryption construction, nonce handling, authentication, key encoding, digest algorithm or covered metadata is stated.\",\"question\":\"What exact authenticated backup format and key-digest construction must every implementation use?\",\"options\":[\"A versioned authenticated-encryption format covering both metadata and ciphertext.\",\"Encryption of the store body with unauthenticated readable metadata.\",\"An implementation-specific encrypted container identified only by release.\"],\"default_guess\":\"Use a versioned authenticated-encryption format with a fresh nonce, authenticate the readable metadata, and identify the key with a declared cryptographic digest.\"},{\"subject\":\"A18 readable backup record\",\"kind\":\"vague validity rule\",\"text\":\"A kept record is valid when its instant, release, last sequence number and key digest “can all be read”, and an unreadable record is deleted, but valid encodings, ranges and cross-checks are not stated.\",\"question\":\"Exactly which malformed, impossible, unknown or inconsistent metadata values make a kept backup record unreadable or invalid?\",\"options\":[\"Validate a fully declared schema, ranges, release identity and authenticated binding to the encrypted body.\",\"Treat any syntactically decodable values as readable.\",\"Validate syntax and ranges but allow unknown releases and unmatched key digests.\"],\"default_guess\":\"Require a declared schema and ranges, authenticated binding to the body, a known release identifier, and a valid key-digest encoding.\"},{\"subject\":\"A18 backup snapshot instant\",\"kind\":\"undefined timestamp point\",\"text\":\"The backup’s “recorded instant ... [is] that of that snapshot”, but a snapshot spans acquisition, serialization, encryption and checking and no exact instant is selected.\",\"question\":\"At what event is the backup instant captured for its filename, UTC date, newest-backup display and 30-day retention age?\",\"options\":[\"When the read transaction or snapshot is opened.\",\"When the snapshot read transaction commits or closes.\",\"When the checked temporary backup is renamed to its kept name.\"],\"default_guess\":\"Capture the instant when the consistent store snapshot transaction is opened.\"},{\"subject\":\"A18 erasure-retention bound\",\"kind\":\"ambiguous guarantee\",\"text\":\"Rule 6 says successful daily runs remove erased values “at most 31 days after the erasure”, while rules 1 and 5 allow overlapping dates to be skipped and rule 6 says Registry “bounds neither how long a run takes”.\",\"question\":\"Does the 31-day statement include backup-run duration and skipped runs caused by a still-running successful run, or is it only a scheduling estimate under an additional completion-time assumption?\",\"options\":[\"Guarantee 31 elapsed days by bounding run duration and ensuring retention cleanup independently.\",\"Make the bound conditional on at least one fully completed run per UTC day.\",\"Remove the elapsed-time bound and state only that the next successful deletion step after the 30-day cutoff removes the backup.\"],\"default_guess\":\"Treat it as conditional on one completed run per UTC day; otherwise removal occurs at the next successful deletion step.\"}]}",
+ "set_aside": []
+}
