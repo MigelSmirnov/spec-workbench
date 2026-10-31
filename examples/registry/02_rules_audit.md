@@ -64,7 +64,9 @@ outcome but `accepted`.
 5. Sequence numbers are never reused (M09): the next entry after an erasure
    continues from the last number ever written. Registry keeps that last number
    durably, apart from the entries, so neither an erasure nor a restart lowers
-   it.
+   it. A store restored from a backup (A18) continues the history the backup
+   holds: the entries written after it are lost and exist nowhere, and their
+   numbers are issued again for new entries.
 6. An erasure that removes no entry changes nothing: it is accepted, writes no
    entry and mints no confirmation id (A14).
 

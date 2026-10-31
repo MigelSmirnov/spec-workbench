@@ -28,7 +28,11 @@ security review of States 0–2.
 2. The uploaded file is kept in the owner session that uploaded it, never in
    the store, until the import is accepted, another file is uploaded in that
    session, or the session ends (M11); then it is dropped. A refused
-   confirmation keeps it, and the step may be shown again. The mapping names
+   confirmation keeps it, and the step may be shown again; a refused upload —
+   too large or unreadable — replaces nothing. An accepted import drops the
+   file of the session that confirmed it; a file another session keeps stays
+   until that session ends, and its confirmation is refused because the
+   import is closed (rule 8). The mapping names
    the file by its digest. The owner confirms that mapping in the confirmation
    step (A13 rule 6); the confirmation applies the file of that digest, the
    picks, names, aliases and Customer values the mapping showed, nothing
@@ -49,8 +53,12 @@ security review of States 0–2.
    are not every one `superseded` but the highest, which is `published`; an
    instant cannot be read; an `active` project has an
    archived instant or an `archived` one has none; a `superseded` pointer has
-   no superseded instant or a `published` one has one; a record was changed,
-   archived or superseded before it was created, added or published.
+   no superseded instant or a `published` one has one; a record's own instant
+   of change, archiving or supersession is before its own instant of creation,
+   adding or publishing. Imported history is not held to anything more: an
+   archived project's last-changed instant may differ from its archived
+   instant (v1 allowed correcting archived projects, L05), and a record's
+   instants are not compared with another record's.
 5. Ids are unique per kind: a project id, a room id and a pointer id are
    compared only with ids of their own kind, in the file and in production.
 6. At confirmation Registry checks again. Any conflict — a project, room or
@@ -157,8 +165,10 @@ secret cannot be shared between holders.
    location, as a consistent copy taken while it runs: a backup never holds
    part of a transaction. A run that 03:00 found Registry stopped is made when
    it next starts, if no backup was made that UTC day; there is at most one
-   run per UTC day, and runs never overlap. A backup records its instant, the release that made
-   it and the last audit sequence number it holds.
+   run per UTC day, and runs never overlap. A backup records, readable without
+   its key, its instant, the release that made it, the last audit sequence
+   number it holds and a digest of the key it was made with (never the key);
+   its age is counted from that instant.
 2. A backup holds every record but the agent sessions (M06): a store restored
    from it has no session, Kernel registers its sessions again and the owner
    grants them again, so a restore never brings back a grant revoked after
@@ -166,7 +176,8 @@ secret cannot be shared between holders.
 3. Each backup is encrypted with the backup key the configuration holds at its
    making (A17). When the owner changes the key, older backups stay encrypted
    with the key they were made with; the owner keeps that key in the vault
-   until the last of them is deleted (R0-23).
+   until the last of them is deleted (R0-23), and finds it by the digest the
+   backup records.
 4. Right after writing a backup Registry checks it: it decrypts it into a
    temporary file in the backup location, opens it for reading only, checks
    that it is the store version of its release, that the store's own
@@ -191,15 +202,22 @@ secret cannot be shared between holders.
    host while Registry is stopped (Explicit exclusions): the owner decrypts it
    with the key it was made with, kept in the vault (rule 3). It is started by
    the release that made it, or by a later release after that release's own
-   store migration (A17 rule 5). Every change after the backup's instant is
-   lost, the audit entries with it: numbering continues from the backup's
-   last number, and the lost entries exist nowhere.
+   store migration (A17 rule 5). The restored store continues the history the
+   backup holds: every change after the backup's instant is lost, the audit
+   entries with it, and numbering continues from the backup's last number
+   (A15). A migration closure made after the backup is lost with the
+   projects that import brought, and the import may then be made again, which
+   restores them (A16).
 10. The owner first starts the restored instance owner-only (A17 rule 1), so
    no service and no agent reaches it, and brings each Customer and project to
    the state the owner's own record of the retention review (R0-60) gives for
-   it now — erased, restricted, ended or not — before configuring the tokens
-   and starting it again. Registry, which no longer holds those changes,
-   cannot list them or tell when this is done.
+   it now — erased, restricted, ended or not — and erases audit entries before
+   the latest date the owner erased by, before configuring the tokens and
+   starting it again. This is the owner's operation (Explicit exclusions: the
+   host's administration), and the owner's record is its evidence; Registry,
+   which no longer holds those changes, cannot list them, enforce them or
+   tell when this is done. Its guarantee after a restore is what the backup
+   held.
 
 ### Formal invariants
 
