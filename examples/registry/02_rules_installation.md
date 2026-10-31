@@ -124,7 +124,9 @@ closure is the one proof of success.
 
 ### Normative rules
 
-1. The configuration holds exactly these items and no other: the store's
+1. The configuration is the set of environment variables whose names begin
+   with `REGISTRY_`, set as R0-23 says; no other variable is read or
+   checked. It holds exactly these items and no other: the store's
    location; the backup location and the backup key (A18); the owner
    credential; one service token for each service of A09 — PresuPro, Client
    Portal, Cabinet, Cabinet Kernel (R0-20, R0-23) — or, for an owner-only
@@ -198,7 +200,8 @@ secret cannot be shared between holders.
 1. Every day at 03:00 UTC, while Registry runs with its service tokens, it
    makes one backup run; a 03:00 that finds Registry stopped, or in an
    owner-only start (rule 9), makes no run, and none is made later in its
-   place. Runs never overlap. A backup is a consistent copy of the store
+   place. Runs never overlap: a 03:00 that finds a run still going makes no
+   run of its own. A backup is a consistent copy of the store
    taken while Registry runs: it never holds part of a transaction. It
    records, readable without its key, its instant, the release that made it,
    the last audit sequence number it holds and a digest of the key it was
@@ -232,8 +235,9 @@ secret cannot be shared between holders.
    Registry keeps serving, and the next 03:00 tries again. Whether runs
    succeed is the owner's to watch on the host (Explicit exclusions: the
    host's administration).
-6. While the daily runs succeed, an erasure reaches the backups at most 30
-   days after it, and a restore loses at most a day of changes; a failed or
+6. While the daily runs succeed, an erasure reaches the backups by the first
+   run after the last backup holding the erased values is 30 days old — at
+   most 31 days after the erasure — and a restore loses at most a day of changes; a failed or
    missed run lengthens both by the days until a run succeeds.
 7. The store, the backup location and the disks under them are encrypted and
    kept out of VM Agent's reach by the owner's administration of VM Platform
