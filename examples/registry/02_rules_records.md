@@ -189,7 +189,8 @@ card it showed, and what the owner emptied is cleared.
    against and leaves no revision behind (M01, M04): the record is anonymised,
    erased or deleted, not given a next revision.
 2. A stated revision that is not the record's current one is refused as stale,
-   and nothing changes (R0-35).
+   and nothing changes (R0-35); so is an action that states none for a record
+   that has one.
 3. An action that would change nothing (A03 rule 4, A05) still states the
    revision and is refused when it is stale. An anonymised project and an
    erased Customer have no revision (M01, M04): an action on them states
@@ -252,6 +253,8 @@ for action a on record r in {Project, Customer} that may move r.revision:
    stating no revision answers it unchanged.
 7. Restricting an erased Customer from a card read before its erasure is
    refused as stale, not as erased.
+8. Restricting a Customer that has a revision, stating none, is refused as
+   stale, not as a missing value.
 
 ### Consequence
 

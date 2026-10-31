@@ -26,11 +26,14 @@ security review of States 0–2.
    each will link (R0-80); and every malformed record of the picks and every id that
    conflicts with one production holds. For each Customer it will make, the
    owner gives its name and kind and says whether the v1 value is its tax id;
-   confirmation is refused while any of these is missing (A02). Each new
+   confirmation is refused while any of these is missing (A02). While the
+   mapping shows a malformed record, a conflict or a missing value, the
+   import's confirmation step is not shown; at confirmation Registry checks
+   again (rule 6). Each new
    Customer's `customer_ref` is minted when the import is accepted.
 2. The uploaded file is kept in the owner session that uploaded it, in the
    process's memory only — never in the store, never on a disk — until the import is accepted, another file is uploaded in that
-   session, or the session ends (M11); then it is dropped. A refused
+   session — one of the same bytes included — or the session ends (M11); then it is dropped. A refused
    confirmation keeps it, and the step may be shown again; a refused upload —
    too large or unreadable — replaces nothing. An accepted import drops the
    uploaded file of every owner session (M11); a confirmation shown in
@@ -113,7 +116,8 @@ conflict at confirmation => store unchanged
    it shows no imported record.
 2. A file whose one pointer id production holds refuses the whole import.
 3. Confirming a mapping after another file was uploaded in the session is
-   refused: the file it named is no longer kept.
+   refused: the file it named is no longer kept — also when the new file has
+   the same bytes.
 4. A second import after a successful one is refused.
 5. A failure during the transaction leaves no project, no Customer and no
    closure.
@@ -126,6 +130,8 @@ conflict at confirmation => store unchanged
    malformed.
 10. Confirming after the owner session that uploaded the file has ended is
     refused.
+11. Asking for the import's confirmation step while the mapping shows a
+    conflicting id is refused, and no confirmation value is made.
 
 ### Consequence
 
