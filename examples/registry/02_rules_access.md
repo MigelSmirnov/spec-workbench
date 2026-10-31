@@ -246,8 +246,9 @@ sees every change as a new version.
 6. An action that asks for confirmation (Identity formats) is submitted with a
    confirmation value Registry made when it showed the step: one-time, kept in
    the owner session, bound to the action, its target, the revision or access
-   version the step showed — or that it showed none, for a record without a
-   revision (A04 rule 3) — and its inputs — for the import, the file's digest
+   version the step showed, or that it showed none when the action has
+   neither (a record without a revision, A04 rule 3, among them), and its
+   inputs — for the import, the file's digest
    and the picks — kept as a digest of those values in a fixed order, never
    as the values themselves; a submission's inputs are bound when their digest
    equals it. A session holds at most one: showing a confirmation step
