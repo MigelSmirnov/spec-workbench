@@ -1,0 +1,124 @@
+{
+ "open_points": [
+  {
+   "unit": "A13",
+   "subject": "owner-session locking across sessions",
+   "kind": "contradiction",
+   "text": "requests that read or change an uploaded file take the import lock before [the session lock] ... and other requests are not held by them",
+   "question": "May a request in one owner session block uploaded-file requests in other sessions on the instance-wide import lock, or does the promise that other requests are not held exclude that?",
+   "options": [
+    "The import lock serialises uploaded-file requests across all owner sessions",
+    "Only unrelated requests are not held; uploaded-file requests may be held",
+    "Each session must have independent import locking"
+   ],
+   "default_guess": "Treat the new import-lock rule as controlling: uploaded-file requests across sessions may block one another, while requests not using uploaded files do not."
+  },
+  {
+   "unit": "A13",
+   "subject": "sign-out racing an already admitted uploaded-file request",
+   "kind": "ordering gap",
+   "text": "A sign-out is applied in turn ... one admitted before it completes its change ... The requests ... are applied one at a time, in the order in which they take ... [their locks], after passing the session check",
+   "question": "If an uploaded-file request passes the session check before sign-out but sign-out acquires the import and session locks first, must the earlier request still run before sign-out, be refused after sign-out, or be allowed to run against the ended session?",
+   "options": [
+    "Admission order must be preserved through the locks",
+    "Lock-acquisition order controls and the request must recheck the session after acquiring both locks",
+    "A request admitted before sign-out may execute after sign-out against retained session state"
+   ],
+   "default_guess": "Recheck session validity after acquiring the locks and refuse a request if sign-out acquired them first."
+  },
+  {
+   "unit": "A16",
+   "subject": "closure check versus upload validation",
+   "kind": "precedence contradiction",
+   "text": "check the closure while holding them ... when the closure exists, uploading ... [is] refused",
+   "question": "When the import is closed and an upload is also too large, unreadable, or otherwise invalid, is it refused for closure immediately, or does A04's global order require value validation before the lifecycle/closure check?",
+   "options": [
+    "Closure is checked immediately after authentication and locking",
+    "A04 applies: validate the uploaded value before reporting closure",
+    "Closure is checked first internally but the externally visible refusal follows A04"
+   ],
+   "default_guess": "Refuse for closure before reading or validating the uploaded file, to avoid processing a file that can no longer be used."
+  },
+  {
+   "unit": "A17",
+   "subject": "owner-only configuration completeness",
+   "kind": "contradiction",
+   "text": "one service token for each service ... or, for an owner-only start, none of the four ... every item of rule 1 present",
+   "question": "Does the presence check require the four token variables in owner-only mode, and if so must they be absent, present empty, or represented by an explicit mode value?",
+   "options": [
+    "All four token variables must be absent to select owner-only mode",
+    "All four variables must be present but empty",
+    "A separate explicit mode selects whether token variables are required"
+   ],
+   "default_guess": "Treat complete absence of all four token variables as owner-only mode; require all four nonempty tokens otherwise."
+  },
+  {
+   "unit": "A17",
+   "subject": "configuration schema and validation",
+   "kind": "undefined format",
+   "text": "the set of environment variables whose names begin with REGISTRY_ ... each well formed",
+   "question": "What are the exact environment-variable names and lexical formats for the store location, backup location, backup key, owner credential, and four service tokens, and what precisely makes each item malformed?",
+   "options": [
+    "Specify fixed variable names and raw-string/path formats",
+    "Derive variable names from item and service names using an unstated naming convention",
+    "Let each implementation or release choose its own names and parsers"
+   ],
+   "default_guess": "Use fixed uppercase names derived from the listed items and services, interpret locations as filesystem paths, and treat secrets as literal UTF-8 strings."
+  },
+  {
+   "unit": "A17",
+   "subject": "secret length and equality",
+   "kind": "encoding gap",
+   "text": "A secret ... is at least 32 bytes long ... No two secrets are equal",
+   "question": "How are environment-variable strings converted to bytes for the 32-byte test and constant-time comparison, and is distinctness tested on the supplied text, decoded bytes, or a normalized representation?",
+   "options": [
+    "UTF-8 encode exactly as supplied and compare those bytes",
+    "Require a fixed encoding such as hexadecimal or base64 and compare decoded bytes",
+    "Count characters and compare configuration strings"
+   ],
+   "default_guess": "UTF-8 encode the exact supplied value with no normalization, then test length and equality on those bytes."
+  },
+  {
+   "unit": "A18",
+   "subject": "backup encryption and key fingerprint",
+   "kind": "cryptography unspecified",
+   "text": "Each backup is encrypted with the backup key ... and a digest of the key it was made with",
+   "question": "Which authenticated-encryption construction, nonce generation, key derivation or key-size rule, file authentication, and key-digest algorithm and representation must a backup use?",
+   "options": [
+    "A specified authenticated-encryption format using the configured bytes directly as a fixed-size key",
+    "A specified KDF derives an encryption key from the configured secret, followed by authenticated encryption",
+    "Each implementation chooses its own encryption and digest schemes"
+   ],
+   "default_guess": "Use a versioned authenticated-encryption container, derive a fixed-size key with a specified KDF, use a fresh random nonce, and record a SHA-256 fingerprint of the derived key."
+  },
+  {
+   "unit": "A18",
+   "subject": "backup filenames, prefixes and cleartext record",
+   "kind": "undefined format",
+   "text": "Kept and temporary names begin with two different prefixes the release declares ... A kept name is made from the backup's instant ... it records, readable without its key",
+   "question": "What are the exact prefixes, timestamp precision and filename encoding, and the syntax and validation rules of the unencrypted backup record that governs scheduling, display, retention and deletion?",
+   "options": [
+    "State 2 fixes one versioned filename and metadata format",
+    "State 6 fixes the internal backup format",
+    "Each release may choose any format while preserving the listed facts"
+   ],
+   "default_guess": "Define a fixed versioned metadata header and UTC timestamp filename with microsecond precision, plus release-fixed distinct temporary and kept prefixes."
+  },
+  {
+   "unit": "A18",
+   "subject": "failure during backup checking and cleanup",
+   "kind": "failure semantics gap",
+   "text": "it decrypts it into a second temporary file, opens that ... checks ... and removes it; a backup that passes is renamed to its kept name, one that fails is deleted. Third, whatever the second step did ...",
+   "question": "If checking succeeds but removal of the decrypted temporary file fails, or cleanup of a failed candidate fails, is the encrypted backup kept, deleted, or left temporary, and does retention step three still run?",
+   "options": [
+    "Any check-step cleanup failure prevents keeping the backup but retention still runs",
+    "A successfully checked encrypted backup is kept even if plaintext cleanup fails, and the run is reported failed",
+    "Any such failure stops the run before retention"
+   ],
+   "default_guess": "Do not keep the backup unless the decrypted temporary file was removed successfully; leave only removable temporary files, report failure, and still perform retention step three."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A13\",\"subject\":\"owner-session locking across sessions\",\"kind\":\"contradiction\",\"text\":\"requests that read or change an uploaded file take the import lock before [the session lock] ... and other requests are not held by them\",\"question\":\"May a request in one owner session block uploaded-file requests in other sessions on the instance-wide import lock, or does the promise that other requests are not held exclude that?\",\"options\":[\"The import lock serialises uploaded-file requests across all owner sessions\",\"Only unrelated requests are not held; uploaded-file requests may be held\",\"Each session must have independent import locking\"],\"default_guess\":\"Treat the new import-lock rule as controlling: uploaded-file requests across sessions may block one another, while requests not using uploaded files do not.\"},{\"unit\":\"A13\",\"subject\":\"sign-out racing an already admitted uploaded-file request\",\"kind\":\"ordering gap\",\"text\":\"A sign-out is applied in turn ... one admitted before it completes its change ... The requests ... are applied one at a time, in the order in which they take ... [their locks], after passing the session check\",\"question\":\"If an uploaded-file request passes the session check before sign-out but sign-out acquires the import and session locks first, must the earlier request still run before sign-out, be refused after sign-out, or be allowed to run against the ended session?\",\"options\":[\"Admission order must be preserved through the locks\",\"Lock-acquisition order controls and the request must recheck the session after acquiring both locks\",\"A request admitted before sign-out may execute after sign-out against retained session state\"],\"default_guess\":\"Recheck session validity after acquiring the locks and refuse a request if sign-out acquired them first.\"},{\"unit\":\"A16\",\"subject\":\"closure check versus upload validation\",\"kind\":\"precedence contradiction\",\"text\":\"check the closure while holding them ... when the closure exists, uploading ... [is] refused\",\"question\":\"When the import is closed and an upload is also too large, unreadable, or otherwise invalid, is it refused for closure immediately, or does A04's global order require value validation before the lifecycle/closure check?\",\"options\":[\"Closure is checked immediately after authentication and locking\",\"A04 applies: validate the uploaded value before reporting closure\",\"Closure is checked first internally but the externally visible refusal follows A04\"],\"default_guess\":\"Refuse for closure before reading or validating the uploaded file, to avoid processing a file that can no longer be used.\"},{\"unit\":\"A17\",\"subject\":\"owner-only configuration completeness\",\"kind\":\"contradiction\",\"text\":\"one service token for each service ... or, for an owner-only start, none of the four ... every item of rule 1 present\",\"question\":\"Does the presence check require the four token variables in owner-only mode, and if so must they be absent, present empty, or represented by an explicit mode value?\",\"options\":[\"All four token variables must be absent to select owner-only mode\",\"All four variables must be present but empty\",\"A separate explicit mode selects whether token variables are required\"],\"default_guess\":\"Treat complete absence of all four token variables as owner-only mode; require all four nonempty tokens otherwise.\"},{\"unit\":\"A17\",\"subject\":\"configuration schema and validation\",\"kind\":\"undefined format\",\"text\":\"the set of environment variables whose names begin with REGISTRY_ ... each well formed\",\"question\":\"What are the exact environment-variable names and lexical formats for the store location, backup location, backup key, owner credential, and four service tokens, and what precisely makes each item malformed?\",\"options\":[\"Specify fixed variable names and raw-string/path formats\",\"Derive variable names from item and service names using an unstated naming convention\",\"Let each implementation or release choose its own names and parsers\"],\"default_guess\":\"Use fixed uppercase names derived from the listed items and services, interpret locations as filesystem paths, and treat secrets as literal UTF-8 strings.\"},{\"unit\":\"A17\",\"subject\":\"secret length and equality\",\"kind\":\"encoding gap\",\"text\":\"A secret ... is at least 32 bytes long ... No two secrets are equal\",\"question\":\"How are environment-variable strings converted to bytes for the 32-byte test and constant-time comparison, and is distinctness tested on the supplied text, decoded bytes, or a normalized representation?\",\"options\":[\"UTF-8 encode exactly as supplied and compare those bytes\",\"Require a fixed encoding such as hexadecimal or base64 and compare decoded bytes\",\"Count characters and compare configuration strings\"],\"default_guess\":\"UTF-8 encode the exact supplied value with no normalization, then test length and equality on those bytes.\"},{\"unit\":\"A18\",\"subject\":\"backup encryption and key fingerprint\",\"kind\":\"cryptography unspecified\",\"text\":\"Each backup is encrypted with the backup key ... and a digest of the key it was made with\",\"question\":\"Which authenticated-encryption construction, nonce generation, key derivation or key-size rule, file authentication, and key-digest algorithm and representation must a backup use?\",\"options\":[\"A specified authenticated-encryption format using the configured bytes directly as a fixed-size key\",\"A specified KDF derives an encryption key from the configured secret, followed by authenticated encryption\",\"Each implementation chooses its own encryption and digest schemes\"],\"default_guess\":\"Use a versioned authenticated-encryption container, derive a fixed-size key with a specified KDF, use a fresh random nonce, and record a SHA-256 fingerprint of the derived key.\"},{\"unit\":\"A18\",\"subject\":\"backup filenames, prefixes and cleartext record\",\"kind\":\"undefined format\",\"text\":\"Kept and temporary names begin with two different prefixes the release declares ... A kept name is made from the backup's instant ... it records, readable without its key\",\"question\":\"What are the exact prefixes, timestamp precision and filename encoding, and the syntax and validation rules of the unencrypted backup record that governs scheduling, display, retention and deletion?\",\"options\":[\"State 2 fixes one versioned filename and metadata format\",\"State 6 fixes the internal backup format\",\"Each release may choose any format while preserving the listed facts\"],\"default_guess\":\"Define a fixed versioned metadata header and UTC timestamp filename with microsecond precision, plus release-fixed distinct temporary and kept prefixes.\"},{\"unit\":\"A18\",\"subject\":\"failure during backup checking and cleanup\",\"kind\":\"failure semantics gap\",\"text\":\"it decrypts it into a second temporary file, opens that ... checks ... and removes it; a backup that passes is renamed to its kept name, one that fails is deleted. Third, whatever the second step did ...\",\"question\":\"If checking succeeds but removal of the decrypted temporary file fails, or cleanup of a failed candidate fails, is the encrypted backup kept, deleted, or left temporary, and does retention step three still run?\",\"options\":[\"Any check-step cleanup failure prevents keeping the backup but retention still runs\",\"A successfully checked encrypted backup is kept even if plaintext cleanup fails, and the run is reported failed\",\"Any such failure stops the run before retention\"],\"default_guess\":\"Do not keep the backup unless the decrypted temporary file was removed successfully; leave only removable temporary files, report failure, and still perform retention step three.\"}]}",
+ "set_aside": []
+}

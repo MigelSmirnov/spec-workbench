@@ -1,0 +1,191 @@
+{
+ "open_points": [
+  {
+   "unit": "A13",
+   "subject": "owner-session import locking",
+   "kind": "contradiction",
+   "text": "“those that read or change an uploaded file take the import lock before [the session lock]” conflicts with “other requests are not held by them”: the import lock necessarily holds uploads, mappings, import confirmations and sign-outs of other sessions.",
+   "question": "Which requests may a request holding the instance-wide import lock block, and what does “other requests are not held by them” exclude?",
+   "options": [
+    "Only requests needing the same session lock remain unblocked; import-related requests in other sessions may wait",
+    "No request from another session may wait, requiring a different synchronization scheme",
+    "The phrase “other requests are not held by them” applies only to requests needing neither lock"
+   ],
+   "default_guess": "Allow import-related requests in every session to wait for the import lock, and interpret the sentence as applying only to requests needing neither lock."
+  },
+  {
+   "unit": "A16",
+   "subject": "expired owner-session upload sweep",
+   "kind": "missing synchronization rule",
+   "text": "“the upload of a session ended by its limits is dropped by a sweep that takes the import lock” does not say whether the sweep also takes that session’s lock, when it tests expiry, or how it interacts with a request that already passed the session check and must complete.",
+   "question": "How does the sweep synchronize its expiry check and upload removal with admitted requests, sign-out, and updates of the session’s last-request instant?",
+   "options": [
+    "Take the import lock, then the affected session lock, recheck expiry, and preserve uploads needed by already-admitted requests",
+    "Take only the import lock and allow the sweep to remove an upload while an admitted request is pending",
+    "Mark admitted requests separately and let the sweep remove only uploads with no admitted user"
+   ],
+   "default_guess": "Take the import lock and then each affected session’s lock, recheck expiry there, and do not invalidate an already-admitted request."
+  },
+  {
+   "unit": "A16",
+   "subject": "expired upload retention bound",
+   "kind": "unverifiable timing guarantee",
+   "text": "“a sweep that takes the import lock at least once a minute, so it stays in memory at most a minute after the session ends” does not follow when the sweep can wait for the lock, take time to scan sessions, or fail.",
+   "question": "Is one minute a hard bound on removal, a bound on sweep-start attempts, or only a target when the lock and process are healthy?",
+   "options": [
+    "Hard removal bound of one minute",
+    "A sweep is attempted or started at least once per minute, with no hard removal bound",
+    "One minute after the sweep next acquires the lock successfully"
+   ],
+   "default_guess": "Treat it as a sweep-start interval, with removal occurring at the first successful acquisition after expiry rather than claiming a hard one-minute bound."
+  },
+  {
+   "unit": "A16",
+   "subject": "owner-session expiry cleanup",
+   "kind": "missing cleanup scope",
+   "text": "“the upload of a session ended by its limits is dropped by a sweep” names only the uploaded file, while M11 says everything in the session ends with it.",
+   "question": "Does the same sweep remove the entire expired OwnerSession, including its pending confirmation and CSRF state, or only its uploaded file; and when is the remaining runtime state reclaimed?",
+   "options": [
+    "Remove the complete expired session in the same sweep",
+    "Remove only the upload there and reclaim the other session state by a separate unspecified mechanism",
+    "Keep the expired session record indefinitely but make it unreachable"
+   ],
+   "default_guess": "Remove the whole expired session during the synchronized sweep."
+  },
+  {
+   "unit": "A17",
+   "subject": "owner-only configuration presence check",
+   "kind": "contradiction",
+   "text": "Rule 1 permits “for an owner-only start, none of the four” service tokens, but rule 2 orders a check that requires “every item of rule 1 present.”",
+   "question": "During the presence check, exactly when are the four token items optional as a group, and which missing-token combinations fail?",
+   "options": [
+    "All four present or all four absent; any partial set fails",
+    "Every token is always required despite the owner-only clause",
+    "Each token may independently be absent, with its service disabled"
+   ],
+   "default_guess": "Accept exactly all four or none, and fail every partial set."
+  },
+  {
+   "unit": "A17",
+   "subject": "configuration item validation",
+   "kind": "vague refusal condition",
+   "text": "The start checks that “each [item is] well formed,” but no well-formedness rules are given beyond secret length and the stated path checks.",
+   "question": "What exact forms are accepted or refused for the store location, backup location, backup key, owner credential and service tokens?",
+   "options": [
+    "Only the explicitly stated length, distinctness and path conditions apply",
+    "Additional syntax, encoding or character rules apply to every item",
+    "Each item has its own later-declared format"
+   ],
+   "default_guess": "Apply only the explicit checks and accept any configuration string representable by the process environment."
+  },
+  {
+   "unit": "A17",
+   "subject": "secret length and equality",
+   "kind": "undefined byte representation",
+   "text": "“at least 32 bytes long” and “No two secrets are equal” are applied to environment-variable values without defining how those textual values become bytes.",
+   "question": "Which encoding or decoding defines a secret’s byte length and equality, and are secrets raw text, hexadecimal, base64, or another representation?",
+   "options": [
+    "UTF-8 bytes of the environment string",
+    "A required hexadecimal encoding",
+    "A required base64 encoding",
+    "Opaque platform bytes with a separately declared transport representation"
+   ],
+   "default_guess": "Use the UTF-8 bytes of the exact environment string for length, comparison and authentication."
+  },
+  {
+   "unit": "A17",
+   "subject": "startup temporary-file cleanup",
+   "kind": "missing procedure",
+   "text": "“a probe it could not remove, which the next start or run removes with the other temporary files” promises cleanup on the next start, but the startup checks never specify a temporary-prefix cleanup step, its order, or what happens if it fails.",
+   "question": "Must startup remove backup temporary-prefix files and leftover probes, at which point in the ordered checks, and does a cleanup failure stop startup?",
+   "options": [
+    "Clean them before probing and fail startup if any removal fails",
+    "Attempt cleanup but continue startup after reporting failures",
+    "Only backup runs clean them; the reference to the next start is removed"
+   ],
+   "default_guess": "Clean them before the writability probe and stop startup if cleanup fails."
+  },
+  {
+   "unit": "A17",
+   "subject": "failed-start rollback",
+   "kind": "incomplete failure semantics",
+   "text": "“A failed start leaves no file it made but a probe it could not remove” does not specify rollback when creating or opening a new store partially succeeds and a later part of that check fails.",
+   "question": "Which files and mutations must be undone after each possible startup failure, especially a partially created new store?",
+   "options": [
+    "Delete every file created by that start, except an unremovable probe",
+    "Keep a successfully created empty store even though startup ultimately fails",
+    "Use atomic temporary creation and rename so a partial store can never appear"
+   ],
+   "default_guess": "Create the store atomically and remove every artifact of the failed start except a probe that cannot be removed."
+  },
+  {
+   "unit": "A18",
+   "subject": "backup encryption and key identification",
+   "kind": "missing cryptographic definition",
+   "text": "“encrypted with the backup key” and “a digest of the key” do not declare the authenticated-encryption algorithm, nonce generation, key derivation for arbitrary secrets of at least 32 bytes, digest algorithm, format version, or what tampering must be detected.",
+   "question": "What exact cryptographic construction and versioned backup format implement encryption, authentication and the key digest?",
+   "options": [
+    "A declared authenticated-encryption algorithm with random nonce and a declared KDF and digest",
+    "Implementation-selected authenticated encryption recorded in each backup",
+    "Encryption without authenticated metadata"
+   ],
+   "default_guess": "Use a versioned format with a declared modern authenticated-encryption algorithm, random nonce, a declared KDF, and a cryptographic key identifier bound as authenticated metadata."
+  },
+  {
+   "unit": "A18",
+   "subject": "unencrypted backup record",
+   "kind": "undefined validity check",
+   "text": "A file “whose record cannot be read” counts as absent and is deleted, but “can be read” does not say whether the unencrypted record is merely parseable, authenticated, or checked against the encrypted backup.",
+   "question": "What makes an unencrypted backup record valid for scheduling, retention deletion and display as the newest backup?",
+   "options": [
+    "Syntactic parsing alone",
+    "A cryptographic authentication check that does not require decryption",
+    "Parsing plus consistency with the encrypted payload using the configured key",
+    "Only records written during the current process are trusted"
+   ],
+   "default_guess": "Require a versioned, authenticated record and verify its binding to the encrypted payload before treating it as a kept backup."
+  },
+  {
+   "unit": "A18",
+   "subject": "backup filename prefixes",
+   "kind": "missing disjointness invariant",
+   "text": "“two different prefixes” does not require them to be non-overlapping; one may be the prefix of the other, causing temporary cleanup to match kept backups.",
+   "question": "Must the kept and temporary prefix match sets be disjoint, and how is that enforced?",
+   "options": [
+    "Neither prefix may start with the other",
+    "Names include a delimiter that makes the two sets disjoint",
+    "Different strings are sufficient even when their matches overlap"
+   ],
+   "default_guess": "Require non-overlapping prefixes, preferably fixed prefixes ending in distinct delimiters."
+  },
+  {
+   "unit": "A18",
+   "subject": "kept-name collision",
+   "kind": "ambiguous deletion target",
+   "text": "“a backup whose kept name exists, or whose rename fails, is deleted” does not identify whether the existing kept backup, the new temporary backup, or both are deleted.",
+   "question": "When the destination kept name already exists, which file is preserved and which is removed?",
+   "options": [
+    "Preserve the existing kept backup and delete only the new temporary file",
+    "Delete the existing kept backup and retry the rename",
+    "Delete both files and fail the run"
+   ],
+   "default_guess": "Preserve the existing kept backup, delete only the new temporary file, and fail the run."
+  },
+  {
+   "unit": "A18",
+   "subject": "backup check cleanup failures",
+   "kind": "missing failure precedence",
+   "text": "The second step says Registry decrypts to a temporary file, checks it, “and removes it; a backup that passes is renamed,” but does not say what happens when removal of the decrypted temporary file fails or when cleanup and validation fail together.",
+   "question": "Does failure to remove the decrypted temporary file prevent keeping an otherwise valid backup, what artifacts remain, and which failure is reported?",
+   "options": [
+    "Do not keep the backup; report cleanup failure and leave only removable temporary artifacts",
+    "Keep the verified encrypted backup but mark the run failed",
+    "Keep or delete it according to whichever error happened first"
+   ],
+   "default_guess": "Do not rename the encrypted backup to kept status unless validation and required temporary cleanup both succeed; report the first failure in the declared step order."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A13\",\"subject\":\"owner-session import locking\",\"kind\":\"contradiction\",\"text\":\"“those that read or change an uploaded file take the import lock before [the session lock]” conflicts with “other requests are not held by them”: the import lock necessarily holds uploads, mappings, import confirmations and sign-outs of other sessions.\",\"question\":\"Which requests may a request holding the instance-wide import lock block, and what does “other requests are not held by them” exclude?\",\"options\":[\"Only requests needing the same session lock remain unblocked; import-related requests in other sessions may wait\",\"No request from another session may wait, requiring a different synchronization scheme\",\"The phrase “other requests are not held by them” applies only to requests needing neither lock\"],\"default_guess\":\"Allow import-related requests in every session to wait for the import lock, and interpret the sentence as applying only to requests needing neither lock.\"},{\"unit\":\"A16\",\"subject\":\"expired owner-session upload sweep\",\"kind\":\"missing synchronization rule\",\"text\":\"“the upload of a session ended by its limits is dropped by a sweep that takes the import lock” does not say whether the sweep also takes that session’s lock, when it tests expiry, or how it interacts with a request that already passed the session check and must complete.\",\"question\":\"How does the sweep synchronize its expiry check and upload removal with admitted requests, sign-out, and updates of the session’s last-request instant?\",\"options\":[\"Take the import lock, then the affected session lock, recheck expiry, and preserve uploads needed by already-admitted requests\",\"Take only the import lock and allow the sweep to remove an upload while an admitted request is pending\",\"Mark admitted requests separately and let the sweep remove only uploads with no admitted user\"],\"default_guess\":\"Take the import lock and then each affected session’s lock, recheck expiry there, and do not invalidate an already-admitted request.\"},{\"unit\":\"A16\",\"subject\":\"expired upload retention bound\",\"kind\":\"unverifiable timing guarantee\",\"text\":\"“a sweep that takes the import lock at least once a minute, so it stays in memory at most a minute after the session ends” does not follow when the sweep can wait for the lock, take time to scan sessions, or fail.\",\"question\":\"Is one minute a hard bound on removal, a bound on sweep-start attempts, or only a target when the lock and process are healthy?\",\"options\":[\"Hard removal bound of one minute\",\"A sweep is attempted or started at least once per minute, with no hard removal bound\",\"One minute after the sweep next acquires the lock successfully\"],\"default_guess\":\"Treat it as a sweep-start interval, with removal occurring at the first successful acquisition after expiry rather than claiming a hard one-minute bound.\"},{\"unit\":\"A16\",\"subject\":\"owner-session expiry cleanup\",\"kind\":\"missing cleanup scope\",\"text\":\"“the upload of a session ended by its limits is dropped by a sweep” names only the uploaded file, while M11 says everything in the session ends with it.\",\"question\":\"Does the same sweep remove the entire expired OwnerSession, including its pending confirmation and CSRF state, or only its uploaded file; and when is the remaining runtime state reclaimed?\",\"options\":[\"Remove the complete expired session in the same sweep\",\"Remove only the upload there and reclaim the other session state by a separate unspecified mechanism\",\"Keep the expired session record indefinitely but make it unreachable\"],\"default_guess\":\"Remove the whole expired session during the synchronized sweep.\"},{\"unit\":\"A17\",\"subject\":\"owner-only configuration presence check\",\"kind\":\"contradiction\",\"text\":\"Rule 1 permits “for an owner-only start, none of the four” service tokens, but rule 2 orders a check that requires “every item of rule 1 present.”\",\"question\":\"During the presence check, exactly when are the four token items optional as a group, and which missing-token combinations fail?\",\"options\":[\"All four present or all four absent; any partial set fails\",\"Every token is always required despite the owner-only clause\",\"Each token may independently be absent, with its service disabled\"],\"default_guess\":\"Accept exactly all four or none, and fail every partial set.\"},{\"unit\":\"A17\",\"subject\":\"configuration item validation\",\"kind\":\"vague refusal condition\",\"text\":\"The start checks that “each [item is] well formed,” but no well-formedness rules are given beyond secret length and the stated path checks.\",\"question\":\"What exact forms are accepted or refused for the store location, backup location, backup key, owner credential and service tokens?\",\"options\":[\"Only the explicitly stated length, distinctness and path conditions apply\",\"Additional syntax, encoding or character rules apply to every item\",\"Each item has its own later-declared format\"],\"default_guess\":\"Apply only the explicit checks and accept any configuration string representable by the process environment.\"},{\"unit\":\"A17\",\"subject\":\"secret length and equality\",\"kind\":\"undefined byte representation\",\"text\":\"“at least 32 bytes long” and “No two secrets are equal” are applied to environment-variable values without defining how those textual values become bytes.\",\"question\":\"Which encoding or decoding defines a secret’s byte length and equality, and are secrets raw text, hexadecimal, base64, or another representation?\",\"options\":[\"UTF-8 bytes of the environment string\",\"A required hexadecimal encoding\",\"A required base64 encoding\",\"Opaque platform bytes with a separately declared transport representation\"],\"default_guess\":\"Use the UTF-8 bytes of the exact environment string for length, comparison and authentication.\"},{\"unit\":\"A17\",\"subject\":\"startup temporary-file cleanup\",\"kind\":\"missing procedure\",\"text\":\"“a probe it could not remove, which the next start or run removes with the other temporary files” promises cleanup on the next start, but the startup checks never specify a temporary-prefix cleanup step, its order, or what happens if it fails.\",\"question\":\"Must startup remove backup temporary-prefix files and leftover probes, at which point in the ordered checks, and does a cleanup failure stop startup?\",\"options\":[\"Clean them before probing and fail startup if any removal fails\",\"Attempt cleanup but continue startup after reporting failures\",\"Only backup runs clean them; the reference to the next start is removed\"],\"default_guess\":\"Clean them before the writability probe and stop startup if cleanup fails.\"},{\"unit\":\"A17\",\"subject\":\"failed-start rollback\",\"kind\":\"incomplete failure semantics\",\"text\":\"“A failed start leaves no file it made but a probe it could not remove” does not specify rollback when creating or opening a new store partially succeeds and a later part of that check fails.\",\"question\":\"Which files and mutations must be undone after each possible startup failure, especially a partially created new store?\",\"options\":[\"Delete every file created by that start, except an unremovable probe\",\"Keep a successfully created empty store even though startup ultimately fails\",\"Use atomic temporary creation and rename so a partial store can never appear\"],\"default_guess\":\"Create the store atomically and remove every artifact of the failed start except a probe that cannot be removed.\"},{\"unit\":\"A18\",\"subject\":\"backup encryption and key identification\",\"kind\":\"missing cryptographic definition\",\"text\":\"“encrypted with the backup key” and “a digest of the key” do not declare the authenticated-encryption algorithm, nonce generation, key derivation for arbitrary secrets of at least 32 bytes, digest algorithm, format version, or what tampering must be detected.\",\"question\":\"What exact cryptographic construction and versioned backup format implement encryption, authentication and the key digest?\",\"options\":[\"A declared authenticated-encryption algorithm with random nonce and a declared KDF and digest\",\"Implementation-selected authenticated encryption recorded in each backup\",\"Encryption without authenticated metadata\"],\"default_guess\":\"Use a versioned format with a declared modern authenticated-encryption algorithm, random nonce, a declared KDF, and a cryptographic key identifier bound as authenticated metadata.\"},{\"unit\":\"A18\",\"subject\":\"unencrypted backup record\",\"kind\":\"undefined validity check\",\"text\":\"A file “whose record cannot be read” counts as absent and is deleted, but “can be read” does not say whether the unencrypted record is merely parseable, authenticated, or checked against the encrypted backup.\",\"question\":\"What makes an unencrypted backup record valid for scheduling, retention deletion and display as the newest backup?\",\"options\":[\"Syntactic parsing alone\",\"A cryptographic authentication check that does not require decryption\",\"Parsing plus consistency with the encrypted payload using the configured key\",\"Only records written during the current process are trusted\"],\"default_guess\":\"Require a versioned, authenticated record and verify its binding to the encrypted payload before treating it as a kept backup.\"},{\"unit\":\"A18\",\"subject\":\"backup filename prefixes\",\"kind\":\"missing disjointness invariant\",\"text\":\"“two different prefixes” does not require them to be non-overlapping; one may be the prefix of the other, causing temporary cleanup to match kept backups.\",\"question\":\"Must the kept and temporary prefix match sets be disjoint, and how is that enforced?\",\"options\":[\"Neither prefix may start with the other\",\"Names include a delimiter that makes the two sets disjoint\",\"Different strings are sufficient even when their matches overlap\"],\"default_guess\":\"Require non-overlapping prefixes, preferably fixed prefixes ending in distinct delimiters.\"},{\"unit\":\"A18\",\"subject\":\"kept-name collision\",\"kind\":\"ambiguous deletion target\",\"text\":\"“a backup whose kept name exists, or whose rename fails, is deleted” does not identify whether the existing kept backup, the new temporary backup, or both are deleted.\",\"question\":\"When the destination kept name already exists, which file is preserved and which is removed?\",\"options\":[\"Preserve the existing kept backup and delete only the new temporary file\",\"Delete the existing kept backup and retry the rename\",\"Delete both files and fail the run\"],\"default_guess\":\"Preserve the existing kept backup, delete only the new temporary file, and fail the run.\"},{\"unit\":\"A18\",\"subject\":\"backup check cleanup failures\",\"kind\":\"missing failure precedence\",\"text\":\"The second step says Registry decrypts to a temporary file, checks it, “and removes it; a backup that passes is renamed,” but does not say what happens when removal of the decrypted temporary file fails or when cleanup and validation fail together.\",\"question\":\"Does failure to remove the decrypted temporary file prevent keeping an otherwise valid backup, what artifacts remain, and which failure is reported?\",\"options\":[\"Do not keep the backup; report cleanup failure and leave only removable temporary artifacts\",\"Keep the verified encrypted backup but mark the run failed\",\"Keep or delete it according to whichever error happened first\"],\"default_guess\":\"Do not rename the encrypted backup to kept status unless validation and required temporary cleanup both succeed; report the first failure in the declared step order.\"}]}",
+ "set_aside": []
+}

@@ -1,0 +1,202 @@
+{
+ "open_points": [
+  {
+   "subject": "owner-session locking after admission",
+   "kind": "race contradiction",
+   "text": "“Validity is checked when a request arrives … a request that passes it completes even if a limit or a sign-out comes while it runs” and “those that read or change an uploaded file take the import lock before [the session lock]”",
+   "question": "If an upload or other file request passes the session check but a sign-out or expiry ends the session before it acquires both locks, is it still allowed to run and recreate state in the ended session, or must session validity be checked again under the session lock?",
+   "options": [
+    "Let every admitted request finish, even after the session ends",
+    "Recheck validity under the session lock and refuse it",
+    "Define admission as acquisition of the required locks rather than the earlier check"
+   ],
+   "default_guess": "Recheck validity after both locks are acquired and refuse a request whose session has ended.",
+   "unit": "A13"
+  },
+  {
+   "subject": "uploaded file at session expiry",
+   "kind": "direct contradiction",
+   "text": "“until … the session ends (M11); then it is dropped” and “the upload of a session ended by its limits is dropped by a sweep … so it stays in memory at most a minute after the session ends”",
+   "question": "Does an uploaded file cease to exist immediately when its session expires, as M11 and the first sentence require, or may it remain in memory until a later sweep?",
+   "options": [
+    "Drop it synchronously at expiry",
+    "Permit an unreachable file to remain until the sweep",
+    "Change the model so expiry marks the session ended before its runtime state is reclaimed"
+   ],
+   "default_guess": "Permit the unreachable file to remain until the sweep and amend the immediate-drop statements accordingly.",
+   "unit": "A16"
+  },
+  {
+   "subject": "one-minute cleanup guarantee",
+   "kind": "unmet invariant",
+   "text": "“a sweep that takes the import lock at least once a minute, so it stays in memory at most a minute after the session ends”",
+   "question": "How is the one-minute maximum guaranteed when an upload, mapping, confirmation or import may hold or wait for the import lock without any duration, fairness or priority bound, and an already-admitted upload may acquire the lock after the session ends?",
+   "options": [
+    "Give cleanup priority and recheck session validity before an upload lands",
+    "Bound every import-lock holder and require fair acquisition",
+    "Make one minute a best-effort target rather than a maximum"
+   ],
+   "default_guess": "Recheck session validity under the locks and give the cleanup sweep priority sufficient to guarantee the bound.",
+   "unit": "A16"
+  },
+  {
+   "subject": "import and confirmation digests",
+   "kind": "undefined algorithm",
+   "text": "“The mapping names the file by its digest” and “kept as a digest of those values in a fixed order”",
+   "question": "Which digest algorithm, byte encoding, field framing and canonical ordering define the file digest and the confirmation-input digest, including absent values and nested picks?",
+   "options": [
+    "Specify a canonical byte encoding and SHA-256",
+    "Use the raw uploaded bytes for the file and canonical JSON for inputs",
+    "Leave the algorithms release-specific and version the digest representation"
+   ],
+   "default_guess": "Use SHA-256 of the exact uploaded bytes for the file and SHA-256 of a length-framed canonical UTF-8 encoding for the bound inputs.",
+   "unit": "A16"
+  },
+  {
+   "subject": "minting imported Customer identities",
+   "kind": "missing collision rule",
+   "text": "“Each new Customer's `customer_ref` is minted when the import is accepted.”",
+   "question": "What happens if a minted `customer_ref` collides with an existing Customer or with another Customer minted in the same import?",
+   "options": [
+    "Retry minting inside the transaction until all are unique",
+    "Refuse the whole import as a conflict",
+    "Treat collision as an internal failure and permit the same confirmation to be retried"
+   ],
+   "default_guess": "Retry minting inside the transaction until every new reference is unique.",
+   "unit": "A16"
+  },
+  {
+   "subject": "configuration variable set",
+   "kind": "undefined names",
+   "text": "“the set of environment variables whose names begin with `REGISTRY_`” and “It holds exactly these items and no other”",
+   "question": "What are the exact environment-variable names for every listed item, including the four service tokens, and which names are reserved or recognized as unknown?",
+   "options": [
+    "Declare one exact fixed name for each item",
+    "Declare a structured naming convention for service tokens",
+    "Move the complete variable-name list to a release-owned schema"
+   ],
+   "default_guess": "Declare an exact fixed `REGISTRY_…` name for every item and reject every other name with that prefix.",
+   "unit": "A17"
+  },
+  {
+   "subject": "configuration well-formedness",
+   "kind": "vague refusal condition",
+   "text": "“each well formed; each secret's length”",
+   "question": "Beyond the later path and length rules, what exact conditions make each configuration item well formed, and how is the byte length of an environment string measured?",
+   "options": [
+    "UTF-8 encode secrets and count encoded bytes; define path syntax explicitly",
+    "Restrict secrets to an ASCII/base64 alphabet and count decoded bytes",
+    "Count Unicode scalar values and accept any path the operating system accepts"
+   ],
+   "default_guess": "Require UTF-8 strings, count their encoded bytes, reject embedded NULs, and define locations as operating-system paths satisfying rule 5.",
+   "unit": "A17"
+  },
+  {
+   "subject": "creation of a new store",
+   "kind": "failure semantics",
+   "text": "“Registry makes a new, empty store of the running release's version there at the start” and “A failed start leaves no file it made”",
+   "question": "Must creation and initialization of a new store be atomic, and what must the next start do if the process or filesystem fails after creating the file but before initialization is complete?",
+   "options": [
+    "Create under a temporary name and atomically rename only after complete initialization",
+    "Remove any incomplete new store on the next start",
+    "Treat any existing incomplete file as an unopenable store and require owner intervention"
+   ],
+   "default_guess": "Create and initialize a temporary store, then atomically rename it to the configured path.",
+   "unit": "A17"
+  },
+  {
+   "subject": "backup encryption and key identification",
+   "kind": "undefined cryptography",
+   "text": "“Each backup is encrypted with the backup key” and “a digest of the key it was made with”",
+   "question": "Which authenticated-encryption construction, nonce generation, key interpretation or derivation, authentication scope and key-digest algorithm are required?",
+   "options": [
+    "Specify an AEAD format with a random nonce and SHA-256 key identifier",
+    "Use an established encrypted-container format fixed by the release",
+    "Allow each release to choose a versioned cryptographic format"
+   ],
+   "default_guess": "Use a versioned AEAD container with a fresh random nonce, authenticate all metadata, and use SHA-256 as a non-secret key identifier.",
+   "unit": "A18"
+  },
+  {
+   "subject": "unencrypted backup record",
+   "kind": "integrity gap",
+   "text": "“It records, readable without its key, its instant, the release that made it, the last audit sequence number it holds and a digest of the key”",
+   "question": "Is this unencrypted record cryptographically authenticated, and if so how can Registry authenticate it before choosing a key; if not, may corrupted or altered metadata control retention, newest-backup display and integrity checks?",
+   "options": [
+    "Authenticate the record with a signature or MAC whose verification key is available",
+    "Duplicate the record inside the encrypted authenticated payload and distrust it until checking",
+    "Accept unauthenticated metadata for scheduling and retention"
+   ],
+   "default_guess": "Keep a readable header but duplicate and authenticate it inside the encrypted payload, treating mismatches as unreadable.",
+   "unit": "A18"
+  },
+  {
+   "subject": "backup readability test",
+   "kind": "wording conflict",
+   "text": "“records, readable without its key” and required test “A backup cannot be read without the key it was made with.”",
+   "question": "Does “cannot be read” mean only that the encrypted store contents cannot be read, while the declared metadata remains readable, or must no part of the backup be readable without the key?",
+   "options": [
+    "Only payload contents require the key; the listed header remains readable",
+    "Encrypt everything, including the listed record",
+    "Expose a separate sidecar record rather than part of the backup"
+   ],
+   "default_guess": "Interpret the test as applying only to the store payload and leave the listed metadata readable.",
+   "unit": "A18"
+  },
+  {
+   "subject": "backup filenames and prefixes",
+   "kind": "undeclared release choice",
+   "text": "“two different prefixes the release declares” and “A kept name is made from the backup's instant”",
+   "question": "What are the two prefixes, the instant's filename representation and precision, and the complete rule for producing a unique kept name when two runs record the same instant?",
+   "options": [
+    "Declare fixed prefixes and include a high-resolution UTC instant plus random suffix",
+    "Declare fixed prefixes and fail on an equal-instant collision",
+    "Let each release choose a versioned naming scheme"
+   ],
+   "default_guess": "Use fixed release-declared prefixes and a UTC timestamp with microseconds plus a random suffix.",
+   "unit": "A18"
+  },
+  {
+   "subject": "recorded audit sequence in a backup",
+   "kind": "ambiguous value",
+   "text": "“the last audit sequence number it holds” and “checks that its audit log ends at the recorded sequence number”",
+   "question": "Is the recorded value the store's never-reused sequence counter or the highest surviving AuditEntry, and what value and check apply to a new store whose audit log has no entries?",
+   "options": [
+    "Record the persistent sequence counter, using zero before any entry",
+    "Record the highest surviving entry, using null for an empty log",
+    "Record both the counter and the highest surviving entry"
+   ],
+   "default_guess": "Record both, using zero for each when no entry has ever been written, and verify both against the decrypted store.",
+   "unit": "A18"
+  },
+  {
+   "subject": "backup check cleanup failures",
+   "kind": "incomplete failure order",
+   "text": "“checks … and removes [the decrypted temporary file]; a backup that passes is renamed to its kept name”",
+   "question": "If the decrypted copy passes its checks but cannot be removed, is the encrypted backup still renamed and kept, or is the second step failed and the encrypted temporary backup deleted or left for the next run?",
+   "options": [
+    "Fail before rename and leave only temporary files for the next cleanup",
+    "Keep the verified backup but mark the run failed",
+    "Attempt rename and cleanup independently, keeping the backup if rename succeeds"
+   ],
+   "default_guess": "Fail before rename, delete the encrypted temporary file if possible, and leave any undeletable temporary files for the next run.",
+   "unit": "A18"
+  },
+  {
+   "subject": "clock-forward backup scheduling",
+   "kind": "contradictory condition",
+   "text": "“a date's run starts … when an earlier look of the same process saw that date before 03:00” and “after a clock set forward it runs only for the date it then sees pass 03:00”",
+   "question": "If the clock jumps from a prior date or from before midnight directly to a later date after 03:00, should that later date run even though the process never observed that same date before 03:00?",
+   "options": [
+    "Require observation of the same date before 03:00, so no run occurs",
+    "Detect crossing of the latest 03:00 boundary and run once for the resulting date",
+    "Run whenever first observed after 03:00 unless that date is already remembered or kept"
+   ],
+   "default_guess": "Detect crossing of a 03:00 UTC boundary and run once only for the date containing the latest crossed boundary.",
+   "unit": "A18"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"owner-session locking after admission\",\"kind\":\"race contradiction\",\"text\":\"“Validity is checked when a request arrives … a request that passes it completes even if a limit or a sign-out comes while it runs” and “those that read or change an uploaded file take the import lock before [the session lock]”\",\"question\":\"If an upload or other file request passes the session check but a sign-out or expiry ends the session before it acquires both locks, is it still allowed to run and recreate state in the ended session, or must session validity be checked again under the session lock?\",\"options\":[\"Let every admitted request finish, even after the session ends\",\"Recheck validity under the session lock and refuse it\",\"Define admission as acquisition of the required locks rather than the earlier check\"],\"default_guess\":\"Recheck validity after both locks are acquired and refuse a request whose session has ended.\",\"unit\":\"A13\"},{\"subject\":\"uploaded file at session expiry\",\"kind\":\"direct contradiction\",\"text\":\"“until … the session ends (M11); then it is dropped” and “the upload of a session ended by its limits is dropped by a sweep … so it stays in memory at most a minute after the session ends”\",\"question\":\"Does an uploaded file cease to exist immediately when its session expires, as M11 and the first sentence require, or may it remain in memory until a later sweep?\",\"options\":[\"Drop it synchronously at expiry\",\"Permit an unreachable file to remain until the sweep\",\"Change the model so expiry marks the session ended before its runtime state is reclaimed\"],\"default_guess\":\"Permit the unreachable file to remain until the sweep and amend the immediate-drop statements accordingly.\",\"unit\":\"A16\"},{\"subject\":\"one-minute cleanup guarantee\",\"kind\":\"unmet invariant\",\"text\":\"“a sweep that takes the import lock at least once a minute, so it stays in memory at most a minute after the session ends”\",\"question\":\"How is the one-minute maximum guaranteed when an upload, mapping, confirmation or import may hold or wait for the import lock without any duration, fairness or priority bound, and an already-admitted upload may acquire the lock after the session ends?\",\"options\":[\"Give cleanup priority and recheck session validity before an upload lands\",\"Bound every import-lock holder and require fair acquisition\",\"Make one minute a best-effort target rather than a maximum\"],\"default_guess\":\"Recheck session validity under the locks and give the cleanup sweep priority sufficient to guarantee the bound.\",\"unit\":\"A16\"},{\"subject\":\"import and confirmation digests\",\"kind\":\"undefined algorithm\",\"text\":\"“The mapping names the file by its digest” and “kept as a digest of those values in a fixed order”\",\"question\":\"Which digest algorithm, byte encoding, field framing and canonical ordering define the file digest and the confirmation-input digest, including absent values and nested picks?\",\"options\":[\"Specify a canonical byte encoding and SHA-256\",\"Use the raw uploaded bytes for the file and canonical JSON for inputs\",\"Leave the algorithms release-specific and version the digest representation\"],\"default_guess\":\"Use SHA-256 of the exact uploaded bytes for the file and SHA-256 of a length-framed canonical UTF-8 encoding for the bound inputs.\",\"unit\":\"A16\"},{\"subject\":\"minting imported Customer identities\",\"kind\":\"missing collision rule\",\"text\":\"“Each new Customer's `customer_ref` is minted when the import is accepted.”\",\"question\":\"What happens if a minted `customer_ref` collides with an existing Customer or with another Customer minted in the same import?\",\"options\":[\"Retry minting inside the transaction until all are unique\",\"Refuse the whole import as a conflict\",\"Treat collision as an internal failure and permit the same confirmation to be retried\"],\"default_guess\":\"Retry minting inside the transaction until every new reference is unique.\",\"unit\":\"A16\"},{\"subject\":\"configuration variable set\",\"kind\":\"undefined names\",\"text\":\"“the set of environment variables whose names begin with `REGISTRY_`” and “It holds exactly these items and no other”\",\"question\":\"What are the exact environment-variable names for every listed item, including the four service tokens, and which names are reserved or recognized as unknown?\",\"options\":[\"Declare one exact fixed name for each item\",\"Declare a structured naming convention for service tokens\",\"Move the complete variable-name list to a release-owned schema\"],\"default_guess\":\"Declare an exact fixed `REGISTRY_…` name for every item and reject every other name with that prefix.\",\"unit\":\"A17\"},{\"subject\":\"configuration well-formedness\",\"kind\":\"vague refusal condition\",\"text\":\"“each well formed; each secret's length”\",\"question\":\"Beyond the later path and length rules, what exact conditions make each configuration item well formed, and how is the byte length of an environment string measured?\",\"options\":[\"UTF-8 encode secrets and count encoded bytes; define path syntax explicitly\",\"Restrict secrets to an ASCII/base64 alphabet and count decoded bytes\",\"Count Unicode scalar values and accept any path the operating system accepts\"],\"default_guess\":\"Require UTF-8 strings, count their encoded bytes, reject embedded NULs, and define locations as operating-system paths satisfying rule 5.\",\"unit\":\"A17\"},{\"subject\":\"creation of a new store\",\"kind\":\"failure semantics\",\"text\":\"“Registry makes a new, empty store of the running release's version there at the start” and “A failed start leaves no file it made”\",\"question\":\"Must creation and initialization of a new store be atomic, and what must the next start do if the process or filesystem fails after creating the file but before initialization is complete?\",\"options\":[\"Create under a temporary name and atomically rename only after complete initialization\",\"Remove any incomplete new store on the next start\",\"Treat any existing incomplete file as an unopenable store and require owner intervention\"],\"default_guess\":\"Create and initialize a temporary store, then atomically rename it to the configured path.\",\"unit\":\"A17\"},{\"subject\":\"backup encryption and key identification\",\"kind\":\"undefined cryptography\",\"text\":\"“Each backup is encrypted with the backup key” and “a digest of the key it was made with”\",\"question\":\"Which authenticated-encryption construction, nonce generation, key interpretation or derivation, authentication scope and key-digest algorithm are required?\",\"options\":[\"Specify an AEAD format with a random nonce and SHA-256 key identifier\",\"Use an established encrypted-container format fixed by the release\",\"Allow each release to choose a versioned cryptographic format\"],\"default_guess\":\"Use a versioned AEAD container with a fresh random nonce, authenticate all metadata, and use SHA-256 as a non-secret key identifier.\",\"unit\":\"A18\"},{\"subject\":\"unencrypted backup record\",\"kind\":\"integrity gap\",\"text\":\"“It records, readable without its key, its instant, the release that made it, the last audit sequence number it holds and a digest of the key”\",\"question\":\"Is this unencrypted record cryptographically authenticated, and if so how can Registry authenticate it before choosing a key; if not, may corrupted or altered metadata control retention, newest-backup display and integrity checks?\",\"options\":[\"Authenticate the record with a signature or MAC whose verification key is available\",\"Duplicate the record inside the encrypted authenticated payload and distrust it until checking\",\"Accept unauthenticated metadata for scheduling and retention\"],\"default_guess\":\"Keep a readable header but duplicate and authenticate it inside the encrypted payload, treating mismatches as unreadable.\",\"unit\":\"A18\"},{\"subject\":\"backup readability test\",\"kind\":\"wording conflict\",\"text\":\"“records, readable without its key” and required test “A backup cannot be read without the key it was made with.”\",\"question\":\"Does “cannot be read” mean only that the encrypted store contents cannot be read, while the declared metadata remains readable, or must no part of the backup be readable without the key?\",\"options\":[\"Only payload contents require the key; the listed header remains readable\",\"Encrypt everything, including the listed record\",\"Expose a separate sidecar record rather than part of the backup\"],\"default_guess\":\"Interpret the test as applying only to the store payload and leave the listed metadata readable.\",\"unit\":\"A18\"},{\"subject\":\"backup filenames and prefixes\",\"kind\":\"undeclared release choice\",\"text\":\"“two different prefixes the release declares” and “A kept name is made from the backup's instant”\",\"question\":\"What are the two prefixes, the instant's filename representation and precision, and the complete rule for producing a unique kept name when two runs record the same instant?\",\"options\":[\"Declare fixed prefixes and include a high-resolution UTC instant plus random suffix\",\"Declare fixed prefixes and fail on an equal-instant collision\",\"Let each release choose a versioned naming scheme\"],\"default_guess\":\"Use fixed release-declared prefixes and a UTC timestamp with microseconds plus a random suffix.\",\"unit\":\"A18\"},{\"subject\":\"recorded audit sequence in a backup\",\"kind\":\"ambiguous value\",\"text\":\"“the last audit sequence number it holds” and “checks that its audit log ends at the recorded sequence number”\",\"question\":\"Is the recorded value the store's never-reused sequence counter or the highest surviving AuditEntry, and what value and check apply to a new store whose audit log has no entries?\",\"options\":[\"Record the persistent sequence counter, using zero before any entry\",\"Record the highest surviving entry, using null for an empty log\",\"Record both the counter and the highest surviving entry\"],\"default_guess\":\"Record both, using zero for each when no entry has ever been written, and verify both against the decrypted store.\",\"unit\":\"A18\"},{\"subject\":\"backup check cleanup failures\",\"kind\":\"incomplete failure order\",\"text\":\"“checks … and removes [the decrypted temporary file]; a backup that passes is renamed to its kept name”\",\"question\":\"If the decrypted copy passes its checks but cannot be removed, is the encrypted backup still renamed and kept, or is the second step failed and the encrypted temporary backup deleted or left for the next run?\",\"options\":[\"Fail before rename and leave only temporary files for the next cleanup\",\"Keep the verified backup but mark the run failed\",\"Attempt rename and cleanup independently, keeping the backup if rename succeeds\"],\"default_guess\":\"Fail before rename, delete the encrypted temporary file if possible, and leave any undeletable temporary files for the next run.\",\"unit\":\"A18\"},{\"subject\":\"clock-forward backup scheduling\",\"kind\":\"contradictory condition\",\"text\":\"“a date's run starts … when an earlier look of the same process saw that date before 03:00” and “after a clock set forward it runs only for the date it then sees pass 03:00”\",\"question\":\"If the clock jumps from a prior date or from before midnight directly to a later date after 03:00, should that later date run even though the process never observed that same date before 03:00?\",\"options\":[\"Require observation of the same date before 03:00, so no run occurs\",\"Detect crossing of the latest 03:00 boundary and run once for the resulting date\",\"Run whenever first observed after 03:00 unless that date is already remembered or kept\"],\"default_guess\":\"Detect crossing of a 03:00 UTC boundary and run once only for the date containing the latest crossed boundary.\",\"unit\":\"A18\"}]}",
+ "set_aside": []
+}
