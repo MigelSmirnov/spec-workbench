@@ -35,8 +35,12 @@ security review of States 0–2.
    too large or unreadable — replaces nothing. An accepted import drops the
    uploaded file of every owner session (M11); a confirmation shown in
    another session is refused because the import is closed (rule 8). Uploads
-   and import confirmations of all sessions take one lock of the instance,
-   one at a time, so no upload lands after the import that closed it. The mapping names
+   and import confirmations take the instance's one import lock first, then
+   their session's lock (A13), and hold both until done; an accepted import,
+   holding the import lock, drops every session's upload, which only a
+   holder of that lock changes. Other session changes take their session's
+   lock alone. So no upload lands after the import that closed it, and the
+   two locks are always taken in that order. The mapping names
    the file by its digest. The owner confirms that mapping in the confirmation
    step (A13 rule 6); the confirmation applies the file of that digest, the
    picks, names, aliases and Customer values the mapping showed, nothing
@@ -205,7 +209,12 @@ secret cannot be shared between holders.
    owner-only start (rule 9), makes no run, and none is made later in its
    place. A run is made for a UTC date only when the running process sees the
    clock pass 03:00 of that date and no kept backup of that date exists, so
-   a restart, a start at 03:00 or a clock set back makes no second run. Runs
+   a restart, a start at 03:00 or a clock set back makes no second run. A
+   process runs each date at most once, remembering in its memory the dates
+   it ran, a failed run included; after a clock set forward it runs only for
+   the date it then sees pass 03:00, and the dates jumped over get no run. A
+   failed date is run again only by a later process that sees 03:00 of it
+   pass, which only a clock set back makes happen, and that is allowed. Runs
    never overlap: a 03:00 that finds a run still going makes no run of its
    own. A backup is a consistent copy of the store
    taken while Registry runs: it never holds part of a transaction. It
