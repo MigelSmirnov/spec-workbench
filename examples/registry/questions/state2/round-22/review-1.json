@@ -1,0 +1,215 @@
+{
+ "open_points": [
+  {
+   "subject": "A16 import and owner-session locking",
+   "kind": "contradictory lock ownership",
+   "text": "“an accepted import, holding the import lock, drops every session's upload, which only a holder of that lock changes. Other session changes take their session's lock alone.” M11 and A13 also make session end or sign-out drop that session's uploaded file while taking only its session lock.",
+   "question": "Must ending or signing out a session also take the import lock before dropping its upload, or may an upload be changed without the import lock?",
+   "options": [
+    "All upload changes, including session end and sign-out, take the import lock then the session lock",
+    "Session end and sign-out may drop an upload under the session lock alone",
+    "Session end leaves the upload for import-wide cleanup"
+   ],
+   "default_guess": "Require every operation that installs or drops an upload to take the import lock before the session lock.",
+   "unit": "?"
+  },
+  {
+   "subject": "A16 accepted import clearing other sessions",
+   "kind": "unlocked cross-session mutation",
+   "text": "“an accepted import, holding the import lock, drops every session's upload” while it holds only the confirming session's lock, although A13 says requests that change a session's state are serialised by that session's lock.",
+   "question": "How does an accepted import safely change uploads in other sessions that may concurrently be signing out, expiring, replacing confirmations, or otherwise changing session state?",
+   "options": [
+    "Acquire every affected session lock in a declared order while holding the import lock",
+    "Permit upload removal under the import lock without the other session locks and define how concurrent session removal is handled",
+    "Represent uploads in import-lock-owned instance state rather than owner-session state"
+   ],
+   "default_guess": "Treat uploaded files as import-lock-owned state and allow the import to detach them without taking every session lock, with session removal made tolerant of an already-detached upload.",
+   "unit": "?"
+  },
+  {
+   "subject": "A16 interaction with admitted requests and sign-out",
+   "kind": "rule conflict",
+   "text": "A13 says a request that passes session validity “completes even if … a sign-out comes while it runs” and that requests are ordered by the session lock, but A16 makes an upload or confirmation acquire the import lock before it can acquire that session lock.",
+   "question": "If an upload or import confirmation passes the session check, waits for the import lock, and sign-out acquires the session lock and ends the session first, must the admitted request still complete or be refused because its session state has disappeared?",
+   "options": [
+    "The admitted request completes despite the intervening sign-out",
+    "The request is refused after it acquires the locks and discovers the ended session",
+    "Sign-out must coordinate on the import lock so lock acquisition preserves A13's admission rule"
+   ],
+   "default_guess": "Make sign-out coordinate on the import lock when the session has import state, so a request admitted first can complete as A13 requires.",
+   "unit": "?"
+  },
+  {
+   "subject": "A16 scope of the import lock",
+   "kind": "ambiguous operation coverage",
+   "text": "“Uploads and import confirmations take the instance's one import lock” does not say whether “import confirmations” includes showing or refreshing the mapping/confirmation step, or only submitting the final confirmation.",
+   "question": "Which import-interface requests must take the import lock, and must closure be checked while that lock is held before a mapping or confirmation step is shown?",
+   "options": [
+    "Upload, mapping generation, confirmation-step display, and confirmation submission all take it",
+    "Only upload and final confirmation submission take it",
+    "Upload and every request that changes import-related session state take it"
+   ],
+   "default_guess": "Take the import lock for upload, mapping generation, confirmation-step display, and final submission, checking closure while holding it.",
+   "unit": "?"
+  },
+  {
+   "subject": "A17 configuration schema",
+   "kind": "undefined configuration contract",
+   "text": "The configuration “holds exactly these items” and checks that “each [is] well formed”, but the exact environment-variable names, value encodings, path syntax, and well-formedness conditions are not stated.",
+   "question": "What are the exact `REGISTRY_` variable names and the complete validity rules for each store location, backup location, owner credential, backup key, and service token?",
+   "options": [
+    "Define all names, encodings, and validation rules in State 2",
+    "Leave names and representations to States 5 and 6 but identify those later decisions explicitly",
+    "Treat any nonblank path and any secret meeting the byte-length rule as well formed"
+   ],
+   "default_guess": "Use fixed documented names, filesystem paths for locations, UTF-8 environment strings, and otherwise regard secrets as well formed when their encoded value is at least 32 bytes.",
+   "unit": "?"
+  },
+  {
+   "subject": "A17 secret length and equality",
+   "kind": "undefined byte representation",
+   "text": "“A secret … is at least 32 bytes long” and “No two secrets are equal”, although environment variables supply textual values and no decoding or normalization rule is given.",
+   "question": "Which bytes are measured and compared: the environment string's encoded bytes, decoded hexadecimal/base64 bytes, or another canonical representation?",
+   "options": [
+    "Measure and compare UTF-8 bytes of the environment value exactly",
+    "Require a declared encoding and measure decoded bytes",
+    "Measure characters and compare text"
+   ],
+   "default_guess": "Measure and constant-time compare the exact UTF-8 bytes of each environment value without normalization.",
+   "unit": "?"
+  },
+  {
+   "subject": "A17 owner-only token presence checks",
+   "kind": "conditional-check ambiguity",
+   "text": "Rule 1 permits “for an owner-only start, none of the four”, while rules 2 and 5 say “every item of rule 1 present” and “A missing … item fails the start.”",
+   "question": "At what check is the all-four-or-none token mode selected, and are all four token variables absent valid while any strict subset is invalid?",
+   "options": [
+    "All four absent selects owner-only mode; all four present selects normal mode; every subset fails",
+    "Token variables must always be present, with a separate mode variable selecting owner-only mode",
+    "Empty token values count as absent for selecting owner-only mode"
+   ],
+   "default_guess": "Accept only exactly zero or exactly four token variables; present-but-empty values are malformed rather than absent.",
+   "unit": "?"
+  },
+  {
+   "subject": "A17 creation of a new store on failed start",
+   "kind": "contradictory cleanup guarantee",
+   "text": "“When the store's configured file does not exist … Registry makes a new, empty store” but “A failed start leaves no file it made but a probe it could not remove.”",
+   "question": "If creation or initialization of the new store fails after creating its file, must Registry delete that file, and how is creation made atomic so the next start cannot mistake a partial store for an existing one?",
+   "options": [
+    "Create under a temporary name and atomically rename only after validation",
+    "Delete any created store file on every initialization failure",
+    "Leave a partial file and let the next start reject it"
+   ],
+   "default_guess": "Create and validate a new store under an exclusive temporary name, then atomically rename it; remove the temporary file on failure.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 backup cryptography",
+   "kind": "undefined security mechanism",
+   "text": "“Each backup is encrypted with the backup key” does not specify the encryption and authentication algorithm, nonce generation, key derivation, key encoding, or how corruption and wrong keys are distinguished.",
+   "question": "What exact authenticated-encryption format and key-handling rules make a backup encrypted and checkable?",
+   "options": [
+    "Specify a versioned authenticated-encryption format with random nonces and direct fixed-size keys",
+    "Use an encryption library's implementation-defined format",
+    "Encrypt without authentication and rely on the restored store's integrity check"
+   ],
+   "default_guess": "Use a versioned authenticated-encryption format with a fresh operating-system-random nonce and authenticate both ciphertext and metadata.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 unencrypted backup metadata",
+   "kind": "unauthenticated metadata",
+   "text": "A backup records metadata “readable without its key”, while the check trusts that release, instant, key digest, and recorded audit sequence; the text does not say that this record is authenticated by the encrypted backup.",
+   "question": "Is the unencrypted record cryptographically bound to the ciphertext, and what happens when its readable values have been altered while the ciphertext remains intact?",
+   "options": [
+    "Authenticate the metadata as associated data and reject any alteration",
+    "Duplicate the metadata inside the encrypted payload and require an exact match",
+    "Leave the metadata unauthenticated and trust only the decrypted store"
+   ],
+   "default_guess": "Authenticate the entire unencrypted record as associated data and also verify its release and sequence values against the decrypted store.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 backup-key digest",
+   "kind": "undefined identifier",
+   "text": "The backup records “a digest of the key it was made with” but gives no digest algorithm, encoding, domain separation, or rule for avoiding use as an offline verifier of a weak 32-byte textual key.",
+   "question": "How is the key digest computed and represented, and is the backup key required to have cryptographic entropy rather than merely a 32-byte length?",
+   "options": [
+    "Use a specified cryptographic hash with domain separation and require a randomly generated key",
+    "Use a keyed identifier derived by the backup format",
+    "Hash the configured bytes directly and retain only the existing length check"
+   ],
+   "default_guess": "Require a random key of the encryption algorithm's size and store a domain-separated SHA-256 identifier of its canonical bytes.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 daily-run trigger",
+   "kind": "time-boundary ambiguity",
+   "text": "A run occurs when the process “sees the clock pass 03:00”, and the text mentions “a start at 03:00” without defining whether starting exactly at, or clock resolution skipping across, the boundary counts as seeing it pass.",
+   "question": "What precise wall-clock transition triggers a date's run, including process start exactly at 03:00, start after 03:00, and a clock jump from before 03:00 to after it?",
+   "options": [
+    "Trigger when the observed previous time is before 03:00 and the current time is at or after it; define an initial previous time at process start",
+    "Trigger only from a continuously running observation strictly before the boundary",
+    "At startup at exactly 03:00 run if no kept backup exists, but never catch up after 03:00"
+   ],
+   "default_guess": "Run at startup only when the observed UTC time is exactly within the scheduler's 03:00 tick and no kept backup exists; otherwise require a live transition from before to at-or-after 03:00 and never catch up.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 successful-check transition",
+   "kind": "undefined failure precedence",
+   "text": "The second step “decrypts it into a second temporary file, opens that … checks … and removes it; a backup that passes is renamed to its kept name”, without saying whether failure to remove the plaintext temporary file makes the check fail, whether the encrypted temporary backup is retained, or what happens if the kept-name rename collides or fails.",
+   "question": "What exact outcomes and cleanup apply to failure at plaintext removal, failed-backup deletion, or final rename, and may an existing kept name ever be overwritten?",
+   "options": [
+    "Any cleanup or rename failure means no backup is kept; never overwrite an existing kept file",
+    "A validated backup may be kept even if plaintext cleanup fails",
+    "Overwrite an existing same-date kept backup after successful validation"
+   ],
+   "default_guess": "Use exclusive names, never overwrite a kept backup, and regard plaintext cleanup or final rename failure as a failed run with no new kept backup.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 backup-directory file safety",
+   "kind": "filesystem race gap",
+   "text": "Registry deletes and renames “files under” release prefixes, but does not state how it handles symbolic links, hard links, pre-existing names, or path replacement between enumeration and removal.",
+   "question": "Must all backup operations be confined with no-follow, exclusive-create, and directory-relative operations so a prefixed entry cannot redirect Registry outside the backup location?",
+   "options": [
+    "Require no-follow, exclusive creation and directory-relative atomic operations",
+    "Follow normal filesystem semantics and rely on owner-only directory access",
+    "Reject any symbolic link or non-regular file under either prefix before doing the run"
+   ],
+   "default_guess": "Reject non-regular prefixed entries and use no-follow, exclusive, directory-relative operations for creation, opening, deletion, and rename.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 retention bound",
+   "kind": "internal contradiction",
+   "text": "Rule 6 says erasure reaches backups “at most 31 days after the erasure” while the same rule says “Registry bounds neither how long a run takes” and failed or missed runs may extend retention.",
+   "question": "Is 31 days a hard elapsed-time bound, a bound only when each run completes promptly and successfully, or merely the earliest scheduled deletion opportunity?",
+   "options": [
+    "Make 31 days a hard bound and impose a maximum run duration plus failure handling",
+    "State the bound only under explicit assumptions that daily runs complete successfully within a fixed time",
+    "Remove the hard bound and describe deletion at the first successful retention step after age exceeds 30 days"
+   ],
+   "default_guess": "Treat it as deletion at the first successful retention step after the backup is more than 30 days old, with no hard 31-day guarantee.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 encryption of store and disks",
+   "kind": "unverifiable invariant",
+   "text": "“The store, the backup location and the disks under them are encrypted … by the owner's administration” and “Registry does not check the host.”",
+   "question": "What evidence or acceptance check, if any, verifies the required at-rest encryption, or is it only an external deployment assumption outside the guarantees later code and tests must satisfy?",
+   "options": [
+    "Define a deployment verification procedure and required evidence",
+    "State explicitly that it is an unverified owner-controlled assumption, not a Registry invariant",
+    "Have Registry refuse to serve unless it can verify encrypted storage"
+   ],
+   "default_guess": "Classify it explicitly as an external deployment assumption and require a documented owner deployment check rather than claiming it as a Registry-verifiable invariant.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A16 import and owner-session locking\",\"kind\":\"contradictory lock ownership\",\"text\":\"“an accepted import, holding the import lock, drops every session's upload, which only a holder of that lock changes. Other session changes take their session's lock alone.” M11 and A13 also make session end or sign-out drop that session's uploaded file while taking only its session lock.\",\"question\":\"Must ending or signing out a session also take the import lock before dropping its upload, or may an upload be changed without the import lock?\",\"options\":[\"All upload changes, including session end and sign-out, take the import lock then the session lock\",\"Session end and sign-out may drop an upload under the session lock alone\",\"Session end leaves the upload for import-wide cleanup\"],\"default_guess\":\"Require every operation that installs or drops an upload to take the import lock before the session lock.\"},{\"subject\":\"A16 accepted import clearing other sessions\",\"kind\":\"unlocked cross-session mutation\",\"text\":\"“an accepted import, holding the import lock, drops every session's upload” while it holds only the confirming session's lock, although A13 says requests that change a session's state are serialised by that session's lock.\",\"question\":\"How does an accepted import safely change uploads in other sessions that may concurrently be signing out, expiring, replacing confirmations, or otherwise changing session state?\",\"options\":[\"Acquire every affected session lock in a declared order while holding the import lock\",\"Permit upload removal under the import lock without the other session locks and define how concurrent session removal is handled\",\"Represent uploads in import-lock-owned instance state rather than owner-session state\"],\"default_guess\":\"Treat uploaded files as import-lock-owned state and allow the import to detach them without taking every session lock, with session removal made tolerant of an already-detached upload.\"},{\"subject\":\"A16 interaction with admitted requests and sign-out\",\"kind\":\"rule conflict\",\"text\":\"A13 says a request that passes session validity “completes even if … a sign-out comes while it runs” and that requests are ordered by the session lock, but A16 makes an upload or confirmation acquire the import lock before it can acquire that session lock.\",\"question\":\"If an upload or import confirmation passes the session check, waits for the import lock, and sign-out acquires the session lock and ends the session first, must the admitted request still complete or be refused because its session state has disappeared?\",\"options\":[\"The admitted request completes despite the intervening sign-out\",\"The request is refused after it acquires the locks and discovers the ended session\",\"Sign-out must coordinate on the import lock so lock acquisition preserves A13's admission rule\"],\"default_guess\":\"Make sign-out coordinate on the import lock when the session has import state, so a request admitted first can complete as A13 requires.\"},{\"subject\":\"A16 scope of the import lock\",\"kind\":\"ambiguous operation coverage\",\"text\":\"“Uploads and import confirmations take the instance's one import lock” does not say whether “import confirmations” includes showing or refreshing the mapping/confirmation step, or only submitting the final confirmation.\",\"question\":\"Which import-interface requests must take the import lock, and must closure be checked while that lock is held before a mapping or confirmation step is shown?\",\"options\":[\"Upload, mapping generation, confirmation-step display, and confirmation submission all take it\",\"Only upload and final confirmation submission take it\",\"Upload and every request that changes import-related session state take it\"],\"default_guess\":\"Take the import lock for upload, mapping generation, confirmation-step display, and final submission, checking closure while holding it.\"},{\"subject\":\"A17 configuration schema\",\"kind\":\"undefined configuration contract\",\"text\":\"The configuration “holds exactly these items” and checks that “each [is] well formed”, but the exact environment-variable names, value encodings, path syntax, and well-formedness conditions are not stated.\",\"question\":\"What are the exact `REGISTRY_` variable names and the complete validity rules for each store location, backup location, owner credential, backup key, and service token?\",\"options\":[\"Define all names, encodings, and validation rules in State 2\",\"Leave names and representations to States 5 and 6 but identify those later decisions explicitly\",\"Treat any nonblank path and any secret meeting the byte-length rule as well formed\"],\"default_guess\":\"Use fixed documented names, filesystem paths for locations, UTF-8 environment strings, and otherwise regard secrets as well formed when their encoded value is at least 32 bytes.\"},{\"subject\":\"A17 secret length and equality\",\"kind\":\"undefined byte representation\",\"text\":\"“A secret … is at least 32 bytes long” and “No two secrets are equal”, although environment variables supply textual values and no decoding or normalization rule is given.\",\"question\":\"Which bytes are measured and compared: the environment string's encoded bytes, decoded hexadecimal/base64 bytes, or another canonical representation?\",\"options\":[\"Measure and compare UTF-8 bytes of the environment value exactly\",\"Require a declared encoding and measure decoded bytes\",\"Measure characters and compare text\"],\"default_guess\":\"Measure and constant-time compare the exact UTF-8 bytes of each environment value without normalization.\"},{\"subject\":\"A17 owner-only token presence checks\",\"kind\":\"conditional-check ambiguity\",\"text\":\"Rule 1 permits “for an owner-only start, none of the four”, while rules 2 and 5 say “every item of rule 1 present” and “A missing … item fails the start.”\",\"question\":\"At what check is the all-four-or-none token mode selected, and are all four token variables absent valid while any strict subset is invalid?\",\"options\":[\"All four absent selects owner-only mode; all four present selects normal mode; every subset fails\",\"Token variables must always be present, with a separate mode variable selecting owner-only mode\",\"Empty token values count as absent for selecting owner-only mode\"],\"default_guess\":\"Accept only exactly zero or exactly four token variables; present-but-empty values are malformed rather than absent.\"},{\"subject\":\"A17 creation of a new store on failed start\",\"kind\":\"contradictory cleanup guarantee\",\"text\":\"“When the store's configured file does not exist … Registry makes a new, empty store” but “A failed start leaves no file it made but a probe it could not remove.”\",\"question\":\"If creation or initialization of the new store fails after creating its file, must Registry delete that file, and how is creation made atomic so the next start cannot mistake a partial store for an existing one?\",\"options\":[\"Create under a temporary name and atomically rename only after validation\",\"Delete any created store file on every initialization failure\",\"Leave a partial file and let the next start reject it\"],\"default_guess\":\"Create and validate a new store under an exclusive temporary name, then atomically rename it; remove the temporary file on failure.\"},{\"subject\":\"A18 backup cryptography\",\"kind\":\"undefined security mechanism\",\"text\":\"“Each backup is encrypted with the backup key” does not specify the encryption and authentication algorithm, nonce generation, key derivation, key encoding, or how corruption and wrong keys are distinguished.\",\"question\":\"What exact authenticated-encryption format and key-handling rules make a backup encrypted and checkable?\",\"options\":[\"Specify a versioned authenticated-encryption format with random nonces and direct fixed-size keys\",\"Use an encryption library's implementation-defined format\",\"Encrypt without authentication and rely on the restored store's integrity check\"],\"default_guess\":\"Use a versioned authenticated-encryption format with a fresh operating-system-random nonce and authenticate both ciphertext and metadata.\"},{\"subject\":\"A18 unencrypted backup metadata\",\"kind\":\"unauthenticated metadata\",\"text\":\"A backup records metadata “readable without its key”, while the check trusts that release, instant, key digest, and recorded audit sequence; the text does not say that this record is authenticated by the encrypted backup.\",\"question\":\"Is the unencrypted record cryptographically bound to the ciphertext, and what happens when its readable values have been altered while the ciphertext remains intact?\",\"options\":[\"Authenticate the metadata as associated data and reject any alteration\",\"Duplicate the metadata inside the encrypted payload and require an exact match\",\"Leave the metadata unauthenticated and trust only the decrypted store\"],\"default_guess\":\"Authenticate the entire unencrypted record as associated data and also verify its release and sequence values against the decrypted store.\"},{\"subject\":\"A18 backup-key digest\",\"kind\":\"undefined identifier\",\"text\":\"The backup records “a digest of the key it was made with” but gives no digest algorithm, encoding, domain separation, or rule for avoiding use as an offline verifier of a weak 32-byte textual key.\",\"question\":\"How is the key digest computed and represented, and is the backup key required to have cryptographic entropy rather than merely a 32-byte length?\",\"options\":[\"Use a specified cryptographic hash with domain separation and require a randomly generated key\",\"Use a keyed identifier derived by the backup format\",\"Hash the configured bytes directly and retain only the existing length check\"],\"default_guess\":\"Require a random key of the encryption algorithm's size and store a domain-separated SHA-256 identifier of its canonical bytes.\"},{\"subject\":\"A18 daily-run trigger\",\"kind\":\"time-boundary ambiguity\",\"text\":\"A run occurs when the process “sees the clock pass 03:00”, and the text mentions “a start at 03:00” without defining whether starting exactly at, or clock resolution skipping across, the boundary counts as seeing it pass.\",\"question\":\"What precise wall-clock transition triggers a date's run, including process start exactly at 03:00, start after 03:00, and a clock jump from before 03:00 to after it?\",\"options\":[\"Trigger when the observed previous time is before 03:00 and the current time is at or after it; define an initial previous time at process start\",\"Trigger only from a continuously running observation strictly before the boundary\",\"At startup at exactly 03:00 run if no kept backup exists, but never catch up after 03:00\"],\"default_guess\":\"Run at startup only when the observed UTC time is exactly within the scheduler's 03:00 tick and no kept backup exists; otherwise require a live transition from before to at-or-after 03:00 and never catch up.\"},{\"subject\":\"A18 successful-check transition\",\"kind\":\"undefined failure precedence\",\"text\":\"The second step “decrypts it into a second temporary file, opens that … checks … and removes it; a backup that passes is renamed to its kept name”, without saying whether failure to remove the plaintext temporary file makes the check fail, whether the encrypted temporary backup is retained, or what happens if the kept-name rename collides or fails.\",\"question\":\"What exact outcomes and cleanup apply to failure at plaintext removal, failed-backup deletion, or final rename, and may an existing kept name ever be overwritten?\",\"options\":[\"Any cleanup or rename failure means no backup is kept; never overwrite an existing kept file\",\"A validated backup may be kept even if plaintext cleanup fails\",\"Overwrite an existing same-date kept backup after successful validation\"],\"default_guess\":\"Use exclusive names, never overwrite a kept backup, and regard plaintext cleanup or final rename failure as a failed run with no new kept backup.\"},{\"subject\":\"A18 backup-directory file safety\",\"kind\":\"filesystem race gap\",\"text\":\"Registry deletes and renames “files under” release prefixes, but does not state how it handles symbolic links, hard links, pre-existing names, or path replacement between enumeration and removal.\",\"question\":\"Must all backup operations be confined with no-follow, exclusive-create, and directory-relative operations so a prefixed entry cannot redirect Registry outside the backup location?\",\"options\":[\"Require no-follow, exclusive creation and directory-relative atomic operations\",\"Follow normal filesystem semantics and rely on owner-only directory access\",\"Reject any symbolic link or non-regular file under either prefix before doing the run\"],\"default_guess\":\"Reject non-regular prefixed entries and use no-follow, exclusive, directory-relative operations for creation, opening, deletion, and rename.\"},{\"subject\":\"A18 retention bound\",\"kind\":\"internal contradiction\",\"text\":\"Rule 6 says erasure reaches backups “at most 31 days after the erasure” while the same rule says “Registry bounds neither how long a run takes” and failed or missed runs may extend retention.\",\"question\":\"Is 31 days a hard elapsed-time bound, a bound only when each run completes promptly and successfully, or merely the earliest scheduled deletion opportunity?\",\"options\":[\"Make 31 days a hard bound and impose a maximum run duration plus failure handling\",\"State the bound only under explicit assumptions that daily runs complete successfully within a fixed time\",\"Remove the hard bound and describe deletion at the first successful retention step after age exceeds 30 days\"],\"default_guess\":\"Treat it as deletion at the first successful retention step after the backup is more than 30 days old, with no hard 31-day guarantee.\"},{\"subject\":\"A18 encryption of store and disks\",\"kind\":\"unverifiable invariant\",\"text\":\"“The store, the backup location and the disks under them are encrypted … by the owner's administration” and “Registry does not check the host.”\",\"question\":\"What evidence or acceptance check, if any, verifies the required at-rest encryption, or is it only an external deployment assumption outside the guarantees later code and tests must satisfy?\",\"options\":[\"Define a deployment verification procedure and required evidence\",\"State explicitly that it is an unverified owner-controlled assumption, not a Registry invariant\",\"Have Registry refuse to serve unless it can verify encrypted storage\"],\"default_guess\":\"Classify it explicitly as an external deployment assumption and require a documented owner deployment check rather than claiming it as a Registry-verifiable invariant.\"}]}",
+ "set_aside": []
+}

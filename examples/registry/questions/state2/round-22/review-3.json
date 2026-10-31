@@ -1,0 +1,150 @@
+{
+ "open_points": [
+  {
+   "subject": "A16 rule 2 and A13 owner-session serialization",
+   "kind": "contradictory locking",
+   "text": "“Uploads and import confirmations take the instance's one import lock first, then their session's lock” conflicts with A13's rule that session-changing requests are ordered by taking “the session's one lock” and that an admitted request completes even if sign-out occurs while it runs.",
+   "question": "If an upload or confirmation passes the session check, waits for the import lock, and sign-out acquires the session lock first, does the upload or confirmation still run against the ended session, or must sign-out wait for it?",
+   "options": [
+    "Admission before sign-out guarantees completion before sign-out",
+    "Session-lock acquisition decides the order, so sign-out may invalidate the waiting request",
+    "The request is rechecked after acquiring both locks"
+   ],
+   "default_guess": "Use session-lock acquisition as the order and refuse the waiting request if the session has ended.",
+   "unit": "?"
+  },
+  {
+   "subject": "A16 accepted import dropping every session's upload",
+   "kind": "lock ownership conflict",
+   "text": "“an accepted import, holding the import lock, drops every session's upload” changes other sessions' M11 state without their session locks, while A13 says requests that change a session's state are applied under that session's one lock.",
+   "question": "May an accepted import mutate another owner session's uploaded-file field without taking that session's lock, and what is serialized against concurrent sign-out or confirmation-step changes in that session?",
+   "options": [
+    "The import lock exclusively protects uploaded-file fields in all sessions",
+    "Both the import lock and each affected session lock are required",
+    "The cross-session deletion is atomic independently of session locking"
+   ],
+   "default_guess": "Treat the import lock as the exclusive lock for every uploaded-file field, including cross-session deletion.",
+   "unit": "?"
+  },
+  {
+   "subject": "A16 import confirmation locking scope",
+   "kind": "undefined lock scope",
+   "text": "“Uploads and import confirmations take the instance's one import lock first” does not say whether “import confirmations” includes showing or regenerating the confirmation step, or only submitting it.",
+   "question": "Which operations that read an uploaded file or create a confirmation bound to it must take the import lock?",
+   "options": [
+    "Only final confirmation submissions",
+    "Both showing and submitting an import confirmation",
+    "Every import-related request, including mapping reads and pick changes"
+   ],
+   "default_guess": "Require the import lock for every request that reads or binds an uploaded import file.",
+   "unit": "?"
+  },
+  {
+   "subject": "A17 service-token configuration modes",
+   "kind": "contradiction",
+   "text": "Rule 1 permits “one service token for each service ... or, for an owner-only start, none of the four”, but rule 2 requires “every item of rule 1 present”.",
+   "question": "How does the presence check distinguish a valid owner-only configuration from an invalid configuration with missing service tokens?",
+   "options": [
+    "Exactly all four tokens or exactly none are valid",
+    "Every token is always required, making owner-only start impossible",
+    "A separate mode setting selects which tokens are required"
+   ],
+   "default_guess": "Accept exactly all four service tokens or none; refuse every partial set.",
+   "unit": "?"
+  },
+  {
+   "subject": "A17 configuration validation",
+   "kind": "undefined refusal conditions",
+   "text": "“each well formed” and “A missing, malformed or unknown item fails the start” do not define what well formed or malformed means for the store location, backup location, owner credential, backup key, or service tokens beyond minimum secret length.",
+   "question": "What exact syntax, encoding, path form, empty-value handling and other conditions make each configuration item well formed?",
+   "options": [
+    "Only nonempty values plus the explicitly stated path and secret checks",
+    "Release-specific parsers define additional accepted forms",
+    "States 5 and 6 define each environment value's grammar"
+   ],
+   "default_guess": "Accept nonempty environment strings and apply only the explicit length, distinctness, path and openability checks.",
+   "unit": "?"
+  },
+  {
+   "subject": "A17 secret length and distinctness",
+   "kind": "undefined representation",
+   "text": "“at least 32 bytes long” and “No two secrets are equal” do not say how environment-variable text is converted to bytes or normalized before length and equality are checked.",
+   "question": "Are length and equality measured on raw environment bytes, UTF-8 encoding, decoded secret material, or a normalized textual form?",
+   "options": [
+    "UTF-8 bytes of the environment value without normalization",
+    "Decoded binary secret material in a declared encoding",
+    "Characters rather than bytes"
+   ],
+   "default_guess": "Use the exact UTF-8 bytes of the environment value without normalization.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 backup encryption",
+   "kind": "underspecified security rule",
+   "text": "“Each backup is encrypted with the backup key” leaves the encryption construction, key interpretation, nonce generation, authentication and tamper-detection requirements unstated.",
+   "question": "What exact authenticated-encryption and key-handling rules must every implementation use for a backup to count as encrypted and valid?",
+   "options": [
+    "A release-declared authenticated-encryption scheme with random nonces",
+    "Any library-supported encryption scheme",
+    "Confidentiality-only encryption plus the decrypted store integrity check"
+   ],
+   "default_guess": "Use a release-declared authenticated-encryption scheme with a fresh random nonce and authenticate the header as associated data.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 unencrypted backup record",
+   "kind": "integrity gap",
+   "text": "A backup “records, readable without its key, its instant, the release that made it, the last audit sequence number it holds and a digest of the key”, but the text does not say whether that record is authenticated or bound to the encrypted backup.",
+   "question": "Can the unencrypted record be altered independently, or must its fields be authenticated against the ciphertext, and which digest identifies the key?",
+   "options": [
+    "Authenticate the record as associated data and declare the digest algorithm",
+    "Leave it unauthenticated and rely on the creation-time check",
+    "Sign or MAC the record separately"
+   ],
+   "default_guess": "Authenticate the record as associated data and use a release-declared cryptographic digest of the exact key bytes.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 daily-run boundary",
+   "kind": "ambiguous scheduling",
+   "text": "A run occurs when the process “sees the clock pass 03:00”, while the text separately mentions “a start at 03:00” without defining the exact boundary or scheduler-delay behavior.",
+   "question": "Does a process starting exactly at 03:00:00 run that date's backup, and how late may a running process observe the crossing and still count it?",
+   "options": [
+    "Run when the process was running immediately before the boundary and observes time at or after it",
+    "A start exactly at the boundary counts as seeing the crossing",
+    "Only an invocation at the exact instant counts"
+   ],
+   "default_guess": "Run when a continuously running process first observes a time at or after 03:00; a process started at or after the boundary does not run for that date.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 detection of an existing daily backup",
+   "kind": "undefined existence rule",
+   "text": "A run is made only when “no kept backup of that date exists”, while rule 4 later deletes kept-prefix files whose unencrypted record cannot be read.",
+   "question": "Does an unreadable, malformed or duplicate kept-prefix file claiming that date count as an existing kept backup and suppress the run?",
+   "options": [
+    "Only a readable valid backup record counts",
+    "Any kept-prefix file for the date counts",
+    "The run first cleans unreadable files and then decides whether a backup exists"
+   ],
+   "default_guess": "Only a kept file with a readable record for that UTC date counts; unreadable files do not suppress the run.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 recorded audit sequence for an empty log",
+   "kind": "undefined check value",
+   "text": "Each backup records “the last audit sequence number it holds” and the check requires that “its audit log ends at the recorded sequence number”, but a new store can have no audit entry.",
+   "question": "What value is recorded and what check passes when the audit log is empty?",
+   "options": [
+    "Record sequence 0",
+    "Record an explicit absent value",
+    "Refuse to keep a backup until an audit entry exists"
+   ],
+   "default_guess": "Record 0 and require the restored audit log to contain no entries while its sequence counter is 0.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A16 rule 2 and A13 owner-session serialization\",\"kind\":\"contradictory locking\",\"text\":\"“Uploads and import confirmations take the instance's one import lock first, then their session's lock” conflicts with A13's rule that session-changing requests are ordered by taking “the session's one lock” and that an admitted request completes even if sign-out occurs while it runs.\",\"question\":\"If an upload or confirmation passes the session check, waits for the import lock, and sign-out acquires the session lock first, does the upload or confirmation still run against the ended session, or must sign-out wait for it?\",\"options\":[\"Admission before sign-out guarantees completion before sign-out\",\"Session-lock acquisition decides the order, so sign-out may invalidate the waiting request\",\"The request is rechecked after acquiring both locks\"],\"default_guess\":\"Use session-lock acquisition as the order and refuse the waiting request if the session has ended.\"},{\"subject\":\"A16 accepted import dropping every session's upload\",\"kind\":\"lock ownership conflict\",\"text\":\"“an accepted import, holding the import lock, drops every session's upload” changes other sessions' M11 state without their session locks, while A13 says requests that change a session's state are applied under that session's one lock.\",\"question\":\"May an accepted import mutate another owner session's uploaded-file field without taking that session's lock, and what is serialized against concurrent sign-out or confirmation-step changes in that session?\",\"options\":[\"The import lock exclusively protects uploaded-file fields in all sessions\",\"Both the import lock and each affected session lock are required\",\"The cross-session deletion is atomic independently of session locking\"],\"default_guess\":\"Treat the import lock as the exclusive lock for every uploaded-file field, including cross-session deletion.\"},{\"subject\":\"A16 import confirmation locking scope\",\"kind\":\"undefined lock scope\",\"text\":\"“Uploads and import confirmations take the instance's one import lock first” does not say whether “import confirmations” includes showing or regenerating the confirmation step, or only submitting it.\",\"question\":\"Which operations that read an uploaded file or create a confirmation bound to it must take the import lock?\",\"options\":[\"Only final confirmation submissions\",\"Both showing and submitting an import confirmation\",\"Every import-related request, including mapping reads and pick changes\"],\"default_guess\":\"Require the import lock for every request that reads or binds an uploaded import file.\"},{\"subject\":\"A17 service-token configuration modes\",\"kind\":\"contradiction\",\"text\":\"Rule 1 permits “one service token for each service ... or, for an owner-only start, none of the four”, but rule 2 requires “every item of rule 1 present”.\",\"question\":\"How does the presence check distinguish a valid owner-only configuration from an invalid configuration with missing service tokens?\",\"options\":[\"Exactly all four tokens or exactly none are valid\",\"Every token is always required, making owner-only start impossible\",\"A separate mode setting selects which tokens are required\"],\"default_guess\":\"Accept exactly all four service tokens or none; refuse every partial set.\"},{\"subject\":\"A17 configuration validation\",\"kind\":\"undefined refusal conditions\",\"text\":\"“each well formed” and “A missing, malformed or unknown item fails the start” do not define what well formed or malformed means for the store location, backup location, owner credential, backup key, or service tokens beyond minimum secret length.\",\"question\":\"What exact syntax, encoding, path form, empty-value handling and other conditions make each configuration item well formed?\",\"options\":[\"Only nonempty values plus the explicitly stated path and secret checks\",\"Release-specific parsers define additional accepted forms\",\"States 5 and 6 define each environment value's grammar\"],\"default_guess\":\"Accept nonempty environment strings and apply only the explicit length, distinctness, path and openability checks.\"},{\"subject\":\"A17 secret length and distinctness\",\"kind\":\"undefined representation\",\"text\":\"“at least 32 bytes long” and “No two secrets are equal” do not say how environment-variable text is converted to bytes or normalized before length and equality are checked.\",\"question\":\"Are length and equality measured on raw environment bytes, UTF-8 encoding, decoded secret material, or a normalized textual form?\",\"options\":[\"UTF-8 bytes of the environment value without normalization\",\"Decoded binary secret material in a declared encoding\",\"Characters rather than bytes\"],\"default_guess\":\"Use the exact UTF-8 bytes of the environment value without normalization.\"},{\"subject\":\"A18 backup encryption\",\"kind\":\"underspecified security rule\",\"text\":\"“Each backup is encrypted with the backup key” leaves the encryption construction, key interpretation, nonce generation, authentication and tamper-detection requirements unstated.\",\"question\":\"What exact authenticated-encryption and key-handling rules must every implementation use for a backup to count as encrypted and valid?\",\"options\":[\"A release-declared authenticated-encryption scheme with random nonces\",\"Any library-supported encryption scheme\",\"Confidentiality-only encryption plus the decrypted store integrity check\"],\"default_guess\":\"Use a release-declared authenticated-encryption scheme with a fresh random nonce and authenticate the header as associated data.\"},{\"subject\":\"A18 unencrypted backup record\",\"kind\":\"integrity gap\",\"text\":\"A backup “records, readable without its key, its instant, the release that made it, the last audit sequence number it holds and a digest of the key”, but the text does not say whether that record is authenticated or bound to the encrypted backup.\",\"question\":\"Can the unencrypted record be altered independently, or must its fields be authenticated against the ciphertext, and which digest identifies the key?\",\"options\":[\"Authenticate the record as associated data and declare the digest algorithm\",\"Leave it unauthenticated and rely on the creation-time check\",\"Sign or MAC the record separately\"],\"default_guess\":\"Authenticate the record as associated data and use a release-declared cryptographic digest of the exact key bytes.\"},{\"subject\":\"A18 daily-run boundary\",\"kind\":\"ambiguous scheduling\",\"text\":\"A run occurs when the process “sees the clock pass 03:00”, while the text separately mentions “a start at 03:00” without defining the exact boundary or scheduler-delay behavior.\",\"question\":\"Does a process starting exactly at 03:00:00 run that date's backup, and how late may a running process observe the crossing and still count it?\",\"options\":[\"Run when the process was running immediately before the boundary and observes time at or after it\",\"A start exactly at the boundary counts as seeing the crossing\",\"Only an invocation at the exact instant counts\"],\"default_guess\":\"Run when a continuously running process first observes a time at or after 03:00; a process started at or after the boundary does not run for that date.\"},{\"subject\":\"A18 detection of an existing daily backup\",\"kind\":\"undefined existence rule\",\"text\":\"A run is made only when “no kept backup of that date exists”, while rule 4 later deletes kept-prefix files whose unencrypted record cannot be read.\",\"question\":\"Does an unreadable, malformed or duplicate kept-prefix file claiming that date count as an existing kept backup and suppress the run?\",\"options\":[\"Only a readable valid backup record counts\",\"Any kept-prefix file for the date counts\",\"The run first cleans unreadable files and then decides whether a backup exists\"],\"default_guess\":\"Only a kept file with a readable record for that UTC date counts; unreadable files do not suppress the run.\"},{\"subject\":\"A18 recorded audit sequence for an empty log\",\"kind\":\"undefined check value\",\"text\":\"Each backup records “the last audit sequence number it holds” and the check requires that “its audit log ends at the recorded sequence number”, but a new store can have no audit entry.\",\"question\":\"What value is recorded and what check passes when the audit log is empty?\",\"options\":[\"Record sequence 0\",\"Record an explicit absent value\",\"Refuse to keep a backup until an audit entry exists\"],\"default_guess\":\"Record 0 and require the restored audit log to contain no entries while its sequence counter is 0.\"}]}",
+ "set_aside": []
+}

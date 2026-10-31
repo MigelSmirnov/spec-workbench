@@ -1,0 +1,176 @@
+{
+ "open_points": [
+  {
+   "subject": "A16 import and owner-session locking",
+   "kind": "lock contradiction",
+   "text": "A13 says every request that changes an owner session, including uploading a file and sign-out, takes that session's lock; changed A16 says an accepted import, holding only the import lock and its own session's lock, \"drops every session's upload\", while \"Other session changes take their session's lock alone.\"",
+   "question": "Which lock protects another session's uploaded file, and how is clearing it ordered against that session's sign-out, expiry, confirmation changes, or other session-state changes?",
+   "options": [
+    "The import lock alone protects every uploaded file, and all operations that destroy or change an upload must also take it",
+    "The accepted import must additionally take every affected session lock in a declared order",
+    "Cross-session clearing may race with session-only changes, with an explicitly defined winner"
+   ],
+   "default_guess": "Make the import lock protect all uploaded-file state and require session-ending operations that drop an upload to take the import lock before the session lock.",
+   "unit": "?"
+  },
+  {
+   "subject": "A17 configuration variable names",
+   "kind": "missing names",
+   "text": "The configuration is described as environment variables whose names begin with `REGISTRY_`, but the exact variable name corresponding to each required item is never declared.",
+   "question": "What are the exact accepted environment-variable names, including the four service-token variables, and therefore which `REGISTRY_` names are rejected as unknown?",
+   "options": [
+    "Declare one fixed name for every item",
+    "Derive token names from service names by a stated normalization rule"
+   ],
+   "default_guess": "Use fixed, explicitly enumerated uppercase names for every item.",
+   "unit": "?"
+  },
+  {
+   "subject": "A17 configuration validation",
+   "kind": "vague validation",
+   "text": "Startup checks that \"each [item is] well formed\", but no well-formedness rules are given for the store location, backup location, owner credential, backup key, or service tokens beyond secret length and equality.",
+   "question": "What exact syntax, encoding, forbidden values, and path-form requirements make each configuration item well formed?",
+   "options": [
+    "Only paths must parse and secrets must satisfy the stated byte-length rule",
+    "Declare a separate exact grammar for every item",
+    "Treat any environment string as well formed unless another stated check rejects it"
+   ],
+   "default_guess": "Accept arbitrary nonempty secret strings after UTF-8 encoding and require both locations to parse as filesystem paths of their stated kind.",
+   "unit": "?"
+  },
+  {
+   "subject": "A17 secret length",
+   "kind": "undefined byte encoding",
+   "text": "Each secret must be \"at least 32 bytes long\", although environment variables are textual and no conversion from text to bytes is specified.",
+   "question": "In which encoding is a configured secret measured and later compared, and are 32 characters, 32 encoded bytes, or 32 decoded secret bytes required?",
+   "options": [
+    "Measure UTF-8 encoded bytes",
+    "Require an encoded representation such as base64 and measure decoded bytes",
+    "Restrict secrets to an ASCII alphabet and measure characters"
+   ],
+   "default_guess": "Measure the UTF-8 byte representation used for authentication and encryption.",
+   "unit": "?"
+  },
+  {
+   "subject": "A17 path separation",
+   "kind": "undefined canonicalization",
+   "text": "The store and backup locations are compared \"by their absolute paths with every symbolic link resolved\", while the configured store file may not yet exist.",
+   "question": "How are relative paths based, and how is a nonexistent store path canonicalized and checked for containment when its final component cannot be resolved as a symbolic link?",
+   "options": [
+    "Resolve relative paths from a declared working directory and resolve the existing parent before appending the missing name",
+    "Require both configured locations to be absolute",
+    "Reject any path whose complete canonical target does not already exist"
+   ],
+   "default_guess": "Require absolute paths, resolve every existing ancestor, and append a nonexistent final store filename to the resolved parent.",
+   "unit": "?"
+  },
+  {
+   "subject": "A17 startup cleanup",
+   "kind": "missing check order",
+   "text": "A failed start may leave \"a probe it could not remove, which the next start or run removes with the other temporary files\", but the ordered startup checks contain no step that removes old temporary-prefix files.",
+   "question": "When during startup are stale probe and temporary files removed, and does inability to remove one fail startup or merely produce a diagnostic?",
+   "options": [
+    "Clean them before the writable probe and fail startup if cleanup fails",
+    "Clean them after the probe and fail startup if cleanup fails",
+    "Leave cleanup solely to a later backup run"
+   ],
+   "default_guess": "Clean the temporary prefix before probing and fail startup if any stale file cannot be removed.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 backup encryption",
+   "kind": "unspecified cryptography",
+   "text": "A backup is required to be encrypted with the configured key and to expose a digest of that key, but no encryption construction, authentication rule, key derivation, nonce handling, digest algorithm, or file format is declared.",
+   "question": "What exact authenticated-encryption and key-digest scheme determines whether a backup can be decrypted, authenticated, and associated with the correct key?",
+   "options": [
+    "Use a declared authenticated-encryption format with a random nonce and a cryptographic key identifier",
+    "Use an existing declared encrypted-container format",
+    "Leave algorithms and format release-specific but require the release to declare them"
+   ],
+   "default_guess": "Use a versioned authenticated-encryption container with a random nonce, a standard KDF where needed, and a SHA-256-derived key identifier.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 daily scheduling",
+   "kind": "ambiguous clock edge",
+   "text": "A run occurs only when the process \"sees the clock pass 03:00\", while starts at 03:00, restarts, polling delay, and clock changes are discussed without defining the precise observation interval or equality boundary.",
+   "question": "What exact pair of observed wall-clock times constitutes seeing 03:00 pass, especially when the process starts exactly at 03:00 or first observes the clock shortly after it?",
+   "options": [
+    "Run when the previous observation was before 03:00 and the current observation is at or after 03:00",
+    "Run only on an observation whose displayed time is exactly 03:00",
+    "Schedule a timer for 03:00 and treat process start at that instant as crossing"
+   ],
+   "default_guess": "Run when a live process observes a transition from before 03:00 to at-or-after 03:00 for the same UTC date; starting after the boundary is not a transition.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 backup identity for a date",
+   "kind": "undefined existence test",
+   "text": "A run is made only when \"no kept backup of that date exists\", but kept-file naming is not given and an unreadable unencrypted record is deleted only during a run.",
+   "question": "How is a kept backup assigned to a UTC date, and does a current-date file with an unreadable record count as an existing kept backup that suppresses the run?",
+   "options": [
+    "The readable header's instant determines the date; an unreadable file does not count",
+    "The kept filename determines the date even if its header is unreadable",
+    "Any file under the kept prefix for that date suppresses the run"
+   ],
+   "default_guess": "Use a release-declared filename containing the UTC date; delete an unreadable current-date file before deciding whether that date already has a backup.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 backup instant",
+   "kind": "undefined timestamp",
+   "text": "A backup records \"its instant\" and retention age and newest-backup display both use it, but the rules do not say whether this is the run start, snapshot instant, successful check, or final rename instant.",
+   "question": "At what event is the backup instant fixed?",
+   "options": [
+    "When the consistent store snapshot is taken",
+    "When the run starts",
+    "When checking succeeds",
+    "When the checked file is renamed to its kept name"
+   ],
+   "default_guess": "Use the instant at which the consistent store snapshot is taken.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 integrity check",
+   "kind": "undefined acceptance check",
+   "text": "The decrypted temporary store must pass \"the store's own integrity check\", but no store engine or exact integrity test and pass criteria are declared in these texts.",
+   "question": "Which exact checks must succeed before the backup is kept, beyond opening it, matching the store version, and matching the audit sequence?",
+   "options": [
+    "Use the selected store engine's named full integrity-check operation",
+    "Check only structural readability and declared Registry invariants",
+    "Require both the engine's full integrity check and Registry-level invariant checks"
+   ],
+   "default_guess": "Run the store engine's full integrity check plus the explicitly stated version and audit-sequence checks.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 managed backup filenames",
+   "kind": "undeclared deletion scope",
+   "text": "Kept and temporary names begin with \"two different prefixes the release declares\", but neither prefix, the remainder of the filename, nor collision handling is declared.",
+   "question": "What exact names are Registry allowed to delete or rename, and what happens when the intended kept name already exists or a foreign file happens to share a prefix?",
+   "options": [
+    "Declare exact prefixes and a complete filename grammar; manage only names matching that grammar",
+    "Manage every file whose basename begins with either prefix",
+    "Record a manifest of files Registry owns"
+   ],
+   "default_guess": "Declare exact prefixes and a strict filename grammar containing the UTC date and unique run identity, and touch only files matching that grammar.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 old backup keys",
+   "kind": "unverifiable recoverability",
+   "text": "After a key change, older backups remain encrypted with their old keys and restore requires \"the key [the backup] was made with\", but Registry stores no old key and the texts assign no duty or location for retaining one.",
+   "question": "What guarantees that every retained older backup still has an available decryption key, and what should happen to a retained backup when that key is no longer available?",
+   "options": [
+    "The owner must retain every old backup key outside Registry for at least the backup's retention period",
+    "Registry re-encrypts retained backups when the key changes",
+    "Backups whose old keys are unavailable may remain even though they are unrestorable"
+   ],
+   "default_guess": "Require the owner to retain old backup keys in the owner's secret vault until every backup made with them has expired.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A16 import and owner-session locking\",\"kind\":\"lock contradiction\",\"text\":\"A13 says every request that changes an owner session, including uploading a file and sign-out, takes that session's lock; changed A16 says an accepted import, holding only the import lock and its own session's lock, \\\"drops every session's upload\\\", while \\\"Other session changes take their session's lock alone.\\\"\",\"question\":\"Which lock protects another session's uploaded file, and how is clearing it ordered against that session's sign-out, expiry, confirmation changes, or other session-state changes?\",\"options\":[\"The import lock alone protects every uploaded file, and all operations that destroy or change an upload must also take it\",\"The accepted import must additionally take every affected session lock in a declared order\",\"Cross-session clearing may race with session-only changes, with an explicitly defined winner\"],\"default_guess\":\"Make the import lock protect all uploaded-file state and require session-ending operations that drop an upload to take the import lock before the session lock.\"},{\"subject\":\"A17 configuration variable names\",\"kind\":\"missing names\",\"text\":\"The configuration is described as environment variables whose names begin with `REGISTRY_`, but the exact variable name corresponding to each required item is never declared.\",\"question\":\"What are the exact accepted environment-variable names, including the four service-token variables, and therefore which `REGISTRY_` names are rejected as unknown?\",\"options\":[\"Declare one fixed name for every item\",\"Derive token names from service names by a stated normalization rule\"],\"default_guess\":\"Use fixed, explicitly enumerated uppercase names for every item.\"},{\"subject\":\"A17 configuration validation\",\"kind\":\"vague validation\",\"text\":\"Startup checks that \\\"each [item is] well formed\\\", but no well-formedness rules are given for the store location, backup location, owner credential, backup key, or service tokens beyond secret length and equality.\",\"question\":\"What exact syntax, encoding, forbidden values, and path-form requirements make each configuration item well formed?\",\"options\":[\"Only paths must parse and secrets must satisfy the stated byte-length rule\",\"Declare a separate exact grammar for every item\",\"Treat any environment string as well formed unless another stated check rejects it\"],\"default_guess\":\"Accept arbitrary nonempty secret strings after UTF-8 encoding and require both locations to parse as filesystem paths of their stated kind.\"},{\"subject\":\"A17 secret length\",\"kind\":\"undefined byte encoding\",\"text\":\"Each secret must be \\\"at least 32 bytes long\\\", although environment variables are textual and no conversion from text to bytes is specified.\",\"question\":\"In which encoding is a configured secret measured and later compared, and are 32 characters, 32 encoded bytes, or 32 decoded secret bytes required?\",\"options\":[\"Measure UTF-8 encoded bytes\",\"Require an encoded representation such as base64 and measure decoded bytes\",\"Restrict secrets to an ASCII alphabet and measure characters\"],\"default_guess\":\"Measure the UTF-8 byte representation used for authentication and encryption.\"},{\"subject\":\"A17 path separation\",\"kind\":\"undefined canonicalization\",\"text\":\"The store and backup locations are compared \\\"by their absolute paths with every symbolic link resolved\\\", while the configured store file may not yet exist.\",\"question\":\"How are relative paths based, and how is a nonexistent store path canonicalized and checked for containment when its final component cannot be resolved as a symbolic link?\",\"options\":[\"Resolve relative paths from a declared working directory and resolve the existing parent before appending the missing name\",\"Require both configured locations to be absolute\",\"Reject any path whose complete canonical target does not already exist\"],\"default_guess\":\"Require absolute paths, resolve every existing ancestor, and append a nonexistent final store filename to the resolved parent.\"},{\"subject\":\"A17 startup cleanup\",\"kind\":\"missing check order\",\"text\":\"A failed start may leave \\\"a probe it could not remove, which the next start or run removes with the other temporary files\\\", but the ordered startup checks contain no step that removes old temporary-prefix files.\",\"question\":\"When during startup are stale probe and temporary files removed, and does inability to remove one fail startup or merely produce a diagnostic?\",\"options\":[\"Clean them before the writable probe and fail startup if cleanup fails\",\"Clean them after the probe and fail startup if cleanup fails\",\"Leave cleanup solely to a later backup run\"],\"default_guess\":\"Clean the temporary prefix before probing and fail startup if any stale file cannot be removed.\"},{\"subject\":\"A18 backup encryption\",\"kind\":\"unspecified cryptography\",\"text\":\"A backup is required to be encrypted with the configured key and to expose a digest of that key, but no encryption construction, authentication rule, key derivation, nonce handling, digest algorithm, or file format is declared.\",\"question\":\"What exact authenticated-encryption and key-digest scheme determines whether a backup can be decrypted, authenticated, and associated with the correct key?\",\"options\":[\"Use a declared authenticated-encryption format with a random nonce and a cryptographic key identifier\",\"Use an existing declared encrypted-container format\",\"Leave algorithms and format release-specific but require the release to declare them\"],\"default_guess\":\"Use a versioned authenticated-encryption container with a random nonce, a standard KDF where needed, and a SHA-256-derived key identifier.\"},{\"subject\":\"A18 daily scheduling\",\"kind\":\"ambiguous clock edge\",\"text\":\"A run occurs only when the process \\\"sees the clock pass 03:00\\\", while starts at 03:00, restarts, polling delay, and clock changes are discussed without defining the precise observation interval or equality boundary.\",\"question\":\"What exact pair of observed wall-clock times constitutes seeing 03:00 pass, especially when the process starts exactly at 03:00 or first observes the clock shortly after it?\",\"options\":[\"Run when the previous observation was before 03:00 and the current observation is at or after 03:00\",\"Run only on an observation whose displayed time is exactly 03:00\",\"Schedule a timer for 03:00 and treat process start at that instant as crossing\"],\"default_guess\":\"Run when a live process observes a transition from before 03:00 to at-or-after 03:00 for the same UTC date; starting after the boundary is not a transition.\"},{\"subject\":\"A18 backup identity for a date\",\"kind\":\"undefined existence test\",\"text\":\"A run is made only when \\\"no kept backup of that date exists\\\", but kept-file naming is not given and an unreadable unencrypted record is deleted only during a run.\",\"question\":\"How is a kept backup assigned to a UTC date, and does a current-date file with an unreadable record count as an existing kept backup that suppresses the run?\",\"options\":[\"The readable header's instant determines the date; an unreadable file does not count\",\"The kept filename determines the date even if its header is unreadable\",\"Any file under the kept prefix for that date suppresses the run\"],\"default_guess\":\"Use a release-declared filename containing the UTC date; delete an unreadable current-date file before deciding whether that date already has a backup.\"},{\"subject\":\"A18 backup instant\",\"kind\":\"undefined timestamp\",\"text\":\"A backup records \\\"its instant\\\" and retention age and newest-backup display both use it, but the rules do not say whether this is the run start, snapshot instant, successful check, or final rename instant.\",\"question\":\"At what event is the backup instant fixed?\",\"options\":[\"When the consistent store snapshot is taken\",\"When the run starts\",\"When checking succeeds\",\"When the checked file is renamed to its kept name\"],\"default_guess\":\"Use the instant at which the consistent store snapshot is taken.\"},{\"subject\":\"A18 integrity check\",\"kind\":\"undefined acceptance check\",\"text\":\"The decrypted temporary store must pass \\\"the store's own integrity check\\\", but no store engine or exact integrity test and pass criteria are declared in these texts.\",\"question\":\"Which exact checks must succeed before the backup is kept, beyond opening it, matching the store version, and matching the audit sequence?\",\"options\":[\"Use the selected store engine's named full integrity-check operation\",\"Check only structural readability and declared Registry invariants\",\"Require both the engine's full integrity check and Registry-level invariant checks\"],\"default_guess\":\"Run the store engine's full integrity check plus the explicitly stated version and audit-sequence checks.\"},{\"subject\":\"A18 managed backup filenames\",\"kind\":\"undeclared deletion scope\",\"text\":\"Kept and temporary names begin with \\\"two different prefixes the release declares\\\", but neither prefix, the remainder of the filename, nor collision handling is declared.\",\"question\":\"What exact names are Registry allowed to delete or rename, and what happens when the intended kept name already exists or a foreign file happens to share a prefix?\",\"options\":[\"Declare exact prefixes and a complete filename grammar; manage only names matching that grammar\",\"Manage every file whose basename begins with either prefix\",\"Record a manifest of files Registry owns\"],\"default_guess\":\"Declare exact prefixes and a strict filename grammar containing the UTC date and unique run identity, and touch only files matching that grammar.\"},{\"subject\":\"A18 old backup keys\",\"kind\":\"unverifiable recoverability\",\"text\":\"After a key change, older backups remain encrypted with their old keys and restore requires \\\"the key [the backup] was made with\\\", but Registry stores no old key and the texts assign no duty or location for retaining one.\",\"question\":\"What guarantees that every retained older backup still has an available decryption key, and what should happen to a retained backup when that key is no longer available?\",\"options\":[\"The owner must retain every old backup key outside Registry for at least the backup's retention period\",\"Registry re-encrypts retained backups when the key changes\",\"Backups whose old keys are unavailable may remain even though they are unrestorable\"],\"default_guess\":\"Require the owner to retain old backup keys in the owner's secret vault until every backup made with them has expired.\"}]}",
+ "set_aside": []
+}
