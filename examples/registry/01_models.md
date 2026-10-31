@@ -11,7 +11,11 @@ identity of its own (M02; "object ids" in R0-50 and R0-80 is a slip, to be
 corrected there by R0-86), and the
 proposals under M01, M04 and M10 are accepted as written. What remains open
 is marked so under a model's `Open questions`; nothing blocks State 2. The
-state is not yet closed by question rounds ("State 1 readiness").
+state is not yet closed by question rounds ("State 1 readiness"). The
+emulated round 1 (`experiments/registry-pochemuchka/state1/round-1/`,
+2026-10-31) found fourteen blocking topics, closed in this text; two of its
+closures (T05, T09) follow State 0's text over the owner's answers of the same
+day and are marked so under M04 and M01.
 
 This state names the concepts Registry needs, the facts each carries in domain
 words, its identity (`value` or `entity`, `MODEL_IDENTITY_EVIDENCE.md`), who
@@ -45,9 +49,8 @@ States 5 and 6.
 
 - Every identity Registry mints — `project_id`, `room_id`, artifact pointer id,
   `customer_ref` — is an opaque identifier with no meaning in its form. Its
-  concrete format is a UUID, as the v1 ids the import keeps already are
-  (R0-44, R0-50); the owner may choose otherwise, and the import then maps v1
-  ids, which it today keeps verbatim.
+  concrete format is a UUID, as the v1 ids are; the import keeps every v1
+  project, room and pointer id verbatim (R0-44, R0-50, R0-79).
 - Pointer versions are small ordinal numbers per project and type, starting at
   1 (R0-17). The pointer's identity is its id, not the pair (type, version).
 - A test instance's identity space is told apart from production's by the
@@ -58,13 +61,25 @@ States 5 and 6.
 - The agent session's identity is not minted by Registry: Cabinet Kernel names
   the session from its own run context (R0-53, R0-77); Registry records it as
   an opaque identifier it did not create.
+- Two further identifiers Registry mints follow the same rule (opaque, UUID):
+  the owner session's (M11) and the confirmation id. Registry mints a
+  confirmation id when the owner confirms an action that asks for confirmation
+  — archiving a project, erasing an archived project, the import, erasing old
+  audit entries (Primary actions) — and writes it once into the audit entry of
+  that action (M09) and, for the import, into the migration closure (M10). It
+  keeps no Confirmation record; how the owner interface carries the
+  confirmation step belongs to States 2 and 5. Neither identifier appears in a
+  URL (R0-29).
 
 ## Revisions and times (R0-35, L16)
 
 - A Project and a Customer carry a revision, an ordinal starting at 1 that
   every accepted change moves by one. A change names the revision it was made
   against; a stale one is refused and nothing changes. The object has no
-  revision of its own (R0-45).
+  revision of its own (R0-45). The revision and the last-changed instant are
+  one pair: the revision moves exactly when the last-changed instant moves,
+  by the actions listed below, and by nothing else. Which actions must state
+  the revision they were made against is State 2's (carried, R0-35).
 - Every time Registry records is an instant in UTC with time zone (L16). A
   record carries the instant it was created and the instant it was last
   changed; `registry_updated_at` in `context` is the project's last-changed
@@ -78,14 +93,24 @@ States 5 and 6.
 - A Customer's last-changed instant moves by: a correction of its contact,
   kind or fiscal data; restricting and lifting; ending and resuming the
   relationship; erasure.
+- A record the import brings in keeps the instants its source holds: a
+  project's created, last-changed and archived instants, a room's added
+  instant, a pointer's published and superseded instants. Its revision starts
+  at 1, the v1 Registry having none (R0-35). A Customer the import makes is
+  created at the import's instant with revision 1.
 
 ## Disclosure classes by field (R0-26)
 
 | class | fields |
 |---|---|
-| `personal_data` | Project display name (R0-82); Object address, kind and characteristics (R0-38); Customer name, phone, e-mail, language, tax id, legal name (R0-80); the end-of-relationship date and the restriction mark where they are read together with a customer's name |
-| `business_confidential` | `project_id`, project alias, status, revision, created and last-changed instants, archived date, erased mark; `customer_ref` and the Customer's kind, erased, restricted and ended marks without its values; `room_id` and room name; every artifact pointer field; every agent session fact; every audit entry |
+| `personal_data` | Project display name (R0-82); Object address, kind and characteristics (R0-38); Customer name, phone, e-mail, language, tax id, legal name (R0-80) |
+| `business_confidential` | every other fact of every model: `project_id`, alias, status, revision, instants, the archived and anonymised marks; `customer_ref`, the Customer's kind, revision, instants and its erased, restricted and ended marks with their dates; `room_id`, room name and added instant; every artifact pointer fact; every agent session fact and the access request's text; every audit entry; the migration closure; the owner session |
 | `open` | nothing: a project's id is not anonymous by itself (R0-26) |
+
+Each fact has one class. An answer's class is the highest class of the facts
+it carries (R0-26): the customer read, which carries the name beside the
+marks, is `personal_data`; the customer list to the owner is too; the session's
+access is `business_confidential`.
 
 Room names, the alias, `uri`, `payload_ref` and the digest are
 `business_confidential` by a rule on their writers (R0-68, R0-82): Registry
@@ -113,11 +138,9 @@ Facts a Project carries, in domain words:
 - its rooms (M03), owned by the project (R0-10);
 - its status: `active` or `archived` (R0-12);
 - its revision (R0-35);
+- the instant it was last changed ("Revisions and times");
 - written once: the instant it was created; the instant it was archived
-  (R0-60); the instant it was anonymised and the fact that it was (R0-62).
-
-Written once, derived and not a fact of its own: the last-changed instant
-("Revisions and times").
+  (R0-60); the anonymised mark (R0-62).
 
 The acting principal of a creation or a correction is the owner, always
 (Primary actions): the project keeps no "created by".
@@ -150,10 +173,11 @@ archived -> deleted whole     (owner, confirming; the record is gone, R0-60)
 ```
 
 An anonymised project is a Project with status `archived` and the anonymised
-mark: it keeps its `project_id`, its status, its archived instant and its
-artifact pointers (M05) and nothing else — name, alias, object, customer link,
-rooms and revision are gone (R0-62; see Open questions). Deleting it whole is
-refused (R0-71). `active` is never returned to.
+mark: it keeps its `project_id`, its status, that mark and its artifact
+pointers (M05) and nothing else (R0-62) — name, alias, object, customer link,
+rooms, revision and every instant are gone; when it was archived and when it
+was anonymised, the audit log says (M09). Deleting it whole is refused
+(R0-71). `active` is never returned to.
 
 ### Persistence candidate
 
@@ -166,9 +190,14 @@ None. Settled by the owner on 2026-10-31:
 - Alias (R0-82, carried): a short label, no format rule beyond a length State 6
   sets, and no uniqueness — two projects may share an alias, Registry refuses
   no duplicate, and a project without one is shown to the agent by its id.
-- What an anonymised project keeps (R0-60, R0-62, carried): exactly its id, its
-  status, the archived instant, the anonymised instant and its pointers; the
-  revision goes with the card, since nothing of it can be corrected again.
+- What an anonymised project keeps (R0-60, R0-62, carried): exactly what R0-62
+  says — id, status, the anonymised mark and its pointers. The owner's answer
+  of 2026-10-31 kept the archived and anonymised instants too; State 0's
+  "nothing else" (R0-62) decides against it (round 1 T09), and the audit entry
+  of each step holds the instant. Keeping an instant would be a new State 0
+  decision.
+- Display names are not unique: two projects may carry the same display name,
+  and Registry refuses no duplicate (round 1 S3).
 
 ## Model M02 — Object
 
@@ -180,8 +209,10 @@ project, given at creation with a required address (R0-45), corrected only
 through the project card, moving the project's revision (R0-45). Every value
 of it is `personal_data` (R0-26, R0-80).
 
-Facts: address (required); kind; the declared characteristics (their list is
-the specification's and belongs to State 6).
+Facts: address (required at creation, R0-45); kind, one of a closed vocabulary
+the specification declares ("Declared vocabularies"), optional at creation; the
+declared characteristics (their list is the specification's and belongs to
+State 6).
 
 ### Identity
 
@@ -234,9 +265,11 @@ the launch context of a downstream service is `project_id` and a `room_id`
 (R0-18).
 
 Facts: `room_id`, minted by Registry or kept by the import; its name, as its
-writer wrote it (R0-68); its project; written once: the instant it was added
-and by which principal (M07) — the owner or the agent through Kernel naming
-its session (Primary actions, "add a room").
+writer wrote it (R0-68); its project; written once: the instant it was added.
+Who added it — the owner or the agent through Kernel — is not a fact of the
+room: no stated requirement reads it, State 0's output of "add a room" names
+id, name and project only, and a session identity would otherwise reach every
+reader of the rooms (round 1 T11).
 
 ### Identity
 
@@ -292,8 +325,11 @@ Facts a Customer carries:
   - relationship ended, with the date the owner gives, today by default, never
     later than today (R0-49, R0-84), cleared by resuming (R0-57);
   - erased (R0-06): written once and final (R0-67) — the Customer keeps its
-    `customer_ref`, its kind and this mark; name, phone, e-mail, language, tax
-    id and legal name are gone;
+    `customer_ref`, this mark and its instant, and nothing else (R0-06):
+    name, phone, e-mail, language, tax id and legal name are gone (the one
+    erasure covers the fiscal values, R0-06 narrowed by R0-80), and so are its
+    kind, its revision, its recorded instant and its restricted and ended
+    marks;
 - written once: the instant it was recorded.
 
 A Customer is never deleted (R0-67). Recording the same person twice makes two
@@ -324,11 +360,12 @@ recorded -> (ended <-> resumed)               orthogonal, owner (R0-49, R0-57)
 recorded -> erased                            final, owner (R0-06, R0-67)
 ```
 
-The three marks are independent facts, not one status: a Customer may be
-restricted and ended at once; erasure does not clear the other marks (what it
-does to them is settled in State 2 if anything). While restricted or ended no
-project may newly name it (R0-51, R0-57); an erased Customer cannot be
-corrected (Primary actions).
+The restricted and ended marks are independent facts, not one status: a
+Customer may be restricted and ended at once. Erasure ends both: nothing but
+the identity and the erased fact survives it (R0-06), and restricting,
+lifting, ending and resuming an erased Customer are refused (Primary actions).
+While restricted or ended no project may newly name it (R0-51, R0-57); an
+erased Customer cannot be corrected (Primary actions).
 
 ### Persistence candidate
 
@@ -338,16 +375,25 @@ Durable, one record per customer, forever (R0-67).
 
 None. Settled by the owner on 2026-10-31:
 
-- An erased Customer is read as its `customer_ref`, its kind, the erased mark
-  and its instant, and no other value; the list shows it the same way; the
-  billing read refuses it (R0-65).
+- An erased Customer is read as its `customer_ref`, the erased mark and its
+  instant, and no other value; the list shows it the same way; the billing
+  read refuses it (R0-65). The owner's answer of 2026-10-31 kept the kind too;
+  State 0's "nothing else" (R0-06) decides against it (round 1 T05), and
+  keeping the kind would be a new State 0 decision.
 - A restricted Customer is read and listed by the owner unchanged, with the
   restricted mark and its instant; to any service the billing read refuses it
   (R0-65) and `context` still names its `customer_ref` (R0-55).
-- The Customer the import makes from a v1 `customer_ref` (R0-80) gets its tax
-  id from the v1 value when it is one and an absent name; the owner gives the
-  name after the import, as the import gives display names (R0-85). The three
-  marks stay independent facts; erasure clears none of them.
+- The Customer the import makes from a v1 `customer_ref` (R0-80): no v1 value
+  was minted by Registry — in v1 `customer_ref` is an opaque string the caller
+  supplied (L03) — so the import makes one new Customer for each distinct v1
+  value and links every imported project that named it to that Customer. The
+  owner gives each such Customer its kind and its name in the import, as the
+  import takes display names (R0-85): a Customer without a name or a kind is
+  not a state the record may be in (Primary actions, "record a customer"). The
+  owner also says whether the v1 value is the Customer's tax id; one that is
+  not is shown in the import's mapping and kept nowhere. This replaces the
+  owner's answer of 2026-10-31 (an absent name, given after the import), which
+  round 1 T08 found to contradict "record a customer".
 
 ## Model M05 — ArtifactPointer
 
@@ -434,8 +480,8 @@ Facts a session carries:
   archived project (R0-70) — a project archived while active stays active;
 - its pending access request, optional, at most one (M08);
 - its access version, an ordinal that every change of the granted set, the
-  active project or the pending request moves (R0-64; round 28 P4 — the
-  precise semantics are State 2's);
+  active project or the pending request moves — a new request included, equal
+  text or not (R0-64; round 28 P4);
 - written once: the instant it was registered.
 
 ### Identity
@@ -470,8 +516,9 @@ Durable while the session lives; whether it is kept after is State 2's.
 
 ### Open questions
 
-None for identity. The access version's start and what moves it are State 2's
-(round 28 judgement P4).
+None for identity. What moves the access version is stated above; its start
+value and how a stale version is checked are State 2's (round 28 judgement
+P4).
 
 ## Model M07 — ActingPrincipal
 
@@ -533,8 +580,8 @@ value
 ### Identity evidence
 
 Substitution: a request is reached only through its session, and a session's
-pending request is whichever was made last; two equal texts in one session are
-the same pending request. Continuity: none — it is replaced whole or cleared,
+pending request is whichever was made last; a new request with the same text
+replaces the pending one like any other and nothing distinguishes the two. Continuity: none — it is replaced whole or cleared,
 never corrected, and leaves no trace of its own (R0-64).
 
 ### Source of truth
@@ -568,7 +615,15 @@ Facts, all written once:
 
 - the instant of the change;
 - the acting principal (M07);
-- the change: which action, in a closed vocabulary State 6 declares;
+- the change: which action, in a closed vocabulary State 6 declares. The
+  actions that write an entry (R0-58): creating, correcting, archiving,
+  anonymising and deleting a project; recording, correcting and erasing a
+  customer; restricting and lifting; ending and resuming a relationship;
+  granting a project to a session, revoking one and answering a request; the
+  import, as one entry whose subject is the migration closure (M10); erasing
+  old entries. No entry is written for adding a room, publishing or withdrawing
+  a pointer, registering a session, an access request, changing or clearing
+  the active project, or any read (R0-58);
 - the subject: the project (`project_id`) or the customer (`customer_ref`)
   changed, by identity only (R0-37) — for a session grant, the session and the
   project;
@@ -576,7 +631,7 @@ Facts, all written once:
   State 2, round 28 P1);
 - the contract version and the release version under which it happened
   (R0-37);
-- the confirmation id where the owner confirmed (R0-37);
+- the confirmation id where the owner confirmed (R0-37; "Identity formats");
 - for an erasure of old entries: the date the owner gave (R0-66).
 
 ### Identity
@@ -623,8 +678,9 @@ the export file's format is States 5 and 6 (R0-72), and the import's results
 are Projects, Customers, Rooms and ArtifactPointers like any other.
 
 Facts, written once: the instant the import succeeded; the acting principal
-(the owner, M07); the confirmation id; the identity of the file accepted, as a
-digest, so the audit can name what was imported without its values.
+(the owner, M07); the confirmation id ("Identity formats"); the identity of
+the file accepted, as a digest, so the audit can name what was imported
+without its values.
 
 ### Identity
 
@@ -663,8 +719,10 @@ The protected session the owner gets by signing in to the owner interface with
 the owner credential (R0-30). Every owner action is made in one. Its lifetime,
 expiry and sign-in throttling are State 2's (R0-30, carried).
 
-Facts: its identity, minted by Registry at sign-in; written once: the instant
-it began; its expiry.
+Facts: its identity, minted by Registry at sign-in ("Identity formats");
+written once: the instant it began; its expiry. The confirmation id of an
+action the owner confirms in it is minted per confirmation, not per session
+("Identity formats").
 
 ### Identity
 
@@ -703,6 +761,10 @@ These are closed sets the specification declares; in State 6 they become
   separate fact (M01), not a third status: `validate` answers `archived` for
   an anonymised project (R0-62).
 - Customer kind: `person`, `company` (R0-37).
+- Object kind: a closed set the specification declares (R0-38); its entries
+  are the owner's, listed in State 6 (round 1 T10).
+- Customer language: a closed set of the languages the owner writes to
+  customers in; its entries are the owner's, listed in State 6 (round 1 T10).
 - Artifact pointer status: `published`, `superseded`, `withdrawn` (R0-14).
 - Principal kind: `owner`, `service`, `agent_via_kernel` (M07).
 - Artifact type vocabulary: each type with its one owner service (R0-33). The
