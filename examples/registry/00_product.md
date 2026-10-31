@@ -84,12 +84,14 @@ or the platform's general permission system (vNext §17).
   current projects (R0-43, R0-76).
   Client Portal runs on the VPS and reaches the production Registry over a
   WireGuard channel the home server opens (R0-28, R0-39).
-- **Producers** — any service publishing an artifact pointer with its own
-  token: today PresuPro (estimates) and Cabinet Kernel. The pointer names its
-  owner service, which is the authority for the artifact itself; Registry
-  holds the pointer (V1-4). The type and its owner service come from the
-  vocabulary the specification declares (R0-33). A service publishes only as
-  the service its token names; the owner publishes for any owner service.
+- **Producers** — the services that hold the documents a pointer names: today
+  PresuPro (estimates). The pointer names that owner service, which is the
+  authority for the artifact itself; Registry holds the pointer (V1-4). The
+  type and its owner service come from the vocabulary the specification
+  declares (R0-33). A pointer is a link between services, and links are the
+  agent's: the agent publishes and withdraws pointers through Cabinet Kernel,
+  and the owner does in the owner interface; a service publishes none
+  (R0-88).
 - **Browser** — the owner's browser, on the owner interface only, over HTTPS
   when it is not on Registry's host (R0-29). No other browser origin reaches
   Registry; the old frontend on its own origin is retired (R0-29).
@@ -146,8 +148,8 @@ or the platform's general permission system (vNext §17).
 | read the agent projection | Cabinet Kernel for the agent, on a project its session is granted (R0-46) (R0-41, R0-43) | the minimal projection of that project: its id, its alias when the owner gave one (R0-82), status, rooms and artifact pointers — no display name (R0-68), address, customer or other value Registry holds as `personal_data`; room names, the alias and pointer values are as their writers wrote them (R0-68, R0-82) | a project the session is not granted refused; an anonymised project answers that it was erased (R0-62) |
 | add a room | owner; Cabinet Kernel for the agent, on a project its session is granted (R0-41, R0-46) | the room: an identity Registry mints, the given name, its project (R0-10) | missing name refused; unknown or archived project refused; a second room of the same name is a second room (R0-10); a project the session is not granted refused |
 | list rooms | owner; a trusted service; Kernel for the agent on a project its session is granted (R0-46) | the project's rooms in a declared order | unknown project refused as not found (replaces L21); an anonymised project answers that it was erased (R0-62) |
-| publish an artifact pointer | producer service; Cabinet Kernel only for the agent, on a project its session is granted (R0-41, R0-46); the owner for any owner service | the new pointer with the identity and version Registry assigns (R0-17), its content digest when given (R0-33), `published`; the previous published version of that type becomes `superseded` | unknown or archived project refused; a type the specification does not declare, or not the owner service's, refused (R0-33); neither `uri` nor `payload_ref` given refused (R0-17) |
-| withdraw an artifact pointer | the producer service that owns it — Cabinet Kernel only for the agent, on a project its session is granted (R0-46) — or the owner | the pointer, status `withdrawn`; it stays in the history (R0-14) | unknown pointer refused; a pointer of another service, or already withdrawn or superseded, refused; a pointer of an archived project refused (R0-17) |
+| publish an artifact pointer | Cabinet Kernel for the agent, on a project its session is granted (R0-46); the owner (R0-88) | the new pointer with the identity and version Registry assigns (R0-17), naming the type's owner service (R0-33), its content digest when given, `published`; the previous published version of that type becomes `superseded` | unknown or archived project refused; a type the specification does not declare refused (R0-33); neither `uri` nor `payload_ref` given refused (R0-17) |
+| withdraw an artifact pointer | Cabinet Kernel for the agent, on a project its session is granted (R0-46); the owner (R0-88) | the pointer, status `withdrawn`; it stays in the history (R0-14) | unknown pointer refused; a pointer already withdrawn or superseded refused; a pointer of an archived project refused (R0-17) |
 | list artifacts | owner; a trusted service; Kernel for the agent on a project its session is granted (R0-46) | every pointer of the project — published, superseded and withdrawn — each with its type, version and status; this is how history is read (R0-02) | unknown project refused as not found |
 | read the latest artifact of a type | owner; a trusted service; Kernel for the agent on a project its session is granted (R0-46) | the one published pointer of that type | unknown project refused as not found; a type the specification does not declare refused as an unknown type (R0-17); a declared type with no published pointer answers that none is published — also after a withdrawal, which never falls back to an earlier version (R0-14) |
 | list agent sessions | owner | the registered sessions, each with its granted project ids, its active project if any and its pending request if any (R0-47) | — |
@@ -291,6 +293,9 @@ The owner service of a pointer, or staff, may withdraw it. A withdrawn pointer s
 history; "latest of a type" then answers that none is published and never falls
 back to an earlier version.
 
+Narrowed by R0-88: "the owner service of a pointer, or staff" reads "the agent
+through Cabinet Kernel, or the owner".
+
 ### R0-15 — State 0 is accepted as a whole (owner, 2026-10-26)
 
 The whole of this document, not only the numbered owner decisions, is the
@@ -319,6 +324,8 @@ configure is refused as an unknown type, distinct from a configured type with
 nothing published.
 
 Narrowed by R0-33: "configure" reads "the specification declares".
+Narrowed by R0-88: a retried publish — the same request id — is not a second
+publish and returns the pointer it made.
 
 ### R0-18 — No launch-context action (owner, 2026-10-26; narrows V1-3)
 
@@ -527,6 +534,10 @@ matches the implementation (vNext §3.4, §9). A pointer may carry a content
 digest of the artifact; Registry stores it and never computes or checks it
 against the payload.
 
+Narrowed by R0-88: the owner service names where the document lives; the
+pointer is published by the agent through Kernel or by the owner, never by
+that service. The first release declares one type, `estimate` by PresuPro.
+
 ### R0-34 — Production identity is authoritative; test instances are separate (owner, 2026-10-27; narrows R0-05, R0-07, R0-21; vNext §4)
 
 One project has one canonical `project_id` in production, used by Cabinet,
@@ -615,7 +626,8 @@ owner decision here.
 ### R0-41 — The agent works on its session's project only (owner, 2026-10-27; round 3 T1; narrows R0-31, R0-32)
 
 Narrowed by R0-46: "its session's project" reads "a project its session is
-granted".
+granted". Narrowed by R0-88: "Kernel's pointers" reads "pointers of any declared
+type".
 
 Through Cabinet Kernel the agent reads and writes only the project the owner
 chose for its session: it reads the agent projection (R0-43), validates that
@@ -1124,6 +1136,26 @@ holds no personal value. Its status stays `archived` and `validate` answers
 `archived` as before; no third status is added (R0-12). When it was archived
 and when it was anonymised, the audit log says.
 
+### R0-88 — Links between services are the agent's, through Kernel (owner, 2026-10-31, after the State 2 draft; narrows R0-14, R0-33, R0-41)
+
+Each service declares its operations in its manifest and keeps its own
+deterministic business logic; the agent, through Cabinet Kernel, links them
+(R0-31). An artifact pointer is such a link — "this project has this document
+of that service" — so the agent publishes and withdraws pointers through
+Kernel, on a project its session is granted (R0-46), and the owner does in the
+owner interface. A service publishes and withdraws none: its token has no such
+right, and the service needs to know nothing of Registry's catalogue. The
+pointer still names the type's owner service, where the document lives
+(R0-33), and records who published it (State 1 M05); Registry cannot check that
+the document exists, and the Kernel flow that made it is the evidence. The
+first release declares one type, `estimate` by PresuPro; others enter by a
+release when a service holds such documents (R0-33). As a write of the agent,
+a publish carries a request id (R0-36, R0-78): its retry returns the pointer it
+made, and a new publish with equal content is still a new version (R0-17).
+This keeps every agent
+action on one checked path, which the GDPR review of the platform relies on
+(R0-37).
+
 ### R0-81 — The one-home rule is a target the services reach; Registry does not wait (owner, 2026-10-27, after round 23 T1; narrows R0-80)
 
 Production Registry starts without waiting for the other services. From its
@@ -1170,7 +1202,8 @@ R0-40); OQ-13 to OQ-18, raised by the emulated question rounds 3 and 4
 proposed to the owner and accepted on 2026-10-27 (R0-61 to R0-73); R0-76 to
 R0-81 followed the same day, R0-82 and R0-83 answered round 24, R0-84
 round 25 and R0-85 round 26. R0-86 (2026-10-31) corrects a slip found by the
-State 1 draft; R0-87 (2026-10-31) answers State 1 round 2 T5.
+State 1 draft; R0-87 (2026-10-31) answers State 1 round 2 T5; R0-88
+(2026-10-31) follows the State 2 draft.
 
 ## Carried to later states
 
