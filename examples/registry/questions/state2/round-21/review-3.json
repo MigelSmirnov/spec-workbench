@@ -1,0 +1,161 @@
+{
+ "open_points": [
+  {
+   "subject": "A16 import-file concurrency across owner sessions",
+   "kind": "lock coordination",
+   "text": "“Uploads and import confirmations of all sessions take one lock of the instance” and A13 says requests changing an owner session take “the session's one lock”; an accepted import also “drops the uploaded file of every owner session.”",
+   "question": "Which lock protects an uploaded file when another session's accepted import clears it, in what order are the instance and session locks acquired, and may mapping or confirmation-step rendering read the file without the instance lock?",
+   "options": [
+    "The instance lock exclusively protects every access to import files and the closure; session locks are never acquired while it is held.",
+    "Every operation takes both locks in a declared order, including mapping and confirmation-step rendering.",
+    "Only uploads and submissions take the instance lock; other file reads rely on their session lock."
+   ],
+   "default_guess": "Use the instance lock for every read, replacement and deletion of an import file and for the closure check, acquiring it after session validation without taking another session's lock.",
+   "unit": "?"
+  },
+  {
+   "subject": "M11 pending confirmation expiry",
+   "kind": "contradiction",
+   "text": "M11 says a pending confirmation is “cleared when used”; A13 rule 6 says a submission made after it expires “is refused and clears it, whatever value it gives.”",
+   "question": "Does an expired submission clear the pending confirmation even when it does not present the pending value, or does the confirmation remain because it was not used?",
+   "options": [
+    "Clear it on any otherwise valid submission after expiry, as A13 says.",
+    "Retain it until replaced, matched by a submission, or the session ends."
+   ],
+   "default_guess": "Clear it on the first otherwise valid submission observed after expiry.",
+   "unit": "?"
+  },
+  {
+   "subject": "A17 configuration variable names",
+   "kind": "missing specification",
+   "text": "“The configuration is the set of environment variables whose names begin with `REGISTRY_`” and it “holds exactly these items,” but the exact variable name for each item is not declared.",
+   "question": "What exact environment-variable names correspond to the store location, backup location, backup key, owner credential and four service tokens?",
+   "options": [
+    "Declare one fixed name for every item.",
+    "Derive names by an unstated naming convention."
+   ],
+   "default_guess": "Declare fixed uppercase names such as `REGISTRY_STORE`, `REGISTRY_BACKUP_LOCATION`, `REGISTRY_BACKUP_KEY`, `REGISTRY_OWNER_CREDENTIAL` and one named token variable per service.",
+   "unit": "?"
+  },
+  {
+   "subject": "A17 configuration well-formedness",
+   "kind": "undefined validation",
+   "text": "The startup checks require “each well formed,” but no well-formedness rules are given beyond secret length and the later path checks.",
+   "question": "What syntax, encoding and type rules make each configuration item well formed, including how an environment string's length is measured in bytes and whether secrets may contain arbitrary Unicode or encoded binary data?",
+   "options": [
+    "Treat paths as nonblank filesystem paths and secrets as UTF-8 text whose encoded length is measured.",
+    "Require a declared encoded form for secrets, such as base64url, and decode before length and equality checks.",
+    "Apply implementation-specific parsers."
+   ],
+   "default_guess": "Require nonblank path text and base64url-encoded secret bytes, measuring and comparing the decoded bytes.",
+   "unit": "?"
+  },
+  {
+   "subject": "A17 store exclusivity",
+   "kind": "missing refusal condition",
+   "text": "Registry opens the store “for reading and writing” and then serves, but no rule says whether startup must detect another running Registry using the same store.",
+   "question": "Must startup acquire an exclusive lifetime lock on the store and refuse to serve if another process already has it open?",
+   "options": [
+    "Require an exclusive process-lifetime store lock and fail startup if it cannot be acquired.",
+    "Permit multiple processes and rely on the store backend's transaction locking.",
+    "Treat multiple processes as an unchecked deployment error."
+   ],
+   "default_guess": "Acquire an exclusive process-lifetime lock and fail startup if it is unavailable.",
+   "unit": "?"
+  },
+  {
+   "subject": "A17 and A18 backup-location ownership",
+   "kind": "namespace collision",
+   "text": "A18 removes every file in the backup location under release-declared prefixes, while A17 checks only that the backup location differs from the store and is writable.",
+   "question": "May two Registry instances or stores share one backup location, and if not, how is exclusive ownership or per-instance namespacing established and checked before deletion?",
+   "options": [
+    "The backup location must be dedicated to one Registry store and startup refuses conflicting ownership.",
+    "Every store gets a stable namespaced subdirectory or identifier.",
+    "Sharing is allowed and prefixes or complete filenames must include an instance identity."
+   ],
+   "default_guess": "Require a dedicated backup directory containing a store-specific ownership marker verified at startup.",
+   "unit": "?"
+  },
+  {
+   "subject": "A17 startup cleanup of temporary backup files",
+   "kind": "missing behavior",
+   "text": "A17 says a probe that could not be removed is one “which the next start or run removes with the other temporary files,” but its ordered startup checks contain no cleanup step or result for a failed cleanup.",
+   "question": "When during startup are stale temporary-prefix files removed, and does inability to remove one stop startup or merely produce a diagnostic while serving begins?",
+   "options": [
+    "Clean them before the writability probe and fail startup if any cannot be removed.",
+    "Clean them after configuration validation and continue serving on failure.",
+    "Do no startup cleanup; leave all cleanup to the next backup run."
+   ],
+   "default_guess": "Remove temporary-prefix files before probing the backup location and fail startup if cleanup cannot complete.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 backups in owner-only mode",
+   "kind": "contradiction",
+   "text": "R0-89 says “Registry makes daily encrypted backups and checks each one,” while A18 says an owner-only start “makes no backup run” and that missed days are allowed.",
+   "question": "Is an owner-only Registry exempt from the daily-backup guarantee, or must it also make and check daily backups?",
+   "options": [
+    "Owner-only mode is an explicit exception to R0-89 and performs no backups.",
+    "Every running production Registry, including owner-only mode, performs backups.",
+    "Owner-only mode is permitted only temporarily and has a separately stated backup obligation."
+   ],
+   "default_guess": "Treat owner-only mode as an explicit exception and amend the broader guarantee to say backups run only in a full-service start.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 daily-run attempt tracking",
+   "kind": "contradictory scheduling",
+   "text": "A run occurs when the process sees the clock pass 03:00 and “no kept backup of that date exists,” yet a failed run leaves no kept backup; the text also says “a clock set back makes no second run” and “the next 03:00 tries again.”",
+   "question": "What state records that a date's 03:00 run was already attempted when the attempt kept no backup, and does that state survive a process restart or a backward clock change?",
+   "options": [
+    "Keep a runtime attempted-date marker; restart loses it and may repeat after a second clock crossing.",
+    "Persist an attempted-date marker in the store, preventing another attempt for that UTC date.",
+    "Only the actual transition across 03:00 triggers a run; no marker is kept, so a backward clock change can trigger another failed-date attempt."
+   ],
+   "default_guess": "Persist the last attempted UTC date in the store, separately from whether a backup was kept.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 schedule boundary and backup date",
+   "kind": "undefined time semantics",
+   "text": "A run is made when the process “sees the clock pass 03:00 of that date”; a backup records “its instant,” and the scheduler tests whether a kept backup “of that date” exists.",
+   "question": "What exact event counts as passing 03:00, what happens when the process starts exactly at 03:00, which instant is recorded for a long-running backup, and which UTC date owns a run that finishes after midnight?",
+   "options": [
+    "The due date is fixed when the 03:00 boundary is observed; record the snapshot instant and retain the due date separately.",
+    "Use the successful rename instant and its UTC date.",
+    "Use the run-start instant and its UTC date for both metadata and retention age."
+   ],
+   "default_guess": "Fix a due date when the boundary is observed, record the consistent snapshot instant, and keep the due date separately so completion time cannot reclassify the run.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 backup cryptography",
+   "kind": "underspecified security rule",
+   "text": "“Each backup is encrypted with the backup key”; it records “a digest of the key”; and Registry decrypts it to check it, but no encryption, authentication, nonce, key-derivation, digest or authenticated-metadata rules are declared.",
+   "question": "What exact authenticated-encryption format is required, how is an arbitrary configured backup key converted to an encryption key, how are nonces generated, which metadata is authenticated, and which digest identifies the key?",
+   "options": [
+    "Use a versioned AES-256-GCM format with a random nonce, a declared KDF and authenticated metadata.",
+    "Use a versioned XChaCha20-Poly1305 format with a random nonce, a declared KDF and authenticated metadata.",
+    "Leave the format to each implementation."
+   ],
+   "default_guess": "Use a versioned XChaCha20-Poly1305 envelope, derive a fixed key with HKDF, authenticate all clear metadata as associated data, and identify the configured key with SHA-256 over its decoded bytes.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 audit sequence in an empty backup",
+   "kind": "undefined representation",
+   "text": "A backup records “the last audit sequence number it holds” and its check requires that “its audit log ends at the recorded sequence number,” but a new store may have no audit entry.",
+   "question": "What value is recorded and what check is performed when the audit log is empty, and does “last sequence” mean the greatest surviving entry or the separate never-reused sequence counter?",
+   "options": [
+    "Record zero for an untouched store and otherwise record the persistent sequence counter.",
+    "Record an explicit absent value when there are no entries and otherwise the greatest surviving entry.",
+    "Do not permit a backup until at least one audit entry exists."
+   ],
+   "default_guess": "Record the persistent sequence counter, using zero before the first entry, and verify both that counter and the greatest surviving entry where one exists.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A16 import-file concurrency across owner sessions\",\"kind\":\"lock coordination\",\"text\":\"“Uploads and import confirmations of all sessions take one lock of the instance” and A13 says requests changing an owner session take “the session's one lock”; an accepted import also “drops the uploaded file of every owner session.”\",\"question\":\"Which lock protects an uploaded file when another session's accepted import clears it, in what order are the instance and session locks acquired, and may mapping or confirmation-step rendering read the file without the instance lock?\",\"options\":[\"The instance lock exclusively protects every access to import files and the closure; session locks are never acquired while it is held.\",\"Every operation takes both locks in a declared order, including mapping and confirmation-step rendering.\",\"Only uploads and submissions take the instance lock; other file reads rely on their session lock.\"],\"default_guess\":\"Use the instance lock for every read, replacement and deletion of an import file and for the closure check, acquiring it after session validation without taking another session's lock.\"},{\"subject\":\"M11 pending confirmation expiry\",\"kind\":\"contradiction\",\"text\":\"M11 says a pending confirmation is “cleared when used”; A13 rule 6 says a submission made after it expires “is refused and clears it, whatever value it gives.”\",\"question\":\"Does an expired submission clear the pending confirmation even when it does not present the pending value, or does the confirmation remain because it was not used?\",\"options\":[\"Clear it on any otherwise valid submission after expiry, as A13 says.\",\"Retain it until replaced, matched by a submission, or the session ends.\"],\"default_guess\":\"Clear it on the first otherwise valid submission observed after expiry.\"},{\"subject\":\"A17 configuration variable names\",\"kind\":\"missing specification\",\"text\":\"“The configuration is the set of environment variables whose names begin with `REGISTRY_`” and it “holds exactly these items,” but the exact variable name for each item is not declared.\",\"question\":\"What exact environment-variable names correspond to the store location, backup location, backup key, owner credential and four service tokens?\",\"options\":[\"Declare one fixed name for every item.\",\"Derive names by an unstated naming convention.\"],\"default_guess\":\"Declare fixed uppercase names such as `REGISTRY_STORE`, `REGISTRY_BACKUP_LOCATION`, `REGISTRY_BACKUP_KEY`, `REGISTRY_OWNER_CREDENTIAL` and one named token variable per service.\"},{\"subject\":\"A17 configuration well-formedness\",\"kind\":\"undefined validation\",\"text\":\"The startup checks require “each well formed,” but no well-formedness rules are given beyond secret length and the later path checks.\",\"question\":\"What syntax, encoding and type rules make each configuration item well formed, including how an environment string's length is measured in bytes and whether secrets may contain arbitrary Unicode or encoded binary data?\",\"options\":[\"Treat paths as nonblank filesystem paths and secrets as UTF-8 text whose encoded length is measured.\",\"Require a declared encoded form for secrets, such as base64url, and decode before length and equality checks.\",\"Apply implementation-specific parsers.\"],\"default_guess\":\"Require nonblank path text and base64url-encoded secret bytes, measuring and comparing the decoded bytes.\"},{\"subject\":\"A17 store exclusivity\",\"kind\":\"missing refusal condition\",\"text\":\"Registry opens the store “for reading and writing” and then serves, but no rule says whether startup must detect another running Registry using the same store.\",\"question\":\"Must startup acquire an exclusive lifetime lock on the store and refuse to serve if another process already has it open?\",\"options\":[\"Require an exclusive process-lifetime store lock and fail startup if it cannot be acquired.\",\"Permit multiple processes and rely on the store backend's transaction locking.\",\"Treat multiple processes as an unchecked deployment error.\"],\"default_guess\":\"Acquire an exclusive process-lifetime lock and fail startup if it is unavailable.\"},{\"subject\":\"A17 and A18 backup-location ownership\",\"kind\":\"namespace collision\",\"text\":\"A18 removes every file in the backup location under release-declared prefixes, while A17 checks only that the backup location differs from the store and is writable.\",\"question\":\"May two Registry instances or stores share one backup location, and if not, how is exclusive ownership or per-instance namespacing established and checked before deletion?\",\"options\":[\"The backup location must be dedicated to one Registry store and startup refuses conflicting ownership.\",\"Every store gets a stable namespaced subdirectory or identifier.\",\"Sharing is allowed and prefixes or complete filenames must include an instance identity.\"],\"default_guess\":\"Require a dedicated backup directory containing a store-specific ownership marker verified at startup.\"},{\"subject\":\"A17 startup cleanup of temporary backup files\",\"kind\":\"missing behavior\",\"text\":\"A17 says a probe that could not be removed is one “which the next start or run removes with the other temporary files,” but its ordered startup checks contain no cleanup step or result for a failed cleanup.\",\"question\":\"When during startup are stale temporary-prefix files removed, and does inability to remove one stop startup or merely produce a diagnostic while serving begins?\",\"options\":[\"Clean them before the writability probe and fail startup if any cannot be removed.\",\"Clean them after configuration validation and continue serving on failure.\",\"Do no startup cleanup; leave all cleanup to the next backup run.\"],\"default_guess\":\"Remove temporary-prefix files before probing the backup location and fail startup if cleanup cannot complete.\"},{\"subject\":\"A18 backups in owner-only mode\",\"kind\":\"contradiction\",\"text\":\"R0-89 says “Registry makes daily encrypted backups and checks each one,” while A18 says an owner-only start “makes no backup run” and that missed days are allowed.\",\"question\":\"Is an owner-only Registry exempt from the daily-backup guarantee, or must it also make and check daily backups?\",\"options\":[\"Owner-only mode is an explicit exception to R0-89 and performs no backups.\",\"Every running production Registry, including owner-only mode, performs backups.\",\"Owner-only mode is permitted only temporarily and has a separately stated backup obligation.\"],\"default_guess\":\"Treat owner-only mode as an explicit exception and amend the broader guarantee to say backups run only in a full-service start.\"},{\"subject\":\"A18 daily-run attempt tracking\",\"kind\":\"contradictory scheduling\",\"text\":\"A run occurs when the process sees the clock pass 03:00 and “no kept backup of that date exists,” yet a failed run leaves no kept backup; the text also says “a clock set back makes no second run” and “the next 03:00 tries again.”\",\"question\":\"What state records that a date's 03:00 run was already attempted when the attempt kept no backup, and does that state survive a process restart or a backward clock change?\",\"options\":[\"Keep a runtime attempted-date marker; restart loses it and may repeat after a second clock crossing.\",\"Persist an attempted-date marker in the store, preventing another attempt for that UTC date.\",\"Only the actual transition across 03:00 triggers a run; no marker is kept, so a backward clock change can trigger another failed-date attempt.\"],\"default_guess\":\"Persist the last attempted UTC date in the store, separately from whether a backup was kept.\"},{\"subject\":\"A18 schedule boundary and backup date\",\"kind\":\"undefined time semantics\",\"text\":\"A run is made when the process “sees the clock pass 03:00 of that date”; a backup records “its instant,” and the scheduler tests whether a kept backup “of that date” exists.\",\"question\":\"What exact event counts as passing 03:00, what happens when the process starts exactly at 03:00, which instant is recorded for a long-running backup, and which UTC date owns a run that finishes after midnight?\",\"options\":[\"The due date is fixed when the 03:00 boundary is observed; record the snapshot instant and retain the due date separately.\",\"Use the successful rename instant and its UTC date.\",\"Use the run-start instant and its UTC date for both metadata and retention age.\"],\"default_guess\":\"Fix a due date when the boundary is observed, record the consistent snapshot instant, and keep the due date separately so completion time cannot reclassify the run.\"},{\"subject\":\"A18 backup cryptography\",\"kind\":\"underspecified security rule\",\"text\":\"“Each backup is encrypted with the backup key”; it records “a digest of the key”; and Registry decrypts it to check it, but no encryption, authentication, nonce, key-derivation, digest or authenticated-metadata rules are declared.\",\"question\":\"What exact authenticated-encryption format is required, how is an arbitrary configured backup key converted to an encryption key, how are nonces generated, which metadata is authenticated, and which digest identifies the key?\",\"options\":[\"Use a versioned AES-256-GCM format with a random nonce, a declared KDF and authenticated metadata.\",\"Use a versioned XChaCha20-Poly1305 format with a random nonce, a declared KDF and authenticated metadata.\",\"Leave the format to each implementation.\"],\"default_guess\":\"Use a versioned XChaCha20-Poly1305 envelope, derive a fixed key with HKDF, authenticate all clear metadata as associated data, and identify the configured key with SHA-256 over its decoded bytes.\"},{\"subject\":\"A18 audit sequence in an empty backup\",\"kind\":\"undefined representation\",\"text\":\"A backup records “the last audit sequence number it holds” and its check requires that “its audit log ends at the recorded sequence number,” but a new store may have no audit entry.\",\"question\":\"What value is recorded and what check is performed when the audit log is empty, and does “last sequence” mean the greatest surviving entry or the separate never-reused sequence counter?\",\"options\":[\"Record zero for an untouched store and otherwise record the persistent sequence counter.\",\"Record an explicit absent value when there are no entries and otherwise the greatest surviving entry.\",\"Do not permit a backup until at least one audit entry exists.\"],\"default_guess\":\"Record the persistent sequence counter, using zero before the first entry, and verify both that counter and the greatest surviving entry where one exists.\"}]}",
+ "set_aside": []
+}
