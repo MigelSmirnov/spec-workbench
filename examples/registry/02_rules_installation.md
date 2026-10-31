@@ -488,7 +488,7 @@ Security review: PERFORMED
 - external_callbacks_webhooks: NOT_APPLICABLE; rationale: Registry calls no other service and receives no callback (R0-18, R0-54), and every request is a caller's authenticated call (R0-27)
 - browser_boundary: APPLICABLE; references: A13, A19; affected: owner interface, CSRF protection, session cookie, rendering of agent-written text
 - files_artifacts: APPLICABLE; references: A07, A08, A16, A18, A22; affected: M05, M10, import file, backups, pointers as references whose payload Registry never reads (R0-02)
-- concurrency: APPLICABLE; references: A01, A04, A07, A12, A13, A14, A16; affected: M01, M04, M05, M06, M09, M10, M11, concurrent creates, corrections, publishes, session changes, single-use confirmation values, concurrent import confirmations
+- concurrency: APPLICABLE; references: A01, A04, A07, A12, A13, A14, A16; affected: M01, M04, M05, M06, M09, M10, M11, concurrent creates, corrections, publishes, session changes, single-use confirmation values, confirmations bound to no revision, resubmitted forms on records without a revision, re-uploads replacing a confirmed file, concurrent import confirmations
 - dependencies: APPLICABLE; references: A20; affected: Registry release, its Python dependencies
 
 ### Consequence
