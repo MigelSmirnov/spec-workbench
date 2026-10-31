@@ -738,6 +738,8 @@ Narrowed by R0-80: project, object, room and pointer ids and versions are kept,
 and so is a `customer_ref` Registry minted; a v1 `customer_ref` that is not one
 is replaced by the new Customer's minted `customer_ref`, and the import links
 the projects that named it to that Customer.
+Narrowed by R0-86: "object" reads as part of its project; the object has no id
+of its own.
 
 ### R0-51 — Restriction of processing (owner, 2026-10-27; closes OQ-14; narrows R0-37)
 
@@ -1051,6 +1053,8 @@ copies the services keep today is each service's own change (R0-81).
 
 Narrowed by R0-82: the display name is not kept either; a kept snapshot holds
 id, alias, status and `customer_ref`.
+Narrowed by R0-86: "project, object, room and pointer ids" reads "project,
+room and pointer ids"; the object travels inside its project.
 
 ### R0-82 — Projects are named by their object; the agent sees an alias (owner, 2026-10-27, after round 24 T7; narrows R0-04, R0-68, R0-80)
 
@@ -1094,6 +1098,19 @@ display name and an alias (R0-82); the project arrives under them, its id kept.
 This is how an archived project named after a person loses that name: an
 archived project still cannot be corrected (R0-12), and the import is the one
 moment its name is set.
+
+### R0-86 — The object has no identity of its own (owner, 2026-10-31, after the State 1 draft; narrows R0-38, R0-45, R0-50, R0-80)
+
+"Project, object, room and pointer ids" in R0-50 and R0-80 is a slip: the v1
+Registry has no object, and the object R0-38 introduced is part of its
+project's card (R0-45), with no id a caller can name and no revision of its
+own. The import carries it inside its project. Repeated works on the same
+building for the same customer — a roof-drainage repair closed, further works
+planned — are a new project with its own id and its own object holding the
+same address, related to the earlier one only through the Customer both name;
+Registry keeps no link between projects by building and no history of works
+per building (R0-38, option (b), stays declined; R0-59). Giving the object an
+identity later is a new State 0 decision.
 
 ### R0-81 — The one-home rule is a target the services reach; Registry does not wait (owner, 2026-10-27, after round 23 T1; narrows R0-80)
 
@@ -1140,7 +1157,8 @@ R0-40); OQ-13 to OQ-18, raised by the emulated question rounds 3 and 4
 (`experiments/registry-pochemuchka/state0/`), on 2026-10-27 (R0-47 to R0-52). The answers to question rounds 18 to 20 were
 proposed to the owner and accepted on 2026-10-27 (R0-61 to R0-73); R0-76 to
 R0-81 followed the same day, R0-82 and R0-83 answered round 24, R0-84
-round 25 and R0-85 round 26.
+round 25 and R0-85 round 26. R0-86 (2026-10-31) corrects a slip found by the
+State 1 draft.
 
 ## Carried to later states
 

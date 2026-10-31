@@ -8,7 +8,7 @@ code (`SOURCE.md`) is evidence of what runs, never a source of norm.
 
 On 2026-10-31 the owner answered the draft's questions: the object has no
 identity of its own (M02; "object ids" in R0-50 and R0-80 is a slip, to be
-corrected in `00_product.md` by a new owner decision there), and the
+corrected there by R0-86), and the
 proposals under M01, M04 and M10 are accepted as written. What remains open
 is marked so under a model's `Open questions`; nothing blocks State 2. The
 state is not yet closed by question rounds ("State 1 readiness").
@@ -223,8 +223,7 @@ None. R0-50 and R0-80 say the import keeps "project, object, room and pointer
 ids"; the v1 Registry has no object (R0-38 moved the address from the project
 to it), so no v1 object id exists to keep. The owner confirmed on 2026-10-31
 that "object ids" is a slip: the object has no identity of its own and the
-import carries it inside its project. The wording is to be corrected in
-`00_product.md` by a new owner decision there (R0-75).
+import carries it inside its project (R0-86).
 
 ## Model M03 — Room
 
@@ -741,7 +740,6 @@ None is a model: none has facts of its own.
 
 - `tools/design_lint.py examples/registry --state 1` answers no error
   (2026-10-31, after the owner's answers).
-- `00_product.md` owes one correction: "object ids" in R0-50 and R0-80 (M02).
 - Every carried State 1 question of `00_product.md` is answered above or
   placed under a model's Open questions: fields and create requests (each
   model's facts; the create request is the facts the owner gives, State 6),
