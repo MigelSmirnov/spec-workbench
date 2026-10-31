@@ -34,7 +34,9 @@ security review of States 0–2.
    confirmation keeps it, and the step may be shown again; a refused upload —
    too large or unreadable — replaces nothing. An accepted import drops the
    uploaded file of every owner session (M11); a confirmation shown in
-   another session is refused because the import is closed (rule 8). The mapping names
+   another session is refused because the import is closed (rule 8). Uploads
+   and import confirmations of all sessions take one lock of the instance,
+   one at a time, so no upload lands after the import that closed it. The mapping names
    the file by its digest. The owner confirms that mapping in the confirmation
    step (A13 rule 6); the confirmation applies the file of that digest, the
    picks, names, aliases and Customer values the mapping showed, nothing
@@ -134,8 +136,8 @@ closure is the one proof of success.
 2. Registry checks the configuration when it starts and serves nothing until
    every check passes; a failed check stops the start with a diagnostic that
    names the failed item and never its value (R0-37). The checks run in one
-   order and the first that fails stops the start: every item of rule 1
-   present and none unknown; each well formed; each secret's length (rule 3);
+   order and the first that fails stops the start: no unknown item, taken in
+   the order of their names; every item of rule 1 present; each well formed; each secret's length (rule 3);
    their distinctness (rule 4); the store and backup location apart (rule
    5); the backup location writable, by a probe file under the temporary
    prefix (A18 rule 5); the store opening, or made new (rule 5). Within one
@@ -201,14 +203,17 @@ secret cannot be shared between holders.
    03:00 UTC, while Registry runs with its service tokens, it
    makes one backup run; a 03:00 that finds Registry stopped, or in an
    owner-only start (rule 9), makes no run, and none is made later in its
-   place. Runs never overlap: a 03:00 that finds a run still going makes no
-   run of its own. A backup is a consistent copy of the store
+   place. A run is made for a UTC date only when the running process sees the
+   clock pass 03:00 of that date and no kept backup of that date exists, so
+   a restart, a start at 03:00 or a clock set back makes no second run. Runs
+   never overlap: a 03:00 that finds a run still going makes no run of its
+   own. A backup is a consistent copy of the store
    taken while Registry runs: it never holds part of a transaction. It
    records, readable without its key, its instant, the release that made it,
    the last audit sequence number it holds and a digest of the key it was
    made with (never the key); its age is counted from that instant. The
-   owner interface shows the instant of the newest kept backup, read from the
-   kept backups.
+   owner interface shows the instant of the newest kept backup whose record
+   can be read, or that there is none.
 2. A backup holds every record but the agent sessions (M06): a store restored
    from it has no session, Kernel registers its sessions again and the owner
    grants them again, so a restore never brings back a grant revoked after
@@ -281,7 +286,7 @@ every kept backup is encrypted, consistent, checked, and records
 
 ### Consequence
 
-A tested restore exists every day without a second instance holding
+A tested restore exists after every run that keeps a backup, without a second instance holding
 production data (R0-34); a restore cannot revive a revoked grant.
 
 ## Accepted decision A19 — every stored value is data, never code
