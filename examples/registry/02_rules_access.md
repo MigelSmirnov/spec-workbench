@@ -1,0 +1,206 @@
+# State 2 — Registry access rules: service tokens, agent sessions, the owner's sign-in
+
+Draft of 2026-10-31. The owner accepted the proposals behind these decisions on
+2026-10-31 (answers 6–9 of the State 2 plan). They settle what State 0 carried
+here: what each service token and Kernel's agent authority may do and receive
+(R0-27, R0-31), what ends an agent session (R0-42, R0-47), the access version
+(State 1 M06), and the owner session's lifetime and sign-in throttling (R0-30).
+
+## Accepted decision A09 — each token names its service, its operations and its highest class
+
+### Normative rules
+
+1. Every service token names one service; Registry knows from its own release
+   which operations that service may call and the highest disclosure class it
+   may receive (R0-26, R0-27). The configuration holds the tokens, not their
+   rights (R0-20, R0-23).
+2. The services and their rights:
+
+   | service | operations | highest class |
+   |---|---|---|
+   | PresuPro | validate a project reference; read a project context; read a customer's billing data; publish and withdraw pointers of its own types; list artifacts; read the latest artifact of a type | `personal_data` |
+   | Client Portal | validate a project reference; read a project context; read a project; list rooms; list artifacts; read the latest artifact of a type | `personal_data` |
+   | Cabinet | list projects; read a project context; validate a project reference | `personal_data` |
+   | Cabinet Kernel | with agent authority only (A10): register an agent session; read the session's access; request access to a project; validate a project reference; read the agent projection; list rooms; add a room; list artifacts; read the latest artifact of a type; publish and withdraw pointers of its own types | `business_confidential` (R0-74) |
+
+3. An operation outside a token's row is refused, whatever the request holds.
+4. An answer that would carry a class above the token's highest is refused
+   whole; Registry never answers part of it (R0-26).
+5. Every owner action is made in an owner session (A13), never with a service
+   token; no token carries the owner's rights.
+6. A new service, or a change of a row, enters by a specification change and a
+   release (R0-27, R0-33).
+
+### Formal invariants
+
+```text
+call(op) with token of service s accepted => op in rights(s)
+class(answer(op)) <= highest_class(s)
+highest_class(Cabinet Kernel) = business_confidential
+```
+
+### Required tests
+
+1. Cabinet calling 'read a customer's billing data' is refused.
+2. Client Portal reading `context` receives the address; Kernel calling
+   `context` is refused.
+3. A token not in the configuration is refused like a wrong one (R0-23).
+4. PresuPro publishing with a token of Client Portal's name is refused.
+
+### Consequence
+
+Denial is the default (R0-27); every right is listed in one table, and the
+manifest record derives from it (R0-78).
+
+## Accepted decision A10 — every agent-authority call is checked three times by Registry
+
+### Normative rules
+
+1. A call with agent authority is accepted only when the token is Cabinet
+   Kernel's, the session it names is registered, and — for an operation on a
+   project — the project is in that session's set (R0-46, R0-53).
+2. An operation on a project that names none uses the session's active
+   project; with none active it is refused (R0-69).
+3. Every refusal of the third check, and of a project that does not exist, is
+   the same answer as for a project that does not exist (R0-47); a call naming
+   an unregistered session is answered as a call outside the set (R0-53).
+4. A write with agent authority on an archived project of the set is refused
+   (R0-12, R0-70); reads of it are answered.
+5. The check is made at every call, a running flow's next step included; a
+   revocation holds from the next call on (R0-46).
+
+### Formal invariants
+
+```text
+agent_call(session x, project p) accepted =>
+  token = Kernel and registered(x) and p in granted(x)
+answer(p not in granted(x)) = answer(p does not exist)
+```
+
+### Required tests
+
+1. Kernel reading the projection of a project outside the set receives the
+   not-found answer, identical to that of a random id.
+2. After the owner revokes a project, the next 'add a room' on it is refused.
+3. A call naming no project, with no active project, is refused.
+4. 'Add a room' on an archived project of the set is refused.
+
+### Consequence
+
+Registry does not depend on Kernel's own check (R0-46), and no refusal tells
+the agent that a project exists.
+
+## Accepted decision A11 — Kernel registers and ends sessions; ending removes the session
+
+### Normative rules
+
+1. Cabinet Kernel registers a session when its agent session starts, naming
+   it from its own run context (R0-53, R0-77); registering a registered
+   session answers it unchanged (A05).
+2. Cabinet Kernel ends a session when its agent session ends; the owner may
+   end any session in the owner interface. Ending is the one end of a session:
+   Registry sets no expiry of its own.
+3. Ending removes the session's record — its set, active project, pending
+   request and access version. The audit entries that name it stay (M09).
+4. After its end a session is unregistered: a call naming it is refused as for
+   an unregistered session (A10). Registering the same identity again makes a
+   new session with an empty set.
+5. Ending a session that is not registered is refused as for an unregistered
+   session.
+6. Registering and ending write no audit entry (M09): the grants that ended
+   with the session are recorded by their own entries.
+
+### Formal invariants
+
+```text
+end(x) accepted => not registered(x) and no record of x remains
+register(x) after end(x) => granted(x) = {} and active(x) = none
+```
+
+### Required tests
+
+1. After Kernel ends a session, reading its access is refused.
+2. Registering the ended identity again answers a session with no project.
+3. The owner ends a session; its next agent-authority call is refused.
+
+### Consequence
+
+Registry holds only living sessions; a stale session cannot keep a grant.
+
+## Accepted decision A12 — the access version is a session's revision
+
+### Normative rules
+
+1. A session's access version is 1 at registration and moves by one with each
+   accepted change of its granted set, its active project or its pending
+   request (M06) — a project leaving the set by its erasure included (R0-61).
+2. A change that changes nothing (A05) leaves it.
+3. The owner's actions on a session — granting, revoking, changing or clearing
+   the active project, answering a request, ending the session — state the
+   access version the owner saw; a stale one is refused and nothing changes.
+4. Kernel's 'request access to a project' states none: a new request always
+   replaces the pending one (R0-46) and moves the version.
+5. 'Read the session's access' answers the current version (R0-32).
+
+### Formal invariants
+
+```text
+owner_action(x, stated v) with v != version(x) => refused, x unchanged
+accepted change of x => version(x)' = version(x) + 1
+```
+
+### Required tests
+
+1. The owner opens a session while the agent replaces its request; granting
+   with the old version is refused.
+2. Erasing a project in two sessions' sets moves both versions by one.
+3. Granting a project already granted leaves the version.
+
+### Consequence
+
+The owner never answers a request the agent has since replaced, and Kernel
+sees every change as a new version.
+
+## Accepted decision A13 — the owner signs in to a session of bounded life
+
+### Normative rules
+
+1. The owner signs in with the owner credential (R0-30) and receives an owner
+   session (M11), carried by a cookie that scripts cannot read, sent only over
+   HTTPS when the interface is reached from another machine (R0-29), and only
+   to Registry's own origin.
+2. The session ends at the first of: 8 hours after sign-in; 30 minutes without
+   an owner action; the owner's sign-out; the instance's restart (M11 is never
+   durable).
+3. After 5 refused sign-ins within 15 minutes, every sign-in — the right
+   credential included — is refused for the next 15 minutes. The count is the
+   instance's, not a caller's: Registry tells no callers apart by address
+   (R0-27).
+4. A refused sign-in answers the same whatever was wrong, and never echoes
+   the credential.
+5. Every change in the owner interface carries the CSRF protection bound to
+   its session (R0-29); one from another session or none is refused.
+6. A confirmation step (Identity formats) is valid only in the session that
+   showed it, and once.
+
+### Formal invariants
+
+```text
+owner_session s valid at t <=> t < s.began + 8h and
+                                t < s.last_action + 30min and
+                                not signed_out(s) and no restart since s.began
+refused_sign_ins(last 15min) >= 5 => sign_in refused
+```
+
+### Required tests
+
+1. A session idle for 31 minutes is refused and asks for sign-in again.
+2. The sixth sign-in within 15 minutes after five refusals is refused with the
+   right credential, and accepted 15 minutes later.
+3. A change without the session's CSRF value is refused.
+4. A restart ends every owner session.
+
+### Consequence
+
+The owner credential's exposure is bounded in time; the lockout slows a guess
+without telling who is guessing.
