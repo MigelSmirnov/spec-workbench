@@ -80,7 +80,8 @@ security review of States 0–2.
 9. A refused import may be retried with a corrected file; nothing of a refused
    attempt remains.
 10. The import answers once its transaction commits, listing for each
-   Customer it made its v1 value and the `customer_ref` minted for it (R0-89); right after it — or, in
+   Customer it made its v1 value and the `customer_ref` minted for it; right
+   after it — or, in
    an owner-only start, at the next start with the tokens (A18 rule 10) —
    Registry makes a backup run outside the daily schedule (A18), so the import
    reaches a checked backup as soon as it can, and the owner interface shows
@@ -140,9 +141,9 @@ closure is the one proof of success.
    is made only after every other check has passed, and a failed start
    leaves no file it made.
 3. A secret — each token, the owner credential and the backup key — is at
-   least 32 bytes long; a shorter one fails the start. That the owner's vault
-   generates it at random is the owner's duty (R0-23), which Registry cannot
-   check.
+   least 32 bytes long; a shorter one fails the start. Registry checks the
+   length and, by rule 4, the distinctness, and nothing else of how the owner
+   made it (R0-23).
 4. No two secrets are equal: two services with one token, or a token equal to
    the owner credential, fail the start.
 5. A missing, malformed or unknown item fails the start; Registry applies no
@@ -222,9 +223,8 @@ secret cannot be shared between holders.
    the backup.
 3. Each backup is encrypted with the backup key the configuration holds at its
    making (A17). When the owner changes the key, older backups stay encrypted
-   with the key they were made with; the owner keeps that key in the vault
-   until the last of them is deleted (R0-23), and finds it by the digest the
-   backup records.
+   with the key they were made with, which the digest each backup records
+   names.
 4. Right after writing a backup Registry checks it: it decrypts it into a
    temporary file in the backup location, opens it for reading only, checks
    that it is the store version of its release, that the store's own
@@ -252,31 +252,15 @@ secret cannot be shared between holders.
 8. The store, the backup location and the disks under them are encrypted and
    kept out of VM Agent's reach by the owner's administration of VM Platform
    (R0-48; Explicit exclusions); Registry does not check the host.
-9. When the store is lost, the owner restores the newest kept backup on the
-   host while Registry is stopped: disaster recovery, the owner's
-   administration, outside Registry's guarantees (R0-89; Explicit
-   exclusions). The owner decrypts it with the key it was made with, kept in
-   the vault (rule 3); it is started by the release that made it, or by a
-   later release after that release's own store migration (A17 rule 5). The
-   restored store begins its own history from the backup (R0-89): every change
-   after the backup's instant is lost, the audit entries with it, and
-   numbering continues from the backup's last number (A15). Being the newest,
-   no kept backup is newer than it.
-10. The owner first starts the restored instance owner-only (A17 rule 1), so
-   no service and no agent reaches it, and brings each Customer and project to
-   the state the owner's own record of the retention review (R0-60) gives for
-   it now — erased, restricted, ended or not — and erases audit entries before
-   the greatest date the owner ever erased by, before configuring the tokens and
-   starting it again. A project the backup holds as active that was erased
-   after it is archived first, then erased, as any project (Primary
-   actions). An owner-only start makes no backup run, so no backup
-   holds the store before this is done; an import the owner repeats then
-   (R0-89) comes first, and its backup run is made at the next start with the
-   tokens. This is the owner's operation (Explicit exclusions: the
-   host's administration), and the owner's record is its evidence; Registry,
-   which no longer holds those changes, cannot list them, enforce them or
-   tell when this is done. Its guarantee after a restore is what the backup
-   held.
+9. Registry has no restore operation (R0-89). A store the owner puts in
+   place of a lost one starts as any store (A17 rule 5) — by the release that
+   made its backup, or by a later one after that release's own store
+   migration — and begins its own history from the backup: numbering
+   continues from its last number (A15), and a store without the migration
+   closure accepts the import (A16).
+10. An owner-only start (A17 rule 1) serves the owner interface alone and
+   makes no backup run; a post-import run due then is made at the next start
+   with the service tokens (A16 rule 10).
 11. A run goes in this order: remove the temporary files; write the new
    backup under a temporary name, check it and give it its kept name, which
    begins with the kept prefix the release declares; delete backups older
