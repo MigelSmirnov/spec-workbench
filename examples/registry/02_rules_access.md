@@ -21,7 +21,7 @@ here: what each service token and Kernel's agent authority may do and receive
    | PresuPro | validate a project reference; read a project context; read a customer's billing data; list artifacts; read the latest artifact of a type | `personal_data` |
    | Client Portal | validate a project reference; read a project context; read a project; list rooms; list artifacts; read the latest artifact of a type | `personal_data` |
    | Cabinet | list projects; read a project context; validate a project reference | `personal_data` |
-   | Cabinet Kernel | with agent authority only (A10): register an agent session; read the session's access; request access to a project; validate a project reference; read the agent projection; list rooms; add a room; list artifacts; read the latest artifact of a type; publish and withdraw an artifact pointer (R0-88) | `business_confidential` (R0-74) |
+   | Cabinet Kernel | with agent authority only (A10): register an agent session; end an agent session (A11); read the session's access; request access to a project; validate a project reference; read the agent projection; list rooms; add a room; list artifacts; read the latest artifact of a type; publish and withdraw an artifact pointer (R0-88) | `business_confidential` (R0-74) |
 
 3. An operation outside a token's row is refused, whatever the request holds.
 4. An answer that would carry a class above the token's highest is refused
@@ -59,6 +59,8 @@ manifest record derives from it (R0-78).
 1. A call with agent authority is accepted only when the token is Cabinet
    Kernel's, the session it names is registered, and — for an operation on a
    project — the project is in that session's set (R0-46, R0-53).
+   'Register an agent session' is checked for the token only: the session it
+   names is the one it registers (R0-53).
 2. An operation on a project that names none uses the session's active
    project; with none active it is refused (R0-69).
 3. Every refusal of the third check, and of a project that does not exist, is
@@ -84,6 +86,7 @@ answer(p not in granted(x)) = answer(p does not exist)
 2. After the owner revokes a project, the next 'add a room' on it is refused.
 3. A call naming no project, with no active project, is refused.
 4. 'Add a room' on an archived project of the set is refused.
+5. Kernel registers a new session id and is accepted.
 
 ### Consequence
 
@@ -132,8 +135,10 @@ Registry holds only living sessions; a stale session cannot keep a grant.
 ### Normative rules
 
 1. A session's access version is 1 at registration and moves by one with each
-   accepted change of its granted set, its active project or its pending
-   request (M06) — a project leaving the set by its erasure included (R0-61).
+   accepted action that changes its granted set, its active project or its
+   pending request (M06) — a project leaving the set by its erasure included
+   (R0-61). One action moves it once, however many of these it changes:
+   granting a project and making it active is one move.
 2. A change that changes nothing (A05) leaves it.
 3. The owner's actions on a session — granting, revoking, changing or clearing
    the active project, answering a request, ending the session — state the
@@ -155,6 +160,8 @@ accepted change of x => version(x)' = version(x) + 1
    with the old version is refused.
 2. Erasing a project in two sessions' sets moves both versions by one.
 3. Granting a project already granted leaves the version.
+4. Granting a project and making it active in one action moves the version
+   by one.
 
 ### Consequence
 
@@ -170,18 +177,30 @@ sees every change as a new version.
    HTTPS when the interface is reached from another machine (R0-29), and only
    to Registry's own origin.
 2. The session ends at the first of: 8 hours after sign-in; 30 minutes without
-   an owner action; the owner's sign-out; the instance's restart (M11 is never
-   durable).
-3. After 5 refused sign-ins within 15 minutes, every sign-in — the right
-   credential included — is refused for the next 15 minutes. The count is the
-   instance's, not a caller's: Registry tells no callers apart by address
-   (R0-27).
+   an owner request; the owner's sign-out; the instance's restart (M11 is never
+   durable). An owner request is any request to the owner interface that
+   carries the valid session, whatever its answer; it restarts the 30
+   minutes.
+3. Registry counts the refused sign-ins of the last 15 minutes, for the whole
+   instance: Registry tells no callers apart by address (R0-27). The fifth
+   refusal within 15 minutes starts a lockout of 15 minutes from that
+   refusal. During the lockout every sign-in is refused — the right credential
+   included — and is not counted; the lockout is not extended. A successful
+   sign-in clears the count. Count and lockout are runtime state, like the
+   owner session, and a restart clears them. Concurrent sign-ins are counted
+   one at a time.
 4. A refused sign-in answers the same whatever was wrong, and never echoes
    the credential.
 5. Every change in the owner interface carries the CSRF protection bound to
    its session (R0-29); one from another session or none is refused.
-6. A confirmation step (Identity formats) is valid only in the session that
-   showed it, and once.
+6. An action that asks for confirmation (Identity formats) is submitted with a
+   confirmation value Registry made when it showed the step: one-time, kept in
+   the owner session, bound to the action, its target, the revision or access
+   version the step showed, and its inputs — for the import, the file's digest
+   and the picks. It is valid only in that session, for 10 minutes, and is
+   used up by the first submission, whatever its answer; a refused submission
+   needs the step shown again. It is not the confirmation id, which Registry
+   mints only when the action is accepted (A14).
 
 ### Formal invariants
 
@@ -199,6 +218,9 @@ refused_sign_ins(last 15min) >= 5 => sign_in refused
    right credential, and accepted 15 minutes later.
 3. A change without the session's CSRF value is refused.
 4. A restart ends every owner session.
+5. A sign-in during a lockout is refused and does not extend it.
+6. A confirmation value used once — even by a refused submission — is refused
+   the second time; one older than 10 minutes is refused.
 
 ### Consequence
 

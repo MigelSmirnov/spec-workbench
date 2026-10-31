@@ -55,14 +55,16 @@ outcome but `accepted`.
    removes one.
 2. Only the owner reads the log, in an owner session (A13); no service token
    has a right to it (A09).
-3. The date of an erasure is a date not later than today; a later date is
-   refused. Every entry whose instant is before the start of that date (UTC)
-   is removed.
+3. The date of an erasure is a date not later than today, the current date in
+   UTC; a later date is refused. Every entry whose instant is before 00:00 UTC
+   of that date is removed.
 4. The erasure's own entry is written after the removal, in the same
    transaction, with the current instant; it is therefore never removed by the
    erasure that wrote it.
 5. Sequence numbers are never reused (M09): the next entry after an erasure
-   continues from the last number ever written.
+   continues from the last number ever written. Registry keeps that last number
+   durably, apart from the entries, so neither an erasure nor a restart lowers
+   it.
 6. An erasure that removes no entry changes nothing: it is accepted, writes no
    entry and mints no confirmation id (A14).
 

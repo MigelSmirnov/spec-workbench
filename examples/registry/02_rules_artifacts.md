@@ -14,9 +14,13 @@ commits, and two concurrent publishes of one type answer 500.
 1. Publishing a pointer assigns its version, marks the type's published
    pointer `superseded` with its instant, and stores the new pointer
    `published` — all in one transaction, or none of it (R0-17, R0-35).
-2. Publishes of one type on one project are serialised: of two concurrent
-   ones, each sees the other's result, and both are accepted with consecutive
-   versions.
+2. Every publish and every withdrawal on one project's pointers is
+   serialised with the others: each runs on the result of the one before.
+   Two concurrent publishes of a type are both accepted with consecutive
+   versions; a withdrawal that runs after a publish superseded its pointer is
+   refused as withdrawing a superseded pointer; a publish that runs after a
+   withdrawal makes the next version `published`; a second withdrawal of one
+   pointer is refused.
 3. At every moment a project has at most one `published` pointer of a type.
 4. Withdrawing marks the pointer `withdrawn` with its instant and principal in
    one transaction; it never makes an earlier version `published` (R0-14).
@@ -45,7 +49,10 @@ publish(p, t) accepted:
    new one.
 3. After withdrawing the published pointer, 'read the latest artifact of a
    type' answers that none is published.
-4. Publishing on an archived project is refused.
+4. A withdrawal racing a publish of the same type either withdraws the old
+   pointer before it is superseded, or is refused because it was superseded;
+   never both.
+5. Publishing on an archived project is refused.
 
 ### Consequence
 
@@ -57,8 +64,8 @@ L07's partial state and internal error are gone; the history is gap-free.
 
 1. A pointer is published and withdrawn by Cabinet Kernel for the agent, on a
    project of its session's set (R0-46, A10), or by the owner (R0-88).
-2. No service token has the right to publish or withdraw (A09); a service is
-   refused whatever type it names.
+2. No service token other than Cabinet Kernel's has the right to publish or
+   withdraw (A09); such a service is refused whatever type it names.
 3. The pointer names the owner service the declared vocabulary fixes for its
    type (R0-33); the caller does not choose it.
 4. The pointer records its publisher: Kernel for the agent naming the session,
@@ -66,6 +73,10 @@ L07's partial state and internal error are gone; the history is gap-free.
 5. Any declared type may be published and withdrawn by either; a type the
    specification does not declare is refused as an unknown type (R0-33).
 6. A pointer the import brought in is withdrawn as any other.
+7. A withdrawal names the pointer only; its project is the pointer's own, and
+   for Kernel that project is checked against the session's set (A10). A
+   pointer that does not exist, or whose project is outside the set, is
+   answered as not found.
 
 ### Formal invariants
 
@@ -104,12 +115,14 @@ R0-88.
    running instance reads them from its release, never from its configuration
    or its store (R0-33).
 3. A release that adds a type accepts publishes of it from that release on.
-4. A release that removes a type keeps every pointer of it: they stay in the
-   history and are listed and read as before, with their status as it was.
+4. A release that removes a type keeps every pointer of it, with its status as
+   it was: 'list artifacts' and the agent projection still carry them.
 5. After the removal, publishing that type and 'read the latest artifact of a
    type' for it are refused as an unknown type, and withdrawing a pointer of it
    is refused.
 6. A type never changes its owner service; a move is a removal and a new type.
+   A removed type's name is never declared again, so its history never
+   continues.
 7. An import file holding a pointer of an undeclared type is refused as a
    malformed record (A16).
 

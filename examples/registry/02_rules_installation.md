@@ -15,22 +15,37 @@ security review of States 0–2.
    reads it as data (A19) and answers the mapping without changing anything:
    each project the file holds, with its id, status, rooms and pointers; for
    each project the owner picks, the display name and alias it will arrive
-   under (R0-85); each Customer the import will make and the projects it will
-   link (R0-80); every id that conflicts with one production holds.
+   under (R0-85); each Customer the import will make, with the v1 value it
+   comes from and the projects it will link (R0-80); every id that conflicts
+   with one production holds. For each Customer it will make, the owner gives
+   its name and kind and says whether the v1 value is its tax id (State 1
+   M04); confirmation is refused while any of these is missing (A02).
 2. The mapping names the file by its digest. The owner confirms that mapping
    in the confirmation step (A13 rule 6); the confirmation applies the file of
-   that digest and the picks the mapping showed, nothing else.
-3. At confirmation Registry checks every conflict again. Any conflict — a
-   project, room or pointer id production holds, a Registry-minted
-   `customer_ref` production holds, a malformed record — refuses the whole
-   import, and nothing changes (R0-50, R0-79).
-4. An accepted import stores every picked project with its rooms and pointers,
+   that digest, the picks, names, aliases and Customer values the mapping
+   showed, nothing else.
+3. Registry checks what the picks bring in — the picked projects with their
+   rooms and pointers and the customers they name — and nothing else of the
+   file; records only of projects the owner did not pick are neither checked
+   nor imported. A file that cannot be read as the format States 5 and 6
+   declare is refused whole.
+4. A brought-in record is malformed when: a required value is missing (A02);
+   it names a project, customer or room the file does not hold; an id occurs
+   twice in the file; a status is outside its vocabulary; a pointer's type is
+   not declared or its owner service is not the type's (A22); the versions of
+   a project's pointers of one type are not 1..n, or more than one of them is
+   `published`; an instant cannot be read.
+5. At confirmation Registry checks again. Any conflict — a project, room or
+   pointer id production holds, a Registry-minted `customer_ref` production
+   holds — or any malformed record refuses the whole import, and nothing
+   changes (R0-50, R0-79).
+6. An accepted import stores every picked project with its rooms and pointers,
    the Customers it makes, the migration closure (M10) and its one audit entry
    (M09) in one transaction. The import has succeeded when that transaction
    is committed; Registry knows it by the closure.
-5. While the closure exists, uploading and confirming an import are refused
+7. While the closure exists, uploading and confirming an import are refused
    (R0-79).
-6. A refused import may be retried with a corrected file; nothing of a refused
+8. A refused import may be retried with a corrected file; nothing of a refused
    attempt remains.
 
 ### Formal invariants
@@ -53,6 +68,11 @@ conflict at confirmation => store unchanged
 4. A second import after a successful one is refused.
 5. A failure during the transaction leaves no project, no Customer and no
    closure.
+6. A conflicting id belonging only to a project the owner did not pick does
+   not refuse the import.
+7. A picked project whose room names a project absent from the file refuses
+   the import as malformed.
+8. Confirming without a kind for a Customer the import makes is refused.
 
 ### Consequence
 
@@ -63,18 +83,24 @@ closure is the one proof of success.
 
 ### Normative rules
 
-1. The configuration names the store, the owner credential and one service
-   token for each service of A09 (R0-20, R0-23).
+1. The configuration holds exactly these items and no other: the store's
+   location; the backup location and the backup key (A18); the owner
+   credential; one service token for each service of A09 — PresuPro, Client
+   Portal, Cabinet, Cabinet Kernel (R0-20, R0-23).
 2. Registry checks the configuration when it starts and serves nothing until
    every check passes; a failed check stops the start with a diagnostic that
    names the failed item and never its value (R0-37).
-3. A secret — each token and the owner credential — is at least 32 bytes
-   generated at random by the owner's vault (R0-23); a shorter one fails the
-   start.
+3. A secret — each token, the owner credential and the backup key — is at
+   least 32 bytes long; a shorter one fails the start. That the owner's vault
+   generates it at random is the owner's duty (R0-23), which Registry cannot
+   check.
 4. No two secrets are equal: two services with one token, or a token equal to
    the owner credential, fail the start.
 5. A missing, malformed or unknown item fails the start; Registry applies no
-   default to a secret or to the store.
+   default to any item. The store must open for reading and writing and carry
+   the store version of the running release; a store of another version, or
+   one that does not open, fails the start — bringing a store to a new version
+   is a step of the release, not of the start.
 6. A presented secret is compared in constant time; no secret enters a record,
    a log line, an audit entry, a diagnostic or an answer (R0-23, R0-37).
 7. A change of the configuration takes effect at the next start (R0-20).
@@ -103,40 +129,57 @@ secret cannot be shared between holders.
 
 ### Normative rules
 
-1. Once a day the store is backed up as a consistent copy taken while
-   Registry runs; a backup never holds part of a transaction.
-2. Each backup is encrypted with a key the owner holds in the vault (R0-23),
-   and is kept 30 days; older backups are deleted. An erasure in Registry
-   reaches the backups when the last backup holding the erased values is
-   deleted, at most 30 days after it.
-3. The store and the backups live on encrypted disks of VM Platform and of
-   the place the backups are kept; neither is readable from VM Agent (R0-48).
-4. Before each release the owner restores the latest backup into a temporary
-   instance on VM Platform, checks that it starts (A17) and answers, and
-   removes it; a test instance never receives a production backup (R0-34).
-5. After restoring production from a backup, the owner repeats every erasure
-   made after the backup's instant, as the owner's retention review recorded
-   it (R0-60), before the instance serves again.
+1. Registry backs up its store once a day at 03:00 UTC into the backup
+   location, as a consistent copy taken while it runs: a backup never holds
+   part of a transaction. The backup records its instant and the last audit
+   sequence number it holds.
+2. Each backup is encrypted with the backup key (A17). After a backup is
+   written, Registry deletes every backup older than 30 days (30 × 24 hours
+   by its instant).
+3. A backup that fails leaves no partial file, writes a diagnostic that names
+   the failure and no value (A17), and is tried again at the next 03:00;
+   Registry keeps serving. Whether backups succeed is the owner's to watch on
+   the host (Explicit exclusions: the host's administration).
+4. An erasure reaches the backups when the last backup holding the erased
+   values is deleted: at most 30 days after the erasure.
+5. The store and the backup location are on encrypted disks of VM Platform;
+   neither is reachable from VM Agent (R0-48).
+6. Before each release the owner restores the latest backup into a temporary
+   instance on VM Platform. It is a production instance for the test only: it
+   holds production data under every rule of production, configured with no
+   service token, so no service or agent reaches it. The test passes when the
+   instance starts (A17) and its audit log ends at the sequence number the
+   backup recorded; the owner then removes it. A release is not made while
+   the test fails. A test instance never receives a backup (R0-34).
+7. Restoring production from a backup loses every change made after the
+   backup's instant. The erasures among them are repeated by the owner from
+   the owner's own record of the retention review (R0-60), before the
+   instance serves again; Registry, which no longer holds them, cannot list
+   them, and that record is the governance's.
 
 ### Formal invariants
 
 ```text
-age(oldest backup) <= 30 days
-every backup is encrypted and consistent
+age(oldest backup) <= 30 days after each backup run
+every backup is encrypted, consistent and records (instant, last sequence)
 erasure at t => no backup holding the erased values exists after t + 30 days
+release made => restore test of the latest backup passed
 ```
 
 ### Required tests
 
 1. A backup taken during a write restores either before or after it, never in
    between.
-2. A backup older than 30 days does not exist.
-3. A backup cannot be read without the owner's key.
+2. After a backup run, no backup older than 30 days exists.
+3. A backup cannot be read without the backup key.
+4. A failed backup leaves no file and Registry keeps answering.
+5. A restored instance whose audit log ends before the recorded sequence
+   number fails the restore test.
 
 ### Consequence
 
-Data survives the loss of the store; an erasure has a bounded reach into the
-backups, as the governance can state.
+Data survives the loss of the store with at most a day of changes lost;
+an erasure has a bounded reach into the backups, as the governance can state.
 
 ## Accepted decision A19 — every stored value is data, never code
 
@@ -182,9 +225,15 @@ Proposed by the security review and accepted by the owner on 2026-10-31.
 ### Normative rules
 
 1. A release names every dependency it runs with, at an exact version, with
-   its digest; a running instance uses exactly those.
-2. A dependency changes only by a new release, verified as any release.
-3. Registry has no dependency that loads code at run time from outside its
+   its digest: every Python package, direct or transitive, by the digest of
+   its distribution file; the Python version; and the base image of VM
+   Platform's Registry environment by its digest, which fixes the system
+   libraries and the store's engine. Tools used only to build or test are not
+   dependencies of the running instance.
+2. A running instance uses exactly those; installing a dependency whose digest
+   differs fails.
+3. A dependency changes only by a new release, verified as any release.
+4. Registry has no dependency that loads code at run time from outside its
    release.
 
 ### Formal invariants

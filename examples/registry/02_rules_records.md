@@ -4,14 +4,15 @@ Draft of 2026-10-31. The owner accepted the proposals behind these decisions on
 2026-10-31 (answers 1–5 of the State 2 plan). They make the State 0 and State 1
 texts (`00_product.md`, `01_models.md`) exact where those carried the question
 here; they add no responsibility. Field names, types and answer shapes are
-States 5 and 6.
+States 5 and 6. Every "today" in Registry is the current date in UTC, as every
+instant is (L16).
 
 ## Accepted decision A01 — a create carries a request id; its repeat changes nothing
 
 R0-36 asks that a create repeated after a lost answer never makes a second
 project, customer or room; R0-88 makes publishing a pointer a write of the
-agent, which R0-78 asks to be replay-safe too. Equal content cannot tell a repeat from a second
-create: a second room of the same name is a second room (R0-10), and recording
+agent, which R0-78 asks to be replay-safe too. Equal content cannot tell a
+repeat from a second create: a second room of the same name is a second room (R0-10), and recording
 the same person twice makes two Customers (R0-16). The caller therefore names
 each create once.
 
@@ -24,22 +25,28 @@ each create once.
    field of 'add a room' and of 'publish an artifact pointer' (R0-78).
 2. Registry keeps the request id with the record the create made, written once
    (M01, M03, M04, M05).
-3. A create whose request id an existing record of the same model already
-   carries, with the same supplied facts, is a repeat: Registry answers that
-   record as it stands now — archived included — and changes nothing.
-4. A create whose request id an existing record carries, with different
-   supplied facts, is refused, and nothing changes.
-5. The supplied facts are compared as the caller gave them, value for value;
-   Registry does not normalise them for the comparison. For 'add a room' the
-   project is one of them.
-6. A create without a request id is refused.
-7. A request id leaves its record with the values anonymisation or erasure
+3. The call's rights are checked first, as for any call (A09, A10, A04 rule
+   6); a create on a project — 'add a room', 'publish an artifact pointer' —
+   whose project is now archived is refused (R0-17, R0-88). No other
+   precondition of the create is checked again for a repeat: the customer a
+   project named may since be restricted, and the repeat still answers the
+   project.
+4. A create whose request id an existing record of the same model carries is
+   a repeat when the facts it supplies equal that record's current facts of
+   the same kind: Registry answers the record as it stands now and changes
+   nothing. A publish's repeat answers the pointer whatever its status now; it
+   neither supersedes nor makes a version (R0-17, R0-88).
+5. A create whose request id an existing record carries, with facts that
+   differ from that record's current ones — a different value, or the record
+   corrected since — is refused, and nothing changes; the caller reads the
+   record.
+6. Facts are compared as A02 reads them: a required value as written, an
+   optional value given blank the same as one not given. For 'add a room' and
+   'publish an artifact pointer' the project is one of the facts.
+7. A create without a request id is refused.
+8. A request id leaves its record with the values anonymisation or erasure
    removes (M01, M04); a create arriving after that with the same request id
    is a new create.
-8. A publish's repeat answers the pointer it made, whatever its status now;
-   it neither supersedes nor makes a version (R0-17, R0-88). The checks of
-   the call come first: a repeat on a project no longer in the session's set
-   or since archived is refused as any call (A10, A07).
 9. A request id is never an identity: it is not answered as one, and no read
    looks a record up by it.
 
@@ -50,8 +57,9 @@ for each model m in {Project, Customer, Room, ArtifactPointer}:
   for records r1 != r2 of m with r1.request_id and r2.request_id present:
     r1.request_id != r2.request_id
 create(m, request_id = k, facts = f) where existing r of m has r.request_id = k:
-  f = supplied_facts(r)  => answer r, store unchanged
-  f != supplied_facts(r) => refused, store unchanged
+  rights fail or project archived => refused, store unchanged
+  f = current_facts(r)  => answer r, store unchanged
+  f != current_facts(r) => refused, store unchanged
 ```
 
 ### Required tests
@@ -69,13 +77,18 @@ create(m, request_id = k, facts = f) where existing r of m has r.request_id = k:
    makes a new project with a new id.
 7. Kernel retrying a publish with the same request id gets the same pointer
    and version; the pointer it made is not superseded.
+8. A repeat of a project's create after the project was corrected is refused.
+9. A repeat of 'record a customer' giving an empty e-mail equals one that gave
+   none.
+10. Kernel repeating 'add a room' after the project left its session's set is
+    answered as not found (A10).
 
 ### Consequence
 
 Kernel's retried 'add a room' or publish and a resubmitted owner form are
-safe. A request
-id is not a deduplication of look-alike records: Registry still never merges
-records because they look alike (R0-34).
+safe, and Registry keeps nothing but the request id to tell a repeat. A
+request id is not a deduplication of look-alike records: Registry still never
+merges records because they look alike (R0-34).
 
 ## Accepted decision A02 — a required value is present and not blank
 
@@ -166,10 +179,19 @@ card it showed, and what the owner emptied is cleared.
 5. Actions on records without a revision — adding a room, publishing or
    withdrawing a pointer, session actions — state none; the session's owner
    actions state its access version instead (A12).
+6. Every action checks in one order, and the first failure is its answer:
+   (1) the caller's authentication and its right to the operation (A09, A13);
+   (2) for agent authority, the session and its set (A10), whose refusal
+   hides every later failure; (3) that the record named exists; (4) the
+   values given (A02, A08, A22); (5) the stated revision or access version
+   (A12); (6) the record's lifecycle — archived, erased, anonymised, not in the
+   set. Only an action that passes all six may be a repeat that changes nothing
+   (A05).
 
 ### Formal invariants
 
 ```text
+answer(a) = first failing check of a in the order (1)..(6), else its effect
 for action a on record r in {Project, Customer} that may move r.revision:
   a.stated_revision != r.revision => refused, r unchanged
   accepted and changed(r) => r.revision' = r.revision + 1
@@ -184,6 +206,10 @@ for action a on record r in {Project, Customer} that may move r.revision:
 2. Restricting a customer with an old revision is refused.
 3. Archiving moves the revision once; archiving again with the new revision
    answers the project unchanged.
+4. Correcting an archived project with a stale revision is refused as stale,
+   not as archived.
+5. Kernel naming a project outside its set with a blank room name receives the
+   not-found answer, not the missing-name refusal.
 
 ### Consequence
 
@@ -194,8 +220,8 @@ the revision of the card it rendered.
 
 ### Normative rules
 
-1. A transition to the state a record is already in is accepted and changes
-   nothing: archiving an archived project (R0-12), anonymising an anonymised
+1. A transition to the state a record is already in, that passes every check
+   of A04 rule 6, is accepted and changes nothing: archiving an archived project (R0-12), anonymising an anonymised
    one (R0-71), erasing an erased Customer (Primary actions), restricting a
    restricted Customer, lifting an unrestricted one, ending an ended
    relationship, resuming one that is not ended (R0-84), granting a project
@@ -207,9 +233,11 @@ the revision of the card it rendered.
    is written and no confirmation id is minted.
 3. Ending an ended relationship with another date does not move the date: the
    owner resumes and ends again to change it.
-4. The refusals State 0 states stay refusals: withdrawing a withdrawn or
-   superseded pointer (Primary actions), revoking a project not in the set
-   (answered as not granted), deleting an anonymised project whole (R0-71).
+4. The refusals State 0 states stay refusals and come first: withdrawing a
+   withdrawn or superseded pointer (Primary actions), revoking a project not
+   in the set (answered as not granted), deleting an anonymised project whole
+   (R0-71), granting or making active an archived project — already granted
+   or active included (R0-70).
 
 ### Formal invariants
 
@@ -225,6 +253,8 @@ transition t to state s on record r with state(r) = s:
 2. Ending an ended relationship with a new date keeps the old date.
 3. Granting a project already granted leaves the access version.
 4. Withdrawing a withdrawn pointer is refused.
+5. Granting again a granted project that has since been archived is refused,
+   and the project stays in the set (R0-46, R0-70).
 
 ### Consequence
 
@@ -244,8 +274,14 @@ The audit log holds changes only (R0-58), and a retried transition is safe.
 5. 'List agent sessions': by registration instant, earliest first, then by
    session identity.
 6. 'Read the audit log': by sequence number, ascending (M09).
-7. Names compare by Unicode code point of the stored value; identities compare
-   as their text.
+7. Every key is ascending unless named "latest first" or "highest first".
+   Names, artifact types and identities compare by Unicode code point of the
+   stored text; instants and numbers by value.
+8. A collection inside an answer follows the order of the list that answers it
+   alone: a project card's rooms as 'list rooms'; the agent projection's
+   pointers as 'list artifacts'; a session's granted ids by `project_id`; the
+   import mapping's projects by `project_id`, each one's rooms and pointers as
+   their lists, and the Customers it makes by their v1 value.
 
 ### Formal invariants
 
@@ -259,6 +295,7 @@ because each key ends in an identity or a sequence number
 1. Two projects changed at the same instant list by id.
 2. An erased Customer lists after every Customer that is not erased.
 3. Artifacts of one type list version 3, 2, 1.
+4. A project card lists its rooms in the order of 'list rooms'.
 
 ### Consequence
 
