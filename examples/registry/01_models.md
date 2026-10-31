@@ -145,7 +145,7 @@ Facts a Project carries, in domain words:
 - its revision (R0-35);
 - the instant it was last changed ("Revisions and times");
 - written once: the instant it was created; the instant it was archived
-  (R0-60); the anonymised mark (R0-62).
+  (R0-60); the anonymised mark (R0-62, R0-87).
 
 The acting principal of a creation or a correction is the owner, always
 (Primary actions): the project keeps no "created by".
@@ -179,7 +179,7 @@ archived -> deleted whole     (owner, confirming; the record is gone, R0-60)
 
 An anonymised project is a Project with status `archived` and the anonymised
 mark: it keeps its `project_id`, its status, that mark and its artifact
-pointers (M05) and nothing else (R0-62) — name, alias, object, customer link,
+pointers (M05) and nothing else (R0-62, R0-87) — name, alias, object, customer link,
 rooms, revision and every instant are gone; when it was archived and when it
 was anonymised, the audit log says (M09). Deleting it whole is refused
 (R0-71). `active` is never returned to.
@@ -196,7 +196,8 @@ None. Settled by the owner on 2026-10-31:
   sets, and no uniqueness — two projects may share an alias, Registry refuses
   no duplicate, and a project without one is shown to the agent by its id.
 - What an anonymised project keeps (R0-60, R0-62, carried): exactly what R0-62
-  says — id, status, the anonymised mark and its pointers. The owner's answer
+  says as R0-87 narrows it (owner, 2026-10-31, codex round-02 T5) — id,
+  status, the anonymised mark and its pointers. The owner's answer
   of 2026-10-31 kept the archived and anonymised instants too; State 0's
   "nothing else" (R0-62) decides against it (round 1 T09), and the audit entry
   of each step holds the instant. Keeping an instant would be a new State 0
@@ -431,6 +432,15 @@ Facts a pointer carries:
   session, or the owner for any owner service; the instant it was superseded;
   the instant it was withdrawn and by which principal (R0-14).
 
+A pointer the import brings in (R0-50) was published before Registry recorded
+principals: the v1 Registry keeps no publisher (its `owner_service` is the
+caller's own claim, checked by no token) and no withdrawal (L22). Its
+publisher is therefore the import itself — the migration closure (M10), not a
+principal — and its published and superseded instants are those the source
+holds ("Revisions and times"). It is never imported `withdrawn`, so it carries
+no withdrawal facts until it is withdrawn in Registry, which records them as
+for any pointer (owner, 2026-10-31; codex round-02 T1).
+
 ### Identity
 
 entity
@@ -624,6 +634,11 @@ secret (R0-37).
 
 Facts, all written once:
 
+- its sequence number, minted by Registry: 1 for the instance's first entry,
+  then one more than the last ever written; never reused, also after old
+  entries are erased (R0-66), so the log's order is the order of the numbers
+  even where two entries share an instant (owner, 2026-10-31; codex round-02
+  T2);
 - the instant of the change;
 - the acting principal (M07);
 - the change: which action, in a closed vocabulary State 6 declares. The
@@ -637,10 +652,15 @@ Facts, all written once:
   so it writes none (R0-58; codex round-01 T4). No entry is written for adding a
   room, publishing or withdrawing a pointer, registering a session, an access
   request or its decline, changing or clearing the active project, or any read
-  (R0-58);
-- the subject: the project (`project_id`) or the customer (`customer_ref`)
-  changed, by identity only (R0-37) — for a session grant, the session and the
-  project;
+  (R0-58). Anonymising or deleting a project writes that one entry; the
+  project leaving every session's granted set (R0-61) is its consequence and
+  writes no revocation entry (owner, 2026-10-31; codex round-02 T6);
+- the subject, by identity only (R0-37), one of a closed set fixed by the
+  action (owner, 2026-10-31; codex round-02 T4): the project (`project_id`)
+  for a project's actions; the customer (`customer_ref`) for a customer's
+  actions, restricting and lifting, ending and resuming; the session and the
+  project for a grant or a revocation; the migration closure (M10) for the
+  import; none for an erasure of old entries, whose fact is the owner's date;
 - the outcome (accepted; whether refused attempts are recorded is settled in
   State 2, round 28 P1);
 - the contract version and the release version under which it happened
@@ -656,8 +676,8 @@ entity
 
 Substitution: two entries with equal facts are two events — two archivings of
 two projects at the same instant, or an erasure and its re-run — and the log
-is read in time order as distinct entries (R0-58). Continuity: an entry never
-changes; it is read until the owner erases it with every entry older than a
+is read in time order as distinct entries (R0-58); the sequence number is what
+tells them apart. Continuity: an entry never changes; it is read until the owner erases it with every entry older than a
 date (R0-66).
 
 ### Source of truth
@@ -804,8 +824,11 @@ None is a model: none has facts of its own.
   `customer_ref`, created and `registry_updated_at` — field for field as v1
   (R0-04).
 - `validate`: exists, active, `not_found` or `archived` (R0-04, R0-62).
-- The agent projection: `project_id`, alias, status, rooms, pointers — nothing
-  held as `personal_data` (R0-43, R0-68, R0-82).
+- The agent projection: `project_id`, alias, status, rooms, and the project's
+  current pointers — those `published`, without the superseded and withdrawn
+  history, which the owner and the services read (R0-43's minimal projection;
+  owner, 2026-10-31; codex round-02 T7) — nothing held as `personal_data`
+  (R0-43, R0-68, R0-82).
 - The session's access: granted ids, active project, whether a request is
   pending, the access version (R0-46, R0-64).
 - The billing read: kind, tax id, legal name, each recorded or absent (R0-83).

@@ -889,6 +889,9 @@ before. 'Read a project', `context`, 'list rooms' and the agent projection answe
 it was erased, and 'list projects' never lists it. R0-45's "`context` therefore always
 has an address" holds for every project that is not erased.
 
+Narrowed by R0-87: "its id, status and artifact pointers" reads "its id,
+status, the mark that it was anonymised and its artifact pointers".
+
 ### R0-63 — `onboard_object` is retired (proposed to the owner 2026-10-27 after round 18 T4, accepted; narrows R0-13, R0-30)
 
 The operator script `onboard_object` holds no token and calls no production
@@ -1112,6 +1115,15 @@ Registry keeps no link between projects by building and no history of works
 per building (R0-38, option (b), stays declined; R0-59). Giving the object an
 identity later is a new State 0 decision.
 
+### R0-87 — An anonymised project keeps the mark that it was anonymised (owner, 2026-10-31, after State 1 round 2 T5; narrows R0-62)
+
+Registry answers that an anonymised project was erased (R0-62) and refuses to
+delete it whole (R0-71), so it must know the project was anonymised: the
+project keeps that mark beside its id, status and artifact pointers. The mark
+holds no personal value. Its status stays `archived` and `validate` answers
+`archived` as before; no third status is added (R0-12). When it was archived
+and when it was anonymised, the audit log says.
+
 ### R0-81 — The one-home rule is a target the services reach; Registry does not wait (owner, 2026-10-27, after round 23 T1; narrows R0-80)
 
 Production Registry starts without waiting for the other services. From its
@@ -1158,7 +1170,7 @@ R0-40); OQ-13 to OQ-18, raised by the emulated question rounds 3 and 4
 proposed to the owner and accepted on 2026-10-27 (R0-61 to R0-73); R0-76 to
 R0-81 followed the same day, R0-82 and R0-83 answered round 24, R0-84
 round 25 and R0-85 round 26. R0-86 (2026-10-31) corrects a slip found by the
-State 1 draft.
+State 1 draft; R0-87 (2026-10-31) answers State 1 round 2 T5.
 
 ## Carried to later states
 
