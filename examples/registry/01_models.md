@@ -437,8 +437,10 @@ Facts a pointer carries:
 
 - its identity, minted by Registry or kept by the import (R0-17, R0-50);
 - its project (M01);
-- its type, one of the vocabulary the specification declares, and so its owner
-  service, which the vocabulary fixes (R0-33; "Declared vocabularies");
+- its type, one of the vocabulary the specification declared when it was
+  published — or, imported, when the import accepted it — and so its owner
+  service, which the vocabulary fixed (R0-33; "Declared vocabularies"); a
+  later release that removes the type leaves it as it is (State 2 A22);
 - its version within the project and type, minted by Registry: 1, then one
   more than the type's last (R0-17);
 - its reference: `uri`, `payload_ref`, at least one (R0-17); its content
@@ -663,7 +665,8 @@ Facts, all written once:
   then one more than the last ever written; never reused, also after old
   entries are erased (R0-66), so the log's order is the order of the numbers
   even where two entries share an instant (owner, 2026-10-31; codex round-02
-  T2);
+  T2). A store restored from a backup continues the backup's history, whose
+  last number it continues from (State 2 A18);
 - the instant of the change;
 - the acting principal (M07);
 - the change: which action, in a closed vocabulary State 6 declares. The
@@ -760,7 +763,9 @@ Registry's own record of the accepted import (R0-79).
 
 ### Lifecycle candidate
 
-None; absent, then present forever.
+None; absent, then present for the rest of the store's history. A store
+restored from a backup made before the import continues that backup's
+history, in which it is absent (State 2 A18).
 
 ### Persistence candidate
 
