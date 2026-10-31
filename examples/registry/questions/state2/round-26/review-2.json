@@ -1,0 +1,176 @@
+{
+ "open_points": [
+  {
+   "subject": "owner-session expiry sweep schedule",
+   "kind": "ambiguous timing",
+   "text": "\"a pass over the sessions it makes every 60 seconds from the start\"",
+   "question": "What is \"the start\", when is the first pass, and after a delayed pass are missed passes skipped, queued, or rescheduled from the delayed pass?",
+   "options": [
+    "Intervals at 60, 120, ... seconds from process start, with missed passes skipped",
+    "Intervals from each session's start",
+    "Sixty seconds after the preceding pass finishes"
+   ],
+   "default_guess": "Run at fixed 60-second boundaries from process start and skip missed boundaries.",
+   "unit": "A13"
+  },
+  {
+   "subject": "owner request racing the expiry sweep",
+   "kind": "undefined precedence",
+   "text": "\"its arrival restarts the 30 minutes\" and \"The pass takes the import lock and then each session's lock ... and decides under that lock\"",
+   "question": "If a request arrives before the idle limit but the sweep obtains the session lock after the limit, is validity decided from the arrival instant or from the order in which the request and sweep obtain the lock, and how is the arrival recorded safely against the sweep?",
+   "options": [
+    "Arrival before the limit admits the request even if the sweep gets the lock first",
+    "Whichever obtains the session lock first decides",
+    "The sweep may end the session unless the request has already updated last_request under the lock"
+   ],
+   "default_guess": "Use the request's captured arrival instant and update last_request under the session lock before the sweep may decide.",
+   "unit": "A13"
+  },
+  {
+   "subject": "expiry noticed by an ordinary next request",
+   "kind": "lock contradiction",
+   "text": "\"Registry ends it — and drops its pending confirmation and its uploaded file with it — when it notices: at the session's next request\" versus A16 \"An uploaded file is changed only by a holder of the import lock\"",
+   "question": "Must every request to a session acquire the import lock before checking expiry because it might have to drop an upload, or may an ordinary request end the session and change the upload without that lock?",
+   "options": [
+    "Every owner request takes the import lock before the session lock for its expiry check",
+    "Only a request that discovers expiry escalates to the import lock and rechecks without reversing lock order",
+    "An ordinary request may drop the upload under the session lock alone"
+   ],
+   "default_guess": "Every owner request takes the import lock before the session lock when checking and potentially ending an expired session.",
+   "unit": "A13"
+  },
+  {
+   "subject": "accepted import clearing other sessions' uploads",
+   "kind": "conflicting locking rules",
+   "text": "\"an accepted import, holding it, drops every session's upload\" and \"hold both until done\" versus A13 \"The requests of one owner session that change its state ... are applied one at a time ... [with] the session's one lock\"",
+   "question": "Does an accepted import have to take every affected session's lock before clearing its upload, or is each upload a separately import-lock-protected field that may change while another request holds that session's lock?",
+   "options": [
+    "Take every affected session lock in a declared order while holding the import lock",
+    "Treat uploaded-file state as protected solely by the import lock and exempt it from A13's whole-session serialization",
+    "Clear uploads without the other session locks despite A13"
+   ],
+   "default_guess": "Treat uploaded-file state as protected solely by the import lock and state that exception to A13 explicitly.",
+   "unit": "A16"
+  },
+  {
+   "subject": "configuration environment-variable names",
+   "kind": "unspecified accepted input",
+   "text": "\"The configuration is the set of environment variables whose names begin with REGISTRY_\" and \"It holds exactly these items and no other\"",
+   "question": "What exact environment-variable name corresponds to each required item, and therefore which REGISTRY_-prefixed names are accepted rather than rejected as unknown?",
+   "options": [
+    "The specification fixes exact names",
+    "Each release declares the exact names",
+    "The implementation chooses the names"
+   ],
+   "default_guess": "Use fixed names derived directly from the items, such as REGISTRY_STORE_LOCATION and REGISTRY_BACKUP_LOCATION.",
+   "unit": "A17"
+  },
+  {
+   "subject": "configuration well-formedness",
+   "kind": "undefined refusal conditions",
+   "text": "\"each well formed\"",
+   "question": "What makes the store location, backup location, owner credential, service tokens and backup key well formed beyond the separately stated presence, path and minimum-length checks?",
+   "options": [
+    "Only the explicit checks elsewhere in A17 define well formedness",
+    "Additional syntax and encoding rules apply to every item",
+    "Each release may choose additional validation"
+   ],
+   "default_guess": "Treat an item as well formed exactly when it can be decoded as its expected scalar or path and passes the other explicit A17 checks.",
+   "unit": "A17"
+  },
+  {
+   "subject": "secret length measurement",
+   "kind": "ambiguous validation",
+   "text": "\"A secret ... is at least 32 bytes long\"",
+   "question": "Environment variables are text; under which encoding is their byte length measured, and are arbitrary non-ASCII or invalidly encoded values accepted?",
+   "options": [
+    "Measure UTF-8 encoded bytes and require valid Unicode text",
+    "Require an ASCII encoding and measure its bytes",
+    "Decode a declared binary representation such as base64 and measure the decoded bytes"
+   ],
+   "default_guess": "Require ASCII secret text and measure its ASCII bytes.",
+   "unit": "A17"
+  },
+  {
+   "subject": "existing store validation at start",
+   "kind": "vague refusal condition",
+   "text": "\"the store must open for reading and writing and carry the store version of the running release\"",
+   "question": "Does starting on an existing store also run the store's integrity check or validate its schema and required invariants, and what exact corruption is sufficient to refuse startup?",
+   "options": [
+    "Opening read/write and matching the version are the only startup checks",
+    "Run the same store integrity check used for backup verification",
+    "Fully validate schema and domain invariants before serving"
+   ],
+   "default_guess": "Run the backend integrity check and verify the release's complete schema before serving.",
+   "unit": "A17"
+  },
+  {
+   "subject": "failed startup probe cleanup",
+   "kind": "missing cleanup rule",
+   "text": "\"A failed start leaves no file it made but a probe it could not remove, which the next start or run removes with the other temporary files\"",
+   "question": "Which startup step removes a probe left by an earlier failed start, how is that probe identified, and does cleanup occur during an owner-only start where no backup run will occur?",
+   "options": [
+    "Every startup first removes all regular files under the backup temporary prefix",
+    "Startup removes only a uniquely named probe file",
+    "Only a later backup run removes it"
+   ],
+   "default_guess": "Every startup removes stale regular files under the declared backup temporary prefix before making its new probe.",
+   "unit": "A17"
+  },
+  {
+   "subject": "backup-run mutual exclusion",
+   "kind": "unverifiable invariant",
+   "text": "\"Runs never overlap: a 03:00 that finds a run still going makes no run of its own\"",
+   "question": "What state or lock makes a running backup detectable and prevents overlap, especially across two Registry processes using the same store and backup location or across a restart during a run?",
+   "options": [
+    "An in-process flag only, with multiple processes declared invalid deployment",
+    "A store-backed lease or lock",
+    "An exclusive lock file in the backup location"
+   ],
+   "default_guess": "Use an exclusive lock file in the backup location and refuse or skip a run while it is held.",
+   "unit": "A18"
+  },
+  {
+   "subject": "backup encryption and key digest",
+   "kind": "underspecified security rule",
+   "text": "\"Each backup is encrypted with the backup key\" and \"a digest of the key it was made with\"",
+   "question": "Which authenticated-encryption construction, nonce-generation rule, key derivation or interpretation, and digest algorithm are required, and is the readable metadata cryptographically bound to the encrypted store?",
+   "options": [
+    "A specified authenticated-encryption format binds all metadata as associated data",
+    "Encryption protects only the store bytes and metadata is unauthenticated",
+    "Each release may choose an incompatible encryption and digest format"
+   ],
+   "default_guess": "Use a versioned authenticated-encryption format with a fresh random nonce, bind all readable metadata as associated data, and record a SHA-256 digest of the key.",
+   "unit": "A18"
+  },
+  {
+   "subject": "interrupted decrypted backup-check file",
+   "kind": "retention gap",
+   "text": "\"it decrypts it into a second temporary file\" and \"the next run removes what is left\"",
+   "question": "What removes a decrypted temporary store after a crash when Registry restarts owner-only or otherwise never reaches another backup run, and how is that plaintext copy prevented from outliving the backup retention and erasure rules?",
+   "options": [
+    "Every startup removes all backup temporary files before serving",
+    "Only the next scheduled backup run removes it",
+    "The decrypted check uses no filesystem plaintext file"
+   ],
+   "default_guess": "Avoid a persistent plaintext file; otherwise remove every backup temporary file at every startup before serving.",
+   "unit": "A18"
+  },
+  {
+   "subject": "backup metadata used for retention and status",
+   "kind": "tamper precedence",
+   "text": "\"its age is counted from that instant\" and \"The owner interface shows the instant of the newest kept backup whose record can be read\"",
+   "question": "If the unencrypted record is syntactically readable but has been altered, does Registry trust its instant, release, sequence and key digest for retention and display, or must their authenticity be verified before the file counts as kept?",
+   "options": [
+    "Authenticate the record and count it only after authentication",
+    "Trust any syntactically readable record until a restore check",
+    "Cross-check only the sequence and release while leaving the instant trusted"
+   ],
+   "default_guess": "Count, display and age a backup only after authenticating its record against the encrypted payload.",
+   "unit": "A18"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"owner-session expiry sweep schedule\",\"kind\":\"ambiguous timing\",\"text\":\"\\\"a pass over the sessions it makes every 60 seconds from the start\\\"\",\"question\":\"What is \\\"the start\\\", when is the first pass, and after a delayed pass are missed passes skipped, queued, or rescheduled from the delayed pass?\",\"options\":[\"Intervals at 60, 120, ... seconds from process start, with missed passes skipped\",\"Intervals from each session's start\",\"Sixty seconds after the preceding pass finishes\"],\"default_guess\":\"Run at fixed 60-second boundaries from process start and skip missed boundaries.\",\"unit\":\"A13\"},{\"subject\":\"owner request racing the expiry sweep\",\"kind\":\"undefined precedence\",\"text\":\"\\\"its arrival restarts the 30 minutes\\\" and \\\"The pass takes the import lock and then each session's lock ... and decides under that lock\\\"\",\"question\":\"If a request arrives before the idle limit but the sweep obtains the session lock after the limit, is validity decided from the arrival instant or from the order in which the request and sweep obtain the lock, and how is the arrival recorded safely against the sweep?\",\"options\":[\"Arrival before the limit admits the request even if the sweep gets the lock first\",\"Whichever obtains the session lock first decides\",\"The sweep may end the session unless the request has already updated last_request under the lock\"],\"default_guess\":\"Use the request's captured arrival instant and update last_request under the session lock before the sweep may decide.\",\"unit\":\"A13\"},{\"subject\":\"expiry noticed by an ordinary next request\",\"kind\":\"lock contradiction\",\"text\":\"\\\"Registry ends it — and drops its pending confirmation and its uploaded file with it — when it notices: at the session's next request\\\" versus A16 \\\"An uploaded file is changed only by a holder of the import lock\\\"\",\"question\":\"Must every request to a session acquire the import lock before checking expiry because it might have to drop an upload, or may an ordinary request end the session and change the upload without that lock?\",\"options\":[\"Every owner request takes the import lock before the session lock for its expiry check\",\"Only a request that discovers expiry escalates to the import lock and rechecks without reversing lock order\",\"An ordinary request may drop the upload under the session lock alone\"],\"default_guess\":\"Every owner request takes the import lock before the session lock when checking and potentially ending an expired session.\",\"unit\":\"A13\"},{\"subject\":\"accepted import clearing other sessions' uploads\",\"kind\":\"conflicting locking rules\",\"text\":\"\\\"an accepted import, holding it, drops every session's upload\\\" and \\\"hold both until done\\\" versus A13 \\\"The requests of one owner session that change its state ... are applied one at a time ... [with] the session's one lock\\\"\",\"question\":\"Does an accepted import have to take every affected session's lock before clearing its upload, or is each upload a separately import-lock-protected field that may change while another request holds that session's lock?\",\"options\":[\"Take every affected session lock in a declared order while holding the import lock\",\"Treat uploaded-file state as protected solely by the import lock and exempt it from A13's whole-session serialization\",\"Clear uploads without the other session locks despite A13\"],\"default_guess\":\"Treat uploaded-file state as protected solely by the import lock and state that exception to A13 explicitly.\",\"unit\":\"A16\"},{\"subject\":\"configuration environment-variable names\",\"kind\":\"unspecified accepted input\",\"text\":\"\\\"The configuration is the set of environment variables whose names begin with REGISTRY_\\\" and \\\"It holds exactly these items and no other\\\"\",\"question\":\"What exact environment-variable name corresponds to each required item, and therefore which REGISTRY_-prefixed names are accepted rather than rejected as unknown?\",\"options\":[\"The specification fixes exact names\",\"Each release declares the exact names\",\"The implementation chooses the names\"],\"default_guess\":\"Use fixed names derived directly from the items, such as REGISTRY_STORE_LOCATION and REGISTRY_BACKUP_LOCATION.\",\"unit\":\"A17\"},{\"subject\":\"configuration well-formedness\",\"kind\":\"undefined refusal conditions\",\"text\":\"\\\"each well formed\\\"\",\"question\":\"What makes the store location, backup location, owner credential, service tokens and backup key well formed beyond the separately stated presence, path and minimum-length checks?\",\"options\":[\"Only the explicit checks elsewhere in A17 define well formedness\",\"Additional syntax and encoding rules apply to every item\",\"Each release may choose additional validation\"],\"default_guess\":\"Treat an item as well formed exactly when it can be decoded as its expected scalar or path and passes the other explicit A17 checks.\",\"unit\":\"A17\"},{\"subject\":\"secret length measurement\",\"kind\":\"ambiguous validation\",\"text\":\"\\\"A secret ... is at least 32 bytes long\\\"\",\"question\":\"Environment variables are text; under which encoding is their byte length measured, and are arbitrary non-ASCII or invalidly encoded values accepted?\",\"options\":[\"Measure UTF-8 encoded bytes and require valid Unicode text\",\"Require an ASCII encoding and measure its bytes\",\"Decode a declared binary representation such as base64 and measure the decoded bytes\"],\"default_guess\":\"Require ASCII secret text and measure its ASCII bytes.\",\"unit\":\"A17\"},{\"subject\":\"existing store validation at start\",\"kind\":\"vague refusal condition\",\"text\":\"\\\"the store must open for reading and writing and carry the store version of the running release\\\"\",\"question\":\"Does starting on an existing store also run the store's integrity check or validate its schema and required invariants, and what exact corruption is sufficient to refuse startup?\",\"options\":[\"Opening read/write and matching the version are the only startup checks\",\"Run the same store integrity check used for backup verification\",\"Fully validate schema and domain invariants before serving\"],\"default_guess\":\"Run the backend integrity check and verify the release's complete schema before serving.\",\"unit\":\"A17\"},{\"subject\":\"failed startup probe cleanup\",\"kind\":\"missing cleanup rule\",\"text\":\"\\\"A failed start leaves no file it made but a probe it could not remove, which the next start or run removes with the other temporary files\\\"\",\"question\":\"Which startup step removes a probe left by an earlier failed start, how is that probe identified, and does cleanup occur during an owner-only start where no backup run will occur?\",\"options\":[\"Every startup first removes all regular files under the backup temporary prefix\",\"Startup removes only a uniquely named probe file\",\"Only a later backup run removes it\"],\"default_guess\":\"Every startup removes stale regular files under the declared backup temporary prefix before making its new probe.\",\"unit\":\"A17\"},{\"subject\":\"backup-run mutual exclusion\",\"kind\":\"unverifiable invariant\",\"text\":\"\\\"Runs never overlap: a 03:00 that finds a run still going makes no run of its own\\\"\",\"question\":\"What state or lock makes a running backup detectable and prevents overlap, especially across two Registry processes using the same store and backup location or across a restart during a run?\",\"options\":[\"An in-process flag only, with multiple processes declared invalid deployment\",\"A store-backed lease or lock\",\"An exclusive lock file in the backup location\"],\"default_guess\":\"Use an exclusive lock file in the backup location and refuse or skip a run while it is held.\",\"unit\":\"A18\"},{\"subject\":\"backup encryption and key digest\",\"kind\":\"underspecified security rule\",\"text\":\"\\\"Each backup is encrypted with the backup key\\\" and \\\"a digest of the key it was made with\\\"\",\"question\":\"Which authenticated-encryption construction, nonce-generation rule, key derivation or interpretation, and digest algorithm are required, and is the readable metadata cryptographically bound to the encrypted store?\",\"options\":[\"A specified authenticated-encryption format binds all metadata as associated data\",\"Encryption protects only the store bytes and metadata is unauthenticated\",\"Each release may choose an incompatible encryption and digest format\"],\"default_guess\":\"Use a versioned authenticated-encryption format with a fresh random nonce, bind all readable metadata as associated data, and record a SHA-256 digest of the key.\",\"unit\":\"A18\"},{\"subject\":\"interrupted decrypted backup-check file\",\"kind\":\"retention gap\",\"text\":\"\\\"it decrypts it into a second temporary file\\\" and \\\"the next run removes what is left\\\"\",\"question\":\"What removes a decrypted temporary store after a crash when Registry restarts owner-only or otherwise never reaches another backup run, and how is that plaintext copy prevented from outliving the backup retention and erasure rules?\",\"options\":[\"Every startup removes all backup temporary files before serving\",\"Only the next scheduled backup run removes it\",\"The decrypted check uses no filesystem plaintext file\"],\"default_guess\":\"Avoid a persistent plaintext file; otherwise remove every backup temporary file at every startup before serving.\",\"unit\":\"A18\"},{\"subject\":\"backup metadata used for retention and status\",\"kind\":\"tamper precedence\",\"text\":\"\\\"its age is counted from that instant\\\" and \\\"The owner interface shows the instant of the newest kept backup whose record can be read\\\"\",\"question\":\"If the unencrypted record is syntactically readable but has been altered, does Registry trust its instant, release, sequence and key digest for retention and display, or must their authenticity be verified before the file counts as kept?\",\"options\":[\"Authenticate the record and count it only after authentication\",\"Trust any syntactically readable record until a restore check\",\"Cross-check only the sequence and release while leaving the instant trusted\"],\"default_guess\":\"Count, display and age a backup only after authenticating its record against the encrypted payload.\",\"unit\":\"A18\"}]}",
+ "set_aside": []
+}

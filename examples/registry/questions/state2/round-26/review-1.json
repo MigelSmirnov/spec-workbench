@@ -1,0 +1,124 @@
+{
+ "open_points": [
+  {
+   "subject": "owner-session expiry and import-file locking",
+   "kind": "contradictory lock rules",
+   "text": "A13 says an expired session is ended “at the session's next request” and its uploaded file is dropped, while A16 says “An uploaded file is changed only by a holder of the import lock”, locks must be taken import-first, and “Other session changes take their session's lock alone.”",
+   "question": "Which locks must an ordinary owner request take when its validity check may end the session and drop an uploaded file, and at what locked point is expiry decided?",
+   "options": [
+    "Every owner request takes the import lock and then its session lock before checking expiry.",
+    "An ordinary request first checks under the session lock and, if expired with an upload, releases it and retries with import lock then session lock.",
+    "Expiry noticed by ordinary requests never drops an upload; only the periodic pass does."
+   ],
+   "default_guess": "Every owner request takes the import lock and then its session lock before deciding whether the session has expired.",
+   "unit": "A13"
+  },
+  {
+   "subject": "periodic owner-session expiry pass",
+   "kind": "undefined scheduling",
+   "text": "Registry makes “a pass over the sessions it makes every 60 seconds from the start” and takes “each session's lock”, but the text does not define what happens when a pass lasts past the next scheduled instant or sessions are created while the pass is enumerating them.",
+   "question": "What is one pass's session set, and are missed or overlapping 60-second passes skipped, queued or run concurrently?",
+   "options": [
+    "Snapshot the session identities at the scheduled instant and skip any tick while the preceding pass is running.",
+    "Visit the live collection, including sessions added before iteration reaches them, and queue delayed ticks.",
+    "Allow overlapping passes, with locks serialising their decisions."
+   ],
+   "default_guess": "Snapshot the sessions at each tick, run only one pass at a time and skip ticks that occur while it is still running.",
+   "unit": "A13"
+  },
+  {
+   "subject": "successful import and pending confirmations in other sessions",
+   "kind": "unspecified cleanup",
+   "text": "An accepted import “drops the uploaded file of every owner session”, while “a confirmation shown in another session is refused because the import is closed”; it does not say whether those other sessions' pending import confirmations are cleared when closure is committed.",
+   "question": "Does a successful import proactively clear pending import confirmations in every owner session, or do they remain until submission, expiry, replacement or session end?",
+   "options": [
+    "Clear every pending confirmation bound to an import when the import succeeds.",
+    "Leave other sessions' pending confirmations in place; a later submission consumes or clears them under A13 while being refused for closure.",
+    "Clear every pending confirmation, including confirmations for unrelated actions."
+   ],
+   "default_guess": "Leave pending confirmations in place and only drop every uploaded file; later import submissions are refused and handled by A13's normal confirmation-consumption rules.",
+   "unit": "A16"
+  },
+  {
+   "subject": "configuration environment-variable schema",
+   "kind": "missing names",
+   "text": "The configuration is “the set of environment variables whose names begin with `REGISTRY_`” and holds the listed conceptual items, but no exact environment-variable name is given for any item.",
+   "question": "What are the exact accepted `REGISTRY_` names, so that presence, unknown-item rejection and Unicode-name ordering are deterministic?",
+   "options": [
+    "State 2 declares fixed names for the store, backup location, backup key, owner credential and four service tokens.",
+    "A later release schema declares the names, and A17 refers to that schema.",
+    "Implementations choose names independently from the conceptual list."
+   ],
+   "default_guess": "Use fixed uppercase names derived directly from the listed concepts and reject every other `REGISTRY_` name.",
+   "unit": "A17"
+  },
+  {
+   "subject": "configuration value validation",
+   "kind": "undefined validation",
+   "text": "Startup checks say “each well formed” and require each secret to be “at least 32 bytes long”, but the text defines neither well-formedness for credentials, tokens and the backup key nor how environment text is converted to bytes for that length test.",
+   "question": "Which encodings and syntax make each configuration value well formed, and which byte representation is used for secret length, equality and cryptographic use?",
+   "options": [
+    "Treat secrets as opaque UTF-8 text and measure their UTF-8 bytes.",
+    "Require a fixed encoded binary form such as base64 and validate its decoded byte length.",
+    "Accept operating-system environment bytes directly without a text encoding rule."
+   ],
+   "default_guess": "Require a fixed base64 encoding and compare and measure the decoded bytes.",
+   "unit": "A17"
+  },
+  {
+   "subject": "backup encryption and unencrypted record",
+   "kind": "missing cryptographic contract",
+   "text": "A backup is “encrypted with the backup key” while its record is “readable without its key”; no encryption construction, key derivation, nonce rule, record authentication or binding between the unencrypted record and encrypted store is specified.",
+   "question": "What exact authenticated-encryption format is used, and are the instant, release, audit sequence and key digest cryptographically authenticated as part of that backup?",
+   "options": [
+    "Use an authenticated-encryption format whose associated data is the complete unencrypted record.",
+    "Encrypt only the store payload and leave the readable record unauthenticated.",
+    "Encrypt and authenticate the entire backup, keeping a separate minimal key identifier outside it."
+   ],
+   "default_guess": "Use authenticated encryption with a fresh nonce and authenticate the complete readable record as associated data.",
+   "unit": "A18"
+  },
+  {
+   "subject": "backup-key rotation and old backups",
+   "kind": "missing key lifecycle",
+   "text": "“Older backups stay encrypted with the key they were made with” and restoring one uses that old key, but configuration holds only one current backup key and no rule says where, for how long or under which identifier old keys remain available.",
+   "question": "What must preserve old backup keys until their backups are deleted, and how is the recorded key digest resolved to the correct key during restore?",
+   "options": [
+    "The owner retains every old key outside Registry until no kept backup names it.",
+    "Registry keeps a key ring in configuration and selects by digest.",
+    "Changing the key immediately makes older backups unrestorable, despite their retention."
+   ],
+   "default_guess": "The owner retains old keys outside Registry until every backup made with them has expired or been deleted, and selects one by the recorded digest.",
+   "unit": "A18"
+  },
+  {
+   "subject": "backup snapshot metadata",
+   "kind": "undefined linearization point",
+   "text": "A backup records “its instant” and “the last audit sequence number it holds” while being a consistent copy taken during concurrent service, but the text does not say when the instant and sequence are sampled relative to the store snapshot.",
+   "question": "At what single point is the backup deemed taken, and must both recorded values describe exactly the same snapshot?",
+   "options": [
+    "The snapshot transaction's linearization point supplies both its instant and last sequence.",
+    "The instant is run start and the sequence is read after copying.",
+    "The instant is successful rename time while the sequence belongs to the earlier snapshot."
+   ],
+   "default_guess": "Sample the instant and last sequence inside the same consistent snapshot transaction and use that as the backup's linearization point.",
+   "unit": "A18"
+  },
+  {
+   "subject": "backup check for a store with no audit entries",
+   "kind": "missing empty-case rule",
+   "text": "The check requires that the restored store's “audit log ends at the recorded sequence number”, but no sequence value or meaning is defined when the store has never written an audit entry.",
+   "question": "What last audit sequence is recorded and checked for an empty audit history?",
+   "options": [
+    "Record zero and require an empty log with the store counter at zero.",
+    "Record an explicit absent value.",
+    "Refuse to keep a backup until at least one audit entry exists."
+   ],
+   "default_guess": "Record zero and treat it as an empty audit history whose next entry will be sequence 1.",
+   "unit": "A18"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"owner-session expiry and import-file locking\",\"kind\":\"contradictory lock rules\",\"text\":\"A13 says an expired session is ended “at the session's next request” and its uploaded file is dropped, while A16 says “An uploaded file is changed only by a holder of the import lock”, locks must be taken import-first, and “Other session changes take their session's lock alone.”\",\"question\":\"Which locks must an ordinary owner request take when its validity check may end the session and drop an uploaded file, and at what locked point is expiry decided?\",\"options\":[\"Every owner request takes the import lock and then its session lock before checking expiry.\",\"An ordinary request first checks under the session lock and, if expired with an upload, releases it and retries with import lock then session lock.\",\"Expiry noticed by ordinary requests never drops an upload; only the periodic pass does.\"],\"default_guess\":\"Every owner request takes the import lock and then its session lock before deciding whether the session has expired.\",\"unit\":\"A13\"},{\"subject\":\"periodic owner-session expiry pass\",\"kind\":\"undefined scheduling\",\"text\":\"Registry makes “a pass over the sessions it makes every 60 seconds from the start” and takes “each session's lock”, but the text does not define what happens when a pass lasts past the next scheduled instant or sessions are created while the pass is enumerating them.\",\"question\":\"What is one pass's session set, and are missed or overlapping 60-second passes skipped, queued or run concurrently?\",\"options\":[\"Snapshot the session identities at the scheduled instant and skip any tick while the preceding pass is running.\",\"Visit the live collection, including sessions added before iteration reaches them, and queue delayed ticks.\",\"Allow overlapping passes, with locks serialising their decisions.\"],\"default_guess\":\"Snapshot the sessions at each tick, run only one pass at a time and skip ticks that occur while it is still running.\",\"unit\":\"A13\"},{\"subject\":\"successful import and pending confirmations in other sessions\",\"kind\":\"unspecified cleanup\",\"text\":\"An accepted import “drops the uploaded file of every owner session”, while “a confirmation shown in another session is refused because the import is closed”; it does not say whether those other sessions' pending import confirmations are cleared when closure is committed.\",\"question\":\"Does a successful import proactively clear pending import confirmations in every owner session, or do they remain until submission, expiry, replacement or session end?\",\"options\":[\"Clear every pending confirmation bound to an import when the import succeeds.\",\"Leave other sessions' pending confirmations in place; a later submission consumes or clears them under A13 while being refused for closure.\",\"Clear every pending confirmation, including confirmations for unrelated actions.\"],\"default_guess\":\"Leave pending confirmations in place and only drop every uploaded file; later import submissions are refused and handled by A13's normal confirmation-consumption rules.\",\"unit\":\"A16\"},{\"subject\":\"configuration environment-variable schema\",\"kind\":\"missing names\",\"text\":\"The configuration is “the set of environment variables whose names begin with `REGISTRY_`” and holds the listed conceptual items, but no exact environment-variable name is given for any item.\",\"question\":\"What are the exact accepted `REGISTRY_` names, so that presence, unknown-item rejection and Unicode-name ordering are deterministic?\",\"options\":[\"State 2 declares fixed names for the store, backup location, backup key, owner credential and four service tokens.\",\"A later release schema declares the names, and A17 refers to that schema.\",\"Implementations choose names independently from the conceptual list.\"],\"default_guess\":\"Use fixed uppercase names derived directly from the listed concepts and reject every other `REGISTRY_` name.\",\"unit\":\"A17\"},{\"subject\":\"configuration value validation\",\"kind\":\"undefined validation\",\"text\":\"Startup checks say “each well formed” and require each secret to be “at least 32 bytes long”, but the text defines neither well-formedness for credentials, tokens and the backup key nor how environment text is converted to bytes for that length test.\",\"question\":\"Which encodings and syntax make each configuration value well formed, and which byte representation is used for secret length, equality and cryptographic use?\",\"options\":[\"Treat secrets as opaque UTF-8 text and measure their UTF-8 bytes.\",\"Require a fixed encoded binary form such as base64 and validate its decoded byte length.\",\"Accept operating-system environment bytes directly without a text encoding rule.\"],\"default_guess\":\"Require a fixed base64 encoding and compare and measure the decoded bytes.\",\"unit\":\"A17\"},{\"subject\":\"backup encryption and unencrypted record\",\"kind\":\"missing cryptographic contract\",\"text\":\"A backup is “encrypted with the backup key” while its record is “readable without its key”; no encryption construction, key derivation, nonce rule, record authentication or binding between the unencrypted record and encrypted store is specified.\",\"question\":\"What exact authenticated-encryption format is used, and are the instant, release, audit sequence and key digest cryptographically authenticated as part of that backup?\",\"options\":[\"Use an authenticated-encryption format whose associated data is the complete unencrypted record.\",\"Encrypt only the store payload and leave the readable record unauthenticated.\",\"Encrypt and authenticate the entire backup, keeping a separate minimal key identifier outside it.\"],\"default_guess\":\"Use authenticated encryption with a fresh nonce and authenticate the complete readable record as associated data.\",\"unit\":\"A18\"},{\"subject\":\"backup-key rotation and old backups\",\"kind\":\"missing key lifecycle\",\"text\":\"“Older backups stay encrypted with the key they were made with” and restoring one uses that old key, but configuration holds only one current backup key and no rule says where, for how long or under which identifier old keys remain available.\",\"question\":\"What must preserve old backup keys until their backups are deleted, and how is the recorded key digest resolved to the correct key during restore?\",\"options\":[\"The owner retains every old key outside Registry until no kept backup names it.\",\"Registry keeps a key ring in configuration and selects by digest.\",\"Changing the key immediately makes older backups unrestorable, despite their retention.\"],\"default_guess\":\"The owner retains old keys outside Registry until every backup made with them has expired or been deleted, and selects one by the recorded digest.\",\"unit\":\"A18\"},{\"subject\":\"backup snapshot metadata\",\"kind\":\"undefined linearization point\",\"text\":\"A backup records “its instant” and “the last audit sequence number it holds” while being a consistent copy taken during concurrent service, but the text does not say when the instant and sequence are sampled relative to the store snapshot.\",\"question\":\"At what single point is the backup deemed taken, and must both recorded values describe exactly the same snapshot?\",\"options\":[\"The snapshot transaction's linearization point supplies both its instant and last sequence.\",\"The instant is run start and the sequence is read after copying.\",\"The instant is successful rename time while the sequence belongs to the earlier snapshot.\"],\"default_guess\":\"Sample the instant and last sequence inside the same consistent snapshot transaction and use that as the backup's linearization point.\",\"unit\":\"A18\"},{\"subject\":\"backup check for a store with no audit entries\",\"kind\":\"missing empty-case rule\",\"text\":\"The check requires that the restored store's “audit log ends at the recorded sequence number”, but no sequence value or meaning is defined when the store has never written an audit entry.\",\"question\":\"What last audit sequence is recorded and checked for an empty audit history?\",\"options\":[\"Record zero and require an empty log with the store counter at zero.\",\"Record an explicit absent value.\",\"Refuse to keep a backup until at least one audit entry exists.\"],\"default_guess\":\"Record zero and treat it as an empty audit history whose next entry will be sequence 1.\",\"unit\":\"A18\"}]}",
+ "set_aside": []
+}

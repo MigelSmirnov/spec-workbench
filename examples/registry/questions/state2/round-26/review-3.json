@@ -1,0 +1,279 @@
+{
+ "open_points": [
+  {
+   "subject": "owner-session expiry on the next ordinary request",
+   "kind": "lock-order gap",
+   "text": "Registry ends it — and drops its pending confirmation and its uploaded file with it (M11) — when it notices: at the session's next request ... The pass takes the import lock and then each session's lock ... Other session changes take their session's lock alone.",
+   "question": "When an ordinary request that normally takes only the session lock discovers that its session has expired, must it first take the import lock before ending the session and dropping a possible upload, and how can it do so without reversing the required lock order?",
+   "options": [
+    "Every owner request takes the import lock before checking expiry",
+    "The expiry check releases or avoids the session lock, then takes import lock followed by session lock",
+    "An ordinary request only marks the session expired and leaves upload removal to the pass"
+   ],
+   "default_guess": "Check expiry before taking the session lock, and when it has expired take the import lock followed by the session lock to end it.",
+   "unit": "A13"
+  },
+  {
+   "subject": "expiry pass cadence",
+   "kind": "timing ambiguity",
+   "text": "a pass over the sessions it makes every 60 seconds from the start",
+   "question": "Does the first pass occur at startup or 60 seconds later, are later passes tied to fixed startup-relative ticks or scheduled 60 seconds after completion, and what happens to a tick while an earlier pass is waiting or still running?",
+   "options": [
+    "First pass after 60 seconds on fixed startup-relative ticks, with overlapping ticks coalesced",
+    "Pass immediately at startup and then every 60 seconds",
+    "Schedule the next pass 60 seconds after the previous pass finishes"
+   ],
+   "default_guess": "Run first after 60 seconds on fixed ticks and coalesce any tick while a pass is pending or running.",
+   "unit": "A13"
+  },
+  {
+   "subject": "expiry pass lock scope",
+   "kind": "lock-scope ambiguity",
+   "text": "The pass takes the import lock and then each session's lock (A16 rule 2), and decides under that lock.",
+   "question": "Does one pass hold the import lock for its entire traversal of all sessions, or release and reacquire it around each individual session?",
+   "options": [
+    "Hold the import lock for the whole pass and take each session lock in turn",
+    "Take and release the import lock separately for each session"
+   ],
+   "default_guess": "Hold the import lock for the whole pass and take one session lock at a time.",
+   "unit": "A13"
+  },
+  {
+   "subject": "request arrival racing the expiry pass",
+   "kind": "concurrency ambiguity",
+   "text": "its arrival restarts the 30 minutes — of concurrent requests the latest arrival counts ... The pass takes the import lock and then each session's lock ... and decides under that lock. Validity is checked when a request arrives",
+   "question": "How is an arrival recorded relative to the pass, so that a request which arrived before the idle limit but is still waiting for a lock prevents the pass from ending the session?",
+   "options": [
+    "Record the arrival atomically before any lock wait and have the pass read that value",
+    "Only update last-request after acquiring the session lock",
+    "Let whichever operation acquires the session lock first decide"
+   ],
+   "default_guess": "Atomically record and validate the arrival before waiting for the operation locks; the pass uses the latest recorded arrival.",
+   "unit": "A13"
+  },
+  {
+   "subject": "accepted import dropping other sessions' uploads",
+   "kind": "lock-ownership ambiguity",
+   "text": "Uploads and every other request that reads or changes an uploaded file ... take the instance's one import lock first, then their session's lock ... An accepted import, holding it, drops every session's upload",
+   "question": "When an accepted import drops uploads belonging to other sessions, must it also take every affected session's lock, or is the import lock alone sufficient for those other sessions' upload fields?",
+   "options": [
+    "The import lock alone protects uploads in other sessions",
+    "Take all affected session locks in a declared order while holding the import lock",
+    "Mark the closure first and let each session remove its own upload later"
+   ],
+   "default_guess": "Treat the import lock as the sole guard for upload fields outside the confirming session; hold only the confirming session's lock.",
+   "unit": "A16"
+  },
+  {
+   "subject": "closure-check precedence for import requests",
+   "kind": "check-precedence ambiguity",
+   "text": "take the instance's one import lock first, then their session's lock (A13), check the closure while holding them ... when the closure exists, uploading, showing the mapping or the import's confirmation step and confirming are refused",
+   "question": "When the closure exists and the same request also has an invalid file, missing mapping input, stale or wrong confirmation value, or another failure, which refusal is returned and how does this interact with A04's global check order?",
+   "options": [
+    "Apply A04's stages and report an earlier-stage failure before closure",
+    "After authentication and session/CSRF checks, closure always wins for these operations",
+    "Perform validation but always return the closure refusal if closure exists"
+   ],
+   "default_guess": "Follow A04's stated stages; closure is the lifecycle/conflict failure after applicable value and version checks.",
+   "unit": "A16"
+  },
+  {
+   "subject": "service-token presence in owner-only mode",
+   "kind": "contradiction",
+   "text": "one service token for each service of A09 ... or, for an owner-only start, none of the four ... every item of rule 1 present",
+   "question": "Does the startup presence check require all four service tokens, or accept their complete absence as owner-only mode?",
+   "options": [
+    "Require all four or exactly none",
+    "Always require all four",
+    "Allow any subset and refuse calls for missing services"
+   ],
+   "default_guess": "Require either all four tokens or exactly none.",
+   "unit": "A17"
+  },
+  {
+   "subject": "configuration variable names",
+   "kind": "missing declaration",
+   "text": "The configuration is the set of environment variables whose names begin with REGISTRY_ ... It holds exactly these items and no other",
+   "question": "What is the exact environment-variable name for each listed item, so that Registry can distinguish required variables from unknown ones?",
+   "options": [
+    "Declare one fixed REGISTRY_ name per item",
+    "Derive names mechanically from the prose labels",
+    "Accept aliases for each item"
+   ],
+   "default_guess": "Declare fixed uppercase names such as REGISTRY_STORE_LOCATION, REGISTRY_BACKUP_LOCATION, REGISTRY_BACKUP_KEY, REGISTRY_OWNER_CREDENTIAL and one token name per service.",
+   "unit": "A17"
+  },
+  {
+   "subject": "configuration well-formedness",
+   "kind": "undefined refusal conditions",
+   "text": "each well formed; each secret's length ... A missing, malformed or unknown item fails the start",
+   "question": "Beyond minimum secret length and path checks, what exact syntax, encoding and allowed values make each location, credential, token and backup key well formed?",
+   "options": [
+    "Treat secrets as arbitrary nonempty UTF-8 strings and locations as filesystem paths",
+    "Require a declared encoding such as base64 for secrets",
+    "Give each item its own declared grammar"
+   ],
+   "default_guess": "Use a declared per-item grammar, with secrets supplied in a reversible ASCII encoding and paths required to contain no NUL byte.",
+   "unit": "A17"
+  },
+  {
+   "subject": "secret byte length",
+   "kind": "encoding ambiguity",
+   "text": "A secret ... is at least 32 bytes long",
+   "question": "For an environment-variable string, are the 32 bytes counted before decoding, after UTF-8 encoding, or after decoding a declared representation such as hexadecimal or base64?",
+   "options": [
+    "Count UTF-8 encoded bytes",
+    "Decode base64 or hexadecimal and count secret bytes",
+    "Count Unicode characters"
+   ],
+   "default_guess": "Decode a declared base64 representation and require at least 32 decoded bytes.",
+   "unit": "A17"
+  },
+  {
+   "subject": "configured filesystem paths",
+   "kind": "path-semantics ambiguity",
+   "text": "compared by their absolute paths with every symbolic link resolved",
+   "question": "Are relative paths accepted and, if so, against which stable directory are they resolved; and must the store location name a regular file while the backup location names a directory?",
+   "options": [
+    "Require both configured paths to be absolute, with store a regular file and backup a directory",
+    "Resolve relative paths against the process working directory",
+    "Resolve relative paths against a release-defined data directory"
+   ],
+   "default_guess": "Require absolute paths; require the store target to be a regular file or absent and the backup location to be an existing directory.",
+   "unit": "A17"
+  },
+  {
+   "subject": "new-store and existing-store format",
+   "kind": "missing format contract",
+   "text": "makes a new, empty store of the running release's version ... otherwise the store must open for reading and writing and carry the store version of the running release",
+   "question": "What store engine and on-disk format are used, where is the store version recorded, and what exact checks constitute opening it successfully for reading and writing?",
+   "options": [
+    "Declare a specific transactional database engine and schema/version marker",
+    "Leave the backend to the implementation but standardize a compatibility probe",
+    "Use a release-specific opaque store format"
+   ],
+   "default_guess": "Declare a specific transactional database engine with a schema-version record and an explicit read/write transaction probe.",
+   "unit": "A17"
+  },
+  {
+   "subject": "temporary store filename",
+   "kind": "missing declaration",
+   "text": "under a temporary name — the store's name with a suffix the release declares",
+   "question": "What suffix is declared, and how is collision with a legitimate configured store name or another process prevented?",
+   "options": [
+    "Use one fixed reserved suffix",
+    "Use a random suffix and record it",
+    "Use a process-specific suffix"
+   ],
+   "default_guess": "Use one fixed reserved suffix and reject a configured store name that itself ends in that suffix.",
+   "unit": "A17"
+  },
+  {
+   "subject": "backup encryption format",
+   "kind": "missing cryptographic contract",
+   "text": "Each backup is encrypted with the backup key ... A backup cannot be read without the key it was made with.",
+   "question": "Which authenticated-encryption algorithm, nonce-generation rule, key derivation or key-size rule, and versioned ciphertext format are required?",
+   "options": [
+    "Use a declared AEAD scheme with random nonces and a versioned envelope",
+    "Use an encryption library's implementation-selected default",
+    "Rely only on host disk encryption"
+   ],
+   "default_guess": "Use a versioned AEAD envelope with a declared algorithm, random nonce and authenticated metadata, deriving a fixed-size key from the configured backup key with a declared KDF.",
+   "unit": "A18"
+  },
+  {
+   "subject": "readable backup record and metadata integrity",
+   "kind": "format and integrity gap",
+   "text": "It records, readable without its key, its instant, the release that made it, the last audit sequence number it holds and a digest of the key ... a file whose record cannot be read counting as none",
+   "question": "What is the exact encoding of this unencrypted record, what ranges and canonical forms are valid, and how is it authenticated so tampering cannot change retention age, release, sequence number or key identity without detection?",
+   "options": [
+    "Define a canonical authenticated header bound as AEAD associated data",
+    "Use an unauthenticated plaintext header and rely on the encrypted store check",
+    "Store metadata in the filename only"
+   ],
+   "default_guess": "Use a versioned canonical header authenticated as associated data by the backup's AEAD tag.",
+   "unit": "A18"
+  },
+  {
+   "subject": "backup-key digest",
+   "kind": "undefined digest",
+   "text": "a digest of the key it was made with (never the key)",
+   "question": "Which digest construction and representation identify a backup key, and is it a plain hash, keyed identifier or salted fingerprint?",
+   "options": [
+    "A declared cryptographic hash of the decoded key",
+    "A random key identifier configured alongside the key",
+    "A keyed or salted fingerprint stored in the header"
+   ],
+   "default_guess": "Use a declared cryptographic hash of the decoded key with a domain-separation label, encoded canonically.",
+   "unit": "A18"
+  },
+  {
+   "subject": "consistent backup versus live writes",
+   "kind": "concurrency gap",
+   "text": "A backup is a consistent copy of the store taken while Registry runs: it never holds part of a transaction.",
+   "question": "What serialization or snapshot rule defines the backup's point in history, and may owner, service, import and audit-erasure transactions continue while the copy is being made?",
+   "options": [
+    "Use the store engine's transactional snapshot while writes continue",
+    "Take a global store lock and block all writes for the copy",
+    "Pause every request, including reads, until copying finishes"
+   ],
+   "default_guess": "Use a transactional read snapshot at one defined instant and allow later transactions to continue concurrently.",
+   "unit": "A18"
+  },
+  {
+   "subject": "backup recorded instant",
+   "kind": "timestamp ambiguity",
+   "text": "It records ... its instant ... its age is counted from that instant. First, it removes ... Second, it writes the backup ... Third ... deletes every kept backup made more than 30 × 24 hours before the instant this step starts",
+   "question": "At what event is the backup's recorded instant fixed: run start, snapshot creation, completion of encryption/checking, or rename to the kept name?",
+   "options": [
+    "The instant the consistent store snapshot is established",
+    "The start of the run",
+    "The successful rename to the kept name"
+   ],
+   "default_guess": "Use the instant at which the consistent store snapshot is established.",
+   "unit": "A18"
+  },
+  {
+   "subject": "audit sequence in a backup of an empty store",
+   "kind": "missing base value",
+   "text": "records ... the last audit sequence number it holds ... checks ... that its audit log ends at the recorded sequence number",
+   "question": "What sequence value is recorded and checked when the store has never written an audit entry?",
+   "options": [
+    "Record zero",
+    "Record null or an explicit no-entry marker",
+    "Omit the field"
+   ],
+   "default_guess": "Record zero and define an empty audit log as ending at sequence zero.",
+   "unit": "A18"
+  },
+  {
+   "subject": "backup filename prefixes and kept-name construction",
+   "kind": "missing declaration",
+   "text": "Kept and temporary names begin with two different prefixes the release declares ... A kept name is made from the backup's instant and is never overwritten",
+   "question": "What are the two prefixes and the exact canonical conversion from an instant to a kept filename, including precision and characters, so collision and ordering behavior are deterministic?",
+   "options": [
+    "Declare fixed prefixes and a UTC timestamp with sufficient fixed precision",
+    "Use a timestamp plus a random suffix",
+    "Use a monotonically allocated filename independent of the timestamp"
+   ],
+   "default_guess": "Declare fixed reserved prefixes and use a canonical UTC timestamp including microseconds, rejecting a collision as already specified.",
+   "unit": "A18"
+  },
+  {
+   "subject": "store integrity check used for tested backup",
+   "kind": "undefined verification",
+   "text": "checks that it is the store version of its release, that the store's own integrity check passes and that its audit log ends at the recorded sequence number",
+   "question": "What exact integrity check must the store provide, and which failures or incomplete checks make the backup fail?",
+   "options": [
+    "Declare the database engine's full integrity-check operation and require a successful complete result",
+    "Use only the ability to open and query the store",
+    "Use a release-defined checksum over every logical record"
+   ],
+   "default_guess": "Require the chosen store engine's full integrity-check operation, followed by explicit schema-version and audit-tail queries, all completing successfully.",
+   "unit": "A18"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"owner-session expiry on the next ordinary request\",\"kind\":\"lock-order gap\",\"text\":\"Registry ends it — and drops its pending confirmation and its uploaded file with it (M11) — when it notices: at the session's next request ... The pass takes the import lock and then each session's lock ... Other session changes take their session's lock alone.\",\"question\":\"When an ordinary request that normally takes only the session lock discovers that its session has expired, must it first take the import lock before ending the session and dropping a possible upload, and how can it do so without reversing the required lock order?\",\"options\":[\"Every owner request takes the import lock before checking expiry\",\"The expiry check releases or avoids the session lock, then takes import lock followed by session lock\",\"An ordinary request only marks the session expired and leaves upload removal to the pass\"],\"default_guess\":\"Check expiry before taking the session lock, and when it has expired take the import lock followed by the session lock to end it.\" ,\"unit\":\"A13\"},{\"subject\":\"expiry pass cadence\",\"kind\":\"timing ambiguity\",\"text\":\"a pass over the sessions it makes every 60 seconds from the start\",\"question\":\"Does the first pass occur at startup or 60 seconds later, are later passes tied to fixed startup-relative ticks or scheduled 60 seconds after completion, and what happens to a tick while an earlier pass is waiting or still running?\",\"options\":[\"First pass after 60 seconds on fixed startup-relative ticks, with overlapping ticks coalesced\",\"Pass immediately at startup and then every 60 seconds\",\"Schedule the next pass 60 seconds after the previous pass finishes\"],\"default_guess\":\"Run first after 60 seconds on fixed ticks and coalesce any tick while a pass is pending or running.\",\"unit\":\"A13\"},{\"subject\":\"expiry pass lock scope\",\"kind\":\"lock-scope ambiguity\",\"text\":\"The pass takes the import lock and then each session's lock (A16 rule 2), and decides under that lock.\",\"question\":\"Does one pass hold the import lock for its entire traversal of all sessions, or release and reacquire it around each individual session?\",\"options\":[\"Hold the import lock for the whole pass and take each session lock in turn\",\"Take and release the import lock separately for each session\"],\"default_guess\":\"Hold the import lock for the whole pass and take one session lock at a time.\",\"unit\":\"A13\"},{\"subject\":\"request arrival racing the expiry pass\",\"kind\":\"concurrency ambiguity\",\"text\":\"its arrival restarts the 30 minutes — of concurrent requests the latest arrival counts ... The pass takes the import lock and then each session's lock ... and decides under that lock. Validity is checked when a request arrives\",\"question\":\"How is an arrival recorded relative to the pass, so that a request which arrived before the idle limit but is still waiting for a lock prevents the pass from ending the session?\",\"options\":[\"Record the arrival atomically before any lock wait and have the pass read that value\",\"Only update last-request after acquiring the session lock\",\"Let whichever operation acquires the session lock first decide\"],\"default_guess\":\"Atomically record and validate the arrival before waiting for the operation locks; the pass uses the latest recorded arrival.\",\"unit\":\"A13\"},{\"subject\":\"accepted import dropping other sessions' uploads\",\"kind\":\"lock-ownership ambiguity\",\"text\":\"Uploads and every other request that reads or changes an uploaded file ... take the instance's one import lock first, then their session's lock ... An accepted import, holding it, drops every session's upload\",\"question\":\"When an accepted import drops uploads belonging to other sessions, must it also take every affected session's lock, or is the import lock alone sufficient for those other sessions' upload fields?\",\"options\":[\"The import lock alone protects uploads in other sessions\",\"Take all affected session locks in a declared order while holding the import lock\",\"Mark the closure first and let each session remove its own upload later\"],\"default_guess\":\"Treat the import lock as the sole guard for upload fields outside the confirming session; hold only the confirming session's lock.\",\"unit\":\"A16\"},{\"subject\":\"closure-check precedence for import requests\",\"kind\":\"check-precedence ambiguity\",\"text\":\"take the instance's one import lock first, then their session's lock (A13), check the closure while holding them ... when the closure exists, uploading, showing the mapping or the import's confirmation step and confirming are refused\",\"question\":\"When the closure exists and the same request also has an invalid file, missing mapping input, stale or wrong confirmation value, or another failure, which refusal is returned and how does this interact with A04's global check order?\",\"options\":[\"Apply A04's stages and report an earlier-stage failure before closure\",\"After authentication and session/CSRF checks, closure always wins for these operations\",\"Perform validation but always return the closure refusal if closure exists\"],\"default_guess\":\"Follow A04's stated stages; closure is the lifecycle/conflict failure after applicable value and version checks.\",\"unit\":\"A16\"},{\"subject\":\"service-token presence in owner-only mode\",\"kind\":\"contradiction\",\"text\":\"one service token for each service of A09 ... or, for an owner-only start, none of the four ... every item of rule 1 present\",\"question\":\"Does the startup presence check require all four service tokens, or accept their complete absence as owner-only mode?\",\"options\":[\"Require all four or exactly none\",\"Always require all four\",\"Allow any subset and refuse calls for missing services\"],\"default_guess\":\"Require either all four tokens or exactly none.\",\"unit\":\"A17\"},{\"subject\":\"configuration variable names\",\"kind\":\"missing declaration\",\"text\":\"The configuration is the set of environment variables whose names begin with REGISTRY_ ... It holds exactly these items and no other\",\"question\":\"What is the exact environment-variable name for each listed item, so that Registry can distinguish required variables from unknown ones?\",\"options\":[\"Declare one fixed REGISTRY_ name per item\",\"Derive names mechanically from the prose labels\",\"Accept aliases for each item\"],\"default_guess\":\"Declare fixed uppercase names such as REGISTRY_STORE_LOCATION, REGISTRY_BACKUP_LOCATION, REGISTRY_BACKUP_KEY, REGISTRY_OWNER_CREDENTIAL and one token name per service.\",\"unit\":\"A17\"},{\"subject\":\"configuration well-formedness\",\"kind\":\"undefined refusal conditions\",\"text\":\"each well formed; each secret's length ... A missing, malformed or unknown item fails the start\",\"question\":\"Beyond minimum secret length and path checks, what exact syntax, encoding and allowed values make each location, credential, token and backup key well formed?\",\"options\":[\"Treat secrets as arbitrary nonempty UTF-8 strings and locations as filesystem paths\",\"Require a declared encoding such as base64 for secrets\",\"Give each item its own declared grammar\"],\"default_guess\":\"Use a declared per-item grammar, with secrets supplied in a reversible ASCII encoding and paths required to contain no NUL byte.\",\"unit\":\"A17\"},{\"subject\":\"secret byte length\",\"kind\":\"encoding ambiguity\",\"text\":\"A secret ... is at least 32 bytes long\",\"question\":\"For an environment-variable string, are the 32 bytes counted before decoding, after UTF-8 encoding, or after decoding a declared representation such as hexadecimal or base64?\",\"options\":[\"Count UTF-8 encoded bytes\",\"Decode base64 or hexadecimal and count secret bytes\",\"Count Unicode characters\"],\"default_guess\":\"Decode a declared base64 representation and require at least 32 decoded bytes.\",\"unit\":\"A17\"},{\"subject\":\"configured filesystem paths\",\"kind\":\"path-semantics ambiguity\",\"text\":\"compared by their absolute paths with every symbolic link resolved\",\"question\":\"Are relative paths accepted and, if so, against which stable directory are they resolved; and must the store location name a regular file while the backup location names a directory?\",\"options\":[\"Require both configured paths to be absolute, with store a regular file and backup a directory\",\"Resolve relative paths against the process working directory\",\"Resolve relative paths against a release-defined data directory\"],\"default_guess\":\"Require absolute paths; require the store target to be a regular file or absent and the backup location to be an existing directory.\",\"unit\":\"A17\"},{\"subject\":\"new-store and existing-store format\",\"kind\":\"missing format contract\",\"text\":\"makes a new, empty store of the running release's version ... otherwise the store must open for reading and writing and carry the store version of the running release\",\"question\":\"What store engine and on-disk format are used, where is the store version recorded, and what exact checks constitute opening it successfully for reading and writing?\",\"options\":[\"Declare a specific transactional database engine and schema/version marker\",\"Leave the backend to the implementation but standardize a compatibility probe\",\"Use a release-specific opaque store format\"],\"default_guess\":\"Declare a specific transactional database engine with a schema-version record and an explicit read/write transaction probe.\",\"unit\":\"A17\"},{\"subject\":\"temporary store filename\",\"kind\":\"missing declaration\",\"text\":\"under a temporary name — the store's name with a suffix the release declares\",\"question\":\"What suffix is declared, and how is collision with a legitimate configured store name or another process prevented?\",\"options\":[\"Use one fixed reserved suffix\",\"Use a random suffix and record it\",\"Use a process-specific suffix\"],\"default_guess\":\"Use one fixed reserved suffix and reject a configured store name that itself ends in that suffix.\",\"unit\":\"A17\"},{\"subject\":\"backup encryption format\",\"kind\":\"missing cryptographic contract\",\"text\":\"Each backup is encrypted with the backup key ... A backup cannot be read without the key it was made with.\",\"question\":\"Which authenticated-encryption algorithm, nonce-generation rule, key derivation or key-size rule, and versioned ciphertext format are required?\",\"options\":[\"Use a declared AEAD scheme with random nonces and a versioned envelope\",\"Use an encryption library's implementation-selected default\",\"Rely only on host disk encryption\"],\"default_guess\":\"Use a versioned AEAD envelope with a declared algorithm, random nonce and authenticated metadata, deriving a fixed-size key from the configured backup key with a declared KDF.\",\"unit\":\"A18\"},{\"subject\":\"readable backup record and metadata integrity\",\"kind\":\"format and integrity gap\",\"text\":\"It records, readable without its key, its instant, the release that made it, the last audit sequence number it holds and a digest of the key ... a file whose record cannot be read counting as none\",\"question\":\"What is the exact encoding of this unencrypted record, what ranges and canonical forms are valid, and how is it authenticated so tampering cannot change retention age, release, sequence number or key identity without detection?\",\"options\":[\"Define a canonical authenticated header bound as AEAD associated data\",\"Use an unauthenticated plaintext header and rely on the encrypted store check\",\"Store metadata in the filename only\"],\"default_guess\":\"Use a versioned canonical header authenticated as associated data by the backup's AEAD tag.\",\"unit\":\"A18\"},{\"subject\":\"backup-key digest\",\"kind\":\"undefined digest\",\"text\":\"a digest of the key it was made with (never the key)\",\"question\":\"Which digest construction and representation identify a backup key, and is it a plain hash, keyed identifier or salted fingerprint?\",\"options\":[\"A declared cryptographic hash of the decoded key\",\"A random key identifier configured alongside the key\",\"A keyed or salted fingerprint stored in the header\"],\"default_guess\":\"Use a declared cryptographic hash of the decoded key with a domain-separation label, encoded canonically.\",\"unit\":\"A18\"},{\"subject\":\"consistent backup versus live writes\",\"kind\":\"concurrency gap\",\"text\":\"A backup is a consistent copy of the store taken while Registry runs: it never holds part of a transaction.\",\"question\":\"What serialization or snapshot rule defines the backup's point in history, and may owner, service, import and audit-erasure transactions continue while the copy is being made?\",\"options\":[\"Use the store engine's transactional snapshot while writes continue\",\"Take a global store lock and block all writes for the copy\",\"Pause every request, including reads, until copying finishes\"],\"default_guess\":\"Use a transactional read snapshot at one defined instant and allow later transactions to continue concurrently.\",\"unit\":\"A18\"},{\"subject\":\"backup recorded instant\",\"kind\":\"timestamp ambiguity\",\"text\":\"It records ... its instant ... its age is counted from that instant. First, it removes ... Second, it writes the backup ... Third ... deletes every kept backup made more than 30 × 24 hours before the instant this step starts\",\"question\":\"At what event is the backup's recorded instant fixed: run start, snapshot creation, completion of encryption/checking, or rename to the kept name?\",\"options\":[\"The instant the consistent store snapshot is established\",\"The start of the run\",\"The successful rename to the kept name\"],\"default_guess\":\"Use the instant at which the consistent store snapshot is established.\",\"unit\":\"A18\"},{\"subject\":\"audit sequence in a backup of an empty store\",\"kind\":\"missing base value\",\"text\":\"records ... the last audit sequence number it holds ... checks ... that its audit log ends at the recorded sequence number\",\"question\":\"What sequence value is recorded and checked when the store has never written an audit entry?\",\"options\":[\"Record zero\",\"Record null or an explicit no-entry marker\",\"Omit the field\"],\"default_guess\":\"Record zero and define an empty audit log as ending at sequence zero.\",\"unit\":\"A18\"},{\"subject\":\"backup filename prefixes and kept-name construction\",\"kind\":\"missing declaration\",\"text\":\"Kept and temporary names begin with two different prefixes the release declares ... A kept name is made from the backup's instant and is never overwritten\",\"question\":\"What are the two prefixes and the exact canonical conversion from an instant to a kept filename, including precision and characters, so collision and ordering behavior are deterministic?\",\"options\":[\"Declare fixed prefixes and a UTC timestamp with sufficient fixed precision\",\"Use a timestamp plus a random suffix\",\"Use a monotonically allocated filename independent of the timestamp\"],\"default_guess\":\"Declare fixed reserved prefixes and use a canonical UTC timestamp including microseconds, rejecting a collision as already specified.\",\"unit\":\"A18\"},{\"subject\":\"store integrity check used for tested backup\",\"kind\":\"undefined verification\",\"text\":\"checks that it is the store version of its release, that the store's own integrity check passes and that its audit log ends at the recorded sequence number\",\"question\":\"What exact integrity check must the store provide, and which failures or incomplete checks make the backup fail?\",\"options\":[\"Declare the database engine's full integrity-check operation and require a successful complete result\",\"Use only the ability to open and query the store\",\"Use a release-defined checksum over every logical record\"],\"default_guess\":\"Require the chosen store engine's full integrity-check operation, followed by explicit schema-version and audit-tail queries, all completing successfully.\",\"unit\":\"A18\"}]}",
+ "set_aside": []
+}
