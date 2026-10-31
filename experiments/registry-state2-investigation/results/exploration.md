@@ -1,0 +1,390 @@
+# Bounded exploration (depth 6)
+
+Every sequence of events of the alphabet up to the depth, from an empty store, branching on every outcome the texts allow; states are deduplicated. Past a conflict, exploration goes on with the outcomes that break the fewest passages. Past an out-of-store step it goes on with the outcomes the texts allow. A finding is reported once per signature (kind, event, conflicting passages), with its shortest trace.
+
+## V0 `fd254d08` — State 2 draft
+
+- `default`: 481 states, 3728 transitions, 1 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 invariant, A15 invariant (erasure entry)}; {A14 invariant, R0-66}; {A14 r3, A15 invariant (erasure entry)}; {A14 r3, R0-66}; {A15 invariant (erasure entry), A15 r6}; {A15 r6, R0-66}; {A14 r5, A15 invariant (erasure entry), R0-37/M09 conf}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+- `default +restore`: 2395 states, 14112 transitions, 5 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 invariant, A15 invariant (erasure entry)}; {A14 invariant, R0-66}; {A14 r3, A15 invariant (erasure entry)}; {A14 r3, R0-66}; {A15 invariant (erasure entry), A15 r6}; {A15 r6, R0-66}; {A14 r5, A15 invariant (erasure entry), R0-37/M09 conf}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+  - **out_of_store** after backup → create(request_id=r1, name=A) → restore → create(request_id=r1, name=A)
+  - **out_of_store** after create(request_id=r1, name=A) → backup → correct(name=B) → restore → correct(name=B)
+  - **out_of_store** after create(request_id=r1, name=A) → backup → correct(name=B) → restore → archive(confirmed)
+  - **out_of_store** after create(request_id=r1, name=A) → tick → backup → correct(name=B) → restore → erase_before(today, confirmed)
+- `own_entry_is_change=True`: 18580 states, 64576 transitions, 1 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A15 invariant (erasure entry), A15 r6}; {A15 r6, R0-66} — resolution: state2_edit
+- `a15_inv_presupposes=False`: 481 states, 3728 transitions, 1 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 invariant, R0-66}; {A14 r3, R0-66}; {A15 r6, R0-66}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+- `a14_inv_reading=literal`: 481 states, 3728 transitions, 7 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 invariant, A15 invariant (erasure entry)}; {A14 invariant, R0-66}; {A14 r3, A15 invariant (erasure entry)}; {A14 r3, R0-66}; {A15 invariant (erasure entry), A15 r6}; {A15 r6, R0-66}; {A14 r5, A15 invariant (erasure entry), R0-37/M09 conf}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+  - **conflict** after create(request_id=r1, name=A) → tick → erase_before(today, confirmed) — {A14 invariant} — resolution: state2_edit
+  - **conflict** after create(request_id=r1, name=A) → tick → erase_before(today, confirmed) → create(request_id=r1, name=A) — {A14 invariant} — resolution: state2_edit
+  - **conflict** after create(request_id=r1, name=A) → tick → erase_before(today, confirmed) → correct(name=A) — {A14 invariant} — resolution: state2_edit
+  - **conflict** after create(request_id=r1, name=A) → tick → erase_before(today, confirmed) → archive(confirmed) — {A14 invariant} — resolution: state2_edit
+  - **conflict** after create(request_id=r1, name=A) → tick → erase_before(today, confirmed) → read_log — {A14 invariant} — resolution: state2_edit
+  - **conflict** after create(request_id=r1, name=A) → tick → erase_before(today, confirmed) → erase_before(today, confirmed) — {A14 invariant}; {A14 r3, A15 invariant (erasure entry)}; {A14 r3, R0-66}; {A15 invariant (erasure entry), A15 r6}; {A15 r6, R0-66}; {A14 r5, A15 invariant (erasure entry), R0-37/M09 conf}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+- `durable_counter=outside_store`: 481 states, 3728 transitions, 1 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 invariant, A15 invariant (erasure entry)}; {A14 invariant, R0-66}; {A14 r3, A15 invariant (erasure entry)}; {A14 r3, R0-66}; {A15 invariant (erasure entry), A15 r6}; {A15 r6, R0-66}; {A14 r5, A15 invariant (erasure entry), R0-37/M09 conf}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+- `durable_counter=outside_store +restore`: 2395 states, 14112 transitions, 5 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 invariant, A15 invariant (erasure entry)}; {A14 invariant, R0-66}; {A14 r3, A15 invariant (erasure entry)}; {A14 r3, R0-66}; {A15 invariant (erasure entry), A15 r6}; {A15 r6, R0-66}; {A14 r5, A15 invariant (erasure entry), R0-37/M09 conf}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+  - **out_of_store** after backup → create(request_id=r1, name=A) → restore → create(request_id=r1, name=A)
+  - **out_of_store** after create(request_id=r1, name=A) → backup → correct(name=B) → restore → correct(name=B)
+  - **out_of_store** after create(request_id=r1, name=A) → backup → correct(name=B) → restore → archive(confirmed)
+  - **out_of_store** after create(request_id=r1, name=A) → tick → backup → correct(name=B) → restore → erase_before(today, confirmed)
+- `v0_counter=unstated`: 481 states, 3728 transitions, 1 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 invariant, A15 invariant (erasure entry)}; {A14 invariant, R0-66}; {A14 r3, A15 invariant (erasure entry)}; {A14 r3, R0-66}; {A15 invariant (erasure entry), A15 r6}; {A15 r6, R0-66}; {A14 r5, A15 invariant (erasure entry), R0-37/M09 conf}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+- `v0_counter=unstated +restore`: 2395 states, 14112 transitions, 5 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 invariant, A15 invariant (erasure entry)}; {A14 invariant, R0-66}; {A14 r3, A15 invariant (erasure entry)}; {A14 r3, R0-66}; {A15 invariant (erasure entry), A15 r6}; {A15 r6, R0-66}; {A14 r5, A15 invariant (erasure entry), R0-37/M09 conf}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+  - **out_of_store** after backup → create(request_id=r1, name=A) → restore → create(request_id=r1, name=A)
+  - **out_of_store** after create(request_id=r1, name=A) → backup → correct(name=B) → restore → correct(name=B)
+  - **out_of_store** after create(request_id=r1, name=A) → backup → correct(name=B) → restore → archive(confirmed)
+  - **out_of_store** after create(request_id=r1, name=A) → tick → backup → correct(name=B) → restore → erase_before(today, confirmed)
+- `a05_covers_empty_erasure=True`: 481 states, 3728 transitions, 1 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A05 r2, A15 invariant (erasure entry)}; {A05 r2, R0-66}; {A14 invariant, A15 invariant (erasure entry)}; {A14 invariant, R0-66}; {A14 r3, A15 invariant (erasure entry)}; {A14 r3, R0-66}; {A15 invariant (erasure entry), A15 r6}; {A15 r6, R0-66}; {A14 r5, A15 invariant (erasure entry), R0-37/M09 conf}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+- `id_formats_strict=True`: 481 states, 3728 transitions, 2 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 invariant, A15 invariant (erasure entry)}; {A14 invariant, Identity formats (strict)}; {A14 invariant, R0-66}; {A14 r3, A15 invariant (erasure entry)}; {A14 r3, Identity formats (strict)}; {A14 r3, R0-66}; {A14 r5, Identity formats (strict)}; {A15 invariant (erasure entry), A15 r6}; {A15 r6, Identity formats (strict)}; {A15 r6, R0-66}; {A14 r5, A15 invariant (erasure entry), R0-37/M09 conf}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+  - **conflict** after create(request_id=r1, name=A) → archive(confirmed) → archive(confirmed) — {A05 r2, Identity formats (strict)}; {A14 invariant, Identity formats (strict)}; {A14 r3, Identity formats (strict)}; {A14 r5, Identity formats (strict)} — resolution: state2_edit
+
+## V1 `cb9f12d3` — answers to round 1
+
+- `default`: 481 states, 3728 transitions, 1 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 invariant, A15 invariant (erasure entry)}; {A14 invariant, R0-66}; {A14 r3, A15 invariant (erasure entry)}; {A14 r3, R0-66}; {A15 invariant (erasure entry), A15 r6}; {A15 r6, R0-66}; {A14 r5, A15 invariant (erasure entry), R0-37/M09 conf}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+- `default +restore`: 2624 states, 14634 transitions, 6 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 invariant, A15 invariant (erasure entry)}; {A14 invariant, R0-66}; {A14 r3, A15 invariant (erasure entry)}; {A14 r3, R0-66}; {A15 invariant (erasure entry), A15 r6}; {A15 r6, R0-66}; {A14 r5, A15 invariant (erasure entry), R0-37/M09 conf}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+  - **conflict** after backup → create(request_id=r1, name=A) → restore → create(request_id=r1, name=A) — {A14 invariant, A15 r5, M09 never reused (global)}; {A14 r1, A15 r5, M09 never reused (global)}; {A15 r5, M09 never reused (global), R0-58 changes} — resolution: state2_mechanism
+  - **conflict** after backup → create(request_id=r1, name=A) → restore → erase_before(today, confirmed) — {A14 invariant, A15 invariant (erasure entry)}; {A14 invariant, R0-66}; {A14 r3, A15 invariant (erasure entry)}; {A14 r3, R0-66}; {A15 invariant (erasure entry), A15 r6}; {A15 r6, R0-66}; {A14 r5, A15 invariant (erasure entry), R0-37/M09 conf}; {A14 r5, R0-37/M09 conf, R0-66}; {A15 invariant (erasure entry), A15 r5, M09 never reused (global)}; {A15 r5, M09 never reused (global), R0-66} — resolution: state2_mechanism
+  - **conflict** after create(request_id=r1, name=A) → backup → correct(name=B) → restore → correct(name=B) — {A14 invariant, A15 r5, M09 never reused (global)}; {A14 r1, A15 r5, M09 never reused (global)}; {A15 r5, M09 never reused (global), R0-58 changes} — resolution: state2_mechanism
+  - **conflict** after create(request_id=r1, name=A) → backup → correct(name=B) → restore → archive(confirmed) — {A14 invariant, A15 r5, M09 never reused (global)}; {A14 r1, A15 r5, M09 never reused (global)}; {A14 r5, A15 r5, M09 never reused (global)}; {A15 r5, M09 never reused (global), R0-58 changes} — resolution: state2_mechanism
+  - **conflict** after create(request_id=r1, name=A) → tick → backup → correct(name=B) → restore → erase_before(today, confirmed) — {A14 invariant, A15 r5, M09 never reused (global)}; {A14 r1, A15 r5, M09 never reused (global)}; {A14 r5, A15 r5, M09 never reused (global)}; {A15 invariant (erasure entry), A15 r5, M09 never reused (global)}; {A15 r5, M09 never reused (global), R0-58 changes}; {A15 r5, M09 never reused (global), R0-66} — resolution: state2_mechanism
+- `own_entry_is_change=True`: 18580 states, 64576 transitions, 1 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A15 invariant (erasure entry), A15 r6}; {A15 r6, R0-66} — resolution: state2_edit
+- `a15_inv_presupposes=False`: 481 states, 3728 transitions, 1 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 invariant, R0-66}; {A14 r3, R0-66}; {A15 r6, R0-66}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+- `a14_inv_reading=literal`: 481 states, 3728 transitions, 7 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 invariant, A15 invariant (erasure entry)}; {A14 invariant, R0-66}; {A14 r3, A15 invariant (erasure entry)}; {A14 r3, R0-66}; {A15 invariant (erasure entry), A15 r6}; {A15 r6, R0-66}; {A14 r5, A15 invariant (erasure entry), R0-37/M09 conf}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+  - **conflict** after create(request_id=r1, name=A) → tick → erase_before(today, confirmed) — {A14 invariant} — resolution: state2_edit
+  - **conflict** after create(request_id=r1, name=A) → tick → erase_before(today, confirmed) → create(request_id=r1, name=A) — {A14 invariant} — resolution: state2_edit
+  - **conflict** after create(request_id=r1, name=A) → tick → erase_before(today, confirmed) → correct(name=A) — {A14 invariant} — resolution: state2_edit
+  - **conflict** after create(request_id=r1, name=A) → tick → erase_before(today, confirmed) → archive(confirmed) — {A14 invariant} — resolution: state2_edit
+  - **conflict** after create(request_id=r1, name=A) → tick → erase_before(today, confirmed) → read_log — {A14 invariant} — resolution: state2_edit
+  - **conflict** after create(request_id=r1, name=A) → tick → erase_before(today, confirmed) → erase_before(today, confirmed) — {A14 invariant}; {A14 r3, A15 invariant (erasure entry)}; {A14 r3, R0-66}; {A15 invariant (erasure entry), A15 r6}; {A15 r6, R0-66}; {A14 r5, A15 invariant (erasure entry), R0-37/M09 conf}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+- `durable_counter=outside_store`: 481 states, 3728 transitions, 1 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 invariant, A15 invariant (erasure entry)}; {A14 invariant, R0-66}; {A14 r3, A15 invariant (erasure entry)}; {A14 r3, R0-66}; {A15 invariant (erasure entry), A15 r6}; {A15 r6, R0-66}; {A14 r5, A15 invariant (erasure entry), R0-37/M09 conf}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+- `durable_counter=outside_store +restore`: 2395 states, 14112 transitions, 1 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 invariant, A15 invariant (erasure entry)}; {A14 invariant, R0-66}; {A14 r3, A15 invariant (erasure entry)}; {A14 r3, R0-66}; {A15 invariant (erasure entry), A15 r6}; {A15 r6, R0-66}; {A14 r5, A15 invariant (erasure entry), R0-37/M09 conf}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+- `v0_counter=unstated`: 481 states, 3728 transitions, 1 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 invariant, A15 invariant (erasure entry)}; {A14 invariant, R0-66}; {A14 r3, A15 invariant (erasure entry)}; {A14 r3, R0-66}; {A15 invariant (erasure entry), A15 r6}; {A15 r6, R0-66}; {A14 r5, A15 invariant (erasure entry), R0-37/M09 conf}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+- `v0_counter=unstated +restore`: 2624 states, 14634 transitions, 6 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 invariant, A15 invariant (erasure entry)}; {A14 invariant, R0-66}; {A14 r3, A15 invariant (erasure entry)}; {A14 r3, R0-66}; {A15 invariant (erasure entry), A15 r6}; {A15 r6, R0-66}; {A14 r5, A15 invariant (erasure entry), R0-37/M09 conf}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+  - **conflict** after backup → create(request_id=r1, name=A) → restore → create(request_id=r1, name=A) — {A14 invariant, A15 r5, M09 never reused (global)}; {A14 r1, A15 r5, M09 never reused (global)}; {A15 r5, M09 never reused (global), R0-58 changes} — resolution: state2_mechanism
+  - **conflict** after backup → create(request_id=r1, name=A) → restore → erase_before(today, confirmed) — {A14 invariant, A15 invariant (erasure entry)}; {A14 invariant, R0-66}; {A14 r3, A15 invariant (erasure entry)}; {A14 r3, R0-66}; {A15 invariant (erasure entry), A15 r6}; {A15 r6, R0-66}; {A14 r5, A15 invariant (erasure entry), R0-37/M09 conf}; {A14 r5, R0-37/M09 conf, R0-66}; {A15 invariant (erasure entry), A15 r5, M09 never reused (global)}; {A15 r5, M09 never reused (global), R0-66} — resolution: state2_mechanism
+  - **conflict** after create(request_id=r1, name=A) → backup → correct(name=B) → restore → correct(name=B) — {A14 invariant, A15 r5, M09 never reused (global)}; {A14 r1, A15 r5, M09 never reused (global)}; {A15 r5, M09 never reused (global), R0-58 changes} — resolution: state2_mechanism
+  - **conflict** after create(request_id=r1, name=A) → backup → correct(name=B) → restore → archive(confirmed) — {A14 invariant, A15 r5, M09 never reused (global)}; {A14 r1, A15 r5, M09 never reused (global)}; {A14 r5, A15 r5, M09 never reused (global)}; {A15 r5, M09 never reused (global), R0-58 changes} — resolution: state2_mechanism
+  - **conflict** after create(request_id=r1, name=A) → tick → backup → correct(name=B) → restore → erase_before(today, confirmed) — {A14 invariant, A15 r5, M09 never reused (global)}; {A14 r1, A15 r5, M09 never reused (global)}; {A14 r5, A15 r5, M09 never reused (global)}; {A15 invariant (erasure entry), A15 r5, M09 never reused (global)}; {A15 r5, M09 never reused (global), R0-58 changes}; {A15 r5, M09 never reused (global), R0-66} — resolution: state2_mechanism
+- `a05_covers_empty_erasure=True`: 481 states, 3728 transitions, 1 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A05 r2, A15 invariant (erasure entry)}; {A05 r2, R0-66}; {A14 invariant, A15 invariant (erasure entry)}; {A14 invariant, R0-66}; {A14 r3, A15 invariant (erasure entry)}; {A14 r3, R0-66}; {A15 invariant (erasure entry), A15 r6}; {A15 r6, R0-66}; {A14 r5, A15 invariant (erasure entry), R0-37/M09 conf}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+- `id_formats_strict=True`: 481 states, 3728 transitions, 2 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 invariant, A15 invariant (erasure entry)}; {A14 invariant, Identity formats (strict)}; {A14 invariant, R0-66}; {A14 r3, A15 invariant (erasure entry)}; {A14 r3, Identity formats (strict)}; {A14 r3, R0-66}; {A14 r5, Identity formats (strict)}; {A15 invariant (erasure entry), A15 r6}; {A15 r6, Identity formats (strict)}; {A15 r6, R0-66}; {A14 r5, A15 invariant (erasure entry), R0-37/M09 conf}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+  - **conflict** after create(request_id=r1, name=A) → archive(confirmed) → archive(confirmed) — {A05 r2, Identity formats (strict)}; {A14 invariant, Identity formats (strict)}; {A14 r3, Identity formats (strict)}; {A14 r5, Identity formats (strict)} — resolution: state2_edit
+
+## V2 `12e2d9ea` — answers to round 4 (invariant weakened)
+
+- `default`: 481 states, 3728 transitions, 1 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 invariant, R0-66}; {A14 r3, R0-66}; {A15 r6, R0-66}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+- `default +restore`: 2624 states, 14634 transitions, 6 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 invariant, R0-66}; {A14 r3, R0-66}; {A15 r6, R0-66}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+  - **conflict** after backup → create(request_id=r1, name=A) → restore → create(request_id=r1, name=A) — {A14 invariant, A15 r5, M09 never reused (global)}; {A14 r1, A15 r5, M09 never reused (global)}; {A15 r5, M09 never reused (global), R0-58 changes} — resolution: state2_mechanism
+  - **conflict** after backup → create(request_id=r1, name=A) → restore → erase_before(today, confirmed) — {A14 invariant, R0-66}; {A14 r3, R0-66}; {A15 r6, R0-66}; {A14 r5, R0-37/M09 conf, R0-66}; {A15 r5, M09 never reused (global), R0-66} — resolution: state2_mechanism
+  - **conflict** after create(request_id=r1, name=A) → backup → correct(name=B) → restore → correct(name=B) — {A14 invariant, A15 r5, M09 never reused (global)}; {A14 r1, A15 r5, M09 never reused (global)}; {A15 r5, M09 never reused (global), R0-58 changes} — resolution: state2_mechanism
+  - **conflict** after create(request_id=r1, name=A) → backup → correct(name=B) → restore → archive(confirmed) — {A14 invariant, A15 r5, M09 never reused (global)}; {A14 r1, A15 r5, M09 never reused (global)}; {A14 r5, A15 r5, M09 never reused (global)}; {A15 r5, M09 never reused (global), R0-58 changes} — resolution: state2_mechanism
+  - **conflict** after create(request_id=r1, name=A) → tick → backup → correct(name=B) → restore → erase_before(today, confirmed) — {A14 invariant, A15 r5, M09 never reused (global)}; {A14 r1, A15 r5, M09 never reused (global)}; {A14 r5, A15 r5, M09 never reused (global)}; {A15 invariant (erasure entry), A15 r5, M09 never reused (global)}; {A15 r5, M09 never reused (global), R0-58 changes}; {A15 r5, M09 never reused (global), R0-66} — resolution: state2_mechanism
+- `own_entry_is_change=True`: 18580 states, 64576 transitions, 1 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A15 r6, R0-66} — resolution: state2_edit
+- `a15_inv_presupposes=False`: 481 states, 3728 transitions, 1 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 invariant, R0-66}; {A14 r3, R0-66}; {A15 r6, R0-66}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+- `a14_inv_reading=literal`: 481 states, 3728 transitions, 7 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 invariant, R0-66}; {A14 r3, R0-66}; {A15 r6, R0-66}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+  - **conflict** after create(request_id=r1, name=A) → tick → erase_before(today, confirmed) — {A14 invariant} — resolution: state2_edit
+  - **conflict** after create(request_id=r1, name=A) → tick → erase_before(today, confirmed) → create(request_id=r1, name=A) — {A14 invariant} — resolution: state2_edit
+  - **conflict** after create(request_id=r1, name=A) → tick → erase_before(today, confirmed) → correct(name=A) — {A14 invariant} — resolution: state2_edit
+  - **conflict** after create(request_id=r1, name=A) → tick → erase_before(today, confirmed) → archive(confirmed) — {A14 invariant} — resolution: state2_edit
+  - **conflict** after create(request_id=r1, name=A) → tick → erase_before(today, confirmed) → read_log — {A14 invariant} — resolution: state2_edit
+  - **conflict** after create(request_id=r1, name=A) → tick → erase_before(today, confirmed) → erase_before(today, confirmed) — {A14 invariant}; {A14 r3, R0-66}; {A15 r6, R0-66}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+- `durable_counter=outside_store`: 481 states, 3728 transitions, 1 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 invariant, R0-66}; {A14 r3, R0-66}; {A15 r6, R0-66}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+- `durable_counter=outside_store +restore`: 2395 states, 14112 transitions, 1 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 invariant, R0-66}; {A14 r3, R0-66}; {A15 r6, R0-66}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+- `v0_counter=unstated`: 481 states, 3728 transitions, 1 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 invariant, R0-66}; {A14 r3, R0-66}; {A15 r6, R0-66}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+- `v0_counter=unstated +restore`: 2624 states, 14634 transitions, 6 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 invariant, R0-66}; {A14 r3, R0-66}; {A15 r6, R0-66}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+  - **conflict** after backup → create(request_id=r1, name=A) → restore → create(request_id=r1, name=A) — {A14 invariant, A15 r5, M09 never reused (global)}; {A14 r1, A15 r5, M09 never reused (global)}; {A15 r5, M09 never reused (global), R0-58 changes} — resolution: state2_mechanism
+  - **conflict** after backup → create(request_id=r1, name=A) → restore → erase_before(today, confirmed) — {A14 invariant, R0-66}; {A14 r3, R0-66}; {A15 r6, R0-66}; {A14 r5, R0-37/M09 conf, R0-66}; {A15 r5, M09 never reused (global), R0-66} — resolution: state2_mechanism
+  - **conflict** after create(request_id=r1, name=A) → backup → correct(name=B) → restore → correct(name=B) — {A14 invariant, A15 r5, M09 never reused (global)}; {A14 r1, A15 r5, M09 never reused (global)}; {A15 r5, M09 never reused (global), R0-58 changes} — resolution: state2_mechanism
+  - **conflict** after create(request_id=r1, name=A) → backup → correct(name=B) → restore → archive(confirmed) — {A14 invariant, A15 r5, M09 never reused (global)}; {A14 r1, A15 r5, M09 never reused (global)}; {A14 r5, A15 r5, M09 never reused (global)}; {A15 r5, M09 never reused (global), R0-58 changes} — resolution: state2_mechanism
+  - **conflict** after create(request_id=r1, name=A) → tick → backup → correct(name=B) → restore → erase_before(today, confirmed) — {A14 invariant, A15 r5, M09 never reused (global)}; {A14 r1, A15 r5, M09 never reused (global)}; {A14 r5, A15 r5, M09 never reused (global)}; {A15 invariant (erasure entry), A15 r5, M09 never reused (global)}; {A15 r5, M09 never reused (global), R0-58 changes}; {A15 r5, M09 never reused (global), R0-66} — resolution: state2_mechanism
+- `a05_covers_empty_erasure=True`: 481 states, 3728 transitions, 1 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A05 r2, R0-66}; {A14 invariant, R0-66}; {A14 r3, R0-66}; {A15 r6, R0-66}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+- `id_formats_strict=True`: 481 states, 3728 transitions, 2 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 invariant, Identity formats (strict)}; {A14 invariant, R0-66}; {A14 r3, Identity formats (strict)}; {A14 r3, R0-66}; {A14 r5, Identity formats (strict)}; {A15 r6, Identity formats (strict)}; {A15 r6, R0-66}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+  - **conflict** after create(request_id=r1, name=A) → archive(confirmed) → archive(confirmed) — {A05 r2, Identity formats (strict)}; {A14 invariant, Identity formats (strict)}; {A14 r3, Identity formats (strict)}; {A14 r5, Identity formats (strict)} — resolution: state2_edit
+
+## V2r `37beed89` — answers to round 5 (numbers issued again after a restore)
+
+- `default`: 481 states, 3728 transitions, 1 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 invariant, R0-66}; {A14 r3, R0-66}; {A15 r6, R0-66}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+- `default +restore`: 2624 states, 14634 transitions, 6 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 invariant, R0-66}; {A14 r3, R0-66}; {A15 r6, R0-66}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+  - **conflict** after backup → create(request_id=r1, name=A) → restore → create(request_id=r1, name=A) — {A14 invariant, A15 r5, M09 never reused (global)}; {A14 r1, A15 r5, M09 never reused (global)}; {A15 r5, M09 never reused (global), R0-58 changes} — resolution: state2_mechanism
+  - **conflict** after backup → create(request_id=r1, name=A) → restore → erase_before(today, confirmed) — {A14 invariant, R0-66}; {A14 r3, R0-66}; {A15 r6, R0-66}; {A14 r5, R0-37/M09 conf, R0-66}; {A15 r5, M09 never reused (global), R0-66} — resolution: state2_mechanism
+  - **conflict** after create(request_id=r1, name=A) → backup → correct(name=B) → restore → correct(name=B) — {A14 invariant, A15 r5, M09 never reused (global)}; {A14 r1, A15 r5, M09 never reused (global)}; {A15 r5, M09 never reused (global), R0-58 changes} — resolution: state2_mechanism
+  - **conflict** after create(request_id=r1, name=A) → backup → correct(name=B) → restore → archive(confirmed) — {A14 invariant, A15 r5, M09 never reused (global)}; {A14 r1, A15 r5, M09 never reused (global)}; {A14 r5, A15 r5, M09 never reused (global)}; {A15 r5, M09 never reused (global), R0-58 changes} — resolution: state2_mechanism
+  - **conflict** after create(request_id=r1, name=A) → tick → backup → correct(name=B) → restore → erase_before(today, confirmed) — {A14 invariant, A15 r5, M09 never reused (global)}; {A14 r1, A15 r5, M09 never reused (global)}; {A14 r5, A15 r5, M09 never reused (global)}; {A15 invariant (erasure entry), A15 r5, M09 never reused (global)}; {A15 r5, M09 never reused (global), R0-58 changes}; {A15 r5, M09 never reused (global), R0-66} — resolution: state2_mechanism
+- `own_entry_is_change=True`: 18580 states, 64576 transitions, 1 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A15 r6, R0-66} — resolution: state2_edit
+- `a15_inv_presupposes=False`: 481 states, 3728 transitions, 1 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 invariant, R0-66}; {A14 r3, R0-66}; {A15 r6, R0-66}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+- `a14_inv_reading=literal`: 481 states, 3728 transitions, 7 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 invariant, R0-66}; {A14 r3, R0-66}; {A15 r6, R0-66}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+  - **conflict** after create(request_id=r1, name=A) → tick → erase_before(today, confirmed) — {A14 invariant} — resolution: state2_edit
+  - **conflict** after create(request_id=r1, name=A) → tick → erase_before(today, confirmed) → create(request_id=r1, name=A) — {A14 invariant} — resolution: state2_edit
+  - **conflict** after create(request_id=r1, name=A) → tick → erase_before(today, confirmed) → correct(name=A) — {A14 invariant} — resolution: state2_edit
+  - **conflict** after create(request_id=r1, name=A) → tick → erase_before(today, confirmed) → archive(confirmed) — {A14 invariant} — resolution: state2_edit
+  - **conflict** after create(request_id=r1, name=A) → tick → erase_before(today, confirmed) → read_log — {A14 invariant} — resolution: state2_edit
+  - **conflict** after create(request_id=r1, name=A) → tick → erase_before(today, confirmed) → erase_before(today, confirmed) — {A14 invariant}; {A14 r3, R0-66}; {A15 r6, R0-66}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+- `durable_counter=outside_store`: 481 states, 3728 transitions, 1 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 invariant, R0-66}; {A14 r3, R0-66}; {A15 r6, R0-66}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+- `durable_counter=outside_store +restore`: 2624 states, 14634 transitions, 6 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 invariant, R0-66}; {A14 r3, R0-66}; {A15 r6, R0-66}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+  - **conflict** after backup → create(request_id=r1, name=A) → restore → create(request_id=r1, name=A) — {A14 invariant, A15 r5, M09 never reused (global)}; {A14 r1, A15 r5, M09 never reused (global)}; {A15 r5, M09 never reused (global), R0-58 changes} — resolution: state2_mechanism
+  - **conflict** after backup → create(request_id=r1, name=A) → restore → erase_before(today, confirmed) — {A14 invariant, R0-66}; {A14 r3, R0-66}; {A15 r6, R0-66}; {A14 r5, R0-37/M09 conf, R0-66}; {A15 r5, M09 never reused (global), R0-66} — resolution: state2_mechanism
+  - **conflict** after create(request_id=r1, name=A) → backup → correct(name=B) → restore → correct(name=B) — {A14 invariant, A15 r5, M09 never reused (global)}; {A14 r1, A15 r5, M09 never reused (global)}; {A15 r5, M09 never reused (global), R0-58 changes} — resolution: state2_mechanism
+  - **conflict** after create(request_id=r1, name=A) → backup → correct(name=B) → restore → archive(confirmed) — {A14 invariant, A15 r5, M09 never reused (global)}; {A14 r1, A15 r5, M09 never reused (global)}; {A14 r5, A15 r5, M09 never reused (global)}; {A15 r5, M09 never reused (global), R0-58 changes} — resolution: state2_mechanism
+  - **conflict** after create(request_id=r1, name=A) → tick → backup → correct(name=B) → restore → erase_before(today, confirmed) — {A14 invariant, A15 r5, M09 never reused (global)}; {A14 r1, A15 r5, M09 never reused (global)}; {A14 r5, A15 r5, M09 never reused (global)}; {A15 invariant (erasure entry), A15 r5, M09 never reused (global)}; {A15 r5, M09 never reused (global), R0-58 changes}; {A15 r5, M09 never reused (global), R0-66} — resolution: state2_mechanism
+- `v0_counter=unstated`: 481 states, 3728 transitions, 1 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 invariant, R0-66}; {A14 r3, R0-66}; {A15 r6, R0-66}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+- `v0_counter=unstated +restore`: 2624 states, 14634 transitions, 6 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 invariant, R0-66}; {A14 r3, R0-66}; {A15 r6, R0-66}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+  - **conflict** after backup → create(request_id=r1, name=A) → restore → create(request_id=r1, name=A) — {A14 invariant, A15 r5, M09 never reused (global)}; {A14 r1, A15 r5, M09 never reused (global)}; {A15 r5, M09 never reused (global), R0-58 changes} — resolution: state2_mechanism
+  - **conflict** after backup → create(request_id=r1, name=A) → restore → erase_before(today, confirmed) — {A14 invariant, R0-66}; {A14 r3, R0-66}; {A15 r6, R0-66}; {A14 r5, R0-37/M09 conf, R0-66}; {A15 r5, M09 never reused (global), R0-66} — resolution: state2_mechanism
+  - **conflict** after create(request_id=r1, name=A) → backup → correct(name=B) → restore → correct(name=B) — {A14 invariant, A15 r5, M09 never reused (global)}; {A14 r1, A15 r5, M09 never reused (global)}; {A15 r5, M09 never reused (global), R0-58 changes} — resolution: state2_mechanism
+  - **conflict** after create(request_id=r1, name=A) → backup → correct(name=B) → restore → archive(confirmed) — {A14 invariant, A15 r5, M09 never reused (global)}; {A14 r1, A15 r5, M09 never reused (global)}; {A14 r5, A15 r5, M09 never reused (global)}; {A15 r5, M09 never reused (global), R0-58 changes} — resolution: state2_mechanism
+  - **conflict** after create(request_id=r1, name=A) → tick → backup → correct(name=B) → restore → erase_before(today, confirmed) — {A14 invariant, A15 r5, M09 never reused (global)}; {A14 r1, A15 r5, M09 never reused (global)}; {A14 r5, A15 r5, M09 never reused (global)}; {A15 invariant (erasure entry), A15 r5, M09 never reused (global)}; {A15 r5, M09 never reused (global), R0-58 changes}; {A15 r5, M09 never reused (global), R0-66} — resolution: state2_mechanism
+- `a05_covers_empty_erasure=True`: 481 states, 3728 transitions, 1 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A05 r2, R0-66}; {A14 invariant, R0-66}; {A14 r3, R0-66}; {A15 r6, R0-66}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+- `id_formats_strict=True`: 481 states, 3728 transitions, 2 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 invariant, Identity formats (strict)}; {A14 invariant, R0-66}; {A14 r3, Identity formats (strict)}; {A14 r3, R0-66}; {A14 r5, Identity formats (strict)}; {A15 r6, Identity formats (strict)}; {A15 r6, R0-66}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+  - **conflict** after create(request_id=r1, name=A) → archive(confirmed) → archive(confirmed) — {A05 r2, Identity formats (strict)}; {A14 invariant, Identity formats (strict)}; {A14 r3, Identity formats (strict)}; {A14 r5, Identity formats (strict)} — resolution: state2_edit
+
+## V3a `9cb4051e` — answers to round 6 (instance marks)
+
+- `default`: 963 states, 5920 transitions, 4 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 invariant, R0-66}; {A14 r3, R0-66}; {A15 r6, R0-66}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+  - **ambiguity** after create(request_id=r1, name=A) → correct(name=B, store fails) → correct(name=B) — entry #2 without confirmation id / entry #3 without confirmation id
+  - **ambiguity** after create(request_id=r1, name=A) → correct(name=B, store fails) → archive(confirmed) — entry #2 with confirmation id / entry #3 with confirmation id
+  - **ambiguity** after create(request_id=r1, name=A) → correct(name=B, store fails) → tick → erase_before(today, confirmed) — entry #2 with confirmation id / entry #3 with confirmation id
+- `default +restore`: 3604 states, 18972 transitions, 4 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 invariant, R0-66}; {A14 r3, R0-66}; {A15 r6, R0-66}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+  - **ambiguity** after create(request_id=r1, name=A) → correct(name=B, store fails) → correct(name=B) — entry #2 without confirmation id / entry #3 without confirmation id
+  - **ambiguity** after create(request_id=r1, name=A) → correct(name=B, store fails) → archive(confirmed) — entry #2 with confirmation id / entry #3 with confirmation id
+  - **ambiguity** after create(request_id=r1, name=A) → correct(name=B, store fails) → tick → erase_before(today, confirmed) — entry #2 with confirmation id / entry #3 with confirmation id
+- `own_entry_is_change=True`: 24571 states, 78752 transitions, 4 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A15 r6, R0-66} — resolution: state2_edit
+  - **ambiguity** after create(request_id=r1, name=A) → correct(name=B, store fails) → correct(name=B) — entry #2 without confirmation id / entry #3 without confirmation id
+  - **ambiguity** after create(request_id=r1, name=A) → correct(name=B, store fails) → archive(confirmed) — entry #2 with confirmation id / entry #3 with confirmation id
+  - **ambiguity** after create(request_id=r1, name=A) → correct(name=B, store fails) → tick → erase_before(today, confirmed) — entry #2 with confirmation id / entry #3 with confirmation id
+- `a15_inv_presupposes=False`: 963 states, 5920 transitions, 4 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 invariant, R0-66}; {A14 r3, R0-66}; {A15 r6, R0-66}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+  - **ambiguity** after create(request_id=r1, name=A) → correct(name=B, store fails) → correct(name=B) — entry #2 without confirmation id / entry #3 without confirmation id
+  - **ambiguity** after create(request_id=r1, name=A) → correct(name=B, store fails) → archive(confirmed) — entry #2 with confirmation id / entry #3 with confirmation id
+  - **ambiguity** after create(request_id=r1, name=A) → correct(name=B, store fails) → tick → erase_before(today, confirmed) — entry #2 with confirmation id / entry #3 with confirmation id
+- `a14_inv_reading=literal`: 963 states, 5920 transitions, 9 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 invariant, R0-66}; {A14 r3, R0-66}; {A15 r6, R0-66}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+  - **ambiguity** after create(request_id=r1, name=A) → correct(name=B, store fails) → correct(name=B) — entry #2 without confirmation id / entry #3 without confirmation id
+  - **ambiguity** after create(request_id=r1, name=A) → correct(name=B, store fails) → archive(confirmed) — entry #2 with confirmation id / entry #3 with confirmation id
+  - **conflict** after create(request_id=r1, name=A) → tick → erase_before(today, confirmed) — {A14 invariant} — resolution: state2_edit
+  - **conflict** after create(request_id=r1, name=A) → tick → erase_before(today, confirmed) → create(request_id=r1, name=A) — {A14 invariant} — resolution: state2_edit
+  - **conflict** after create(request_id=r1, name=A) → tick → erase_before(today, confirmed) → correct(name=A) — {A14 invariant} — resolution: state2_edit
+  - **conflict** after create(request_id=r1, name=A) → tick → erase_before(today, confirmed) → archive(confirmed) — {A14 invariant} — resolution: state2_edit
+  - **conflict** after create(request_id=r1, name=A) → tick → erase_before(today, confirmed) → read_log — {A14 invariant} — resolution: state2_edit
+  - **conflict** after create(request_id=r1, name=A) → tick → erase_before(today, confirmed) → erase_before(today, confirmed) — {A14 invariant}; {A14 r3, R0-66}; {A15 r6, R0-66}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+- `durable_counter=outside_store`: 963 states, 5920 transitions, 4 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 invariant, R0-66}; {A14 r3, R0-66}; {A15 r6, R0-66}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+  - **ambiguity** after create(request_id=r1, name=A) → correct(name=B, store fails) → correct(name=B) — entry #2 without confirmation id / entry #3 without confirmation id
+  - **ambiguity** after create(request_id=r1, name=A) → correct(name=B, store fails) → archive(confirmed) — entry #2 with confirmation id / entry #3 with confirmation id
+  - **ambiguity** after create(request_id=r1, name=A) → correct(name=B, store fails) → tick → erase_before(today, confirmed) — entry #2 with confirmation id / entry #3 with confirmation id
+- `durable_counter=outside_store +restore`: 3604 states, 18972 transitions, 4 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 invariant, R0-66}; {A14 r3, R0-66}; {A15 r6, R0-66}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+  - **ambiguity** after create(request_id=r1, name=A) → correct(name=B, store fails) → correct(name=B) — entry #2 without confirmation id / entry #3 without confirmation id
+  - **ambiguity** after create(request_id=r1, name=A) → correct(name=B, store fails) → archive(confirmed) — entry #2 with confirmation id / entry #3 with confirmation id
+  - **ambiguity** after create(request_id=r1, name=A) → correct(name=B, store fails) → tick → erase_before(today, confirmed) — entry #2 with confirmation id / entry #3 with confirmation id
+- `v0_counter=unstated`: 963 states, 5920 transitions, 4 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 invariant, R0-66}; {A14 r3, R0-66}; {A15 r6, R0-66}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+  - **ambiguity** after create(request_id=r1, name=A) → correct(name=B, store fails) → correct(name=B) — entry #2 without confirmation id / entry #3 without confirmation id
+  - **ambiguity** after create(request_id=r1, name=A) → correct(name=B, store fails) → archive(confirmed) — entry #2 with confirmation id / entry #3 with confirmation id
+  - **ambiguity** after create(request_id=r1, name=A) → correct(name=B, store fails) → tick → erase_before(today, confirmed) — entry #2 with confirmation id / entry #3 with confirmation id
+- `v0_counter=unstated +restore`: 3604 states, 18972 transitions, 4 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 invariant, R0-66}; {A14 r3, R0-66}; {A15 r6, R0-66}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+  - **ambiguity** after create(request_id=r1, name=A) → correct(name=B, store fails) → correct(name=B) — entry #2 without confirmation id / entry #3 without confirmation id
+  - **ambiguity** after create(request_id=r1, name=A) → correct(name=B, store fails) → archive(confirmed) — entry #2 with confirmation id / entry #3 with confirmation id
+  - **ambiguity** after create(request_id=r1, name=A) → correct(name=B, store fails) → tick → erase_before(today, confirmed) — entry #2 with confirmation id / entry #3 with confirmation id
+- `a05_covers_empty_erasure=True`: 963 states, 5920 transitions, 4 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A05 r2, R0-66}; {A14 invariant, R0-66}; {A14 r3, R0-66}; {A15 r6, R0-66}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+  - **ambiguity** after create(request_id=r1, name=A) → correct(name=B, store fails) → correct(name=B) — entry #2 without confirmation id / entry #3 without confirmation id
+  - **ambiguity** after create(request_id=r1, name=A) → correct(name=B, store fails) → archive(confirmed) — entry #2 with confirmation id / entry #3 with confirmation id
+  - **ambiguity** after create(request_id=r1, name=A) → correct(name=B, store fails) → tick → erase_before(today, confirmed) — entry #2 with confirmation id / entry #3 with confirmation id
+- `id_formats_strict=True`: 963 states, 5920 transitions, 5 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 invariant, Identity formats (strict)}; {A14 invariant, R0-66}; {A14 r3, Identity formats (strict)}; {A14 r3, R0-66}; {A14 r5, Identity formats (strict)}; {A15 r6, Identity formats (strict)}; {A15 r6, R0-66}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+  - **ambiguity** after create(request_id=r1, name=A) → correct(name=B, store fails) → correct(name=B) — entry #2 without confirmation id / entry #3 without confirmation id
+  - **ambiguity** after create(request_id=r1, name=A) → correct(name=B, store fails) → archive(confirmed) — entry #2 with confirmation id / entry #3 with confirmation id
+  - **conflict** after create(request_id=r1, name=A) → archive(confirmed) → archive(confirmed) — {A05 r2, Identity formats (strict)}; {A14 invariant, Identity formats (strict)}; {A14 r3, Identity formats (strict)}; {A14 r5, Identity formats (strict)} — resolution: state2_edit
+  - **ambiguity** after create(request_id=r1, name=A) → correct(name=B, store fails) → tick → erase_before(today, confirmed) — entry #2 with confirmation id / entry #3 with confirmation id
+
+## V3b `af52b3fa` — answers to round 7 (marks; a failed change skips)
+
+- `default`: 895 states, 5696 transitions, 1 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 invariant, R0-66}; {A14 r3, R0-66}; {A15 r6, R0-66}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+- `default +restore`: 3479 states, 18612 transitions, 1 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 invariant, R0-66}; {A14 r3, R0-66}; {A15 r6, R0-66}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+- `own_entry_is_change=True`: 24337 states, 78336 transitions, 1 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A15 r6, R0-66} — resolution: state2_edit
+- `a15_inv_presupposes=False`: 895 states, 5696 transitions, 1 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 invariant, R0-66}; {A14 r3, R0-66}; {A15 r6, R0-66}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+- `a14_inv_reading=literal`: 895 states, 5696 transitions, 7 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 invariant, R0-66}; {A14 r3, R0-66}; {A15 r6, R0-66}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+  - **conflict** after create(request_id=r1, name=A) → tick → erase_before(today, confirmed) — {A14 invariant} — resolution: state2_edit
+  - **conflict** after create(request_id=r1, name=A) → tick → erase_before(today, confirmed) → create(request_id=r1, name=A) — {A14 invariant} — resolution: state2_edit
+  - **conflict** after create(request_id=r1, name=A) → tick → erase_before(today, confirmed) → correct(name=A) — {A14 invariant} — resolution: state2_edit
+  - **conflict** after create(request_id=r1, name=A) → tick → erase_before(today, confirmed) → archive(confirmed) — {A14 invariant} — resolution: state2_edit
+  - **conflict** after create(request_id=r1, name=A) → tick → erase_before(today, confirmed) → read_log — {A14 invariant} — resolution: state2_edit
+  - **conflict** after create(request_id=r1, name=A) → tick → erase_before(today, confirmed) → erase_before(today, confirmed) — {A14 invariant}; {A14 r3, R0-66}; {A15 r6, R0-66}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+- `durable_counter=outside_store`: 895 states, 5696 transitions, 1 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 invariant, R0-66}; {A14 r3, R0-66}; {A15 r6, R0-66}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+- `durable_counter=outside_store +restore`: 3479 states, 18612 transitions, 1 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 invariant, R0-66}; {A14 r3, R0-66}; {A15 r6, R0-66}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+- `v0_counter=unstated`: 895 states, 5696 transitions, 1 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 invariant, R0-66}; {A14 r3, R0-66}; {A15 r6, R0-66}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+- `v0_counter=unstated +restore`: 3479 states, 18612 transitions, 1 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 invariant, R0-66}; {A14 r3, R0-66}; {A15 r6, R0-66}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+- `a05_covers_empty_erasure=True`: 895 states, 5696 transitions, 1 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A05 r2, R0-66}; {A14 invariant, R0-66}; {A14 r3, R0-66}; {A15 r6, R0-66}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+- `id_formats_strict=True`: 895 states, 5696 transitions, 2 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 invariant, Identity formats (strict)}; {A14 invariant, R0-66}; {A14 r3, Identity formats (strict)}; {A14 r3, R0-66}; {A14 r5, Identity formats (strict)}; {A15 r6, Identity formats (strict)}; {A15 r6, R0-66}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+  - **conflict** after create(request_id=r1, name=A) → archive(confirmed) → archive(confirmed) — {A05 r2, Identity formats (strict)}; {A14 invariant, Identity formats (strict)}; {A14 r3, Identity formats (strict)}; {A14 r5, Identity formats (strict)} — resolution: state2_edit
+
+## V4 `67589757` — answers to round 9 and R0-89
+
+- `default`: 481 states, 3728 transitions, 1 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 invariant, R0-66}; {A14 r3, R0-66}; {A15 r6, R0-66}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+- `default +restore`: 2395 states, 14112 transitions, 1 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 invariant, R0-66}; {A14 r3, R0-66}; {A15 r6, R0-66}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+- `own_entry_is_change=True`: 18580 states, 64576 transitions, 1 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A15 r6, R0-66} — resolution: state2_edit
+- `a15_inv_presupposes=False`: 481 states, 3728 transitions, 1 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 invariant, R0-66}; {A14 r3, R0-66}; {A15 r6, R0-66}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+- `a14_inv_reading=literal`: 481 states, 3728 transitions, 7 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 invariant, R0-66}; {A14 r3, R0-66}; {A15 r6, R0-66}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+  - **conflict** after create(request_id=r1, name=A) → tick → erase_before(today, confirmed) — {A14 invariant} — resolution: state2_edit
+  - **conflict** after create(request_id=r1, name=A) → tick → erase_before(today, confirmed) → create(request_id=r1, name=A) — {A14 invariant} — resolution: state2_edit
+  - **conflict** after create(request_id=r1, name=A) → tick → erase_before(today, confirmed) → correct(name=A) — {A14 invariant} — resolution: state2_edit
+  - **conflict** after create(request_id=r1, name=A) → tick → erase_before(today, confirmed) → archive(confirmed) — {A14 invariant} — resolution: state2_edit
+  - **conflict** after create(request_id=r1, name=A) → tick → erase_before(today, confirmed) → read_log — {A14 invariant} — resolution: state2_edit
+  - **conflict** after create(request_id=r1, name=A) → tick → erase_before(today, confirmed) → erase_before(today, confirmed) — {A14 invariant}; {A14 r3, R0-66}; {A15 r6, R0-66}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+- `durable_counter=outside_store`: 481 states, 3728 transitions, 1 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 invariant, R0-66}; {A14 r3, R0-66}; {A15 r6, R0-66}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+- `durable_counter=outside_store +restore`: 2395 states, 14112 transitions, 1 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 invariant, R0-66}; {A14 r3, R0-66}; {A15 r6, R0-66}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+- `v0_counter=unstated`: 481 states, 3728 transitions, 1 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 invariant, R0-66}; {A14 r3, R0-66}; {A15 r6, R0-66}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+- `v0_counter=unstated +restore`: 2395 states, 14112 transitions, 1 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 invariant, R0-66}; {A14 r3, R0-66}; {A15 r6, R0-66}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+- `a05_covers_empty_erasure=True`: 481 states, 3728 transitions, 1 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A05 r2, R0-66}; {A14 invariant, R0-66}; {A14 r3, R0-66}; {A15 r6, R0-66}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+- `id_formats_strict=True`: 481 states, 3728 transitions, 2 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 invariant, Identity formats (strict)}; {A14 invariant, R0-66}; {A14 r3, Identity formats (strict)}; {A14 r3, R0-66}; {A14 r5, Identity formats (strict)}; {A15 r6, Identity formats (strict)}; {A15 r6, R0-66}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+  - **conflict** after create(request_id=r1, name=A) → archive(confirmed) → archive(confirmed) — {A05 r2, Identity formats (strict)}; {A14 invariant, Identity formats (strict)}; {A14 r3, Identity formats (strict)}; {A14 r5, Identity formats (strict)} — resolution: state2_edit
+
+## V5 `699d18f3` — answers to round 11 (empty erasure writes its entry)
+
+- `default`: 18580 states, 64576 transitions, 1 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 r5, A15 r6}; {A14 invariant, A14 r5, R0-37/M09 conf}; {A14 r5, A15 invariant (erasure entry), R0-37/M09 conf}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+- `default +restore`: 45029 states, 149364 transitions, 1 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 r5, A15 r6}; {A14 invariant, A14 r5, R0-37/M09 conf}; {A14 r5, A15 invariant (erasure entry), R0-37/M09 conf}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+- `own_entry_is_change=True`: 18580 states, 64576 transitions, 0 finding(s)
+- `a15_inv_presupposes=False`: 18580 states, 64576 transitions, 1 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 r5, A15 r6}; {A14 invariant, A14 r5, R0-37/M09 conf}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+- `a14_inv_reading=literal`: 18580 states, 64576 transitions, 7 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 r5, A15 r6}; {A14 invariant, A14 r5, R0-37/M09 conf}; {A14 r5, A15 invariant (erasure entry), R0-37/M09 conf}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+  - **conflict** after create(request_id=r1, name=A) → tick → erase_before(today, confirmed) — {A14 invariant} — resolution: state2_edit
+  - **conflict** after create(request_id=r1, name=A) → tick → erase_before(today, confirmed) → create(request_id=r1, name=A) — {A14 invariant} — resolution: state2_edit
+  - **conflict** after create(request_id=r1, name=A) → tick → erase_before(today, confirmed) → correct(name=A) — {A14 invariant} — resolution: state2_edit
+  - **conflict** after create(request_id=r1, name=A) → tick → erase_before(today, confirmed) → archive(confirmed) — {A14 invariant} — resolution: state2_edit
+  - **conflict** after create(request_id=r1, name=A) → tick → erase_before(today, confirmed) → read_log — {A14 invariant} — resolution: state2_edit
+  - **conflict** after create(request_id=r1, name=A) → tick → erase_before(today, confirmed) → erase_before(today, confirmed) — {A14 invariant}; {A14 r5, A15 r6}; {A14 r5, A15 invariant (erasure entry), R0-37/M09 conf}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+- `durable_counter=outside_store`: 18580 states, 64576 transitions, 1 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 r5, A15 r6}; {A14 invariant, A14 r5, R0-37/M09 conf}; {A14 r5, A15 invariant (erasure entry), R0-37/M09 conf}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+- `durable_counter=outside_store +restore`: 45029 states, 149364 transitions, 1 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 r5, A15 r6}; {A14 invariant, A14 r5, R0-37/M09 conf}; {A14 r5, A15 invariant (erasure entry), R0-37/M09 conf}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+- `v0_counter=unstated`: 18580 states, 64576 transitions, 1 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 r5, A15 r6}; {A14 invariant, A14 r5, R0-37/M09 conf}; {A14 r5, A15 invariant (erasure entry), R0-37/M09 conf}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+- `v0_counter=unstated +restore`: 45029 states, 149364 transitions, 1 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 r5, A15 r6}; {A14 invariant, A14 r5, R0-37/M09 conf}; {A14 r5, A15 invariant (erasure entry), R0-37/M09 conf}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+- `a05_covers_empty_erasure=True`: 18580 states, 64576 transitions, 1 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A05 r2, A14 invariant}; {A05 r2, A15 invariant (erasure entry)}; {A05 r2, A15 r6}; {A05 r2, R0-66}; {A14 r5, A15 r6}; {A14 invariant, A14 r5, R0-37/M09 conf}; {A14 r5, A15 invariant (erasure entry), R0-37/M09 conf}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+- `id_formats_strict=True`: 18580 states, 64576 transitions, 2 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 r5, A15 r6}; {A14 r5, Identity formats (strict)}; {A14 invariant, A14 r5, R0-37/M09 conf}; {A14 r5, A15 invariant (erasure entry), R0-37/M09 conf}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+  - **conflict** after create(request_id=r1, name=A) → archive(confirmed) → archive(confirmed) — {A05 r2, Identity formats (strict)}; {A14 invariant, Identity formats (strict)}; {A14 r3, Identity formats (strict)}; {A14 r5, Identity formats (strict)} — resolution: state2_edit
+
+## H1 `67589757` — CONSTRUCTED: V4 + new A15 rule 6 only
+
+- `default`: 481 states, 3728 transitions, 1 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 invariant, A15 r6}; {A14 invariant, R0-66}; {A14 r3, A15 r6}; {A14 r3, R0-66}; {A14 r5, A15 r6}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+- `default +restore`: 2395 states, 14112 transitions, 1 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 invariant, A15 r6}; {A14 invariant, R0-66}; {A14 r3, A15 r6}; {A14 r3, R0-66}; {A14 r5, A15 r6}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+- `own_entry_is_change=True`: 18580 states, 64576 transitions, 0 finding(s)
+- `a15_inv_presupposes=False`: 481 states, 3728 transitions, 1 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 invariant, A15 r6}; {A14 invariant, R0-66}; {A14 r3, A15 r6}; {A14 r3, R0-66}; {A14 r5, A15 r6}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+- `a14_inv_reading=literal`: 1215 states, 5232 transitions, 7 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 invariant, A15 r6}; {A14 invariant, R0-66}; {A14 r3, A15 r6}; {A14 r3, R0-66}; {A14 r5, A15 r6}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+  - **conflict** after create(request_id=r1, name=A) → tick → erase_before(today, confirmed) — {A14 invariant} — resolution: state2_edit
+  - **conflict** after create(request_id=r1, name=A) → tick → erase_before(today, confirmed) → create(request_id=r1, name=A) — {A14 invariant} — resolution: state2_edit
+  - **conflict** after create(request_id=r1, name=A) → tick → erase_before(today, confirmed) → correct(name=A) — {A14 invariant} — resolution: state2_edit
+  - **conflict** after create(request_id=r1, name=A) → tick → erase_before(today, confirmed) → archive(confirmed) — {A14 invariant} — resolution: state2_edit
+  - **conflict** after create(request_id=r1, name=A) → tick → erase_before(today, confirmed) → read_log — {A14 invariant} — resolution: state2_edit
+  - **conflict** after create(request_id=r1, name=A) → tick → erase_before(today, confirmed) → erase_before(today, confirmed) — {A14 invariant}; {A14 r3, A15 r6}; {A14 r3, R0-66}; {A14 r5, A15 r6}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+- `durable_counter=outside_store`: 481 states, 3728 transitions, 1 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 invariant, A15 r6}; {A14 invariant, R0-66}; {A14 r3, A15 r6}; {A14 r3, R0-66}; {A14 r5, A15 r6}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+- `durable_counter=outside_store +restore`: 2395 states, 14112 transitions, 1 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 invariant, A15 r6}; {A14 invariant, R0-66}; {A14 r3, A15 r6}; {A14 r3, R0-66}; {A14 r5, A15 r6}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+- `v0_counter=unstated`: 481 states, 3728 transitions, 1 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 invariant, A15 r6}; {A14 invariant, R0-66}; {A14 r3, A15 r6}; {A14 r3, R0-66}; {A14 r5, A15 r6}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+- `v0_counter=unstated +restore`: 2395 states, 14112 transitions, 1 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 invariant, A15 r6}; {A14 invariant, R0-66}; {A14 r3, A15 r6}; {A14 r3, R0-66}; {A14 r5, A15 r6}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+- `a05_covers_empty_erasure=True`: 481 states, 3728 transitions, 1 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A05 r2, A15 r6}; {A05 r2, R0-66}; {A14 invariant, A15 r6}; {A14 invariant, R0-66}; {A14 r3, A15 r6}; {A14 r3, R0-66}; {A14 r5, A15 r6}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+- `id_formats_strict=True`: 18580 states, 64576 transitions, 2 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A14 invariant, A15 r6}; {A14 invariant, Identity formats (strict)}; {A14 invariant, R0-66}; {A14 r3, A15 r6}; {A14 r3, Identity formats (strict)}; {A14 r3, R0-66}; {A14 r5, A15 r6}; {A14 r5, Identity formats (strict)}; {A14 r5, R0-37/M09 conf, R0-66} — resolution: state2_edit
+  - **conflict** after create(request_id=r1, name=A) → archive(confirmed) → archive(confirmed) — {A05 r2, Identity formats (strict)}; {A14 invariant, Identity formats (strict)}; {A14 r3, Identity formats (strict)}; {A14 r5, Identity formats (strict)} — resolution: state2_edit
+
+## V6 `b31d9eac` — answers to round 12 (A14 rule 5 follows); current
+
+- `default`: 18580 states, 64576 transitions, 0 finding(s)
+- `default +restore`: 45029 states, 149364 transitions, 0 finding(s)
+- `own_entry_is_change=True`: 18580 states, 64576 transitions, 0 finding(s)
+- `a15_inv_presupposes=False`: 18580 states, 64576 transitions, 0 finding(s)
+- `a14_inv_reading=literal`: 18580 states, 64576 transitions, 5 finding(s)
+  - **conflict** after create(request_id=r1, name=A) → tick → erase_before(today, confirmed) — {A14 invariant} — resolution: state2_edit
+  - **conflict** after create(request_id=r1, name=A) → tick → erase_before(today, confirmed) → create(request_id=r1, name=A) — {A14 invariant} — resolution: state2_edit
+  - **conflict** after create(request_id=r1, name=A) → tick → erase_before(today, confirmed) → correct(name=A) — {A14 invariant} — resolution: state2_edit
+  - **conflict** after create(request_id=r1, name=A) → tick → erase_before(today, confirmed) → archive(confirmed) — {A14 invariant} — resolution: state2_edit
+  - **conflict** after create(request_id=r1, name=A) → tick → erase_before(today, confirmed) → read_log — {A14 invariant} — resolution: state2_edit
+- `durable_counter=outside_store`: 18580 states, 64576 transitions, 0 finding(s)
+- `durable_counter=outside_store +restore`: 45029 states, 149364 transitions, 0 finding(s)
+- `v0_counter=unstated`: 18580 states, 64576 transitions, 0 finding(s)
+- `v0_counter=unstated +restore`: 45029 states, 149364 transitions, 0 finding(s)
+- `a05_covers_empty_erasure=True`: 18580 states, 64576 transitions, 1 finding(s)
+  - **conflict** after erase_before(today, confirmed) — {A05 r2, A14 invariant}; {A05 r2, A14 r5}; {A05 r2, A15 invariant (erasure entry)}; {A05 r2, A15 r6}; {A05 r2, R0-66} — resolution: state2_edit
+- `id_formats_strict=True`: 18580 states, 64576 transitions, 1 finding(s)
+  - **conflict** after create(request_id=r1, name=A) → archive(confirmed) → archive(confirmed) — {A05 r2, Identity formats (strict)}; {A14 invariant, Identity formats (strict)}; {A14 r3, Identity formats (strict)}; {A14 r5, Identity formats (strict)} — resolution: state2_edit
+

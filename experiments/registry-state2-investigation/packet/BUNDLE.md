@@ -1,0 +1,356 @@
+# Investigation packet — what an audit erasure leaves in the log
+
+A compact packet for continuing work on one State 2 behaviour of Registry
+without rereading the case. Every `[q:<key>]` is a verbatim passage pinned in
+`model/sources.py` to a commit and file; `check_quotes.py` verifies all of them
+mechanically. Addresses are `file:line` at the current text `cf675e5c`
+(`origin/agent/registry`, 2026-10-31) unless another commit is named.
+
+Text versions used below (full list and the rounds that read each one:
+`results/rounds.md`):
+
+| name | commit | what changed for this question | rounds that read it |
+|---|---|---|---|
+| V0 | `fd254d08` | State 2 draft: an empty erasure writes nothing | 1 |
+| V1 | `cb9f12d3` | today in UTC; last number kept "durably" | 2–4 |
+| V2 | `12e2d9ea` | A15 invariant weakened to agree with rule 6 | 5 |
+| V4 | `67589757` | numbering per store history (R0-89) | 10–11 |
+| V5 | `699d18f3` | rule 6 reversed; A14 rule 3 excepts the erasure | 12 |
+| V6 | `b31d9eac` | A14 rule 5 excepts the erasure too — current | 13–34 |
+
+## 1. The behaviour question
+
+> When the owner, confirming, erases the audit entries before a date and no
+> entry is older than that date, does the erasure leave an entry of its own,
+> and does that entry carry a confirmation id?
+
+And three questions that depend on it: does a no-op repeat of another
+confirmed action write an entry or mint an id; is a second erasure with the
+same date a "repeat"; are sequence numbers and confirmation ids fresh for it.
+
+## 2. Accepted bases (State 0, State 1)
+
+State 0 (`00_product.md`), owner-accepted:
+
+- R0-66, the promise (2026-10-27, after State 0 round 18 T10), unchanged in
+  every version since `fd254d08`: `00_product.md:934`
+  [q:R0-66.text] — "that erasure leaves an entry of its own naming the date".
+  The Primary actions row says the same with no condition on what was removed:
+  `00_product.md:173` [q:R0-66.row].
+- R0-37, the audit record: "a confirmation id where the owner confirmed"
+  `00_product.md:588` [q:R0-37.audit].
+- R0-58, what is recorded: significant changes of state, "erasures and
+  anonymisations" `00_product.md:851` [q:R0-58.scope]; reads are not recorded
+  `00_product.md:853` [q:R0-58.reads].
+- R0-60 lists "a log entry for every erasure, without the erased values"
+  `00_product.md:887` [q:R0-60.every_erasure]. **Not used as a basis**: the
+  bullet sits in R0-60's list of retention tools for customer and project data
+  (contact data, archived projects); it does not speak of the audit erasure,
+  which R0-66 introduced later and which narrows R0-60.
+- R0-89 (2026-10-31, after State 2 rounds 5–9) scopes the numbering to a
+  store's history `00_product.md:1180` [q:R0-89.history]. It is a **new owner
+  promise made during State 2**, see §6.
+
+State 1 (`01_models.md`), M09 AuditEntry and Identity formats:
+
+- M09 lists "the erasure of old entries itself (R0-66)" among the changes it
+  records `01_models.md:655` [q:M09.erasure_writes]; its subject is "none …
+  whose fact is the owner's date" `01_models.md:692` [q:M09.subject_none];
+  it carries "the confirmation id where the owner confirmed"
+  `01_models.md:698` [q:M09.conf].
+- Numbering: "never reused within that history" `01_models.md:665`
+  [q:M09.seq.history] (before `cce33f0b`: "never reused", unscoped
+  [q:M09.seq.global]).
+- Identity formats: Registry mints a confirmation id when the owner confirms
+  an action that asks for confirmation — erasing old audit entries among them
+  — "and writes it once into the audit entry of that action (M09)"
+  `01_models.md:67` [q:ID.conf_minted]. State 1 round 01 T7 judged *whether a
+  confirmed no-op mints an id* carried to State 2 (`later_state`)
+  [q:SO1.r1T7]; so this sentence is not read as deciding the no-op case.
+
+## 3. Related State 2 rules and what they constrain
+
+| rule (current) | address | constraint on this question |
+|---|---|---|
+| A14 r1 | `02_rules_audit.md:12` [q:A14.r1] | an accepted change M09 lists writes its entry in the same transaction |
+| A14 r2 | `:15` [q:A14.r2] | a refused action writes nothing — a refused confirmation, a later date (A15 r3) |
+| A14 r3 | `:18` [q:A14.r3.new] | a no-change action writes nothing, **but for the erasure** |
+| A14 r5 | `:22–26` [q:A14.r5.old] [q:A14.r5.new] | an id only for a confirmed change, **but for the erasure, which always writes its entry with its id** |
+| A14 invariant | `:33` [q:A14.inv.new] | entry ⇔ accepted change or erasure (read at the transaction, §6) |
+| A15 r1 | `:57` [q:A15.r1] | only the dated erasure removes entries |
+| A15 r3 | `:62` [q:A15.r3] | date ≤ today (UTC); entries before 00:00 UTC of it are removed |
+| A15 r4 | `:65` [q:A15.r4] | the erasure's own entry is written after the removal: never removed by itself |
+| A15 r5 | `:68` [q:A15.r5.history] | the entry takes the next number of the store's history; an erasure does not lower it |
+| A15 r6 | `:73` [q:A15.r6.new] | an empty erasure writes its entry naming the date, with its id |
+| A15 invariants | `:81–83` [q:A15.inv.seq] [q:A15.inv.removed] [q:A15.inv.entry.v5] | ordered numbers; nothing older remains; the erasure's entry exists |
+| A05 r1, r2 | `02_rules_records.md:254–262` [q:A05.r1.head] [q:A05.r1.tail] [q:A05.r2] | a *listed* transition to the state already held writes nothing, mints nothing — the erasure is **not** in the list |
+| A03 r4, A01 r4 | `02_rules_records.md:152`, `:39` [q:A03.r4] [q:A01.r4] | an equal correction / a create's repeat changes nothing and writes nothing |
+| A04 r6 | `02_rules_records.md:202–217` [q:A04.r6.first] [q:A04.r6.stage1] [q:A04.r6.order] | a refused confirmation answers at stage 1, a later date at stage 4, before anything is written |
+| A13 r6 | `02_rules_access.md:254–261` [q:A13.r6.used] [q:A13.r6.not_id] | the one-time confirmation *value* is used up by any submission; it is not the confirmation *id* |
+| A06 r6 | `02_rules_records.md` [q:A06.r6] | the log reads in sequence order, whatever the instants |
+
+Outside the cluster, found by the search in §7: A18 keeps "the last sequence
+number" of a store in each backup (`02_rules_installation.md:255, 281, 327`,
+[q:A18.last_seq]); A16's import is the other confirmed action whose id also
+goes into the migration closure [q:A16.import_conf].
+
+## 4. The boundary of the choice
+
+- **Already accepted (not reopened here):** an erasure leaves its own entry
+  naming the date (R0-66); confirmed actions' entries carry the id (R0-37,
+  M09); reads write nothing (R0-58); numbers are fresh within a store's
+  history (M09, R0-89); refusals write nothing (A14 r2).
+- **Decided in State 2, and consistent in V6:** the empty erasure is the one
+  accepted action that writes an entry without changing other state (A14 r3,
+  A15 r6); it mints its id (A14 r5); it is not an A05 repeat (A05 r1 is a
+  closed list); a no-op repeat of a listed transition writes nothing and mints
+  nothing (A05 r2).
+- **Would need the owner:** anything that makes the empty erasure leave no
+  trace (contradicts R0-66); a number that never repeats across a restore
+  (R0-89 scoped it to a history; §6); recording refused or no-op attempts
+  (R0-58).
+
+## 5. Admissible histories and expected outcomes
+
+Witnesses in `witnesses/witnesses.json`, run by `run.py` on every version.
+
+| witness | history (owner unless said) | expected (V6) | status |
+|---|---|---|---|
+| W01 | create A; erase before a date older than every entry | entries: create #1, erasure #2 with id | accepted (A15 test 2) |
+| W02 | create A; next day; erase before today | only the erasure's entry | accepted (A15 test 1) |
+| W03 | create A; erase before tomorrow | refused at stage 4, log unchanged | accepted (A15 test 3) |
+| W04 | create A; next day; erase before today; correct | numbers 2, 3 | accepted (A15 test 4) |
+| W05 | create A; archive (confirmed); archive again | one archive entry with id; card revision 2 | accepted (A14 test 2) |
+| W12 | create A; archive with a refused confirmation; archive | refused at stage 1; one archive entry with id | inferred |
+| W13 | create A; next day; erase before today; the same erasure again | two erasure entries, #2 and #3, two distinct ids | inferred |
+| W14 | archive; two empty erasures | three distinct ids | assumption (§6) |
+
+Observer in every case: the owner reading the log in the periodic review —
+whether the review left its trace, and which confirmation it answers to.
+
+## 6. Unknowns, assumptions, rejected readings
+
+Readings the texts leave open, each run both ways by `run.py`:
+
+- **Does an erasure's own entry count as "changing state" (A14 r1, r5)?**
+  Before V6 the result depends on it: on V5, A14 r5 contradicts A15 r6 only if
+  it does not (round 12 T7 judged a contradiction, T8 judged the entry side
+  answered — both right, on different readings). V6 is consistent either way.
+  Default: it does not (otherwise A14 r1 is circular).
+- **A14's invariant over time.** Read over the log as it stands, "entry e
+  exists <=> accepted action" fails after every erasure that removes an entry;
+  read at the action's transaction (A14 r1: "in the same transaction") it
+  holds. Default: at the transaction. Raised twice by single reviews (State 2
+  rounds 2 and 13), never judged. No behaviour differs; a test generated from
+  the formula literally would fail on a correct implementation.
+- **"the erasure entry e" in V0's invariant** presupposes an entry. Default:
+  it does (as round 4's judge read it).
+- **Is an empty erasure an A05 repeat?** Rejected: A05 r1 is a closed list
+  without it, A14 r3 names the erasure as the exception, and the reading
+  contradicts R0-66 in every version.
+- **Identity formats read as complete** (every confirmed action mints an id,
+  a no-op included). Rejected: contradicts A05 r2 / A14 test 2 in every
+  version, and State 1 round 01 T7 carried that case to State 2.
+
+Assumptions (not stated by any passage):
+
+- Confirmation ids never repeat. Identity formats says opaque, a UUID,
+  minted per confirmation; nothing says unique. Taken as the intent (W14).
+- The model's day granularity: instants inside one UTC day are not ordered
+  against the cut-off; A15 r3 cuts at 00:00 UTC, so nothing in this question
+  depends on finer instants.
+
+Out of scope here, and why: what an erasure does to backups (A18: the owner
+repeats the latest erasure after a restore, R0-89 makes it the owner's); clock
+regressions (A06 r6 orders the log by number, not instant).
+
+## 7. How the dependencies were searched
+
+1. References out of the cluster: every `A\d\d`, `R0-\d+`, `M\d\d` in A04,
+   A05, A14, A15 at `cf675e5c` (A01–A03, A08–A10, A12, A13, A22; M01, M04,
+   M09; R0-12, R0-29, R0-35, R0-46, R0-53, R0-58, R0-60, R0-66, R0-70, R0-71,
+   R0-84, R0-89). Each was opened; only those in §3 bear on the question.
+2. References into the cluster: every mention of A14, A15, R0-66 in the other
+   files — found A13 r6 (confirmation id), A18 (last number in backups, the
+   repeated erasure after a restore), A21 (security review lists).
+3. Vocabulary: "confirmation id", "sequence", "erase", "audit" across
+   `00_product.md`, `01_models.md`, `02_rules_*.md` — found R0-60's "every
+   erasure" (rejected as a basis, §2) and Identity formats (§2).
+4. History: `git log -S` and per-commit diffs of `02_rules_audit.md`, and the
+   round digests (`provenance.py`) — found the weakened invariant of V2 and the
+   two-step fix V5→V6.
+5. Rounds: every State 1 and State 2 topic about audit, confirmation ids and
+   numbering (`results/rounds.md`) — found State 1 round 01 T7 (§2) and the
+   restore numbering topics (State 1 rounds 18–29, State 2 rounds 2–9), which
+   led to R0-89.
+
+Missed by the first cluster cut and found this way: A13 r6 (value vs id),
+Identity formats (State 1 sentence on minting), A18's use of the last number,
+R0-89 as a new promise.
+
+
+## Appendix — the cited passages, verbatim
+
+- **[q:R0-66.text]** `fd254d08:examples/registry/00_product.md`
+
+  > In the periodic review the owner erases, confirming, every entry older than a date the owner gives; that erasure leaves an entry of its own naming the date. Registry erases no entry on its own.
+
+- **[q:R0-66.row]** `fd254d08:examples/registry/00_product.md`
+
+  > | erase audit entries before a date | owner, confirming | every entry older than the date the owner gives is gone; the erasure leaves an entry of its own naming the date (R0-66) | — |
+
+- **[q:R0-37.audit]** `fd254d08:examples/registry/00_product.md`
+
+  > the project or customer, the outcome, the contract and release version, and a confirmation id where the owner confirmed.
+
+- **[q:R0-58.scope]** `fd254d08:examples/registry/00_product.md`
+
+  > Registry records only significant changes of state: changes to projects and customer records, granting and revoking an agent session's projects, restricting processing and lifting it, and erasures and anonymisations.
+
+- **[q:R0-58.reads]** `fd254d08:examples/registry/00_product.md`
+
+  > Ordinary reads, agent calls and the inner steps of flows are not recorded in Registry
+
+- **[q:R0-60.every_erasure]** `fd254d08:examples/registry/00_product.md`
+
+  > a log entry for every erasure, without the erased values (R0-58).
+
+- **[q:R0-89.history]** `cf675e5c:examples/registry/00_product.md`
+
+  > Registry's guarantees — the log's numbering, the closed import — hold within each store's history
+
+- **[q:M09.erasure_writes]** `fd254d08:examples/registry/01_models.md`
+
+  > and the erasure of old entries itself (R0-66)
+
+- **[q:M09.subject_none]** `cf675e5c:examples/registry/01_models.md`
+
+  > none for an erasure of old entries, whose fact is the owner's date;
+
+- **[q:M09.conf]** `fd254d08:examples/registry/01_models.md`
+
+  > the confirmation id where the owner confirmed (R0-37; "Identity formats");
+
+- **[q:M09.seq.history]** `67589757:examples/registry/01_models.md`
+
+  > one more than the last its store's history ever wrote; never reused within
+
+- **[q:M09.seq.global]** `fd254d08:examples/registry/01_models.md`
+
+  > then one more than the last ever written; never reused, also after old
+
+- **[q:ID.conf_minted]** `cf675e5c:examples/registry/01_models.md`
+
+  > Registry mints a confirmation id when the owner confirms an action that asks for confirmation — archiving a project, erasing an archived project, the import, erasing old audit entries (Primary actions) — and writes it once into the audit entry of that action (M09)
+
+- **[q:SO1.r1T7]** `cf675e5c:examples/registry/questions/state1/round-01/summary.json`
+
+  > Whether confirmed no-op or refused actions mint confirmation ids and create AuditEntries
+
+- **[q:A14.r1]** `fd254d08:examples/registry/02_rules_audit.md`
+
+  > An entry is written by an accepted action that changes state and that M09 lists, in the same transaction as the change: if the change is not stored, neither is the entry, and the reverse.
+
+- **[q:A14.r2]** `fd254d08:examples/registry/02_rules_audit.md`
+
+  > A refused action writes no entry — a stale revision, a failed check of rights, an unknown id, a refused sign-in included.
+
+- **[q:A14.r3.new]** `699d18f3:examples/registry/02_rules_audit.md`
+
+  > An accepted action that changes nothing (A03 rule 4, A05) writes no entry, but for the erasure of old audit entries (A15 rule 6).
+
+- **[q:A14.r5.old]** `fd254d08:examples/registry/02_rules_audit.md`
+
+  > A confirmation id is minted only for an accepted, confirmed action that changes state, and is written into its entry (and, for the import, into the migration closure); a confirmed action that changes nothing mints none.
+
+- **[q:A14.r5.new]** `b31d9eac:examples/registry/02_rules_audit.md`
+
+  > a confirmed action that changes nothing mints none, but for the erasure of old audit entries, which always writes its entry with its confirmation id (A15 rule 6).
+
+- **[q:A14.inv.new]** `699d18f3:examples/registry/02_rules_audit.md`
+
+  > entry e exists <=> accepted action a in M09.actions, with changed(a) or a an erasure of old entries, and e written in the transaction of a
+
+- **[q:A15.r1]** `fd254d08:examples/registry/02_rules_audit.md`
+
+  > No action changes an entry. Entries are added by A14 and removed only by 'erase audit entries before a date' (R0-66); Registry has no other path that removes one.
+
+- **[q:A15.r3]** `cb9f12d3:examples/registry/02_rules_audit.md`
+
+  > The date of an erasure is a date not later than today, the current date in UTC; a later date is refused. Every entry whose instant is before 00:00 UTC of that date is removed.
+
+- **[q:A15.r4]** `fd254d08:examples/registry/02_rules_audit.md`
+
+  > The erasure's own entry is written after the removal, in the same transaction, with the current instant; it is therefore never removed by the erasure that wrote it.
+
+- **[q:A15.r5.history]** `67589757:examples/registry/02_rules_audit.md`
+
+  > Sequence numbers are never reused within a store's history (M09): changes that write an entry are applied one at a time, and each entry takes the number after the last that history ever wrote, kept in the store apart from the entries, so an erasure does not lower it.
+
+- **[q:A15.r6.new]** `699d18f3:examples/registry/02_rules_audit.md`
+
+  > An erasure that removes no entry still writes its own entry naming the date, with its confirmation id: R0-66 makes the erasure leave an entry of its own, whatever it removed. It is the one accepted action that writes an entry without changing other state (A14 rule 3).
+
+- **[q:A15.inv.seq]** `fd254d08:examples/registry/02_rules_audit.md`
+
+  > for entries e1 written before e2: e1.sequence < e2.sequence
+
+- **[q:A15.inv.removed]** `fd254d08:examples/registry/02_rules_audit.md`
+
+  > erase(d) accepted => no entry with instant < start_of(d) remains
+
+- **[q:A15.inv.entry.v5]** `699d18f3:examples/registry/02_rules_audit.md`
+
+  > erase(d) accepted => its erasure entry e has e.instant >= start_of(d)
+
+- **[q:A05.r1.head]** `cf675e5c:examples/registry/02_rules_records.md`
+
+  > A transition to the state a record is already in, that passes every check of A04 rule 6, is accepted and changes nothing: archiving an archived project (R0-12)
+
+- **[q:A05.r1.tail]** `cf675e5c:examples/registry/02_rules_records.md`
+
+  > clearing an active project that is already clear, registering a registered session (R0-53).
+
+- **[q:A05.r2]** `fd254d08:examples/registry/02_rules_records.md`
+
+  > Such a transition answers the record as it stands; its revision, its last-changed instant and a session's access version stay; no audit entry is written and no confirmation id is minted.
+
+- **[q:A03.r4]** `fd254d08:examples/registry/02_rules_records.md`
+
+  > A correction that gives exactly the stored facts is accepted and changes nothing: revision and last-changed instant stay, and no audit entry is written (A05).
+
+- **[q:A01.r4]** `cf675e5c:examples/registry/02_rules_records.md`
+
+  > is a repeat when the facts it supplies equal that record's current facts of the same kind: Registry answers the record as it stands now and changes nothing.
+
+- **[q:A04.r6.first]** `cf675e5c:examples/registry/02_rules_records.md`
+
+  > checks in one order, and the first failure is its answer
+
+- **[q:A04.r6.stage1]** `cf675e5c:examples/registry/02_rules_records.md`
+
+  > then for a change its CSRF value (R0-29), then a confirmation value where one is asked (A13);
+
+- **[q:A04.r6.order]** `cf675e5c:examples/registry/02_rules_records.md`
+
+  > (3) that every record the action names exists — its target and any it newly names, such as a customer; (4) the values given (A02, A08, A22); (5) the stated revision or access version (A12); (6) the record's lifecycle — archived, erased, anonymised, not in the set, a customer's eligibility, a conflict.
+
+- **[q:A13.r6.used]** `cf675e5c:examples/registry/02_rules_access.md`
+
+  > is used up by the first submission that carries it, whatever its answer; a refused submission needs the step shown again.
+
+- **[q:A13.r6.not_id]** `cf675e5c:examples/registry/02_rules_access.md`
+
+  > It is not the confirmation id, which Registry mints only when the action is accepted (A14).
+
+- **[q:A06.r6]** `cf675e5c:examples/registry/02_rules_records.md`
+
+  > 'Read the audit log': by sequence number, ascending (M09).
+
+- **[q:A18.last_seq]** `cf675e5c:examples/registry/02_rules_installation.md`
+
+  > 0 for a store that never wrote one
+
+- **[q:A16.import_conf]** `fd254d08:examples/registry/02_rules_audit.md`
+
+  > (and, for the import, into the migration closure)
