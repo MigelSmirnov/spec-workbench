@@ -781,9 +781,12 @@ the owner credential (R0-30). Every owner action is made in one. Its lifetime,
 expiry and sign-in throttling are State 2's (R0-30, carried).
 
 Facts: its identity, minted by Registry at sign-in ("Identity formats");
-written once: the instant it began; its expiry. The confirmation id of an
-action the owner confirms in it is minted per confirmation, not per session
-("Identity formats").
+written once: the instant it began, its expiry at the latest and its CSRF
+value (R0-29); changed by the owner's requests: the instant of its last
+request, its pending confirmation values and the import file uploaded in it,
+each kept until used, replaced or the session ends (State 2 A13, A16;
+owner, 2026-10-31). The confirmation id of an action the owner confirms in it
+is minted per confirmation, not per session ("Identity formats").
 
 ### Identity
 
