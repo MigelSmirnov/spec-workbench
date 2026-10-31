@@ -15,7 +15,9 @@ security review of States 0–2.
    reads it as data (A19) and answers, without changing anything, each
    project the file holds with its id and status. As the owner picks projects,
    the mapping shows for the picks only: their rooms and pointers; the display
-   name and alias each will arrive under (R0-85); the Customers the import
+   name and alias each will arrive under — its v1 name and no alias unless the
+   owner gives others (R0-85), a name being required (A02); the Customers the
+   import
    will make — one for each distinct v1 `customer_ref` a picked project names,
    which is all the file says of a customer (State 1 M04) — with the projects
    each will link (R0-80); and every malformed record and every id that
@@ -31,9 +33,10 @@ security review of States 0–2.
    step (A13 rule 6); the confirmation applies the file of that digest, the
    picks, names, aliases and Customer values the mapping showed, nothing
    else; a file no longer kept is refused and must be uploaded again.
-3. Registry checks what the picks bring in — the picked projects with their
-   rooms and pointers and the v1 values they name — and nothing else of the
-   file: records only of projects the owner did not pick are neither checked,
+3. Registry checks what the picks bring in — each picked project with the
+   rooms and pointers that name it and the v1 value it names — and nothing
+   else of the file; a room or pointer naming another project belongs to that
+   project: records only of projects the owner did not pick are neither checked,
    shown as conflicts nor imported, and take no part in the duplicate-id
    check. A file that cannot be read as the format States 5 and 6
    declare is refused whole.
@@ -43,8 +46,8 @@ security review of States 0–2.
    vocabulary, or a pointer is `withdrawn` (v1 never withdrew one, M05); a
    pointer's type is not declared or its owner service is not the type's
    (A22); the versions of a project's pointers of one type are not 1..n, or
-   more than one of them is `published`, or a `superseded` one is not lower
-   than a later version; an instant cannot be read; an `active` project has an
+   are not every one `superseded` but the highest, which is `published`; an
+   instant cannot be read; an `active` project has an
    archived instant or an `archived` one has none; a `superseded` pointer has
    no superseded instant or a `published` one has one; a record was changed,
    archived or superseded before it was created, added or published.
@@ -104,7 +107,9 @@ closure is the one proof of success.
 1. The configuration holds exactly these items and no other: the store's
    location; the backup location and the backup key (A18); the owner
    credential; one service token for each service of A09 — PresuPro, Client
-   Portal, Cabinet, Cabinet Kernel (R0-20, R0-23).
+   Portal, Cabinet, Cabinet Kernel (R0-20, R0-23) — or, for an owner-only
+   start, none of the four: Registry then serves the owner interface alone
+   and refuses every service call (A18 rule 10).
 2. Registry checks the configuration when it starts and serves nothing until
    every check passes; a failed check stops the start with a diagnostic that
    names the failed item and never its value (R0-37).
@@ -183,14 +188,18 @@ secret cannot be shared between holders.
    kept out of VM Agent's reach by the owner's administration of VM Platform
    (R0-48; Explicit exclusions); Registry does not check the host.
 9. Restoring production replaces the store with a backup, by the owner on the
-   host while Registry is stopped (Explicit exclusions). Every change after the
-   backup's instant is lost, the audit entries with it: numbering continues
-   from the backup's last number, and the lost entries exist nowhere. Before
-   any service or agent uses the restored instance again the owner repeats,
-   in the owner interface, every erasure, restriction and end of a
-   relationship made after the backup, from the owner's own record of the
-   retention review (R0-60); Registry, which no longer holds them, cannot list
-   them.
+   host while Registry is stopped (Explicit exclusions): the owner decrypts it
+   with the key it was made with, kept in the vault (rule 3). It is started by
+   the release that made it, or by a later release after that release's own
+   store migration (A17 rule 5). Every change after the backup's instant is
+   lost, the audit entries with it: numbering continues from the backup's
+   last number, and the lost entries exist nowhere.
+10. The owner first starts the restored instance owner-only (A17 rule 1), so
+   no service and no agent reaches it, and brings each Customer and project to
+   the state the owner's own record of the retention review (R0-60) gives for
+   it now — erased, restricted, ended or not — before configuring the tokens
+   and starting it again. Registry, which no longer holds those changes,
+   cannot list them or tell when this is done.
 
 ### Formal invariants
 
@@ -228,8 +237,8 @@ request text (M08) — and the import reads a file from outside.
    place it appears in, never as markup or script, whoever wrote it.
 2. The owner interface sends no script of its own (R0-29) and forbids the
    browser to run any, by its content security policy.
-3. Every value reaches the store as a bound parameter, never as part of a
-   statement.
+3. No value a caller gives ever becomes part of a query's or a command's
+   structure; how the store's backend lowers this is the backend's.
 4. The import file is read as data with a size limit State 6 sets; nothing in
    it is executed or evaluated, and a file over the limit is refused.
 
@@ -292,9 +301,28 @@ What runs is what was verified.
 1. The categories are the nine of the Workbench's security review
    (`skills/spec-authoring/SECURITY_REVIEW_EVIDENCE.md`), the catalogue every
    case is reviewed against; this review is complete for that catalogue and
-   claims nothing beyond it. That document states the questions each category
-   asks; each outcome below answers them by naming the decisions that do, or,
-   for NOT_APPLICABLE, why the category's subject is absent.
+   claims nothing beyond it. Each outcome below answers the category's
+   questions, as that catalogue states them, by naming the decisions that do,
+   or, for NOT_APPLICABLE, why the category's subject is absent:
+   - authentication_credential_abuse: guessing, credential stuffing, session
+     and token lifecycle at every human and machine boundary; scope,
+     revocation, replay, who owns the abuse controls;
+   - secrets: where credentials live, where they must never travel — source,
+     logs, diagnostics, exports — and how exposure is revoked or rotated;
+   - authorization: object-level and owner scope, privileged operations,
+     enforcement on the server independent of interface state, tied to the
+     stable identities of State 1;
+   - injection_interpreted_input: no input becomes query, command, template or
+     other interpreted structure;
+   - external_callbacks_webhooks: for each inbound callback, authenticity,
+     replay, idempotency, allowed transition;
+   - browser_boundary: output that could run in a browser, session and cookie
+     rules, allowed origins, protection of state-changing requests;
+   - files_artifacts: accepted type and size, path ownership, never executed,
+     storage isolation, who may retrieve it;
+   - concurrency: read-check-change races, single-use values, atomic
+     transitions, duplicate submissions;
+   - dependencies: which dependencies run, how they are fixed and verified.
 2. A change to a decision a category names reopens this review.
 3. Every decision a category names is accepted.
 

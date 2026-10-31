@@ -73,7 +73,8 @@ outcome but `accepted`.
 ```text
 for entries e1 written before e2: e1.sequence < e2.sequence
 erase(d) accepted => no entry with instant < start_of(d) remains
-                     and the erasure entry e has e.instant >= start_of(d)
+erase(d) accepted and removed at least one entry
+                  => its erasure entry e has e.instant >= start_of(d)
 ```
 
 ### Required tests

@@ -155,6 +155,8 @@ Registry holds only living sessions; a stale session cannot keep a grant.
 3. The owner's actions on a session — granting, revoking, changing or clearing
    the active project, answering a request, ending the session — state the
    access version the owner saw; a stale one is refused and nothing changes.
+   Kernel's 'end an agent session' states none: its agent session has ended,
+   whatever the session's access.
 4. Kernel's 'request access to a project' states none: a new request always
    replaces the pending one (R0-46) and moves the version.
 5. 'Read the session's access' answers the current version (R0-32).
@@ -220,6 +222,11 @@ sees every change as a new version.
    a value bound to another action included — the value is used up. It is not
    the confirmation id, which Registry mints only when the action is accepted
    (A14).
+7. The session's identity, its CSRF value and a confirmation value are each at
+   least 32 bytes from the operating system's random source; each is compared
+   in constant time and never appears in a URL, a log line, a diagnostic or an
+   audit entry (R0-29, R0-37). The identity travels only in the cookie, the
+   other two only in the forms the interface serves.
 
 ### Formal invariants
 

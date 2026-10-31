@@ -116,7 +116,9 @@ R0-88.
    or its store (R0-33).
 3. A release that adds a type accepts publishes of it from that release on.
 4. A release that removes a type keeps every pointer of it, with its status as
-   it was: 'list artifacts' and the agent projection still carry them.
+   it was: 'list artifacts' still carries all of them, and the agent
+   projection, which carries only `published` pointers (State 1, "Projections
+   and answers"), still carries its published one.
 5. After the removal, publishing that type and 'read the latest artifact of a
    type' for it are refused as an unknown type, and withdrawing a pointer of it
    is refused.
