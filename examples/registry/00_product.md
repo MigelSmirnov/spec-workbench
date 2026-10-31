@@ -1049,6 +1049,10 @@ in any source is created anew in production. Consumers that name an id
 production does not hold — PresuPro's estimates among them — are relinked in
 those services, not by Registry (R0-34).
 
+Narrowed by R0-89: the import is closed on the store that holds its closure;
+a store restored after a loss, from a backup made before the import, does
+not hold it.
+
 ### R0-80 — Registry is the one home of customer personal data (owner, 2026-10-27; replaces R0-06's fiscal-data clause; narrows R0-37, R0-43)
 
 A customer's living personal data — name, contact data, tax id (NIF/NIE/CIF),
@@ -1166,6 +1170,20 @@ This keeps every agent
 action on one checked path, which the GDPR review of the platform relies on
 (R0-37).
 
+### R0-89 — Restoring a lost store is disaster recovery, outside Registry's guarantees (owner, 2026-10-31, after State 2 rounds 5–9; narrows R0-58, R0-79)
+
+Registry makes daily encrypted backups and checks each one (State 2). When the
+store is lost, the owner restores the newest kept backup on the host: that is
+disaster recovery, the owner's administration (Explicit exclusions), not an
+action of Registry. The restored store begins its own history from the
+backup: every change after it is lost, the audit entries with it, and
+Registry's guarantees — the log's numbering, the closed import — hold within
+each store's history. A store lost before a checked backup holds the import
+loses the import with it, and the import may then be made again. What the
+owner repeats after a restore — erasures, restrictions, ends of a
+relationship — follows the owner's own record of the retention review
+(R0-60).
+
 ### R0-81 — The one-home rule is a target the services reach; Registry does not wait (owner, 2026-10-27, after round 23 T1; narrows R0-80)
 
 Production Registry starts without waiting for the other services. From its
@@ -1213,7 +1231,8 @@ proposed to the owner and accepted on 2026-10-27 (R0-61 to R0-73); R0-76 to
 R0-81 followed the same day, R0-82 and R0-83 answered round 24, R0-84
 round 25 and R0-85 round 26. R0-86 (2026-10-31) corrects a slip found by the
 State 1 draft; R0-87 (2026-10-31) answers State 1 round 2 T5; R0-88
-(2026-10-31) follows the State 2 draft.
+(2026-10-31) follows the State 2 draft; R0-89 (2026-10-31) follows State 2
+rounds 5–9.
 
 ## Carried to later states
 
