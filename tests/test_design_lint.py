@@ -790,3 +790,35 @@ def test_lint_delegates_context_building_to_design_index(
 
     assert len(calls) == len(report.findings)
     assert all(call[0] == project.resolve() for call in calls)
+
+
+def _code_messages(report) -> list[tuple[str, str]]:
+    return [(f.code, f.message) for f in report.findings]
+
+
+def test_a_rule_reference_must_name_a_rule_the_decision_has(tmp_path: Path) -> None:
+    _write(tmp_path / "00_product.md", "# State 0\n\n### R0-01 — A promise\n\nText.\n")
+    _write(tmp_path / "02_rules.md", _decision("A1")
+           + "\n" + _decision("A2").replace("# State 2\n", "").replace(
+               "1. Preserve evidence.", "1. Preserve evidence, as A1 rule 1 says (R0-01).\n2. Keep it."))
+    assert not [c for c in _code_messages(design_lint.lint_project(tmp_path)) if c[0].startswith("unresolved_")]
+
+    _write(tmp_path / "02_rules.md", (tmp_path / "02_rules.md").read_text(encoding="utf-8")
+           .replace("A1 rule 1 says", "A1 rules 1 and 3 say").replace("(R0-01)", "(R0-02)"))
+    found = _code_messages(design_lint.lint_project(tmp_path))
+    assert ("unresolved_rule_reference", "'A1 rules 1 and 3' names rule 3 of A1, which has rules 1–1.") in found
+    assert any(code == "unresolved_owner_decision_reference" and "'R0-02'" in message for code, message in found)
+    assert all(f.severity == "error" for f in design_lint.lint_project(tmp_path).findings
+               if f.code.startswith("unresolved_"))
+
+
+def test_owner_decision_references_are_checked_only_where_state_0_numbers_them(tmp_path: Path) -> None:
+    _write(tmp_path / "00_product.md", "# State 0\n\nNo numbered owner decisions.\n")
+    _write(tmp_path / "02_rules.md", _decision("A1").replace("1. Preserve evidence.", "1. Preserve evidence (R0-77)."))
+    assert not [c for c in _code_messages(design_lint.lint_project(tmp_path))
+                if c[0] == "unresolved_owner_decision_reference"]
+
+
+def test_a_reference_to_an_unknown_decision_is_left_to_unresolved_reference(tmp_path: Path) -> None:
+    _write(tmp_path / "02_rules.md", _decision("A1").replace("1. Preserve evidence.", "1. Preserve, as A9 rule 4 says."))
+    assert not [c for c in _code_messages(design_lint.lint_project(tmp_path)) if c[0] == "unresolved_rule_reference"]
