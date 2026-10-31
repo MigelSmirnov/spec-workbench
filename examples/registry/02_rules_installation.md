@@ -66,8 +66,11 @@ security review of States 0–2.
    import, and nothing changes (R0-50, R0-79).
 7. An accepted import stores every picked project with its rooms and pointers,
    the Customers it makes, the migration closure (M10) and its one audit entry
-   (M09) in one transaction. The import has succeeded when that transaction
-   is committed; Registry knows it by the closure.
+   (M09) in one transaction, after recording the closure in the instance
+   marks (A15). The import has succeeded when that transaction is committed;
+   Registry knows it by the closure. Right after it Registry makes a backup
+   run outside the daily schedule (A18), so a backup holding the import
+   exists.
 8. While the closure exists, uploading and confirming an import are refused
    (R0-79).
 9. A refused import may be retried with a corrected file; nothing of a refused
@@ -129,13 +132,20 @@ closure is the one proof of success.
    the owner credential, fail the start.
 5. A missing, malformed or unknown item fails the start; Registry applies no
    default to any item. The backup location must exist and let Registry create
-   and remove a file in it; otherwise the start fails. The store must open for reading and writing and carry
-   the store version of the running release; a store of another version, or
+   and remove a file in it; otherwise the start fails. The instance marks
+   there (A15) are made at the first start; marks that cannot be read fail
+   the start. The store must open for reading and writing and carry the store
+   version of the running release; a store of another version, or
    one that does not open, fails the start — bringing a store to a new version
    is a step of the release, not of the start.
 6. A presented secret is compared in constant time; no secret enters a record,
    a log line, an audit entry, a diagnostic or an answer (R0-23, R0-37).
-7. A change of the configuration takes effect at the next start (R0-20).
+7. A change of the configuration takes effect at the next start (R0-20). A
+   compromised token is revoked by replacing it and restarting. A token is a
+   bearer secret: a valid one presented again is valid, on channels that
+   reach Registry only from VM Platform or the WireGuard tunnel (R0-28,
+   R0-39); wrong tokens are refused each time without a limit, guessing 32
+   random bytes being out of reach.
 
 ### Formal invariants
 
@@ -164,8 +174,9 @@ secret cannot be shared between holders.
 1. Registry backs up its store once a day at 03:00 UTC into the backup
    location, as a consistent copy taken while it runs: a backup never holds
    part of a transaction. A run that 03:00 found Registry stopped is made when
-   it next starts, if no backup was made that UTC day; there is at most one
-   run per UTC day, and runs never overlap. A backup records, readable without
+   it next starts, if no backup was made that UTC day; besides the run after
+   an accepted import (A16), there is at most one run per UTC day, and runs
+   never overlap. A backup records, readable without
    its key, its instant, the release that made it, the last audit sequence
    number it holds and a digest of the key it was made with (never the key);
    its age is counted from that instant.
@@ -202,12 +213,12 @@ secret cannot be shared between holders.
    host while Registry is stopped (Explicit exclusions): the owner decrypts it
    with the key it was made with, kept in the vault (rule 3). It is started by
    the release that made it, or by a later release after that release's own
-   store migration (A17 rule 5). The restored store continues the history the
-   backup holds: every change after the backup's instant is lost, the audit
-   entries with it, and numbering continues from the backup's last number
-   (A15). A migration closure made after the backup is lost with the
-   projects that import brought, and the import may then be made again, which
-   restores them (A16).
+   store migration (A17 rule 5). Every change after the backup's instant is
+   lost, the audit entries with it; the instance marks are not replaced, so
+   numbering continues above every number ever written (A15) and a migration
+   closure is never lost: at start Registry writes the closure into the store
+   when the marks hold it and the store does not, and the import stays closed
+   (R0-79).
 10. The owner first starts the restored instance owner-only (A17 rule 1), so
    no service and no agent reaches it, and brings each Customer and project to
    the state the owner's own record of the retention review (R0-60) gives for
@@ -255,8 +266,11 @@ request text (M08) — and the import reads a file from outside.
    place it appears in, never as markup or script, whoever wrote it.
 2. The owner interface sends no script of its own (R0-29) and forbids the
    browser to run any, by its content security policy.
-3. No value a caller gives ever becomes part of a query's or a command's
-   structure; how the store's backend lowers this is the backend's.
+3. A value a caller gives only ever fills a value place of a query or command
+   whose structure the release fixes; it never becomes an identifier, an
+   operator or syntax. A value that selects among fixed alternatives — a list
+   order, a type — is checked against its closed list first. How the store's
+   backend lowers this is the backend's.
 4. The import file is read as data with a size limit State 6 sets; nothing in
    it is executed or evaluated, and a file over the limit is refused.
 
@@ -367,7 +381,7 @@ Security review: PERFORMED
 - external_callbacks_webhooks: NOT_APPLICABLE; rationale: Registry calls no other service and receives no callback (R0-18, R0-54), and every request is a caller's authenticated call (R0-27)
 - browser_boundary: APPLICABLE; references: A13, A19; affected: owner interface, CSRF protection, session cookie, rendering of agent-written text
 - files_artifacts: APPLICABLE; references: A07, A08, A16, A18, A22; affected: M05, M10, import file, backups, pointers as references whose payload Registry never reads (R0-02)
-- concurrency: APPLICABLE; references: A01, A04, A07, A12, A14; affected: M01, M04, M05, M06, M09, concurrent creates, corrections, publishes and session changes
+- concurrency: APPLICABLE; references: A01, A04, A07, A12, A13, A14, A16; affected: M01, M04, M05, M06, M09, M10, M11, concurrent creates, corrections, publishes, session changes, single-use confirmation values, concurrent import confirmations
 - dependencies: APPLICABLE; references: A20; affected: Registry release, its Python dependencies
 
 ### Consequence

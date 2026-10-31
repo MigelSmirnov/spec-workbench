@@ -61,12 +61,13 @@ outcome but `accepted`.
 4. The erasure's own entry is written after the removal, in the same
    transaction, with the current instant; it is therefore never removed by the
    erasure that wrote it.
-5. Sequence numbers are never reused (M09): the next entry after an erasure
-   continues from the last number ever written. Registry keeps that last number
-   durably, apart from the entries, so neither an erasure nor a restart lowers
-   it. A store restored from a backup (A18) continues the history the backup
-   holds: the entries written after it are lost and exist nowhere, and their
-   numbers are issued again for new entries.
+5. Sequence numbers are never reused (M09): the next entry continues from the
+   last number ever written. Registry records each number in the instance
+   marks — a small file in the backup location, apart from the store and the
+   backups, which a restore does not replace (A18) — before the entry
+   commits; at start it continues from the higher of the store's last number
+   and the marks'. Neither an erasure, a restart nor a restore lowers it, and
+   a number lost with a restore is never issued again.
 6. An erasure that removes no entry changes nothing: it is accepted, writes no
    entry and mints no confirmation id (A14).
 
