@@ -45,8 +45,11 @@ each create once.
    corrected since — is refused, and nothing changes; the caller reads the
    record.
 6. Facts are compared as A02 reads them: a required value as written, an
-   optional value given blank the same as one not given. For 'add a room' and
-   'publish an artifact pointer' the project is one of the facts.
+   optional value given blank the same as one not given; a fact made of
+   several parts — the object's characteristics — by its parts, whatever
+   their order. For 'add a room' and 'publish an artifact pointer' the
+   project is one of the facts, and for a publish its publisher too: another
+   principal or session repeating the request id is refused.
 7. A create without a request id is refused. Creates of one model carrying
    one request id are applied one at a time: of two concurrent ones, the
    first makes the record and the second is a repeat or refused by rule 4
@@ -199,14 +202,16 @@ card it showed, and what the owner emptied is cleared.
    the operation (A09) — for the owner, a valid owner session, then its CSRF
    value, then a confirmation value where one is asked (A13);
    (2) for agent authority, the session and its set (A10), whose refusal
-   hides every later failure; (3) that the record named exists; (4) the
+   hides every later failure; (3) that every record the action names exists —
+   its target and any it newly names, such as a customer; (4) the
    values given (A02, A08, A22); (5) the stated revision or access version
    (A12); (6) the record's lifecycle — archived, erased, anonymised, not in the
    set, a customer's eligibility, a conflict. A transition that passes all six
    may be a repeat that changes nothing (A05). A create's repeat is the one
    exception: it is recognised after stages (1) to (4) and its project's
    archive check (A01 rule 3), and the rest of stage (6) does not apply to
-   it.
+   it. When several checks of one stage fail, the answer names every one of
+   them.
 
 ### Formal invariants
 

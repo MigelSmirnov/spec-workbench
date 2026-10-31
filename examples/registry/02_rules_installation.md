@@ -45,8 +45,9 @@ security review of States 0–2.
    else of the file; a room or pointer naming another project belongs to that
    project: records only of projects the owner did not pick are neither checked,
    shown as conflicts nor imported, and take no part in the duplicate-id
-   check. A file that cannot be read as the format States 5 and 6
-   declare is refused whole.
+   check. A file that cannot be read as the format States 5 and 6 declare,
+   or that holds two project records with one id, is refused whole at
+   upload, before anything is picked.
 4. A brought-in record is malformed when: a required value is missing (A02);
    it names a project or room the file does not hold; an id occurs
    twice among the file's records of one kind; a status is outside its
@@ -139,7 +140,10 @@ closure is the one proof of success.
    the owner credential, fail the start.
 5. A missing, malformed or unknown item fails the start; Registry applies no
    default to any item. The backup location must exist and let Registry create
-   and remove a file in it; otherwise the start fails. When the store's
+   and remove a file in it; otherwise the start fails. The store and the
+   backup location are different places, neither inside the other; a
+   configuration where they are the same or one holds the other fails the
+   start. When the store's
    configured file does not exist and its directory does, Registry makes a new,
    empty store of the running release's version there at the start; otherwise
    the store must open for reading and writing and carry the store
@@ -183,9 +187,11 @@ secret cannot be shared between holders.
    location, as a consistent copy taken while it runs: a backup never holds
    part of a transaction. A run that 03:00 found Registry stopped is made when
    it next starts with its service tokens, if no backup was made that UTC
-   day; an owner-only start makes no run (rule 10); besides the run after
-   an accepted import (A16), there is at most one run per UTC day, and runs
-   never overlap. A backup records, readable without
+   day; an owner-only start makes no run (rule 10). A failed run does not
+   count: a start with the service tokens on the same UTC day tries again
+   when no backup of that day is kept. Besides the run after an accepted
+   import (A16), at most one backup is kept per UTC day, the kept backups
+   themselves saying which days have one, and runs never overlap. A backup records, readable without
    its key, its instant, the release that made it, the last audit sequence
    number it holds and a digest of the key it was made with (never the key);
    its age is counted from that instant.
@@ -207,8 +213,9 @@ secret cannot be shared between holders.
    other instance is made from a backup. A backup and its check file are
    written under temporary names in the backup location and become a kept
    backup only when complete; at every start and every run Registry first
-   removes every temporary file left there, and a removal that fails is
-   reported and tried again at the next run.
+   removes every temporary file left there. A removal that fails is reported;
+   the run then makes no backup and counts as failed, and the start goes on
+   serving.
 5. Every day at the same run — whether the new backup succeeded or not —
    Registry deletes every backup made more than 30 × 24 hours before.
 6. A backup or a deletion that fails leaves no partial file, writes a
