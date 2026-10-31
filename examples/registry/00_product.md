@@ -1182,10 +1182,17 @@ each store's history. A store lost before a checked backup holds the import
 loses the import with it, and the import may then be made again: the owner
 keeps the export file and the picks, names and aliases given in the import
 until a checked backup holds the import, and retires the VPS instance only
-then (R0-79). What the
-owner repeats after a restore — erasures, restrictions, ends of a
-relationship — follows the owner's own record of the retention review
-(R0-60).
+then (R0-79). What the owner repeats after a restore — erasures,
+restrictions, ends of a relationship, the latest date audit entries were
+erased by — follows the owner's record of the retention review (R0-60): a
+governance document, outside this case (Explicit exclusions), naming each
+action by its date, kind and the `customer_ref` or `project_id` it touched,
+with no personal value. The kept export and the import's choices hold
+personal data: the owner keeps them in the vault (R0-23), the governance
+lists them as a copy that remains, as R0-81 lists the services' copies, and
+the owner deletes them once a checked backup holds the import. Where either
+record is missing, what the restored store holds stands until the owner
+corrects it.
 
 ### R0-81 — The one-home rule is a target the services reach; Registry does not wait (owner, 2026-10-27, after round 23 T1; narrows R0-80)
 
