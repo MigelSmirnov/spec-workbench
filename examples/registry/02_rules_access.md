@@ -196,7 +196,9 @@ sees every change as a new version.
    carries the valid session, whatever its answer; it restarts the 30
    minutes; before the first request it runs from the sign-in. Validity is
    checked when a request arrives (A04 rule 6, stage 1); a request that
-   passes it completes even if a limit passes while it runs.
+   passes it completes even if a limit or a sign-out comes while it runs, and
+   a restart that interrupts it leaves nothing of it (A04 rule 4). Several
+   owner sessions may be open at once; signing in ends none of the others.
 3. Registry counts the sign-ins refused for a wrong or missing credential
    whose instant is less than 15 minutes before now, for the whole instance:
    Registry tells no callers apart by address (R0-27). The fifth such refusal

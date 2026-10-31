@@ -61,11 +61,11 @@ outcome but `accepted`.
 4. The erasure's own entry is written after the removal, in the same
    transaction, with the current instant; it is therefore never removed by the
    erasure that wrote it.
-5. Sequence numbers are never reused in a store (M09): changes that write an
-   entry are applied one at a time, and each entry takes the number after the
-   last its store ever wrote, kept in the store apart from the entries, so an
-   erasure does not lower it. A store the owner restores from a backup
-   continues from the backup's last number (A18 rule 9).
+5. Sequence numbers are never reused within a store's history (M09): changes
+   that write an entry are applied one at a time, and each entry takes the
+   number after the last that history ever wrote, kept in the store apart
+   from the entries, so an erasure does not lower it. A store restored after a
+   loss begins its own history from the backup's last number (R0-89).
 6. An erasure that removes no entry changes nothing: it is accepted, writes no
    entry and mints no confirmation id (A14).
 

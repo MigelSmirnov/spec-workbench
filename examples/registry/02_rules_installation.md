@@ -16,7 +16,10 @@ security review of States 0–2.
    project the file holds with its id and status. As the owner picks projects,
    the mapping shows for the picks only: their rooms and pointers; the display
    name and alias each will arrive under — its v1 name and no alias unless the
-   owner gives others (R0-85), a name being required (A02); the Customers the
+   owner gives others (R0-85), a name being required (A02). That a project
+   named after a person gets another name here is a rule on the owner, like
+   R0-68's: Registry shows each v1 name to keep or replace and cannot tell a
+   person's name (R0-82); the Customers the
    import
    will make — one for each distinct v1 `customer_ref` a picked project names,
    which is all the file says of a customer (State 1 M04) — with the projects
@@ -75,12 +78,10 @@ security review of States 0–2.
 9. A refused import may be retried with a corrected file; nothing of a refused
    attempt remains.
 10. Right after an accepted import Registry makes a backup run outside the
-   daily schedule (A18). Once a backup holding the closure has passed its
-   check, Registry deletes every backup made before the import; a deletion
-   that fails is tried again at each run until it succeeds. Until a backup
-   holding the closure has passed, a failed run is retried at the next run,
-   and the import stays accepted. The owner never restores a backup made
-   before the import (A18 rule 9), so R0-79 holds through any restore.
+   daily schedule (A18), so the import reaches a checked backup as soon as it
+   can; a failed run is retried at the next run, and the import stays
+   accepted. A store lost before a checked backup holds the import loses it,
+   and the import may then be made again (R0-89).
 
 ### Formal invariants
 
@@ -138,9 +139,10 @@ closure is the one proof of success.
    the owner credential, fail the start.
 5. A missing, malformed or unknown item fails the start; Registry applies no
    default to any item. The backup location must exist and let Registry create
-   and remove a file in it; otherwise the start fails. An empty store location is
-   made into a new, empty store of the running release's version at the start;
-   otherwise the store must open for reading and writing and carry the store
+   and remove a file in it; otherwise the start fails. When the store's
+   configured file does not exist and its directory does, Registry makes a new,
+   empty store of the running release's version there at the start; otherwise
+   the store must open for reading and writing and carry the store
    version of the running release, and a store of another version, or one
    that does not open, fails the start — bringing a store to a new version is
    a step of the release, not of the start.
@@ -202,7 +204,11 @@ secret cannot be shared between holders.
    integrity check passes and that its audit log ends at the recorded
    sequence number, and removes the temporary file. A backup that fails the
    check is deleted and counts as failed. This is the tested restore: no
-   other instance is made from a backup.
+   other instance is made from a backup. A backup and its check file are
+   written under temporary names in the backup location and become a kept
+   backup only when complete; at every start and every run Registry first
+   removes every temporary file left there, and a removal that fails is
+   reported and tried again at the next run.
 5. Every day at the same run — whether the new backup succeeded or not —
    Registry deletes every backup made more than 30 × 24 hours before.
 6. A backup or a deletion that fails leaves no partial file, writes a
@@ -216,15 +222,16 @@ secret cannot be shared between holders.
 8. The store, the backup location and the disks under them are encrypted and
    kept out of VM Agent's reach by the owner's administration of VM Platform
    (R0-48; Explicit exclusions); Registry does not check the host.
-9. Restoring production replaces the store with a backup, by the owner on the
-   host while Registry is stopped (Explicit exclusions): the owner decrypts it
-   with the key it was made with, kept in the vault (rule 3). It is started by
-   the release that made it, or by a later release after that release's own
-   store migration (A17 rule 5). Every change after the backup's instant is
-   lost, the audit entries with it, and numbering continues from the backup's
-   last number (A15); the lost entries exist nowhere. The owner never
-   restores a backup made before the import, which its recorded instant
-   shows, so the import stays closed (A16 rule 10, R0-79).
+9. When the store is lost, the owner restores the newest kept backup on the
+   host while Registry is stopped: disaster recovery, the owner's
+   administration, outside Registry's guarantees (R0-89; Explicit
+   exclusions). The owner decrypts it with the key it was made with, kept in
+   the vault (rule 3); it is started by the release that made it, or by a
+   later release after that release's own store migration (A17 rule 5). The
+   restored store begins its own history from the backup (R0-89): every change
+   after the backup's instant is lost, the audit entries with it, and
+   numbering continues from the backup's last number (A15). Being the newest,
+   no kept backup is newer than it.
 10. The owner first starts the restored instance owner-only (A17 rule 1), so
    no service and no agent reaches it, and brings each Customer and project to
    the state the owner's own record of the retention review (R0-60) gives for

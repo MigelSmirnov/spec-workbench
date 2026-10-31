@@ -32,7 +32,10 @@ each create once.
    other check of stage (6) is made again for a repeat: the customer a
    project named may since be restricted, and the repeat still answers the
    project.
-4. A create whose request id an existing record of the same model carries is
+4. A request id is looked up among the records of the same model — for 'add a
+   room' and 'publish an artifact pointer', only those of the project the
+   call names, so a record of another project is never reached through it.
+   A create whose request id such a record carries is
    a repeat when the facts it supplies equal that record's current facts of
    the same kind: Registry answers the record as it stands now and changes
    nothing. A publish's repeat answers the pointer whatever its status now; it
@@ -57,7 +60,8 @@ each create once.
 ### Formal invariants
 
 ```text
-for each model m in {Project, Customer, Room, ArtifactPointer}:
+for each model m in {Project, Customer}, and per project for m in
+{Room, ArtifactPointer}:
   for records r1 != r2 of m with r1.request_id and r2.request_id present:
     r1.request_id != r2.request_id
 create(m, request_id = k, facts = f) where existing r of m has r.request_id = k:
