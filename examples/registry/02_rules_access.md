@@ -197,7 +197,11 @@ sees every change as a new version.
    which a change of the wall clock does not move and which counts the time
    the host or its VM was suspended, so a session does not outlive a
    suspension; instants Registry records
-   and the 03:00 of A18 are UTC wall-clock time. A session that has reached a
+   and the 03:00 of A18 are UTC wall-clock time. An owner session is never
+   recorded (M11), so its instants — when it began, its last request, when
+   its confirmation was shown — and its expiry at the latest are held as
+   readings of that monotonic clock, and only they decide its limits; the
+   UTC rule for recorded times does not reach them. A session that has reached a
    limit serves no request from that
    moment: a request carrying it is refused at the session check. Registry
    ends it — and drops its pending confirmation and its uploaded file with it
