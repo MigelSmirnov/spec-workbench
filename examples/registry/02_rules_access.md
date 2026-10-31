@@ -193,8 +193,9 @@ sees every change as a new version.
 2. The session ends at the first of: 8 hours after sign-in; 30 minutes without
    an owner request; the owner's sign-out; the instance's restart (M11 is never
    durable). An owner request is any request to the owner interface that
-   carries the valid session, whatever its answer; it restarts the 30
-   minutes; before the first request it runs from the sign-in. Validity is
+   carries the valid session, whatever its answer; its arrival restarts the 30
+   minutes — of concurrent requests the latest arrival counts; before the
+   first request it runs from the sign-in. Validity is
    checked when a request arrives (A04 rule 6, stage 1); a request that
    passes it completes even if a limit or a sign-out comes while it runs, and
    a restart that interrupts it leaves nothing of it (A04 rule 4). Several

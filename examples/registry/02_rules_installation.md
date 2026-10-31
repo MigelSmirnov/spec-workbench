@@ -23,7 +23,7 @@ security review of States 0–2.
    import
    will make — one for each distinct v1 `customer_ref` a picked project names,
    which is all the file says of a customer (State 1 M04) — with the projects
-   each will link (R0-80); and every malformed record and every id that
+   each will link (R0-80); and every malformed record of the picks and every id that
    conflicts with one production holds. For each Customer it will make, the
    owner gives its name and kind and says whether the v1 value is its tax id;
    confirmation is refused while any of these is missing (A02). Each new
@@ -67,7 +67,7 @@ security review of States 0–2.
 5. Ids are unique per kind: a project id, a room id and a pointer id are
    compared only with ids of their own kind, in the file and in production.
 6. At confirmation Registry checks again. Any conflict — a project, room or
-   pointer id production holds — or any malformed record refuses the whole
+   pointer id production holds — or any malformed record of the picks refuses the whole
    import, and nothing changes (R0-50, R0-79).
 7. An accepted import stores every picked project with its rooms and pointers,
    the Customers it makes, the migration closure (M10) and its one audit entry
@@ -196,8 +196,9 @@ secret cannot be shared between holders.
    day; an owner-only start makes no run (rule 10). A failed run does not
    count: a start with the service tokens on the same UTC day tries again
    when no backup of that day is kept. The run after an accepted import (A16)
-   is made even when the day already has a backup, and keeps both; besides
-   it, at most one backup is made per UTC day, the kept backups themselves
+   is made even when the day already has a backup, and keeps both; it is not
+   that day's ordinary backup, which is still made at 03:00 or at the next
+   start. Besides it, at most one backup is made per UTC day, the kept backups themselves
    saying which days have one, and runs never overlap. Each run writes its
    outcome and instant to a status file in the backup location, which a
    restart keeps; it is written after the backup is kept or the run fails,
@@ -233,7 +234,8 @@ secret cannot be shared between holders.
    serving.
 5. Every day at the same run — whether the new backup succeeded or not —
    Registry deletes every backup made more than 30 × 24 hours before.
-6. A backup or a deletion that fails leaves no partial file, writes a
+6. A backup or a deletion that fails leaves no partial kept backup — at most a
+   file under the temporary prefix, which a later run removes — writes a
    diagnostic that names the failure and no value (A17), and is tried again at
    the next run; Registry keeps serving. Whether the runs succeed is the
    owner's to watch on the host (Explicit exclusions: the host's
@@ -258,7 +260,7 @@ secret cannot be shared between holders.
    no service and no agent reaches it, and brings each Customer and project to
    the state the owner's own record of the retention review (R0-60) gives for
    it now — erased, restricted, ended or not — and erases audit entries before
-   the latest date the owner erased by, before configuring the tokens and
+   the greatest date the owner ever erased by, before configuring the tokens and
    starting it again. A project the backup holds as active that was erased
    after it is archived first, then erased, as any project (Primary
    actions). An owner-only start makes no backup run, so no backup
@@ -269,6 +271,16 @@ secret cannot be shared between holders.
    which no longer holds those changes, cannot list them, enforce them or
    tell when this is done. Its guarantee after a restore is what the backup
    held.
+11. A run goes in this order: remove the temporary files; write the new
+   backup under a temporary name, check it and give it its kept name, which
+   begins with the kept prefix the release declares; delete backups older
+   than 30 days; write the status. Every phase runs even when an earlier one
+   failed, but a failed removal skips the new backup. A kept backup stays
+   kept whatever a later phase does. The run's outcome is `ok` when every
+   phase succeeded and otherwise names each failed phase. A status that
+   cannot be written is reported and written at the next run; until then,
+   and when it is rebuilt at start from the kept backups alone, it shows the
+   newest kept backup's instant with the outcome `unknown`.
 
 ### Formal invariants
 
