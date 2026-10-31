@@ -20,10 +20,13 @@ security review of States 0–2.
    with one production holds. For each Customer it will make, the owner gives
    its name and kind and says whether the v1 value is its tax id (State 1
    M04); confirmation is refused while any of these is missing (A02).
-2. The mapping names the file by its digest. The owner confirms that mapping
-   in the confirmation step (A13 rule 6); the confirmation applies the file of
-   that digest, the picks, names, aliases and Customer values the mapping
-   showed, nothing else.
+2. The uploaded file is kept in the owner session that uploaded it, never in
+   the store, until the import is confirmed, another file is uploaded in that
+   session, or the session ends (M11); then it is dropped. The mapping names
+   the file by its digest. The owner confirms that mapping in the confirmation
+   step (A13 rule 6); the confirmation applies the file of that digest, the
+   picks, names, aliases and Customer values the mapping showed, nothing
+   else; a file no longer kept is refused and must be uploaded again.
 3. Registry checks what the picks bring in — the picked projects with their
    rooms and pointers and the customers they name — and nothing else of the
    file; records only of projects the owner did not pick are neither checked
@@ -31,21 +34,28 @@ security review of States 0–2.
    declare is refused whole.
 4. A brought-in record is malformed when: a required value is missing (A02);
    it names a project, customer or room the file does not hold; an id occurs
-   twice in the file; a status is outside its vocabulary; a pointer's type is
-   not declared or its owner service is not the type's (A22); the versions of
-   a project's pointers of one type are not 1..n, or more than one of them is
-   `published`; an instant cannot be read.
-5. At confirmation Registry checks again. Any conflict — a project, room or
+   twice among the file's records of one kind; a status is outside its
+   vocabulary, or a pointer is `withdrawn` (v1 never withdrew one, M05); a
+   pointer's type is not declared or its owner service is not the type's
+   (A22); the versions of a project's pointers of one type are not 1..n, or
+   more than one of them is `published`, or a `superseded` one is not lower
+   than a later version; an instant cannot be read; an `active` project has an
+   archived instant or an `archived` one has none; a `superseded` pointer has
+   no superseded instant or a `published` one has one; a record was changed,
+   archived or superseded before it was created, added or published.
+5. Ids are unique per kind: a project id, a room id and a pointer id are
+   compared only with ids of their own kind, in the file and in production.
+6. At confirmation Registry checks again. Any conflict — a project, room or
    pointer id production holds, a Registry-minted `customer_ref` production
    holds — or any malformed record refuses the whole import, and nothing
    changes (R0-50, R0-79).
-6. An accepted import stores every picked project with its rooms and pointers,
+7. An accepted import stores every picked project with its rooms and pointers,
    the Customers it makes, the migration closure (M10) and its one audit entry
    (M09) in one transaction. The import has succeeded when that transaction
    is committed; Registry knows it by the closure.
-7. While the closure exists, uploading and confirming an import are refused
+8. While the closure exists, uploading and confirming an import are refused
    (R0-79).
-8. A refused import may be retried with a corrected file; nothing of a refused
+9. A refused import may be retried with a corrected file; nothing of a refused
    attempt remains.
 
 ### Formal invariants
@@ -73,6 +83,10 @@ conflict at confirmation => store unchanged
 7. A picked project whose room names a project absent from the file refuses
    the import as malformed.
 8. Confirming without a kind for a Customer the import makes is refused.
+9. A picked project holding a `withdrawn` pointer refuses the import as
+   malformed.
+10. Confirming after the owner session that uploaded the file has ended is
+    refused.
 
 ### Consequence
 
@@ -97,7 +111,8 @@ closure is the one proof of success.
 4. No two secrets are equal: two services with one token, or a token equal to
    the owner credential, fail the start.
 5. A missing, malformed or unknown item fails the start; Registry applies no
-   default to any item. The store must open for reading and writing and carry
+   default to any item. The backup location must exist and let Registry create
+   and remove a file in it; otherwise the start fails. The store must open for reading and writing and carry
    the store version of the running release; a store of another version, or
    one that does not open, fails the start — bringing a store to a new version
    is a step of the release, not of the start.
@@ -125,61 +140,74 @@ for secrets s1 != s2 in config: value(s1) != value(s2) and len >= 32 bytes
 A wrong configuration is found at start, not by a caller; a leaked or weak
 secret cannot be shared between holders.
 
-## Accepted decision A18 — daily encrypted backups, kept 30 days, restore tested at each release
+## Accepted decision A18 — daily encrypted backups, checked when made, kept 30 days
 
 ### Normative rules
 
 1. Registry backs up its store once a day at 03:00 UTC into the backup
    location, as a consistent copy taken while it runs: a backup never holds
-   part of a transaction. The backup records its instant and the last audit
-   sequence number it holds.
-2. Each backup is encrypted with the backup key (A17). After a backup is
-   written, Registry deletes every backup older than 30 days (30 × 24 hours
-   by its instant).
-3. A backup that fails leaves no partial file, writes a diagnostic that names
-   the failure and no value (A17), and is tried again at the next 03:00;
-   Registry keeps serving. Whether backups succeed is the owner's to watch on
-   the host (Explicit exclusions: the host's administration).
-4. An erasure reaches the backups when the last backup holding the erased
-   values is deleted: at most 30 days after the erasure.
-5. The store and the backup location are on encrypted disks of VM Platform;
-   neither is reachable from VM Agent (R0-48).
-6. Before each release the owner restores the latest backup into a temporary
-   instance on VM Platform. It is a production instance for the test only: it
-   holds production data under every rule of production, configured with no
-   service token, so no service or agent reaches it. The test passes when the
-   instance starts (A17) and its audit log ends at the sequence number the
-   backup recorded; the owner then removes it. A release is not made while
-   the test fails. A test instance never receives a backup (R0-34).
-7. Restoring production from a backup loses every change made after the
-   backup's instant. The erasures among them are repeated by the owner from
-   the owner's own record of the retention review (R0-60), before the
-   instance serves again; Registry, which no longer holds them, cannot list
-   them, and that record is the governance's.
+   part of a transaction. A backup records its instant, the release that made
+   it and the last audit sequence number it holds.
+2. A backup holds every record but the agent sessions (M06): a store restored
+   from it has no session, Kernel registers its sessions again and the owner
+   grants them again, so a restore never brings back a grant revoked after
+   the backup.
+3. Each backup is encrypted with the backup key the configuration holds at its
+   making (A17). When the owner changes the key, older backups stay encrypted
+   with the key they were made with; the owner keeps that key in the vault
+   until the last of them is deleted (R0-23).
+4. Right after writing a backup Registry checks it: it decrypts it into a
+   temporary file in the backup location, opens it for reading only, checks
+   that it is the store version of its release, that the store's own
+   integrity check passes and that its audit log ends at the recorded
+   sequence number, and removes the temporary file. A backup that fails the
+   check is deleted and counts as failed. This is the tested restore: no
+   other instance is made from a backup.
+5. Every day at the same run — whether the new backup succeeded or not —
+   Registry deletes every backup made more than 30 × 24 hours before.
+6. A backup or a deletion that fails leaves no partial file, writes a
+   diagnostic that names the failure and no value (A17), and is tried again at
+   the next run; Registry keeps serving. Whether the runs succeed is the
+   owner's to watch on the host (Explicit exclusions: the host's
+   administration).
+7. While the daily runs succeed, an erasure reaches the backups at most 30
+   days after it, and a restore loses at most a day of changes; a failed run
+   lengthens both by the days until a run succeeds.
+8. The store, the backup location and the disks under them are encrypted and
+   kept out of VM Agent's reach by the owner's administration of VM Platform
+   (R0-48; Explicit exclusions); Registry does not check the host.
+9. Restoring production replaces the store with a backup, by the owner on the
+   host while Registry is stopped (Explicit exclusions). Every change after the
+   backup's instant is lost, the audit entries with it: numbering continues
+   from the backup's last number, and the lost entries exist nowhere. Before
+   any service or agent uses the restored instance again the owner repeats,
+   in the owner interface, every erasure, restriction and end of a
+   relationship made after the backup, from the owner's own record of the
+   retention review (R0-60); Registry, which no longer holds them, cannot list
+   them.
 
 ### Formal invariants
 
 ```text
-age(oldest backup) <= 30 days after each backup run
-every backup is encrypted, consistent and records (instant, last sequence)
-erasure at t => no backup holding the erased values exists after t + 30 days
-release made => restore test of the latest backup passed
+after a run: no backup older than 30 days exists
+every kept backup is encrypted, consistent, checked, and records
+  (instant, release, last sequence); no backup holds an agent session
 ```
 
 ### Required tests
 
 1. A backup taken during a write restores either before or after it, never in
    between.
-2. After a backup run, no backup older than 30 days exists.
-3. A backup cannot be read without the backup key.
-4. A failed backup leaves no file and Registry keeps answering.
-5. A restored instance whose audit log ends before the recorded sequence
-   number fails the restore test.
+2. After a run in which the backup failed, backups older than 30 days are
+   still deleted.
+3. A backup cannot be read without the key it was made with.
+4. A backup whose integrity check fails is deleted and reported.
+5. A store restored from a backup holds no agent session.
 
 ### Consequence
 
-Data survives the loss of the store with at most a day of changes lost;
-an erasure has a bounded reach into the backups, as the governance can state.
+A tested restore exists every day without a second instance holding
+production data (R0-34); a restore cannot revive a revoked grant.
 
 ## Accepted decision A19 — every stored value is data, never code
 
@@ -254,8 +282,11 @@ What runs is what was verified.
 
 ### Normative rules
 
-1. Every security category has exactly one outcome below, resting on the
-   decisions it names.
+1. The categories are the nine of the Workbench's security review
+   (`skills/spec-authoring/SECURITY_REVIEW_EVIDENCE.md`), the catalogue every
+   case is reviewed against; this review is complete for that catalogue and
+   claims nothing beyond it. Each category has exactly one outcome below,
+   resting on the decisions it names.
 2. A change to a decision a category names reopens this review.
 3. Every decision a category names is accepted.
 

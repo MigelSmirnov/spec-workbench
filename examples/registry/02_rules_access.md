@@ -24,8 +24,9 @@ here: what each service token and Kernel's agent authority may do and receive
    | Cabinet Kernel | with agent authority only (A10): register an agent session; end an agent session (A11); read the session's access; request access to a project; validate a project reference; read the agent projection; list rooms; add a room; list artifacts; read the latest artifact of a type; publish and withdraw an artifact pointer (R0-88) | `business_confidential` (R0-74) |
 
 3. An operation outside a token's row is refused, whatever the request holds.
-4. An answer that would carry a class above the token's highest is refused
-   whole; Registry never answers part of it (R0-26).
+4. The classes are ordered `open` < `business_confidential` <
+   `personal_data` (R0-26). An answer that would carry a class above the
+   token's highest is refused whole; Registry never answers part of it.
 5. Every owner action is made in an owner session (A13), never with a service
    token; no token carries the owner's rights.
 6. A new service, or a change of a row, enters by a specification change and a
@@ -70,6 +71,11 @@ manifest record derives from it (R0-78).
    (R0-12, R0-70); reads of it are answered.
 5. The check is made at every call, a running flow's next step included; a
    revocation holds from the next call on (R0-46).
+6. A call and every change of its session — a revocation, an archiving, the
+   session's end — are applied one at a time: a call whose transaction
+   commits before the change is accepted, one that commits after it is
+   checked against the changed session and refused when the change removed
+   its right.
 
 ### Formal invariants
 
@@ -106,8 +112,12 @@ the agent that a project exists.
 3. Ending removes the session's record — its set, active project, pending
    request and access version. The audit entries that name it stay (M09).
 4. After its end a session is unregistered: a call naming it is refused as for
-   an unregistered session (A10). Registering the same identity again makes a
-   new session with an empty set.
+   an unregistered session (A10). Cabinet Kernel names every agent session
+   with an identity it never uses again, so an ended identity is never
+   registered again and the audit entries naming it mean one session; Registry
+   relies on this as it relies on Kernel naming the session (R0-53, R0-77).
+   A registration of an ended identity, Kernel's defect, makes a new session
+   with an empty set.
 5. Ending a session that is not registered is refused as for an unregistered
    session.
 6. Registering and ending write no audit entry (M09): the grants that ended
@@ -139,7 +149,9 @@ Registry holds only living sessions; a stale session cannot keep a grant.
    pending request (M06) — a project leaving the set by its erasure included
    (R0-61). One action moves it once, however many of these it changes:
    granting a project and making it active is one move.
-2. A change that changes nothing (A05) leaves it.
+2. A change that changes nothing (A05) leaves it. Ending a session states the
+   current version and removes the session with it (A11); it makes no next
+   version.
 3. The owner's actions on a session — granting, revoking, changing or clearing
    the active project, answering a request, ending the session — state the
    access version the owner saw; a stale one is refused and nothing changes.
@@ -181,9 +193,10 @@ sees every change as a new version.
    durable). An owner request is any request to the owner interface that
    carries the valid session, whatever its answer; it restarts the 30
    minutes.
-3. Registry counts the refused sign-ins of the last 15 minutes, for the whole
-   instance: Registry tells no callers apart by address (R0-27). The fifth
-   refusal within 15 minutes starts a lockout of 15 minutes from that
+3. Registry counts the sign-ins refused for a wrong or missing credential
+   whose instant is less than 15 minutes before now, for the whole instance:
+   Registry tells no callers apart by address (R0-27). The fifth such refusal
+   starts a lockout that lasts while now is less than 15 minutes after that
    refusal. During the lockout every sign-in is refused — the right credential
    included — and is not counted; the lockout is not extended. A successful
    sign-in clears the count. Count and lockout are runtime state, like the
@@ -199,8 +212,12 @@ sees every change as a new version.
    version the step showed, and its inputs — for the import, the file's digest
    and the picks. It is valid only in that session, for 10 minutes, and is
    used up by the first submission, whatever its answer; a refused submission
-   needs the step shown again. It is not the confirmation id, which Registry
-   mints only when the action is accepted (A14).
+   needs the step shown again. A submission becomes the first one when it
+   passes the owner session and CSRF checks (A04 rule 6, stage 1): one refused
+   before them leaves the value unused; from there on, whatever the answer —
+   a value bound to another action included — the value is used up. It is not
+   the confirmation id, which Registry mints only when the action is accepted
+   (A14).
 
 ### Formal invariants
 

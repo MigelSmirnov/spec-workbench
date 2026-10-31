@@ -25,10 +25,11 @@ each create once.
    field of 'add a room' and of 'publish an artifact pointer' (R0-78).
 2. Registry keeps the request id with the record the create made, written once
    (M01, M03, M04, M05).
-3. The call's rights are checked first, as for any call (A09, A10, A04 rule
-   6); a create on a project — 'add a room', 'publish an artifact pointer' —
-   whose project is now archived is refused (R0-17, R0-88). No other
-   precondition of the create is checked again for a repeat: the customer a
+3. A repeat passes stages (1) to (4) of A04 rule 6 like any call — rights,
+   the session's set, the existence of its project, its values, a publish's
+   type among them (A22) — and, for 'add a room' and 'publish an artifact
+   pointer', the check that its project is not archived (R0-17, R0-88). No
+   other check of stage (6) is made again for a repeat: the customer a
    project named may since be restricted, and the repeat still answers the
    project.
 4. A create whose request id an existing record of the same model carries is
@@ -82,6 +83,8 @@ create(m, request_id = k, facts = f) where existing r of m has r.request_id = k:
    none.
 10. Kernel repeating 'add a room' after the project left its session's set is
     answered as not found (A10).
+11. Repeating a publish after its type was removed is refused as an unknown
+    type (A22).
 
 ### Consequence
 
@@ -168,7 +171,10 @@ card it showed, and what the owner emptied is cleared.
 1. Every action that moves a Project's or a Customer's revision ("Revisions and
    times") states the revision it was made against: correcting, archiving and
    erasing a project; correcting a customer, erasing its contact data,
-   restricting and lifting, ending and resuming the relationship.
+   restricting and lifting, ending and resuming the relationship. Erasing a
+   project or a Customer's contact data states the revision it was made
+   against and leaves no revision behind (M01, M04): the record is anonymised,
+   erased or deleted, not given a next revision.
 2. A stated revision that is not the record's current one is refused as stale,
    and nothing changes (R0-35).
 3. An action that would change nothing (A03 rule 4, A05) still states the
@@ -179,14 +185,19 @@ card it showed, and what the owner emptied is cleared.
 5. Actions on records without a revision — adding a room, publishing or
    withdrawing a pointer, session actions — state none; the session's owner
    actions state its access version instead (A12).
-6. Every action checks in one order, and the first failure is its answer:
-   (1) the caller's authentication and its right to the operation (A09, A13);
+6. Every operation — read or change, of a service, Kernel or the owner —
+   checks in one order, and the first failure is its answer; a stage that
+   does not apply to it is skipped, and each check an operation states belongs
+   to the stage of its kind: (1) the caller's authentication and its right to
+   the operation (A09) — for the owner, a valid owner session, then its CSRF
+   value, then a confirmation value where one is asked (A13);
    (2) for agent authority, the session and its set (A10), whose refusal
    hides every later failure; (3) that the record named exists; (4) the
    values given (A02, A08, A22); (5) the stated revision or access version
    (A12); (6) the record's lifecycle — archived, erased, anonymised, not in the
-   set. Only an action that passes all six may be a repeat that changes nothing
-   (A05).
+   set, a customer's eligibility, a conflict. Only an action that passes all
+   six may be a repeat that changes nothing (A05); a create's repeat is
+   recognised as A01 rule 3 says.
 
 ### Formal invariants
 
@@ -194,8 +205,10 @@ card it showed, and what the owner emptied is cleared.
 answer(a) = first failing check of a in the order (1)..(6), else its effect
 for action a on record r in {Project, Customer} that may move r.revision:
   a.stated_revision != r.revision => refused, r unchanged
-  accepted and changed(r) => r.revision' = r.revision + 1
+  accepted and changed(r) and r keeps a revision
+                          => r.revision' = r.revision + 1
                              and r.last_changed' = now
+  accepted erasure, anonymisation or deletion => r has no revision after
   accepted and not changed(r) => r.revision' = r.revision
 ```
 
