@@ -192,7 +192,13 @@ sees every change as a new version.
    to Registry's own origin.
 2. The session ends at the first of: 8 hours after sign-in; 30 minutes without
    an owner request; the owner's sign-out; the instance's restart (M11 is never
-   durable). An owner request is any request to the owner interface that
+   durable). A session that has reached a limit serves no request from that
+   moment; Registry ends it — and drops its pending confirmation and its
+   uploaded file with it (M11) — when it notices: at the session's next
+   request, or at a pass over the sessions it makes every 60 seconds from
+   the start, whichever comes first. The pass takes the import lock and then
+   each session's lock (A16 rule 2), and decides under that lock. An owner
+   request is any request to the owner interface that
    carries the valid session, whatever its answer; its arrival restarts the 30
    minutes — of concurrent requests the latest arrival counts; before the
    first request it runs from the sign-in. Validity is

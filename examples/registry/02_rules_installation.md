@@ -43,9 +43,8 @@ security review of States 0–2.
    confirmation step and confirming are refused, and a sign-out goes on.
    An uploaded file is changed only by a holder of the import lock: an
    accepted import, holding it, drops every session's upload; the upload of
-   a session ended by its limits is dropped by a sweep that takes the import
-   lock once a minute, waiting for it like any request; from the session's
-   end until that sweep the upload is reachable by no request. Other
+   a session ended by its limits goes with the session, when Registry ends it
+   (A13 rule 2). Other
    session changes take their session's lock alone. So no upload lands after
    the import that closed it, and the two locks are always taken in that
    order. The mapping names
@@ -149,7 +148,7 @@ closure is the one proof of success.
    every check passes; a failed check stops the start with a diagnostic that
    names the failed item and never its value (R0-37). The checks run in one
    order and the first that fails stops the start: no unknown item, taken in
-   the order of their names; every item of rule 1 present; each well formed; each secret's length (rule 3);
+   the order of their names by Unicode code point; every item of rule 1 present; each well formed; each secret's length (rule 3);
    their distinctness (rule 4); the store and backup location apart (rule
    5); the backup location writable, by a probe file under the temporary
    prefix (A18 rule 5); the store opening, or made new (rule 5). Within one
@@ -176,9 +175,10 @@ closure is the one proof of success.
    (Explicit exclusions). When the store's
    configured file does not exist and its directory does, Registry makes a new,
    empty store of the running release's version there at the start, under a
-   temporary name in that directory that it renames to the store's name only
-   once the store is complete; at every start it first removes such a
-   temporary file left by an interrupted start, and no other file there; otherwise
+   temporary name — the store's name with a suffix the release declares —
+   that it renames to the store's name only once the store is complete; at
+   every start it first removes a file of that temporary name, left by an
+   interrupted start, and no other file there; otherwise
    the store must open for reading and writing and carry the store
    version of the running release, and a store of another version, or one
    that does not open, fails the start — bringing a store to a new version is
@@ -264,7 +264,8 @@ secret cannot be shared between holders.
    is not kept, the run fails, the third step still runs, and the next run
    removes what is left. This is the tested restore: no other instance is made
    from a backup. Third, whatever the second step did, it deletes every kept
-   backup made more than 30 × 24 hours before, and every file under the kept
+   backup made more than 30 × 24 hours before the instant this step starts,
+   one cutoff for the whole step, and every file under the kept
    prefix whose unencrypted record (rule 1) cannot be read. It takes the
    files in the order of their names; a file it cannot read or delete is
    reported, and it goes on with the next. A run succeeds only when every
