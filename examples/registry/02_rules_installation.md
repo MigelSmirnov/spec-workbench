@@ -35,12 +35,16 @@ security review of States 0–2.
    too large or unreadable — replaces nothing. An accepted import drops the
    uploaded file of every owner session (M11); a confirmation shown in
    another session is refused because the import is closed (rule 8). Uploads
-   and import confirmations take the instance's one import lock first, then
-   their session's lock (A13), and hold both until done; an accepted import,
-   holding the import lock, drops every session's upload, which only a
-   holder of that lock changes. Other session changes take their session's
-   lock alone. So no upload lands after the import that closed it, and the
-   two locks are always taken in that order. The mapping names
+   and every other request that reads or changes an uploaded file — showing
+   the mapping or the import's confirmation step, confirming, a sign-out —
+   take the instance's one import lock first, then their session's lock
+   (A13), check the closure while holding them, and hold both until done.
+   An uploaded file is changed only by a holder of the import lock: an
+   accepted import, holding it, drops every session's upload; the upload of
+   a session ended by its limits is dropped by the next holder. Other
+   session changes take their session's lock alone. So no upload lands after
+   the import that closed it, and the two locks are always taken in that
+   order. The mapping names
    the file by its digest. The owner confirms that mapping in the confirmation
    step (A13 rule 6); the confirmation applies the file of that digest, the
    picks, names, aliases and Customer values the mapping showed, nothing
@@ -156,7 +160,8 @@ closure is the one proof of success.
    the owner credential, fail the start.
 5. A missing, malformed or unknown item fails the start; Registry applies no
    default to any item. The backup location must exist and let Registry create
-   and remove a file in it; otherwise the start fails. The store and the
+   and remove a file in it; otherwise the start fails. It holds Registry's
+   files only; the owner puts nothing else there. The store and the
    backup location are different places, neither inside the other, compared
    by their absolute paths with every symbolic link resolved; a configuration
    where they are the same or one holds the other fails the start. Aliases a
@@ -207,8 +212,12 @@ secret cannot be shared between holders.
    03:00 UTC, while Registry runs with its service tokens, it
    makes one backup run; a 03:00 that finds Registry stopped, or in an
    owner-only start (rule 9), makes no run, and none is made later in its
-   place. A run is made for a UTC date only when the running process sees the
-   clock pass 03:00 of that date and no kept backup of that date exists, so
+   place. The process looks at the clock at least once a minute; a date's
+   run starts at its first look at or after 03:00 of that date when an
+   earlier look of the same process saw that date before 03:00, and no kept
+   backup of that date exists — a kept backup's date being the UTC date of
+   its recorded instant, and a file whose record cannot be read counting as
+   none (rule 4), so
    a restart, a start at 03:00 or a clock set back makes no second run. A
    process runs each date at most once, remembering in its memory the dates
    it ran, a failed run included; after a clock set forward it runs only for
@@ -248,7 +257,10 @@ secret cannot be shared between holders.
    reported, and it goes on with the next.
 5. Kept and temporary names begin with two different prefixes the release
    declares; Registry removes, renames and deletes in the backup location
-   only files under them. A step that fails leaves no partial kept backup —
+   only files under them, and the location is Registry's alone (A17). A kept
+   name is made from the backup's instant and is never overwritten: a backup
+   whose kept name exists, or whose rename fails, is deleted and the run
+   fails. A step that fails leaves no partial kept backup —
    at most a file under the temporary prefix, which the next run removes —
    and writes a diagnostic that names the failure and no value (A17);
    Registry keeps serving, and the next 03:00 tries again. Whether runs

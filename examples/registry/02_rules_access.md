@@ -206,7 +206,8 @@ sees every change as a new version.
    The requests of one owner session that change its state — showing a
    confirmation step, uploading a file, a submission, a sign-out — are
    applied one at a time, in the order in which they take the session's one
-   lock, after passing the session check: each sees the
+   lock, after passing the session check — those that read or change an
+   uploaded file take the import lock before it (A16 rule 2): each sees the
    session as the one before left it, and other requests are not held by
    them, so a confirmation
    bound to a file a later upload replaced is refused (A16 rule 2).
