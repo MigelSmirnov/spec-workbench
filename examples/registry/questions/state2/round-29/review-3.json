@@ -1,0 +1,215 @@
+{
+ "open_points": [
+  {
+   "subject": "owner-session expiry pass",
+   "kind": "ambiguous cadence",
+   "text": "“at a pass over the sessions it makes every 60 seconds from the start”",
+   "question": "Does the first expiry pass run at instance start or 60 seconds later, and are later passes fixed to the start-time cadence or scheduled 60 seconds after the previous pass finishes?",
+   "options": [
+    "First at start, then fixed 60-second boundaries",
+    "First after 60 seconds, then fixed boundaries",
+    "Sixty seconds after each completed pass"
+   ],
+   "default_guess": "Run the first pass 60 seconds after start and use fixed 60-second boundaries.",
+   "unit": "?"
+  },
+  {
+   "subject": "owner-session lifetime",
+   "kind": "missing clock rule",
+   "text": "“8 hours after sign-in; 30 minutes without an owner request”",
+   "question": "Are these durations measured with the UTC wall clock or a monotonic elapsed-time clock, and what happens when the system clock moves backward or forward?",
+   "options": [
+    "Use monotonic elapsed time",
+    "Use UTC wall-clock instants",
+    "Use monotonic time for idle expiry and UTC for the absolute limit"
+   ],
+   "default_guess": "Use monotonic elapsed time for both limits while the process lives.",
+   "unit": "?"
+  },
+  {
+   "subject": "owner-session expiry race",
+   "kind": "contradictory concurrency",
+   "text": "“Validity is checked when a request arrives”; “a request that passes it completes even if a limit or a sign-out comes while it runs”; “the pass alone ends sessions by their limits, taking the import lock and then each session's lock”",
+   "question": "How is admission made atomic with the expiry pass, given that a request may pass the session check before taking the session lock and the pass may then remove the session, confirmation, or uploaded file before that admitted request uses them?",
+   "options": [
+    "Take or reserve the session under its lock during the session check",
+    "Track admitted in-flight requests and defer removal until they finish",
+    "Allow removal and require the admitted request to continue from captured state"
+   ],
+   "default_guess": "Perform the validity check and last-request update under the session lock, and defer absolute-expiry removal while an admitted request is in flight.",
+   "unit": "?"
+  },
+  {
+   "subject": "owner-session expiry pass traversal",
+   "kind": "unspecified linearization",
+   "text": "“a pass over the sessions … taking the import lock and then each session's lock … and deciding under them”",
+   "question": "Which sessions belong to a pass, is the import lock held for the whole pass or reacquired for each session, and is expiry tested against one pass-start instant or the instant each session lock is acquired?",
+   "options": [
+    "Snapshot sessions and time at pass start; hold one import lock throughout",
+    "Snapshot sessions at pass start; test time per session; hold one import lock throughout",
+    "Re-enumerate and reacquire the import lock per session"
+   ],
+   "default_guess": "Snapshot the session identities at pass start, hold the import lock throughout, and test expiry when each session lock is acquired.",
+   "unit": "?"
+  },
+  {
+   "subject": "accepted import and other sessions",
+   "kind": "lock contradiction",
+   "text": "“every other request that reads or changes an uploaded file … take the instance's one import lock first, then their session's lock”; “an accepted import, holding it, drops every session's upload”; “The requests of one owner session that change its state … are applied one at a time … [with] the session's one lock”",
+   "question": "Must an accepted import take every affected session's lock before dropping that session's upload, or is the import lock alone authoritative for uploaded-file state despite the session-lock rule?",
+   "options": [
+    "Import lock alone protects every uploaded file",
+    "Take all affected session locks after the import lock",
+    "Treat cross-session clearing as an explicit exception to session-state serialization"
+   ],
+   "default_guess": "Make the import lock the sole authority for uploaded-file state and state that cross-session clearing is an exception to the session-lock rule.",
+   "unit": "?"
+  },
+  {
+   "subject": "accepted import upload clearing",
+   "kind": "missing atomicity",
+   "text": "“A refused confirmation keeps it”; “an accepted import … drops every session's upload”; “The import has succeeded when that transaction is committed”",
+   "question": "At what point relative to the durable import transaction are all in-memory uploads dropped, and must they remain intact if the transaction fails?",
+   "options": [
+    "Drop uploads only after the transaction commits",
+    "Drop them before commit and restore them on rollback",
+    "Include a reversible pending-clear step around the transaction"
+   ],
+   "default_guess": "Commit the transaction first, then drop all uploads while still holding the import lock and before answering.",
+   "unit": "?"
+  },
+  {
+   "subject": "closed import upload refusal",
+   "kind": "check precedence",
+   "text": "“check the closure while holding them”; “when the closure exists, uploading … [is] refused”; A04 orders “the values given” before lifecycle and conflict checks",
+   "question": "When the import is already closed and an upload is also oversized, unreadable, or malformed, which refusal wins, and may Registry parse or read the file before checking closure?",
+   "options": [
+    "Closure is checked first and hides file errors",
+    "File/value checks follow A04 and precede closure",
+    "Both failures are returned because they occupy one stage"
+   ],
+   "default_guess": "Check closure immediately after authentication and locking, before reading or validating the uploaded file.",
+   "unit": "?"
+  },
+  {
+   "subject": "configuration variables",
+   "kind": "missing names",
+   "text": "“The configuration is the set of environment variables whose names begin with REGISTRY_ … It holds exactly these items”",
+   "question": "What is the exact environment-variable name for each listed item, including each of the four service tokens?",
+   "options": [
+    "One fixed name per item declared here",
+    "Names declared later by the release",
+    "A structured convention derived from service names"
+   ],
+   "default_guess": "Use fixed uppercase names such as REGISTRY_STORE_LOCATION, REGISTRY_BACKUP_LOCATION, REGISTRY_BACKUP_KEY, REGISTRY_OWNER_CREDENTIAL, and REGISTRY_TOKEN_<SERVICE>.",
+   "unit": "?"
+  },
+  {
+   "subject": "configuration values and secrets",
+   "kind": "undefined validation",
+   "text": "“each well formed”; “A secret … is at least 32 bytes long”",
+   "question": "What encodings and grammars make paths, tokens, the owner credential, and the backup key well formed, and are the 32 bytes counted before or after decoding an environment-variable string?",
+   "options": [
+    "UTF-8 text secrets, length measured after UTF-8 encoding",
+    "Base64-encoded random bytes, length measured after decoding",
+    "Different declared formats for credentials, tokens, and encryption keys"
+   ],
+   "default_guess": "Require base64-encoded bytes for all secrets, measure decoded length, and require exactly 32 decoded bytes for the backup key.",
+   "unit": "?"
+  },
+  {
+   "subject": "configuration paths",
+   "kind": "ambiguous path resolution",
+   "text": "“compared by their absolute paths with every symbolic link resolved”",
+   "question": "Are relative store or backup paths accepted, and if so, against which stable directory are they made absolute?",
+   "options": [
+    "Reject every relative path",
+    "Resolve relative paths against the process working directory",
+    "Resolve them against a release-defined data directory"
+   ],
+   "default_guess": "Reject relative paths and require absolute configured paths.",
+   "unit": "?"
+  },
+  {
+   "subject": "new-store temporary file",
+   "kind": "undeclared release value",
+   "text": "“under a temporary name — the store's name with a suffix the release declares”",
+   "question": "What suffix does the release declare, how is collision with an existing non-temporary file prevented, and where is that declaration recorded for later implementations?",
+   "options": [
+    "A fixed specification-wide suffix",
+    "A release-manifest field",
+    "A newly random temporary suffix on each start"
+   ],
+   "default_guess": "Use one fixed suffix declared in the release manifest and refuse unsafe collisions.",
+   "unit": "?"
+  },
+  {
+   "subject": "backup encryption",
+   "kind": "missing cryptographic protocol",
+   "text": "“Each backup is encrypted with the backup key”; “A backup cannot be read without the key it was made with”",
+   "question": "Which authenticated-encryption algorithm, nonce generation rule, key size and encoding, file framing, associated data, and authentication-failure behavior define an encrypted backup?",
+   "options": [
+    "AES-256-GCM with a random nonce and authenticated metadata",
+    "XChaCha20-Poly1305 with a random nonce and authenticated metadata",
+    "A standard encrypted-container format fixed by the release"
+   ],
+   "default_guess": "Use XChaCha20-Poly1305 with a 32-byte decoded key, a fresh random nonce, and authenticate all unencrypted metadata as associated data.",
+   "unit": "?"
+  },
+  {
+   "subject": "backup key digest",
+   "kind": "undefined digest",
+   "text": "“a digest of the key it was made with (never the key)”",
+   "question": "Which digest algorithm and byte representation are used, and is the recorded digest verified against the configured key during the make-and-check run?",
+   "options": [
+    "SHA-256 of the decoded key, verified during the run",
+    "A keyed identifier derived with HKDF",
+    "An opaque key identifier supplied in configuration"
+   ],
+   "default_guess": "Record SHA-256 of the decoded backup key and verify it during the backup check.",
+   "unit": "?"
+  },
+  {
+   "subject": "backup file format and names",
+   "kind": "undeclared format",
+   "text": "“Kept and temporary names begin with two different prefixes the release declares”; “A kept name is made from the backup's instant”; “its unencrypted record … can be read”",
+   "question": "What are the two prefixes, the kept-name timestamp representation and precision, and the exact serialized layout and versioning of the unencrypted record and encrypted payload?",
+   "options": [
+    "A specification-wide versioned binary container and fixed filename grammar",
+    "A release-manifest declaration of prefixes and container version",
+    "Implementation-private names and serialization"
+   ],
+   "default_guess": "Define a versioned binary container and fixed ASCII filenames containing a UTC timestamp with subsecond precision and a random collision-resistant suffix.",
+   "unit": "?"
+  },
+  {
+   "subject": "backup record validity",
+   "kind": "vague validation",
+   "text": "“a kept file's record is valid when its instant, release, last sequence number and key digest can all be read”",
+   "question": "Does ‘can all be read’ require only syntactic decoding, or also valid ranges, a known release, a non-future instant, a correctly sized digest, and consistency between the record and ciphertext?",
+   "options": [
+    "Syntactic decoding only",
+    "Full semantic and cryptographic consistency validation",
+    "Semantic validation except that old or unknown releases remain valid"
+   ],
+   "default_guess": "Require full syntactic, range, and cryptographic consistency validation, while allowing a recorded older release identifier.",
+   "unit": "?"
+  },
+  {
+   "subject": "backup audit sequence",
+   "kind": "ambiguous invariant",
+   "text": "“records … the last audit sequence number it holds”; “checks … that its audit log ends at the recorded sequence number”",
+   "question": "Is the recorded number the persistent highest-ever sequence counter or the greatest surviving AuditEntry sequence, and what value represents a new store with no audit entries?",
+   "options": [
+    "Persistent highest-ever counter, with 0 for no entries",
+    "Greatest surviving entry, with null for no entries",
+    "Both values are recorded and checked separately"
+   ],
+   "default_guess": "Record the persistent highest-ever counter, use 0 before the first entry, and require the greatest surviving entry to equal it whenever entries exist.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"owner-session expiry pass\",\"kind\":\"ambiguous cadence\",\"text\":\"“at a pass over the sessions it makes every 60 seconds from the start”\",\"question\":\"Does the first expiry pass run at instance start or 60 seconds later, and are later passes fixed to the start-time cadence or scheduled 60 seconds after the previous pass finishes?\",\"options\":[\"First at start, then fixed 60-second boundaries\",\"First after 60 seconds, then fixed boundaries\",\"Sixty seconds after each completed pass\"],\"default_guess\":\"Run the first pass 60 seconds after start and use fixed 60-second boundaries.\"},{\"subject\":\"owner-session lifetime\",\"kind\":\"missing clock rule\",\"text\":\"“8 hours after sign-in; 30 minutes without an owner request”\",\"question\":\"Are these durations measured with the UTC wall clock or a monotonic elapsed-time clock, and what happens when the system clock moves backward or forward?\",\"options\":[\"Use monotonic elapsed time\",\"Use UTC wall-clock instants\",\"Use monotonic time for idle expiry and UTC for the absolute limit\"],\"default_guess\":\"Use monotonic elapsed time for both limits while the process lives.\"},{\"subject\":\"owner-session expiry race\",\"kind\":\"contradictory concurrency\",\"text\":\"“Validity is checked when a request arrives”; “a request that passes it completes even if a limit or a sign-out comes while it runs”; “the pass alone ends sessions by their limits, taking the import lock and then each session's lock”\",\"question\":\"How is admission made atomic with the expiry pass, given that a request may pass the session check before taking the session lock and the pass may then remove the session, confirmation, or uploaded file before that admitted request uses them?\",\"options\":[\"Take or reserve the session under its lock during the session check\",\"Track admitted in-flight requests and defer removal until they finish\",\"Allow removal and require the admitted request to continue from captured state\"],\"default_guess\":\"Perform the validity check and last-request update under the session lock, and defer absolute-expiry removal while an admitted request is in flight.\"},{\"subject\":\"owner-session expiry pass traversal\",\"kind\":\"unspecified linearization\",\"text\":\"“a pass over the sessions … taking the import lock and then each session's lock … and deciding under them”\",\"question\":\"Which sessions belong to a pass, is the import lock held for the whole pass or reacquired for each session, and is expiry tested against one pass-start instant or the instant each session lock is acquired?\",\"options\":[\"Snapshot sessions and time at pass start; hold one import lock throughout\",\"Snapshot sessions at pass start; test time per session; hold one import lock throughout\",\"Re-enumerate and reacquire the import lock per session\"],\"default_guess\":\"Snapshot the session identities at pass start, hold the import lock throughout, and test expiry when each session lock is acquired.\"},{\"subject\":\"accepted import and other sessions\",\"kind\":\"lock contradiction\",\"text\":\"“every other request that reads or changes an uploaded file … take the instance's one import lock first, then their session's lock”; “an accepted import, holding it, drops every session's upload”; “The requests of one owner session that change its state … are applied one at a time … [with] the session's one lock”\",\"question\":\"Must an accepted import take every affected session's lock before dropping that session's upload, or is the import lock alone authoritative for uploaded-file state despite the session-lock rule?\",\"options\":[\"Import lock alone protects every uploaded file\",\"Take all affected session locks after the import lock\",\"Treat cross-session clearing as an explicit exception to session-state serialization\"],\"default_guess\":\"Make the import lock the sole authority for uploaded-file state and state that cross-session clearing is an exception to the session-lock rule.\"},{\"subject\":\"accepted import upload clearing\",\"kind\":\"missing atomicity\",\"text\":\"“A refused confirmation keeps it”; “an accepted import … drops every session's upload”; “The import has succeeded when that transaction is committed”\",\"question\":\"At what point relative to the durable import transaction are all in-memory uploads dropped, and must they remain intact if the transaction fails?\",\"options\":[\"Drop uploads only after the transaction commits\",\"Drop them before commit and restore them on rollback\",\"Include a reversible pending-clear step around the transaction\"],\"default_guess\":\"Commit the transaction first, then drop all uploads while still holding the import lock and before answering.\"},{\"subject\":\"closed import upload refusal\",\"kind\":\"check precedence\",\"text\":\"“check the closure while holding them”; “when the closure exists, uploading … [is] refused”; A04 orders “the values given” before lifecycle and conflict checks\",\"question\":\"When the import is already closed and an upload is also oversized, unreadable, or malformed, which refusal wins, and may Registry parse or read the file before checking closure?\",\"options\":[\"Closure is checked first and hides file errors\",\"File/value checks follow A04 and precede closure\",\"Both failures are returned because they occupy one stage\"],\"default_guess\":\"Check closure immediately after authentication and locking, before reading or validating the uploaded file.\"},{\"subject\":\"configuration variables\",\"kind\":\"missing names\",\"text\":\"“The configuration is the set of environment variables whose names begin with REGISTRY_ … It holds exactly these items”\",\"question\":\"What is the exact environment-variable name for each listed item, including each of the four service tokens?\",\"options\":[\"One fixed name per item declared here\",\"Names declared later by the release\",\"A structured convention derived from service names\"],\"default_guess\":\"Use fixed uppercase names such as REGISTRY_STORE_LOCATION, REGISTRY_BACKUP_LOCATION, REGISTRY_BACKUP_KEY, REGISTRY_OWNER_CREDENTIAL, and REGISTRY_TOKEN_<SERVICE>.\"},{\"subject\":\"configuration values and secrets\",\"kind\":\"undefined validation\",\"text\":\"“each well formed”; “A secret … is at least 32 bytes long”\",\"question\":\"What encodings and grammars make paths, tokens, the owner credential, and the backup key well formed, and are the 32 bytes counted before or after decoding an environment-variable string?\",\"options\":[\"UTF-8 text secrets, length measured after UTF-8 encoding\",\"Base64-encoded random bytes, length measured after decoding\",\"Different declared formats for credentials, tokens, and encryption keys\"],\"default_guess\":\"Require base64-encoded bytes for all secrets, measure decoded length, and require exactly 32 decoded bytes for the backup key.\"},{\"subject\":\"configuration paths\",\"kind\":\"ambiguous path resolution\",\"text\":\"“compared by their absolute paths with every symbolic link resolved”\",\"question\":\"Are relative store or backup paths accepted, and if so, against which stable directory are they made absolute?\",\"options\":[\"Reject every relative path\",\"Resolve relative paths against the process working directory\",\"Resolve them against a release-defined data directory\"],\"default_guess\":\"Reject relative paths and require absolute configured paths.\"},{\"subject\":\"new-store temporary file\",\"kind\":\"undeclared release value\",\"text\":\"“under a temporary name — the store's name with a suffix the release declares”\",\"question\":\"What suffix does the release declare, how is collision with an existing non-temporary file prevented, and where is that declaration recorded for later implementations?\",\"options\":[\"A fixed specification-wide suffix\",\"A release-manifest field\",\"A newly random temporary suffix on each start\"],\"default_guess\":\"Use one fixed suffix declared in the release manifest and refuse unsafe collisions.\"},{\"subject\":\"backup encryption\",\"kind\":\"missing cryptographic protocol\",\"text\":\"“Each backup is encrypted with the backup key”; “A backup cannot be read without the key it was made with”\",\"question\":\"Which authenticated-encryption algorithm, nonce generation rule, key size and encoding, file framing, associated data, and authentication-failure behavior define an encrypted backup?\",\"options\":[\"AES-256-GCM with a random nonce and authenticated metadata\",\"XChaCha20-Poly1305 with a random nonce and authenticated metadata\",\"A standard encrypted-container format fixed by the release\"],\"default_guess\":\"Use XChaCha20-Poly1305 with a 32-byte decoded key, a fresh random nonce, and authenticate all unencrypted metadata as associated data.\"},{\"subject\":\"backup key digest\",\"kind\":\"undefined digest\",\"text\":\"“a digest of the key it was made with (never the key)”\",\"question\":\"Which digest algorithm and byte representation are used, and is the recorded digest verified against the configured key during the make-and-check run?\",\"options\":[\"SHA-256 of the decoded key, verified during the run\",\"A keyed identifier derived with HKDF\",\"An opaque key identifier supplied in configuration\"],\"default_guess\":\"Record SHA-256 of the decoded backup key and verify it during the backup check.\"},{\"subject\":\"backup file format and names\",\"kind\":\"undeclared format\",\"text\":\"“Kept and temporary names begin with two different prefixes the release declares”; “A kept name is made from the backup's instant”; “its unencrypted record … can be read”\",\"question\":\"What are the two prefixes, the kept-name timestamp representation and precision, and the exact serialized layout and versioning of the unencrypted record and encrypted payload?\",\"options\":[\"A specification-wide versioned binary container and fixed filename grammar\",\"A release-manifest declaration of prefixes and container version\",\"Implementation-private names and serialization\"],\"default_guess\":\"Define a versioned binary container and fixed ASCII filenames containing a UTC timestamp with subsecond precision and a random collision-resistant suffix.\"},{\"subject\":\"backup record validity\",\"kind\":\"vague validation\",\"text\":\"“a kept file's record is valid when its instant, release, last sequence number and key digest can all be read”\",\"question\":\"Does ‘can all be read’ require only syntactic decoding, or also valid ranges, a known release, a non-future instant, a correctly sized digest, and consistency between the record and ciphertext?\",\"options\":[\"Syntactic decoding only\",\"Full semantic and cryptographic consistency validation\",\"Semantic validation except that old or unknown releases remain valid\"],\"default_guess\":\"Require full syntactic, range, and cryptographic consistency validation, while allowing a recorded older release identifier.\"},{\"subject\":\"backup audit sequence\",\"kind\":\"ambiguous invariant\",\"text\":\"“records … the last audit sequence number it holds”; “checks … that its audit log ends at the recorded sequence number”\",\"question\":\"Is the recorded number the persistent highest-ever sequence counter or the greatest surviving AuditEntry sequence, and what value represents a new store with no audit entries?\",\"options\":[\"Persistent highest-ever counter, with 0 for no entries\",\"Greatest surviving entry, with null for no entries\",\"Both values are recorded and checked separately\"],\"default_guess\":\"Record the persistent highest-ever counter, use 0 before the first entry, and require the greatest surviving entry to equal it whenever entries exist.\"}]}",
+ "set_aside": []
+}

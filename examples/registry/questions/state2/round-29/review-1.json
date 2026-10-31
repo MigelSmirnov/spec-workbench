@@ -1,0 +1,202 @@
+{
+ "open_points": [
+  {
+   "subject": "owner-session expiry versus an admitted request",
+   "kind": "concurrency contradiction",
+   "text": "Validity is checked when a request arrives, and a request that passes it completes even if a limit comes while it runs; however, the expiry pass later takes the import lock and the session lock and ends the session, while state-changing requests take those locks only after passing the session check.",
+   "question": "What happens when a request passes the session check but the expiry pass acquires the required lock first and removes that session before the request acquires it?",
+   "options": [
+    "The admitted request must complete, so expiry waits for all requests admitted before the limit.",
+    "The expiry pass removes the session and the admitted request is subsequently refused.",
+    "Lock acquisition and the validity decision are one atomic admission step, so this interleaving cannot occur."
+   ],
+   "default_guess": "Treat arrival-time admission as decisive and let every admitted request complete before the pass removes the session.",
+   "unit": "A13"
+  },
+  {
+   "subject": "owner-session expiry pass schedule",
+   "kind": "vague schedule",
+   "text": "Registry ends it ... at a pass over the sessions it makes every 60 seconds from the start.",
+   "question": "Does the first pass run at startup or 60 seconds later, and when a pass lasts longer than 60 seconds are later passes skipped, coalesced, queued or overlapped?",
+   "options": [
+    "First pass after 60 seconds; use fixed-delay, non-overlapping passes.",
+    "First pass at startup; use fixed-rate passes and skip a tick while one is running.",
+    "Queue every elapsed tick and run the passes serially."
+   ],
+   "default_guess": "Run the first pass 60 seconds after startup and use non-overlapping fixed-delay passes, coalescing missed ticks.",
+   "unit": "A13"
+  },
+  {
+   "subject": "locks held by the expiry pass",
+   "kind": "ambiguous lock scope",
+   "text": "the pass alone ends sessions by their limits, taking the import lock and then each session's lock ... and deciding under them",
+   "question": "Does one pass hold the import lock for the entire traversal, and does it acquire and release each session lock separately or hold all session locks together?",
+   "options": [
+    "Hold the import lock for the whole pass and acquire one session lock at a time.",
+    "Release the import lock between sessions.",
+    "Hold the import lock and all session locks until the complete pass finishes."
+   ],
+   "default_guess": "Hold the import lock for the whole pass and acquire, decide and release one session lock at a time.",
+   "unit": "A13"
+  },
+  {
+   "subject": "clock used for owner-session limits",
+   "kind": "missing clock rule",
+   "text": "A session that has reached a limit serves no request from that moment ... Registry ends it ... at a pass over the sessions it makes every 60 seconds from the start.",
+   "question": "Which clock measures the 8-hour, 30-minute, 10-minute, 15-minute and 60-second intervals, and what happens when the system wall clock moves forward or backward?",
+   "options": [
+    "Use a monotonic clock for all runtime durations.",
+    "Use UTC wall-clock instants, so clock adjustments change expiry and lockout timing.",
+    "Use wall clock for recorded instants and monotonic deadlines for runtime limits."
+   ],
+   "default_guess": "Use monotonic deadlines for runtime limits and UTC wall clock only for recorded instants.",
+   "unit": "A13"
+  },
+  {
+   "subject": "accepted import changing every session's upload",
+   "kind": "lock-rule conflict",
+   "text": "An accepted import, holding it, drops every session's upload ... Other session changes take their session's lock alone. A13 also says requests of one owner session that change its state are applied one at a time under that session's lock.",
+   "question": "May an accepted import drop uploads from other sessions while holding only the import lock, or must it also acquire each affected session's lock, and if so in what scope?",
+   "options": [
+    "The import lock exclusively protects uploaded-file fields, so no other session lock is required.",
+    "Acquire each affected session's lock one at a time while retaining the import lock.",
+    "Acquire every affected session lock before dropping any upload."
+   ],
+   "default_guess": "Treat the import lock as the sole lock for uploaded-file fields, because every operation that accesses those fields must already hold it.",
+   "unit": "A16"
+  },
+  {
+   "subject": "configuration environment-variable names",
+   "kind": "missing identifiers",
+   "text": "The configuration is the set of environment variables whose names begin with REGISTRY_ ... It holds exactly these items and no other.",
+   "question": "What is the exact environment-variable name for each store location, backup location, backup key, owner credential and service token?",
+   "options": [
+    "State 2 declares fixed names for all items.",
+    "A later state declares the names.",
+    "Names are derived mechanically from the item and service names."
+   ],
+   "default_guess": "Use fixed uppercase names under REGISTRY_, with one explicitly named variable per listed item.",
+   "unit": "A17"
+  },
+  {
+   "subject": "configuration value syntax",
+   "kind": "undefined validation",
+   "text": "every other item of rule 1 present; each well formed; each secret's length ...",
+   "question": "What makes each configuration value well formed beyond presence and secret length, including the accepted text encoding and representation of paths, credentials, tokens and the backup key?",
+   "options": [
+    "All secrets are literal UTF-8 text and paths are filesystem path strings.",
+    "Secrets use an encoded binary form such as base64, with malformed encodings refused.",
+    "Each item has a separately declared grammar."
+   ],
+   "default_guess": "Treat environment values as literal UTF-8 text, count their UTF-8 bytes, and give paths a separately validated filesystem-path grammar.",
+   "unit": "A17"
+  },
+  {
+   "subject": "secret byte length and equality",
+   "kind": "encoding ambiguity",
+   "text": "A secret ... is at least 32 bytes long ... No two secrets are equal.",
+   "question": "How are environment-variable text values converted to bytes for length, constant-time comparison and equality, and are Unicode normalization or alternate encodings significant?",
+   "options": [
+    "Compare the exact UTF-8 byte encoding with no normalization.",
+    "Restrict secrets to ASCII and compare those bytes.",
+    "Decode a declared binary encoding before checking length and equality."
+   ],
+   "default_guess": "Compare exact UTF-8 bytes without Unicode normalization.",
+   "unit": "A17"
+  },
+  {
+   "subject": "relative and canonical configuration paths",
+   "kind": "path ambiguity",
+   "text": "compared by their absolute paths with every symbolic link resolved",
+   "question": "Are relative store or backup paths accepted, and if they are, relative to which stable directory are they made absolute?",
+   "options": [
+    "Require absolute paths and refuse relative ones.",
+    "Resolve relative paths against the process working directory.",
+    "Resolve relative paths against a release- or configuration-directory fixed by the specification."
+   ],
+   "default_guess": "Require absolute paths so startup behavior does not depend on the process working directory.",
+   "unit": "A17"
+  },
+  {
+   "subject": "exclusive ownership of the store and backup location",
+   "kind": "unenforced concurrency invariant",
+   "text": "When the store's configured file does not exist ... Registry makes a new, empty store ... A18 states that backup runs never overlap, but startup establishes no single-process or location ownership lock.",
+   "question": "What prevents two Registry processes using the same configuration from concurrently creating or opening the store and running backups in the same location?",
+   "options": [
+    "Startup acquires an exclusive inter-process lock covering the store and backup location.",
+    "The deployment must guarantee one process, with concurrent processes outside Registry's guarantees.",
+    "SQLite serializes store writes, while a separate backup-location lock serializes backup runs."
+   ],
+   "default_guess": "Acquire an exclusive inter-process ownership lock at startup and fail the second process.",
+   "unit": "A17"
+  },
+  {
+   "subject": "backup encryption construction",
+   "kind": "missing security mechanism",
+   "text": "Each backup is encrypted with the backup key ... A backup cannot be read without the key it was made with.",
+   "question": "Which authenticated-encryption algorithm, nonce-generation rule and key-derivation rule are required, especially since A17 accepts secrets of any length of at least 32 bytes?",
+   "options": [
+    "Use a declared authenticated-encryption scheme with random nonces and a KDF producing its fixed-size key.",
+    "Require an exact-size raw encryption key and use it directly with a declared authenticated-encryption scheme.",
+    "Leave the cryptographic construction to each implementation."
+   ],
+   "default_guess": "Use a release-declared authenticated-encryption scheme, a random nonce per backup and a domain-separated KDF from the configured key.",
+   "unit": "A18"
+  },
+  {
+   "subject": "unencrypted backup record integrity",
+   "kind": "metadata ambiguity",
+   "text": "It records, readable without its key, its instant, the release that made it, the last audit sequence number it holds and a digest of the key ... a kept file's record is valid when its instant, release, last sequence number and key digest can all be read.",
+   "question": "Is the unencrypted record authenticated, what exact format and version does it use, and which digest algorithm and encoding identify the backup key?",
+   "options": [
+    "Authenticate the record as associated data of the encrypted backup and declare a versioned envelope format.",
+    "Leave the record unauthenticated and rely on the decrypted store checks.",
+    "Put only a format marker outside encryption and keep all other metadata authenticated inside."
+   ],
+   "default_guess": "Use a versioned envelope and authenticate all cleartext metadata as associated data; use a release-declared cryptographic digest encoding.",
+   "unit": "A18"
+  },
+  {
+   "subject": "backup file and temporary-name allocation",
+   "kind": "missing file rule",
+   "text": "it writes the backup under a temporary name ... a kept name is made from the backup's instant and is never overwritten",
+   "question": "What are the exact name formats and timestamp precision, how is a unique temporary name chosen, and what happens if a pre-existing file, link or directory occupies that temporary name?",
+   "options": [
+    "Use an exclusive random temporary filename and refuse any collision; derive the kept name from a canonical high-resolution UTC instant.",
+    "Use a fixed temporary filename after cleanup.",
+    "Include both the instant and fresh randomness in kept and temporary names."
+   ],
+   "default_guess": "Create a random temporary regular file exclusively without following links, then use a canonical UTC instant plus randomness for the kept name.",
+   "unit": "A18"
+  },
+  {
+   "subject": "last audit sequence in an empty store",
+   "kind": "undefined boundary value",
+   "text": "It records ... the last audit sequence number it holds ... checks ... that its audit log ends at the recorded sequence number.",
+   "question": "What value is recorded and what check passes when the store has never written an audit entry?",
+   "options": [
+    "Record zero and require the audit log to be empty.",
+    "Record an explicit absent value.",
+    "Omit the field for an empty log."
+   ],
+   "default_guess": "Record zero and require that the copied audit log contains no entries.",
+   "unit": "A18"
+  },
+  {
+   "subject": "shutdown during a backup run",
+   "kind": "missing interruption rule",
+   "text": "A 03:00 that finds Registry stopped ... makes no run ... A step that fails leaves no partial kept backup — at most a file under the temporary prefix, which the next run removes.",
+   "question": "When Registry is asked to stop while a run is active, does shutdown wait for the run, cancel it and leave temporary files, or allow the run to finish independently?",
+   "options": [
+    "Graceful shutdown waits for the active run to finish.",
+    "Graceful shutdown cancels the run, leaving only temporary files for the next startup or run.",
+    "The backup worker may outlive request serving but must finish before process exit."
+   ],
+   "default_guess": "Cancel the run during shutdown, never publish a partially checked backup, and leave only temporary files for later cleanup.",
+   "unit": "A18"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"owner-session expiry versus an admitted request\",\"kind\":\"concurrency contradiction\",\"text\":\"Validity is checked when a request arrives, and a request that passes it completes even if a limit comes while it runs; however, the expiry pass later takes the import lock and the session lock and ends the session, while state-changing requests take those locks only after passing the session check.\",\"question\":\"What happens when a request passes the session check but the expiry pass acquires the required lock first and removes that session before the request acquires it?\",\"options\":[\"The admitted request must complete, so expiry waits for all requests admitted before the limit.\",\"The expiry pass removes the session and the admitted request is subsequently refused.\",\"Lock acquisition and the validity decision are one atomic admission step, so this interleaving cannot occur.\"],\"default_guess\":\"Treat arrival-time admission as decisive and let every admitted request complete before the pass removes the session.\",\"unit\":\"A13\"},{\"subject\":\"owner-session expiry pass schedule\",\"kind\":\"vague schedule\",\"text\":\"Registry ends it ... at a pass over the sessions it makes every 60 seconds from the start.\",\"question\":\"Does the first pass run at startup or 60 seconds later, and when a pass lasts longer than 60 seconds are later passes skipped, coalesced, queued or overlapped?\",\"options\":[\"First pass after 60 seconds; use fixed-delay, non-overlapping passes.\",\"First pass at startup; use fixed-rate passes and skip a tick while one is running.\",\"Queue every elapsed tick and run the passes serially.\"],\"default_guess\":\"Run the first pass 60 seconds after startup and use non-overlapping fixed-delay passes, coalescing missed ticks.\",\"unit\":\"A13\"},{\"subject\":\"locks held by the expiry pass\",\"kind\":\"ambiguous lock scope\",\"text\":\"the pass alone ends sessions by their limits, taking the import lock and then each session's lock ... and deciding under them\",\"question\":\"Does one pass hold the import lock for the entire traversal, and does it acquire and release each session lock separately or hold all session locks together?\",\"options\":[\"Hold the import lock for the whole pass and acquire one session lock at a time.\",\"Release the import lock between sessions.\",\"Hold the import lock and all session locks until the complete pass finishes.\"],\"default_guess\":\"Hold the import lock for the whole pass and acquire, decide and release one session lock at a time.\",\"unit\":\"A13\"},{\"subject\":\"clock used for owner-session limits\",\"kind\":\"missing clock rule\",\"text\":\"A session that has reached a limit serves no request from that moment ... Registry ends it ... at a pass over the sessions it makes every 60 seconds from the start.\",\"question\":\"Which clock measures the 8-hour, 30-minute, 10-minute, 15-minute and 60-second intervals, and what happens when the system wall clock moves forward or backward?\",\"options\":[\"Use a monotonic clock for all runtime durations.\",\"Use UTC wall-clock instants, so clock adjustments change expiry and lockout timing.\",\"Use wall clock for recorded instants and monotonic deadlines for runtime limits.\"],\"default_guess\":\"Use monotonic deadlines for runtime limits and UTC wall clock only for recorded instants.\",\"unit\":\"A13\"},{\"subject\":\"accepted import changing every session's upload\",\"kind\":\"lock-rule conflict\",\"text\":\"An accepted import, holding it, drops every session's upload ... Other session changes take their session's lock alone. A13 also says requests of one owner session that change its state are applied one at a time under that session's lock.\",\"question\":\"May an accepted import drop uploads from other sessions while holding only the import lock, or must it also acquire each affected session's lock, and if so in what scope?\",\"options\":[\"The import lock exclusively protects uploaded-file fields, so no other session lock is required.\",\"Acquire each affected session's lock one at a time while retaining the import lock.\",\"Acquire every affected session lock before dropping any upload.\"],\"default_guess\":\"Treat the import lock as the sole lock for uploaded-file fields, because every operation that accesses those fields must already hold it.\",\"unit\":\"A16\"},{\"subject\":\"configuration environment-variable names\",\"kind\":\"missing identifiers\",\"text\":\"The configuration is the set of environment variables whose names begin with REGISTRY_ ... It holds exactly these items and no other.\",\"question\":\"What is the exact environment-variable name for each store location, backup location, backup key, owner credential and service token?\",\"options\":[\"State 2 declares fixed names for all items.\",\"A later state declares the names.\",\"Names are derived mechanically from the item and service names.\"],\"default_guess\":\"Use fixed uppercase names under REGISTRY_, with one explicitly named variable per listed item.\",\"unit\":\"A17\"},{\"subject\":\"configuration value syntax\",\"kind\":\"undefined validation\",\"text\":\"every other item of rule 1 present; each well formed; each secret's length ...\",\"question\":\"What makes each configuration value well formed beyond presence and secret length, including the accepted text encoding and representation of paths, credentials, tokens and the backup key?\",\"options\":[\"All secrets are literal UTF-8 text and paths are filesystem path strings.\",\"Secrets use an encoded binary form such as base64, with malformed encodings refused.\",\"Each item has a separately declared grammar.\"],\"default_guess\":\"Treat environment values as literal UTF-8 text, count their UTF-8 bytes, and give paths a separately validated filesystem-path grammar.\",\"unit\":\"A17\"},{\"subject\":\"secret byte length and equality\",\"kind\":\"encoding ambiguity\",\"text\":\"A secret ... is at least 32 bytes long ... No two secrets are equal.\",\"question\":\"How are environment-variable text values converted to bytes for length, constant-time comparison and equality, and are Unicode normalization or alternate encodings significant?\",\"options\":[\"Compare the exact UTF-8 byte encoding with no normalization.\",\"Restrict secrets to ASCII and compare those bytes.\",\"Decode a declared binary encoding before checking length and equality.\"],\"default_guess\":\"Compare exact UTF-8 bytes without Unicode normalization.\",\"unit\":\"A17\"},{\"subject\":\"relative and canonical configuration paths\",\"kind\":\"path ambiguity\",\"text\":\"compared by their absolute paths with every symbolic link resolved\",\"question\":\"Are relative store or backup paths accepted, and if they are, relative to which stable directory are they made absolute?\",\"options\":[\"Require absolute paths and refuse relative ones.\",\"Resolve relative paths against the process working directory.\",\"Resolve relative paths against a release- or configuration-directory fixed by the specification.\"],\"default_guess\":\"Require absolute paths so startup behavior does not depend on the process working directory.\",\"unit\":\"A17\"},{\"subject\":\"exclusive ownership of the store and backup location\",\"kind\":\"unenforced concurrency invariant\",\"text\":\"When the store's configured file does not exist ... Registry makes a new, empty store ... A18 states that backup runs never overlap, but startup establishes no single-process or location ownership lock.\",\"question\":\"What prevents two Registry processes using the same configuration from concurrently creating or opening the store and running backups in the same location?\",\"options\":[\"Startup acquires an exclusive inter-process lock covering the store and backup location.\",\"The deployment must guarantee one process, with concurrent processes outside Registry's guarantees.\",\"SQLite serializes store writes, while a separate backup-location lock serializes backup runs.\"],\"default_guess\":\"Acquire an exclusive inter-process ownership lock at startup and fail the second process.\",\"unit\":\"A17\"},{\"subject\":\"backup encryption construction\",\"kind\":\"missing security mechanism\",\"text\":\"Each backup is encrypted with the backup key ... A backup cannot be read without the key it was made with.\",\"question\":\"Which authenticated-encryption algorithm, nonce-generation rule and key-derivation rule are required, especially since A17 accepts secrets of any length of at least 32 bytes?\",\"options\":[\"Use a declared authenticated-encryption scheme with random nonces and a KDF producing its fixed-size key.\",\"Require an exact-size raw encryption key and use it directly with a declared authenticated-encryption scheme.\",\"Leave the cryptographic construction to each implementation.\"],\"default_guess\":\"Use a release-declared authenticated-encryption scheme, a random nonce per backup and a domain-separated KDF from the configured key.\",\"unit\":\"A18\"},{\"subject\":\"unencrypted backup record integrity\",\"kind\":\"metadata ambiguity\",\"text\":\"It records, readable without its key, its instant, the release that made it, the last audit sequence number it holds and a digest of the key ... a kept file's record is valid when its instant, release, last sequence number and key digest can all be read.\",\"question\":\"Is the unencrypted record authenticated, what exact format and version does it use, and which digest algorithm and encoding identify the backup key?\",\"options\":[\"Authenticate the record as associated data of the encrypted backup and declare a versioned envelope format.\",\"Leave the record unauthenticated and rely on the decrypted store checks.\",\"Put only a format marker outside encryption and keep all other metadata authenticated inside.\"],\"default_guess\":\"Use a versioned envelope and authenticate all cleartext metadata as associated data; use a release-declared cryptographic digest encoding.\",\"unit\":\"A18\"},{\"subject\":\"backup file and temporary-name allocation\",\"kind\":\"missing file rule\",\"text\":\"it writes the backup under a temporary name ... a kept name is made from the backup's instant and is never overwritten\",\"question\":\"What are the exact name formats and timestamp precision, how is a unique temporary name chosen, and what happens if a pre-existing file, link or directory occupies that temporary name?\",\"options\":[\"Use an exclusive random temporary filename and refuse any collision; derive the kept name from a canonical high-resolution UTC instant.\",\"Use a fixed temporary filename after cleanup.\",\"Include both the instant and fresh randomness in kept and temporary names.\"],\"default_guess\":\"Create a random temporary regular file exclusively without following links, then use a canonical UTC instant plus randomness for the kept name.\",\"unit\":\"A18\"},{\"subject\":\"last audit sequence in an empty store\",\"kind\":\"undefined boundary value\",\"text\":\"It records ... the last audit sequence number it holds ... checks ... that its audit log ends at the recorded sequence number.\",\"question\":\"What value is recorded and what check passes when the store has never written an audit entry?\",\"options\":[\"Record zero and require the audit log to be empty.\",\"Record an explicit absent value.\",\"Omit the field for an empty log.\"],\"default_guess\":\"Record zero and require that the copied audit log contains no entries.\",\"unit\":\"A18\"},{\"subject\":\"shutdown during a backup run\",\"kind\":\"missing interruption rule\",\"text\":\"A 03:00 that finds Registry stopped ... makes no run ... A step that fails leaves no partial kept backup — at most a file under the temporary prefix, which the next run removes.\",\"question\":\"When Registry is asked to stop while a run is active, does shutdown wait for the run, cancel it and leave temporary files, or allow the run to finish independently?\",\"options\":[\"Graceful shutdown waits for the active run to finish.\",\"Graceful shutdown cancels the run, leaving only temporary files for the next startup or run.\",\"The backup worker may outlive request serving but must finish before process exit.\"],\"default_guess\":\"Cancel the run during shutdown, never publish a partially checked backup, and leave only temporary files for later cleanup.\",\"unit\":\"A18\"}]}",
+ "set_aside": []
+}

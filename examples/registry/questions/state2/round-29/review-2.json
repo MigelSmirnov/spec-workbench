@@ -1,0 +1,165 @@
+{
+ "open_points": [
+  {
+   "subject": "A13 owner-session expiry and request arrival",
+   "kind": "missing linearization",
+   "text": "“its arrival restarts the 30 minutes — of concurrent requests the latest arrival counts” and “the pass alone ends sessions by their limits, taking the import lock and then each session's lock ... and deciding under them”, while validity is “checked when a request arrives” before the request takes those locks",
+   "question": "What single ordering point decides whether an arriving request refreshes the idle limit before the expiry pass ends the session, and under what lock or atomic operation is last_request updated?",
+   "options": [
+    "The session check and last_request update are atomic under the session lock before the expiry pass may decide",
+    "Arrival atomically updates last_request without the session lock, and the expiry pass must observe it",
+    "The expiry pass may win after a request passed its session check, leaving that admitted request to finish against an ended session"
+   ],
+   "default_guess": "Make the session check and max(last_request, arrival) update one atomic operation ordered against the expiry pass under the session lock.",
+   "unit": "A13"
+  },
+  {
+   "subject": "A13 sixty-second expiry pass",
+   "kind": "schedule ambiguity",
+   "text": "“a pass over the sessions it makes every 60 seconds from the start”",
+   "question": "If a pass lasts longer than 60 seconds, does Registry overlap passes, skip elapsed ticks, or start another pass immediately afterward; and is the import lock held once for the whole pass or reacquired for each session?",
+   "options": [
+    "One non-overlapping pass, missed ticks skipped, with the import lock held for the whole pass",
+    "One non-overlapping pass, missed ticks caught up immediately, with the import lock held for the whole pass",
+    "Independent passes may overlap",
+    "The import lock is acquired separately for each session"
+   ],
+   "default_guess": "Run non-overlapping passes, skip missed ticks, and hold the import lock once while visiting the pass's session snapshot.",
+   "unit": "A13"
+  },
+  {
+   "subject": "A16 successful import dropping every session upload",
+   "kind": "lock ownership ambiguity",
+   "text": "“an accepted import, holding it, drops every session's upload” while requests changing session state are otherwise serialized by “their session's lock”",
+   "question": "May the confirming request mutate uploads in other sessions while holding only the import lock and its own session lock, or must it also take every affected session's lock; if it must, in what order are those locks acquired?",
+   "options": [
+    "The import lock exclusively owns all uploaded-file fields, so no other session lock is required",
+    "Take the import lock and then every affected session lock in a declared total order",
+    "Take and release each affected session lock one at a time while retaining the import lock"
+   ],
+   "default_guess": "Treat uploaded-file fields as exclusively protected by the import lock and require no other sessions' locks.",
+   "unit": "A16"
+  },
+  {
+   "subject": "A17 configuration schema",
+   "kind": "undefined validation",
+   "text": "“It holds exactly these items and no other” and “each well formed”",
+   "question": "What are the exact REGISTRY_ variable names and the accepted representation and syntax of the store location, backup location, backup key, owner credential and service tokens?",
+   "options": [
+    "Declare exact variable names and textual encodings in A17",
+    "Defer the concrete names and encodings explicitly to State 6",
+    "Accept arbitrary environment strings subject only to the stated path and length checks"
+   ],
+   "default_guess": "Declare fixed variable names, filesystem-path syntax for locations, and an explicit encoded-byte format for every secret.",
+   "unit": "A17"
+  },
+  {
+   "subject": "A17 secret length",
+   "kind": "unit ambiguity",
+   "text": "“A secret ... is at least 32 bytes long” although configuration values are environment variables",
+   "question": "How is the byte length of an environment-variable value computed, and is the backup key an encoded random key, raw text used directly, or input to a key-derivation function?",
+   "options": [
+    "Count UTF-8 bytes and use those bytes directly",
+    "Require a specified encoding such as base64 and count decoded bytes",
+    "Count characters rather than encoded bytes",
+    "Apply a specified password-based key-derivation function"
+   ],
+   "default_guess": "Require canonical base64 encoding and at least 32 decoded random bytes; compare decoded secret bytes.",
+   "unit": "A17"
+  },
+  {
+   "subject": "A17 temporary store file",
+   "kind": "undeclared release value",
+   "text": "“under a temporary name — the store's name with a suffix the release declares”",
+   "question": "What suffix is declared, and what exact path results for store names with extensions or unusual filesystem characters?",
+   "options": [
+    "Declare one literal suffix appended to the entire configured filename",
+    "Insert a literal suffix before the filename extension",
+    "Generate a unique temporary name for each start"
+   ],
+   "default_guess": "Append one fixed release-declared literal suffix to the entire configured store path.",
+   "unit": "A17"
+  },
+  {
+   "subject": "A18 backup encryption",
+   "kind": "unspecified cryptography",
+   "text": "“Each backup is encrypted with the backup key” and it records “a digest of the key”",
+   "question": "Which authenticated-encryption construction, nonce generation, key interpretation or derivation, file format, and key-digest algorithm must implementations use?",
+   "options": [
+    "Specify one versioned authenticated-encryption format and key-digest algorithm",
+    "Permit any authenticated-encryption implementation meeting stated security properties",
+    "Permit encryption without authentication"
+   ],
+   "default_guess": "Use a versioned AEAD format with a fresh random nonce, a fixed 32-byte decoded key, and a specified cryptographic digest for the key identifier.",
+   "unit": "A18"
+  },
+  {
+   "subject": "A18 unencrypted backup record",
+   "kind": "contradictory readability",
+   "text": "Rule 1 says a backup “records, readable without its key, its instant, the release that made it, the last audit sequence number it holds and a digest of the key”, while required test 3 says “A backup cannot be read without the key it was made with.”",
+   "question": "Does the no-key readability prohibition cover the whole backup file, or only its encrypted store payload while the listed metadata remains readable?",
+   "options": [
+    "The listed metadata is readable without the key; only the store payload is confidential",
+    "Nothing in the backup, including metadata, is readable without the key",
+    "Only a minimal format/version marker is readable without the key"
+   ],
+   "default_guess": "Keep exactly the listed metadata readable and interpret the test as requiring that the store payload cannot be read without the key.",
+   "unit": "A18"
+  },
+  {
+   "subject": "A18 integrity of readable backup metadata",
+   "kind": "missing integrity rule",
+   "text": "The metadata is “readable without its key”, and a kept record is valid when its fields “can all be read”, but no rule says the metadata is authenticated or checked against the encrypted contents beyond the audit sequence number.",
+   "question": "Must the unencrypted instant, release, key digest and sequence metadata be cryptographically authenticated and cross-checked with values inside the decrypted backup?",
+   "options": [
+    "Authenticate all metadata as AEAD associated data and cross-check duplicated values after decryption",
+    "Authenticate the metadata but do not duplicate or cross-check it inside the payload",
+    "Treat readable metadata as unauthenticated and trust any parseable values"
+   ],
+   "default_guess": "Authenticate all readable metadata as associated data and cross-check release and sequence against the decrypted store.",
+   "unit": "A18"
+  },
+  {
+   "subject": "A18 validity of backup records",
+   "kind": "incomplete refusal conditions",
+   "text": "“a kept file's record is valid when its instant, release, last sequence number and key digest can all be read”",
+   "question": "What values count as readable and valid—for example, may the instant be in the future, the sequence be negative or exceed the store's counter, the release be unknown, or the key digest have an unexpected length?",
+   "options": [
+    "Only syntactic decoding is required",
+    "Apply declared syntax and semantic bounds, then verify the values during decryption",
+    "Treat any unfamiliar release or key digest as invalid immediately"
+   ],
+   "default_guess": "Require canonical field encodings and semantic bounds, and verify release and sequence against the decrypted store before keeping the backup.",
+   "unit": "A18"
+  },
+  {
+   "subject": "A18 backup filenames and prefixes",
+   "kind": "undeclared naming",
+   "text": "“Kept and temporary names begin with two different prefixes the release declares” and “A kept name is made from the backup's instant”",
+   "question": "What are the exact prefixes and the canonical conversion of an instant into a kept filename, including precision, timezone notation and collision behavior for equal instants?",
+   "options": [
+    "Declare fixed prefixes and a UTC timestamp format with sufficient precision",
+    "Use a timestamp plus a random or monotonic suffix",
+    "Leave filenames implementation-specific while requiring only uniqueness"
+   ],
+   "default_guess": "Declare fixed prefixes and encode the UTC instant canonically with microsecond precision, adding a collision-resistant suffix if necessary.",
+   "unit": "A18"
+  },
+  {
+   "subject": "A18 backup sequence metadata for an empty log",
+   "kind": "undefined sentinel",
+   "text": "A backup records “the last audit sequence number it holds” and the check requires “that its audit log ends at the recorded sequence number”",
+   "question": "What value is recorded and what check is performed when the store has never written an audit entry and its audit log is empty?",
+   "options": [
+    "Record 0 and require an empty log with the stored sequence counter at 0",
+    "Record null and require an empty log",
+    "Omit the field for an empty log"
+   ],
+   "default_guess": "Record 0 and require both an empty audit log and a sequence counter of 0.",
+   "unit": "A18"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A13 owner-session expiry and request arrival\",\"kind\":\"missing linearization\",\"text\":\"“its arrival restarts the 30 minutes — of concurrent requests the latest arrival counts” and “the pass alone ends sessions by their limits, taking the import lock and then each session's lock ... and deciding under them”, while validity is “checked when a request arrives” before the request takes those locks\",\"question\":\"What single ordering point decides whether an arriving request refreshes the idle limit before the expiry pass ends the session, and under what lock or atomic operation is last_request updated?\",\"options\":[\"The session check and last_request update are atomic under the session lock before the expiry pass may decide\",\"Arrival atomically updates last_request without the session lock, and the expiry pass must observe it\",\"The expiry pass may win after a request passed its session check, leaving that admitted request to finish against an ended session\"],\"default_guess\":\"Make the session check and max(last_request, arrival) update one atomic operation ordered against the expiry pass under the session lock.\",\"unit\":\"A13\"},{\"subject\":\"A13 sixty-second expiry pass\",\"kind\":\"schedule ambiguity\",\"text\":\"“a pass over the sessions it makes every 60 seconds from the start”\",\"question\":\"If a pass lasts longer than 60 seconds, does Registry overlap passes, skip elapsed ticks, or start another pass immediately afterward; and is the import lock held once for the whole pass or reacquired for each session?\",\"options\":[\"One non-overlapping pass, missed ticks skipped, with the import lock held for the whole pass\",\"One non-overlapping pass, missed ticks caught up immediately, with the import lock held for the whole pass\",\"Independent passes may overlap\",\"The import lock is acquired separately for each session\"],\"default_guess\":\"Run non-overlapping passes, skip missed ticks, and hold the import lock once while visiting the pass's session snapshot.\",\"unit\":\"A13\"},{\"subject\":\"A16 successful import dropping every session upload\",\"kind\":\"lock ownership ambiguity\",\"text\":\"“an accepted import, holding it, drops every session's upload” while requests changing session state are otherwise serialized by “their session's lock”\",\"question\":\"May the confirming request mutate uploads in other sessions while holding only the import lock and its own session lock, or must it also take every affected session's lock; if it must, in what order are those locks acquired?\",\"options\":[\"The import lock exclusively owns all uploaded-file fields, so no other session lock is required\",\"Take the import lock and then every affected session lock in a declared total order\",\"Take and release each affected session lock one at a time while retaining the import lock\"],\"default_guess\":\"Treat uploaded-file fields as exclusively protected by the import lock and require no other sessions' locks.\",\"unit\":\"A16\"},{\"subject\":\"A17 configuration schema\",\"kind\":\"undefined validation\",\"text\":\"“It holds exactly these items and no other” and “each well formed”\",\"question\":\"What are the exact REGISTRY_ variable names and the accepted representation and syntax of the store location, backup location, backup key, owner credential and service tokens?\",\"options\":[\"Declare exact variable names and textual encodings in A17\",\"Defer the concrete names and encodings explicitly to State 6\",\"Accept arbitrary environment strings subject only to the stated path and length checks\"],\"default_guess\":\"Declare fixed variable names, filesystem-path syntax for locations, and an explicit encoded-byte format for every secret.\",\"unit\":\"A17\"},{\"subject\":\"A17 secret length\",\"kind\":\"unit ambiguity\",\"text\":\"“A secret ... is at least 32 bytes long” although configuration values are environment variables\",\"question\":\"How is the byte length of an environment-variable value computed, and is the backup key an encoded random key, raw text used directly, or input to a key-derivation function?\",\"options\":[\"Count UTF-8 bytes and use those bytes directly\",\"Require a specified encoding such as base64 and count decoded bytes\",\"Count characters rather than encoded bytes\",\"Apply a specified password-based key-derivation function\"],\"default_guess\":\"Require canonical base64 encoding and at least 32 decoded random bytes; compare decoded secret bytes.\",\"unit\":\"A17\"},{\"subject\":\"A17 temporary store file\",\"kind\":\"undeclared release value\",\"text\":\"“under a temporary name — the store's name with a suffix the release declares”\",\"question\":\"What suffix is declared, and what exact path results for store names with extensions or unusual filesystem characters?\",\"options\":[\"Declare one literal suffix appended to the entire configured filename\",\"Insert a literal suffix before the filename extension\",\"Generate a unique temporary name for each start\"],\"default_guess\":\"Append one fixed release-declared literal suffix to the entire configured store path.\",\"unit\":\"A17\"},{\"subject\":\"A18 backup encryption\",\"kind\":\"unspecified cryptography\",\"text\":\"“Each backup is encrypted with the backup key” and it records “a digest of the key”\",\"question\":\"Which authenticated-encryption construction, nonce generation, key interpretation or derivation, file format, and key-digest algorithm must implementations use?\",\"options\":[\"Specify one versioned authenticated-encryption format and key-digest algorithm\",\"Permit any authenticated-encryption implementation meeting stated security properties\",\"Permit encryption without authentication\"],\"default_guess\":\"Use a versioned AEAD format with a fresh random nonce, a fixed 32-byte decoded key, and a specified cryptographic digest for the key identifier.\",\"unit\":\"A18\"},{\"subject\":\"A18 unencrypted backup record\",\"kind\":\"contradictory readability\",\"text\":\"Rule 1 says a backup “records, readable without its key, its instant, the release that made it, the last audit sequence number it holds and a digest of the key”, while required test 3 says “A backup cannot be read without the key it was made with.”\",\"question\":\"Does the no-key readability prohibition cover the whole backup file, or only its encrypted store payload while the listed metadata remains readable?\",\"options\":[\"The listed metadata is readable without the key; only the store payload is confidential\",\"Nothing in the backup, including metadata, is readable without the key\",\"Only a minimal format/version marker is readable without the key\"],\"default_guess\":\"Keep exactly the listed metadata readable and interpret the test as requiring that the store payload cannot be read without the key.\",\"unit\":\"A18\"},{\"subject\":\"A18 integrity of readable backup metadata\",\"kind\":\"missing integrity rule\",\"text\":\"The metadata is “readable without its key”, and a kept record is valid when its fields “can all be read”, but no rule says the metadata is authenticated or checked against the encrypted contents beyond the audit sequence number.\",\"question\":\"Must the unencrypted instant, release, key digest and sequence metadata be cryptographically authenticated and cross-checked with values inside the decrypted backup?\",\"options\":[\"Authenticate all metadata as AEAD associated data and cross-check duplicated values after decryption\",\"Authenticate the metadata but do not duplicate or cross-check it inside the payload\",\"Treat readable metadata as unauthenticated and trust any parseable values\"],\"default_guess\":\"Authenticate all readable metadata as associated data and cross-check release and sequence against the decrypted store.\",\"unit\":\"A18\"},{\"subject\":\"A18 validity of backup records\",\"kind\":\"incomplete refusal conditions\",\"text\":\"“a kept file's record is valid when its instant, release, last sequence number and key digest can all be read”\",\"question\":\"What values count as readable and valid—for example, may the instant be in the future, the sequence be negative or exceed the store's counter, the release be unknown, or the key digest have an unexpected length?\",\"options\":[\"Only syntactic decoding is required\",\"Apply declared syntax and semantic bounds, then verify the values during decryption\",\"Treat any unfamiliar release or key digest as invalid immediately\"],\"default_guess\":\"Require canonical field encodings and semantic bounds, and verify release and sequence against the decrypted store before keeping the backup.\",\"unit\":\"A18\"},{\"subject\":\"A18 backup filenames and prefixes\",\"kind\":\"undeclared naming\",\"text\":\"“Kept and temporary names begin with two different prefixes the release declares” and “A kept name is made from the backup's instant”\",\"question\":\"What are the exact prefixes and the canonical conversion of an instant into a kept filename, including precision, timezone notation and collision behavior for equal instants?\",\"options\":[\"Declare fixed prefixes and a UTC timestamp format with sufficient precision\",\"Use a timestamp plus a random or monotonic suffix\",\"Leave filenames implementation-specific while requiring only uniqueness\"],\"default_guess\":\"Declare fixed prefixes and encode the UTC instant canonically with microsecond precision, adding a collision-resistant suffix if necessary.\",\"unit\":\"A18\"},{\"subject\":\"A18 backup sequence metadata for an empty log\",\"kind\":\"undefined sentinel\",\"text\":\"A backup records “the last audit sequence number it holds” and the check requires “that its audit log ends at the recorded sequence number”\",\"question\":\"What value is recorded and what check is performed when the store has never written an audit entry and its audit log is empty?\",\"options\":[\"Record 0 and require an empty log with the stored sequence counter at 0\",\"Record null and require an empty log\",\"Omit the field for an empty log\"],\"default_guess\":\"Record 0 and require both an empty audit log and a sequence counter of 0.\",\"unit\":\"A18\"}]}",
+ "set_aside": []
+}
