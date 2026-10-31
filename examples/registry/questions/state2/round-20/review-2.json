@@ -1,0 +1,176 @@
+{
+ "open_points": [
+  {
+   "subject": "owner-session cookie",
+   "kind": "vague scope",
+   "text": "\"carried by a cookie that scripts cannot read, sent only over HTTPS when the interface is reached from another machine, and only to Registry's own origin\"",
+   "question": "What exact cookie attributes and transport rule implement this, especially for an interface reached locally without HTTPS, given that cookies are scoped by host and path rather than by origin or port?",
+   "options": [
+    "Require HTTPS everywhere and use a host-only Secure, HttpOnly, SameSite cookie",
+    "Permit a non-Secure cookie on local HTTP and a Secure cookie for remote HTTPS",
+    "Use an additional host/path arrangement that isolates the cookie from other same-host services"
+   ],
+   "default_guess": "Require HTTPS everywhere and use a host-only Secure, HttpOnly, SameSite=Strict cookie scoped to the owner-interface path.",
+   "unit": "A13"
+  },
+  {
+   "subject": "sign-out racing an admitted request",
+   "kind": "contradictory ordering",
+   "text": "\"a request that passes it completes even if a limit or a sign-out comes while it runs\"; \"A sign-out is applied in turn with the session's other requests\"; requests are ordered \"in the order in which they take the session's one lock, after passing the session check\"",
+   "question": "If request A passes the session check, sign-out then takes the session lock first, and A takes it afterward, does A still run, may it change session state, or is it refused because the session has ended?",
+   "options": [
+    "Admission order fixes lock order, so A must run before sign-out",
+    "A may finish its store action after sign-out but may not recreate session state",
+    "The session is rechecked after taking the lock and A is refused"
+   ],
+   "default_guess": "Assign the session-lock order when a request passes the session check, so every already-admitted request runs before a later sign-out.",
+   "unit": "A13"
+  },
+  {
+   "subject": "confirmation input binding",
+   "kind": "undefined canonicalization",
+   "text": "\"kept as a digest of those values in a fixed order, never as the values themselves; a submission's inputs are bound when their digest equals it\"",
+   "question": "What hash algorithm, field order, type representation, absent-value representation and collision-free encoding define this digest?",
+   "options": [
+    "A canonical length-prefixed binary encoding hashed with a named cryptographic hash",
+    "Canonical JSON with specified keys and normalization",
+    "A release-specific serialization chosen by the implementation"
+   ],
+   "default_guess": "Use SHA-256 over a versioned, length-prefixed encoding with a specified field order and explicit representations for types and absent values.",
+   "unit": "A13"
+  },
+  {
+   "subject": "successful import versus uploads in other owner sessions",
+   "kind": "missing concurrency rule",
+   "text": "\"An accepted import drops the uploaded file of every owner session\"; \"The requests of one owner session that change its state ... are applied one at a time\"",
+   "question": "How is a successful confirmation ordered against an upload in a different owner session, so that an upload which passed its closure check cannot install a file after the successful import has performed the cross-session drop?",
+   "options": [
+    "Serialize all import uploads and confirmations under one instance-wide import lock",
+    "Let uploads race and run another all-session purge after commitment",
+    "Permit the racing session to retain a file even though the import is closed"
+   ],
+   "default_guess": "Use one instance-wide import lock covering the closure check, placement of an uploaded file, import commitment and the purge of every session's uploaded file.",
+   "unit": "A16"
+  },
+  {
+   "subject": "configuration schema",
+   "kind": "undefined format",
+   "text": "\"The configuration is the set of environment variables whose names begin with `REGISTRY_`\"; \"each well formed\"",
+   "question": "What are the exact variable names and the lexical formats and encodings of store location, backup location, backup key, owner credential and service tokens, including how byte length is measured and whether whitespace or Unicode is normalized?",
+   "options": [
+    "Specify exact names and treat secret values as unmodified UTF-8 bytes",
+    "Specify exact names with an encoded binary form such as base64",
+    "Leave names, parsing and encoding to each implementation"
+   ],
+   "default_guess": "Specify exact variable names, preserve values without normalization, and measure secret length in the UTF-8 bytes actually compared.",
+   "unit": "A17"
+  },
+  {
+   "subject": "configuration failure precedence",
+   "kind": "incomplete order",
+   "text": "\"every item of rule 1 present and none unknown\"; \"Within one check, items go in the order rule 1 lists them\"",
+   "question": "When required variables are missing while one or more unknown `REGISTRY_` variables are also present, which failure is first, and where do unknown variables fall in the declared item order?",
+   "options": [
+    "Check missing known items first in declared order, then unknown names in lexical order",
+    "Check unknown names first in lexical order, then missing items",
+    "Report all failures from this check together despite the first-failure rule"
+   ],
+   "default_guess": "Check missing known items in declared order, then reject the lexically first unknown `REGISTRY_` name.",
+   "unit": "A17"
+  },
+  {
+   "subject": "store and backup path separation",
+   "kind": "vague containment",
+   "text": "\"The store and the backup location are different places, neither inside the other, compared by their absolute paths with every symbolic link resolved\"",
+   "question": "Because the store location is a file and the backup location is a directory, is a backup directory inside the store file's parent directory allowed, and exactly which resolved paths are tested for containment when the store file does not yet exist?",
+   "options": [
+    "Compare the store file path directly with the backup directory",
+    "Treat the store file's parent directory as the store location for containment",
+    "Require the store and backup directory trees to have disjoint parent directories"
+   ],
+   "default_guess": "Compare the resolved store file path directly with the resolved backup directory, resolving the nearest existing parent when the file does not exist.",
+   "unit": "A17"
+  },
+  {
+   "subject": "backup encryption and readable metadata",
+   "kind": "undefined security mechanism",
+   "text": "\"Each backup is encrypted with the backup key\"; it also \"records, readable without its key\" its metadata and key digest",
+   "question": "Which authenticated-encryption algorithm, nonce construction, key representation and key-digest algorithm are used, and is the readable metadata authenticated with the encrypted payload?",
+   "options": [
+    "Use a named AEAD and authenticate the metadata as associated data",
+    "Encrypt the payload without authenticating the readable metadata",
+    "Let each implementation select its cryptography and metadata protection"
+   ],
+   "default_guess": "Use a named modern AEAD with a fresh random nonce, authenticate the complete readable header as associated data, and identify keys with SHA-256 of their raw bytes.",
+   "unit": "A18"
+  },
+  {
+   "subject": "backup file and name format",
+   "kind": "undefined persistence format",
+   "text": "\"Kept and temporary names begin with two different prefixes the release declares\"; a backup carries an unencrypted record and an encrypted store",
+   "question": "What are the prefixes, kept-name uniqueness rule, file framing and atomic replacement behavior when a generated kept name already exists?",
+   "options": [
+    "Specify a versioned format and names containing a UTC instant plus a random identifier, refusing collisions",
+    "Use one date-based name and replace an existing backup for that day",
+    "Leave format, names and collision behavior to the implementation"
+   ],
+   "default_guess": "Declare a versioned framed format and unique names containing the UTC instant and a random identifier; never overwrite an existing kept backup.",
+   "unit": "A18"
+  },
+  {
+   "subject": "daily backup scheduling",
+   "kind": "missing scheduler edge cases",
+   "text": "\"one is due each day\"; \"Every day at 03:00 UTC, while Registry runs ... it makes one backup run\"",
+   "question": "How is at-most-once execution for a UTC day enforced across a restart at 03:00, a backward clock correction, or a process that observes 03:00 more than once, and is that due-state durable?",
+   "options": [
+    "Persist the last attempted UTC backup date and never retry that date",
+    "Infer completion from a kept backup, allowing a same-day retry after failure",
+    "Keep only runtime scheduler state, allowing a restart to trigger another run"
+   ],
+   "default_guess": "Persist the last attempted UTC date and make at most one attempt for it, with no catch-up or same-day retry.",
+   "unit": "A18"
+  },
+  {
+   "subject": "backup audit sequence metadata",
+   "kind": "undefined empty case",
+   "text": "\"the last audit sequence number it holds\"; the check requires \"that its audit log ends at the recorded sequence number\"",
+   "question": "What value is recorded and what does the check require for a new store whose audit log has no entries?",
+   "options": [
+    "Record sequence 0 and require an empty log with counter 0",
+    "Record no sequence value and require an empty log",
+    "Do not permit a backup until at least one audit entry exists"
+   ],
+   "default_guess": "Record 0 and require both an empty audit log and a next-sequence counter consistent with 0.",
+   "unit": "A18"
+  },
+  {
+   "subject": "newest-kept-backup display",
+   "kind": "missing failure behavior",
+   "text": "\"The owner interface shows the instant of the newest kept backup, read from the kept backups\"; an unreadable kept file may remain when it \"cannot be read or delete[d]\"",
+   "question": "What does the owner interface show when the newest prefixed file has unreadable metadata, or when no readable kept backup exists?",
+   "options": [
+    "Ignore unreadable files and show the newest readable backup, or explicitly show none",
+    "Refuse the view because the backup set is damaged",
+    "Show the filesystem time of the unreadable file"
+   ],
+   "default_guess": "Ignore unreadable files for determining the newest backup, report them diagnostically, and show explicitly that no readable kept backup exists when applicable.",
+   "unit": "A18"
+  },
+  {
+   "subject": "backup availability guarantee",
+   "kind": "contradiction",
+   "text": "Rule 1 says \"the days this rule and rule 5 leave without a kept backup are allowed\" and permits missed or overlapping runs, while the consequence says \"A tested restore exists every day\"",
+   "question": "Is the guarantee best-effort daily attempts with possibly no tested backup, or must at least one tested restore exist on every day?",
+   "options": [
+    "Keep the normative best-effort rules and weaken the consequence",
+    "Require catch-up or retry until every day has a tested backup",
+    "Require only that an existing newest backup was tested, regardless of age"
+   ],
+   "default_guess": "Treat the normative rules as controlling: runs are best-effort, and the consequence should say that every kept backup was tested, not that one exists every day.",
+   "unit": "A18"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"owner-session cookie\",\"kind\":\"vague scope\",\"text\":\"\\\"carried by a cookie that scripts cannot read, sent only over HTTPS when the interface is reached from another machine, and only to Registry's own origin\\\"\",\"question\":\"What exact cookie attributes and transport rule implement this, especially for an interface reached locally without HTTPS, given that cookies are scoped by host and path rather than by origin or port?\",\"options\":[\"Require HTTPS everywhere and use a host-only Secure, HttpOnly, SameSite cookie\",\"Permit a non-Secure cookie on local HTTP and a Secure cookie for remote HTTPS\",\"Use an additional host/path arrangement that isolates the cookie from other same-host services\"],\"default_guess\":\"Require HTTPS everywhere and use a host-only Secure, HttpOnly, SameSite=Strict cookie scoped to the owner-interface path.\",\"unit\":\"A13\"},{\"subject\":\"sign-out racing an admitted request\",\"kind\":\"contradictory ordering\",\"text\":\"\\\"a request that passes it completes even if a limit or a sign-out comes while it runs\\\"; \\\"A sign-out is applied in turn with the session's other requests\\\"; requests are ordered \\\"in the order in which they take the session's one lock, after passing the session check\\\"\",\"question\":\"If request A passes the session check, sign-out then takes the session lock first, and A takes it afterward, does A still run, may it change session state, or is it refused because the session has ended?\",\"options\":[\"Admission order fixes lock order, so A must run before sign-out\",\"A may finish its store action after sign-out but may not recreate session state\",\"The session is rechecked after taking the lock and A is refused\"],\"default_guess\":\"Assign the session-lock order when a request passes the session check, so every already-admitted request runs before a later sign-out.\",\"unit\":\"A13\"},{\"subject\":\"confirmation input binding\",\"kind\":\"undefined canonicalization\",\"text\":\"\\\"kept as a digest of those values in a fixed order, never as the values themselves; a submission's inputs are bound when their digest equals it\\\"\",\"question\":\"What hash algorithm, field order, type representation, absent-value representation and collision-free encoding define this digest?\",\"options\":[\"A canonical length-prefixed binary encoding hashed with a named cryptographic hash\",\"Canonical JSON with specified keys and normalization\",\"A release-specific serialization chosen by the implementation\"],\"default_guess\":\"Use SHA-256 over a versioned, length-prefixed encoding with a specified field order and explicit representations for types and absent values.\",\"unit\":\"A13\"},{\"subject\":\"successful import versus uploads in other owner sessions\",\"kind\":\"missing concurrency rule\",\"text\":\"\\\"An accepted import drops the uploaded file of every owner session\\\"; \\\"The requests of one owner session that change its state ... are applied one at a time\\\"\",\"question\":\"How is a successful confirmation ordered against an upload in a different owner session, so that an upload which passed its closure check cannot install a file after the successful import has performed the cross-session drop?\",\"options\":[\"Serialize all import uploads and confirmations under one instance-wide import lock\",\"Let uploads race and run another all-session purge after commitment\",\"Permit the racing session to retain a file even though the import is closed\"],\"default_guess\":\"Use one instance-wide import lock covering the closure check, placement of an uploaded file, import commitment and the purge of every session's uploaded file.\",\"unit\":\"A16\"},{\"subject\":\"configuration schema\",\"kind\":\"undefined format\",\"text\":\"\\\"The configuration is the set of environment variables whose names begin with `REGISTRY_`\\\"; \\\"each well formed\\\"\",\"question\":\"What are the exact variable names and the lexical formats and encodings of store location, backup location, backup key, owner credential and service tokens, including how byte length is measured and whether whitespace or Unicode is normalized?\",\"options\":[\"Specify exact names and treat secret values as unmodified UTF-8 bytes\",\"Specify exact names with an encoded binary form such as base64\",\"Leave names, parsing and encoding to each implementation\"],\"default_guess\":\"Specify exact variable names, preserve values without normalization, and measure secret length in the UTF-8 bytes actually compared.\",\"unit\":\"A17\"},{\"subject\":\"configuration failure precedence\",\"kind\":\"incomplete order\",\"text\":\"\\\"every item of rule 1 present and none unknown\\\"; \\\"Within one check, items go in the order rule 1 lists them\\\"\",\"question\":\"When required variables are missing while one or more unknown `REGISTRY_` variables are also present, which failure is first, and where do unknown variables fall in the declared item order?\",\"options\":[\"Check missing known items first in declared order, then unknown names in lexical order\",\"Check unknown names first in lexical order, then missing items\",\"Report all failures from this check together despite the first-failure rule\"],\"default_guess\":\"Check missing known items in declared order, then reject the lexically first unknown `REGISTRY_` name.\",\"unit\":\"A17\"},{\"subject\":\"store and backup path separation\",\"kind\":\"vague containment\",\"text\":\"\\\"The store and the backup location are different places, neither inside the other, compared by their absolute paths with every symbolic link resolved\\\"\",\"question\":\"Because the store location is a file and the backup location is a directory, is a backup directory inside the store file's parent directory allowed, and exactly which resolved paths are tested for containment when the store file does not yet exist?\",\"options\":[\"Compare the store file path directly with the backup directory\",\"Treat the store file's parent directory as the store location for containment\",\"Require the store and backup directory trees to have disjoint parent directories\"],\"default_guess\":\"Compare the resolved store file path directly with the resolved backup directory, resolving the nearest existing parent when the file does not exist.\",\"unit\":\"A17\"},{\"subject\":\"backup encryption and readable metadata\",\"kind\":\"undefined security mechanism\",\"text\":\"\\\"Each backup is encrypted with the backup key\\\"; it also \\\"records, readable without its key\\\" its metadata and key digest\",\"question\":\"Which authenticated-encryption algorithm, nonce construction, key representation and key-digest algorithm are used, and is the readable metadata authenticated with the encrypted payload?\",\"options\":[\"Use a named AEAD and authenticate the metadata as associated data\",\"Encrypt the payload without authenticating the readable metadata\",\"Let each implementation select its cryptography and metadata protection\"],\"default_guess\":\"Use a named modern AEAD with a fresh random nonce, authenticate the complete readable header as associated data, and identify keys with SHA-256 of their raw bytes.\",\"unit\":\"A18\"},{\"subject\":\"backup file and name format\",\"kind\":\"undefined persistence format\",\"text\":\"\\\"Kept and temporary names begin with two different prefixes the release declares\\\"; a backup carries an unencrypted record and an encrypted store\",\"question\":\"What are the prefixes, kept-name uniqueness rule, file framing and atomic replacement behavior when a generated kept name already exists?\",\"options\":[\"Specify a versioned format and names containing a UTC instant plus a random identifier, refusing collisions\",\"Use one date-based name and replace an existing backup for that day\",\"Leave format, names and collision behavior to the implementation\"],\"default_guess\":\"Declare a versioned framed format and unique names containing the UTC instant and a random identifier; never overwrite an existing kept backup.\",\"unit\":\"A18\"},{\"subject\":\"daily backup scheduling\",\"kind\":\"missing scheduler edge cases\",\"text\":\"\\\"one is due each day\\\"; \\\"Every day at 03:00 UTC, while Registry runs ... it makes one backup run\\\"\",\"question\":\"How is at-most-once execution for a UTC day enforced across a restart at 03:00, a backward clock correction, or a process that observes 03:00 more than once, and is that due-state durable?\",\"options\":[\"Persist the last attempted UTC backup date and never retry that date\",\"Infer completion from a kept backup, allowing a same-day retry after failure\",\"Keep only runtime scheduler state, allowing a restart to trigger another run\"],\"default_guess\":\"Persist the last attempted UTC date and make at most one attempt for it, with no catch-up or same-day retry.\",\"unit\":\"A18\"},{\"subject\":\"backup audit sequence metadata\",\"kind\":\"undefined empty case\",\"text\":\"\\\"the last audit sequence number it holds\\\"; the check requires \\\"that its audit log ends at the recorded sequence number\\\"\",\"question\":\"What value is recorded and what does the check require for a new store whose audit log has no entries?\",\"options\":[\"Record sequence 0 and require an empty log with counter 0\",\"Record no sequence value and require an empty log\",\"Do not permit a backup until at least one audit entry exists\"],\"default_guess\":\"Record 0 and require both an empty audit log and a next-sequence counter consistent with 0.\",\"unit\":\"A18\"},{\"subject\":\"newest-kept-backup display\",\"kind\":\"missing failure behavior\",\"text\":\"\\\"The owner interface shows the instant of the newest kept backup, read from the kept backups\\\"; an unreadable kept file may remain when it \\\"cannot be read or delete[d]\\\"\",\"question\":\"What does the owner interface show when the newest prefixed file has unreadable metadata, or when no readable kept backup exists?\",\"options\":[\"Ignore unreadable files and show the newest readable backup, or explicitly show none\",\"Refuse the view because the backup set is damaged\",\"Show the filesystem time of the unreadable file\"],\"default_guess\":\"Ignore unreadable files for determining the newest backup, report them diagnostically, and show explicitly that no readable kept backup exists when applicable.\",\"unit\":\"A18\"},{\"subject\":\"backup availability guarantee\",\"kind\":\"contradiction\",\"text\":\"Rule 1 says \\\"the days this rule and rule 5 leave without a kept backup are allowed\\\" and permits missed or overlapping runs, while the consequence says \\\"A tested restore exists every day\\\"\",\"question\":\"Is the guarantee best-effort daily attempts with possibly no tested backup, or must at least one tested restore exist on every day?\",\"options\":[\"Keep the normative best-effort rules and weaken the consequence\",\"Require catch-up or retry until every day has a tested backup\",\"Require only that an existing newest backup was tested, regardless of age\"],\"default_guess\":\"Treat the normative rules as controlling: runs are best-effort, and the consequence should say that every kept backup was tested, not that one exists every day.\",\"unit\":\"A18\"}]}",
+ "set_aside": []
+}

@@ -1,0 +1,189 @@
+{
+ "open_points": [
+  {
+   "subject": "owner-session cookie scope",
+   "kind": "unenforceable scope",
+   "text": "\"carried by a cookie that scripts cannot read, sent only over HTTPS when the interface is reached from another machine (R0-29), and only to Registry's own origin\"",
+   "question": "Which cookie attributes, host/domain, path and SameSite policy make \"Registry's own origin\" exact, given that browser cookies are not scoped by port and therefore not strictly by origin?",
+   "options": [
+    "Use a host-only HttpOnly cookie with Secure, SameSite=Strict and a Registry-only path",
+    "Use a shared host cookie and rely on CSRF protection",
+    "Require Registry to have a dedicated hostname"
+   ],
+   "default_guess": "Use a host-only HttpOnly Secure SameSite=Strict cookie, scoped to the narrowest Registry path, and require a dedicated hostname if another application shares that host.",
+   "unit": "?"
+  },
+  {
+   "subject": "owner-session concurrency and sign-out",
+   "kind": "contradictory ordering",
+   "text": "\"a request that passes it completes even if a limit or a sign-out comes while it runs\"; \"A sign-out is applied in turn with the session's other requests that change it\"; \"each sees the session as the one before left it\"",
+   "question": "If a request passes the session check before sign-out but takes the session lock after sign-out has ended and removed the session, must it still run, or must it observe the ended session and be refused?",
+   "options": [
+    "Admission is final, so every request admitted before sign-out completes",
+    "Lock order is final, so a request taking the lock after sign-out is refused",
+    "Sign-out waits for all previously admitted requests"
+   ],
+   "default_guess": "Treat admission as final: requests admitted before sign-out finish, while later arrivals are refused; sign-out removes the session only after earlier admitted state-changing requests finish.",
+   "unit": "?"
+  },
+  {
+   "subject": "owner-session last-request updates",
+   "kind": "concurrency gap",
+   "text": "\"An owner request is any request to the owner interface that carries the valid session, whatever its answer; its arrival restarts the 30 minutes — of concurrent requests the latest arrival counts\"; \"The requests of one owner session that change its state — showing a confirmation step, uploading a file, a submission, a sign-out — are applied one at a time\"",
+   "question": "How are last-request updates from ordinary reads or refused requests ordered atomically with sign-out and the listed session-state changes, and can such an update recreate or mutate a session after sign-out removes it?",
+   "options": [
+    "Atomically take the maximum arrival instant independently of the session lock, but discard updates after termination",
+    "Serialize every valid owner request on the session lock",
+    "Update last-request only for the listed state-changing requests"
+   ],
+   "default_guess": "Atomically record the maximum admitted arrival instant without recreating an ended session; do not serialize ordinary reads.",
+   "unit": "?"
+  },
+  {
+   "subject": "confirmation input binding",
+   "kind": "undefined canonicalization",
+   "text": "\"its inputs — for the import, the file's digest and the picks — kept as a digest of those values in a fixed order, never as the values themselves; a submission's inputs are bound when their digest equals it\"",
+   "question": "What digest algorithm and canonical encoding define the ordered input digest, including absent versus blank optional values, Unicode text, collections and object characteristics?",
+   "options": [
+    "Define a canonical byte encoding and a fixed cryptographic hash",
+    "Digest the release's canonical request serialization",
+    "Compare normalized input values directly and store only a keyed digest"
+   ],
+   "default_guess": "Define a versioned canonical byte encoding using A02's absent-value semantics and hash it with SHA-256.",
+   "unit": "?"
+  },
+  {
+   "subject": "cross-session import-file disposal",
+   "kind": "missing serialization",
+   "text": "\"An accepted import drops the uploaded file of every owner session (M11)\"; \"The requests of one owner session that change its state ... are applied one at a time ... and other requests are not held by them\"",
+   "question": "How is accepting an import serialized with uploads in other owner sessions so that an upload which passed the closure check before the import committed cannot finish afterward and leave a file retained despite the closure?",
+   "options": [
+    "Use one instance-wide import lock for upload and confirmation",
+    "Commit the closure first, then atomically clear all sessions and make in-flight uploads recheck it",
+    "Permit such an in-flight upload to finish but discard its file immediately"
+   ],
+   "default_guess": "Serialize every upload and import confirmation with one instance-wide import lock, and recheck the closure while holding it.",
+   "unit": "?"
+  },
+  {
+   "subject": "refused concurrent import confirmation",
+   "kind": "rule conflict",
+   "text": "\"A refused confirmation keeps it\"; \"An accepted import drops the uploaded file of every owner session (M11); a confirmation shown in another session is refused because the import is closed\"",
+   "question": "When one session accepts the import and thereby drops another session's file, does the other session's subsequently refused confirmation keep its file as the first sentence requires, or remain without it as the changed rule requires?",
+   "options": [
+    "The accepted import's global drop takes precedence",
+    "A refused confirmation restores or retains that session's file",
+    "The first sentence applies only when no other import has been accepted"
+   ],
+   "default_guess": "The global drop takes precedence; qualify the keep rule as applying only while the import remains open and the file is still retained.",
+   "unit": "?"
+  },
+  {
+   "subject": "configuration variable schema",
+   "kind": "undefined closed set",
+   "text": "\"The configuration is the set of environment variables whose names begin with REGISTRY_\"; \"It holds exactly these items and no other\"; \"every item of rule 1 present and none unknown\"",
+   "question": "What are the exact environment-variable names, and therefore which REGISTRY_ variables count as required, optional or unknown?",
+   "options": [
+    "State 2 declares every exact variable name",
+    "A later contract state declares the names while preserving this closed set",
+    "Names are implementation-defined"
+   ],
+   "default_guess": "Declare a fixed exact name for each listed item in the specification; every other REGISTRY_ name fails startup.",
+   "unit": "?"
+  },
+  {
+   "subject": "configuration well-formedness",
+   "kind": "vague validation",
+   "text": "\"each well formed\"; \"A missing, malformed or unknown item fails the start\"",
+   "question": "What makes each store location, backup location, backup key, owner credential and service token well formed beyond the separately stated length, distinctness and path checks?",
+   "options": [
+    "Only successful decoding plus the explicit checks in rules 3–5",
+    "Additional character, encoding and path-shape rules",
+    "A later state supplies a schema for every item"
+   ],
+   "default_guess": "Accept arbitrary non-NUL UTF-8 secret text and absolute filesystem paths, subject only to the explicit checks already stated.",
+   "unit": "?"
+  },
+  {
+   "subject": "secret byte length and equality",
+   "kind": "undefined encoding",
+   "text": "\"A secret ... is at least 32 bytes long\"; \"No two secrets are equal\"",
+   "question": "How are environment-variable strings converted to bytes for the 32-byte test, equality and constant-time comparison, and are Unicode normalization or textual encodings such as hex/base64 interpreted?",
+   "options": [
+    "Use the exact UTF-8 bytes of the environment string",
+    "Require base64 and compare decoded bytes",
+    "Require printable ASCII and compare its bytes"
+   ],
+   "default_guess": "Require printable ASCII and compare its exact encoded bytes without normalization or decoding.",
+   "unit": "?"
+  },
+  {
+   "subject": "backup encryption construction",
+   "kind": "missing security rule",
+   "text": "\"Each backup is encrypted with the backup key\"; \"A backup cannot be read without the key it was made with\"",
+   "question": "Which authenticated-encryption algorithm, key encoding or derivation, nonce generation and file authentication rules define an encrypted backup and detect a wrong key or modified ciphertext?",
+   "options": [
+    "A fixed AEAD construction with a fresh random nonce",
+    "An encrypted archive plus a separate MAC",
+    "Backend-selected encryption satisfying stated tests"
+   ],
+   "default_guess": "Use a release-fixed AEAD construction with a fresh operating-system-random nonce and authenticate both ciphertext and metadata.",
+   "unit": "?"
+  },
+  {
+   "subject": "backup key digest",
+   "kind": "undefined digest",
+   "text": "\"a digest of the key it was made with (never the key)\"",
+   "question": "Which digest algorithm and byte representation produce the recorded key digest, and is it an unkeyed fingerprint or another identifier?",
+   "options": [
+    "SHA-256 of the exact key bytes",
+    "A keyed identifier derived by the backup format",
+    "A random key identifier stored beside the key externally"
+   ],
+   "default_guess": "Record SHA-256 of the exact configured key bytes.",
+   "unit": "?"
+  },
+  {
+   "subject": "backup scheduling at the daily boundary",
+   "kind": "trigger ambiguity",
+   "text": "\"one is due each day\"; \"Every day at 03:00 UTC ... it makes one backup run\"",
+   "question": "What happens when Registry starts or restarts exactly at 03:00, or the system clock repeats or jumps across 03:00: how is at most one run for a UTC date determined without making up a missed run?",
+   "options": [
+    "Trigger once when the running process first observes the 03:00 boundary for that UTC date",
+    "Run only from a scheduler event delivered at exactly 03:00",
+    "Persist the last attempted backup date and suppress duplicates across restarts"
+   ],
+   "default_guess": "Trigger at most once per process when it observes the 03:00 UTC boundary; never catch up a boundary missed while stopped.",
+   "unit": "?"
+  },
+  {
+   "subject": "newest-backup owner-interface status",
+   "kind": "missing empty-state behavior",
+   "text": "\"The owner interface shows the instant of the newest kept backup, read from the kept backups\"",
+   "question": "What does the owner interface show or return when no kept backup exists, or when files under the kept prefix exist but none has readable metadata?",
+   "options": [
+    "Show that no verified backup is available",
+    "Refuse the view with a backup-status error",
+    "Show the newest readable backup and separately report unreadable files"
+   ],
+   "default_guess": "Show \"no verified backup available\" and separately surface unreadable kept-prefix files as diagnostics.",
+   "unit": "?"
+  },
+  {
+   "subject": "backup durability at rename",
+   "kind": "unspecified commit point",
+   "text": "\"a backup that passes is renamed to its kept name\"; \"A step that fails leaves no partial kept backup\"",
+   "question": "Is a backup considered kept immediately after rename, or only after the backup file and containing directory have been durably flushed, so that power loss cannot leave a missing or partial file reported as successful?",
+   "options": [
+    "Rename is the commit point",
+    "File and directory fsync complete the commit",
+    "Durability is delegated entirely to the filesystem"
+   ],
+   "default_guess": "Treat the backup as kept only after flushing the file and the directory containing the rename.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"owner-session cookie scope\",\"kind\":\"unenforceable scope\",\"text\":\"\\\"carried by a cookie that scripts cannot read, sent only over HTTPS when the interface is reached from another machine (R0-29), and only to Registry's own origin\\\"\",\"question\":\"Which cookie attributes, host/domain, path and SameSite policy make \\\"Registry's own origin\\\" exact, given that browser cookies are not scoped by port and therefore not strictly by origin?\",\"options\":[\"Use a host-only HttpOnly cookie with Secure, SameSite=Strict and a Registry-only path\",\"Use a shared host cookie and rely on CSRF protection\",\"Require Registry to have a dedicated hostname\"],\"default_guess\":\"Use a host-only HttpOnly Secure SameSite=Strict cookie, scoped to the narrowest Registry path, and require a dedicated hostname if another application shares that host.\"},{\"subject\":\"owner-session concurrency and sign-out\",\"kind\":\"contradictory ordering\",\"text\":\"\\\"a request that passes it completes even if a limit or a sign-out comes while it runs\\\"; \\\"A sign-out is applied in turn with the session's other requests that change it\\\"; \\\"each sees the session as the one before left it\\\"\",\"question\":\"If a request passes the session check before sign-out but takes the session lock after sign-out has ended and removed the session, must it still run, or must it observe the ended session and be refused?\",\"options\":[\"Admission is final, so every request admitted before sign-out completes\",\"Lock order is final, so a request taking the lock after sign-out is refused\",\"Sign-out waits for all previously admitted requests\"],\"default_guess\":\"Treat admission as final: requests admitted before sign-out finish, while later arrivals are refused; sign-out removes the session only after earlier admitted state-changing requests finish.\"},{\"subject\":\"owner-session last-request updates\",\"kind\":\"concurrency gap\",\"text\":\"\\\"An owner request is any request to the owner interface that carries the valid session, whatever its answer; its arrival restarts the 30 minutes — of concurrent requests the latest arrival counts\\\"; \\\"The requests of one owner session that change its state — showing a confirmation step, uploading a file, a submission, a sign-out — are applied one at a time\\\"\",\"question\":\"How are last-request updates from ordinary reads or refused requests ordered atomically with sign-out and the listed session-state changes, and can such an update recreate or mutate a session after sign-out removes it?\",\"options\":[\"Atomically take the maximum arrival instant independently of the session lock, but discard updates after termination\",\"Serialize every valid owner request on the session lock\",\"Update last-request only for the listed state-changing requests\"],\"default_guess\":\"Atomically record the maximum admitted arrival instant without recreating an ended session; do not serialize ordinary reads.\"},{\"subject\":\"confirmation input binding\",\"kind\":\"undefined canonicalization\",\"text\":\"\\\"its inputs — for the import, the file's digest and the picks — kept as a digest of those values in a fixed order, never as the values themselves; a submission's inputs are bound when their digest equals it\\\"\",\"question\":\"What digest algorithm and canonical encoding define the ordered input digest, including absent versus blank optional values, Unicode text, collections and object characteristics?\",\"options\":[\"Define a canonical byte encoding and a fixed cryptographic hash\",\"Digest the release's canonical request serialization\",\"Compare normalized input values directly and store only a keyed digest\"],\"default_guess\":\"Define a versioned canonical byte encoding using A02's absent-value semantics and hash it with SHA-256.\"},{\"subject\":\"cross-session import-file disposal\",\"kind\":\"missing serialization\",\"text\":\"\\\"An accepted import drops the uploaded file of every owner session (M11)\\\"; \\\"The requests of one owner session that change its state ... are applied one at a time ... and other requests are not held by them\\\"\",\"question\":\"How is accepting an import serialized with uploads in other owner sessions so that an upload which passed the closure check before the import committed cannot finish afterward and leave a file retained despite the closure?\",\"options\":[\"Use one instance-wide import lock for upload and confirmation\",\"Commit the closure first, then atomically clear all sessions and make in-flight uploads recheck it\",\"Permit such an in-flight upload to finish but discard its file immediately\"],\"default_guess\":\"Serialize every upload and import confirmation with one instance-wide import lock, and recheck the closure while holding it.\"},{\"subject\":\"refused concurrent import confirmation\",\"kind\":\"rule conflict\",\"text\":\"\\\"A refused confirmation keeps it\\\"; \\\"An accepted import drops the uploaded file of every owner session (M11); a confirmation shown in another session is refused because the import is closed\\\"\",\"question\":\"When one session accepts the import and thereby drops another session's file, does the other session's subsequently refused confirmation keep its file as the first sentence requires, or remain without it as the changed rule requires?\",\"options\":[\"The accepted import's global drop takes precedence\",\"A refused confirmation restores or retains that session's file\",\"The first sentence applies only when no other import has been accepted\"],\"default_guess\":\"The global drop takes precedence; qualify the keep rule as applying only while the import remains open and the file is still retained.\"},{\"subject\":\"configuration variable schema\",\"kind\":\"undefined closed set\",\"text\":\"\\\"The configuration is the set of environment variables whose names begin with REGISTRY_\\\"; \\\"It holds exactly these items and no other\\\"; \\\"every item of rule 1 present and none unknown\\\"\",\"question\":\"What are the exact environment-variable names, and therefore which REGISTRY_ variables count as required, optional or unknown?\",\"options\":[\"State 2 declares every exact variable name\",\"A later contract state declares the names while preserving this closed set\",\"Names are implementation-defined\"],\"default_guess\":\"Declare a fixed exact name for each listed item in the specification; every other REGISTRY_ name fails startup.\"},{\"subject\":\"configuration well-formedness\",\"kind\":\"vague validation\",\"text\":\"\\\"each well formed\\\"; \\\"A missing, malformed or unknown item fails the start\\\"\",\"question\":\"What makes each store location, backup location, backup key, owner credential and service token well formed beyond the separately stated length, distinctness and path checks?\",\"options\":[\"Only successful decoding plus the explicit checks in rules 3–5\",\"Additional character, encoding and path-shape rules\",\"A later state supplies a schema for every item\"],\"default_guess\":\"Accept arbitrary non-NUL UTF-8 secret text and absolute filesystem paths, subject only to the explicit checks already stated.\"},{\"subject\":\"secret byte length and equality\",\"kind\":\"undefined encoding\",\"text\":\"\\\"A secret ... is at least 32 bytes long\\\"; \\\"No two secrets are equal\\\"\",\"question\":\"How are environment-variable strings converted to bytes for the 32-byte test, equality and constant-time comparison, and are Unicode normalization or textual encodings such as hex/base64 interpreted?\",\"options\":[\"Use the exact UTF-8 bytes of the environment string\",\"Require base64 and compare decoded bytes\",\"Require printable ASCII and compare its bytes\"],\"default_guess\":\"Require printable ASCII and compare its exact encoded bytes without normalization or decoding.\"},{\"subject\":\"backup encryption construction\",\"kind\":\"missing security rule\",\"text\":\"\\\"Each backup is encrypted with the backup key\\\"; \\\"A backup cannot be read without the key it was made with\\\"\",\"question\":\"Which authenticated-encryption algorithm, key encoding or derivation, nonce generation and file authentication rules define an encrypted backup and detect a wrong key or modified ciphertext?\",\"options\":[\"A fixed AEAD construction with a fresh random nonce\",\"An encrypted archive plus a separate MAC\",\"Backend-selected encryption satisfying stated tests\"],\"default_guess\":\"Use a release-fixed AEAD construction with a fresh operating-system-random nonce and authenticate both ciphertext and metadata.\"},{\"subject\":\"backup key digest\",\"kind\":\"undefined digest\",\"text\":\"\\\"a digest of the key it was made with (never the key)\\\"\",\"question\":\"Which digest algorithm and byte representation produce the recorded key digest, and is it an unkeyed fingerprint or another identifier?\",\"options\":[\"SHA-256 of the exact key bytes\",\"A keyed identifier derived by the backup format\",\"A random key identifier stored beside the key externally\"],\"default_guess\":\"Record SHA-256 of the exact configured key bytes.\"},{\"subject\":\"backup scheduling at the daily boundary\",\"kind\":\"trigger ambiguity\",\"text\":\"\\\"one is due each day\\\"; \\\"Every day at 03:00 UTC ... it makes one backup run\\\"\",\"question\":\"What happens when Registry starts or restarts exactly at 03:00, or the system clock repeats or jumps across 03:00: how is at most one run for a UTC date determined without making up a missed run?\",\"options\":[\"Trigger once when the running process first observes the 03:00 boundary for that UTC date\",\"Run only from a scheduler event delivered at exactly 03:00\",\"Persist the last attempted backup date and suppress duplicates across restarts\"],\"default_guess\":\"Trigger at most once per process when it observes the 03:00 UTC boundary; never catch up a boundary missed while stopped.\"},{\"subject\":\"newest-backup owner-interface status\",\"kind\":\"missing empty-state behavior\",\"text\":\"\\\"The owner interface shows the instant of the newest kept backup, read from the kept backups\\\"\",\"question\":\"What does the owner interface show or return when no kept backup exists, or when files under the kept prefix exist but none has readable metadata?\",\"options\":[\"Show that no verified backup is available\",\"Refuse the view with a backup-status error\",\"Show the newest readable backup and separately report unreadable files\"],\"default_guess\":\"Show \\\"no verified backup available\\\" and separately surface unreadable kept-prefix files as diagnostics.\"},{\"subject\":\"backup durability at rename\",\"kind\":\"unspecified commit point\",\"text\":\"\\\"a backup that passes is renamed to its kept name\\\"; \\\"A step that fails leaves no partial kept backup\\\"\",\"question\":\"Is a backup considered kept immediately after rename, or only after the backup file and containing directory have been durably flushed, so that power loss cannot leave a missing or partial file reported as successful?\",\"options\":[\"Rename is the commit point\",\"File and directory fsync complete the commit\",\"Durability is delegated entirely to the filesystem\"],\"default_guess\":\"Treat the backup as kept only after flushing the file and the directory containing the rename.\"}]}",
+ "set_aside": []
+}
