@@ -79,7 +79,8 @@ security review of States 0–2.
    (R0-79).
 9. A refused import may be retried with a corrected file; nothing of a refused
    attempt remains.
-10. The import answers once its transaction commits; right after it
+10. The import answers once its transaction commits; right after it — or, in
+   an owner-only start, at the next start with the tokens (A18 rule 10) —
    Registry makes a backup run outside the daily schedule (A18), so the import
    reaches a checked backup as soon as it can, and the owner interface shows
    when it has (A18 rule 1); a failed run is retried at the next run, and the import stays
@@ -172,8 +173,9 @@ for secrets s1 != s2 in config: value(s1) != value(s2) and len >= 32 bytes
 
 ### Required tests
 
-1. A configuration without Client Portal's token stops the start and names the
-   missing item.
+1. A configuration with some service tokens but without Client Portal's
+   stops the start and names the missing item; one with none of the four is
+   an owner-only start.
 2. Two services with one token stop the start.
 3. A 16-byte token stops the start.
 4. The start diagnostic never contains a secret's value.
@@ -198,7 +200,10 @@ secret cannot be shared between holders.
    it, at most one backup is made per UTC day, the kept backups themselves
    saying which days have one, and runs never overlap. Each run writes its
    outcome and instant to a status file in the backup location, which a
-   restart keeps; the owner interface shows the newest kept backup's instant
+   restart keeps; it is written after the backup is kept or the run fails,
+   and a status file missing, unreadable or older than the newest kept backup
+   is rewritten at start from the kept backups, which alone say whether a day
+   has one; the owner interface shows the newest kept backup's instant
    and that last outcome, so the owner sees when a backup holds the import
    (A16 rule 10). A backup records, readable without
    its key, its instant, the release that made it, the last audit sequence
@@ -254,7 +259,9 @@ secret cannot be shared between holders.
    the state the owner's own record of the retention review (R0-60) gives for
    it now — erased, restricted, ended or not — and erases audit entries before
    the latest date the owner erased by, before configuring the tokens and
-   starting it again. An owner-only start makes no backup run, so no backup
+   starting it again. A project the backup holds as active that was erased
+   after it is archived first, then erased, as any project (Primary
+   actions). An owner-only start makes no backup run, so no backup
    holds the store before this is done; an import the owner repeats then
    (R0-89) comes first, and its backup run is made at the next start with the
    tokens. This is the owner's operation (Explicit exclusions: the

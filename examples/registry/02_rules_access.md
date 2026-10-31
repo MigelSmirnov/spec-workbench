@@ -199,6 +199,9 @@ sees every change as a new version.
    passes it completes even if a limit or a sign-out comes while it runs, and
    a restart that interrupts it leaves nothing of it (A04 rule 4). Several
    owner sessions may be open at once; signing in ends none of the others.
+   A sign-out is applied in turn with the session's other requests that
+   change it: one admitted before it completes its change to the store, and
+   leaves nothing in the ended session.
    The requests of one owner session that change its state — showing a
    confirmation step, uploading a file, a submission — are applied one at a
    time: each sees the session as the one before left it, so a confirmation
@@ -224,15 +227,16 @@ sees every change as a new version.
    as the values themselves; a submission's inputs are bound when their digest
    equals it. A session holds at most one: showing a confirmation step
    replaces the one pending (M11). It is valid only in that session, while
-   less than 10 minutes have passed since it was shown — an expired one is
-   refused and cleared by any submission that reaches the confirmation check,
-   whatever value it gives — and is used up by the first submission that carries it, whatever
+   less than 10 minutes have passed since it was shown, and is used up by the first submission that carries it, whatever
    its answer; a refused submission needs the step shown again. A submission
    carries it when it passes the owner session and CSRF checks (A04 rule 6,
    stage 1) and gives a value equal to the pending one; from there on,
    whatever the answer — a binding to another action or input included — the
    pending value is used up. A submission refused before those checks, or
-   giving another value, is refused and leaves the pending value as it was. It is not
+   giving another value while the pending one is still valid, is refused and
+   leaves it as it was. A submission that passes those checks when the
+   pending one has expired is refused and clears it, whatever value it
+   gives. It is not
    the confirmation id, which Registry mints only when the action is accepted
    (A14).
 7. The session's identity, its CSRF value and a confirmation value are each at
