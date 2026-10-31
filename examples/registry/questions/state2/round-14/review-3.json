@@ -1,0 +1,255 @@
+{
+ "open_points": [
+  {
+   "subject": "OwnerSession last-request instant",
+   "kind": "timing ambiguity",
+   "text": "“An owner request is any request to the owner interface that carries the valid session, whatever its answer; it restarts the 30 minutes” does not say whether `last_request` is set when the request is admitted or when it completes, while only selected session-changing requests are explicitly serialised.",
+   "question": "At what instant is `last_request` updated, and how are concurrent ordinary owner requests ordered for idle-expiry purposes?",
+   "options": [
+    "Set it to each request’s admission instant and retain the greatest instant",
+    "Set it when each request completes",
+    "Serialise every owner request, including reads, and update it in that order"
+   ],
+   "default_guess": "Set it to the admission instant and atomically retain the greatest admitted instant.",
+   "unit": "A13"
+  },
+  {
+   "subject": "Owner-session cookie",
+   "kind": "missing cookie rules",
+   "text": "The session is “carried by a cookie that scripts cannot read, sent only over HTTPS when the interface is reached from another machine, and only to Registry's own origin,” but no lifetime, SameSite policy, path/domain scope, or deletion behaviour is declared.",
+   "question": "What exact cookie attributes and browser lifetime apply, and does Registry explicitly expire the cookie when the server-side session ends?",
+   "options": [
+    "Host-only session cookie with HttpOnly, SameSite=Strict, Path=/, conditional Secure, explicitly expired on known end",
+    "Persistent cookie expiring at the eight-hour limit",
+    "Server-side expiry only, leaving the browser cookie until browser-session end"
+   ],
+   "default_guess": "Use a host-only HttpOnly SameSite=Strict session cookie scoped to the owner interface, set Secure on HTTPS, and explicitly expire it on sign-out or a detected expired session.",
+   "unit": "A13"
+  },
+  {
+   "subject": "Confirmation input digest",
+   "kind": "undefined canonicalisation",
+   "text": "The confirmation is bound to inputs “kept as a digest of those values in a fixed order,” but the order, value encoding, treatment of absent values and digest algorithm are not declared.",
+   "question": "How are confirmation-bound values canonically encoded and ordered, and which digest algorithm is used?",
+   "options": [
+    "A specified canonical binary encoding and cryptographic digest",
+    "Canonical JSON with a specified field order and digest",
+    "Implementation-native serialisation and digest"
+   ],
+   "default_guess": "Use length-delimited canonical UTF-8 values in a specification-declared field order, distinguish absent from present values, and hash with SHA-256.",
+   "unit": "A13"
+  },
+  {
+   "subject": "Sign-in versus the universal check order",
+   "kind": "scope contradiction",
+   "text": "A04 says “Every operation — read or change, of a service, Kernel or the owner — checks in one order” beginning with “for the owner, a valid owner session,” but sign-in is an owner-interface action that necessarily has no valid owner session and A13 gives it a separate credential-and-lockout procedure.",
+   "question": "Is sign-in outside A04 rule 6, or where does its credential and lockout checking fit into that order?",
+   "options": [
+    "Sign-in is an explicit exception governed only by A13",
+    "A04 applies with a sign-in-specific authentication branch",
+    "Sign-in is not considered an operation or action in A04"
+   ],
+   "default_guess": "Treat sign-in as an explicit exception governed by A13 alone.",
+   "unit": "A04"
+  },
+  {
+   "subject": "Request-id character set",
+   "kind": "vague validation",
+   "text": "A request id is “printable text of at most 128 characters,” without defining printable, the character repertoire, normalization, or whether the limit counts Unicode scalar values, grapheme clusters or encoded bytes.",
+   "question": "Exactly which request-id strings are accepted and how is the 128-character limit measured?",
+   "options": [
+    "Printable ASCII, measured in bytes/characters",
+    "Any non-control Unicode scalar values, measured in code points",
+    "Any Unicode text accepted by the transport, measured in UTF-8 bytes"
+   ],
+   "default_guess": "Accept printable ASCII only and count ASCII characters.",
+   "unit": "A01"
+  },
+  {
+   "subject": "Request-id entropy requirement",
+   "kind": "unverifiable invariant",
+   "text": "A request id must be “made from at least 16 random bytes,” but “That it is random is the caller's duty; Registry checks its form only.”",
+   "question": "Is a short but otherwise printable nonblank request id accepted by Registry, or must its form encode a minimum amount of entropy or length?",
+   "options": [
+    "Accept every nonblank printable value up to 128 characters; randomness is purely a caller obligation",
+    "Require a minimum encoded length compatible with 16 random bytes",
+    "Require UUID syntax"
+   ],
+   "default_guess": "Accept every conforming nonblank printable value and treat the randomness requirement solely as a caller contract.",
+   "unit": "A01"
+  },
+  {
+   "subject": "Replay lookup racing record mutation or erasure",
+   "kind": "missing concurrency order",
+   "text": "Creates sharing one request id are serialised with each other, but no order is declared between a replay lookup and a concurrent correction, archiving, anonymisation, erasure or deletion that changes or removes the record used for replay comparison.",
+   "question": "What result must a create replay produce when the original record is concurrently changed or loses its request id?",
+   "options": [
+    "Serialise replay recognition with every mutation of the candidate record",
+    "Allow either result according to transaction commit order",
+    "Take a snapshot at request admission and decide from that snapshot"
+   ],
+   "default_guess": "Serialise replay recognition with mutations of the candidate record and decide from commit order.",
+   "unit": "A01"
+  },
+  {
+   "subject": "Failures within one A04 stage",
+   "kind": "precedence contradiction",
+   "text": "A04 says “the first failure is its answer” and orders owner-session, CSRF and confirmation checks with “then,” but also says “When several checks of one stage fail, the answer names every one of them.”",
+   "question": "Within a stage, are checks short-circuited in their stated order or are all applicable failures collected, especially for CSRF and confirmation checks?",
+   "options": [
+    "Short-circuit within each stage as well as between stages",
+    "Collect every safe-to-evaluate failure in the first failing stage",
+    "Use operation-specific rules, with A13 short-circuiting session and CSRF checks"
+   ],
+   "default_guess": "Short-circuit session and CSRF checks as A13 requires, then collect only failures that can safely be evaluated after them.",
+   "unit": "A04"
+  },
+  {
+   "subject": "Import upload handling of malformed records",
+   "kind": "direct contradiction",
+   "text": "A16 rule 1 says the mapping shows “every malformed record,” while rule 3 says a file with duplicate project records or an unreadable project id/status “is refused whole at upload, before anything is picked.”",
+   "question": "Which malformed files are accepted for a diagnostic mapping and which are refused at upload without a mapping?",
+   "options": [
+    "All parseable files receive a mapping listing malformations; only unreadable format/oversize is rejected at upload",
+    "The specifically listed structural defects are rejected at upload and all other malformations appear in the mapping",
+    "Every malformed record causes upload refusal"
+   ],
+   "default_guess": "Reject only unreadable format, oversize, duplicate project records and unreadable project identity/status at upload; show all other malformations in the mapping.",
+   "unit": "A16"
+  },
+  {
+   "subject": "Import diagnostics for unpicked projects",
+   "kind": "scope contradiction",
+   "text": "Rule 1 says the mapping shows “every malformed record and every id that conflicts,” but rule 3 says records only of projects not picked “are neither checked, shown as conflicts nor imported.”",
+   "question": "Are malformations and conflicts outside the picked subset shown, ignored, or only checked when the owner picks that project?",
+   "options": [
+    "Ignore them unless their project is picked",
+    "Show them for the whole file but do not let them block selected projects",
+    "Validate the whole file and block confirmation for any defect"
+   ],
+   "default_guess": "Check and show project-level identity/status defects needed to load the file, but otherwise validate and show conflicts only for the currently picked subset.",
+   "unit": "A16"
+  },
+  {
+   "subject": "Post-import backup initiation and response",
+   "kind": "ordering ambiguity",
+   "text": "“The import answers once its transaction commits; right after it … Registry makes a backup run” does not say whether the response is sent before the backup starts, whether the run is queued durably, or what happens when a daily run is already active.",
+   "question": "What observable ordering and queuing rules apply between the committed import, its response and its mandatory backup run?",
+   "options": [
+    "Return immediately after commit and queue a non-durable in-process run",
+    "Start the run before sending the response but do not wait for completion",
+    "Wait for the backup attempt before answering",
+    "Record a durable pending-backup obligation in the store"
+   ],
+   "default_guess": "Answer immediately after commit, then queue a serialized in-process backup run; if another run is active, run it next, with a restart relying on A18’s missed-run rules.",
+   "unit": "A16"
+  },
+  {
+   "subject": "Configuration secret length",
+   "kind": "undefined measurement",
+   "text": "Each secret must be “at least 32 bytes long,” but the configuration representation and the encoding used to turn textual values into bytes are not declared.",
+   "question": "How is the 32-byte minimum measured for configured credentials and keys?",
+   "options": [
+    "Raw bytes supplied by the configuration mechanism",
+    "UTF-8 encoded byte length of configuration text",
+    "Decoded bytes from a required base64 or hexadecimal representation"
+   ],
+   "default_guess": "Require a specified base64 encoding and measure the decoded secret bytes.",
+   "unit": "A17"
+  },
+  {
+   "subject": "Daily backup versus import-triggered backup",
+   "kind": "counting ambiguity",
+   "text": "A18 says a missed daily run is made “if no backup was made that UTC day,” while an import run is made even when the day already has a backup and “besides it, at most one backup is made per UTC day.”",
+   "question": "Does an import-triggered backup count as that day’s ordinary backup and suppress the scheduled/startup daily backup?",
+   "options": [
+    "It does not count; one ordinary daily backup may still be made that day",
+    "It counts if it precedes the daily run, but an import after the daily run creates a second backup",
+    "Any kept backup for the day suppresses the ordinary run"
+   ],
+   "default_guess": "Treat the import-triggered backup as extra and allow one ordinary daily backup in the same UTC day.",
+   "unit": "A18"
+  },
+  {
+   "subject": "Backup-run cleanup failure",
+   "kind": "missing failure order",
+   "text": "If removing a leftover temporary file fails, “the run then makes no backup and counts as failed,” but rule 5 also requires every run, whether the new backup succeeded or not, to delete backups older than 30 days.",
+   "question": "After temporary-file cleanup fails, does the run still perform retention deletion, and what outcome is recorded if that deletion succeeds or also fails?",
+   "options": [
+    "Continue with retention deletion but skip backup creation",
+    "Abort the entire run, including retention deletion",
+    "Attempt retention deletion only when cleanup of temporary files fully succeeds"
+   ],
+   "default_guess": "Continue with retention deletion, skip backup creation, and record the run as failed with both failure details if necessary.",
+   "unit": "A18"
+  },
+  {
+   "subject": "Deletion and status-write failure semantics",
+   "kind": "incomplete outcome rules",
+   "text": "The rules define failed backup creation and failed old-backup deletion, but do not define the single status-file outcome when backup creation succeeds and deletion fails, or when writing the status file itself fails after a backup has become kept.",
+   "question": "What is the run outcome in mixed-success cases, and is a successfully checked backup retained when the status file cannot be written?",
+   "options": [
+    "Any failed substep makes the run failed while retaining a successfully kept backup",
+    "Backup and retention have separate outcomes in the status file",
+    "Rollback/delete the new backup unless every substep and status write succeeds"
+   ],
+   "default_guess": "Retain every successfully checked backup, record separate backup and retention results, and treat a status-write failure as a reported run failure without deleting the backup.",
+   "unit": "A18"
+  },
+  {
+   "subject": "Reconstructing a missing backup status file",
+   "kind": "undefined reconstruction",
+   "text": "A missing or unreadable status file is “rewritten at start from the kept backups,” but kept backups reveal successful backups only and cannot reveal the last failed run or failed deletion.",
+   "question": "What `last outcome` and instant are written when status is reconstructed solely from kept backups?",
+   "options": [
+    "Record a synthetic successful outcome at the newest backup’s instant",
+    "Record an unknown/reconstructed outcome",
+    "Treat the missing status as the last failure at startup time"
+   ],
+   "default_guess": "Record an explicit `unknown_reconstructed` outcome plus the newest kept backup’s instant, rather than asserting that the last run succeeded.",
+   "unit": "A18"
+  },
+  {
+   "subject": "Backup encryption and key digest",
+   "kind": "unspecified cryptography",
+   "text": "A18 requires backups to be encrypted, decryptable for checking, and to expose “a digest of the key,” but declares no authenticated-encryption scheme, nonce handling, file format, key derivation or digest algorithm.",
+   "question": "Which cryptographic construction and metadata format must every implementation use, and how is the exposed key digest computed without enabling unsafe key verification?",
+   "options": [
+    "A specified authenticated-encryption format with random nonces and a specified keyed identifier",
+    "Implementation-selected authenticated encryption and ordinary SHA-256 of the key",
+    "Platform/disk encryption only, with no application-level format"
+   ],
+   "default_guess": "Specify an application-level versioned authenticated-encryption format using a modern AEAD with a fresh random nonce and a domain-separated SHA-256 key identifier.",
+   "unit": "A18"
+  },
+  {
+   "subject": "Retention-review relationship dates after restore",
+   "kind": "insufficient recovery fact",
+   "text": "R0-89 says the governance names each repeated action “by its date, kind and the `customer_ref` or `project_id` it touched,” but ending a relationship may record an effective end date earlier than the action date.",
+   "question": "For an `end relationship` record, does “its date” mean the action date, the effective relationship-end date, or must both be kept so the restored Customer can be reconstructed?",
+   "options": [
+    "Keep the effective end date only",
+    "Keep the governance action date only and replay with that date",
+    "Keep both the action date and effective end date"
+   ],
+   "default_guess": "Keep both dates and replay using the effective relationship-end date.",
+   "unit": "context"
+  },
+  {
+   "subject": "Audit-erasure cutoff after restore",
+   "kind": "ambiguous maximum",
+   "text": "R0-89 refers to “the latest date audit entries were erased by,” and A18 repeats “the latest date the owner erased by,” without saying whether this is the cutoff from the chronologically latest erasure action or the greatest cutoff date ever used.",
+   "question": "Which cutoff must be applied after restore when later erasure actions used an older date than an earlier action?",
+   "options": [
+    "The greatest cutoff date ever accepted",
+    "The cutoff supplied by the chronologically latest erasure action",
+    "Replay every recorded erasure action in chronological order"
+   ],
+   "default_guess": "Use the greatest accepted cutoff date, which is equivalent to replaying all erasures for the resulting retained set.",
+   "unit": "context"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"OwnerSession last-request instant\",\"kind\":\"timing ambiguity\",\"text\":\"“An owner request is any request to the owner interface that carries the valid session, whatever its answer; it restarts the 30 minutes” does not say whether `last_request` is set when the request is admitted or when it completes, while only selected session-changing requests are explicitly serialised.\",\"question\":\"At what instant is `last_request` updated, and how are concurrent ordinary owner requests ordered for idle-expiry purposes?\",\"options\":[\"Set it to each request’s admission instant and retain the greatest instant\",\"Set it when each request completes\",\"Serialise every owner request, including reads, and update it in that order\"],\"default_guess\":\"Set it to the admission instant and atomically retain the greatest admitted instant.\",\"unit\":\"A13\"},{\"subject\":\"Owner-session cookie\",\"kind\":\"missing cookie rules\",\"text\":\"The session is “carried by a cookie that scripts cannot read, sent only over HTTPS when the interface is reached from another machine, and only to Registry's own origin,” but no lifetime, SameSite policy, path/domain scope, or deletion behaviour is declared.\",\"question\":\"What exact cookie attributes and browser lifetime apply, and does Registry explicitly expire the cookie when the server-side session ends?\",\"options\":[\"Host-only session cookie with HttpOnly, SameSite=Strict, Path=/, conditional Secure, explicitly expired on known end\",\"Persistent cookie expiring at the eight-hour limit\",\"Server-side expiry only, leaving the browser cookie until browser-session end\"],\"default_guess\":\"Use a host-only HttpOnly SameSite=Strict session cookie scoped to the owner interface, set Secure on HTTPS, and explicitly expire it on sign-out or a detected expired session.\",\"unit\":\"A13\"},{\"subject\":\"Confirmation input digest\",\"kind\":\"undefined canonicalisation\",\"text\":\"The confirmation is bound to inputs “kept as a digest of those values in a fixed order,” but the order, value encoding, treatment of absent values and digest algorithm are not declared.\",\"question\":\"How are confirmation-bound values canonically encoded and ordered, and which digest algorithm is used?\",\"options\":[\"A specified canonical binary encoding and cryptographic digest\",\"Canonical JSON with a specified field order and digest\",\"Implementation-native serialisation and digest\"],\"default_guess\":\"Use length-delimited canonical UTF-8 values in a specification-declared field order, distinguish absent from present values, and hash with SHA-256.\",\"unit\":\"A13\"},{\"subject\":\"Sign-in versus the universal check order\",\"kind\":\"scope contradiction\",\"text\":\"A04 says “Every operation — read or change, of a service, Kernel or the owner — checks in one order” beginning with “for the owner, a valid owner session,” but sign-in is an owner-interface action that necessarily has no valid owner session and A13 gives it a separate credential-and-lockout procedure.\",\"question\":\"Is sign-in outside A04 rule 6, or where does its credential and lockout checking fit into that order?\",\"options\":[\"Sign-in is an explicit exception governed only by A13\",\"A04 applies with a sign-in-specific authentication branch\",\"Sign-in is not considered an operation or action in A04\"],\"default_guess\":\"Treat sign-in as an explicit exception governed by A13 alone.\",\"unit\":\"A04\"},{\"subject\":\"Request-id character set\",\"kind\":\"vague validation\",\"text\":\"A request id is “printable text of at most 128 characters,” without defining printable, the character repertoire, normalization, or whether the limit counts Unicode scalar values, grapheme clusters or encoded bytes.\",\"question\":\"Exactly which request-id strings are accepted and how is the 128-character limit measured?\",\"options\":[\"Printable ASCII, measured in bytes/characters\",\"Any non-control Unicode scalar values, measured in code points\",\"Any Unicode text accepted by the transport, measured in UTF-8 bytes\"],\"default_guess\":\"Accept printable ASCII only and count ASCII characters.\",\"unit\":\"A01\"},{\"subject\":\"Request-id entropy requirement\",\"kind\":\"unverifiable invariant\",\"text\":\"A request id must be “made from at least 16 random bytes,” but “That it is random is the caller's duty; Registry checks its form only.”\",\"question\":\"Is a short but otherwise printable nonblank request id accepted by Registry, or must its form encode a minimum amount of entropy or length?\",\"options\":[\"Accept every nonblank printable value up to 128 characters; randomness is purely a caller obligation\",\"Require a minimum encoded length compatible with 16 random bytes\",\"Require UUID syntax\"],\"default_guess\":\"Accept every conforming nonblank printable value and treat the randomness requirement solely as a caller contract.\",\"unit\":\"A01\"},{\"subject\":\"Replay lookup racing record mutation or erasure\",\"kind\":\"missing concurrency order\",\"text\":\"Creates sharing one request id are serialised with each other, but no order is declared between a replay lookup and a concurrent correction, archiving, anonymisation, erasure or deletion that changes or removes the record used for replay comparison.\",\"question\":\"What result must a create replay produce when the original record is concurrently changed or loses its request id?\",\"options\":[\"Serialise replay recognition with every mutation of the candidate record\",\"Allow either result according to transaction commit order\",\"Take a snapshot at request admission and decide from that snapshot\"],\"default_guess\":\"Serialise replay recognition with mutations of the candidate record and decide from commit order.\",\"unit\":\"A01\"},{\"subject\":\"Failures within one A04 stage\",\"kind\":\"precedence contradiction\",\"text\":\"A04 says “the first failure is its answer” and orders owner-session, CSRF and confirmation checks with “then,” but also says “When several checks of one stage fail, the answer names every one of them.”\",\"question\":\"Within a stage, are checks short-circuited in their stated order or are all applicable failures collected, especially for CSRF and confirmation checks?\",\"options\":[\"Short-circuit within each stage as well as between stages\",\"Collect every safe-to-evaluate failure in the first failing stage\",\"Use operation-specific rules, with A13 short-circuiting session and CSRF checks\"],\"default_guess\":\"Short-circuit session and CSRF checks as A13 requires, then collect only failures that can safely be evaluated after them.\",\"unit\":\"A04\"},{\"subject\":\"Import upload handling of malformed records\",\"kind\":\"direct contradiction\",\"text\":\"A16 rule 1 says the mapping shows “every malformed record,” while rule 3 says a file with duplicate project records or an unreadable project id/status “is refused whole at upload, before anything is picked.”\",\"question\":\"Which malformed files are accepted for a diagnostic mapping and which are refused at upload without a mapping?\",\"options\":[\"All parseable files receive a mapping listing malformations; only unreadable format/oversize is rejected at upload\",\"The specifically listed structural defects are rejected at upload and all other malformations appear in the mapping\",\"Every malformed record causes upload refusal\"],\"default_guess\":\"Reject only unreadable format, oversize, duplicate project records and unreadable project identity/status at upload; show all other malformations in the mapping.\",\"unit\":\"A16\"},{\"subject\":\"Import diagnostics for unpicked projects\",\"kind\":\"scope contradiction\",\"text\":\"Rule 1 says the mapping shows “every malformed record and every id that conflicts,” but rule 3 says records only of projects not picked “are neither checked, shown as conflicts nor imported.”\",\"question\":\"Are malformations and conflicts outside the picked subset shown, ignored, or only checked when the owner picks that project?\",\"options\":[\"Ignore them unless their project is picked\",\"Show them for the whole file but do not let them block selected projects\",\"Validate the whole file and block confirmation for any defect\"],\"default_guess\":\"Check and show project-level identity/status defects needed to load the file, but otherwise validate and show conflicts only for the currently picked subset.\",\"unit\":\"A16\"},{\"subject\":\"Post-import backup initiation and response\",\"kind\":\"ordering ambiguity\",\"text\":\"“The import answers once its transaction commits; right after it … Registry makes a backup run” does not say whether the response is sent before the backup starts, whether the run is queued durably, or what happens when a daily run is already active.\",\"question\":\"What observable ordering and queuing rules apply between the committed import, its response and its mandatory backup run?\",\"options\":[\"Return immediately after commit and queue a non-durable in-process run\",\"Start the run before sending the response but do not wait for completion\",\"Wait for the backup attempt before answering\",\"Record a durable pending-backup obligation in the store\"],\"default_guess\":\"Answer immediately after commit, then queue a serialized in-process backup run; if another run is active, run it next, with a restart relying on A18’s missed-run rules.\",\"unit\":\"A16\"},{\"subject\":\"Configuration secret length\",\"kind\":\"undefined measurement\",\"text\":\"Each secret must be “at least 32 bytes long,” but the configuration representation and the encoding used to turn textual values into bytes are not declared.\",\"question\":\"How is the 32-byte minimum measured for configured credentials and keys?\",\"options\":[\"Raw bytes supplied by the configuration mechanism\",\"UTF-8 encoded byte length of configuration text\",\"Decoded bytes from a required base64 or hexadecimal representation\"],\"default_guess\":\"Require a specified base64 encoding and measure the decoded secret bytes.\",\"unit\":\"A17\"},{\"subject\":\"Daily backup versus import-triggered backup\",\"kind\":\"counting ambiguity\",\"text\":\"A18 says a missed daily run is made “if no backup was made that UTC day,” while an import run is made even when the day already has a backup and “besides it, at most one backup is made per UTC day.”\",\"question\":\"Does an import-triggered backup count as that day’s ordinary backup and suppress the scheduled/startup daily backup?\",\"options\":[\"It does not count; one ordinary daily backup may still be made that day\",\"It counts if it precedes the daily run, but an import after the daily run creates a second backup\",\"Any kept backup for the day suppresses the ordinary run\"],\"default_guess\":\"Treat the import-triggered backup as extra and allow one ordinary daily backup in the same UTC day.\",\"unit\":\"A18\"},{\"subject\":\"Backup-run cleanup failure\",\"kind\":\"missing failure order\",\"text\":\"If removing a leftover temporary file fails, “the run then makes no backup and counts as failed,” but rule 5 also requires every run, whether the new backup succeeded or not, to delete backups older than 30 days.\",\"question\":\"After temporary-file cleanup fails, does the run still perform retention deletion, and what outcome is recorded if that deletion succeeds or also fails?\",\"options\":[\"Continue with retention deletion but skip backup creation\",\"Abort the entire run, including retention deletion\",\"Attempt retention deletion only when cleanup of temporary files fully succeeds\"],\"default_guess\":\"Continue with retention deletion, skip backup creation, and record the run as failed with both failure details if necessary.\",\"unit\":\"A18\"},{\"subject\":\"Deletion and status-write failure semantics\",\"kind\":\"incomplete outcome rules\",\"text\":\"The rules define failed backup creation and failed old-backup deletion, but do not define the single status-file outcome when backup creation succeeds and deletion fails, or when writing the status file itself fails after a backup has become kept.\",\"question\":\"What is the run outcome in mixed-success cases, and is a successfully checked backup retained when the status file cannot be written?\",\"options\":[\"Any failed substep makes the run failed while retaining a successfully kept backup\",\"Backup and retention have separate outcomes in the status file\",\"Rollback/delete the new backup unless every substep and status write succeeds\"],\"default_guess\":\"Retain every successfully checked backup, record separate backup and retention results, and treat a status-write failure as a reported run failure without deleting the backup.\",\"unit\":\"A18\"},{\"subject\":\"Reconstructing a missing backup status file\",\"kind\":\"undefined reconstruction\",\"text\":\"A missing or unreadable status file is “rewritten at start from the kept backups,” but kept backups reveal successful backups only and cannot reveal the last failed run or failed deletion.\",\"question\":\"What `last outcome` and instant are written when status is reconstructed solely from kept backups?\",\"options\":[\"Record a synthetic successful outcome at the newest backup’s instant\",\"Record an unknown/reconstructed outcome\",\"Treat the missing status as the last failure at startup time\"],\"default_guess\":\"Record an explicit `unknown_reconstructed` outcome plus the newest kept backup’s instant, rather than asserting that the last run succeeded.\",\"unit\":\"A18\"},{\"subject\":\"Backup encryption and key digest\",\"kind\":\"unspecified cryptography\",\"text\":\"A18 requires backups to be encrypted, decryptable for checking, and to expose “a digest of the key,” but declares no authenticated-encryption scheme, nonce handling, file format, key derivation or digest algorithm.\",\"question\":\"Which cryptographic construction and metadata format must every implementation use, and how is the exposed key digest computed without enabling unsafe key verification?\",\"options\":[\"A specified authenticated-encryption format with random nonces and a specified keyed identifier\",\"Implementation-selected authenticated encryption and ordinary SHA-256 of the key\",\"Platform/disk encryption only, with no application-level format\"],\"default_guess\":\"Specify an application-level versioned authenticated-encryption format using a modern AEAD with a fresh random nonce and a domain-separated SHA-256 key identifier.\",\"unit\":\"A18\"},{\"subject\":\"Retention-review relationship dates after restore\",\"kind\":\"insufficient recovery fact\",\"text\":\"R0-89 says the governance names each repeated action “by its date, kind and the `customer_ref` or `project_id` it touched,” but ending a relationship may record an effective end date earlier than the action date.\",\"question\":\"For an `end relationship` record, does “its date” mean the action date, the effective relationship-end date, or must both be kept so the restored Customer can be reconstructed?\",\"options\":[\"Keep the effective end date only\",\"Keep the governance action date only and replay with that date\",\"Keep both the action date and effective end date\"],\"default_guess\":\"Keep both dates and replay using the effective relationship-end date.\",\"unit\":\"context\"},{\"subject\":\"Audit-erasure cutoff after restore\",\"kind\":\"ambiguous maximum\",\"text\":\"R0-89 refers to “the latest date audit entries were erased by,” and A18 repeats “the latest date the owner erased by,” without saying whether this is the cutoff from the chronologically latest erasure action or the greatest cutoff date ever used.\",\"question\":\"Which cutoff must be applied after restore when later erasure actions used an older date than an earlier action?\",\"options\":[\"The greatest cutoff date ever accepted\",\"The cutoff supplied by the chronologically latest erasure action\",\"Replay every recorded erasure action in chronological order\"],\"default_guess\":\"Use the greatest accepted cutoff date, which is equivalent to replaying all erasures for the resulting retained set.\",\"unit\":\"context\"}]}",
+ "set_aside": []
+}
