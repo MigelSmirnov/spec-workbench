@@ -15,7 +15,8 @@ an entry (round 28 P1) — and how the audit log is protected (R0-37).
 2. A refused action writes no entry — a stale revision, a failed check of
    rights, an unknown id, a refused sign-in included. Security events of the
    infrastructure are the infrastructure's (R0-58).
-3. An accepted action that changes nothing (A03 rule 4, A05) writes no entry.
+3. An accepted action that changes nothing (A03 rule 4, A05) writes no entry,
+   but for the erasure of old audit entries (A15 rule 6).
 4. Reads write no entry, whoever reads — the owner, a service, Kernel for the
    agent (R0-58).
 5. A confirmation id is minted only for an accepted, confirmed action that
@@ -27,8 +28,9 @@ an entry (round 28 P1) — and how the audit log is protected (R0-37).
 ### Formal invariants
 
 ```text
-entry e exists <=> accepted action a with changed(a) and a in M09.actions
-                   and e written in the transaction of a
+entry e exists <=> accepted action a in M09.actions, with changed(a) or a an
+                   erasure of old entries, and e written in the transaction
+                   of a
 e.outcome = accepted
 ```
 
@@ -66,24 +68,25 @@ outcome but `accepted`.
    number after the last that history ever wrote, kept in the store apart
    from the entries, so an erasure does not lower it. A store restored after a
    loss begins its own history from the backup's last number (R0-89).
-6. An erasure that removes no entry changes nothing: it is accepted, writes no
-   entry and mints no confirmation id (A14).
+6. An erasure that removes no entry still writes its own entry naming the
+   date, with its confirmation id: R0-66 makes the erasure leave an entry of
+   its own, whatever it removed. It is the one accepted action that writes an
+   entry without changing other state (A14 rule 3).
 
 ### Formal invariants
 
 ```text
 for entries e1 written before e2: e1.sequence < e2.sequence
 erase(d) accepted => no entry with instant < start_of(d) remains
-erase(d) accepted and removed at least one entry
-                  => its erasure entry e has e.instant >= start_of(d)
+erase(d) accepted => its erasure entry e has e.instant >= start_of(d)
 ```
 
 ### Required tests
 
 1. In a log whose entries are all older than today, erasing before today
    leaves exactly the new erasure entry.
-2. Erasing before a date older than every entry removes nothing, writes no
-   entry and mints no confirmation id.
+2. Erasing before a date older than every entry removes nothing and writes
+   its own erasure entry with a confirmation id.
 3. A date later than today is refused.
 4. After an erasure, the next entry's sequence number is one more than the
    erasure entry's.

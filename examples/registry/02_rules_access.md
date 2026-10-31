@@ -216,7 +216,9 @@ sees every change as a new version.
    confirmation value Registry made when it showed the step: one-time, kept in
    the owner session, bound to the action, its target, the revision or access
    version the step showed, and its inputs — for the import, the file's digest
-   and the picks. A session holds at most one: showing a confirmation step
+   and the picks — kept as a digest of those values in a fixed order, never
+   as the values themselves; a submission's inputs are bound when their digest
+   equals it. A session holds at most one: showing a confirmation step
    replaces the one pending (M11). It is valid only in that session, while
    less than 10 minutes have passed since it was shown — an expired one is
    refused and cleared — and is used up by the first submission that carries it, whatever

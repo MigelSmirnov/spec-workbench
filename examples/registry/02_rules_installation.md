@@ -78,9 +78,10 @@ security review of States 0–2.
    (R0-79).
 9. A refused import may be retried with a corrected file; nothing of a refused
    attempt remains.
-10. Right after an accepted import Registry makes a backup run outside the
-   daily schedule (A18), so the import reaches a checked backup as soon as it
-   can; a failed run is retried at the next run, and the import stays
+10. The import answers once its transaction commits; right after it
+   Registry makes a backup run outside the daily schedule (A18), so the import
+   reaches a checked backup as soon as it can, and the owner interface shows
+   when it has (A18 rule 1); a failed run is retried at the next run, and the import stays
    accepted. A store lost before a checked backup holds the import loses it,
    and the import may then be made again (R0-89).
 
@@ -141,9 +142,11 @@ closure is the one proof of success.
 5. A missing, malformed or unknown item fails the start; Registry applies no
    default to any item. The backup location must exist and let Registry create
    and remove a file in it; otherwise the start fails. The store and the
-   backup location are different places, neither inside the other; a
-   configuration where they are the same or one holds the other fails the
-   start. When the store's
+   backup location are different places, neither inside the other, compared
+   by their absolute paths with every symbolic link resolved; a configuration
+   where they are the same or one holds the other fails the start. Aliases a
+   path comparison cannot see, such as bind mounts, are the owner's to avoid
+   (Explicit exclusions). When the store's
    configured file does not exist and its directory does, Registry makes a new,
    empty store of the running release's version there at the start; otherwise
    the store must open for reading and writing and carry the store
@@ -190,8 +193,11 @@ secret cannot be shared between holders.
    day; an owner-only start makes no run (rule 10). A failed run does not
    count: a start with the service tokens on the same UTC day tries again
    when no backup of that day is kept. Besides the run after an accepted
-   import (A16), at most one backup is kept per UTC day, the kept backups
-   themselves saying which days have one, and runs never overlap. A backup records, readable without
+   import (A16), which counts as that day's backup, at most one backup is
+   made per UTC day, the kept backups themselves saying which days have one,
+   and runs never overlap. The owner interface shows the instant of the
+   newest kept backup and whether the last run failed, so the owner sees when
+   a backup holds the import (A16 rule 10). A backup records, readable without
    its key, its instant, the release that made it, the last audit sequence
    number it holds and a digest of the key it was made with (never the key);
    its age is counted from that instant.
