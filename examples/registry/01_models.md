@@ -769,7 +769,9 @@ without it (R0-89).
 
 ### Persistence candidate
 
-Durable, at most one per instance.
+Durable, at most one per store history (R0-89): an instance that restores a
+store from before the import may import again, and that history then holds
+its own closure.
 
 ### Open questions
 
