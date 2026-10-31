@@ -1186,13 +1186,21 @@ then (R0-79). What the owner repeats after a restore — erasures,
 restrictions, ends of a relationship, the latest date audit entries were
 erased by — follows the owner's record of the retention review (R0-60): a
 governance document, outside this case (Explicit exclusions), naming each
-action by its date, kind and the `customer_ref` or `project_id` it touched,
-with no personal value. The kept export and the import's choices hold
-personal data: the owner keeps them in the vault (R0-23), the governance
+action by its date, kind and the `customer_ref` or `project_id` it touched —
+an audit erasure by its date alone — with no personal value. The kept export and the import's choices hold
+personal data — the import's choices include the names, kinds and tax-id
+answers given for the Customers it made: the owner keeps them in the vault,
+the owner's Bitwarden that only the owner reaches (R0-23), from the export's
+making until their deletion; the governance
 lists them as a copy that remains, as R0-81 lists the services' copies, and
 the owner deletes them once a checked backup holds the import. Where the
-retention record or the kept export is missing, what the restored store holds stands until the owner
-corrects it.
+retention record or the kept export is missing, what the restored store holds
+stands until the owner corrects it with the ordinary owner actions from what
+the owner knows; a fact that cannot be reconstructed stays as the backup
+holds it, and the governance records that. A repeated import mints new
+`customer_ref`s for the Customers it makes; a consumer that kept one the lost
+import minted relinks it in its own service, as R0-79 says for ids
+production does not hold.
 
 ### R0-81 — The one-home rule is a target the services reach; Registry does not wait (owner, 2026-10-27, after round 23 T1; narrows R0-80)
 
