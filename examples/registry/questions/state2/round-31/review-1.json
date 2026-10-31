@@ -1,0 +1,199 @@
+{
+ "open_points": [
+  {
+   "subject": "A13 suspension semantics",
+   "kind": "contradiction",
+   "text": "The monotonic clock \"counts the time the host or its VM was suspended, so a session does not outlive a suspension\".",
+   "question": "Does every suspension end every owner session, or does suspended time merely count toward the 8-hour, 30-minute, 15-minute and 10-minute limits so that a short suspension may leave a session valid?",
+   "options": [
+    "Any suspension ends all owner sessions",
+    "Suspended time counts toward the limits; only a reached limit ends the session"
+   ],
+   "default_guess": "Suspended time counts toward the limits; a session survives a suspension that reaches none of its limits.",
+   "unit": "A13"
+  },
+  {
+   "subject": "M11 owner-session timer facts",
+   "kind": "model contradiction",
+   "text": "M11 carries \"the instant it began, its expiry at the latest\" and \"the instant of its last request\", while A13 says recorded instants are UTC wall-clock time but all session durations are measured by a suspension-counting monotonic clock.",
+   "question": "What monotonic facts or deadlines does an OwnerSession retain so that wall-clock changes cannot move its absolute or idle expiry, and what meaning does M11's wall-clock \"expiry at the latest\" retain?",
+   "options": [
+    "Add monotonic began, last-arrival and deadline readings beside the recorded UTC instants",
+    "Treat M11's UTC expiry as display-only and keep unspecified runtime timer state outside the model",
+    "Derive expiry solely from the recorded UTC instants despite A13"
+   ],
+   "default_guess": "Keep monotonic began and last-arrival readings as runtime session facts, using UTC instants only for recorded/displayed times.",
+   "unit": "A13"
+  },
+  {
+   "subject": "A13 expiry pass after suspension or delay",
+   "kind": "missing scheduling rule",
+   "text": "Registry makes a pass \"every 60 seconds from the start\", while the clock used for that duration counts suspension.",
+   "question": "When one or more scheduled pass times elapse while the process cannot run or the pass is delayed, does Registry run one pass immediately on resumption, run a pass for every missed interval, or wait until the next point in the original cadence?",
+   "options": [
+    "Run one coalesced pass immediately, then continue the original cadence",
+    "Run every missed pass",
+    "Wait until the next future cadence point"
+   ],
+   "default_guess": "Run one coalesced pass immediately and then continue at 60-second intervals.",
+   "unit": "A13"
+  },
+  {
+   "subject": "A13 expiry-pass locking",
+   "kind": "ambiguous lock scope",
+   "text": "The pass ends sessions \"taking the import lock and then each session's lock\".",
+   "question": "Does one pass hold the import lock for the entire traversal of all sessions, or release and reacquire it separately for each session?",
+   "options": [
+    "Hold the import lock for the whole pass, taking session locks one at a time",
+    "Acquire and release the import lock with each individual session lock"
+   ],
+   "default_guess": "Hold the import lock for the whole pass and take each session lock one at a time.",
+   "unit": "A13"
+  },
+  {
+   "subject": "A13 admission versus expiry cleanup",
+   "kind": "race unresolved",
+   "text": "\"Validity is checked when a request arrives\" and a request that passes \"completes even if a limit ... comes while it runs\", but the expiry pass alone ends sessions and decides under the session lock.",
+   "question": "What prevents the expiry pass from removing a session after a request passed its arrival check but before that request records its arrival, takes the session lock, or uses its confirmation or uploaded file?",
+   "options": [
+    "Admission and the last-request update occur atomically under the session lock before the request is considered admitted",
+    "An admitted request reserves the session until it finishes",
+    "The expiry pass may remove the session and the admitted request may then fail"
+   ],
+   "default_guess": "Perform admission and the last-request update atomically under the session lock; requests needing session state retain or reacquire protected access that the pass cannot invalidate.",
+   "unit": "A13"
+  },
+  {
+   "subject": "A18 daily-backup obligation",
+   "kind": "contradiction",
+   "text": "R0-89 says \"Registry makes daily encrypted backups and checks each one\", while A18 says days without a kept backup are allowed and that a missed 03:00 run \"is not made later in its place\".",
+   "question": "Is one checked backup per UTC day a guarantee, or is 03:00 merely a best-effort opportunity that may leave a day with no backup?",
+   "options": [
+    "Guarantee one checked backup for every UTC day, catching up a missed run",
+    "Allow days with no run or no kept backup exactly as A18 describes"
+   ],
+   "default_guess": "Treat the run as best effort and allow missing days as A18 explicitly describes.",
+   "unit": "A18"
+  },
+  {
+   "subject": "A18 backup encryption",
+   "kind": "missing cryptographic specification",
+   "text": "\"Each backup is encrypted with the backup key\" does not declare an encryption construction, key derivation, nonce generation, authentication tag, or algorithm/version identifier.",
+   "question": "Which authenticated-encryption format and key-handling rules must every implementation use, including how arbitrary configuration keys of at least 32 bytes become cipher keys and how nonce reuse is prevented?",
+   "options": [
+    "Specify one versioned AEAD container, KDF and random nonce format",
+    "Allow each implementation or release to choose any encryption scheme",
+    "Use encryption without authenticated integrity"
+   ],
+   "default_guess": "Use a versioned AEAD container with a specified KDF, operating-system-random nonce and authenticated header.",
+   "unit": "A18"
+  },
+  {
+   "subject": "A18 unencrypted backup record",
+   "kind": "integrity gap",
+   "text": "A backup \"records, readable without its key, its instant, the release ... last sequence number ... and a digest of the key\"; the text does not say whether this record is authenticated or cryptographically bound to the encrypted store.",
+   "question": "Which bytes remain unencrypted, and must their instant, release, sequence number and key digest be authenticated as associated data so they cannot be altered or transplanted between backups?",
+   "options": [
+    "Keep a fixed plaintext header and authenticate all of it with the encrypted payload",
+    "Leave the record unauthenticated",
+    "Encrypt the record and keep only a format marker readable"
+   ],
+   "default_guess": "Keep only a fixed header plaintext and authenticate the complete header as AEAD associated data.",
+   "unit": "A18"
+  },
+  {
+   "subject": "A18 backup-key digest",
+   "kind": "undefined computation",
+   "text": "The backup records \"a digest of the key it was made with (never the key)\" without naming the digest algorithm, encoding, domain separation or whether it is salted.",
+   "question": "How is the key digest computed and compared, and is it intended as a stable key identifier across backups or as a per-backup salted value?",
+   "options": [
+    "A specified domain-separated stable cryptographic hash of the key",
+    "A specified per-backup salted digest",
+    "A release-specific unspecified digest"
+   ],
+   "default_guess": "Use a specified domain-separated stable cryptographic hash solely as a key identifier.",
+   "unit": "A18"
+  },
+  {
+   "subject": "A18 backup container and filenames",
+   "kind": "undeclared release contract",
+   "text": "Kept and temporary names use \"two different prefixes the release declares\", and a kept name \"is made from the backup's instant\", but no text declares the prefixes, timestamp serialization, filename comparison rules or container layout.",
+   "question": "What exact prefixes, kept-name construction, timestamp precision and backup container format must releases use, and may these change between releases?",
+   "options": [
+    "Declare one stable versioned format and exact filename grammar",
+    "Let every release choose them while retaining backward compatibility",
+    "Let every implementation choose them"
+   ],
+   "default_guess": "Declare a stable versioned container and exact filename grammar with collision-resistant timestamp precision.",
+   "unit": "A18"
+  },
+  {
+   "subject": "A18 compatibility with older backups",
+   "kind": "missing upgrade rule",
+   "text": "A kept file is deleted when its unencrypted record \"cannot be read\", but no rule requires a later release to read records or containers made by an earlier release.",
+   "question": "Must each release recognize every still-retained earlier backup format, or may an upgrade classify old backups as unreadable and delete them before their 30-day retention expires?",
+   "options": [
+    "Later releases must read every backup format that can still be retained",
+    "An upgrade may delete unreadable older formats",
+    "A release migration must rewrite old backups before serving"
+   ],
+   "default_guess": "Require later releases to read all backup formats that may remain within the retention window.",
+   "unit": "A18"
+  },
+  {
+   "subject": "A18 crash durability of a kept backup",
+   "kind": "missing durability rule",
+   "text": "A passing temporary backup \"is renamed to its kept name\", but the text does not state when file contents and the directory entry are durably flushed before the run reports success.",
+   "question": "What durability barrier makes a successfully kept backup survive a process or host crash immediately after the rename?",
+   "options": [
+    "Flush the backup, atomically rename it, then flush the containing directory before success",
+    "Rely on rename alone",
+    "Make no crash-survival guarantee for a reported successful run"
+   ],
+   "default_guess": "Flush the completed file, atomically rename it, and flush the backup directory before reporting success.",
+   "unit": "A18"
+  },
+  {
+   "subject": "A18 failed-check temporary files",
+   "kind": "internal contradiction",
+   "text": "When a decrypted file cannot be removed, \"the backup stays under its temporary name\", which can leave both the decrypted temporary file and encrypted backup temporary file, while rule 5 says a failed step leaves \"at most a file under the temporary prefix\".",
+   "question": "After failure to remove the decrypted check file, exactly which temporary files remain, and must Registry attempt to delete the encrypted temporary backup?",
+   "options": [
+    "Both files may remain despite the singular limit",
+    "Keep only the undeletable decrypted file and delete the encrypted temporary backup",
+    "Keep only the encrypted backup and somehow remove the decrypted file"
+   ],
+   "default_guess": "Leave only the undeletable decrypted file, attempt to remove the encrypted temporary backup, and report any failure separately.",
+   "unit": "A18"
+  },
+  {
+   "subject": "A18 cleanup ordering",
+   "kind": "undefined order",
+   "text": "The first step removes temporary-prefix files and stops on a removal failure without declaring their order; the third step processes kept files \"in the order of their names\" without declaring the filename ordering relation.",
+   "question": "In what exact order are temporary and kept files processed, especially when an early temporary-file failure determines which files remain?",
+   "options": [
+    "Ascending filename byte order",
+    "Ascending Unicode code-point order",
+    "Filesystem enumeration order"
+   ],
+   "default_guess": "Use ascending filename byte order for both temporary and kept files.",
+   "unit": "A18"
+  },
+  {
+   "subject": "A18 backup-status read during a run",
+   "kind": "concurrency unspecified",
+   "text": "\"The owner interface shows the instant of the newest kept backup whose record can be read\" while a run may concurrently rename, delete or inspect those files, but no synchronization or snapshot rule is given for that read.",
+   "question": "What must the owner interface answer if the newest-backup read races a rename or deletion during a backup run?",
+   "options": [
+    "Serialize the status read with backup-file changes",
+    "Read a snapshot of the directory and retry files that disappear",
+    "Allow a transient older instant or 'none' answer"
+   ],
+   "default_guess": "Serialize the status read with kept-file rename and deletion operations.",
+   "unit": "A18"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A13 suspension semantics\",\"kind\":\"contradiction\",\"text\":\"The monotonic clock \\\"counts the time the host or its VM was suspended, so a session does not outlive a suspension\\\".\",\"question\":\"Does every suspension end every owner session, or does suspended time merely count toward the 8-hour, 30-minute, 15-minute and 10-minute limits so that a short suspension may leave a session valid?\",\"options\":[\"Any suspension ends all owner sessions\",\"Suspended time counts toward the limits; only a reached limit ends the session\"],\"default_guess\":\"Suspended time counts toward the limits; a session survives a suspension that reaches none of its limits.\",\"unit\":\"A13\"},{\"subject\":\"M11 owner-session timer facts\",\"kind\":\"model contradiction\",\"text\":\"M11 carries \\\"the instant it began, its expiry at the latest\\\" and \\\"the instant of its last request\\\", while A13 says recorded instants are UTC wall-clock time but all session durations are measured by a suspension-counting monotonic clock.\",\"question\":\"What monotonic facts or deadlines does an OwnerSession retain so that wall-clock changes cannot move its absolute or idle expiry, and what meaning does M11's wall-clock \\\"expiry at the latest\\\" retain?\",\"options\":[\"Add monotonic began, last-arrival and deadline readings beside the recorded UTC instants\",\"Treat M11's UTC expiry as display-only and keep unspecified runtime timer state outside the model\",\"Derive expiry solely from the recorded UTC instants despite A13\"],\"default_guess\":\"Keep monotonic began and last-arrival readings as runtime session facts, using UTC instants only for recorded/displayed times.\",\"unit\":\"A13\"},{\"subject\":\"A13 expiry pass after suspension or delay\",\"kind\":\"missing scheduling rule\",\"text\":\"Registry makes a pass \\\"every 60 seconds from the start\\\", while the clock used for that duration counts suspension.\",\"question\":\"When one or more scheduled pass times elapse while the process cannot run or the pass is delayed, does Registry run one pass immediately on resumption, run a pass for every missed interval, or wait until the next point in the original cadence?\",\"options\":[\"Run one coalesced pass immediately, then continue the original cadence\",\"Run every missed pass\",\"Wait until the next future cadence point\"],\"default_guess\":\"Run one coalesced pass immediately and then continue at 60-second intervals.\",\"unit\":\"A13\"},{\"subject\":\"A13 expiry-pass locking\",\"kind\":\"ambiguous lock scope\",\"text\":\"The pass ends sessions \\\"taking the import lock and then each session's lock\\\".\",\"question\":\"Does one pass hold the import lock for the entire traversal of all sessions, or release and reacquire it separately for each session?\",\"options\":[\"Hold the import lock for the whole pass, taking session locks one at a time\",\"Acquire and release the import lock with each individual session lock\"],\"default_guess\":\"Hold the import lock for the whole pass and take each session lock one at a time.\",\"unit\":\"A13\"},{\"subject\":\"A13 admission versus expiry cleanup\",\"kind\":\"race unresolved\",\"text\":\"\\\"Validity is checked when a request arrives\\\" and a request that passes \\\"completes even if a limit ... comes while it runs\\\", but the expiry pass alone ends sessions and decides under the session lock.\",\"question\":\"What prevents the expiry pass from removing a session after a request passed its arrival check but before that request records its arrival, takes the session lock, or uses its confirmation or uploaded file?\",\"options\":[\"Admission and the last-request update occur atomically under the session lock before the request is considered admitted\",\"An admitted request reserves the session until it finishes\",\"The expiry pass may remove the session and the admitted request may then fail\"],\"default_guess\":\"Perform admission and the last-request update atomically under the session lock; requests needing session state retain or reacquire protected access that the pass cannot invalidate.\",\"unit\":\"A13\"},{\"subject\":\"A18 daily-backup obligation\",\"kind\":\"contradiction\",\"text\":\"R0-89 says \\\"Registry makes daily encrypted backups and checks each one\\\", while A18 says days without a kept backup are allowed and that a missed 03:00 run \\\"is not made later in its place\\\".\",\"question\":\"Is one checked backup per UTC day a guarantee, or is 03:00 merely a best-effort opportunity that may leave a day with no backup?\",\"options\":[\"Guarantee one checked backup for every UTC day, catching up a missed run\",\"Allow days with no run or no kept backup exactly as A18 describes\"],\"default_guess\":\"Treat the run as best effort and allow missing days as A18 explicitly describes.\",\"unit\":\"A18\"},{\"subject\":\"A18 backup encryption\",\"kind\":\"missing cryptographic specification\",\"text\":\"\\\"Each backup is encrypted with the backup key\\\" does not declare an encryption construction, key derivation, nonce generation, authentication tag, or algorithm/version identifier.\",\"question\":\"Which authenticated-encryption format and key-handling rules must every implementation use, including how arbitrary configuration keys of at least 32 bytes become cipher keys and how nonce reuse is prevented?\",\"options\":[\"Specify one versioned AEAD container, KDF and random nonce format\",\"Allow each implementation or release to choose any encryption scheme\",\"Use encryption without authenticated integrity\"],\"default_guess\":\"Use a versioned AEAD container with a specified KDF, operating-system-random nonce and authenticated header.\",\"unit\":\"A18\"},{\"subject\":\"A18 unencrypted backup record\",\"kind\":\"integrity gap\",\"text\":\"A backup \\\"records, readable without its key, its instant, the release ... last sequence number ... and a digest of the key\\\"; the text does not say whether this record is authenticated or cryptographically bound to the encrypted store.\",\"question\":\"Which bytes remain unencrypted, and must their instant, release, sequence number and key digest be authenticated as associated data so they cannot be altered or transplanted between backups?\",\"options\":[\"Keep a fixed plaintext header and authenticate all of it with the encrypted payload\",\"Leave the record unauthenticated\",\"Encrypt the record and keep only a format marker readable\"],\"default_guess\":\"Keep only a fixed header plaintext and authenticate the complete header as AEAD associated data.\",\"unit\":\"A18\"},{\"subject\":\"A18 backup-key digest\",\"kind\":\"undefined computation\",\"text\":\"The backup records \\\"a digest of the key it was made with (never the key)\\\" without naming the digest algorithm, encoding, domain separation or whether it is salted.\",\"question\":\"How is the key digest computed and compared, and is it intended as a stable key identifier across backups or as a per-backup salted value?\",\"options\":[\"A specified domain-separated stable cryptographic hash of the key\",\"A specified per-backup salted digest\",\"A release-specific unspecified digest\"],\"default_guess\":\"Use a specified domain-separated stable cryptographic hash solely as a key identifier.\",\"unit\":\"A18\"},{\"subject\":\"A18 backup container and filenames\",\"kind\":\"undeclared release contract\",\"text\":\"Kept and temporary names use \\\"two different prefixes the release declares\\\", and a kept name \\\"is made from the backup's instant\\\", but no text declares the prefixes, timestamp serialization, filename comparison rules or container layout.\",\"question\":\"What exact prefixes, kept-name construction, timestamp precision and backup container format must releases use, and may these change between releases?\",\"options\":[\"Declare one stable versioned format and exact filename grammar\",\"Let every release choose them while retaining backward compatibility\",\"Let every implementation choose them\"],\"default_guess\":\"Declare a stable versioned container and exact filename grammar with collision-resistant timestamp precision.\",\"unit\":\"A18\"},{\"subject\":\"A18 compatibility with older backups\",\"kind\":\"missing upgrade rule\",\"text\":\"A kept file is deleted when its unencrypted record \\\"cannot be read\\\", but no rule requires a later release to read records or containers made by an earlier release.\",\"question\":\"Must each release recognize every still-retained earlier backup format, or may an upgrade classify old backups as unreadable and delete them before their 30-day retention expires?\",\"options\":[\"Later releases must read every backup format that can still be retained\",\"An upgrade may delete unreadable older formats\",\"A release migration must rewrite old backups before serving\"],\"default_guess\":\"Require later releases to read all backup formats that may remain within the retention window.\",\"unit\":\"A18\"},{\"subject\":\"A18 crash durability of a kept backup\",\"kind\":\"missing durability rule\",\"text\":\"A passing temporary backup \\\"is renamed to its kept name\\\", but the text does not state when file contents and the directory entry are durably flushed before the run reports success.\",\"question\":\"What durability barrier makes a successfully kept backup survive a process or host crash immediately after the rename?\",\"options\":[\"Flush the backup, atomically rename it, then flush the containing directory before success\",\"Rely on rename alone\",\"Make no crash-survival guarantee for a reported successful run\"],\"default_guess\":\"Flush the completed file, atomically rename it, and flush the backup directory before reporting success.\",\"unit\":\"A18\"},{\"subject\":\"A18 failed-check temporary files\",\"kind\":\"internal contradiction\",\"text\":\"When a decrypted file cannot be removed, \\\"the backup stays under its temporary name\\\", which can leave both the decrypted temporary file and encrypted backup temporary file, while rule 5 says a failed step leaves \\\"at most a file under the temporary prefix\\\".\",\"question\":\"After failure to remove the decrypted check file, exactly which temporary files remain, and must Registry attempt to delete the encrypted temporary backup?\",\"options\":[\"Both files may remain despite the singular limit\",\"Keep only the undeletable decrypted file and delete the encrypted temporary backup\",\"Keep only the encrypted backup and somehow remove the decrypted file\"],\"default_guess\":\"Leave only the undeletable decrypted file, attempt to remove the encrypted temporary backup, and report any failure separately.\",\"unit\":\"A18\"},{\"subject\":\"A18 cleanup ordering\",\"kind\":\"undefined order\",\"text\":\"The first step removes temporary-prefix files and stops on a removal failure without declaring their order; the third step processes kept files \\\"in the order of their names\\\" without declaring the filename ordering relation.\",\"question\":\"In what exact order are temporary and kept files processed, especially when an early temporary-file failure determines which files remain?\",\"options\":[\"Ascending filename byte order\",\"Ascending Unicode code-point order\",\"Filesystem enumeration order\"],\"default_guess\":\"Use ascending filename byte order for both temporary and kept files.\",\"unit\":\"A18\"},{\"subject\":\"A18 backup-status read during a run\",\"kind\":\"concurrency unspecified\",\"text\":\"\\\"The owner interface shows the instant of the newest kept backup whose record can be read\\\" while a run may concurrently rename, delete or inspect those files, but no synchronization or snapshot rule is given for that read.\",\"question\":\"What must the owner interface answer if the newest-backup read races a rename or deletion during a backup run?\",\"options\":[\"Serialize the status read with backup-file changes\",\"Read a snapshot of the directory and retry files that disappear\",\"Allow a transient older instant or 'none' answer\"],\"default_guess\":\"Serialize the status read with kept-file rename and deletion operations.\",\"unit\":\"A18\"}]}",
+ "set_aside": []
+}

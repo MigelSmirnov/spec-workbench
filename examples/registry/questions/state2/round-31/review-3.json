@@ -1,0 +1,189 @@
+{
+ "open_points": [
+  {
+   "subject": "owner-session expiry and cleanup",
+   "kind": "contradiction",
+   "text": "The session ends at the first of: 8 hours after sign-in; 30 minutes without an owner request [...] Registry ends it — and drops its pending confirmation and its uploaded file with it (M11) — at a pass over the sessions it makes every 60 seconds [...] the pass alone ends sessions by their limits",
+   "question": "Does a session end and drop its confirmation and upload at the exact limit, or does it merely become invalid then and retain those resources until the next pass?",
+   "options": [
+    "It becomes invalid at the limit and is removed with its resources at the next pass",
+    "It is fully ended and its resources are dropped at the exact limit",
+    "Its resources are dropped when the first post-limit request or pass observes it"
+   ],
+   "default_guess": "Treat it as invalid at the exact limit and remove it, including its confirmation and upload, at the next pass.",
+   "unit": "A13"
+  },
+  {
+   "subject": "expiry pass racing an admitted request",
+   "kind": "concurrency gap",
+   "text": "a request that passes it completes even if a limit or a sign-out comes while it runs [...] the pass alone ends sessions by their limits, taking the import lock and then each session's lock and deciding under them",
+   "question": "What happens when a request passes the session check before the limit but is still waiting for the session or import lock when the expiry pass acquires the lock and observes the limit?",
+   "options": [
+    "The admitted request prevents or outranks expiry and completes before removal",
+    "The pass removes the session, but the admitted request still completes using retained request state",
+    "The pass removes the session and the admitted request is refused despite having passed the check"
+   ],
+   "default_guess": "Mark admitted requests so the pass cannot remove their session until they finish.",
+   "unit": "A13"
+  },
+  {
+   "subject": "idle-time update versus expiry pass",
+   "kind": "race undefined",
+   "text": "An owner request is any request to the owner interface that carries the valid session, whatever its answer; its arrival restarts the 30 minutes [...] the pass alone ends sessions by their limits, taking the import lock and then each session's lock and deciding under them",
+   "question": "How is the arrival-time update ordered against the expiry pass, especially for ordinary requests that do not otherwise take the session lock?",
+   "options": [
+    "Every session check and last-request update takes the session lock atomically",
+    "Arrival updates an atomic timestamp without the session lock and the pass rereads it under the lock",
+    "The pass may expire a session even though a valid request arrived before the deadline"
+   ],
+   "default_guess": "Atomically validate and update the last-request instant under the session lock before the pass can decide expiry.",
+   "unit": "A13"
+  },
+  {
+   "subject": "expiry-pass lock scope",
+   "kind": "vague locking rule",
+   "text": "taking the import lock and then each session's lock (A16 rule 2) and deciding under them",
+   "question": "Does the pass hold the import lock for the entire traversal of all sessions, or release and reacquire it for each session; and when is each session lock released?",
+   "options": [
+    "Hold the import lock for the whole pass and take/release each session lock in turn",
+    "Take and release the import lock together with each individual session lock",
+    "Snapshot the session identities under the import lock, release it, then inspect sessions"
+   ],
+   "default_guess": "Hold the import lock for the whole pass and take and release each session lock one at a time.",
+   "unit": "A13"
+  },
+  {
+   "subject": "expiry-pass phase",
+   "kind": "timing ambiguity",
+   "text": "at a pass over the sessions it makes every 60 seconds from the start",
+   "question": "Is the first pass made immediately at process start or 60 seconds after start, and are later passes fixed to the original phase or scheduled 60 seconds after the preceding pass finishes?",
+   "options": [
+    "Immediate pass, then fixed 60-second intervals from process start",
+    "First pass after 60 seconds, then fixed intervals from process start",
+    "Each next pass begins 60 seconds after the prior pass finishes"
+   ],
+   "default_guess": "Run immediately at start and then at fixed 60-second intervals from that start.",
+   "unit": "A13"
+  },
+  {
+   "subject": "monotonic clock across suspension",
+   "kind": "unverifiable invariant",
+   "text": "the process's monotonic clock, which a change of the wall clock does not move and which counts the time the host or its VM was suspended",
+   "question": "Which clock source provides these semantics, and what must Registry do at start when the operating system or VM cannot guarantee that suspension time is counted?",
+   "options": [
+    "Require a suspend-aware monotonic clock and fail startup if unavailable",
+    "Use the platform's ordinary monotonic clock even where it excludes suspension",
+    "Detect resume separately and expire every pre-suspension session"
+   ],
+   "default_guess": "Require a suspend-aware monotonic clock and fail startup when its semantics cannot be guaranteed.",
+   "unit": "A13"
+  },
+  {
+   "subject": "backup scheduler initialization",
+   "kind": "timing gap",
+   "text": "The process looks at the clock at least once a minute; a date's run starts at its first look at or after 03:00 of that date when an earlier look of the same process saw that date before 03:00",
+   "question": "Does process startup itself perform and retain a clock look, so that a process started shortly before 03:00 is eligible to run at its first periodic look after 03:00?",
+   "options": [
+    "Startup is an immediate clock look and establishes the before-03:00 observation",
+    "Only periodic scheduler ticks count as looks",
+    "A process must complete two periodic looks, one before and one after 03:00"
+   ],
+   "default_guess": "Count an immediate startup observation as a look.",
+   "unit": "A18"
+  },
+  {
+   "subject": "daily run skipped because another run overlaps",
+   "kind": "retry ambiguity",
+   "text": "Runs never overlap: a 03:00 that finds a run still going makes no run of its own",
+   "question": "If the earlier run finishes later that same date, is the skipped date permanently missed, or may a later clock look start that date's run?",
+   "options": [
+    "The date is permanently missed once its first eligible look finds another run active",
+    "Start the date's run at the first later look after the earlier run finishes",
+    "Treat the overlapping run as satisfying the new date as well"
+   ],
+   "default_guess": "Mark the date missed and do not start it later.",
+   "unit": "A18"
+  },
+  {
+   "subject": "backup encryption construction",
+   "kind": "security mechanism unspecified",
+   "text": "Each backup is encrypted with the backup key the configuration holds at its making [...] A backup cannot be read without the key it was made with",
+   "question": "What authenticated-encryption algorithm, nonce generation, key derivation, file format and authenticated metadata rules must implementations use?",
+   "options": [
+    "The release declares one fixed authenticated-encryption format and algorithm",
+    "Any authenticated-encryption construction meeting stated security properties is allowed",
+    "Confidentiality-only encryption is sufficient and metadata need not be authenticated"
+   ],
+   "default_guess": "Declare one versioned authenticated-encryption format using a fresh random nonce and authenticate both ciphertext and the readable metadata.",
+   "unit": "A18"
+  },
+  {
+   "subject": "backup key digest",
+   "kind": "digest unspecified",
+   "text": "a digest of the key it was made with (never the key)",
+   "question": "How is the key digest computed and encoded, and must it be salted or otherwise protected from serving as an offline verifier for candidate keys?",
+   "options": [
+    "A fixed cryptographic hash of the raw key",
+    "A keyed or salted identifier with its parameters stored in the record",
+    "A release-specific opaque key identifier supplied by the owner"
+   ],
+   "default_guess": "Use a release-declared cryptographic hash and encoding over the full random key.",
+   "unit": "A18"
+  },
+  {
+   "subject": "physical removal of excluded or erased data from backups",
+   "kind": "data-remanence gap",
+   "text": "A backup holds every record but the agent sessions (M06), which are removed from the copy before it is encrypted [...] an erasure reaches the backups",
+   "question": "Must the checked plaintext copy also exclude recoverable remnants in SQLite free pages, journals, WAL data and other unused storage, or is logical absence from tables sufficient?",
+   "options": [
+    "Rebuild or compact the copy so excluded and erased values are absent from all plaintext bytes",
+    "Logical absence from queryable records is sufficient",
+    "Sanitize agent sessions physically but allow remnants of other erased records"
+   ],
+   "default_guess": "Rebuild or securely compact the plaintext copy before encryption so excluded and erased values are absent from all database and sidecar bytes.",
+   "unit": "A18"
+  },
+  {
+   "subject": "failed run and backup-retention deletion",
+   "kind": "contradiction",
+   "text": "Third, whatever the second step did, it deletes every kept backup made more than 30 × 24 hours before the instant this step starts [...] A run succeeds only when every step did [...] a failed or missed run lengthens that by the days until a run succeeds",
+   "question": "If backup creation or checking fails but the third-step deletions succeed, are old backups deleted on that failed run or retained until an entirely successful run?",
+   "options": [
+    "Delete them because retention depends only on the third deletion step",
+    "Retain them because any failed run postpones retention",
+    "Delete them only when a new backup was successfully kept"
+   ],
+   "default_guess": "Delete them whenever the third deletion step succeeds, even if another step made the overall run fail.",
+   "unit": "A18"
+  },
+  {
+   "subject": "failed checked backup left under a temporary name",
+   "kind": "invariant conflict",
+   "text": "When the decrypted file cannot be removed, or a failed backup cannot be deleted, the backup stays under its temporary name and is not kept [...] after a run whose deletions succeeded: no backup older than 30 days and no backup that failed its check exists",
+   "question": "Does the formal invariant exclude temporary failed-backup files, or must such a file be removed before the run can be considered to have successful deletions?",
+   "options": [
+    "The invariant concerns kept backups only; failed temporary files may remain",
+    "Any failed-backup temporary file violates the invariant",
+    "A remaining temporary file makes the deletion step unsuccessful even when all kept-file deletions succeeded"
+   ],
+   "default_guess": "Treat the invariant as applying only to kept backups and report the remaining temporary file as an overall run failure.",
+   "unit": "A18"
+  },
+  {
+   "subject": "backup-file traversal order",
+   "kind": "ordering unspecified",
+   "text": "It takes the files in the order of their names",
+   "question": "What exact comparison defines file-name order across platforms and locales?",
+   "options": [
+    "Ascending Unicode code-point order",
+    "Ascending raw filename-byte order",
+    "The filesystem enumeration order"
+   ],
+   "default_guess": "Use ascending Unicode code-point order, matching the other declared text orders.",
+   "unit": "A18"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"owner-session expiry and cleanup\",\"kind\":\"contradiction\",\"text\":\"The session ends at the first of: 8 hours after sign-in; 30 minutes without an owner request [...] Registry ends it — and drops its pending confirmation and its uploaded file with it (M11) — at a pass over the sessions it makes every 60 seconds [...] the pass alone ends sessions by their limits\",\"question\":\"Does a session end and drop its confirmation and upload at the exact limit, or does it merely become invalid then and retain those resources until the next pass?\",\"options\":[\"It becomes invalid at the limit and is removed with its resources at the next pass\",\"It is fully ended and its resources are dropped at the exact limit\",\"Its resources are dropped when the first post-limit request or pass observes it\"],\"default_guess\":\"Treat it as invalid at the exact limit and remove it, including its confirmation and upload, at the next pass.\",\"unit\":\"A13\"},{\"subject\":\"expiry pass racing an admitted request\",\"kind\":\"concurrency gap\",\"text\":\"a request that passes it completes even if a limit or a sign-out comes while it runs [...] the pass alone ends sessions by their limits, taking the import lock and then each session's lock and deciding under them\",\"question\":\"What happens when a request passes the session check before the limit but is still waiting for the session or import lock when the expiry pass acquires the lock and observes the limit?\",\"options\":[\"The admitted request prevents or outranks expiry and completes before removal\",\"The pass removes the session, but the admitted request still completes using retained request state\",\"The pass removes the session and the admitted request is refused despite having passed the check\"],\"default_guess\":\"Mark admitted requests so the pass cannot remove their session until they finish.\",\"unit\":\"A13\"},{\"subject\":\"idle-time update versus expiry pass\",\"kind\":\"race undefined\",\"text\":\"An owner request is any request to the owner interface that carries the valid session, whatever its answer; its arrival restarts the 30 minutes [...] the pass alone ends sessions by their limits, taking the import lock and then each session's lock and deciding under them\",\"question\":\"How is the arrival-time update ordered against the expiry pass, especially for ordinary requests that do not otherwise take the session lock?\",\"options\":[\"Every session check and last-request update takes the session lock atomically\",\"Arrival updates an atomic timestamp without the session lock and the pass rereads it under the lock\",\"The pass may expire a session even though a valid request arrived before the deadline\"],\"default_guess\":\"Atomically validate and update the last-request instant under the session lock before the pass can decide expiry.\",\"unit\":\"A13\"},{\"subject\":\"expiry-pass lock scope\",\"kind\":\"vague locking rule\",\"text\":\"taking the import lock and then each session's lock (A16 rule 2) and deciding under them\",\"question\":\"Does the pass hold the import lock for the entire traversal of all sessions, or release and reacquire it for each session; and when is each session lock released?\",\"options\":[\"Hold the import lock for the whole pass and take/release each session lock in turn\",\"Take and release the import lock together with each individual session lock\",\"Snapshot the session identities under the import lock, release it, then inspect sessions\"],\"default_guess\":\"Hold the import lock for the whole pass and take and release each session lock one at a time.\",\"unit\":\"A13\"},{\"subject\":\"expiry-pass phase\",\"kind\":\"timing ambiguity\",\"text\":\"at a pass over the sessions it makes every 60 seconds from the start\",\"question\":\"Is the first pass made immediately at process start or 60 seconds after start, and are later passes fixed to the original phase or scheduled 60 seconds after the preceding pass finishes?\",\"options\":[\"Immediate pass, then fixed 60-second intervals from process start\",\"First pass after 60 seconds, then fixed intervals from process start\",\"Each next pass begins 60 seconds after the prior pass finishes\"],\"default_guess\":\"Run immediately at start and then at fixed 60-second intervals from that start.\",\"unit\":\"A13\"},{\"subject\":\"monotonic clock across suspension\",\"kind\":\"unverifiable invariant\",\"text\":\"the process's monotonic clock, which a change of the wall clock does not move and which counts the time the host or its VM was suspended\",\"question\":\"Which clock source provides these semantics, and what must Registry do at start when the operating system or VM cannot guarantee that suspension time is counted?\",\"options\":[\"Require a suspend-aware monotonic clock and fail startup if unavailable\",\"Use the platform's ordinary monotonic clock even where it excludes suspension\",\"Detect resume separately and expire every pre-suspension session\"],\"default_guess\":\"Require a suspend-aware monotonic clock and fail startup when its semantics cannot be guaranteed.\",\"unit\":\"A13\"},{\"subject\":\"backup scheduler initialization\",\"kind\":\"timing gap\",\"text\":\"The process looks at the clock at least once a minute; a date's run starts at its first look at or after 03:00 of that date when an earlier look of the same process saw that date before 03:00\",\"question\":\"Does process startup itself perform and retain a clock look, so that a process started shortly before 03:00 is eligible to run at its first periodic look after 03:00?\",\"options\":[\"Startup is an immediate clock look and establishes the before-03:00 observation\",\"Only periodic scheduler ticks count as looks\",\"A process must complete two periodic looks, one before and one after 03:00\"],\"default_guess\":\"Count an immediate startup observation as a look.\",\"unit\":\"A18\"},{\"subject\":\"daily run skipped because another run overlaps\",\"kind\":\"retry ambiguity\",\"text\":\"Runs never overlap: a 03:00 that finds a run still going makes no run of its own\",\"question\":\"If the earlier run finishes later that same date, is the skipped date permanently missed, or may a later clock look start that date's run?\",\"options\":[\"The date is permanently missed once its first eligible look finds another run active\",\"Start the date's run at the first later look after the earlier run finishes\",\"Treat the overlapping run as satisfying the new date as well\"],\"default_guess\":\"Mark the date missed and do not start it later.\",\"unit\":\"A18\"},{\"subject\":\"backup encryption construction\",\"kind\":\"security mechanism unspecified\",\"text\":\"Each backup is encrypted with the backup key the configuration holds at its making [...] A backup cannot be read without the key it was made with\",\"question\":\"What authenticated-encryption algorithm, nonce generation, key derivation, file format and authenticated metadata rules must implementations use?\",\"options\":[\"The release declares one fixed authenticated-encryption format and algorithm\",\"Any authenticated-encryption construction meeting stated security properties is allowed\",\"Confidentiality-only encryption is sufficient and metadata need not be authenticated\"],\"default_guess\":\"Declare one versioned authenticated-encryption format using a fresh random nonce and authenticate both ciphertext and the readable metadata.\",\"unit\":\"A18\"},{\"subject\":\"backup key digest\",\"kind\":\"digest unspecified\",\"text\":\"a digest of the key it was made with (never the key)\",\"question\":\"How is the key digest computed and encoded, and must it be salted or otherwise protected from serving as an offline verifier for candidate keys?\",\"options\":[\"A fixed cryptographic hash of the raw key\",\"A keyed or salted identifier with its parameters stored in the record\",\"A release-specific opaque key identifier supplied by the owner\"],\"default_guess\":\"Use a release-declared cryptographic hash and encoding over the full random key.\",\"unit\":\"A18\"},{\"subject\":\"physical removal of excluded or erased data from backups\",\"kind\":\"data-remanence gap\",\"text\":\"A backup holds every record but the agent sessions (M06), which are removed from the copy before it is encrypted [...] an erasure reaches the backups\",\"question\":\"Must the checked plaintext copy also exclude recoverable remnants in SQLite free pages, journals, WAL data and other unused storage, or is logical absence from tables sufficient?\",\"options\":[\"Rebuild or compact the copy so excluded and erased values are absent from all plaintext bytes\",\"Logical absence from queryable records is sufficient\",\"Sanitize agent sessions physically but allow remnants of other erased records\"],\"default_guess\":\"Rebuild or securely compact the plaintext copy before encryption so excluded and erased values are absent from all database and sidecar bytes.\",\"unit\":\"A18\"},{\"subject\":\"failed run and backup-retention deletion\",\"kind\":\"contradiction\",\"text\":\"Third, whatever the second step did, it deletes every kept backup made more than 30 × 24 hours before the instant this step starts [...] A run succeeds only when every step did [...] a failed or missed run lengthens that by the days until a run succeeds\",\"question\":\"If backup creation or checking fails but the third-step deletions succeed, are old backups deleted on that failed run or retained until an entirely successful run?\",\"options\":[\"Delete them because retention depends only on the third deletion step\",\"Retain them because any failed run postpones retention\",\"Delete them only when a new backup was successfully kept\"],\"default_guess\":\"Delete them whenever the third deletion step succeeds, even if another step made the overall run fail.\",\"unit\":\"A18\"},{\"subject\":\"failed checked backup left under a temporary name\",\"kind\":\"invariant conflict\",\"text\":\"When the decrypted file cannot be removed, or a failed backup cannot be deleted, the backup stays under its temporary name and is not kept [...] after a run whose deletions succeeded: no backup older than 30 days and no backup that failed its check exists\",\"question\":\"Does the formal invariant exclude temporary failed-backup files, or must such a file be removed before the run can be considered to have successful deletions?\",\"options\":[\"The invariant concerns kept backups only; failed temporary files may remain\",\"Any failed-backup temporary file violates the invariant\",\"A remaining temporary file makes the deletion step unsuccessful even when all kept-file deletions succeeded\"],\"default_guess\":\"Treat the invariant as applying only to kept backups and report the remaining temporary file as an overall run failure.\",\"unit\":\"A18\"},{\"subject\":\"backup-file traversal order\",\"kind\":\"ordering unspecified\",\"text\":\"It takes the files in the order of their names\",\"question\":\"What exact comparison defines file-name order across platforms and locales?\",\"options\":[\"Ascending Unicode code-point order\",\"Ascending raw filename-byte order\",\"The filesystem enumeration order\"],\"default_guess\":\"Use ascending Unicode code-point order, matching the other declared text orders.\",\"unit\":\"A18\"}]}",
+ "set_aside": []
+}
