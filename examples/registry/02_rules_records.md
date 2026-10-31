@@ -37,7 +37,9 @@ each create once.
    removes (M01, M04); a create arriving after that with the same request id
    is a new create.
 8. A publish's repeat answers the pointer it made, whatever its status now;
-   it neither supersedes nor makes a version (R0-17, R0-88).
+   it neither supersedes nor makes a version (R0-17, R0-88). The checks of
+   the call come first: a repeat on a project no longer in the session's set
+   or since archived is refused as any call (A10, A07).
 9. A request id is never an identity: it is not answered as one, and no read
    looks a record up by it.
 

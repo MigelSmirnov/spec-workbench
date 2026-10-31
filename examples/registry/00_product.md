@@ -25,8 +25,9 @@ or in a later state; the open questions are the owner's.
 
 Registry is the platform's trusted entry point for project identity. It says
 which projects exist, which customer each is for, which object it renovates and
-which rooms it has; it keeps a catalogue of the documents other services
-published about a project; and it lets the owner choose the project the agent
+which rooms it has; it keeps a catalogue of pointers to the documents other
+services hold about a project, which the agent and the owner link to it
+(R0-88); and it lets the owner choose the project the agent
 works on, handing each agent session a bounded set of projects and nothing more
 (vNext §1, §6). Every other service names a project by the Registry's identity
 and reads that identity as a snapshot; none of them writes it back (V1-2).
@@ -949,7 +950,8 @@ The rule closes the path by which a `personal_data` value would reach an agent
 through Cabinet Kernel and so the agent's AI provider (R0-25, R0-26).
 
 Narrowed by R0-82: the projection carries the project's alias, under the same
-writer rule.
+writer rule. Narrowed by R0-88: "a producer publishes" reads "the agent,
+through Kernel, and the owner publish"; the rule binds them.
 
 ### R0-69 — No project named and none active is refused (proposed to the owner 2026-10-27 after round 19 T10, accepted; narrows R0-46)
 
@@ -1150,8 +1152,11 @@ pointer still names the type's owner service, where the document lives
 the document exists, and the Kernel flow that made it is the evidence. The
 first release declares one type, `estimate` by PresuPro; others enter by a
 release when a service holds such documents (R0-33). As a write of the agent,
-a publish carries a request id (R0-36, R0-78): its retry returns the pointer it
-made, and a new publish with equal content is still a new version (R0-17).
+a publish carries a request id (R0-36, R0-78): a retry that is still allowed —
+the project still in the session's set and not archived — returns the pointer
+it made, whatever its status now; a retry no longer allowed is refused as any
+call (R0-46, R0-17); and a new publish with equal content is still a new
+version (R0-17).
 This keeps every agent
 action on one checked path, which the GDPR review of the platform relies on
 (R0-37).
