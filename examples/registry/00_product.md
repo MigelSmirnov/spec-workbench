@@ -1183,13 +1183,14 @@ loses the import with it, and the import may then be made again: the owner
 keeps the export file and the picks, names and aliases given in the import
 until a checked backup holds the import, and retires the VPS instance only
 then (R0-79). What the owner repeats after a restore — erasures,
-restrictions, ends of a relationship, the latest date audit entries were
-erased by — follows the owner's record of the retention review (R0-60): a
+restrictions, ends of a relationship, the greatest date audit entries were
+ever erased by — follows the owner's record of the retention review (R0-60): a
 governance document, outside this case (Explicit exclusions), naming each
 action by its date, kind and the `customer_ref` or `project_id` it touched —
 an audit erasure by its date alone — with no personal value. The kept export and the import's choices hold
 personal data — the import's choices include the names, kinds and tax-id
-answers given for the Customers it made: the owner keeps them in the vault,
+answers given for the Customers it made, each with the v1 `customer_ref` it
+came from: the owner keeps them in the vault,
 the owner's Bitwarden that only the owner reaches (R0-23), from the export's
 making until their deletion; the governance
 lists them as a copy that remains, as R0-81 lists the services' copies, and
