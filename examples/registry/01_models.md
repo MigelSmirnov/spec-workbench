@@ -427,9 +427,11 @@ Facts a pointer carries:
   digest when the producer gave one (R0-33); all as their writer wrote them
   (R0-68);
 - its status: `published`, `superseded` or `withdrawn` (R0-02, R0-14);
-- written once: the instant it was published and by which principal (M07) —
-  a producer service as its token names it, Kernel for the agent naming its
-  session, or the owner for any owner service; the instant it was superseded;
+- written once: the instant it was published and its publisher — the
+  principal (M07) for a pointer published in Registry: a producer service as
+  its token names it, Kernel for the agent naming its session, or the owner
+  for any owner service; the import (M10) for a pointer the import brought in
+  (below); the instant it was superseded;
   the instant it was withdrawn and by which principal (R0-14).
 
 A pointer the import brings in (R0-50) was published before Registry recorded
