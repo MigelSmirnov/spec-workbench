@@ -9,19 +9,21 @@ States 5 and 6.
 ## Accepted decision A01 — a create carries a request id; its repeat changes nothing
 
 R0-36 asks that a create repeated after a lost answer never makes a second
-project, customer or room. Equal content cannot tell a repeat from a second
+project, customer or room; R0-88 makes publishing a pointer a write of the
+agent, which R0-78 asks to be replay-safe too. Equal content cannot tell a repeat from a second
 create: a second room of the same name is a second room (R0-10), and recording
 the same person twice makes two Customers (R0-16). The caller therefore names
 each create once.
 
 ### Normative rules
 
-1. 'Create a project', 'record a customer' and 'add a room' each carry a
-   request id: an opaque value the caller makes, unique for every create it
-   means as new. The owner interface makes one when it renders a create form;
-   Cabinet Kernel gives one as an input field of 'add a room' (R0-78).
+1. 'Create a project', 'record a customer', 'add a room' and 'publish an
+   artifact pointer' each carry a request id: an opaque value the caller
+   makes, unique for every create it means as new. The owner interface makes
+   one when it renders a create form; Cabinet Kernel gives one as an input
+   field of 'add a room' and of 'publish an artifact pointer' (R0-78).
 2. Registry keeps the request id with the record the create made, written once
-   (M01, M03, M04).
+   (M01, M03, M04, M05).
 3. A create whose request id an existing record of the same model already
    carries, with the same supplied facts, is a repeat: Registry answers that
    record as it stands now — archived included — and changes nothing.
@@ -34,13 +36,15 @@ each create once.
 7. A request id leaves its record with the values anonymisation or erasure
    removes (M01, M04); a create arriving after that with the same request id
    is a new create.
-8. A request id is never an identity: it is not answered as one, and no read
+8. A publish's repeat answers the pointer it made, whatever its status now;
+   it neither supersedes nor makes a version (R0-17, R0-88).
+9. A request id is never an identity: it is not answered as one, and no read
    looks a record up by it.
 
 ### Formal invariants
 
 ```text
-for each model m in {Project, Customer, Room}:
+for each model m in {Project, Customer, Room, ArtifactPointer}:
   for records r1 != r2 of m with r1.request_id and r2.request_id present:
     r1.request_id != r2.request_id
 create(m, request_id = k, facts = f) where existing r of m has r.request_id = k:
@@ -61,10 +65,13 @@ create(m, request_id = k, facts = f) where existing r of m has r.request_id = k:
 5. A create without a request id is refused.
 6. After anonymising a project, a create with that project's former request id
    makes a new project with a new id.
+7. Kernel retrying a publish with the same request id gets the same pointer
+   and version; the pointer it made is not superseded.
 
 ### Consequence
 
-Kernel's retried 'add a room' and a resubmitted owner form are safe. A request
+Kernel's retried 'add a room' or publish and a resubmitted owner form are
+safe. A request
 id is not a deduplication of look-alike records: Registry still never merges
 records because they look alike (R0-34).
 

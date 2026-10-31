@@ -1,8 +1,8 @@
 # State 2 — Registry installation rules: import, configuration, backups, security review
 
 Draft of 2026-10-31. The owner accepted the proposals behind A16–A18 on
-2026-10-31 (answers 13–15 of the State 2 plan); A19 and A20 are proposed to the
-owner and not yet accepted. They settle what State 0 carried here: the
+2026-10-31 (answers 13–15 of the State 2 plan), and A19 and A20, which the
+security review proposed, the same day. They settle what State 0 carried here: the
 import's mapping check and how Registry knows it succeeded (R0-34, R0-79),
 backup and tested restore and encryption at rest (owner, 2026-10-27), and the
 security review of States 0–2.
@@ -138,11 +138,11 @@ erasure at t => no backup holding the erased values exists after t + 30 days
 Data survives the loss of the store; an erasure has a bounded reach into the
 backups, as the governance can state.
 
-## Proposed decision A19 — every stored value is data, never code
+## Accepted decision A19 — every stored value is data, never code
 
-Proposed to the owner 2026-10-31 by the security review: the agent writes text
-the owner interface shows — room names (R0-68), access request text (M08) —
-and the import reads a file from outside.
+Proposed by the security review and accepted by the owner on 2026-10-31: the
+agent writes text the owner interface shows — room names (R0-68), access
+request text (M08) — and the import reads a file from outside.
 
 ### Normative rules
 
@@ -175,9 +175,9 @@ no stored value is ever evaluated or executed
 Text the agent writes cannot act in the owner's browser; values never change
 what Registry executes.
 
-## Proposed decision A20 — a release fixes its dependencies
+## Accepted decision A20 — a release fixes its dependencies
 
-Proposed to the owner 2026-10-31 by the security review.
+Proposed by the security review and accepted by the owner on 2026-10-31.
 
 ### Normative rules
 
@@ -208,8 +208,7 @@ What runs is what was verified.
 1. Every security category has exactly one outcome below, resting on the
    decisions it names.
 2. A change to a decision a category names reopens this review.
-3. A category whose decisions are proposed, not accepted, holds only once the
-   owner accepts them.
+3. Every decision a category names is accepted.
 
 ### Formal invariants
 
@@ -233,12 +232,11 @@ Security review: PERFORMED
 - injection_interpreted_input: APPLICABLE; references: A02, A16, A19; affected: M03, M08, import file, every stored text value
 - external_callbacks_webhooks: NOT_APPLICABLE; rationale: Registry calls no other service and receives no callback (R0-18, R0-54), and every request is a caller's authenticated call (R0-27)
 - browser_boundary: APPLICABLE; references: A13, A19; affected: owner interface, CSRF protection, session cookie, rendering of agent-written text
-- files_artifacts: APPLICABLE; references: A07, A08, A16, A18; affected: M05, M10, import file, backups, pointers as references whose payload Registry never reads (R0-02)
+- files_artifacts: APPLICABLE; references: A07, A08, A16, A18, A22; affected: M05, M10, import file, backups, pointers as references whose payload Registry never reads (R0-02)
 - concurrency: APPLICABLE; references: A01, A04, A07, A12, A14; affected: M01, M04, M05, M06, M09, concurrent creates, corrections, publishes and session changes
 - dependencies: APPLICABLE; references: A20; affected: Registry release, its Python dependencies
 
 ### Consequence
 
-Every category has an outcome. A19 and A20 are proposals: until the owner
-accepts them, injection, browser boundary and dependencies rest on decisions
-that are not yet accepted.
+Every category has an outcome resting on accepted decisions; the GDPR review
+of the platform reads its technical guarantees here (R0-37, R0-88).

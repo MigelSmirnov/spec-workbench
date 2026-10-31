@@ -18,10 +18,10 @@ here: what each service token and Kernel's agent authority may do and receive
 
    | service | operations | highest class |
    |---|---|---|
-   | PresuPro | validate a project reference; read a project context; read a customer's billing data; publish and withdraw pointers of its own types; list artifacts; read the latest artifact of a type | `personal_data` |
+   | PresuPro | validate a project reference; read a project context; read a customer's billing data; list artifacts; read the latest artifact of a type | `personal_data` |
    | Client Portal | validate a project reference; read a project context; read a project; list rooms; list artifacts; read the latest artifact of a type | `personal_data` |
    | Cabinet | list projects; read a project context; validate a project reference | `personal_data` |
-   | Cabinet Kernel | with agent authority only (A10): register an agent session; read the session's access; request access to a project; validate a project reference; read the agent projection; list rooms; add a room; list artifacts; read the latest artifact of a type; publish and withdraw pointers of its own types | `business_confidential` (R0-74) |
+   | Cabinet Kernel | with agent authority only (A10): register an agent session; read the session's access; request access to a project; validate a project reference; read the agent projection; list rooms; add a room; list artifacts; read the latest artifact of a type; publish and withdraw an artifact pointer (R0-88) | `business_confidential` (R0-74) |
 
 3. An operation outside a token's row is refused, whatever the request holds.
 4. An answer that would carry a class above the token's highest is refused
@@ -45,7 +45,7 @@ highest_class(Cabinet Kernel) = business_confidential
 2. Client Portal reading `context` receives the address; Kernel calling
    `context` is refused.
 3. A token not in the configuration is refused like a wrong one (R0-23).
-4. PresuPro publishing with a token of Client Portal's name is refused.
+4. PresuPro calling 'publish an artifact pointer' is refused (R0-88).
 
 ### Consequence
 
