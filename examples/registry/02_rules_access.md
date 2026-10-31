@@ -194,7 +194,9 @@ sees every change as a new version.
    an owner request; the owner's sign-out; the instance's restart (M11 is never
    durable). Every duration in this decision — the 8 hours, the 30, 15 and 10
    minutes, the 60 seconds — is measured by the process's monotonic clock,
-   which a change of the wall clock does not move; instants Registry records
+   which a change of the wall clock does not move and which counts the time
+   the host or its VM was suspended, so a session does not outlive a
+   suspension; instants Registry records
    and the 03:00 of A18 are UTC wall-clock time. A session that has reached a
    limit serves no request from that
    moment: a request carrying it is refused at the session check. Registry
