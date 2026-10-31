@@ -251,7 +251,9 @@ secret cannot be shared between holders.
    recorded instant and last sequence number are those of that snapshot,
    the instant being when its read transaction began. It
    records, readable without its key, its instant, the release that made it,
-   the last audit sequence number it holds and a digest of the key it was
+   the last audit sequence number its store ever wrote — kept apart from the
+   entries (A15), 0 for a store that never wrote one, whatever the log now
+   holds — and a digest of the key it was
    made with (never the key); its age is counted from that instant. The
    owner interface shows the instant of the newest kept backup whose record
    can be read, or that there is none.
@@ -274,7 +276,8 @@ secret cannot be shared between holders.
    into a second temporary file, opens that for reading only, checks that it
    is the store version of its release, that the full integrity check (A17
    rule 5)
-   passes and that its audit log ends at the recorded sequence number, and
+   passes and that the last sequence number it keeps (A15) equals the
+   recorded one, and
    removes it; a backup that passes is renamed to its kept name, one that
    fails is deleted. When the decrypted file cannot be removed, or a failed
    backup cannot be deleted, the backup stays under its temporary name and

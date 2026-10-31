@@ -192,7 +192,11 @@ sees every change as a new version.
    to Registry's own origin.
 2. The session ends at the first of: 8 hours after sign-in; 30 minutes without
    an owner request; the owner's sign-out; the instance's restart (M11 is never
-   durable). A session that has reached a limit serves no request from that
+   durable). Every duration in this decision — the 8 hours, the 30, 15 and 10
+   minutes, the 60 seconds — is measured by the process's monotonic clock,
+   which a change of the wall clock does not move; instants Registry records
+   and the 03:00 of A18 are UTC wall-clock time. A session that has reached a
+   limit serves no request from that
    moment: a request carrying it is refused at the session check. Registry
    ends it — and drops its pending confirmation and its uploaded file with it
    (M11) — at a pass over the sessions it makes every 60 seconds from the
