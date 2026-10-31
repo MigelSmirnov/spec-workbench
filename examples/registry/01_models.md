@@ -3,9 +3,15 @@
 ## Status
 
 Draft of 2026-10-31, derived from the accepted State 0 (`00_product.md`, R0-75)
-and the questions it carried to State 1 ("Carried to later states"). Nothing
-here is a decision until the owner accepts it; the v1 code (`SOURCE.md`) is
-evidence of what runs, never a source of norm.
+and the questions it carried to State 1 ("Carried to later states"). The v1
+code (`SOURCE.md`) is evidence of what runs, never a source of norm.
+
+On 2026-10-31 the owner answered the draft's questions: the object has no
+identity of its own (M02; "object ids" in R0-50 and R0-80 is a slip, to be
+corrected in `00_product.md` by a new owner decision there), and the
+proposals under M01, M04 and M10 are accepted as written. What remains open
+is marked so under a model's `Open questions`; nothing blocks State 2. The
+state is not yet closed by question rounds ("State 1 readiness").
 
 This state names the concepts Registry needs, the facts each carries in domain
 words, its identity (`value` or `entity`, `MODEL_IDENTITY_EVIDENCE.md`), who
@@ -155,15 +161,14 @@ Durable, one record per project in the instance's own store (R0-05).
 
 ### Open questions
 
-- Alias (R0-82, carried): proposed — a short label, no format rule beyond a
-  length State 6 sets, and no uniqueness: two projects may share an alias, and
-  a project without one is shown to the agent by its id. Does the owner want
-  Registry to refuse a duplicate alias? (Does not change identity.)
-- What an anonymised project keeps (R0-60, R0-62, carried): proposed — exactly
-  id, status, the archived instant, the anonymised instant and the pointers;
-  the revision goes with the card since nothing of it can be corrected again.
-  Confirm that the archived instant stays (the retention review no longer needs
-  it) or goes with "nothing else".
+None. Settled by the owner on 2026-10-31:
+
+- Alias (R0-82, carried): a short label, no format rule beyond a length State 6
+  sets, and no uniqueness — two projects may share an alias, Registry refuses
+  no duplicate, and a project without one is shown to the agent by its id.
+- What an anonymised project keeps (R0-60, R0-62, carried): exactly its id, its
+  status, the archived instant, the anonymised instant and its pointers; the
+  revision goes with the card, since nothing of it can be corrected again.
 
 ## Model M02 — Object
 
@@ -190,6 +195,16 @@ Continuity: the object has no revision and no life of its own (R0-45); a
 correction replaces its values under the project's next revision, and nothing
 on the platform names an object apart from its project.
 
+Owner's evidence (2026-10-31): a roof-drainage repair on a building is a
+closed project, and further works on the same building for the same customer
+are planned. They are a new project with its own `project_id`, its own
+object holding the same address, and its own money; the two are related only
+through the Customer they name (M04, `customer_ref`). Registry keeps no "same
+building" link and no history of works per building: that would be the object
+carrying several projects, declined in R0-38, and a new responsibility
+(R0-24, R0-59). Adding an object identity later, should such a history be
+wanted, is a State 0 reopening and does not break existing projects.
+
 ### Source of truth
 
 The owner, recorded in the project card (R0-45).
@@ -204,13 +219,12 @@ Embedded in the Project record.
 
 ### Open questions
 
-- BLOCK: R0-50 and R0-80 say the import keeps "project, object, room and
-  pointer ids". The v1 Registry has no object (R0-38 moved the address from the
-  project to it), so no v1 object id exists to keep. Does the owner intend the
-  object to have an identity of its own — an `object_id` consumers may name,
-  which would make it an entity that could later carry several projects
-  (option (b) declined in R0-38) — or is "object ids" a slip and the object a
-  value inside the project, as drafted here?
+None. R0-50 and R0-80 say the import keeps "project, object, room and pointer
+ids"; the v1 Registry has no object (R0-38 moved the address from the project
+to it), so no v1 object id exists to keep. The owner confirmed on 2026-10-31
+that "object ids" is a slip: the object has no identity of its own and the
+import carries it inside its project. The wording is to be corrected in
+`00_product.md` by a new owner decision there (R0-75).
 
 ## Model M03 — Room
 
@@ -323,18 +337,18 @@ Durable, one record per customer, forever (R0-67).
 
 ### Open questions
 
-- How an erased Customer is read and listed (carried): proposed — the read
-  answers its `customer_ref`, kind, the erased mark and instant, and no other
-  value; the list shows it the same way; the billing read refuses it (R0-65).
-- How a restricted Customer is read and listed (carried): proposed — to the
-  owner, unchanged, with the restricted mark and instant; to any service, the
-  billing read refuses it (R0-65) and `context` still names its `customer_ref`
-  (R0-55).
-- Does the import's new Customer from a v1 `customer_ref` (R0-80) get a name?
-  Proposed — the v1 value becomes its tax id when it is one, its name is the
-  owner's to give after the import, and until then the record holds an absent
-  name; or the owner gives the name in the import as for display names
-  (R0-85). (Does not change identity.)
+None. Settled by the owner on 2026-10-31:
+
+- An erased Customer is read as its `customer_ref`, its kind, the erased mark
+  and its instant, and no other value; the list shows it the same way; the
+  billing read refuses it (R0-65).
+- A restricted Customer is read and listed by the owner unchanged, with the
+  restricted mark and its instant; to any service the billing read refuses it
+  (R0-65) and `context` still names its `customer_ref` (R0-55).
+- The Customer the import makes from a v1 `customer_ref` (R0-80) gets its tax
+  id from the v1 value when it is one and an absent name; the owner gives the
+  name after the import, as the import gives display names (R0-85). The three
+  marks stay independent facts; erasure clears none of them.
 
 ## Model M05 — ArtifactPointer
 
@@ -638,10 +652,9 @@ Durable, at most one per instance.
 
 ### Open questions
 
-- Is the closure a record of its own or only the audit entry of the import
-  (M09)? Proposed — its own, so that refusing a second import does not depend
-  on the audit log, which the owner may erase by date (R0-66). (Does not change
-  identity.)
+None. Settled by the owner on 2026-10-31: the closure is a record of its own,
+not only the audit entry of the import (M09), so that refusing a second import
+does not depend on the audit log, which the owner may erase by date (R0-66).
 
 ## Model M11 — OwnerSession
 
@@ -726,8 +739,9 @@ None is a model: none has facts of its own.
 
 ## State 1 readiness
 
-- `tools/design_lint.py examples/registry --state 1` must answer no error
-  other than M02's BLOCK, which the owner closes.
+- `tools/design_lint.py examples/registry --state 1` answers no error
+  (2026-10-31, after the owner's answers).
+- `00_product.md` owes one correction: "object ids" in R0-50 and R0-80 (M02).
 - Every carried State 1 question of `00_product.md` is answered above or
   placed under a model's Open questions: fields and create requests (each
   model's facts; the create request is the facts the owner gives, State 6),
