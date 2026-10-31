@@ -1,0 +1,86 @@
+{
+ "open_points": [
+  {
+   "unit": "A13",
+   "subject": "Owner-session idle timeout",
+   "kind": "race ordering",
+   "text": "“An owner request is any request to the owner interface that carries the valid session, whatever its answer; its arrival restarts the 30 minutes” but only requests that show confirmations, upload files, submit changes or sign out are serialised by the session lock, while the expiry pass decides under that lock.",
+   "question": "How is an ordinary owner request’s validity check and update of last_request made atomic with the expiry pass, so the pass cannot expire the session using the previous last_request after a valid request has arrived?",
+   "options": [
+    "Every request briefly takes the session lock for the validity check and last_request update",
+    "Use separate atomic state or synchronisation for last_request",
+    "Let the expiry pass win when it observed the old last_request"
+   ],
+   "default_guess": "Every request briefly takes the session lock, checks validity and updates last_request atomically, then releases it before doing work that does not otherwise need the lock."
+  },
+  {
+   "unit": "A13",
+   "subject": "Admitted request versus expiry cleanup",
+   "kind": "contradictory concurrency",
+   "text": "“a request that passes it completes even if a limit or a sign-out comes while it runs” and “the pass alone ends sessions by their limits” and drops the session’s pending confirmation and uploaded file, although a state-changing request takes the session lock only “after passing the session check.”",
+   "question": "What happens when a request passes the session check, then the expiry pass acquires the locks and removes that session before the request acquires the session lock or uses its pending confirmation or uploaded file?",
+   "options": [
+    "An admitted request pins the session until it finishes",
+    "The validity check and the request’s session-state work hold one uninterrupted lock",
+    "The expiry pass may remove the session and the admitted request is then refused or aborted"
+   ],
+   "default_guess": "An admitted request pins the session until it finishes; expiry makes it unavailable to new requests immediately, but cleanup waits for admitted requests."
+  },
+  {
+   "unit": "A13",
+   "subject": "Sixty-second session-expiry pass",
+   "kind": "missing schedule semantics",
+   "text": "“a pass over the sessions it makes every 60 seconds from the start” does not say what happens to missed ticks when the process is delayed or the host or VM is suspended, even though the monotonic clock counts the suspension.",
+   "question": "After suspension or a pass lasting beyond its next scheduled tick, does Registry run one pass immediately, run every missed pass, or schedule the next pass 60 seconds after resumption or completion?",
+   "options": [
+    "Run one pass immediately and skip missed ticks",
+    "Run catch-up passes for every missed tick",
+    "Wait until the next phase-aligned tick",
+    "Schedule 60 seconds after the previous pass completes"
+   ],
+   "default_guess": "Run one pass immediately after resumption or delay, skip redundant missed ticks, and continue on the original 60-second phase."
+  },
+  {
+   "unit": "A18",
+   "subject": "Backup encryption and key digest",
+   "kind": "security mechanism unspecified",
+   "text": "“Each backup is encrypted with the backup key” and records “a digest of the key,” but no encryption construction, authentication rule, nonce generation, key derivation, digest algorithm or binding of the readable record to the ciphertext is declared.",
+   "question": "What fixed cryptographic format must every implementation use, including authenticated encryption, nonce generation, treatment of backup keys longer than an algorithm key, the key-digest algorithm, and authentication of the readable metadata?",
+   "options": [
+    "Declare one versioned authenticated-encryption format and bind the readable record as associated data",
+    "Allow any authenticated-encryption format selected by the implementation",
+    "Require encryption but permit unauthenticated encryption and independent metadata"
+   ],
+   "default_guess": "Use a versioned AEAD format with a fresh random nonce, a specified KDF for the configured key, SHA-256 for the key identifier, and authenticate all readable metadata as associated data."
+  },
+  {
+   "unit": "A18",
+   "subject": "Thirty-day backup retention",
+   "kind": "clock contradiction",
+   "text": "A13 now says recorded instants and 03:00 use UTC wall-clock time, while A18 deletes backups “more than 30 × 24 hours before” the current instant and claims erasure reaches them “at most 31 days after the erasure.”",
+   "question": "Does the 30-day and at-most-31-day guarantee measure elapsed time despite wall-clock changes, or UTC timestamp difference; and what bound applies if the wall clock is moved backward or forward?",
+   "options": [
+    "Measure retention by elapsed time unaffected by wall-clock changes",
+    "Measure by UTC timestamp difference and qualify the bound when the wall clock changes",
+    "Use UTC dates rather than 30×24 elapsed hours"
+   ],
+   "default_guess": "Use the specified UTC timestamp difference and explicitly make the 31-day bound conditional on the wall clock not moving backward."
+  },
+  {
+   "unit": "A18",
+   "subject": "Committing a kept backup",
+   "kind": "crash durability",
+   "text": "“a backup that passes is renamed to its kept name” and “A step that fails leaves no partial kept backup,” but the text gives no durability boundary for a crash or power loss during writing, checking or renaming.",
+   "question": "When is a backup durably considered kept, and what file and directory synchronisation is required so a crash cannot leave a kept name containing incomplete data or lose a backup already reported as kept?",
+   "options": [
+    "Require durable file writes, atomic rename and directory synchronisation before it counts as kept",
+    "Treat successful rename as sufficient without an explicit durability guarantee",
+    "On the next start or run, revalidate every kept payload and discard incomplete ones"
+   ],
+   "default_guess": "Count it as kept only after the complete encrypted file is flushed, atomically renamed, and the backup directory is synchronised."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A13\",\"subject\":\"Owner-session idle timeout\",\"kind\":\"race ordering\",\"text\":\"“An owner request is any request to the owner interface that carries the valid session, whatever its answer; its arrival restarts the 30 minutes” but only requests that show confirmations, upload files, submit changes or sign out are serialised by the session lock, while the expiry pass decides under that lock.\",\"question\":\"How is an ordinary owner request’s validity check and update of last_request made atomic with the expiry pass, so the pass cannot expire the session using the previous last_request after a valid request has arrived?\",\"options\":[\"Every request briefly takes the session lock for the validity check and last_request update\",\"Use separate atomic state or synchronisation for last_request\",\"Let the expiry pass win when it observed the old last_request\"],\"default_guess\":\"Every request briefly takes the session lock, checks validity and updates last_request atomically, then releases it before doing work that does not otherwise need the lock.\"},{\"unit\":\"A13\",\"subject\":\"Admitted request versus expiry cleanup\",\"kind\":\"contradictory concurrency\",\"text\":\"“a request that passes it completes even if a limit or a sign-out comes while it runs” and “the pass alone ends sessions by their limits” and drops the session’s pending confirmation and uploaded file, although a state-changing request takes the session lock only “after passing the session check.”\",\"question\":\"What happens when a request passes the session check, then the expiry pass acquires the locks and removes that session before the request acquires the session lock or uses its pending confirmation or uploaded file?\",\"options\":[\"An admitted request pins the session until it finishes\",\"The validity check and the request’s session-state work hold one uninterrupted lock\",\"The expiry pass may remove the session and the admitted request is then refused or aborted\"],\"default_guess\":\"An admitted request pins the session until it finishes; expiry makes it unavailable to new requests immediately, but cleanup waits for admitted requests.\"},{\"unit\":\"A13\",\"subject\":\"Sixty-second session-expiry pass\",\"kind\":\"missing schedule semantics\",\"text\":\"“a pass over the sessions it makes every 60 seconds from the start” does not say what happens to missed ticks when the process is delayed or the host or VM is suspended, even though the monotonic clock counts the suspension.\",\"question\":\"After suspension or a pass lasting beyond its next scheduled tick, does Registry run one pass immediately, run every missed pass, or schedule the next pass 60 seconds after resumption or completion?\",\"options\":[\"Run one pass immediately and skip missed ticks\",\"Run catch-up passes for every missed tick\",\"Wait until the next phase-aligned tick\",\"Schedule 60 seconds after the previous pass completes\"],\"default_guess\":\"Run one pass immediately after resumption or delay, skip redundant missed ticks, and continue on the original 60-second phase.\"},{\"unit\":\"A18\",\"subject\":\"Backup encryption and key digest\",\"kind\":\"security mechanism unspecified\",\"text\":\"“Each backup is encrypted with the backup key” and records “a digest of the key,” but no encryption construction, authentication rule, nonce generation, key derivation, digest algorithm or binding of the readable record to the ciphertext is declared.\",\"question\":\"What fixed cryptographic format must every implementation use, including authenticated encryption, nonce generation, treatment of backup keys longer than an algorithm key, the key-digest algorithm, and authentication of the readable metadata?\",\"options\":[\"Declare one versioned authenticated-encryption format and bind the readable record as associated data\",\"Allow any authenticated-encryption format selected by the implementation\",\"Require encryption but permit unauthenticated encryption and independent metadata\"],\"default_guess\":\"Use a versioned AEAD format with a fresh random nonce, a specified KDF for the configured key, SHA-256 for the key identifier, and authenticate all readable metadata as associated data.\"},{\"unit\":\"A18\",\"subject\":\"Thirty-day backup retention\",\"kind\":\"clock contradiction\",\"text\":\"A13 now says recorded instants and 03:00 use UTC wall-clock time, while A18 deletes backups “more than 30 × 24 hours before” the current instant and claims erasure reaches them “at most 31 days after the erasure.”\",\"question\":\"Does the 30-day and at-most-31-day guarantee measure elapsed time despite wall-clock changes, or UTC timestamp difference; and what bound applies if the wall clock is moved backward or forward?\",\"options\":[\"Measure retention by elapsed time unaffected by wall-clock changes\",\"Measure by UTC timestamp difference and qualify the bound when the wall clock changes\",\"Use UTC dates rather than 30×24 elapsed hours\"],\"default_guess\":\"Use the specified UTC timestamp difference and explicitly make the 31-day bound conditional on the wall clock not moving backward.\"},{\"unit\":\"A18\",\"subject\":\"Committing a kept backup\",\"kind\":\"crash durability\",\"text\":\"“a backup that passes is renamed to its kept name” and “A step that fails leaves no partial kept backup,” but the text gives no durability boundary for a crash or power loss during writing, checking or renaming.\",\"question\":\"When is a backup durably considered kept, and what file and directory synchronisation is required so a crash cannot leave a kept name containing incomplete data or lose a backup already reported as kept?\",\"options\":[\"Require durable file writes, atomic rename and directory synchronisation before it counts as kept\",\"Treat successful rename as sufficient without an explicit durability guarantee\",\"On the next start or run, revalidate every kept payload and discard incomplete ones\"],\"default_guess\":\"Count it as kept only after the complete encrypted file is flushed, atomically renamed, and the backup directory is synchronised.\"}]}",
+ "set_aside": []
+}

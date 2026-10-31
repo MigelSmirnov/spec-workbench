@@ -1,0 +1,111 @@
+{
+ "open_points": [
+  {
+   "subject": "Owner-session expiry and cleanup",
+   "kind": "contradictory timing",
+   "text": "“The session ends at the first of: 8 hours after sign-in; 30 minutes without an owner request” but “the pass alone ends sessions by their limits” and drops their pending confirmation and uploaded file.",
+   "question": "At a time limit, does the session and its temporary data end immediately, or does it merely become invalid and remain stored until the next cleanup pass?",
+   "options": [
+    "It ends logically at the limit, but its record and temporary data are removed by the next pass",
+    "It remains an expired record until the pass ends it and drops its data",
+    "A per-session timer ends and removes it exactly at the limit; the pass is only a fallback"
+   ],
+   "default_guess": "Refuse requests from the exact limit, but retain the expired record and its temporary data until the next cleanup pass.",
+   "unit": "A13"
+  },
+  {
+   "subject": "OwnerSession monotonic lifetime state",
+   "kind": "model contradiction",
+   "text": "A13 measures the 8-hour, 30-minute and 10-minute limits with a suspension-counting monotonic clock, while M11 carries “the instant it began, its expiry at the latest,” “the instant of its last request,” and “the instant it was shown,” and State 1 says every recorded instant is UTC wall-clock time and that the listed facts are all the model's facts.",
+   "question": "What monotonic values does M11 retain to enforce session, idle and confirmation limits after wall-clock changes, and what does its wall-clock “expiry at the latest” mean then?",
+   "options": [
+    "Add monotonic began, last-request and confirmation-shown values beside the UTC instants",
+    "Store only monotonic deadlines and remove or redefine the wall-clock expiry fact",
+    "Derive deadlines from UTC instants despite the rule that wall-clock changes must not move them"
+   ],
+   "default_guess": "Add runtime monotonic timestamps for all three limits and treat any UTC expiry as informational rather than authoritative.",
+   "unit": "A13"
+  },
+  {
+   "subject": "Updating the session's last-request time",
+   "kind": "concurrency gap",
+   "text": "“An owner request is any request ... that carries the valid session, whatever its answer; its arrival restarts the 30 minutes — of concurrent requests the latest arrival counts,” but the requests serialized by the session lock are listed as “showing a confirmation step, uploading a file, a submission, a sign-out,” and “other requests are not held by them.”",
+   "question": "What event defines a request's arrival, and how is last_request updated atomically for ordinary and concurrent requests without violating the stated locking behavior?",
+   "options": [
+    "Every request briefly takes the session lock during admission and updates last_request to max(current, arrival)",
+    "Use a separate atomic maximum for last_request without taking the session lock",
+    "Only the listed session-changing requests take the lock and ordinary requests update last_request without synchronization"
+   ],
+   "default_guess": "Timestamp arrival at handler admission and atomically set last_request to the maximum arrival time before releasing the request to continue.",
+   "unit": "A13"
+  },
+  {
+   "subject": "Sixty-second session cleanup pass",
+   "kind": "scheduling ambiguity",
+   "text": "“Registry ends it ... at a pass over the sessions it makes every 60 seconds from the start; the pass alone ends sessions by their limits, taking the import lock and then each session's lock.”",
+   "question": "If a pass is delayed, lasts longer than 60 seconds, or the host resumes after several intervals, are missed passes skipped, coalesced or run repeatedly; which sessions belong to a pass; and is the import lock held for the whole pass or acquired separately for each session?",
+   "options": [
+    "Fixed-rate, non-overlapping passes; coalesce missed ticks into one pass over a start-of-pass snapshot while holding the import lock throughout",
+    "Schedule the next pass 60 seconds after the previous pass completes and acquire the import lock per session",
+    "Run every missed pass after resumption and enumerate sessions dynamically"
+   ],
+   "default_guess": "Use non-overlapping fixed-rate passes, coalesce missed intervals into one immediate pass, scan a start-of-pass session snapshot, and hold the import lock for the whole scan.",
+   "unit": "A13"
+  },
+  {
+   "subject": "Daily run while the preceding run is still active",
+   "kind": "contradictory scheduling",
+   "text": "The eligibility rule starts a date's run at “its first look at or after 03:00” when the process previously saw that date before 03:00, but “a 03:00 that finds a run still going makes no run of its own.”",
+   "question": "After the preceding run finishes later that day, may a later clock look start the skipped date's run, or is that date permanently marked as missed?",
+   "options": [
+    "The date is permanently skipped when its 03:00 opportunity finds another run active",
+    "A later look starts the date's run as soon as the preceding run finishes",
+    "The running backup is cancelled or overlapped so the new date starts at 03:00"
+   ],
+   "default_guess": "Mark the date as missed and do not make a delayed replacement, consistently with the other explicitly missed-run cases.",
+   "unit": "A18"
+  },
+  {
+   "subject": "Backup encryption and authentication",
+   "kind": "cryptographic gap",
+   "text": "“Each backup is encrypted with the backup key,” its record is “readable without its key,” and the required test says it “cannot be read without the key,” but no cipher, nonce rule, key derivation, authentication boundary or meaning of “read” is declared.",
+   "question": "Which authenticated-encryption construction and key handling are required, and are the unencrypted metadata and ciphertext authenticated together so either cannot be altered undetected?",
+   "options": [
+    "Use an authenticated-encryption format and authenticate the clear metadata as associated data",
+    "Encrypt the store without authenticating the clear metadata",
+    "Use encryption without an integrity tag and rely on the SQLite integrity check after decryption"
+   ],
+   "default_guess": "Use a versioned AES-256-GCM format with a fresh random nonce, derive the encryption key from the configured key with HKDF-SHA-256, and authenticate all clear metadata as associated data.",
+   "unit": "A18"
+  },
+  {
+   "subject": "Backup key digest",
+   "kind": "undefined derivation",
+   "text": "A backup records “a digest of the key it was made with (never the key),” but the digest algorithm, input encoding and comparison rule are not stated.",
+   "question": "How is the key digest computed and represented, and is it merely a key identifier or a security check that must be collision-resistant and authenticated?",
+   "options": [
+    "SHA-256 over the exact configured key bytes, encoded canonically and authenticated with the backup metadata",
+    "A keyed identifier derived as part of the encryption format",
+    "An implementation-selected digest and encoding"
+   ],
+   "default_guess": "Record a canonical SHA-256 digest of the exact configured key bytes and authenticate it with the rest of the backup metadata.",
+   "unit": "A18"
+  },
+  {
+   "subject": "Backup file names and prefixes",
+   "kind": "undeclared constants",
+   "text": "“Kept and temporary names begin with two different prefixes the release declares” and “A kept name is made from the backup's instant,” but neither prefix nor the canonical transformation from an instant to a name is declared in the accepted texts.",
+   "question": "What exact prefixes and filename encoding must every release use, including precision and collision behavior for equal recorded instants?",
+   "options": [
+    "Declare fixed prefixes and a canonical UTC timestamp encoding in State 2",
+    "Carry the exact backup filename grammar explicitly to State 6",
+    "Let each implementation or release choose its own grammar"
+   ],
+   "default_guess": "Use fixed distinct prefixes and a filesystem-safe UTC timestamp with sufficient fractional precision; an equal resulting kept name follows the stated collision failure.",
+   "unit": "A18"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"Owner-session expiry and cleanup\",\"kind\":\"contradictory timing\",\"text\":\"“The session ends at the first of: 8 hours after sign-in; 30 minutes without an owner request” but “the pass alone ends sessions by their limits” and drops their pending confirmation and uploaded file.\",\"question\":\"At a time limit, does the session and its temporary data end immediately, or does it merely become invalid and remain stored until the next cleanup pass?\",\"options\":[\"It ends logically at the limit, but its record and temporary data are removed by the next pass\",\"It remains an expired record until the pass ends it and drops its data\",\"A per-session timer ends and removes it exactly at the limit; the pass is only a fallback\"],\"default_guess\":\"Refuse requests from the exact limit, but retain the expired record and its temporary data until the next cleanup pass.\",\"unit\":\"A13\"},{\"subject\":\"OwnerSession monotonic lifetime state\",\"kind\":\"model contradiction\",\"text\":\"A13 measures the 8-hour, 30-minute and 10-minute limits with a suspension-counting monotonic clock, while M11 carries “the instant it began, its expiry at the latest,” “the instant of its last request,” and “the instant it was shown,” and State 1 says every recorded instant is UTC wall-clock time and that the listed facts are all the model's facts.\",\"question\":\"What monotonic values does M11 retain to enforce session, idle and confirmation limits after wall-clock changes, and what does its wall-clock “expiry at the latest” mean then?\",\"options\":[\"Add monotonic began, last-request and confirmation-shown values beside the UTC instants\",\"Store only monotonic deadlines and remove or redefine the wall-clock expiry fact\",\"Derive deadlines from UTC instants despite the rule that wall-clock changes must not move them\"],\"default_guess\":\"Add runtime monotonic timestamps for all three limits and treat any UTC expiry as informational rather than authoritative.\",\"unit\":\"A13\"},{\"subject\":\"Updating the session's last-request time\",\"kind\":\"concurrency gap\",\"text\":\"“An owner request is any request ... that carries the valid session, whatever its answer; its arrival restarts the 30 minutes — of concurrent requests the latest arrival counts,” but the requests serialized by the session lock are listed as “showing a confirmation step, uploading a file, a submission, a sign-out,” and “other requests are not held by them.”\",\"question\":\"What event defines a request's arrival, and how is last_request updated atomically for ordinary and concurrent requests without violating the stated locking behavior?\",\"options\":[\"Every request briefly takes the session lock during admission and updates last_request to max(current, arrival)\",\"Use a separate atomic maximum for last_request without taking the session lock\",\"Only the listed session-changing requests take the lock and ordinary requests update last_request without synchronization\"],\"default_guess\":\"Timestamp arrival at handler admission and atomically set last_request to the maximum arrival time before releasing the request to continue.\",\"unit\":\"A13\"},{\"subject\":\"Sixty-second session cleanup pass\",\"kind\":\"scheduling ambiguity\",\"text\":\"“Registry ends it ... at a pass over the sessions it makes every 60 seconds from the start; the pass alone ends sessions by their limits, taking the import lock and then each session's lock.”\",\"question\":\"If a pass is delayed, lasts longer than 60 seconds, or the host resumes after several intervals, are missed passes skipped, coalesced or run repeatedly; which sessions belong to a pass; and is the import lock held for the whole pass or acquired separately for each session?\",\"options\":[\"Fixed-rate, non-overlapping passes; coalesce missed ticks into one pass over a start-of-pass snapshot while holding the import lock throughout\",\"Schedule the next pass 60 seconds after the previous pass completes and acquire the import lock per session\",\"Run every missed pass after resumption and enumerate sessions dynamically\"],\"default_guess\":\"Use non-overlapping fixed-rate passes, coalesce missed intervals into one immediate pass, scan a start-of-pass session snapshot, and hold the import lock for the whole scan.\",\"unit\":\"A13\"},{\"subject\":\"Daily run while the preceding run is still active\",\"kind\":\"contradictory scheduling\",\"text\":\"The eligibility rule starts a date's run at “its first look at or after 03:00” when the process previously saw that date before 03:00, but “a 03:00 that finds a run still going makes no run of its own.”\",\"question\":\"After the preceding run finishes later that day, may a later clock look start the skipped date's run, or is that date permanently marked as missed?\",\"options\":[\"The date is permanently skipped when its 03:00 opportunity finds another run active\",\"A later look starts the date's run as soon as the preceding run finishes\",\"The running backup is cancelled or overlapped so the new date starts at 03:00\"],\"default_guess\":\"Mark the date as missed and do not make a delayed replacement, consistently with the other explicitly missed-run cases.\",\"unit\":\"A18\"},{\"subject\":\"Backup encryption and authentication\",\"kind\":\"cryptographic gap\",\"text\":\"“Each backup is encrypted with the backup key,” its record is “readable without its key,” and the required test says it “cannot be read without the key,” but no cipher, nonce rule, key derivation, authentication boundary or meaning of “read” is declared.\",\"question\":\"Which authenticated-encryption construction and key handling are required, and are the unencrypted metadata and ciphertext authenticated together so either cannot be altered undetected?\",\"options\":[\"Use an authenticated-encryption format and authenticate the clear metadata as associated data\",\"Encrypt the store without authenticating the clear metadata\",\"Use encryption without an integrity tag and rely on the SQLite integrity check after decryption\"],\"default_guess\":\"Use a versioned AES-256-GCM format with a fresh random nonce, derive the encryption key from the configured key with HKDF-SHA-256, and authenticate all clear metadata as associated data.\",\"unit\":\"A18\"},{\"subject\":\"Backup key digest\",\"kind\":\"undefined derivation\",\"text\":\"A backup records “a digest of the key it was made with (never the key),” but the digest algorithm, input encoding and comparison rule are not stated.\",\"question\":\"How is the key digest computed and represented, and is it merely a key identifier or a security check that must be collision-resistant and authenticated?\",\"options\":[\"SHA-256 over the exact configured key bytes, encoded canonically and authenticated with the backup metadata\",\"A keyed identifier derived as part of the encryption format\",\"An implementation-selected digest and encoding\"],\"default_guess\":\"Record a canonical SHA-256 digest of the exact configured key bytes and authenticate it with the rest of the backup metadata.\",\"unit\":\"A18\"},{\"subject\":\"Backup file names and prefixes\",\"kind\":\"undeclared constants\",\"text\":\"“Kept and temporary names begin with two different prefixes the release declares” and “A kept name is made from the backup's instant,” but neither prefix nor the canonical transformation from an instant to a name is declared in the accepted texts.\",\"question\":\"What exact prefixes and filename encoding must every release use, including precision and collision behavior for equal recorded instants?\",\"options\":[\"Declare fixed prefixes and a canonical UTC timestamp encoding in State 2\",\"Carry the exact backup filename grammar explicitly to State 6\",\"Let each implementation or release choose its own grammar\"],\"default_guess\":\"Use fixed distinct prefixes and a filesystem-safe UTC timestamp with sufficient fractional precision; an equal resulting kept name follows the stated collision failure.\",\"unit\":\"A18\"}]}",
+ "set_aside": []
+}
