@@ -46,8 +46,9 @@ security review of States 0–2.
    project: records only of projects the owner did not pick are neither checked,
    shown as conflicts nor imported, and take no part in the duplicate-id
    check. A file that cannot be read as the format States 5 and 6 declare,
-   or that holds two project records with one id, is refused whole at
-   upload, before anything is picked.
+   that holds two project records with one id, or a project record whose id
+   or status is missing or cannot be read, is refused whole at upload, before
+   anything is picked.
 4. A brought-in record is malformed when: a required value is missing (A02);
    it names a project or room the file does not hold; an id occurs
    twice among the file's records of one kind; a status is outside its
@@ -192,12 +193,14 @@ secret cannot be shared between holders.
    it next starts with its service tokens, if no backup was made that UTC
    day; an owner-only start makes no run (rule 10). A failed run does not
    count: a start with the service tokens on the same UTC day tries again
-   when no backup of that day is kept. Besides the run after an accepted
-   import (A16), which counts as that day's backup, at most one backup is
-   made per UTC day, the kept backups themselves saying which days have one,
-   and runs never overlap. The owner interface shows the instant of the
-   newest kept backup and whether the last run failed, so the owner sees when
-   a backup holds the import (A16 rule 10). A backup records, readable without
+   when no backup of that day is kept. The run after an accepted import (A16)
+   is made even when the day already has a backup, and keeps both; besides
+   it, at most one backup is made per UTC day, the kept backups themselves
+   saying which days have one, and runs never overlap. Each run writes its
+   outcome and instant to a status file in the backup location, which a
+   restart keeps; the owner interface shows the newest kept backup's instant
+   and that last outcome, so the owner sees when a backup holds the import
+   (A16 rule 10). A backup records, readable without
    its key, its instant, the release that made it, the last audit sequence
    number it holds and a digest of the key it was made with (never the key);
    its age is counted from that instant.
@@ -217,9 +220,10 @@ secret cannot be shared between holders.
    sequence number, and removes the temporary file. A backup that fails the
    check is deleted and counts as failed. This is the tested restore: no
    other instance is made from a backup. A backup and its check file are
-   written under temporary names in the backup location and become a kept
-   backup only when complete; at every start and every run Registry first
-   removes every temporary file left there. A removal that fails is reported;
+   written under temporary names in the backup location — every one beginning
+   with the prefix the release declares for them — and become a kept backup
+   only when complete; at every start and every run Registry first removes
+   every file left there under that prefix, and no other file. A removal that fails is reported;
    the run then makes no backup and counts as failed, and the start goes on
    serving.
 5. Every day at the same run — whether the new backup succeeded or not —
@@ -251,7 +255,9 @@ secret cannot be shared between holders.
    it now — erased, restricted, ended or not — and erases audit entries before
    the latest date the owner erased by, before configuring the tokens and
    starting it again. An owner-only start makes no backup run, so no backup
-   holds the store before this is done. This is the owner's operation (Explicit exclusions: the
+   holds the store before this is done; an import the owner repeats then
+   (R0-89) comes first, and its backup run is made at the next start with the
+   tokens. This is the owner's operation (Explicit exclusions: the
    host's administration), and the owner's record is its evidence; Registry,
    which no longer holds those changes, cannot list them, enforce them or
    tell when this is done. Its guarantee after a restore is what the backup

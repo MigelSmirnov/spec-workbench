@@ -20,7 +20,10 @@ each create once.
 
 1. 'Create a project', 'record a customer', 'add a room' and 'publish an
    artifact pointer' each carry a request id: an opaque value the caller
-   makes, unique for every create it means as new. The owner interface makes
+   makes, unique for every create it means as new — printable text of at most
+   128 characters, made from at least 16 random bytes, as a random UUID is; a
+   blank one is missing (A02). That it is random is the caller's duty;
+   Registry checks its form only. The owner interface makes
    one when it renders a create form; Cabinet Kernel gives one as an input
    field of 'add a room' and of 'publish an artifact pointer' (R0-78).
 2. Registry keeps the request id with the record the create made, written once

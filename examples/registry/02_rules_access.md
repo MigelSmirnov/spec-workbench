@@ -199,6 +199,10 @@ sees every change as a new version.
    passes it completes even if a limit or a sign-out comes while it runs, and
    a restart that interrupts it leaves nothing of it (A04 rule 4). Several
    owner sessions may be open at once; signing in ends none of the others.
+   The requests of one owner session that change its state — showing a
+   confirmation step, uploading a file, a submission — are applied one at a
+   time: each sees the session as the one before left it, so a confirmation
+   bound to a file a later upload replaced is refused (A16 rule 2).
 3. Registry counts the sign-ins refused for a wrong or missing credential
    whose instant is less than 15 minutes before now, for the whole instance:
    Registry tells no callers apart by address (R0-27). The fifth such refusal
@@ -221,7 +225,8 @@ sees every change as a new version.
    equals it. A session holds at most one: showing a confirmation step
    replaces the one pending (M11). It is valid only in that session, while
    less than 10 minutes have passed since it was shown — an expired one is
-   refused and cleared — and is used up by the first submission that carries it, whatever
+   refused and cleared by any submission that reaches the confirmation check,
+   whatever value it gives — and is used up by the first submission that carries it, whatever
    its answer; a refused submission needs the step shown again. A submission
    carries it when it passes the owner session and CSRF checks (A04 rule 6,
    stage 1) and gives a value equal to the pending one; from there on,

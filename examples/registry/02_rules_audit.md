@@ -21,7 +21,9 @@ an entry (round 28 P1) — and how the audit log is protected (R0-37).
    agent (R0-58).
 5. A confirmation id is minted only for an accepted, confirmed action that
    changes state, and is written into its entry (and, for the import, into the
-   migration closure); a confirmed action that changes nothing mints none.
+   migration closure); a confirmed action that changes nothing mints none, but
+   for the erasure of old audit entries, which always writes its entry with
+   its confirmation id (A15 rule 6).
 6. Every entry records the outcome `accepted`; State 6 declares no other
    outcome.
 
