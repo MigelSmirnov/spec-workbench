@@ -77,7 +77,7 @@ States 5 and 6.
 ## Revisions and times (R0-35, L16)
 
 - A Project and a Customer carry a revision, an ordinal starting at 1 that
-  every accepted change moves by one. A change names the revision it was made
+  accepted change of its own facts moves by one. A change names the revision it was made
   against; a stale one is refused and nothing changes. The object has no
   revision of its own (R0-45). The revision and the last-changed instant are
   one pair: the revision moves exactly when the last-changed instant moves,
@@ -93,8 +93,10 @@ States 5 and 6.
   customer link or object (R0-45). It does not move by: adding a room, publishing
   or withdrawing a pointer, a session grant, archiving an archived project
   (R0-12) or anonymising an anonymised one (R0-71). Archiving moves it once and
-  records the archived date. A room and a pointer have no last-changed instant:
-  they are written once (a pointer's status change records its own instant).
+  records the archived date. A room and a pointer are records of their own
+  that name their project, not facts of it (M01), so adding one changes no
+  Project fact; they have no last-changed instant: they are written once (a
+  pointer's status change records its own instant) (codex round-04 T2, T3).
 - A Customer's last-changed instant moves by: a correction of its contact,
   kind or fiscal data; restricting and lifting; ending and resuming the
   relationship; erasure.
@@ -140,7 +142,6 @@ Facts a Project carries, in domain words:
 - its object, embedded, exactly one (R0-38, M02);
 - its customer link, optional: the `customer_ref` of a Customer (R0-16); kept
   even after that Customer's contact data is erased (R0-06, R0-67);
-- its rooms (M03), owned by the project (R0-10);
 - its status: `active` or `archived` (R0-12);
 - its revision (R0-35);
 - the instant it was last changed ("Revisions and times");
@@ -149,6 +150,13 @@ Facts a Project carries, in domain words:
 
 The acting principal of a creation or a correction is the owner, always
 (Primary actions): the project keeps no "created by".
+
+Its rooms (M03, R0-10) and its artifact pointers (M05) are not facts of the
+Project: each is a record of its own that names the project. The project's
+rooms are the rooms naming it; its pointers are the pointers naming it, and
+they stay after its anonymisation (R0-62, R0-87). Adding a room or publishing
+a pointer therefore changes no Project fact and moves neither its revision
+nor its last-changed instant ("Revisions and times"; codex round-04 T2, T3).
 
 ### Identity
 
@@ -299,7 +307,8 @@ project's anonymisation or deletion (R0-62).
 
 ### Persistence candidate
 
-Durable, owned by its Project record.
+Durable, a record of its own naming its project (M01); it goes when the
+project is anonymised or deleted.
 
 ### Open questions
 
@@ -474,7 +483,8 @@ one `published` pointer of that type, or none (R0-14).
 
 ### Persistence candidate
 
-Durable, owned by its Project record; kept after anonymisation (R0-62).
+Durable, a record of its own naming its project (M01); kept after
+anonymisation (R0-62).
 
 ### Open questions
 
@@ -648,7 +658,7 @@ Facts, all written once:
   anonymising and deleting a project; recording, correcting and erasing a
   customer; restricting and lifting; ending and resuming a relationship;
   granting a project to a session and revoking one; the import, as one entry
-  whose subject is the migration closure (M10); erasing old entries. An answer
+  naming the migration closure (M10) by its file digest; erasing old entries. An answer
   to an access request that grants a project writes the grant's entry; a
   decline changes no session's projects and only clears the request (R0-64),
   so it writes none (R0-58; codex round-01 T4). No entry is written for adding a
@@ -661,8 +671,10 @@ Facts, all written once:
   action (owner, 2026-10-31; codex round-02 T4): the project (`project_id`)
   for a project's actions; the customer (`customer_ref`) for a customer's
   actions, restricting and lifting, ending and resuming; the session and the
-  project for a grant or a revocation; the migration closure (M10) for the
-  import; none for an erasure of old entries, whose fact is the owner's date;
+  project for a grant or a revocation; for the import, the digest of the file
+  it accepted (M10) — the migration closure is unique in the instance and has
+  no other identity (codex round-04 T1); none for an erasure of old entries,
+  whose fact is the owner's date;
 - the outcome (accepted; whether refused attempts are recorded is settled in
   State 2, round 28 P1);
 - the contract version and the release version under which it happened
