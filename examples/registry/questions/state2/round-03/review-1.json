@@ -1,0 +1,202 @@
+{
+ "open_points": [
+  {
+   "subject": "create request-id namespace",
+   "kind": "contradictory scope",
+   "text": "A01 rule 1 says the request id is “unique for every create it means as new”, while rule 4 and the formal invariant detect duplicates only for “the same model”.",
+   "question": "Must request ids be unique globally across all four create operations, or only within each model?",
+   "options": [
+    "Globally across Project, Customer, Room and ArtifactPointer",
+    "Separately within each model",
+    "Within a narrower caller or session scope"
+   ],
+   "default_guess": "Treat request ids as unique per model, following the formal invariant.",
+   "unit": "A01"
+  },
+  {
+   "subject": "agent create replay colliding with another project or session",
+   "kind": "authorization conflict",
+   "text": "A01 says a colliding request id with different facts is refused and “the caller reads the record”, while A10 says Kernel never reaches a project outside its session’s set and such a project is answered as not found. A01 checks the supplied project before locating the record carrying the request id, but does not say to check that record’s project.",
+   "question": "What happens when Kernel supplies a request id already carried by a Room or ArtifactPointer belonging to another project or another session’s authority?",
+   "options": [
+    "Answer not found without revealing the existing record",
+    "Return the existing record as A01 says",
+    "Scope request ids by session or project so the collision cannot address that record"
+   ],
+   "default_guess": "Answer not found unless the existing record’s own project is in the named session’s set; never return an out-of-set record.",
+   "unit": "A01"
+  },
+  {
+   "subject": "owner-session bearer and anti-forgery values",
+   "kind": "security invariant missing",
+   "text": "A13 says Registry issues a session cookie, a CSRF value and confirmation values, but states no unpredictability, entropy, generation or comparison requirement for any of them; State 1 only says the session identity is an opaque UUID.",
+   "question": "What security properties and generation rules must the owner-session id, CSRF value and confirmation values satisfy?",
+   "options": [
+    "Cryptographically random, unguessable values with a stated minimum entropy and constant-time comparison",
+    "Signed values derived from the session and action",
+    "Opaque UUIDs or arbitrary generated values without an additional entropy rule"
+   ],
+   "default_guess": "Use independent cryptographically random values with at least 256 bits of entropy and constant-time comparison.",
+   "unit": "A13"
+  },
+  {
+   "subject": "owner-session cookie scope",
+   "kind": "vague browser rule",
+   "text": "A13 requires the cookie to be “only to Registry’s own origin”, but cookies are scoped by host/domain, path, Secure and SameSite attributes rather than by web origin, and no SameSite, Domain or Path rule is stated.",
+   "question": "Which exact cookie attributes and cross-site sending policy enforce “only to Registry’s own origin”?",
+   "options": [
+    "Host-only, Path=/, HttpOnly, Secure where HTTPS is used, SameSite=Strict",
+    "Host-only with SameSite=Lax",
+    "Rely only on CSRF validation and omit a SameSite requirement"
+   ],
+   "default_guess": "Use a host-only HttpOnly cookie with Path=/ and SameSite=Strict, adding Secure whenever served over HTTPS.",
+   "unit": "A13"
+  },
+  {
+   "subject": "owner-session idle clock",
+   "kind": "initial state undefined",
+   "text": "The changed M11 text adds “the instant of its last request”, while A13’s invariant uses `s.last_action`; neither text states its initial value at sign-in or explicitly says these are the same fact.",
+   "question": "What value initializes the idle clock, and are “last request” and `last_action` the same session fact?",
+   "options": [
+    "Initialize it to the sign-in instant and treat both names as the same fact",
+    "Do not start the 30-minute idle period until the first authenticated owner request",
+    "Keep separate last-request and last-action instants"
+   ],
+   "default_guess": "Initialize one last-request instant to the sign-in instant and use it as A13’s `last_action`.",
+   "unit": "context"
+  },
+  {
+   "subject": "pending confirmation replacement",
+   "kind": "replacement rule missing",
+   "text": "The changed M11 text says the session holds “its pending confirmation values”, each until “used, replaced or the session ends”, but neither M11 nor A13 defines which newly shown confirmation step replaces which existing value or how many may coexist.",
+   "question": "What is the namespace and replacement rule for pending confirmation values?",
+   "options": [
+    "Only one pending confirmation value per owner session; showing any new step replaces it",
+    "One per action and target; a new value replaces only the matching action-target entry",
+    "Any number may coexist until used, expired or the session ends"
+   ],
+   "default_guess": "Keep one value per action and target, replacing only an earlier value for that same action and target.",
+   "unit": "context"
+  },
+  {
+   "subject": "import mapping versus unpicked records",
+   "kind": "direct contradiction",
+   "text": "A16 rule 1 says the mapping shows “each project the file holds” and “every id that conflicts with one production holds”, while rule 3 says records of projects the owner did not pick “are neither checked nor imported”, and required test 6 says a conflict belonging only to an unpicked project does not refuse the import.",
+   "question": "Must Registry inspect and report conflicts and malformed data in unpicked projects when producing the mapping?",
+   "options": [
+    "Show all projects but check and report conflicts only for picked projects",
+    "Check and report every project at upload, but only picked-project defects can block confirmation",
+    "Check every project and let every conflict block confirmation"
+   ],
+   "default_guess": "List all projects, but validate and report blocking conflicts only for the picked closure of projects, rooms, pointers and customers.",
+   "unit": "A16"
+  },
+  {
+   "subject": "legacy customer references in import validation",
+   "kind": "model-rule ambiguity",
+   "text": "State 1 M04 says v1 has no Customer records and the import makes one Customer for each distinct v1 `customer_ref`, while A16 rule 4 calls a record malformed when “it names a ... customer ... the file does not hold”.",
+   "question": "Does a distinct v1 `customer_ref` implicitly count as a customer the file holds, or must the export contain a separate Customer record?",
+   "options": [
+    "Each distinct v1 value is an implicit customer mapping entry",
+    "The file must contain a separate Customer record for every reference",
+    "Only references recognized as Registry-minted require a Customer record"
+   ],
+   "default_guess": "Treat each distinct nonblank v1 `customer_ref` as an implicit customer mapping entry from which the import creates one Customer.",
+   "unit": "A16"
+  },
+  {
+   "subject": "malformed import at upload",
+   "kind": "check timing missing",
+   "text": "A16 says upload “answers the mapping”, rule 3 expressly refuses an unreadable file, and rule 6 says Registry checks malformed records “again” at confirmation, but it never says whether a readable yet malformed selected record refuses upload, appears as a mapping defect, or is accepted until confirmation.",
+   "question": "What is the upload-stage result for a readable file containing malformed selected records?",
+   "options": [
+    "Refuse the upload and retain no file",
+    "Return a mapping containing the defects and refuse only confirmation until corrected",
+    "Return an ordinary mapping and discover the defects only at confirmation"
+   ],
+   "default_guess": "Return a mapping that identifies the defects without changing durable state, and refuse confirmation while any selected record is malformed.",
+   "unit": "A16"
+  },
+  {
+   "subject": "confirmation after import-file replacement",
+   "kind": "contradictory lifecycle",
+   "text": "A16 rule 2 says another upload drops the prior file and a confirmation whose file is no longer kept is refused, but required test 3 says “Confirming a mapping after another file was uploaded applies only the file whose digest the confirmation named.”",
+   "question": "When a confirmation for the old digest is submitted after a replacement upload, is it refused or can the old file still be applied?",
+   "options": [
+    "Refuse because the old file was dropped",
+    "Retain both files and apply the old one named by the confirmation",
+    "Apply the newly uploaded file only if its digest happens to match"
+   ],
+   "default_guess": "Refuse the old confirmation because its bound file is no longer kept.",
+   "unit": "A16"
+  },
+  {
+   "subject": "secret length measurement",
+   "kind": "refusal condition incomplete",
+   "text": "A17 requires every secret to be “at least 32 bytes long” but does not define the configuration representation or the encoding used to turn a textual credential into bytes.",
+   "question": "How is the 32-byte minimum measured for owner credentials, service tokens and the backup key?",
+   "options": [
+    "Require an encoded binary form and measure the decoded bytes",
+    "Measure UTF-8 bytes of the configured text",
+    "Restrict secrets to ASCII and measure characters as bytes"
+   ],
+   "default_guess": "Require a canonical encoded form and measure the decoded secret bytes.",
+   "unit": "A17"
+  },
+  {
+   "subject": "backup encryption format",
+   "kind": "cryptography unspecified",
+   "text": "A18 says each backup “is encrypted with the backup key” and can be checked and decrypted, but specifies no authenticated-encryption algorithm, nonce rule, file format, key identification, tamper handling or cryptographic version.",
+   "question": "What exact authenticated backup format and cryptographic algorithm must Registry use, and how does it identify the key and format needed to decrypt an older backup?",
+   "options": [
+    "Specify a versioned AEAD format with a fresh nonce and a non-secret key identifier",
+    "Use an implementation-selected authenticated-encryption library and format",
+    "Encrypt without a separately specified authentication requirement"
+   ],
+   "default_guess": "Use a versioned AEAD container with a fresh random nonce, authenticated metadata and a non-secret key identifier.",
+   "unit": "A18"
+  },
+  {
+   "subject": "daily backup scheduling around downtime and overlap",
+   "kind": "scheduler behavior missing",
+   "text": "A18 says Registry backs up “once a day at 03:00 UTC” and retries failures “at the next run”, but does not say what happens when Registry is stopped at 03:00, starts after that time, or the preceding run is still active.",
+   "question": "Are missed runs caught up on startup, and what happens when a scheduled run overlaps an earlier run?",
+   "options": [
+    "Run one catch-up immediately after startup and serialize all runs",
+    "Skip missed runs and wait for the next 03:00 UTC; skip overlaps",
+    "Queue every missed or overlapping run"
+   ],
+   "default_guess": "Run at most one immediate catch-up after startup when no successful run exists for that UTC day, and serialize runs so they never overlap.",
+   "unit": "A18"
+  },
+  {
+   "subject": "dependency digest verification",
+   "kind": "digest definition missing",
+   "text": "A20 requires the digest of every distribution file and base image and says a differing digest fails, but it does not name the digest algorithm, canonical textual encoding or treatment of multiple distribution artifacts for one package version.",
+   "question": "Which digest algorithm and canonical representation define equality, and which exact distribution artifact is selected for each package?",
+   "options": [
+    "Declare one artifact filename plus a SHA-256 digest in canonical lowercase hexadecimal",
+    "Allow any cryptographic algorithm identified beside each digest",
+    "Let the package or image tooling choose its native digest representation"
+   ],
+   "default_guess": "Record the exact artifact identity and an algorithm-qualified SHA-256 digest using a canonical encoding.",
+   "unit": "A20"
+  },
+  {
+   "subject": "security-review catalogue completeness",
+   "kind": "unverifiable external dependency",
+   "text": "A21 defines completeness by “the nine of the Workbench’s security review (`skills/spec-authoring/SECURITY_REVIEW_EVIDENCE.md`)”, but the accepted texts do not contain that catalogue’s criteria or the evidence used to decide each outcome.",
+   "question": "What criteria must be checked for each category so the claim that the review is complete can be verified from the design texts alone?",
+   "options": [
+    "Embed the catalogue criteria and category evidence in State 2",
+    "Make the referenced catalogue a normative versioned dependency of the accepted design",
+    "Treat the nine category names and listed outcomes as sufficient without further verification"
+   ],
+   "default_guess": "Embed or normatively pin the exact catalogue version and record the evidence considered for every category.",
+   "unit": "A21"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"create request-id namespace\",\"kind\":\"contradictory scope\",\"text\":\"A01 rule 1 says the request id is “unique for every create it means as new”, while rule 4 and the formal invariant detect duplicates only for “the same model”.\",\"question\":\"Must request ids be unique globally across all four create operations, or only within each model?\",\"options\":[\"Globally across Project, Customer, Room and ArtifactPointer\",\"Separately within each model\",\"Within a narrower caller or session scope\"],\"default_guess\":\"Treat request ids as unique per model, following the formal invariant.\",\"unit\":\"A01\"},{\"subject\":\"agent create replay colliding with another project or session\",\"kind\":\"authorization conflict\",\"text\":\"A01 says a colliding request id with different facts is refused and “the caller reads the record”, while A10 says Kernel never reaches a project outside its session’s set and such a project is answered as not found. A01 checks the supplied project before locating the record carrying the request id, but does not say to check that record’s project.\",\"question\":\"What happens when Kernel supplies a request id already carried by a Room or ArtifactPointer belonging to another project or another session’s authority?\",\"options\":[\"Answer not found without revealing the existing record\",\"Return the existing record as A01 says\",\"Scope request ids by session or project so the collision cannot address that record\"],\"default_guess\":\"Answer not found unless the existing record’s own project is in the named session’s set; never return an out-of-set record.\",\"unit\":\"A01\"},{\"subject\":\"owner-session bearer and anti-forgery values\",\"kind\":\"security invariant missing\",\"text\":\"A13 says Registry issues a session cookie, a CSRF value and confirmation values, but states no unpredictability, entropy, generation or comparison requirement for any of them; State 1 only says the session identity is an opaque UUID.\",\"question\":\"What security properties and generation rules must the owner-session id, CSRF value and confirmation values satisfy?\",\"options\":[\"Cryptographically random, unguessable values with a stated minimum entropy and constant-time comparison\",\"Signed values derived from the session and action\",\"Opaque UUIDs or arbitrary generated values without an additional entropy rule\"],\"default_guess\":\"Use independent cryptographically random values with at least 256 bits of entropy and constant-time comparison.\",\"unit\":\"A13\"},{\"subject\":\"owner-session cookie scope\",\"kind\":\"vague browser rule\",\"text\":\"A13 requires the cookie to be “only to Registry’s own origin”, but cookies are scoped by host/domain, path, Secure and SameSite attributes rather than by web origin, and no SameSite, Domain or Path rule is stated.\",\"question\":\"Which exact cookie attributes and cross-site sending policy enforce “only to Registry’s own origin”?\",\"options\":[\"Host-only, Path=/, HttpOnly, Secure where HTTPS is used, SameSite=Strict\",\"Host-only with SameSite=Lax\",\"Rely only on CSRF validation and omit a SameSite requirement\"],\"default_guess\":\"Use a host-only HttpOnly cookie with Path=/ and SameSite=Strict, adding Secure whenever served over HTTPS.\",\"unit\":\"A13\"},{\"subject\":\"owner-session idle clock\",\"kind\":\"initial state undefined\",\"text\":\"The changed M11 text adds “the instant of its last request”, while A13’s invariant uses `s.last_action`; neither text states its initial value at sign-in or explicitly says these are the same fact.\",\"question\":\"What value initializes the idle clock, and are “last request” and `last_action` the same session fact?\",\"options\":[\"Initialize it to the sign-in instant and treat both names as the same fact\",\"Do not start the 30-minute idle period until the first authenticated owner request\",\"Keep separate last-request and last-action instants\"],\"default_guess\":\"Initialize one last-request instant to the sign-in instant and use it as A13’s `last_action`.\",\"unit\":\"context\"},{\"subject\":\"pending confirmation replacement\",\"kind\":\"replacement rule missing\",\"text\":\"The changed M11 text says the session holds “its pending confirmation values”, each until “used, replaced or the session ends”, but neither M11 nor A13 defines which newly shown confirmation step replaces which existing value or how many may coexist.\",\"question\":\"What is the namespace and replacement rule for pending confirmation values?\",\"options\":[\"Only one pending confirmation value per owner session; showing any new step replaces it\",\"One per action and target; a new value replaces only the matching action-target entry\",\"Any number may coexist until used, expired or the session ends\"],\"default_guess\":\"Keep one value per action and target, replacing only an earlier value for that same action and target.\",\"unit\":\"context\"},{\"subject\":\"import mapping versus unpicked records\",\"kind\":\"direct contradiction\",\"text\":\"A16 rule 1 says the mapping shows “each project the file holds” and “every id that conflicts with one production holds”, while rule 3 says records of projects the owner did not pick “are neither checked nor imported”, and required test 6 says a conflict belonging only to an unpicked project does not refuse the import.\",\"question\":\"Must Registry inspect and report conflicts and malformed data in unpicked projects when producing the mapping?\",\"options\":[\"Show all projects but check and report conflicts only for picked projects\",\"Check and report every project at upload, but only picked-project defects can block confirmation\",\"Check every project and let every conflict block confirmation\"],\"default_guess\":\"List all projects, but validate and report blocking conflicts only for the picked closure of projects, rooms, pointers and customers.\",\"unit\":\"A16\"},{\"subject\":\"legacy customer references in import validation\",\"kind\":\"model-rule ambiguity\",\"text\":\"State 1 M04 says v1 has no Customer records and the import makes one Customer for each distinct v1 `customer_ref`, while A16 rule 4 calls a record malformed when “it names a ... customer ... the file does not hold”.\",\"question\":\"Does a distinct v1 `customer_ref` implicitly count as a customer the file holds, or must the export contain a separate Customer record?\",\"options\":[\"Each distinct v1 value is an implicit customer mapping entry\",\"The file must contain a separate Customer record for every reference\",\"Only references recognized as Registry-minted require a Customer record\"],\"default_guess\":\"Treat each distinct nonblank v1 `customer_ref` as an implicit customer mapping entry from which the import creates one Customer.\",\"unit\":\"A16\"},{\"subject\":\"malformed import at upload\",\"kind\":\"check timing missing\",\"text\":\"A16 says upload “answers the mapping”, rule 3 expressly refuses an unreadable file, and rule 6 says Registry checks malformed records “again” at confirmation, but it never says whether a readable yet malformed selected record refuses upload, appears as a mapping defect, or is accepted until confirmation.\",\"question\":\"What is the upload-stage result for a readable file containing malformed selected records?\",\"options\":[\"Refuse the upload and retain no file\",\"Return a mapping containing the defects and refuse only confirmation until corrected\",\"Return an ordinary mapping and discover the defects only at confirmation\"],\"default_guess\":\"Return a mapping that identifies the defects without changing durable state, and refuse confirmation while any selected record is malformed.\",\"unit\":\"A16\"},{\"subject\":\"confirmation after import-file replacement\",\"kind\":\"contradictory lifecycle\",\"text\":\"A16 rule 2 says another upload drops the prior file and a confirmation whose file is no longer kept is refused, but required test 3 says “Confirming a mapping after another file was uploaded applies only the file whose digest the confirmation named.”\",\"question\":\"When a confirmation for the old digest is submitted after a replacement upload, is it refused or can the old file still be applied?\",\"options\":[\"Refuse because the old file was dropped\",\"Retain both files and apply the old one named by the confirmation\",\"Apply the newly uploaded file only if its digest happens to match\"],\"default_guess\":\"Refuse the old confirmation because its bound file is no longer kept.\",\"unit\":\"A16\"},{\"subject\":\"secret length measurement\",\"kind\":\"refusal condition incomplete\",\"text\":\"A17 requires every secret to be “at least 32 bytes long” but does not define the configuration representation or the encoding used to turn a textual credential into bytes.\",\"question\":\"How is the 32-byte minimum measured for owner credentials, service tokens and the backup key?\",\"options\":[\"Require an encoded binary form and measure the decoded bytes\",\"Measure UTF-8 bytes of the configured text\",\"Restrict secrets to ASCII and measure characters as bytes\"],\"default_guess\":\"Require a canonical encoded form and measure the decoded secret bytes.\",\"unit\":\"A17\"},{\"subject\":\"backup encryption format\",\"kind\":\"cryptography unspecified\",\"text\":\"A18 says each backup “is encrypted with the backup key” and can be checked and decrypted, but specifies no authenticated-encryption algorithm, nonce rule, file format, key identification, tamper handling or cryptographic version.\",\"question\":\"What exact authenticated backup format and cryptographic algorithm must Registry use, and how does it identify the key and format needed to decrypt an older backup?\",\"options\":[\"Specify a versioned AEAD format with a fresh nonce and a non-secret key identifier\",\"Use an implementation-selected authenticated-encryption library and format\",\"Encrypt without a separately specified authentication requirement\"],\"default_guess\":\"Use a versioned AEAD container with a fresh random nonce, authenticated metadata and a non-secret key identifier.\",\"unit\":\"A18\"},{\"subject\":\"daily backup scheduling around downtime and overlap\",\"kind\":\"scheduler behavior missing\",\"text\":\"A18 says Registry backs up “once a day at 03:00 UTC” and retries failures “at the next run”, but does not say what happens when Registry is stopped at 03:00, starts after that time, or the preceding run is still active.\",\"question\":\"Are missed runs caught up on startup, and what happens when a scheduled run overlaps an earlier run?\",\"options\":[\"Run one catch-up immediately after startup and serialize all runs\",\"Skip missed runs and wait for the next 03:00 UTC; skip overlaps\",\"Queue every missed or overlapping run\"],\"default_guess\":\"Run at most one immediate catch-up after startup when no successful run exists for that UTC day, and serialize runs so they never overlap.\",\"unit\":\"A18\"},{\"subject\":\"dependency digest verification\",\"kind\":\"digest definition missing\",\"text\":\"A20 requires the digest of every distribution file and base image and says a differing digest fails, but it does not name the digest algorithm, canonical textual encoding or treatment of multiple distribution artifacts for one package version.\",\"question\":\"Which digest algorithm and canonical representation define equality, and which exact distribution artifact is selected for each package?\",\"options\":[\"Declare one artifact filename plus a SHA-256 digest in canonical lowercase hexadecimal\",\"Allow any cryptographic algorithm identified beside each digest\",\"Let the package or image tooling choose its native digest representation\"],\"default_guess\":\"Record the exact artifact identity and an algorithm-qualified SHA-256 digest using a canonical encoding.\",\"unit\":\"A20\"},{\"subject\":\"security-review catalogue completeness\",\"kind\":\"unverifiable external dependency\",\"text\":\"A21 defines completeness by “the nine of the Workbench’s security review (`skills/spec-authoring/SECURITY_REVIEW_EVIDENCE.md`)”, but the accepted texts do not contain that catalogue’s criteria or the evidence used to decide each outcome.\",\"question\":\"What criteria must be checked for each category so the claim that the review is complete can be verified from the design texts alone?\",\"options\":[\"Embed the catalogue criteria and category evidence in State 2\",\"Make the referenced catalogue a normative versioned dependency of the accepted design\",\"Treat the nine category names and listed outcomes as sufficient without further verification\"],\"default_guess\":\"Embed or normatively pin the exact catalogue version and record the evidence considered for every category.\",\"unit\":\"A21\"}]}",
+ "set_aside": []
+}
