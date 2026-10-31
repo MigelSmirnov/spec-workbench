@@ -256,7 +256,9 @@ secret cannot be shared between holders.
    holds — and a digest of the key it was
    made with (never the key); its age is counted from that instant. The
    owner interface shows the instant of the newest kept backup whose record
-   can be read, or that there is none.
+   can be read, or that there is none, from one listing of the backup
+   location; read while a run renames or deletes, it shows the state before
+   or after that change, never a temporary file.
 2. A backup holds every record but the agent sessions (M06), which are
    removed from the copy before it is encrypted, so the copy is a store of
    its own that passes the same checks; Registry's other invariants are not
@@ -301,8 +303,9 @@ secret cannot be shared between holders.
    there. A kept
    name is made from the backup's instant and is never overwritten: a backup
    whose kept name exists, or whose rename fails, is deleted and the run
-   fails. A step that fails leaves no partial kept backup —
-   at most a file under the temporary prefix, which the next run removes —
+   fails. A step that fails leaves no partial kept backup — only files under
+   the temporary prefix, the backup and its decrypted copy among them, which
+   the next run removes —
    and writes a diagnostic that names the failure and no value (A17);
    Registry keeps serving, and the next 03:00 tries again. Whether runs
    succeed is the owner's to watch on the host (Explicit exclusions: the
