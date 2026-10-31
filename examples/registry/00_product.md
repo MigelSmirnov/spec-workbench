@@ -1179,7 +1179,10 @@ action of Registry. The restored store begins its own history from the
 backup: every change after it is lost, the audit entries with it, and
 Registry's guarantees — the log's numbering, the closed import — hold within
 each store's history. A store lost before a checked backup holds the import
-loses the import with it, and the import may then be made again. What the
+loses the import with it, and the import may then be made again: the owner
+keeps the export file and the picks, names and aliases given in the import
+until a checked backup holds the import, and retires the VPS instance only
+then (R0-79). What the
 owner repeats after a restore — erasures, restrictions, ends of a
 relationship — follows the owner's own record of the retention review
 (R0-60).
