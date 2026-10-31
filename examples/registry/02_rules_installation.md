@@ -33,9 +33,8 @@ security review of States 0–2.
    session, or the session ends (M11); then it is dropped. A refused
    confirmation keeps it, and the step may be shown again; a refused upload —
    too large or unreadable — replaces nothing. An accepted import drops the
-   file of the session that confirmed it; a file another session keeps stays
-   until that session ends, and its confirmation is refused because the
-   import is closed (rule 8). The mapping names
+   uploaded file of every owner session (M11); a confirmation shown in
+   another session is refused because the import is closed (rule 8). The mapping names
    the file by its digest. The owner confirms that mapping in the confirmation
    step (A13 rule 6); the confirmation applies the file of that digest, the
    picks, names, aliases and Customer values the mapping showed, nothing
@@ -197,7 +196,9 @@ secret cannot be shared between holders.
 
 ### Normative rules
 
-1. Every day at 03:00 UTC, while Registry runs with its service tokens, it
+1. These runs are R0-89's daily backups: one is due each day, and the days
+   this rule and rule 5 leave without a kept backup are allowed. Every day at
+   03:00 UTC, while Registry runs with its service tokens, it
    makes one backup run; a 03:00 that finds Registry stopped, or in an
    owner-only start (rule 9), makes no run, and none is made later in its
    place. Runs never overlap: a 03:00 that finds a run still going makes no
@@ -215,7 +216,9 @@ secret cannot be shared between holders.
 3. Each backup is encrypted with the backup key the configuration holds at its
    making (A17). When the owner changes the key, older backups stay encrypted
    with the key they were made with, which the digest each backup records
-   names.
+   names. Registry decrypts a backup only to check it when it is made
+   (rule 4); decrypting an older one, with the key it was made with, is part
+   of a restore, outside Registry (rule 8, R0-89).
 4. A run goes in three steps. First, it removes every file under the
    temporary prefix; if a removal fails, the run stops there. Second, it
    writes the backup under a temporary name and checks it: it decrypts it
@@ -226,7 +229,9 @@ secret cannot be shared between holders.
    fails is deleted. This is the tested restore: no other instance is made
    from a backup. Third, whatever the second step did, it deletes every kept
    backup made more than 30 × 24 hours before, and every file under the kept
-   prefix that cannot be read as a backup.
+   prefix whose unencrypted record (rule 1) cannot be read. It takes the
+   files in the order of their names; a file it cannot read or delete is
+   reported, and it goes on with the next.
 5. Kept and temporary names begin with two different prefixes the release
    declares; Registry removes, renames and deletes in the backup location
    only files under them. A step that fails leaves no partial kept backup —
@@ -237,8 +242,10 @@ secret cannot be shared between holders.
    host's administration).
 6. While the daily runs succeed, an erasure reaches the backups by the first
    run after the last backup holding the erased values is 30 days old — at
-   most 31 days after the erasure — and a restore loses at most a day of changes; a failed or
-   missed run lengthens both by the days until a run succeeds.
+   most 31 days after the erasure — and a failed or missed run lengthens that
+   by the days until a run succeeds. A restore loses the changes made after
+   the backup it uses; Registry bounds neither how long a run takes nor how
+   old the newest kept backup may be.
 7. The store, the backup location and the disks under them are encrypted and
    kept out of VM Agent's reach by the owner's administration of VM Platform
    (R0-48; Explicit exclusions); Registry does not check the host.
