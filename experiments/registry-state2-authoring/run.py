@@ -27,6 +27,9 @@ TEXTS = {
     # has none is stale, at stage 5. Fixes A04 r2's reach and A04 r3's second
     # sentence; leaves the invariant's scope as it is (both readings agree).
     "option_A_stale": {"a04_r2": "all_records", "a04_r3_none": "caller_duty"},
+    # Option A2 — option A after the hand-over check: A05 r4's refusals are
+    # lifecycle checks of stage (6), after the revision check (W13).
+    "option_A2_stale": {"a04_r2": "all_records", "a04_r3_none": "caller_duty", "a05_r4_first": "before_repeat"},
     # Option B — the alternative for the owner: on a record without a
     # revision, no revision is checked; the invariant applies to records
     # that have one.
@@ -108,11 +111,11 @@ def main() -> int:
     L = ["# Witnesses under the current text and the two patch options", "",
          "PASS/FAIL against an expected outcome (accepted witnesses); DECIDED: the outcome an option gives "
          "to an open witness; OPEN: outcomes still admitted.", "",
-         "| witness | status | preserve | current | option A (stale) | option B (ignore) |",
-         "|---|---|---|---|---|---|"]
+         "| witness | status | preserve | current | option A (stale) | option A2 (stale, A05 r4 placed) | option B (ignore) |",
+         "|---|---|---|---|---|---|---|"]
     for wid, r in wres.items():
         L.append(f"| {wid} {r['title']} | {r['status']} | {'yes' if r['preserve'] else 'no'} | {r['current']} | "
-                 f"{r['option_A_stale']} | {r['option_B_ignore']} |")
+                 f"{r['option_A_stale']} | {r['option_A2_stale']} | {r['option_B_ignore']} |")
     broken = [f"{wid} under {t}" for wid, r in wres.items() if r["preserve"]
               for t in TEXTS if r[t] != "PASS"]
     L += ["", "Preserved witnesses not passing: " + (", ".join(broken) if broken else "none")]

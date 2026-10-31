@@ -200,3 +200,28 @@ Search method:
   Required tests. The texts do not decide it; it is put to the owner in
   `OWNER_QUESTION.md` against option B (`patch/option_B.patch`), and is **not**
   an accepted decision.
+
+## 9. After the hand-over (added later; §1–§8 are unchanged)
+
+The second author (`handover/`) read `packet/BUNDLE.md` and, with each read
+logged, the Registry texts at `cf675e5c`. They reached the same conclusion
+independently: the texts do not decide, and the owner chooses. They found
+three things this investigation had missed:
+
+| found by the second author | checked here | consequence |
+|---|---|---|
+| A04 r6: "a stage that does not apply to it is skipped" — a fourth ground for option B (stage 5 does not apply to a record without a revision) | [F] the clause is in A04 r6 at `cf675e5c` | the patch must say stage 5 applies, or the clause keeps inviting B |
+| A05 r4 "come first": before the A05 repeat only, or before stage 5 too? Under option A, W13 (delete an anonymised project whole, stating a revision) is stale or refused by R0-71 | [D] the model had put A05 r4's refusals in stage 6 inside `failing_stages`, without a reading. **An unknown hidden in the engine.** It is now the reading `a05_r4_first`; with it, option A leaves W13 open (`results/witnesses.md`) | option A2 places A05 r4's refusals in stage 6; the second author proposes the smaller alternative of limiting the sentence to the erased Customer |
+| A13 r6: what a step shown on a record without a revision binds | [F] not said; one single-review topic in State 2 round 18 | W11 and W13 may stop at stage 1; open under A, harmless under B |
+
+The second author withdrew one claim of their own: whether the State 0 row
+stays reachable from the interface. The interface is State 5's.
+
+[P] Patch options after the hand-over:
+
+- `option_A2.patch` = A + stage 5 made explicit + an invariant line + A05 r4
+  placed;
+- `option_B.patch` unchanged.
+
+Both still need the owner's dated decision cited in A04 r3 once it exists. The
+second author's wording for B is kept in `handover/response_2.json`.

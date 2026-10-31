@@ -135,6 +135,11 @@ READINGS = {
     # A04 r1 "states the revision": a request stating none on a record that has
     # one is a missing value (stage 4) or a stale revision (stage 5)?
     "absent_revision": ("missing_value", "stale"),
+    # A05 r4 "The refusals State 0 states stay refusals and come first": first
+    # before the repeat of A05 r1 only (they sit in stage 6), or before the
+    # revision check too? Added after the hand-over check named it; the first
+    # version of this model had put them in stage 6 without saying so.
+    "a05_r4_first": ("before_repeat", "before_revision"),
 }
 
 
@@ -171,7 +176,11 @@ def failing_stages(s: Situation, r: dict) -> dict[int, str]:
     if stale:
         f.setdefault(5, "refused: stale")
     if lifecycle_refusal(s):
-        f[6] = "refused: lifecycle"
+        a05_r4 = s.kind == "project" and s.action == "delete_whole" and s.state == "anonymised"
+        if a05_r4 and r["a05_r4_first"] == "before_revision":
+            f[4.5] = "refused: lifecycle"
+        else:
+            f[6] = "refused: lifecycle"
     return f
 
 
