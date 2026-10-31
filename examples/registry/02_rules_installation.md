@@ -179,7 +179,8 @@ closure is the one proof of success.
    that it renames to the store's name only once the store is complete; at
    every start it first removes a file of that temporary name, left by an
    interrupted start, and no other file there; otherwise
-   the store must open for reading and writing and carry the store
+   the store must open for reading and writing, pass the store's own
+   integrity check, and carry the store
    version of the running release, and a store of another version, or one
    that does not open, fails the start — bringing a store to a new version is
    a step of the release, not of the start.
@@ -235,8 +236,10 @@ secret cannot be shared between holders.
    failed date is run again only by a later process that sees 03:00 of it
    pass, which only a clock set back makes happen, and that is allowed. Runs
    never overlap: a 03:00 that finds a run still going makes no run of its
-   own. A backup is a consistent copy of the store
-   taken while Registry runs: it never holds part of a transaction. It
+   own. A backup is a consistent copy of the store taken while Registry runs:
+   one snapshot of the store, as one read transaction sees it, while other
+   transactions go on; it never holds part of a transaction, and its
+   recorded instant and last sequence number are those of that snapshot. It
    records, readable without its key, its instant, the release that made it,
    the last audit sequence number it holds and a digest of the key it was
    made with (never the key); its age is counted from that instant. The
