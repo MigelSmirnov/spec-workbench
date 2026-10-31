@@ -194,7 +194,9 @@ sees every change as a new version.
    an owner request; the owner's sign-out; the instance's restart (M11 is never
    durable). An owner request is any request to the owner interface that
    carries the valid session, whatever its answer; it restarts the 30
-   minutes; before the first request it runs from the sign-in.
+   minutes; before the first request it runs from the sign-in. Validity is
+   checked when a request arrives (A04 rule 6, stage 1); a request that
+   passes it completes even if a limit passes while it runs.
 3. Registry counts the sign-ins refused for a wrong or missing credential
    whose instant is less than 15 minutes before now, for the whole instance:
    Registry tells no callers apart by address (R0-27). The fifth such refusal
@@ -213,8 +215,9 @@ sees every change as a new version.
    the owner session, bound to the action, its target, the revision or access
    version the step showed, and its inputs — for the import, the file's digest
    and the picks. A session holds at most one: showing a confirmation step
-   replaces the one pending (M11). It is valid only in that session, for 10
-   minutes, and is used up by the first submission that carries it, whatever
+   replaces the one pending (M11). It is valid only in that session, while
+   less than 10 minutes have passed since it was shown — an expired one is
+   refused and cleared — and is used up by the first submission that carries it, whatever
    its answer; a refused submission needs the step shown again. A submission
    carries it when it passes the owner session and CSRF checks (A04 rule 6,
    stage 1) and gives a value equal to the pending one; from there on,

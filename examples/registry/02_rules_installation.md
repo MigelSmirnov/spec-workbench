@@ -76,9 +76,11 @@ security review of States 0–2.
    attempt remains.
 10. Right after an accepted import Registry makes a backup run outside the
    daily schedule (A18). Once a backup holding the closure has passed its
-   check, Registry deletes every backup made before the import, so no kept
-   backup can bring back a store without the closure (M10). Until then a
-   failed run is retried at the next run; the import stays accepted.
+   check, Registry deletes every backup made before the import; a deletion
+   that fails is tried again at each run until it succeeds. Until a backup
+   holding the closure has passed, a failed run is retried at the next run,
+   and the import stays accepted. The owner never restores a backup made
+   before the import (A18 rule 9), so R0-79 holds through any restore.
 
 ### Formal invariants
 
@@ -136,8 +138,7 @@ closure is the one proof of success.
    the owner credential, fail the start.
 5. A missing, malformed or unknown item fails the start; Registry applies no
    default to any item. The backup location must exist and let Registry create
-   and remove a file in it; otherwise the start fails. Instance marks that
-   exist but cannot be read fail the start (A15). An empty store location is
+   and remove a file in it; otherwise the start fails. An empty store location is
    made into a new, empty store of the running release's version at the start;
    otherwise the store must open for reading and writing and carry the store
    version of the running release, and a store of another version, or one
@@ -179,7 +180,8 @@ secret cannot be shared between holders.
 1. Registry backs up its store once a day at 03:00 UTC into the backup
    location, as a consistent copy taken while it runs: a backup never holds
    part of a transaction. A run that 03:00 found Registry stopped is made when
-   it next starts, if no backup was made that UTC day; besides the run after
+   it next starts with its service tokens, if no backup was made that UTC
+   day; an owner-only start makes no run (rule 10); besides the run after
    an accepted import (A16), there is at most one run per UTC day, and runs
    never overlap. A backup records, readable without
    its key, its instant, the release that made it, the last audit sequence
@@ -219,16 +221,17 @@ secret cannot be shared between holders.
    with the key it was made with, kept in the vault (rule 3). It is started by
    the release that made it, or by a later release after that release's own
    store migration (A17 rule 5). Every change after the backup's instant is
-   lost, the audit entries with it; the instance marks are not replaced, so
-   numbering continues above every number ever minted (A15). Every kept
-   backup made after the import holds its closure (A16 rule 10), so the
-   import stays closed (R0-79).
+   lost, the audit entries with it, and numbering continues from the backup's
+   last number (A15); the lost entries exist nowhere. The owner never
+   restores a backup made before the import, which its recorded instant
+   shows, so the import stays closed (A16 rule 10, R0-79).
 10. The owner first starts the restored instance owner-only (A17 rule 1), so
    no service and no agent reaches it, and brings each Customer and project to
    the state the owner's own record of the retention review (R0-60) gives for
    it now — erased, restricted, ended or not — and erases audit entries before
    the latest date the owner erased by, before configuring the tokens and
-   starting it again. This is the owner's operation (Explicit exclusions: the
+   starting it again. An owner-only start makes no backup run, so no backup
+   holds the store before this is done. This is the owner's operation (Explicit exclusions: the
    host's administration), and the owner's record is its evidence; Registry,
    which no longer holds those changes, cannot list them, enforce them or
    tell when this is done. Its guarantee after a restore is what the backup
