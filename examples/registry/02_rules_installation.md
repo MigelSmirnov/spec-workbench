@@ -148,13 +148,16 @@ closure is the one proof of success.
    every check passes; a failed check stops the start with a diagnostic that
    names the failed item and never its value (R0-37). The checks run in one
    order and the first that fails stops the start: no unknown item, taken in
-   the order of their names by Unicode code point; every item of rule 1 present; each well formed; each secret's length (rule 3);
+   the order of their names by Unicode code point; the service tokens all four
+   or none — none makes an owner-only start, and some but not all fail on the
+   first missing one in rule 1's order; every other item of rule 1 present; each well formed; each secret's length (rule 3);
    their distinctness (rule 4); the store and backup location apart (rule
    5); the backup location writable, by a probe file under the temporary
    prefix (A18 rule 5); the store opening, or made new (rule 5). Within one
    check, items go in the order rule 1 lists them. A failed start leaves no
    file it made but a probe it could not remove, which the next start or run
-   removes with the other temporary files.
+   removes with the other temporary files; a stale temporary file a start
+   cannot remove is reported and does not stop the start.
 3. A secret — each token, the owner credential and the backup key — is at
    least 32 bytes long; a shorter one fails the start. Registry checks the
    length and, by rule 4, the distinctness, and nothing else of how the owner
@@ -179,8 +182,9 @@ closure is the one proof of success.
    that it renames to the store's name only once the store is complete; at
    every start it first removes a file of that temporary name, left by an
    interrupted start, and no other file there; otherwise
-   the store must open for reading and writing, pass the store's own
-   integrity check, and carry the store
+   the store must open for reading and writing, pass the store engine's full
+   integrity check — the same as a backup's check (A18 rule 4) — and carry
+   the store
    version of the running release, and a store of another version, or one
    that does not open, fails the start — bringing a store to a new version is
    a step of the release, not of the start.
@@ -239,13 +243,17 @@ secret cannot be shared between holders.
    own. A backup is a consistent copy of the store taken while Registry runs:
    one snapshot of the store, as one read transaction sees it, while other
    transactions go on; it never holds part of a transaction, and its
-   recorded instant and last sequence number are those of that snapshot. It
+   recorded instant and last sequence number are those of that snapshot,
+   the instant being when its read transaction began. It
    records, readable without its key, its instant, the release that made it,
    the last audit sequence number it holds and a digest of the key it was
    made with (never the key); its age is counted from that instant. The
    owner interface shows the instant of the newest kept backup whose record
    can be read, or that there is none.
-2. A backup holds every record but the agent sessions (M06): a store restored
+2. A backup holds every record but the agent sessions (M06), which are
+   removed from the copy before it is encrypted, so the copy is a store of
+   its own that passes the same checks; Registry's other invariants are not
+   checked again in it, its transactions having kept them: a store restored
    from it has no session, Kernel registers its sessions again and the owner
    grants them again, so a restore never brings back a grant revoked after
    the backup.
@@ -290,7 +298,8 @@ secret cannot be shared between holders.
    Registry keeps serving, and the next 03:00 tries again. Whether runs
    succeed is the owner's to watch on the host (Explicit exclusions: the
    host's administration).
-6. While the daily runs succeed, an erasure reaches the backups by the first
+6. While the daily runs succeed and each ends before the next 03:00, an
+   erasure reaches the backups by the first
    run after the last backup holding the erased values is 30 days old — at
    most 31 days after the erasure — and a failed or missed run lengthens that
    by the days until a run succeeds. A restore loses the changes made after
