@@ -66,15 +66,19 @@ security review of States 0–2.
    import, and nothing changes (R0-50, R0-79).
 7. An accepted import stores every picked project with its rooms and pointers,
    the Customers it makes, the migration closure (M10) and its one audit entry
-   (M09) in one transaction, after recording the closure in the instance
-   marks (A15). The import has succeeded when that transaction is committed;
-   Registry knows it by the closure. Right after it Registry makes a backup
-   run outside the daily schedule (A18), so a backup holding the import
-   exists.
+   (M09) in one transaction. The import has succeeded when that transaction
+   is committed; Registry knows it by the closure. Confirmations are applied
+   one at a time: of two concurrent ones, the second finds the closure and is
+   refused (rule 8).
 8. While the closure exists, uploading and confirming an import are refused
    (R0-79).
 9. A refused import may be retried with a corrected file; nothing of a refused
    attempt remains.
+10. Right after an accepted import Registry makes a backup run outside the
+   daily schedule (A18). Once a backup holding the closure has passed its
+   check, Registry deletes every backup made before the import, so no kept
+   backup can bring back a store without the closure (M10). Until then a
+   failed run is retried at the next run; the import stays accepted.
 
 ### Formal invariants
 
@@ -132,12 +136,13 @@ closure is the one proof of success.
    the owner credential, fail the start.
 5. A missing, malformed or unknown item fails the start; Registry applies no
    default to any item. The backup location must exist and let Registry create
-   and remove a file in it; otherwise the start fails. The instance marks
-   there (A15) are made at the first start; marks that cannot be read fail
-   the start. The store must open for reading and writing and carry the store
-   version of the running release; a store of another version, or
-   one that does not open, fails the start — bringing a store to a new version
-   is a step of the release, not of the start.
+   and remove a file in it; otherwise the start fails. Instance marks that
+   exist but cannot be read fail the start (A15). An empty store location is
+   made into a new, empty store of the running release's version at the start;
+   otherwise the store must open for reading and writing and carry the store
+   version of the running release, and a store of another version, or one
+   that does not open, fails the start — bringing a store to a new version is
+   a step of the release, not of the start.
 6. A presented secret is compared in constant time; no secret enters a record,
    a log line, an audit entry, a diagnostic or an answer (R0-23, R0-37).
 7. A change of the configuration takes effect at the next start (R0-20). A
@@ -215,10 +220,9 @@ secret cannot be shared between holders.
    the release that made it, or by a later release after that release's own
    store migration (A17 rule 5). Every change after the backup's instant is
    lost, the audit entries with it; the instance marks are not replaced, so
-   numbering continues above every number ever written (A15) and a migration
-   closure is never lost: at start Registry writes the closure into the store
-   when the marks hold it and the store does not, and the import stays closed
-   (R0-79).
+   numbering continues above every number ever minted (A15). Every kept
+   backup made after the import holds its closure (A16 rule 10), so the
+   import stays closed (R0-79).
 10. The owner first starts the restored instance owner-only (A17 rule 1), so
    no service and no agent reaches it, and brings each Customer and project to
    the state the owner's own record of the retention review (R0-60) gives for

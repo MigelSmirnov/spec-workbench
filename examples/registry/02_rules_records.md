@@ -198,9 +198,11 @@ card it showed, and what the owner emptied is cleared.
    hides every later failure; (3) that the record named exists; (4) the
    values given (A02, A08, A22); (5) the stated revision or access version
    (A12); (6) the record's lifecycle — archived, erased, anonymised, not in the
-   set, a customer's eligibility, a conflict. Only an action that passes all
-   six may be a repeat that changes nothing (A05); a create's repeat is
-   recognised as A01 rule 3 says.
+   set, a customer's eligibility, a conflict. A transition that passes all six
+   may be a repeat that changes nothing (A05). A create's repeat is the one
+   exception: it is recognised after stages (1) to (4) and its project's
+   archive check (A01 rule 3), and the rest of stage (6) does not apply to
+   it.
 
 ### Formal invariants
 

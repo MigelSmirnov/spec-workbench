@@ -214,12 +214,13 @@ sees every change as a new version.
    version the step showed, and its inputs — for the import, the file's digest
    and the picks. A session holds at most one: showing a confirmation step
    replaces the one pending (M11). It is valid only in that session, for 10
-   minutes, and is
-   used up by the first submission, whatever its answer; a refused submission
-   needs the step shown again. A submission becomes the first one when it
-   passes the owner session and CSRF checks (A04 rule 6, stage 1): one refused
-   before them leaves the value unused; from there on, whatever the answer —
-   a value bound to another action included — the value is used up. It is not
+   minutes, and is used up by the first submission that carries it, whatever
+   its answer; a refused submission needs the step shown again. A submission
+   carries it when it passes the owner session and CSRF checks (A04 rule 6,
+   stage 1) and gives a value equal to the pending one; from there on,
+   whatever the answer — a binding to another action or input included — the
+   pending value is used up. A submission refused before those checks, or
+   giving another value, is refused and leaves the pending value as it was. It is not
    the confirmation id, which Registry mints only when the action is accepted
    (A14).
 7. The session's identity, its CSRF value and a confirmation value are each at
