@@ -48,6 +48,7 @@ import re
 from typing import Any
 
 DECISION_HEADING = re.compile(r"^##\s+Accepted decision\s+(A\d+)\b")
+DECISION_KEY = re.compile(r"A\d+")
 SECTION_HEADING = re.compile(r"^##\s+(.*\S)\s*$")
 CONTEXT = "context"
 UNKNOWN = "?"
@@ -128,6 +129,24 @@ def change_regions(old: str, new: str, context: int = 3) -> tuple[str, list[str]
             lo, hi = max(0, j1 - context), min(len(new_lines), max(j2, j1 + 1) + context)
             regions.append("".join(new_lines[lo:hi]))
     return diff, regions
+
+
+def referencing(current: dict[str, dict[str, str]], changed: list[str], scope: list[str]) -> dict[str, list[str]]:
+    """Closed units that name a decision changed since its own closure: {unit:
+    [changed decisions it names]}. Only decision keys (`A15`) are names a text
+    uses; a unit already under review and `context` are not listed. On
+    Registry State 2 (2026-10-31) A15 rule 6 was reversed while A14, closed
+    since round 3, kept a rule 5 that contradicted it; A14 came back into a
+    round only because its rule 3 happened to be edited too."""
+    decisions = [key for key in changed if DECISION_KEY.fullmatch(key)]
+    found: dict[str, list[str]] = {}
+    for key, unit in current.items():
+        if key in scope or key == CONTEXT:
+            continue
+        named = [d for d in decisions if re.search(rf"(?<![\w-]){re.escape(d)}(?![\w-])", unit["text"])]
+        if named:
+            found[key] = named
+    return found
 
 
 def _clear_for(summary: dict[str, Any], key: str) -> bool:

@@ -15,8 +15,17 @@ Two texts that contradict each other always belong here. Points the texts list o
 purpose as carried to a later state do not.
 
 Do not propose designs as settled. Report only genuine gaps, not style.
+
+When you can, give the point a witness: one history the texts allow — a
+state the product can be in, the events in order with who acts, and the two
+outcomes careful implementers could both read from the texts (or, for a
+contradiction, the outcome each passage gives) and who would see the
+difference. A point with a witness is judged even when no other review raises
+it; a point without one is judged only when several reviews raise it.
+
 Output strict JSON, nothing else:
-{{"open_points":[{{"subject":"<model, decision, action or section>","kind":"<short kind>","text":"<the exact phrase that is silent, vague or contradictory>","question":"<the question the texts must answer>","options":["<option you see>"],"default_guess":"<what you would do if forced>"}}]}}"""
+{{"open_points":[{{"subject":"<model, decision, action or section>","kind":"<short kind>","text":"<the exact phrase that is silent, vague or contradictory>","question":"<the question the texts must answer>","options":["<option you see>"],"default_guess":"<what you would do if forced>","witness":{{"initial":"<state>","events":["<who does what>"],"outcomes":["<outcome one>","<outcome two>"],"observer":"<who sees the difference>"}}}}]}}
+"witness" may be omitted."""
 
 UNIT_SCOPE = """
 
@@ -39,10 +48,28 @@ CHANGED_UNIT = """- {key}: {title}
 {diff}```"""
 
 
-def unit_scope(state: int, scope: list[tuple[str, str]], changed: dict[str, str] | None = None) -> str:
-    changed = changed or {}
-    listing = "\n".join(CHANGED_UNIT.format(key=key, title=title, diff=changed[key]) if key in changed
-                        else f"- {key}: {title}" for key, title in scope)
+REFERENCING_UNIT = """- {key}: {title}
+  This unit was closed and has not changed, but it names {names}, which
+  changed since its closure (the diff is listed with {it}). Review only
+  whether this unit still agrees with that change — a rule here that the
+  change contradicts or leaves without its exception. Its other passages are
+  closed; a point about one of them, away from what the change touches, is
+  not asked for."""
+
+
+def unit_scope(state: int, scope: list[tuple[str, str]], changed: dict[str, str] | None = None,
+               referencing: dict[str, list[str]] | None = None) -> str:
+    changed, referencing = changed or {}, referencing or {}
+
+    def line(key: str, title: str) -> str:
+        if key in changed:
+            return CHANGED_UNIT.format(key=key, title=title, diff=changed[key])
+        if key in referencing:
+            names = referencing[key]
+            return REFERENCING_UNIT.format(key=key, title=title, names=", ".join(names),
+                                           it="it" if len(names) == 1 else "them")
+        return f"- {key}: {title}"
+    listing = "\n".join(line(key, title) for key, title in scope)
     return UNIT_SCOPE.format(state=state, listing=listing)
 
 
@@ -108,12 +135,12 @@ task is to tell the questions that must change the texts before the next state
 from those that need not.{scope_rule} Judge each topic by exactly one kind:
 
 - "contradiction": two passages of the texts say different things. Quote both,
-  verbatim.
+  verbatim.{contradiction_extra}
 - "consequential_gap": the texts leave a choice open, and two careful
   implementers would build different behaviour that the owner, an agent, a
   caller or an external service would notice. Name the two behaviours and who
   notices in "divergence". Quote, verbatim, every passage of the texts that
-  leaves the choice open or bears on it. {unquoted_gap}
+  leaves the choice open or bears on it. {unquoted_gap}{witness_rule}
 - "answered": the texts already answer the question. Quote the passage that
   answers it, verbatim.
 {later_state}- "indifferent": any answer is acceptable, because no caller, owner or service
@@ -121,12 +148,56 @@ from those that need not.{scope_rule} Judge each topic by exactly one kind:
 
 Quotes are checked mechanically against the texts: copy them character for
 character, without ellipsis, at least a full clause. A quote not found in the
-texts counts against your judgement, so never paraphrase. When unsure between a
-blocking kind (contradiction, consequential_gap) and another, choose the
-blocking one.
+texts counts against your judgement, so never paraphrase. {unsure_rule}
 
 Output strict JSON, nothing else:
-{{"judgements":[{{"id":"<topic id>","kind":"<kind>","quotes":["<verbatim passage>"],"later_state":<number or null>,"precedent":"<prior judgement id or null>","divergence":"<two behaviours and who notices, or empty>","why":"<one sentence>"}}]}}"""
+{{"judgements":[{{"id":"<topic id>","kind":"<kind>","quotes":["<verbatim passage>"],"later_state":<number or null>,"precedent":"<prior judgement id or null>","divergence":"<two behaviours and who notices, or empty>","why":"<one sentence>"{witness_schema}}}]}}"""
+
+UNSURE_BLOCKING = """When unsure between a
+blocking kind (contradiction, consequential_gap) and another, choose the
+blocking one."""
+
+UNSURE_WITNESS = """When unsure between a
+blocking kind (contradiction, consequential_gap) and another, choose the
+blocking one if you can give its witness; if you cannot, judge it a
+hypothesis."""
+
+WITNESS_RULE = """
+
+A contradiction or a consequential_gap that quotes a passage blocks only with
+a witness: one admissible history in which the texts give two different
+outcomes. Give it in "witness": "initial" — a state the product can be in;
+"events" — the actions in order, each with who does it; "outcomes" — the two
+outcomes the texts allow (for a contradiction, the outcome each passage
+gives); "observer" — who sees the difference; "basis" — passages of the
+texts, verbatim, that make the history admissible (that these actions exist
+and these actors may take them). A reviewer's witness, when the topic carries
+one, is a draft to check, not evidence.
+- "hypothesis": the reviews suspect a contradiction or a gap, but you cannot
+  build a witness from the texts. Say what is missing in "why". It does not
+  block; the next round's reviewers are asked for a witness."""
+
+CONTRADICTION_BASES = """ In "bases", for each of the two passages, quote
+  verbatim the passage of an earlier state (State 0 to State {before}) it rests
+  on, or give "" when it rests on none: the side that rests on no earlier
+  passage is usually the one to change."""
+
+WITNESS_SCHEMA = ',"witness":{"initial":"","events":[""],"outcomes":["",""],"observer":"","basis":["<verbatim passage>"]},"bases":[{"passage":"<one side, verbatim>","rests_on":"<earlier-state passage, verbatim, or empty>"}]'
+
+HYPOTHESES = """
+
+Hypotheses of the previous round. These were raised without a witness and did
+not block. Raise one again only with a witness (a history in which the texts
+give two different outcomes); without one, do not repeat it.
+{listing}"""
+
+
+def hypotheses_note(hypotheses: list[tuple[str, str]]) -> str:
+    """The previous round's hypotheses, put to this round's reviewers."""
+    if not hypotheses:
+        return ""
+    return HYPOTHESES.format(listing="\n".join(f"- {topic} ({why})" if why else f"- {topic}"
+                                               for topic, why in hypotheses))
 
 PREEXISTING = """
 - "preexisting": only for a state reopened after it was closed. The texts it was
@@ -184,14 +255,20 @@ LAST_DESIGN_STATE = 7
 
 
 def judge_instruction(state: int, reopened: bool, later_files: list[str] | None = None,
-                      precedents: bool = False, scope: str | None = None) -> str:
+                      precedents: bool = False, scope: str | None = None, witness: bool = False) -> str:
+    """`witness`: a blocking kind needs a witness and a contradiction its
+    bases (document states; State 7 keeps its own rule)."""
     answered_later = ANSWERED_LATER.format(files=", ".join(later_files), state=state) if later_files else ""
     unquoted_gap = DEFERRED_GAP if state <= LAST_DEFERRING_STATE else ANSWERING_STATE_GAP.format(state=state)
     scope_rule = SCOPE_RULE.format(state=state, scope=scope) if scope else ""
+    bases = CONTRADICTION_BASES.format(before=state - 1) if witness and state > 0 else ""
     return JUDGE.format(state=state, preexisting=PREEXISTING if reopened else "", answered_later=answered_later,
                         judged_before=JUDGED_BEFORE if precedents else "", unquoted_gap=unquoted_gap,
                         later_state=LATER_STATE.format(state=state) if state < LAST_DESIGN_STATE else "",
-                        scope_rule=scope_rule)
+                        scope_rule=scope_rule, contradiction_extra=bases,
+                        witness_rule=WITNESS_RULE if witness else "",
+                        unsure_rule=UNSURE_WITNESS if witness else UNSURE_BLOCKING,
+                        witness_schema=WITNESS_SCHEMA if witness else "")
 
 
 def judge_input(texts: str, topics: list[dict], change: str | None, precedents: list[dict] | None = None) -> str:
