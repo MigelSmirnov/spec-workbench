@@ -661,12 +661,13 @@ secret (R0-37).
 
 Facts, all written once:
 
-- its sequence number, minted by Registry: greater than every number minted
-  before it, starting at 1; never reused, also after old entries are erased
-  (R0-66) or the store is restored (State 2 A15), so the log's order is the
-  order of the numbers even where two entries share an instant (owner,
-  2026-10-31; codex round-02 T2). A number minted for a change that did not
-  commit is not used again, so the log may skip numbers;
+- its sequence number, minted by Registry: 1 for the store's first entry, then
+  one more than the last its store ever wrote; never reused in that store,
+  also after old entries are erased (R0-66), so the log's order is the order
+  of the numbers even where two entries share an instant (owner, 2026-10-31;
+  codex round-02 T2). A store the owner restores from a backup continues from
+  the backup's last number; the entries written after the backup are lost
+  with it and exist nowhere (State 2 A18);
 - the instant of the change;
 - the acting principal (M07);
 - the change: which action, in a closed vocabulary State 6 declares. The
@@ -763,8 +764,9 @@ Registry's own record of the accepted import (R0-79).
 
 ### Lifecycle candidate
 
-None; absent, then present forever: once a backup holding it has passed its
-check, no backup without it is kept (State 2 A16, A18).
+None; absent, then present forever: no backup made before the import is
+kept once one holding the closure has passed its check, and none is ever
+restored (State 2 A16, A18).
 
 ### Persistence candidate
 
