@@ -1,0 +1,229 @@
+{
+ "open_points": [
+  {
+   "subject": "A13 session expiry and admitted requests",
+   "kind": "contradictory concurrency",
+   "text": "“Validity is checked when a request arrives”; “a request that passes it completes even if a limit or a sign-out comes while it runs”; and the expiry pass takes the locks and decides under them",
+   "question": "If a request passes the session check before a limit but waits for a lock until the expiry pass or sign-out ends the session, must that request still complete, or must validity be checked again under the lock?",
+   "options": [
+    "Admission pins the session and the request completes",
+    "The locked check controls and the request is refused",
+    "Only requests already executing, not waiting for a lock, complete"
+   ],
+   "default_guess": "Treat a successful arrival check as admission and prevent the pass or sign-out from invalidating that admitted request.",
+   "unit": "?"
+  },
+  {
+   "subject": "A13 idle-time update",
+   "kind": "missing synchronization",
+   "text": "“its arrival restarts the 30 minutes — of concurrent requests the latest arrival counts” and “the pass ... [takes] each session's lock ... and decid[es] under them”",
+   "question": "How is last_request updated atomically with the expiry pass, especially for a request that must take the import lock before its session lock?",
+   "options": [
+    "Update last_request atomically at arrival without the session lock",
+    "Update it only while holding the session lock",
+    "Reserve admission at arrival and commit the timestamp later under the lock"
+   ],
+   "default_guess": "Atomically record the arrival time during the session check so the expiry pass sees it.",
+   "unit": "?"
+  },
+  {
+   "subject": "A13 expiry-pass cadence",
+   "kind": "ambiguous schedule",
+   "text": "“a pass over the sessions it makes every 60 seconds from the start”",
+   "question": "Is the first pass made immediately or 60 seconds after start, and are later passes fixed to start-time boundaries or scheduled 60 seconds after the preceding pass finishes?",
+   "options": [
+    "At start and then fixed 60-second boundaries",
+    "First after 60 seconds and then fixed boundaries",
+    "Sixty seconds after each completed pass"
+   ],
+   "default_guess": "Run the first pass 60 seconds after start and use fixed 60-second boundaries without catch-up passes.",
+   "unit": "?"
+  },
+  {
+   "subject": "A13 lifetime clock",
+   "kind": "undefined time semantics",
+   "text": "“8 hours after sign-in”; “30 minutes without an owner request”; “every 60 seconds”",
+   "question": "Which clock governs session limits and the cleanup cadence, and what happens when the system wall clock moves backward or forward?",
+   "options": [
+    "UTC wall-clock instants",
+    "A monotonic elapsed-time clock",
+    "Wall-clock expiry instants with monotonic cleanup scheduling"
+   ],
+   "default_guess": "Use monotonic elapsed time for both limits and cadence while retaining UTC instants only for recorded facts.",
+   "unit": "?"
+  },
+  {
+   "subject": "A16 dropping every session upload",
+   "kind": "missing lock protocol",
+   "text": "“an accepted import, holding [the import lock], drops every session's upload” while file requests “take the instance's one import lock first, then their session's lock ... and hold both until done”",
+   "question": "Must an accepted import acquire every affected session lock before clearing that session's upload, and if so, in what session order and whether all session locks are held together or one at a time?",
+   "options": [
+    "Clear uploads under the import lock alone",
+    "Acquire and release each session lock one at a time",
+    "Acquire all session locks in a declared total order before clearing anything"
+   ],
+   "default_guess": "While holding the import lock, acquire each session lock one at a time in session-identity order and clear its upload.",
+   "unit": "?"
+  },
+  {
+   "subject": "A16 set of sessions cleared by import",
+   "kind": "undefined concurrency boundary",
+   "text": "“drops the uploaded file of every owner session”",
+   "question": "At what instant is “every owner session” determined when sign-ins and sign-outs can occur concurrently with the accepted import?",
+   "options": [
+    "Sessions present when confirmation acquires the import lock",
+    "Sessions present when the store transaction commits",
+    "A live iteration including sessions created before cleanup finishes"
+   ],
+   "default_guess": "Use the sessions present when the import confirmation acquires the import lock.",
+   "unit": "?"
+  },
+  {
+   "subject": "A17 configuration schema",
+   "kind": "undefined validation",
+   "text": "“the set of environment variables whose names begin with REGISTRY_”; “each well formed”; “a missing, malformed or unknown item fails the start”",
+   "question": "What are the exact environment-variable names and the syntax and validity rules for the store location, backup location, backup key, owner credential and four service tokens?",
+   "options": [
+    "Literal text secrets and filesystem path strings under specified names",
+    "Encoded binary secrets with an explicit decoding and path grammar",
+    "Release-defined names and parsers not fixed by these texts"
+   ],
+   "default_guess": "Define fixed REGISTRY_ names, treat locations as filesystem path strings, and treat credentials and tokens as literal UTF-8 strings.",
+   "unit": "?"
+  },
+  {
+   "subject": "A17 secret length and backup-key representation",
+   "kind": "undefined byte interpretation",
+   "text": "“A secret ... is at least 32 bytes long” although the secrets are environment-variable values",
+   "question": "How are environment strings converted to bytes for length, equality, authentication and backup encryption, and may the backup key have any length above 32 bytes or must it be decoded or derived into a fixed-size cryptographic key?",
+   "options": [
+    "UTF-8 bytes used directly",
+    "Hex or base64 decoded bytes",
+    "UTF-8 input passed through a declared key-derivation function"
+   ],
+   "default_guess": "Interpret the configured value as UTF-8 bytes and derive the encryption key with a declared KDF.",
+   "unit": "?"
+  },
+  {
+   "subject": "A17 cleanup of backup temporaries at start",
+   "kind": "contradictory cleanup rule",
+   "text": "“a probe it could not remove, which the next start or run removes with the other temporary files” but A18 specifies removal of backup temporary files only as the first step of a backup run",
+   "question": "Does every Registry start remove files under A18's temporary prefix, including an owner-only start, or are they removed only by a backup run?",
+   "options": [
+    "Every start and every backup run remove them",
+    "Only backup runs remove them",
+    "Starts remove only probe files they can identify"
+   ],
+   "default_guess": "Remove all files under the backup temporary prefix during startup before the writability probe.",
+   "unit": "?"
+  },
+  {
+   "subject": "A17 interrupted store creation",
+   "kind": "undefined refusal condition",
+   "text": "“at every start it first removes a file of that temporary name”",
+   "question": "What happens if the stale temporary store file cannot be removed: does startup fail, continue to inspect the configured store, or report and continue as it does for a stale backup temporary?",
+   "options": [
+    "Fail startup",
+    "Report and continue if the configured store is valid",
+    "Ignore the stale temporary file"
+   ],
+   "default_guess": "Fail startup because safe creation or replacement of the store cannot be guaranteed.",
+   "unit": "?"
+  },
+  {
+   "subject": "A17 store integrity check",
+   "kind": "undefined acceptance test",
+   "text": "“pass the store engine's full integrity check — the same as a backup's check”",
+   "question": "What exact engine operation and result constitute the full integrity check, including whether foreign-key checks, schema checks and application-level invariants are included?",
+   "options": [
+    "Engine physical-integrity check only",
+    "Physical integrity plus schema and foreign-key checks",
+    "Physical checks plus every Registry domain invariant"
+   ],
+   "default_guess": "Require the engine's full physical-integrity check, schema/version validation and foreign-key validation, but not a scan of every domain invariant.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 backup encryption",
+   "kind": "undefined security mechanism",
+   "text": "“Each backup is encrypted with the backup key” and “A backup cannot be read without the key it was made with”",
+   "question": "Which encryption algorithm, mode, nonce generation, key derivation and authentication rules make a backup encrypted and valid?",
+   "options": [
+    "Authenticated encryption with a random nonce and derived fixed-size key",
+    "Direct encryption with the configured bytes",
+    "An engine-provided encrypted-backup format"
+   ],
+   "default_guess": "Use authenticated encryption with a fresh random nonce and a key derived from the configured backup secret.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 unencrypted backup record",
+   "kind": "missing integrity binding",
+   "text": "“It records, readable without its key, its instant, the release that made it, the last audit sequence number it holds and a digest of the key”",
+   "question": "Is this unencrypted record cryptographically authenticated and bound to the encrypted store, and which fields are checked against the decrypted contents?",
+   "options": [
+    "Authenticate all metadata as associated data",
+    "Leave metadata unauthenticated but compare all derivable fields after decryption",
+    "Leave metadata unauthenticated and check only the stated release, store version and sequence"
+   ],
+   "default_guess": "Authenticate the entire metadata record as associated data and verify every field that can be derived from the decrypted store.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 key digest",
+   "kind": "undefined digest semantics",
+   "text": "“a digest of the key it was made with (never the key)”",
+   "question": "Which digest or key identifier is stored, whether it is salted or keyed, and whether it is computed from the configured text, decoded bytes or derived encryption key?",
+   "options": [
+    "Unsalted cryptographic hash of configured bytes",
+    "Hash of the derived encryption key",
+    "Random key identifier configured separately",
+    "Keyed or salted fingerprint"
+   ],
+   "default_guess": "Store a cryptographic hash of the derived encryption key with an explicit domain separator.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 readable-without-key claim",
+   "kind": "text contradiction",
+   "text": "Rule 1 makes the backup's record “readable without its key”, while required test 3 says “A backup cannot be read without the key it was made with”",
+   "question": "What exactly may be read without the key: only the stated metadata record, or no part of the backup file?",
+   "options": [
+    "The metadata is readable; only store contents require the key",
+    "Nothing in the file is readable without the key",
+    "Only a non-semantic format/version header is readable"
+   ],
+   "default_guess": "Allow the stated metadata to be read without the key and interpret the test as applying to the encrypted store contents.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 empty audit history metadata",
+   "kind": "undefined initial value",
+   "text": "A backup records “the last audit sequence number it holds”, while audit sequence numbers start at 1 and a new store may contain no audit entry",
+   "question": "What value is recorded and checked when the snapshot has never written an audit entry?",
+   "options": [
+    "Zero",
+    "Absent or null",
+    "The next sequence number, 1"
+   ],
+   "default_guess": "Record zero as the audit high-water mark of an empty history.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 scheduled date under clock changes",
+   "kind": "ambiguous scheduling state",
+   "text": "A process remembers “the dates it ran”, while a kept backup's date is “the UTC date of its recorded instant”",
+   "question": "If the UTC date changes between the scheduler's qualifying clock observation and the snapshot instant, which date is marked as run and used to decide whether another run may occur?",
+   "options": [
+    "The date observed by the scheduler",
+    "The snapshot's recorded UTC date",
+    "Both dates"
+   ],
+   "default_guess": "Mark the scheduler's qualifying date as run and use the snapshot date only for naming and retention.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A13 session expiry and admitted requests\",\"kind\":\"contradictory concurrency\",\"text\":\"“Validity is checked when a request arrives”; “a request that passes it completes even if a limit or a sign-out comes while it runs”; and the expiry pass takes the locks and decides under them\",\"question\":\"If a request passes the session check before a limit but waits for a lock until the expiry pass or sign-out ends the session, must that request still complete, or must validity be checked again under the lock?\",\"options\":[\"Admission pins the session and the request completes\",\"The locked check controls and the request is refused\",\"Only requests already executing, not waiting for a lock, complete\"],\"default_guess\":\"Treat a successful arrival check as admission and prevent the pass or sign-out from invalidating that admitted request.\"},{\"subject\":\"A13 idle-time update\",\"kind\":\"missing synchronization\",\"text\":\"“its arrival restarts the 30 minutes — of concurrent requests the latest arrival counts” and “the pass ... [takes] each session's lock ... and decid[es] under them”\",\"question\":\"How is last_request updated atomically with the expiry pass, especially for a request that must take the import lock before its session lock?\",\"options\":[\"Update last_request atomically at arrival without the session lock\",\"Update it only while holding the session lock\",\"Reserve admission at arrival and commit the timestamp later under the lock\"],\"default_guess\":\"Atomically record the arrival time during the session check so the expiry pass sees it.\"},{\"subject\":\"A13 expiry-pass cadence\",\"kind\":\"ambiguous schedule\",\"text\":\"“a pass over the sessions it makes every 60 seconds from the start”\",\"question\":\"Is the first pass made immediately or 60 seconds after start, and are later passes fixed to start-time boundaries or scheduled 60 seconds after the preceding pass finishes?\",\"options\":[\"At start and then fixed 60-second boundaries\",\"First after 60 seconds and then fixed boundaries\",\"Sixty seconds after each completed pass\"],\"default_guess\":\"Run the first pass 60 seconds after start and use fixed 60-second boundaries without catch-up passes.\"},{\"subject\":\"A13 lifetime clock\",\"kind\":\"undefined time semantics\",\"text\":\"“8 hours after sign-in”; “30 minutes without an owner request”; “every 60 seconds”\",\"question\":\"Which clock governs session limits and the cleanup cadence, and what happens when the system wall clock moves backward or forward?\",\"options\":[\"UTC wall-clock instants\",\"A monotonic elapsed-time clock\",\"Wall-clock expiry instants with monotonic cleanup scheduling\"],\"default_guess\":\"Use monotonic elapsed time for both limits and cadence while retaining UTC instants only for recorded facts.\"},{\"subject\":\"A16 dropping every session upload\",\"kind\":\"missing lock protocol\",\"text\":\"“an accepted import, holding [the import lock], drops every session's upload” while file requests “take the instance's one import lock first, then their session's lock ... and hold both until done”\",\"question\":\"Must an accepted import acquire every affected session lock before clearing that session's upload, and if so, in what session order and whether all session locks are held together or one at a time?\",\"options\":[\"Clear uploads under the import lock alone\",\"Acquire and release each session lock one at a time\",\"Acquire all session locks in a declared total order before clearing anything\"],\"default_guess\":\"While holding the import lock, acquire each session lock one at a time in session-identity order and clear its upload.\"},{\"subject\":\"A16 set of sessions cleared by import\",\"kind\":\"undefined concurrency boundary\",\"text\":\"“drops the uploaded file of every owner session”\",\"question\":\"At what instant is “every owner session” determined when sign-ins and sign-outs can occur concurrently with the accepted import?\",\"options\":[\"Sessions present when confirmation acquires the import lock\",\"Sessions present when the store transaction commits\",\"A live iteration including sessions created before cleanup finishes\"],\"default_guess\":\"Use the sessions present when the import confirmation acquires the import lock.\"},{\"subject\":\"A17 configuration schema\",\"kind\":\"undefined validation\",\"text\":\"“the set of environment variables whose names begin with REGISTRY_”; “each well formed”; “a missing, malformed or unknown item fails the start”\",\"question\":\"What are the exact environment-variable names and the syntax and validity rules for the store location, backup location, backup key, owner credential and four service tokens?\",\"options\":[\"Literal text secrets and filesystem path strings under specified names\",\"Encoded binary secrets with an explicit decoding and path grammar\",\"Release-defined names and parsers not fixed by these texts\"],\"default_guess\":\"Define fixed REGISTRY_ names, treat locations as filesystem path strings, and treat credentials and tokens as literal UTF-8 strings.\"},{\"subject\":\"A17 secret length and backup-key representation\",\"kind\":\"undefined byte interpretation\",\"text\":\"“A secret ... is at least 32 bytes long” although the secrets are environment-variable values\",\"question\":\"How are environment strings converted to bytes for length, equality, authentication and backup encryption, and may the backup key have any length above 32 bytes or must it be decoded or derived into a fixed-size cryptographic key?\",\"options\":[\"UTF-8 bytes used directly\",\"Hex or base64 decoded bytes\",\"UTF-8 input passed through a declared key-derivation function\"],\"default_guess\":\"Interpret the configured value as UTF-8 bytes and derive the encryption key with a declared KDF.\"},{\"subject\":\"A17 cleanup of backup temporaries at start\",\"kind\":\"contradictory cleanup rule\",\"text\":\"“a probe it could not remove, which the next start or run removes with the other temporary files” but A18 specifies removal of backup temporary files only as the first step of a backup run\",\"question\":\"Does every Registry start remove files under A18's temporary prefix, including an owner-only start, or are they removed only by a backup run?\",\"options\":[\"Every start and every backup run remove them\",\"Only backup runs remove them\",\"Starts remove only probe files they can identify\"],\"default_guess\":\"Remove all files under the backup temporary prefix during startup before the writability probe.\"},{\"subject\":\"A17 interrupted store creation\",\"kind\":\"undefined refusal condition\",\"text\":\"“at every start it first removes a file of that temporary name”\",\"question\":\"What happens if the stale temporary store file cannot be removed: does startup fail, continue to inspect the configured store, or report and continue as it does for a stale backup temporary?\",\"options\":[\"Fail startup\",\"Report and continue if the configured store is valid\",\"Ignore the stale temporary file\"],\"default_guess\":\"Fail startup because safe creation or replacement of the store cannot be guaranteed.\"},{\"subject\":\"A17 store integrity check\",\"kind\":\"undefined acceptance test\",\"text\":\"“pass the store engine's full integrity check — the same as a backup's check”\",\"question\":\"What exact engine operation and result constitute the full integrity check, including whether foreign-key checks, schema checks and application-level invariants are included?\",\"options\":[\"Engine physical-integrity check only\",\"Physical integrity plus schema and foreign-key checks\",\"Physical checks plus every Registry domain invariant\"],\"default_guess\":\"Require the engine's full physical-integrity check, schema/version validation and foreign-key validation, but not a scan of every domain invariant.\"},{\"subject\":\"A18 backup encryption\",\"kind\":\"undefined security mechanism\",\"text\":\"“Each backup is encrypted with the backup key” and “A backup cannot be read without the key it was made with”\",\"question\":\"Which encryption algorithm, mode, nonce generation, key derivation and authentication rules make a backup encrypted and valid?\",\"options\":[\"Authenticated encryption with a random nonce and derived fixed-size key\",\"Direct encryption with the configured bytes\",\"An engine-provided encrypted-backup format\"],\"default_guess\":\"Use authenticated encryption with a fresh random nonce and a key derived from the configured backup secret.\"},{\"subject\":\"A18 unencrypted backup record\",\"kind\":\"missing integrity binding\",\"text\":\"“It records, readable without its key, its instant, the release that made it, the last audit sequence number it holds and a digest of the key”\",\"question\":\"Is this unencrypted record cryptographically authenticated and bound to the encrypted store, and which fields are checked against the decrypted contents?\",\"options\":[\"Authenticate all metadata as associated data\",\"Leave metadata unauthenticated but compare all derivable fields after decryption\",\"Leave metadata unauthenticated and check only the stated release, store version and sequence\"],\"default_guess\":\"Authenticate the entire metadata record as associated data and verify every field that can be derived from the decrypted store.\"},{\"subject\":\"A18 key digest\",\"kind\":\"undefined digest semantics\",\"text\":\"“a digest of the key it was made with (never the key)”\",\"question\":\"Which digest or key identifier is stored, whether it is salted or keyed, and whether it is computed from the configured text, decoded bytes or derived encryption key?\",\"options\":[\"Unsalted cryptographic hash of configured bytes\",\"Hash of the derived encryption key\",\"Random key identifier configured separately\",\"Keyed or salted fingerprint\"],\"default_guess\":\"Store a cryptographic hash of the derived encryption key with an explicit domain separator.\"},{\"subject\":\"A18 readable-without-key claim\",\"kind\":\"text contradiction\",\"text\":\"Rule 1 makes the backup's record “readable without its key”, while required test 3 says “A backup cannot be read without the key it was made with”\",\"question\":\"What exactly may be read without the key: only the stated metadata record, or no part of the backup file?\",\"options\":[\"The metadata is readable; only store contents require the key\",\"Nothing in the file is readable without the key\",\"Only a non-semantic format/version header is readable\"],\"default_guess\":\"Allow the stated metadata to be read without the key and interpret the test as applying to the encrypted store contents.\"},{\"subject\":\"A18 empty audit history metadata\",\"kind\":\"undefined initial value\",\"text\":\"A backup records “the last audit sequence number it holds”, while audit sequence numbers start at 1 and a new store may contain no audit entry\",\"question\":\"What value is recorded and checked when the snapshot has never written an audit entry?\",\"options\":[\"Zero\",\"Absent or null\",\"The next sequence number, 1\"],\"default_guess\":\"Record zero as the audit high-water mark of an empty history.\"},{\"subject\":\"A18 scheduled date under clock changes\",\"kind\":\"ambiguous scheduling state\",\"text\":\"A process remembers “the dates it ran”, while a kept backup's date is “the UTC date of its recorded instant”\",\"question\":\"If the UTC date changes between the scheduler's qualifying clock observation and the snapshot instant, which date is marked as run and used to decide whether another run may occur?\",\"options\":[\"The date observed by the scheduler\",\"The snapshot's recorded UTC date\",\"Both dates\"],\"default_guess\":\"Mark the scheduler's qualifying date as run and use the snapshot date only for naming and retention.\"}]}",
+ "set_aside": []
+}

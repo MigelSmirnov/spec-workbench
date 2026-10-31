@@ -1,0 +1,189 @@
+{
+ "open_points": [
+  {
+   "unit": "A13",
+   "subject": "owner-session idle deadline",
+   "kind": "concurrency gap",
+   "text": "“An owner request … its arrival restarts the 30 minutes — of concurrent requests the latest arrival counts” but only selected session-changing requests take the session lock, while the expiry pass “decid[es] under” that lock.",
+   "question": "How is every valid request's arrival atomically ordered against the expiry pass, especially when a request arrives before the idle deadline but its last-request update races with a pass after the deadline?",
+   "options": [
+    "Every session check atomically updates last_request under the session lock using the captured arrival instant",
+    "Use an atomic maximum update outside the session lock and make the pass coordinate with it",
+    "Let whichever update or expiry removal executes first win"
+   ],
+   "default_guess": "Briefly take the session lock during every session check, validate and set last_request to max(current, captured arrival), then release it before doing the request."
+  },
+  {
+   "unit": "A13",
+   "subject": "expiry-pass schedule",
+   "kind": "timing ambiguity",
+   "text": "“a pass over the sessions it makes every 60 seconds from the start”",
+   "question": "Does the first pass run at process start or 60 seconds later, and after a delayed pass are missed passes skipped or run to restore the original cadence?",
+   "options": [
+    "First pass at start, then fixed-rate every 60 seconds",
+    "First pass 60 seconds after start, then fixed-rate with missed passes skipped",
+    "Wait 60 seconds after each completed pass"
+   ],
+   "default_guess": "Run the first pass 60 seconds after process start on a fixed-rate schedule, skipping missed passes."
+  },
+  {
+   "unit": "A13",
+   "subject": "expiry-pass locking",
+   "kind": "lock-scope ambiguity",
+   "text": "“taking the import lock and then each session's lock … and deciding under them”",
+   "question": "Does one pass hold the import lock for the whole sweep, and does it hold all session locks together or acquire, decide and release them one at a time?",
+   "options": [
+    "Hold the import lock for the whole pass and process one session lock at a time",
+    "Take and release the import lock separately for each session",
+    "Hold the import lock and all session locks simultaneously"
+   ],
+   "default_guess": "Hold the import lock for the whole pass and acquire, decide and release each session lock individually."
+  },
+  {
+   "unit": "A16",
+   "subject": "accepted import clearing all uploads",
+   "kind": "locking gap",
+   "text": "“every request that reads or changes an uploaded file … take[s] the instance's one import lock first, then their session's lock” and “an accepted import, holding it, drops every session's upload”",
+   "question": "When an accepted import changes uploads belonging to other sessions, must it also take each other session's lock, and in what acquisition and release pattern?",
+   "options": [
+    "With the import lock held, acquire and release each affected session lock in turn",
+    "The import lock alone authorizes clearing other sessions' uploads",
+    "Acquire every session lock before clearing any upload"
+   ],
+   "default_guess": "Keep the import lock for the operation and acquire, clear and release each other session's lock one at a time."
+  },
+  {
+   "unit": "A16",
+   "subject": "pending import confirmations after closure",
+   "kind": "state-transition gap",
+   "text": "“An accepted import drops the uploaded file of every owner session” while “a confirmation shown in another session is refused because the import is closed”",
+   "question": "Does acceptance also clear pending import confirmations in other sessions, or do those values remain pending until submitted, replaced, expired or their sessions end?",
+   "options": [
+    "Clear every pending import confirmation when the import is accepted",
+    "Keep pending confirmations; a later submission is consumed and refused by the closure",
+    "Clear a pending confirmation only when its session's upload is cleared"
+   ],
+   "default_guess": "Keep them, because the rule explicitly clears every upload but not confirmations; submission later consumes and refuses them."
+  },
+  {
+   "unit": "A17",
+   "subject": "configuration variable names",
+   "kind": "missing declaration",
+   "text": "“The configuration is the set of environment variables whose names begin with REGISTRY_” and “It holds exactly these items and no other”",
+   "question": "What is the exact environment-variable name for each required item and each of the four service tokens?",
+   "options": [
+    "Declare one fixed REGISTRY_ name per item",
+    "Derive token names mechanically from service names",
+    "Allow aliases for one or more items"
+   ],
+   "default_guess": "Use one fixed uppercase REGISTRY_ name per listed item and reject every other REGISTRY_ name."
+  },
+  {
+   "unit": "A17",
+   "subject": "configuration value validation",
+   "kind": "undefined refusal condition",
+   "text": "“each well formed; each secret's length” and “A secret … is at least 32 bytes long”",
+   "question": "What makes each credential, token, backup key and path well formed, and in which encoding are environment-string secret lengths and equality measured as bytes?",
+   "options": [
+    "Require valid UTF-8 text and measure its UTF-8 bytes",
+    "Decode secrets from a declared encoding such as base64 and measure decoded bytes",
+    "Treat environment values as platform-native byte strings"
+   ],
+   "default_guess": "Require valid UTF-8, measure and compare the UTF-8 bytes, and require nonblank path strings that satisfy the later path checks."
+  },
+  {
+   "unit": "A17",
+   "subject": "unremovable temporary store",
+   "kind": "contradictory startup behavior",
+   "text": "“a stale temporary file a start cannot remove is reported and does not stop the start” but “When the store's configured file does not exist … Registry makes a new, empty store … under a temporary name” and “at every start it first removes a file of that temporary name”",
+   "question": "If the final store is absent and the stale temporary store cannot be removed, does startup fail or try to create/overwrite/reuse that temporary file?",
+   "options": [
+    "Fail startup because a new store cannot be created safely",
+    "Continue only if creation can atomically replace the stale temporary file",
+    "Open and validate the stale temporary store for possible reuse"
+   ],
+   "default_guess": "Fail startup without opening, overwriting or reusing the stale temporary store."
+  },
+  {
+   "unit": "A17",
+   "subject": "store integrity check",
+   "kind": "undefined check",
+   "text": "“pass the store engine's full integrity check — the same as a backup's check”",
+   "question": "Which store engine and exact integrity operation define this refusal condition, including what result is a pass?",
+   "options": [
+    "Name a specific engine and its full-check command/result",
+    "Define an engine-independent set of structural checks",
+    "Let each implementation choose its engine and integrity test"
+   ],
+   "default_guess": "Use the selected release's fixed store engine and declare its documented full-integrity operation and sole successful result as part of that release."
+  },
+  {
+   "unit": "A18",
+   "subject": "backup encryption",
+   "kind": "missing security semantics",
+   "text": "“Each backup is encrypted with the backup key” and “A backup cannot be read without the key it was made with.”",
+   "question": "Which authenticated-encryption algorithm, nonce generation, key derivation or normalization, file framing and authenticated data are required?",
+   "options": [
+    "Declare a fixed authenticated-encryption format using the configured key directly",
+    "Declare a password-based KDF and authenticated-encryption format",
+    "Leave the cryptographic format release-specific"
+   ],
+   "default_guess": "Declare one versioned authenticated-encryption format with a random nonce, authenticated header metadata and a fixed derivation from the configured key."
+  },
+  {
+   "unit": "A18",
+   "subject": "unencrypted backup record and key digest",
+   "kind": "integrity ambiguity",
+   "text": "“It records, readable without its key, its instant, the release, the last audit sequence number it holds and a digest of the key”",
+   "question": "What digest algorithm and representation are used, and is this readable record authenticated so Registry can detect alteration before trusting it for scheduling, display and deletion?",
+   "options": [
+    "Use a declared cryptographic digest and authenticate the record as associated data",
+    "Leave the record unauthenticated and validate it only syntactically",
+    "Sign or MAC the record separately"
+   ],
+   "default_guess": "Use a declared cryptographic digest and include the entire readable record as authenticated associated data of the encrypted backup."
+  },
+  {
+   "unit": "A18",
+   "subject": "backup and temporary filenames",
+   "kind": "missing declaration",
+   "text": "“prefixes the release declares”, “A kept name is made from the backup's instant”, and A17's “suffix the release declares”",
+   "question": "What are the exact kept and temporary prefixes, the store temporary suffix, the instant serialization and the collision-free filename construction?",
+   "options": [
+    "Declare fixed literal prefixes/suffix and a UTC timestamp format in these texts",
+    "Make all names release metadata that every release must supply",
+    "Permit implementations to choose any names satisfying the stated relationships"
+   ],
+   "default_guess": "Make them fixed release metadata, using a filesystem-safe UTC instant plus a random unique suffix for temporary files."
+  },
+  {
+   "unit": "A18",
+   "subject": "backup schedule after a forward clock jump",
+   "kind": "rule conflict",
+   "text": "A run requires that “an earlier look of the same process saw that date before 03:00”, but “after a clock set forward it runs only for the date it then sees pass 03:00”.",
+   "question": "If the clock jumps from before 03:00 on one UTC date to after 03:00 on a later date, is a run made for the newly observed date despite there being no earlier observation of that same date?",
+   "options": [
+    "Run once for the newly observed date",
+    "Run only if that same date was previously observed before 03:00, so make no run",
+    "Run for the last skipped date rather than the newly observed date"
+   ],
+   "default_guess": "Run once for the newly observed date and make no runs for intervening dates."
+  },
+  {
+   "unit": "A18",
+   "subject": "backup audit sequence for an empty log",
+   "kind": "missing sentinel",
+   "text": "A backup records “the last audit sequence number it holds” and its check requires “that its audit log ends at the recorded sequence number”.",
+   "question": "What value is recorded and what check passes when a new store has never written an audit entry and its audit log is empty?",
+   "options": [
+    "Record 0 and require an empty log",
+    "Record an explicit absent/null value",
+    "Omit the field for an empty log"
+   ],
+   "default_guess": "Record 0 and treat an empty audit log as ending at sequence 0."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A13\",\"subject\":\"owner-session idle deadline\",\"kind\":\"concurrency gap\",\"text\":\"“An owner request … its arrival restarts the 30 minutes — of concurrent requests the latest arrival counts” but only selected session-changing requests take the session lock, while the expiry pass “decid[es] under” that lock.\",\"question\":\"How is every valid request's arrival atomically ordered against the expiry pass, especially when a request arrives before the idle deadline but its last-request update races with a pass after the deadline?\",\"options\":[\"Every session check atomically updates last_request under the session lock using the captured arrival instant\",\"Use an atomic maximum update outside the session lock and make the pass coordinate with it\",\"Let whichever update or expiry removal executes first win\"],\"default_guess\":\"Briefly take the session lock during every session check, validate and set last_request to max(current, captured arrival), then release it before doing the request.\"},{\"unit\":\"A13\",\"subject\":\"expiry-pass schedule\",\"kind\":\"timing ambiguity\",\"text\":\"“a pass over the sessions it makes every 60 seconds from the start”\",\"question\":\"Does the first pass run at process start or 60 seconds later, and after a delayed pass are missed passes skipped or run to restore the original cadence?\",\"options\":[\"First pass at start, then fixed-rate every 60 seconds\",\"First pass 60 seconds after start, then fixed-rate with missed passes skipped\",\"Wait 60 seconds after each completed pass\"],\"default_guess\":\"Run the first pass 60 seconds after process start on a fixed-rate schedule, skipping missed passes.\"},{\"unit\":\"A13\",\"subject\":\"expiry-pass locking\",\"kind\":\"lock-scope ambiguity\",\"text\":\"“taking the import lock and then each session's lock … and deciding under them”\",\"question\":\"Does one pass hold the import lock for the whole sweep, and does it hold all session locks together or acquire, decide and release them one at a time?\",\"options\":[\"Hold the import lock for the whole pass and process one session lock at a time\",\"Take and release the import lock separately for each session\",\"Hold the import lock and all session locks simultaneously\"],\"default_guess\":\"Hold the import lock for the whole pass and acquire, decide and release each session lock individually.\"},{\"unit\":\"A16\",\"subject\":\"accepted import clearing all uploads\",\"kind\":\"locking gap\",\"text\":\"“every request that reads or changes an uploaded file … take[s] the instance's one import lock first, then their session's lock” and “an accepted import, holding it, drops every session's upload”\",\"question\":\"When an accepted import changes uploads belonging to other sessions, must it also take each other session's lock, and in what acquisition and release pattern?\",\"options\":[\"With the import lock held, acquire and release each affected session lock in turn\",\"The import lock alone authorizes clearing other sessions' uploads\",\"Acquire every session lock before clearing any upload\"],\"default_guess\":\"Keep the import lock for the operation and acquire, clear and release each other session's lock one at a time.\"},{\"unit\":\"A16\",\"subject\":\"pending import confirmations after closure\",\"kind\":\"state-transition gap\",\"text\":\"“An accepted import drops the uploaded file of every owner session” while “a confirmation shown in another session is refused because the import is closed”\",\"question\":\"Does acceptance also clear pending import confirmations in other sessions, or do those values remain pending until submitted, replaced, expired or their sessions end?\",\"options\":[\"Clear every pending import confirmation when the import is accepted\",\"Keep pending confirmations; a later submission is consumed and refused by the closure\",\"Clear a pending confirmation only when its session's upload is cleared\"],\"default_guess\":\"Keep them, because the rule explicitly clears every upload but not confirmations; submission later consumes and refuses them.\"},{\"unit\":\"A17\",\"subject\":\"configuration variable names\",\"kind\":\"missing declaration\",\"text\":\"“The configuration is the set of environment variables whose names begin with REGISTRY_” and “It holds exactly these items and no other”\",\"question\":\"What is the exact environment-variable name for each required item and each of the four service tokens?\",\"options\":[\"Declare one fixed REGISTRY_ name per item\",\"Derive token names mechanically from service names\",\"Allow aliases for one or more items\"],\"default_guess\":\"Use one fixed uppercase REGISTRY_ name per listed item and reject every other REGISTRY_ name.\"},{\"unit\":\"A17\",\"subject\":\"configuration value validation\",\"kind\":\"undefined refusal condition\",\"text\":\"“each well formed; each secret's length” and “A secret … is at least 32 bytes long”\",\"question\":\"What makes each credential, token, backup key and path well formed, and in which encoding are environment-string secret lengths and equality measured as bytes?\",\"options\":[\"Require valid UTF-8 text and measure its UTF-8 bytes\",\"Decode secrets from a declared encoding such as base64 and measure decoded bytes\",\"Treat environment values as platform-native byte strings\"],\"default_guess\":\"Require valid UTF-8, measure and compare the UTF-8 bytes, and require nonblank path strings that satisfy the later path checks.\"},{\"unit\":\"A17\",\"subject\":\"unremovable temporary store\",\"kind\":\"contradictory startup behavior\",\"text\":\"“a stale temporary file a start cannot remove is reported and does not stop the start” but “When the store's configured file does not exist … Registry makes a new, empty store … under a temporary name” and “at every start it first removes a file of that temporary name”\",\"question\":\"If the final store is absent and the stale temporary store cannot be removed, does startup fail or try to create/overwrite/reuse that temporary file?\",\"options\":[\"Fail startup because a new store cannot be created safely\",\"Continue only if creation can atomically replace the stale temporary file\",\"Open and validate the stale temporary store for possible reuse\"],\"default_guess\":\"Fail startup without opening, overwriting or reusing the stale temporary store.\"},{\"unit\":\"A17\",\"subject\":\"store integrity check\",\"kind\":\"undefined check\",\"text\":\"“pass the store engine's full integrity check — the same as a backup's check”\",\"question\":\"Which store engine and exact integrity operation define this refusal condition, including what result is a pass?\",\"options\":[\"Name a specific engine and its full-check command/result\",\"Define an engine-independent set of structural checks\",\"Let each implementation choose its engine and integrity test\"],\"default_guess\":\"Use the selected release's fixed store engine and declare its documented full-integrity operation and sole successful result as part of that release.\"},{\"unit\":\"A18\",\"subject\":\"backup encryption\",\"kind\":\"missing security semantics\",\"text\":\"“Each backup is encrypted with the backup key” and “A backup cannot be read without the key it was made with.”\",\"question\":\"Which authenticated-encryption algorithm, nonce generation, key derivation or normalization, file framing and authenticated data are required?\",\"options\":[\"Declare a fixed authenticated-encryption format using the configured key directly\",\"Declare a password-based KDF and authenticated-encryption format\",\"Leave the cryptographic format release-specific\"],\"default_guess\":\"Declare one versioned authenticated-encryption format with a random nonce, authenticated header metadata and a fixed derivation from the configured key.\"},{\"unit\":\"A18\",\"subject\":\"unencrypted backup record and key digest\",\"kind\":\"integrity ambiguity\",\"text\":\"“It records, readable without its key, its instant, the release, the last audit sequence number it holds and a digest of the key”\",\"question\":\"What digest algorithm and representation are used, and is this readable record authenticated so Registry can detect alteration before trusting it for scheduling, display and deletion?\",\"options\":[\"Use a declared cryptographic digest and authenticate the record as associated data\",\"Leave the record unauthenticated and validate it only syntactically\",\"Sign or MAC the record separately\"],\"default_guess\":\"Use a declared cryptographic digest and include the entire readable record as authenticated associated data of the encrypted backup.\"},{\"unit\":\"A18\",\"subject\":\"backup and temporary filenames\",\"kind\":\"missing declaration\",\"text\":\"“prefixes the release declares”, “A kept name is made from the backup's instant”, and A17's “suffix the release declares”\",\"question\":\"What are the exact kept and temporary prefixes, the store temporary suffix, the instant serialization and the collision-free filename construction?\",\"options\":[\"Declare fixed literal prefixes/suffix and a UTC timestamp format in these texts\",\"Make all names release metadata that every release must supply\",\"Permit implementations to choose any names satisfying the stated relationships\"],\"default_guess\":\"Make them fixed release metadata, using a filesystem-safe UTC instant plus a random unique suffix for temporary files.\"},{\"unit\":\"A18\",\"subject\":\"backup schedule after a forward clock jump\",\"kind\":\"rule conflict\",\"text\":\"A run requires that “an earlier look of the same process saw that date before 03:00”, but “after a clock set forward it runs only for the date it then sees pass 03:00”.\",\"question\":\"If the clock jumps from before 03:00 on one UTC date to after 03:00 on a later date, is a run made for the newly observed date despite there being no earlier observation of that same date?\",\"options\":[\"Run once for the newly observed date\",\"Run only if that same date was previously observed before 03:00, so make no run\",\"Run for the last skipped date rather than the newly observed date\"],\"default_guess\":\"Run once for the newly observed date and make no runs for intervening dates.\"},{\"unit\":\"A18\",\"subject\":\"backup audit sequence for an empty log\",\"kind\":\"missing sentinel\",\"text\":\"A backup records “the last audit sequence number it holds” and its check requires “that its audit log ends at the recorded sequence number”.\",\"question\":\"What value is recorded and what check passes when a new store has never written an audit entry and its audit log is empty?\",\"options\":[\"Record 0 and require an empty log\",\"Record an explicit absent/null value\",\"Omit the field for an empty log\"],\"default_guess\":\"Record 0 and treat an empty audit log as ending at sequence 0.\"}]}",
+ "set_aside": []
+}
