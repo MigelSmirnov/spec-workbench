@@ -256,7 +256,8 @@ for action a on record r in {Project, Customer} that may move r.revision:
 ### Consequence
 
 One rule for every record change; the owner interface always shows and sends
-the revision of the card it rendered.
+the revision of the card it rendered, and none for a card that shows none
+(rule 3).
 
 ## Accepted decision A05 — a repeated transition returns the record unchanged
 
