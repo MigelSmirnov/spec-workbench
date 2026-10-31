@@ -44,8 +44,8 @@ security review of States 0–2.
    An uploaded file is changed only by a holder of the import lock: an
    accepted import, holding it, drops every session's upload; the upload of
    a session ended by its limits is dropped by a sweep that takes the import
-   lock at least once a minute, so it stays in memory at most a minute after
-   the session ends, reachable by no request. Other
+   lock once a minute, waiting for it like any request; from the session's
+   end until that sweep the upload is reachable by no request. Other
    session changes take their session's lock alone. So no upload lands after
    the import that closed it, and the two locks are always taken in that
    order. The mapping names
@@ -175,7 +175,10 @@ closure is the one proof of success.
    path comparison cannot see, such as bind mounts, are the owner's to avoid
    (Explicit exclusions). When the store's
    configured file does not exist and its directory does, Registry makes a new,
-   empty store of the running release's version there at the start; otherwise
+   empty store of the running release's version there at the start, under a
+   temporary name in that directory that it renames to the store's name only
+   once the store is complete; at every start it first removes such a
+   temporary file left by an interrupted start, and no other file there; otherwise
    the store must open for reading and writing and carry the store
    version of the running release, and a store of another version, or one
    that does not open, fails the start — bringing a store to a new version is
@@ -256,7 +259,10 @@ secret cannot be shared between holders.
    is the store version of its release, that the store's own integrity check
    passes and that its audit log ends at the recorded sequence number, and
    removes it; a backup that passes is renamed to its kept name, one that
-   fails is deleted. This is the tested restore: no other instance is made
+   fails is deleted. When the decrypted file cannot be removed, or a failed
+   backup cannot be deleted, the backup stays under its temporary name and
+   is not kept, the run fails, the third step still runs, and the next run
+   removes what is left. This is the tested restore: no other instance is made
    from a backup. Third, whatever the second step did, it deletes every kept
    backup made more than 30 × 24 hours before, and every file under the kept
    prefix whose unencrypted record (rule 1) cannot be read. It takes the
@@ -265,7 +271,9 @@ secret cannot be shared between holders.
    step did; one whose backup was kept but a deletion failed is failed, and
    its new backup stays kept.
 5. Kept and temporary names begin with two different prefixes the release
-   declares; Registry removes, renames and deletes in the backup location
+   declares, neither beginning with the other; a kept file's record is valid
+   when its instant, release, last sequence number and key digest can all be
+   read, and only a valid one counts as a kept backup; Registry removes, renames and deletes in the backup location
    only files under them, and the location is Registry's alone (A17): a file
    is under a prefix when it is a regular file directly in the location whose
    name begins with it; Registry follows no link and enters no directory
