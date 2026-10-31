@@ -204,8 +204,10 @@ sees every change as a new version.
    change it: one admitted before it completes its change to the store, and
    leaves nothing in the ended session.
    The requests of one owner session that change its state — showing a
-   confirmation step, uploading a file, a submission — are applied one at a
-   time: each sees the session as the one before left it, so a confirmation
+   confirmation step, uploading a file, a submission, a sign-out — are
+   applied one at a time, in the order they reach the session: each sees the
+   session as the one before left it, and other requests are not held by
+   them, so a confirmation
    bound to a file a later upload replaced is refused (A16 rule 2).
 3. Registry counts the sign-ins refused for a wrong or missing credential
    whose instant is less than 15 minutes before now, for the whole instance:

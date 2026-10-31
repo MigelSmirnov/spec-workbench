@@ -28,8 +28,8 @@ security review of States 0–2.
    owner gives its name and kind and says whether the v1 value is its tax id;
    confirmation is refused while any of these is missing (A02). Each new
    Customer's `customer_ref` is minted when the import is accepted.
-2. The uploaded file is kept in the owner session that uploaded it, never in
-   the store, until the import is accepted, another file is uploaded in that
+2. The uploaded file is kept in the owner session that uploaded it, in the
+   process's memory only — never in the store, never on a disk — until the import is accepted, another file is uploaded in that
    session, or the session ends (M11); then it is dropped. A refused
    confirmation keeps it, and the step may be shown again; a refused upload —
    too large or unreadable — replaces nothing. An accepted import drops the
@@ -80,14 +80,10 @@ security review of States 0–2.
 9. A refused import may be retried with a corrected file; nothing of a refused
    attempt remains.
 10. The import answers once its transaction commits, listing for each
-   Customer it made its v1 value and the `customer_ref` minted for it; right
-   after it — or, in
-   an owner-only start, at the next start with the tokens (A18 rule 10) —
-   Registry makes a backup run outside the daily schedule (A18), so the import
-   reaches a checked backup as soon as it can, and the owner interface shows
-   when it has (A18 rule 1); a failed run is retried at the next run, and the import stays
-   accepted. A store lost before a checked backup holds the import loses it,
-   and the import may then be made again (R0-89).
+   Customer it made its v1 value and the `customer_ref` minted for it. It
+   reaches the backups with the next daily run (A18). A store lost before a
+   kept backup holds the import loses it, and the import may then be made
+   again (R0-89).
 
 ### Formal invariants
 
@@ -111,8 +107,8 @@ conflict at confirmation => store unchanged
    closure.
 6. A conflicting id belonging only to a project the owner did not pick does
    not refuse the import.
-7. A picked project whose room names a project absent from the file refuses
-   the import as malformed.
+7. A room naming a project absent from the file belongs to no pick: it is
+   not imported and does not refuse the import.
 8. Confirming without a kind for a Customer the import makes is refused.
 9. A picked project holding a `withdrawn` pointer refuses the import as
    malformed.
@@ -133,13 +129,18 @@ closure is the one proof of success.
    credential; one service token for each service of A09 — PresuPro, Client
    Portal, Cabinet, Cabinet Kernel (R0-20, R0-23) — or, for an owner-only
    start, none of the four: Registry then serves the owner interface alone
-   and refuses every service call (A18 rule 10).
+   and refuses every service call (A18 rule 9).
 2. Registry checks the configuration when it starts and serves nothing until
    every check passes; a failed check stops the start with a diagnostic that
-   names the failed item and never its value (R0-37). The checks run in the
-   order of these rules and the first that fails stops the start; a new store
-   is made only after every other check has passed, and a failed start
-   leaves no file it made.
+   names the failed item and never its value (R0-37). The checks run in one
+   order and the first that fails stops the start: every item of rule 1
+   present and none unknown; each well formed; each secret's length (rule 3);
+   their distinctness (rule 4); the store and backup location apart (rule
+   5); the backup location writable, by a probe file under the temporary
+   prefix (A18 rule 5); the store opening, or made new (rule 5). Within one
+   check, items go in the order rule 1 lists them. A failed start leaves no
+   file it made but a probe it could not remove, which the next start or run
+   removes with the other temporary files.
 3. A secret — each token, the owner credential and the backup key — is at
    least 32 bytes long; a shorter one fails the start. Registry checks the
    length and, by rule 4, the distinctness, and nothing else of how the owner
@@ -194,29 +195,16 @@ secret cannot be shared between holders.
 
 ### Normative rules
 
-1. Registry backs up its store once a day at 03:00 UTC into the backup
-   location, as a consistent copy taken while it runs: a backup never holds
-   part of a transaction. A run that 03:00 found Registry stopped is made when
-   it next starts with its service tokens, if no backup was made that UTC
-   day; an owner-only start makes no run (rule 10). A failed run does not
-   count: a start with the service tokens on the same UTC day tries again
-   when no backup of that day is kept. The run after an accepted import (A16)
-   is made even when the day already has a backup, and keeps both; it is not
-   that day's ordinary backup, which is still made at 03:00 or at the next
-   start. Besides it, at most one backup is made per UTC day, the kept backups themselves
-   saying which days have one, and runs never overlap: a run that falls due
-   while another runs waits for it, and both are made. Each run writes its
-   outcome and instant to a status file in the backup location, which a
-   restart keeps; it is written after the backup is kept or the run fails,
-   and a status file missing, unreadable or older than the newest kept backup
-   is rewritten at start from the kept backups, which alone say whether a day
-   has one; the owner interface shows the newest kept backup's instant
-   and that last outcome, so the owner sees when a backup holds the import
-   (A16 rule 10). A backup records, readable without
-   its key, its instant, the release that made it, the last audit sequence
-   number it holds, whether it is the day's ordinary backup or the one after
-   an import, and a digest of the key it was made with (never the key);
-   its age is counted from that instant.
+1. Every day at 03:00 UTC, while Registry runs with its service tokens, it
+   makes one backup run; a 03:00 that finds Registry stopped, or in an
+   owner-only start (rule 9), makes no run, and none is made later in its
+   place. Runs never overlap. A backup is a consistent copy of the store
+   taken while Registry runs: it never holds part of a transaction. It
+   records, readable without its key, its instant, the release that made it,
+   the last audit sequence number it holds and a digest of the key it was
+   made with (never the key); its age is counted from that instant. The
+   owner interface shows the instant of the newest kept backup, read from the
+   kept backups.
 2. A backup holds every record but the agent sessions (M06): a store restored
    from it has no session, Kernel registers its sessions again and the owner
    grants them again, so a restore never brings back a grant revoked after
@@ -225,52 +213,39 @@ secret cannot be shared between holders.
    making (A17). When the owner changes the key, older backups stay encrypted
    with the key they were made with, which the digest each backup records
    names.
-4. Right after writing a backup Registry checks it: it decrypts it into a
-   temporary file in the backup location, opens it for reading only, checks
-   that it is the store version of its release, that the store's own
-   integrity check passes and that its audit log ends at the recorded
-   sequence number, and removes the temporary file. A backup that fails the
-   check is deleted and counts as failed. This is the tested restore: no
-   other instance is made from a backup. A backup and its check file are
-   written under temporary names in the backup location — every one beginning
-   with the prefix the release declares for them — and become a kept backup
-   only when complete; at every start and every run Registry first removes
-   every file left there under that prefix, and no other file. A removal that fails is reported;
-   the run then makes no backup and counts as failed, and the start goes on
-   serving.
-5. Every day at the same run — whether the new backup succeeded or not —
-   Registry deletes every backup made more than 30 × 24 hours before.
-6. A backup or a deletion that fails leaves no partial kept backup — at most a
-   file under the temporary prefix, which a later run removes — writes a
-   diagnostic that names the failure and no value (A17), and is tried again at
-   the next run; Registry keeps serving. Whether the runs succeed is the
-   owner's to watch on the host (Explicit exclusions: the host's
-   administration).
-7. While the daily runs succeed, an erasure reaches the backups at most 30
-   days after it, and a restore loses at most a day of changes; a failed run
-   lengthens both by the days until a run succeeds.
-8. The store, the backup location and the disks under them are encrypted and
+4. A run goes in three steps. First, it removes every file under the
+   temporary prefix; if a removal fails, the run stops there. Second, it
+   writes the backup under a temporary name and checks it: it decrypts it
+   into a second temporary file, opens that for reading only, checks that it
+   is the store version of its release, that the store's own integrity check
+   passes and that its audit log ends at the recorded sequence number, and
+   removes it; a backup that passes is renamed to its kept name, one that
+   fails is deleted. This is the tested restore: no other instance is made
+   from a backup. Third, whatever the second step did, it deletes every kept
+   backup made more than 30 × 24 hours before, and every file under the kept
+   prefix that cannot be read as a backup.
+5. Kept and temporary names begin with two different prefixes the release
+   declares; Registry removes, renames and deletes in the backup location
+   only files under them. A step that fails leaves no partial kept backup —
+   at most a file under the temporary prefix, which the next run removes —
+   and writes a diagnostic that names the failure and no value (A17);
+   Registry keeps serving, and the next 03:00 tries again. Whether runs
+   succeed is the owner's to watch on the host (Explicit exclusions: the
+   host's administration).
+6. While the daily runs succeed, an erasure reaches the backups at most 30
+   days after it, and a restore loses at most a day of changes; a failed or
+   missed run lengthens both by the days until a run succeeds.
+7. The store, the backup location and the disks under them are encrypted and
    kept out of VM Agent's reach by the owner's administration of VM Platform
    (R0-48; Explicit exclusions); Registry does not check the host.
-9. Registry has no restore operation (R0-89). A store the owner puts in
+8. Registry has no restore operation (R0-89). A store the owner puts in
    place of a lost one starts as any store (A17 rule 5) — by the release that
    made its backup, or by a later one after that release's own store
    migration — and begins its own history from the backup: numbering
    continues from its last number (A15), and a store without the migration
    closure accepts the import (A16).
-10. An owner-only start (A17 rule 1) serves the owner interface alone and
-   makes no backup run; a post-import run due then is made at the next start
-   with the service tokens (A16 rule 10).
-11. A run goes in this order: remove the temporary files; write the new
-   backup under a temporary name, check it and give it its kept name, which
-   begins with the kept prefix the release declares; delete backups older
-   than 30 days; write the status. Every phase runs even when an earlier one
-   failed, but a failed removal skips the new backup. A kept backup stays
-   kept whatever a later phase does. The run's outcome is `ok` when every
-   phase succeeded and otherwise names each failed phase. A status that
-   cannot be written is reported and written at the next run; until then,
-   and when it is rebuilt at start from the kept backups alone, it shows the
-   newest kept backup's instant with the outcome `unknown`.
+9. An owner-only start (A17 rule 1) serves the owner interface alone and
+   makes no backup run.
 
 ### Formal invariants
 
@@ -290,6 +265,8 @@ every kept backup is encrypted, consistent, checked, and records
 3. A backup cannot be read without the key it was made with.
 4. A backup whose integrity check fails is deleted and reported.
 5. A store restored from a backup holds no agent session.
+6. A 03:00 missed while Registry was stopped makes no backup at the next
+   start; the next one is made at the following 03:00.
 
 ### Consequence
 
