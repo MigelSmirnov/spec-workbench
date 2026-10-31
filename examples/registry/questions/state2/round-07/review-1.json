@@ -1,0 +1,254 @@
+{
+ "open_points": [
+  {
+   "unit": "A13",
+   "subject": "owner-session cookie",
+   "kind": "unenforceable scope",
+   "text": "“carried by a cookie that scripts cannot read, sent only over HTTPS when the interface is reached from another machine, and only to Registry's own origin”",
+   "question": "What exact cookie scope and attributes enforce this rule, given that cookies are scoped by host/domain and path rather than by origin and normally ignore the port?",
+   "options": [
+    "Host-only cookie with a fixed Registry path, Secure, HttpOnly and an explicit SameSite policy",
+    "A cookie shared across the host, relying on CSRF protection and network isolation",
+    "A different session transport that can actually be bound to an origin"
+   ],
+   "default_guess": "Use a host-only Secure HttpOnly cookie with Path=/ and SameSite=Strict."
+  },
+  {
+   "unit": "A13",
+   "subject": "sign-in request",
+   "kind": "contradictory CSRF rule",
+   "text": "A13 says “Every change in the owner interface carries the CSRF protection bound to its session”, while sign-in creates a session before any session-bound CSRF value exists; A04 also describes CSRF as part of every owner operation's first stage.",
+   "question": "Does signing in require CSRF protection, and if so, what pre-session state or value is it bound to?",
+   "options": [
+    "Sign-in is explicitly exempt from the session-bound CSRF rule",
+    "Sign-in uses a separate pre-authentication CSRF cookie and form value",
+    "Every sign-in requires an already existing owner session"
+   ],
+   "default_guess": "Exempt sign-in from session-bound CSRF and apply a separate login-CSRF mechanism only if one is specified."
+  },
+  {
+   "unit": "A13",
+   "subject": "confirmation consumption",
+   "kind": "ambiguous refusal effect",
+   "text": "“from there on, whatever the answer — a value bound to another action included — the value is used up”",
+   "question": "After session and CSRF checks pass, does any submitted confirmation value consume the session's pending confirmation, or only the correct pending one when its action, target and inputs fail a later binding check?",
+   "options": [
+    "Any confirmation submission consumes the pending confirmation, even with a random or obsolete value",
+    "Only the matching pending one is consumed; an unknown value leaves it pending",
+    "A matching value is consumed only after all binding checks pass"
+   ],
+   "default_guess": "Consume the pending confirmation only when the submitted one-time value matches it, then consume it regardless of later binding or action refusal."
+  },
+  {
+   "unit": "A13",
+   "subject": "confirmation input binding",
+   "kind": "undefined equality",
+   "text": "“bound to the action, its target, the revision or access version the step showed, and its inputs”",
+   "question": "By what equality rule are the submitted inputs compared with the inputs bound to the confirmation, including blank versus absent optional values, ordering, and equivalent serializations?",
+   "options": [
+    "Compare the raw submitted representation byte for byte",
+    "Compare values after A02 and schema normalization",
+    "Ignore resubmitted inputs and execute only the server-kept bound inputs"
+   ],
+   "default_guess": "Keep a canonical server-side representation and compare normalized domain values."
+  },
+  {
+   "unit": "A07",
+   "subject": "pointer changes versus project lifecycle",
+   "kind": "missing concurrency order",
+   "text": "“Every publish and every withdrawal on one project's pointers is serialised with the others” and “Publishing and withdrawing on an archived project are refused”",
+   "question": "How are a publish or withdrawal, especially one by the owner, ordered against concurrent archiving, anonymising or deleting of the project so that a lifecycle check cannot pass before the lifecycle change and commit afterward?",
+   "options": [
+    "Serialize pointer writes with every lifecycle change of their project",
+    "Let whichever transaction commits first win and require the loser to recheck",
+    "Permit an already-started pointer write to commit after the lifecycle change"
+   ],
+   "default_guess": "Serialize each pointer write with project lifecycle changes and recheck the project state in the committing transaction."
+  },
+  {
+   "unit": "A15",
+   "subject": "audit sequence high-water mark",
+   "kind": "contradictory crash semantics",
+   "text": "A15 says Registry records a number in the instance marks “before the entry commits” and that a lost number is never issued again, while M09 says each number is “one more than the last ever written”.",
+   "question": "If the marks advance but the audit-entry transaction fails or the process crashes before commit, must the next entry skip the reserved number or reuse it?",
+   "options": [
+    "Skip it, allowing permanent gaps in audit sequence numbers",
+    "Reuse it because no entry was ever written",
+    "Atomically commit the mark and audit entry so this state cannot occur"
+   ],
+   "default_guess": "Allow gaps and define the mark as a durable high-water mark, because the two locations cannot otherwise satisfy the stated recovery rule."
+  },
+  {
+   "unit": "A16",
+   "subject": "migration closure in instance marks",
+   "kind": "false-success race",
+   "text": "“after recording the closure in the instance marks” occurs before the import transaction commits, while A18 says that at start Registry recreates a store closure whenever the marks hold it and the store does not.",
+   "question": "What happens if the closure mark is written but the import transaction then fails or the process crashes before it commits?",
+   "options": [
+    "The mark is provisional and is removed or ignored unless the transaction committed",
+    "The mark alone closes the import and startup recreates the closure, even though no records were imported",
+    "The mark and store transaction use a recoverable commit protocol that distinguishes prepared from committed"
+   ],
+   "default_guess": "Use a prepared/committed mark protocol and recreate a closure only from a committed mark."
+  },
+  {
+   "unit": "A16",
+   "subject": "migration closure mark contents",
+   "kind": "underspecified durable record",
+   "text": "A18 says “the marks hold” the migration closure, but M10 requires its instant, acting principal, confirmation id and file digest.",
+   "question": "Which MigrationClosure facts are stored in the instance marks so that a missing store closure can be reconstructed without inventing values?",
+   "options": [
+    "Store the complete M10 closure in the marks",
+    "Store only a closed flag and reconstruct missing facts somehow",
+    "Store only the file digest and treat the restored store closure as a different reduced record"
+   ],
+   "default_guess": "Store the complete M10 closure, versioned and integrity-checked."
+  },
+  {
+   "unit": "A16",
+   "subject": "post-import backup",
+   "kind": "contradictory failure outcome",
+   "text": "A16 says Registry runs a backup after import “so a backup holding the import exists”, while A18 says a backup may fail, be deleted, and Registry keeps serving.",
+   "question": "Does an import remain accepted when its immediate backup fails, and if so, is the claim that a backup holding it exists withdrawn?",
+   "options": [
+    "The import remains accepted and the backup guarantee is only best effort until a later successful run",
+    "Import acceptance is not complete until the backup succeeds",
+    "A backup failure stops Registry from serving until a backup succeeds"
+   ],
+   "default_guess": "Keep the committed import accepted, report the backup failure, and state that no backup guarantee exists until a later run succeeds."
+  },
+  {
+   "unit": "A16",
+   "subject": "import file digest",
+   "kind": "undefined identity algorithm",
+   "text": "“The mapping names the file by its digest” and “the confirmation applies the file of that digest”",
+   "question": "What digest algorithm and byte representation identify the uploaded file and bind the confirmation and migration closure to it?",
+   "options": [
+    "A specified cryptographic digest of the exact uploaded bytes",
+    "A digest of a canonical parsed representation",
+    "A backend-selected digest algorithm"
+   ],
+   "default_guess": "Use a release-fixed cryptographic digest of the exact uploaded bytes."
+  },
+  {
+   "unit": "A17",
+   "subject": "missing instance marks",
+   "kind": "ambiguous first start",
+   "text": "“The instance marks there are made at the first start; marks that cannot be read fail the start.”",
+   "question": "How does Registry distinguish a genuine first start, where absent marks may be created, from loss of the marks beside an existing or restored store, where recreating them could lower the audit high-water mark or lose the migration closure?",
+   "options": [
+    "Create marks only when both the store and backup location are demonstrably new",
+    "Create missing marks from the current store even if history may have been lost",
+    "Treat absent marks as fatal whenever a store already exists"
+   ],
+   "default_guess": "Treat missing marks as fatal if any existing store or backup indicates the instance has run before."
+  },
+  {
+   "unit": "A18",
+   "subject": "30-day backup retention",
+   "kind": "boundary contradiction",
+   "text": "Backups are deleted when “made more than 30 × 24 hours before”, but rule 7 says an erasure reaches backups “at most 30 days after it”.",
+   "question": "At exactly 30 days of age is a backup retained or deleted, and how can the stated at-most-30-day erasure bound hold with only one daily deletion run?",
+   "options": [
+    "Delete backups whose age is at least 30 days",
+    "Keep them until age is greater than 30 days, accepting a retention period approaching 31 days",
+    "Run deletion often enough to enforce the exact 30-day boundary"
+   ],
+   "default_guess": "Delete at age greater than or equal to 30 days and describe the remaining scheduling boundary explicitly."
+  },
+  {
+   "unit": "A18",
+   "subject": "backup encryption format",
+   "kind": "unspecified cryptography",
+   "text": "“Each backup is encrypted with the backup key” and records “a digest of the key”",
+   "question": "Which authenticated-encryption scheme, nonce generation and storage rules, key-digest algorithm, file format and tamper-detection behavior must every release use?",
+   "options": [
+    "The specification fixes an authenticated-encryption format and algorithms",
+    "Each release chooses and versions its own format",
+    "Encryption without authenticated integrity is sufficient because the restored store is checked afterward"
+   ],
+   "default_guess": "Fix and version an authenticated-encryption format with a unique random nonce and a cryptographic key identifier."
+  },
+  {
+   "unit": "A19",
+   "subject": "backend lowering of caller values",
+   "kind": "unverifiable invariant",
+   "text": "“A value a caller gives only ever fills a value place of a query or command whose structure the release fixes” followed by “How the store's backend lowers this is the backend's.”",
+   "question": "What backend contract or verification demonstrates that lowering never turns a caller value into syntax, especially if a backend uses interpolation, escaping or generated command text instead of bound parameters?",
+   "options": [
+    "Require a backend API that structurally separates values from syntax",
+    "Permit backend escaping but specify and test every interpreter and context",
+    "Treat the semantic claim as sufficient without an enforceable backend rule"
+   ],
+   "default_guess": "Require a typed or parameterized backend interface that keeps values structurally separate and test structural-selector rejection."
+  },
+  {
+   "unit": "A19",
+   "subject": "fixed structural alternatives",
+   "kind": "undefined closed lists",
+   "text": "“A value that selects among fixed alternatives — a list order, a type — is checked against its closed list first.”",
+   "question": "Which caller-controlled values are structural selectors, what is each selector's closed list, and must an unrecognized selector be refused before any query or command is built?",
+   "options": [
+    "Enumerate every structural selector and its release-fixed alternatives",
+    "Treat the examples as exhaustive: only list order and artifact type",
+    "Let each backend identify additional selectors during implementation"
+   ],
+   "default_guess": "Enumerate all structural selectors in the release contract and refuse any value outside the corresponding closed list before lowering."
+  },
+  {
+   "unit": "A21",
+   "subject": "security-review status after A19 change",
+   "kind": "reopened review contradiction",
+   "text": "A21 says “A change to a decision a category names reopens this review”; the changed A19 is named by `injection_interpreted_input` and `browser_boundary`, while the same text still says “Security review: PERFORMED” and that the review is complete.",
+   "question": "Has the changed A19 been re-reviewed for both affected categories, and what are their current evidence and outcome?",
+   "options": [
+    "Re-perform and record both affected category reviews before A21 is closed",
+    "Keep the old review outcome because the change is considered equivalent",
+    "Mark A21 open until the backend-lowering and browser implications are settled"
+   ],
+   "default_guess": "Mark A21 reopened and re-perform the two categories against the new A19 wording."
+  },
+  {
+   "unit": "A01",
+   "subject": "create replay check order",
+   "kind": "direct rule contradiction",
+   "text": "A01 says a repeat makes “No other check of stage (6)” and explicitly allows a project-create repeat after its customer became restricted, while A04 says “Only an action that passes all six may be a repeat that changes nothing.”",
+   "question": "Does a recognized create replay bypass lifecycle and customer-eligibility checks after stages 1–4, or must it pass every stage including stage 6?",
+   "options": [
+    "A01 is the exception: recognized repeats bypass the remaining stage-6 checks",
+    "A04 governs: every repeat must pass all six stages",
+    "Only the specifically named changed conditions are bypassed, with all other stage-6 checks repeated"
+   ],
+   "default_guess": "Treat A01 as an explicit exception and enumerate exactly which stage-6 checks are not repeated."
+  },
+  {
+   "unit": "A04",
+   "subject": "CSRF on owner reads",
+   "kind": "scope contradiction",
+   "text": "A04 applies its ordered checks to “Every operation — read or change” and says that for the owner stage 1 includes the CSRF value, while A13 and R0-29 require CSRF for every change.",
+   "question": "Must owner-interface read requests also carry and validate the session's CSRF value, or is CSRF checked only for state-changing requests?",
+   "options": [
+    "Only state-changing owner requests require CSRF",
+    "Every owner request, reads included, requires CSRF",
+    "Reads require CSRF only when they expose personal data"
+   ],
+   "default_guess": "Require CSRF only for state-changing requests and confirmation submissions."
+  },
+  {
+   "unit": "context",
+   "subject": "OwnerSession expiry fact",
+   "kind": "ambiguous model fact",
+   "text": "M11 says the session carries, written once, “its expiry at the latest”, while A13 defines expiry as the first of an absolute eight-hour limit and a moving thirty-minute idle limit based on `last_request`.",
+   "question": "What exactly is the written-once expiry fact: the absolute eight-hour deadline, the current effective expiry, or another value, and is any expiry value updated after requests?",
+   "options": [
+    "Store only the fixed eight-hour deadline and compute idle expiry from `last_request`",
+    "Store and update the effective expiry after every valid request",
+    "Store no expiry fact and compute both deadlines from `began` and `last_request`"
+   ],
+   "default_guess": "Store the fixed absolute deadline and `last_request`, and compute the effective expiry as their minimum."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A13\",\"subject\":\"owner-session cookie\",\"kind\":\"unenforceable scope\",\"text\":\"“carried by a cookie that scripts cannot read, sent only over HTTPS when the interface is reached from another machine, and only to Registry's own origin”\",\"question\":\"What exact cookie scope and attributes enforce this rule, given that cookies are scoped by host/domain and path rather than by origin and normally ignore the port?\",\"options\":[\"Host-only cookie with a fixed Registry path, Secure, HttpOnly and an explicit SameSite policy\",\"A cookie shared across the host, relying on CSRF protection and network isolation\",\"A different session transport that can actually be bound to an origin\"],\"default_guess\":\"Use a host-only Secure HttpOnly cookie with Path=/ and SameSite=Strict.\"},{\"unit\":\"A13\",\"subject\":\"sign-in request\",\"kind\":\"contradictory CSRF rule\",\"text\":\"A13 says “Every change in the owner interface carries the CSRF protection bound to its session”, while sign-in creates a session before any session-bound CSRF value exists; A04 also describes CSRF as part of every owner operation's first stage.\",\"question\":\"Does signing in require CSRF protection, and if so, what pre-session state or value is it bound to?\",\"options\":[\"Sign-in is explicitly exempt from the session-bound CSRF rule\",\"Sign-in uses a separate pre-authentication CSRF cookie and form value\",\"Every sign-in requires an already existing owner session\"],\"default_guess\":\"Exempt sign-in from session-bound CSRF and apply a separate login-CSRF mechanism only if one is specified.\"},{\"unit\":\"A13\",\"subject\":\"confirmation consumption\",\"kind\":\"ambiguous refusal effect\",\"text\":\"“from there on, whatever the answer — a value bound to another action included — the value is used up”\",\"question\":\"After session and CSRF checks pass, does any submitted confirmation value consume the session's pending confirmation, or only the correct pending one when its action, target and inputs fail a later binding check?\",\"options\":[\"Any confirmation submission consumes the pending confirmation, even with a random or obsolete value\",\"Only the matching pending one is consumed; an unknown value leaves it pending\",\"A matching value is consumed only after all binding checks pass\"],\"default_guess\":\"Consume the pending confirmation only when the submitted one-time value matches it, then consume it regardless of later binding or action refusal.\"},{\"unit\":\"A13\",\"subject\":\"confirmation input binding\",\"kind\":\"undefined equality\",\"text\":\"“bound to the action, its target, the revision or access version the step showed, and its inputs”\",\"question\":\"By what equality rule are the submitted inputs compared with the inputs bound to the confirmation, including blank versus absent optional values, ordering, and equivalent serializations?\",\"options\":[\"Compare the raw submitted representation byte for byte\",\"Compare values after A02 and schema normalization\",\"Ignore resubmitted inputs and execute only the server-kept bound inputs\"],\"default_guess\":\"Keep a canonical server-side representation and compare normalized domain values.\"},{\"unit\":\"A07\",\"subject\":\"pointer changes versus project lifecycle\",\"kind\":\"missing concurrency order\",\"text\":\"“Every publish and every withdrawal on one project's pointers is serialised with the others” and “Publishing and withdrawing on an archived project are refused”\",\"question\":\"How are a publish or withdrawal, especially one by the owner, ordered against concurrent archiving, anonymising or deleting of the project so that a lifecycle check cannot pass before the lifecycle change and commit afterward?\",\"options\":[\"Serialize pointer writes with every lifecycle change of their project\",\"Let whichever transaction commits first win and require the loser to recheck\",\"Permit an already-started pointer write to commit after the lifecycle change\"],\"default_guess\":\"Serialize each pointer write with project lifecycle changes and recheck the project state in the committing transaction.\"},{\"unit\":\"A15\",\"subject\":\"audit sequence high-water mark\",\"kind\":\"contradictory crash semantics\",\"text\":\"A15 says Registry records a number in the instance marks “before the entry commits” and that a lost number is never issued again, while M09 says each number is “one more than the last ever written”.\",\"question\":\"If the marks advance but the audit-entry transaction fails or the process crashes before commit, must the next entry skip the reserved number or reuse it?\",\"options\":[\"Skip it, allowing permanent gaps in audit sequence numbers\",\"Reuse it because no entry was ever written\",\"Atomically commit the mark and audit entry so this state cannot occur\"],\"default_guess\":\"Allow gaps and define the mark as a durable high-water mark, because the two locations cannot otherwise satisfy the stated recovery rule.\"},{\"unit\":\"A16\",\"subject\":\"migration closure in instance marks\",\"kind\":\"false-success race\",\"text\":\"“after recording the closure in the instance marks” occurs before the import transaction commits, while A18 says that at start Registry recreates a store closure whenever the marks hold it and the store does not.\",\"question\":\"What happens if the closure mark is written but the import transaction then fails or the process crashes before it commits?\",\"options\":[\"The mark is provisional and is removed or ignored unless the transaction committed\",\"The mark alone closes the import and startup recreates the closure, even though no records were imported\",\"The mark and store transaction use a recoverable commit protocol that distinguishes prepared from committed\"],\"default_guess\":\"Use a prepared/committed mark protocol and recreate a closure only from a committed mark.\"},{\"unit\":\"A16\",\"subject\":\"migration closure mark contents\",\"kind\":\"underspecified durable record\",\"text\":\"A18 says “the marks hold” the migration closure, but M10 requires its instant, acting principal, confirmation id and file digest.\",\"question\":\"Which MigrationClosure facts are stored in the instance marks so that a missing store closure can be reconstructed without inventing values?\",\"options\":[\"Store the complete M10 closure in the marks\",\"Store only a closed flag and reconstruct missing facts somehow\",\"Store only the file digest and treat the restored store closure as a different reduced record\"],\"default_guess\":\"Store the complete M10 closure, versioned and integrity-checked.\"},{\"unit\":\"A16\",\"subject\":\"post-import backup\",\"kind\":\"contradictory failure outcome\",\"text\":\"A16 says Registry runs a backup after import “so a backup holding the import exists”, while A18 says a backup may fail, be deleted, and Registry keeps serving.\",\"question\":\"Does an import remain accepted when its immediate backup fails, and if so, is the claim that a backup holding it exists withdrawn?\",\"options\":[\"The import remains accepted and the backup guarantee is only best effort until a later successful run\",\"Import acceptance is not complete until the backup succeeds\",\"A backup failure stops Registry from serving until a backup succeeds\"],\"default_guess\":\"Keep the committed import accepted, report the backup failure, and state that no backup guarantee exists until a later run succeeds.\"},{\"unit\":\"A16\",\"subject\":\"import file digest\",\"kind\":\"undefined identity algorithm\",\"text\":\"“The mapping names the file by its digest” and “the confirmation applies the file of that digest”\",\"question\":\"What digest algorithm and byte representation identify the uploaded file and bind the confirmation and migration closure to it?\",\"options\":[\"A specified cryptographic digest of the exact uploaded bytes\",\"A digest of a canonical parsed representation\",\"A backend-selected digest algorithm\"],\"default_guess\":\"Use a release-fixed cryptographic digest of the exact uploaded bytes.\"},{\"unit\":\"A17\",\"subject\":\"missing instance marks\",\"kind\":\"ambiguous first start\",\"text\":\"“The instance marks there are made at the first start; marks that cannot be read fail the start.”\",\"question\":\"How does Registry distinguish a genuine first start, where absent marks may be created, from loss of the marks beside an existing or restored store, where recreating them could lower the audit high-water mark or lose the migration closure?\",\"options\":[\"Create marks only when both the store and backup location are demonstrably new\",\"Create missing marks from the current store even if history may have been lost\",\"Treat absent marks as fatal whenever a store already exists\"],\"default_guess\":\"Treat missing marks as fatal if any existing store or backup indicates the instance has run before.\"},{\"unit\":\"A18\",\"subject\":\"30-day backup retention\",\"kind\":\"boundary contradiction\",\"text\":\"Backups are deleted when “made more than 30 × 24 hours before”, but rule 7 says an erasure reaches backups “at most 30 days after it”.\",\"question\":\"At exactly 30 days of age is a backup retained or deleted, and how can the stated at-most-30-day erasure bound hold with only one daily deletion run?\",\"options\":[\"Delete backups whose age is at least 30 days\",\"Keep them until age is greater than 30 days, accepting a retention period approaching 31 days\",\"Run deletion often enough to enforce the exact 30-day boundary\"],\"default_guess\":\"Delete at age greater than or equal to 30 days and describe the remaining scheduling boundary explicitly.\"},{\"unit\":\"A18\",\"subject\":\"backup encryption format\",\"kind\":\"unspecified cryptography\",\"text\":\"“Each backup is encrypted with the backup key” and records “a digest of the key”\",\"question\":\"Which authenticated-encryption scheme, nonce generation and storage rules, key-digest algorithm, file format and tamper-detection behavior must every release use?\",\"options\":[\"The specification fixes an authenticated-encryption format and algorithms\",\"Each release chooses and versions its own format\",\"Encryption without authenticated integrity is sufficient because the restored store is checked afterward\"],\"default_guess\":\"Fix and version an authenticated-encryption format with a unique random nonce and a cryptographic key identifier.\"},{\"unit\":\"A19\",\"subject\":\"backend lowering of caller values\",\"kind\":\"unverifiable invariant\",\"text\":\"“A value a caller gives only ever fills a value place of a query or command whose structure the release fixes” followed by “How the store's backend lowers this is the backend's.”\",\"question\":\"What backend contract or verification demonstrates that lowering never turns a caller value into syntax, especially if a backend uses interpolation, escaping or generated command text instead of bound parameters?\",\"options\":[\"Require a backend API that structurally separates values from syntax\",\"Permit backend escaping but specify and test every interpreter and context\",\"Treat the semantic claim as sufficient without an enforceable backend rule\"],\"default_guess\":\"Require a typed or parameterized backend interface that keeps values structurally separate and test structural-selector rejection.\"},{\"unit\":\"A19\",\"subject\":\"fixed structural alternatives\",\"kind\":\"undefined closed lists\",\"text\":\"“A value that selects among fixed alternatives — a list order, a type — is checked against its closed list first.”\",\"question\":\"Which caller-controlled values are structural selectors, what is each selector's closed list, and must an unrecognized selector be refused before any query or command is built?\",\"options\":[\"Enumerate every structural selector and its release-fixed alternatives\",\"Treat the examples as exhaustive: only list order and artifact type\",\"Let each backend identify additional selectors during implementation\"],\"default_guess\":\"Enumerate all structural selectors in the release contract and refuse any value outside the corresponding closed list before lowering.\"},{\"unit\":\"A21\",\"subject\":\"security-review status after A19 change\",\"kind\":\"reopened review contradiction\",\"text\":\"A21 says “A change to a decision a category names reopens this review”; the changed A19 is named by `injection_interpreted_input` and `browser_boundary`, while the same text still says “Security review: PERFORMED” and that the review is complete.\",\"question\":\"Has the changed A19 been re-reviewed for both affected categories, and what are their current evidence and outcome?\",\"options\":[\"Re-perform and record both affected category reviews before A21 is closed\",\"Keep the old review outcome because the change is considered equivalent\",\"Mark A21 open until the backend-lowering and browser implications are settled\"],\"default_guess\":\"Mark A21 reopened and re-perform the two categories against the new A19 wording.\"},{\"unit\":\"A01\",\"subject\":\"create replay check order\",\"kind\":\"direct rule contradiction\",\"text\":\"A01 says a repeat makes “No other check of stage (6)” and explicitly allows a project-create repeat after its customer became restricted, while A04 says “Only an action that passes all six may be a repeat that changes nothing.”\",\"question\":\"Does a recognized create replay bypass lifecycle and customer-eligibility checks after stages 1–4, or must it pass every stage including stage 6?\",\"options\":[\"A01 is the exception: recognized repeats bypass the remaining stage-6 checks\",\"A04 governs: every repeat must pass all six stages\",\"Only the specifically named changed conditions are bypassed, with all other stage-6 checks repeated\"],\"default_guess\":\"Treat A01 as an explicit exception and enumerate exactly which stage-6 checks are not repeated.\"},{\"unit\":\"A04\",\"subject\":\"CSRF on owner reads\",\"kind\":\"scope contradiction\",\"text\":\"A04 applies its ordered checks to “Every operation — read or change” and says that for the owner stage 1 includes the CSRF value, while A13 and R0-29 require CSRF for every change.\",\"question\":\"Must owner-interface read requests also carry and validate the session's CSRF value, or is CSRF checked only for state-changing requests?\",\"options\":[\"Only state-changing owner requests require CSRF\",\"Every owner request, reads included, requires CSRF\",\"Reads require CSRF only when they expose personal data\"],\"default_guess\":\"Require CSRF only for state-changing requests and confirmation submissions.\"},{\"unit\":\"context\",\"subject\":\"OwnerSession expiry fact\",\"kind\":\"ambiguous model fact\",\"text\":\"M11 says the session carries, written once, “its expiry at the latest”, while A13 defines expiry as the first of an absolute eight-hour limit and a moving thirty-minute idle limit based on `last_request`.\",\"question\":\"What exactly is the written-once expiry fact: the absolute eight-hour deadline, the current effective expiry, or another value, and is any expiry value updated after requests?\",\"options\":[\"Store only the fixed eight-hour deadline and compute idle expiry from `last_request`\",\"Store and update the effective expiry after every valid request\",\"Store no expiry fact and compute both deadlines from `began` and `last_request`\"],\"default_guess\":\"Store the fixed absolute deadline and `last_request`, and compute the effective expiry as their minimum.\"}]}",
+ "set_aside": []
+}

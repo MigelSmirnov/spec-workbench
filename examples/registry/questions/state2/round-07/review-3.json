@@ -1,0 +1,227 @@
+{
+ "open_points": [
+  {
+   "subject": "Create replay isolation",
+   "kind": "authorization contradiction",
+   "text": "A01 says request ids are unique only per model, and on differing facts “the caller reads the record”; A10 requires a project outside an agent session’s set to be indistinguishable from a nonexistent project.",
+   "question": "When Kernel reuses a request id carried by a Room or ArtifactPointer belonging to another project or session, may the existing record be returned, or must the collision be hidden?",
+   "options": [
+    "Scope request-id matching to the authorized project/session",
+    "Refuse the collision as not found without returning the record",
+    "Return the existing record despite its project being outside the set"
+   ],
+   "default_guess": "Check the existing record’s project against the session and answer not found unless it is granted.",
+   "unit": "A01"
+  },
+  {
+   "subject": "Owner CSRF checks",
+   "kind": "contradictory check scope",
+   "text": "A13 says “Every change in the owner interface carries the CSRF protection”, while A04 rule 6 applies “a valid owner session, then its CSRF value” to “Every operation — read or change”.",
+   "question": "Do owner-interface reads require the session’s CSRF value, or only state-changing requests?",
+   "options": [
+    "Only state-changing requests require CSRF",
+    "Every owner-interface request requires CSRF"
+   ],
+   "default_guess": "Require CSRF only for state-changing requests.",
+   "unit": "A04"
+  },
+  {
+   "subject": "Invalid confirmation submission",
+   "kind": "unclear consumption",
+   "text": "A13 says a confirmation is “used up by the first submission” and that after session and CSRF checks “whatever the answer — a value bound to another action included — the value is used up”, but does not say what happens when the presented value is random or does not equal the pending value.",
+   "question": "Does any confirmation submission that passes session and CSRF checks consume the session’s pending confirmation, or only a submission presenting that pending one-time value?",
+   "options": [
+    "Consume the pending confirmation on every such submission",
+    "Consume it only when the presented value matches the pending value",
+    "Consume it when it matches, even if its action or bound inputs do not"
+   ],
+   "default_guess": "Consume it only after the one-time value matches; then consume it regardless of later binding or action failures.",
+   "unit": "A13"
+  },
+  {
+   "subject": "Owner session multiplicity",
+   "kind": "missing lifecycle rule",
+   "text": "A13 says the owner “receives an owner session” at sign-in but never states whether another successful sign-in may coexist with it or invalidates existing sessions.",
+   "question": "How do existing owner sessions change when the owner signs in successfully again?",
+   "options": [
+    "All valid owner sessions coexist until their own end",
+    "A new sign-in invalidates every earlier owner session",
+    "Only one session per browser is replaced"
+   ],
+   "default_guess": "Allow independent concurrent owner sessions, each with its own expiry, CSRF value and confirmation.",
+   "unit": "A13"
+  },
+  {
+   "subject": "Owner session cookie",
+   "kind": "incomplete browser boundary",
+   "text": "A13 requires a cookie “that scripts cannot read, sent only over HTTPS when the interface is reached from another machine, and only to Registry’s own origin”, but does not define SameSite, Domain, Path, or how “own origin” is implemented although cookies are host/path scoped rather than origin scoped.",
+   "question": "What exact cookie scope and attributes enforce the stated browser boundary, including local access that may use HTTP?",
+   "options": [
+    "Host-only, HttpOnly, SameSite=Strict, Path=/, Secure whenever HTTPS is used",
+    "Host-only, HttpOnly, SameSite=Lax, Path=/, Secure always",
+    "Use separate cookie policies for local HTTP and remote HTTPS"
+   ],
+   "default_guess": "Use a host-only HttpOnly SameSite=Strict cookie with Path=/ and Secure in the production HTTPS deployment.",
+   "unit": "A13"
+  },
+  {
+   "subject": "Audit sequence reservation",
+   "kind": "crash contradiction",
+   "text": "M09 says each sequence is “one more than the last ever written”, while A15 records a number in external marks “before the entry commits”; a crash or failed transaction between those steps records a number that was never written as an entry.",
+   "question": "After a number is placed in the marks but its audit transaction never commits, is the next entry allowed to skip that number or must the reservation be rolled back or completed?",
+   "options": [
+    "Permit permanent gaps and continue above the marked number",
+    "Roll back the mark when the transaction fails",
+    "Recover by completing a corresponding audit entry"
+   ],
+   "default_guess": "Permit permanent gaps and state explicitly that sequence numbers are strictly increasing, not contiguous.",
+   "unit": "A15"
+  },
+  {
+   "subject": "Audit instance marks concurrency",
+   "kind": "atomicity gap",
+   "text": "A15 requires every writer to record its number in the instance marks before commit, but does not say how concurrent state changes atomically reserve distinct numbers or how a partially written marks file is recovered.",
+   "question": "What serialization and crash-safe update rule governs allocation of audit sequence numbers in the external marks?",
+   "options": [
+    "Serialize all audit-number allocation and atomically replace and sync the marks file",
+    "Use an operating-system file lock and append journal",
+    "Let the store allocate numbers and update the marks afterward"
+   ],
+   "default_guess": "Serialize allocation and use an atomic, durably synced replacement of the marks file before committing the store transaction.",
+   "unit": "A15"
+  },
+  {
+   "subject": "Migration closure commit",
+   "kind": "cross-store atomicity contradiction",
+   "text": "A16 says the closure is recorded in instance marks before the import transaction, that a failed transaction leaves “no closure”, and that startup recreates a store closure from the marks. A crash after writing the marks but before committing the transaction can therefore close an import that never succeeded.",
+   "question": "How is a marked migration distinguished as committed so that a failed or interrupted import cannot permanently close migration?",
+   "options": [
+    "Use pending and committed states in the marks and promote only after store commit",
+    "Write the marks only after the store transaction commits",
+    "Treat a marked but uncommitted import as successful and recover all imported records"
+   ],
+   "default_guess": "Use a pending mark before the transaction and a committed mark afterward; startup must not create a closure from a pending mark.",
+   "unit": "A16"
+  },
+  {
+   "subject": "Post-import backup",
+   "kind": "contradictory guarantee",
+   "text": "A16 says the immediate run means “a backup holding the import exists”, while A18 says a backup can fail, be deleted, and Registry keeps serving.",
+   "question": "What is the result of a successful import whose immediate backup run fails?",
+   "options": [
+    "The import remains successful but no backup is guaranteed until a later run",
+    "The import is reported incomplete and Registry retries the backup while keeping the committed data",
+    "Import acceptance waits for a verified backup and rolls back if it fails"
+   ],
+   "default_guess": "Keep the committed import, report the backup failure, and state that existence of a post-import backup is not guaranteed until a run succeeds.",
+   "unit": "A16"
+  },
+  {
+   "subject": "Concurrent import confirmations",
+   "kind": "missing serialization",
+   "text": "A16 rechecks that no closure exists and then writes the imported records and closure in one transaction, but it does not state how two owner sessions confirming different mappings concurrently are ordered.",
+   "question": "Can exactly one concurrent confirmation commit, and what does the losing confirmation observe?",
+   "options": [
+    "Serialize confirmations; the first commits and the second is refused because import is closed",
+    "Use a unique closure constraint; one commits and the other is refused after its transaction conflicts",
+    "Allow both if both passed the pre-transaction closure check"
+   ],
+   "default_guess": "Serialize import confirmation so one commits and every later confirmation is refused as closed without importing anything.",
+   "unit": "A16"
+  },
+  {
+   "subject": "Initial store startup",
+   "kind": "missing initialization rule",
+   "text": "A17 says the store “must open for reading and writing and carry the store version of the running release” but does not say whether a new installation may create and initialize an absent or empty store.",
+   "question": "What must startup do when the configured store location contains no initialized Registry store?",
+   "options": [
+    "Initialize a new store at the running release’s version",
+    "Fail startup and require the release installation step to initialize it",
+    "Initialize only when an explicit first-start configuration flag is present"
+   ],
+   "default_guess": "Require an explicit installation step to create the versioned store; ordinary startup should fail on an absent or empty store.",
+   "unit": "A17"
+  },
+  {
+   "subject": "Secret length representation",
+   "kind": "ambiguous validation",
+   "text": "A17 requires each configured secret to be “at least 32 bytes long” without defining whether configured text is measured as encoded text, decoded binary material, or Unicode bytes in a particular encoding.",
+   "question": "What representation is validated for the 32-byte minimum, and which textual encodings are accepted in configuration?",
+   "options": [
+    "Require a fixed encoding such as base64 and measure decoded bytes",
+    "Measure UTF-8 bytes of the configured value",
+    "Require exactly 64 hexadecimal characters representing 32 bytes"
+   ],
+   "default_guess": "Require base64-encoded secret material and enforce at least 32 decoded bytes.",
+   "unit": "A17"
+  },
+  {
+   "subject": "Daily versus import backup",
+   "kind": "schedule ambiguity",
+   "text": "A18 says “besides the run after an accepted import, there is at most one run per UTC day” but also makes a missed scheduled run on startup only “if no backup was made that UTC day”.",
+   "question": "Does the post-import backup count as that day’s backup and suppress the scheduled or catch-up daily run?",
+   "options": [
+    "It is additional and never suppresses the daily run",
+    "It counts as the day’s backup and suppresses the daily run",
+    "It suppresses only a catch-up run, not the 03:00 run"
+   ],
+   "default_guess": "Treat the verified post-import backup as additional and still perform the ordinary daily run.",
+   "unit": "A18"
+  },
+  {
+   "subject": "Backup encryption format",
+   "kind": "unspecified security mechanism",
+   "text": "A18 requires backups to be encrypted and records a digest of their key, but names no authenticated-encryption algorithm, nonce rule, key format, metadata authentication, or key-digest algorithm.",
+   "question": "What cryptographic format must every release use so implementations do not silently choose incompatible or unauthenticated encryption?",
+   "options": [
+    "Specify a versioned authenticated-encryption format with random nonces and a fixed key identifier hash",
+    "Permit each backend to choose any encryption scheme",
+    "Delegate the complete backup format to a later explicitly named decision"
+   ],
+   "default_guess": "Specify a versioned AEAD format with a fresh random nonce, authenticated metadata, 256-bit keys and a fixed SHA-256 key identifier.",
+   "unit": "A18"
+  },
+  {
+   "subject": "Missing instance marks on restore",
+   "kind": "uncovered recovery case",
+   "text": "A18 guarantees that marks are not replaced and preserve the audit high-water mark and migration closure, while A17 says marks are made at first start; neither says how startup distinguishes a genuine first start from a restore whose marks were lost.",
+   "question": "May a restored nonempty store start when its external instance marks are absent, and if so how are lost sequence and migration-closure facts recovered?",
+   "options": [
+    "Refuse startup of a nonempty store without existing valid marks",
+    "Reconstruct marks from the restored store",
+    "Create new marks and accept that facts newer than the backup are lost"
+   ],
+   "default_guess": "Refuse startup of a restored or nonempty production store when its valid pre-existing marks are unavailable.",
+   "unit": "A18"
+  },
+  {
+   "subject": "Post-restore reconciliation",
+   "kind": "unenforceable invariant",
+   "text": "A18 requires the owner to restore erased, restricted and ended states and audit-erasure dates “before configuring the tokens”, then says Registry “cannot list them, enforce them or tell when this is done”.",
+   "question": "What verifiable condition prevents service tokens from being enabled before the required post-restore reconciliation is complete?",
+   "options": [
+    "Add a durable restore-pending mark cleared by an explicit owner completion action",
+    "Accept this solely as an unenforceable administrative procedure",
+    "Never permit service tokens after a restore; deploy a new instance instead"
+   ],
+   "default_guess": "Use a durable restore-pending mark that blocks service-token startup until the owner explicitly completes reconciliation.",
+   "unit": "A18"
+  },
+  {
+   "subject": "Security review concurrency coverage",
+   "kind": "incomplete review claim",
+   "text": "A21 declares the concurrency category complete and lists M09, M10 and concurrent import confirmations as affected, but its references omit A15 and A18, and A16 does not settle concurrent confirmations or atomic coordination with external marks.",
+   "question": "Can the concurrency review remain PERFORMED before audit-number allocation, migration-mark commit, and concurrent import confirmation behavior are closed?",
+   "options": [
+    "Reopen the concurrency category until those rules are settled",
+    "Add the missing decisions and tests to A21 now",
+    "Treat external marks and concurrent import confirmation as backend details outside the review"
+   ],
+   "default_guess": "Reopen the concurrency category and close it only after the external-mark and concurrent-import rules are explicit and tested.",
+   "unit": "A21"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"Create replay isolation\",\"kind\":\"authorization contradiction\",\"text\":\"A01 says request ids are unique only per model, and on differing facts “the caller reads the record”; A10 requires a project outside an agent session’s set to be indistinguishable from a nonexistent project.\",\"question\":\"When Kernel reuses a request id carried by a Room or ArtifactPointer belonging to another project or session, may the existing record be returned, or must the collision be hidden?\",\"options\":[\"Scope request-id matching to the authorized project/session\",\"Refuse the collision as not found without returning the record\",\"Return the existing record despite its project being outside the set\"],\"default_guess\":\"Check the existing record’s project against the session and answer not found unless it is granted.\",\"unit\":\"A01\"},{\"subject\":\"Owner CSRF checks\",\"kind\":\"contradictory check scope\",\"text\":\"A13 says “Every change in the owner interface carries the CSRF protection”, while A04 rule 6 applies “a valid owner session, then its CSRF value” to “Every operation — read or change”.\",\"question\":\"Do owner-interface reads require the session’s CSRF value, or only state-changing requests?\",\"options\":[\"Only state-changing requests require CSRF\",\"Every owner-interface request requires CSRF\"],\"default_guess\":\"Require CSRF only for state-changing requests.\",\"unit\":\"A04\"},{\"subject\":\"Invalid confirmation submission\",\"kind\":\"unclear consumption\",\"text\":\"A13 says a confirmation is “used up by the first submission” and that after session and CSRF checks “whatever the answer — a value bound to another action included — the value is used up”, but does not say what happens when the presented value is random or does not equal the pending value.\",\"question\":\"Does any confirmation submission that passes session and CSRF checks consume the session’s pending confirmation, or only a submission presenting that pending one-time value?\",\"options\":[\"Consume the pending confirmation on every such submission\",\"Consume it only when the presented value matches the pending value\",\"Consume it when it matches, even if its action or bound inputs do not\"],\"default_guess\":\"Consume it only after the one-time value matches; then consume it regardless of later binding or action failures.\",\"unit\":\"A13\"},{\"subject\":\"Owner session multiplicity\",\"kind\":\"missing lifecycle rule\",\"text\":\"A13 says the owner “receives an owner session” at sign-in but never states whether another successful sign-in may coexist with it or invalidates existing sessions.\",\"question\":\"How do existing owner sessions change when the owner signs in successfully again?\",\"options\":[\"All valid owner sessions coexist until their own end\",\"A new sign-in invalidates every earlier owner session\",\"Only one session per browser is replaced\"],\"default_guess\":\"Allow independent concurrent owner sessions, each with its own expiry, CSRF value and confirmation.\",\"unit\":\"A13\"},{\"subject\":\"Owner session cookie\",\"kind\":\"incomplete browser boundary\",\"text\":\"A13 requires a cookie “that scripts cannot read, sent only over HTTPS when the interface is reached from another machine, and only to Registry’s own origin”, but does not define SameSite, Domain, Path, or how “own origin” is implemented although cookies are host/path scoped rather than origin scoped.\",\"question\":\"What exact cookie scope and attributes enforce the stated browser boundary, including local access that may use HTTP?\",\"options\":[\"Host-only, HttpOnly, SameSite=Strict, Path=/, Secure whenever HTTPS is used\",\"Host-only, HttpOnly, SameSite=Lax, Path=/, Secure always\",\"Use separate cookie policies for local HTTP and remote HTTPS\"],\"default_guess\":\"Use a host-only HttpOnly SameSite=Strict cookie with Path=/ and Secure in the production HTTPS deployment.\",\"unit\":\"A13\"},{\"subject\":\"Audit sequence reservation\",\"kind\":\"crash contradiction\",\"text\":\"M09 says each sequence is “one more than the last ever written”, while A15 records a number in external marks “before the entry commits”; a crash or failed transaction between those steps records a number that was never written as an entry.\",\"question\":\"After a number is placed in the marks but its audit transaction never commits, is the next entry allowed to skip that number or must the reservation be rolled back or completed?\",\"options\":[\"Permit permanent gaps and continue above the marked number\",\"Roll back the mark when the transaction fails\",\"Recover by completing a corresponding audit entry\"],\"default_guess\":\"Permit permanent gaps and state explicitly that sequence numbers are strictly increasing, not contiguous.\",\"unit\":\"A15\"},{\"subject\":\"Audit instance marks concurrency\",\"kind\":\"atomicity gap\",\"text\":\"A15 requires every writer to record its number in the instance marks before commit, but does not say how concurrent state changes atomically reserve distinct numbers or how a partially written marks file is recovered.\",\"question\":\"What serialization and crash-safe update rule governs allocation of audit sequence numbers in the external marks?\",\"options\":[\"Serialize all audit-number allocation and atomically replace and sync the marks file\",\"Use an operating-system file lock and append journal\",\"Let the store allocate numbers and update the marks afterward\"],\"default_guess\":\"Serialize allocation and use an atomic, durably synced replacement of the marks file before committing the store transaction.\",\"unit\":\"A15\"},{\"subject\":\"Migration closure commit\",\"kind\":\"cross-store atomicity contradiction\",\"text\":\"A16 says the closure is recorded in instance marks before the import transaction, that a failed transaction leaves “no closure”, and that startup recreates a store closure from the marks. A crash after writing the marks but before committing the transaction can therefore close an import that never succeeded.\",\"question\":\"How is a marked migration distinguished as committed so that a failed or interrupted import cannot permanently close migration?\",\"options\":[\"Use pending and committed states in the marks and promote only after store commit\",\"Write the marks only after the store transaction commits\",\"Treat a marked but uncommitted import as successful and recover all imported records\"],\"default_guess\":\"Use a pending mark before the transaction and a committed mark afterward; startup must not create a closure from a pending mark.\",\"unit\":\"A16\"},{\"subject\":\"Post-import backup\",\"kind\":\"contradictory guarantee\",\"text\":\"A16 says the immediate run means “a backup holding the import exists”, while A18 says a backup can fail, be deleted, and Registry keeps serving.\",\"question\":\"What is the result of a successful import whose immediate backup run fails?\",\"options\":[\"The import remains successful but no backup is guaranteed until a later run\",\"The import is reported incomplete and Registry retries the backup while keeping the committed data\",\"Import acceptance waits for a verified backup and rolls back if it fails\"],\"default_guess\":\"Keep the committed import, report the backup failure, and state that existence of a post-import backup is not guaranteed until a run succeeds.\",\"unit\":\"A16\"},{\"subject\":\"Concurrent import confirmations\",\"kind\":\"missing serialization\",\"text\":\"A16 rechecks that no closure exists and then writes the imported records and closure in one transaction, but it does not state how two owner sessions confirming different mappings concurrently are ordered.\",\"question\":\"Can exactly one concurrent confirmation commit, and what does the losing confirmation observe?\",\"options\":[\"Serialize confirmations; the first commits and the second is refused because import is closed\",\"Use a unique closure constraint; one commits and the other is refused after its transaction conflicts\",\"Allow both if both passed the pre-transaction closure check\"],\"default_guess\":\"Serialize import confirmation so one commits and every later confirmation is refused as closed without importing anything.\",\"unit\":\"A16\"},{\"subject\":\"Initial store startup\",\"kind\":\"missing initialization rule\",\"text\":\"A17 says the store “must open for reading and writing and carry the store version of the running release” but does not say whether a new installation may create and initialize an absent or empty store.\",\"question\":\"What must startup do when the configured store location contains no initialized Registry store?\",\"options\":[\"Initialize a new store at the running release’s version\",\"Fail startup and require the release installation step to initialize it\",\"Initialize only when an explicit first-start configuration flag is present\"],\"default_guess\":\"Require an explicit installation step to create the versioned store; ordinary startup should fail on an absent or empty store.\",\"unit\":\"A17\"},{\"subject\":\"Secret length representation\",\"kind\":\"ambiguous validation\",\"text\":\"A17 requires each configured secret to be “at least 32 bytes long” without defining whether configured text is measured as encoded text, decoded binary material, or Unicode bytes in a particular encoding.\",\"question\":\"What representation is validated for the 32-byte minimum, and which textual encodings are accepted in configuration?\",\"options\":[\"Require a fixed encoding such as base64 and measure decoded bytes\",\"Measure UTF-8 bytes of the configured value\",\"Require exactly 64 hexadecimal characters representing 32 bytes\"],\"default_guess\":\"Require base64-encoded secret material and enforce at least 32 decoded bytes.\",\"unit\":\"A17\"},{\"subject\":\"Daily versus import backup\",\"kind\":\"schedule ambiguity\",\"text\":\"A18 says “besides the run after an accepted import, there is at most one run per UTC day” but also makes a missed scheduled run on startup only “if no backup was made that UTC day”.\",\"question\":\"Does the post-import backup count as that day’s backup and suppress the scheduled or catch-up daily run?\",\"options\":[\"It is additional and never suppresses the daily run\",\"It counts as the day’s backup and suppresses the daily run\",\"It suppresses only a catch-up run, not the 03:00 run\"],\"default_guess\":\"Treat the verified post-import backup as additional and still perform the ordinary daily run.\",\"unit\":\"A18\"},{\"subject\":\"Backup encryption format\",\"kind\":\"unspecified security mechanism\",\"text\":\"A18 requires backups to be encrypted and records a digest of their key, but names no authenticated-encryption algorithm, nonce rule, key format, metadata authentication, or key-digest algorithm.\",\"question\":\"What cryptographic format must every release use so implementations do not silently choose incompatible or unauthenticated encryption?\",\"options\":[\"Specify a versioned authenticated-encryption format with random nonces and a fixed key identifier hash\",\"Permit each backend to choose any encryption scheme\",\"Delegate the complete backup format to a later explicitly named decision\"],\"default_guess\":\"Specify a versioned AEAD format with a fresh random nonce, authenticated metadata, 256-bit keys and a fixed SHA-256 key identifier.\",\"unit\":\"A18\"},{\"subject\":\"Missing instance marks on restore\",\"kind\":\"uncovered recovery case\",\"text\":\"A18 guarantees that marks are not replaced and preserve the audit high-water mark and migration closure, while A17 says marks are made at first start; neither says how startup distinguishes a genuine first start from a restore whose marks were lost.\",\"question\":\"May a restored nonempty store start when its external instance marks are absent, and if so how are lost sequence and migration-closure facts recovered?\",\"options\":[\"Refuse startup of a nonempty store without existing valid marks\",\"Reconstruct marks from the restored store\",\"Create new marks and accept that facts newer than the backup are lost\"],\"default_guess\":\"Refuse startup of a restored or nonempty production store when its valid pre-existing marks are unavailable.\",\"unit\":\"A18\"},{\"subject\":\"Post-restore reconciliation\",\"kind\":\"unenforceable invariant\",\"text\":\"A18 requires the owner to restore erased, restricted and ended states and audit-erasure dates “before configuring the tokens”, then says Registry “cannot list them, enforce them or tell when this is done”.\",\"question\":\"What verifiable condition prevents service tokens from being enabled before the required post-restore reconciliation is complete?\",\"options\":[\"Add a durable restore-pending mark cleared by an explicit owner completion action\",\"Accept this solely as an unenforceable administrative procedure\",\"Never permit service tokens after a restore; deploy a new instance instead\"],\"default_guess\":\"Use a durable restore-pending mark that blocks service-token startup until the owner explicitly completes reconciliation.\",\"unit\":\"A18\"},{\"subject\":\"Security review concurrency coverage\",\"kind\":\"incomplete review claim\",\"text\":\"A21 declares the concurrency category complete and lists M09, M10 and concurrent import confirmations as affected, but its references omit A15 and A18, and A16 does not settle concurrent confirmations or atomic coordination with external marks.\",\"question\":\"Can the concurrency review remain PERFORMED before audit-number allocation, migration-mark commit, and concurrent import confirmation behavior are closed?\",\"options\":[\"Reopen the concurrency category until those rules are settled\",\"Add the missing decisions and tests to A21 now\",\"Treat external marks and concurrent import confirmation as backend details outside the review\"],\"default_guess\":\"Reopen the concurrency category and close it only after the external-mark and concurrent-import rules are explicit and tested.\",\"unit\":\"A21\"}]}",
+ "set_aside": []
+}
