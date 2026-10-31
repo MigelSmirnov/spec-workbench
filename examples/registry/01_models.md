@@ -665,8 +665,9 @@ Facts, all written once:
   then one more than the last ever written; never reused, also after old
   entries are erased (R0-66), so the log's order is the order of the numbers
   even where two entries share an instant (owner, 2026-10-31; codex round-02
-  T2). A store restored from a backup continues the backup's history, whose
-  last number it continues from (State 2 A18);
+  T2); the last number written is held in the instance marks outside the
+  store, so a restore from an older backup does not lower it (State 2 A15,
+  A18);
 - the instant of the change;
 - the acting principal (M07);
 - the change: which action, in a closed vocabulary State 6 declares. The
@@ -763,13 +764,13 @@ Registry's own record of the accepted import (R0-79).
 
 ### Lifecycle candidate
 
-None; absent, then present for the rest of the store's history. A store
-restored from a backup made before the import continues that backup's
-history, in which it is absent (State 2 A18).
+None; absent, then present forever: a restore from an older backup does not
+lose it (State 2 A18).
 
 ### Persistence candidate
 
-Durable, at most one per instance.
+Durable, at most one per instance; also held in the instance marks outside
+the store, which a restore does not replace (State 2 A15, A18).
 
 ### Open questions
 
