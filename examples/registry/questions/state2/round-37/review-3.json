@@ -1,0 +1,127 @@
+{
+ "open_points": [
+  {
+   "unit": "A04",
+   "subject": "revision check when a revision-bearing record receives no revision",
+   "kind": "missing refusal semantics",
+   "text": "“Every action that moves a Project's or a Customer's revision ... states the revision” and “A stated revision that is not the record's current one is refused as stale” do not say whether an omitted revision is a missing value or a stated value of none.",
+   "question": "When the target currently has a revision but the action supplies none, is it refused as a missing required input at stage (4), or as stale at stage (5)?",
+   "options": [
+    "Refuse at stage (4) because the required revision is missing.",
+    "Treat none as unequal to the current revision and refuse as stale at stage (5)."
+   ],
+   "default_guess": "Treat none as unequal to the current revision and refuse as stale at stage (5).",
+   "witness": {
+    "initial": "A non-erased Customer is at revision 4.",
+    "events": [
+     "The owner submits ‘restrict customer’ with a valid session and CSRF value but no revision."
+    ],
+    "outcomes": [
+     "The action is refused for a missing required revision at stage (4).",
+     "The action reaches stage (5) and is refused as stale because none is not revision 4."
+    ],
+    "observer": "The owner sees a different refusal and later API/error-contract authors encode a different precedence."
+   }
+  },
+  {
+   "unit": "A05",
+   "subject": "repeated transition on a record whose revision has been removed",
+   "kind": "formal contradiction",
+   "text": "A04 says “a resubmitted erasure that states the revision the record was erased from” is refused as stale, while A05's formal invariant says without qualification: “transition t to state s on record r with state(r) = s: accepted, r unchanged”.",
+   "question": "Does the stale-revision rule override A05's formal invariant for a repeated transition, or must every transition to the already-held state be accepted?",
+   "options": [
+    "Refuse as stale when the erased or anonymised record is submitted with its former revision.",
+    "Accept every repeated transition unchanged, including one carrying the former revision."
+   ],
+   "default_guess": "Refuse as stale, following A04's new normative rule and required test.",
+   "witness": {
+    "initial": "A Customer was erased from revision 7 and now has no revision.",
+    "events": [
+     "The owner resubmits ‘erase contact data’ with stated revision 7."
+    ],
+    "outcomes": [
+     "A04 refuses the action as stale and changes nothing.",
+     "A05's formal invariant accepts the repeated transition and returns the erased Customer unchanged."
+    ],
+    "observer": "The owner sees acceptance versus a stale refusal."
+   }
+  },
+  {
+   "unit": "A16",
+   "subject": "upload, project selection and mapping workflow",
+   "kind": "undefined action sequence",
+   "text": "Rule 1 says “The owner uploads the export file ... and answers ... each project” and then “As the owner picks projects, the mapping shows for the picks only”, while rule 2 separately names “uploading” and “showing the mapping”; required test 1 says “Uploading answers the mapping”.",
+   "question": "Which request supplies the picks and proposed names, aliases and Customer values, and what exactly does the upload response contain before those choices exist?",
+   "options": [
+    "Upload returns only the project inventory; a later mapping request supplies all picks and proposed values and returns the mapping.",
+    "The upload request also supplies the picks and proposed values and directly returns the mapping.",
+    "Upload implicitly selects projects, such as all projects, and returns their mapping."
+   ],
+   "default_guess": "Use a two-step flow: upload returns the inventory, then a stateless mapping request supplies the picks and proposed values.",
+   "witness": {
+    "initial": "The migration is open and a valid file contains projects P and Q.",
+    "events": [
+     "The owner uploads the file without any previously stored picks or proposed replacement values."
+    ],
+    "outcomes": [
+     "Registry returns an inventory from which the owner chooses, and only a later request produces the mapping.",
+     "Registry cannot complete the upload response until the upload request also contains picks and replacement values, so it exposes a different form and request sequence."
+    ],
+    "observer": "The owner and the later owner-interface/API implementers see different workflows."
+   }
+  },
+  {
+   "unit": "A16",
+   "subject": "whether an invalid mapping may reach the confirmation step",
+   "kind": "confirmation gate unspecified",
+   "text": "Rule 1 says the mapping shows “every malformed record of the picks and every id that conflicts”, says “confirmation is refused while” Customer values are missing, and rule 6 says “At confirmation Registry checks again. Any conflict ... or any malformed record ... refuses the whole import.”",
+   "question": "May Registry show and mint a confirmation value for a mapping already known to contain missing Customer values, malformed picked records or production conflicts, or must showing the confirmation step itself be refused until the mapping is valid?",
+   "options": [
+    "Do not show a confirmation step or mint a value while any known defect remains.",
+    "Show the confirmation step despite the defects, then consume its value and refuse the submitted import.",
+    "Apply different gates to missing Customer values, malformed records and conflicts."
+   ],
+   "default_guess": "Refuse to show the confirmation step until every known defect is resolved.",
+   "witness": {
+    "initial": "The migration is open; the owner picks project P, whose pointer id conflicts with a production pointer.",
+    "events": [
+     "Registry displays the mapping and the conflict.",
+     "The owner asks to proceed to confirmation."
+    ],
+    "outcomes": [
+     "Registry refuses to show confirmation and creates no pending confirmation value.",
+     "Registry shows a confirmation value; submission consumes it and is then refused when rule 6 rechecks the conflict."
+    ],
+    "observer": "The owner sees either an immediate blocked mapping or a usable-looking confirmation followed by refusal."
+   }
+  },
+  {
+   "unit": "A16",
+   "subject": "replacement of an uploaded file after confirmation was shown",
+   "kind": "digest identity conflict",
+   "text": "Rule 2 says “confirming a mapping after another file was uploaded in the session is refused: the file it named is no longer kept”, but the confirmation names the file only “by its digest” and “applies the file of that digest”. M11 also says the next upload replaces the uploaded file without saying it clears the pending confirmation.",
+   "question": "If the next upload has the same digest as the file for which confirmation was shown—most simply, the owner uploads identical bytes again—does it invalidate the pending confirmation? What digest algorithm and file-identity rule make this decision?",
+   "options": [
+    "Every successful upload invalidates any earlier import confirmation, even when the new file has identical bytes and digest.",
+    "A confirmation remains valid whenever the currently kept file has the bound digest.",
+    "Use both a digest and a per-upload generation identity, and bind confirmation to both."
+   ],
+   "default_guess": "Bind confirmation to a per-upload generation as well as a collision-resistant file digest, so every replacement invalidates it.",
+   "witness": {
+    "initial": "The owner uploaded file F and Registry showed an import confirmation bound to F's digest.",
+    "events": [
+     "In the same session, the owner uploads the identical bytes F again.",
+     "The owner submits the previously shown confirmation value."
+    ],
+    "outcomes": [
+     "The submission is refused because the next upload replaced the file instance named by the confirmation.",
+     "The submission is accepted because the currently kept file has exactly the digest bound into the confirmation."
+    ],
+    "observer": "The owner sees either a refused confirmation or a committed import."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A04\",\"subject\":\"revision check when a revision-bearing record receives no revision\",\"kind\":\"missing refusal semantics\",\"text\":\"“Every action that moves a Project's or a Customer's revision ... states the revision” and “A stated revision that is not the record's current one is refused as stale” do not say whether an omitted revision is a missing value or a stated value of none.\",\"question\":\"When the target currently has a revision but the action supplies none, is it refused as a missing required input at stage (4), or as stale at stage (5)?\",\"options\":[\"Refuse at stage (4) because the required revision is missing.\",\"Treat none as unequal to the current revision and refuse as stale at stage (5).\"],\"default_guess\":\"Treat none as unequal to the current revision and refuse as stale at stage (5).\",\"witness\":{\"initial\":\"A non-erased Customer is at revision 4.\",\"events\":[\"The owner submits ‘restrict customer’ with a valid session and CSRF value but no revision.\"],\"outcomes\":[\"The action is refused for a missing required revision at stage (4).\",\"The action reaches stage (5) and is refused as stale because none is not revision 4.\"],\"observer\":\"The owner sees a different refusal and later API/error-contract authors encode a different precedence.\"}},{\"unit\":\"A05\",\"subject\":\"repeated transition on a record whose revision has been removed\",\"kind\":\"formal contradiction\",\"text\":\"A04 says “a resubmitted erasure that states the revision the record was erased from” is refused as stale, while A05's formal invariant says without qualification: “transition t to state s on record r with state(r) = s: accepted, r unchanged”.\",\"question\":\"Does the stale-revision rule override A05's formal invariant for a repeated transition, or must every transition to the already-held state be accepted?\",\"options\":[\"Refuse as stale when the erased or anonymised record is submitted with its former revision.\",\"Accept every repeated transition unchanged, including one carrying the former revision.\"],\"default_guess\":\"Refuse as stale, following A04's new normative rule and required test.\",\"witness\":{\"initial\":\"A Customer was erased from revision 7 and now has no revision.\",\"events\":[\"The owner resubmits ‘erase contact data’ with stated revision 7.\"],\"outcomes\":[\"A04 refuses the action as stale and changes nothing.\",\"A05's formal invariant accepts the repeated transition and returns the erased Customer unchanged.\"],\"observer\":\"The owner sees acceptance versus a stale refusal.\"}},{\"unit\":\"A16\",\"subject\":\"upload, project selection and mapping workflow\",\"kind\":\"undefined action sequence\",\"text\":\"Rule 1 says “The owner uploads the export file ... and answers ... each project” and then “As the owner picks projects, the mapping shows for the picks only”, while rule 2 separately names “uploading” and “showing the mapping”; required test 1 says “Uploading answers the mapping”.\",\"question\":\"Which request supplies the picks and proposed names, aliases and Customer values, and what exactly does the upload response contain before those choices exist?\",\"options\":[\"Upload returns only the project inventory; a later mapping request supplies all picks and proposed values and returns the mapping.\",\"The upload request also supplies the picks and proposed values and directly returns the mapping.\",\"Upload implicitly selects projects, such as all projects, and returns their mapping.\"],\"default_guess\":\"Use a two-step flow: upload returns the inventory, then a stateless mapping request supplies the picks and proposed values.\",\"witness\":{\"initial\":\"The migration is open and a valid file contains projects P and Q.\",\"events\":[\"The owner uploads the file without any previously stored picks or proposed replacement values.\"],\"outcomes\":[\"Registry returns an inventory from which the owner chooses, and only a later request produces the mapping.\",\"Registry cannot complete the upload response until the upload request also contains picks and replacement values, so it exposes a different form and request sequence.\"],\"observer\":\"The owner and the later owner-interface/API implementers see different workflows.\"}},{\"unit\":\"A16\",\"subject\":\"whether an invalid mapping may reach the confirmation step\",\"kind\":\"confirmation gate unspecified\",\"text\":\"Rule 1 says the mapping shows “every malformed record of the picks and every id that conflicts”, says “confirmation is refused while” Customer values are missing, and rule 6 says “At confirmation Registry checks again. Any conflict ... or any malformed record ... refuses the whole import.”\",\"question\":\"May Registry show and mint a confirmation value for a mapping already known to contain missing Customer values, malformed picked records or production conflicts, or must showing the confirmation step itself be refused until the mapping is valid?\",\"options\":[\"Do not show a confirmation step or mint a value while any known defect remains.\",\"Show the confirmation step despite the defects, then consume its value and refuse the submitted import.\",\"Apply different gates to missing Customer values, malformed records and conflicts.\"],\"default_guess\":\"Refuse to show the confirmation step until every known defect is resolved.\",\"witness\":{\"initial\":\"The migration is open; the owner picks project P, whose pointer id conflicts with a production pointer.\",\"events\":[\"Registry displays the mapping and the conflict.\",\"The owner asks to proceed to confirmation.\"],\"outcomes\":[\"Registry refuses to show confirmation and creates no pending confirmation value.\",\"Registry shows a confirmation value; submission consumes it and is then refused when rule 6 rechecks the conflict.\"],\"observer\":\"The owner sees either an immediate blocked mapping or a usable-looking confirmation followed by refusal.\"}},{\"unit\":\"A16\",\"subject\":\"replacement of an uploaded file after confirmation was shown\",\"kind\":\"digest identity conflict\",\"text\":\"Rule 2 says “confirming a mapping after another file was uploaded in the session is refused: the file it named is no longer kept”, but the confirmation names the file only “by its digest” and “applies the file of that digest”. M11 also says the next upload replaces the uploaded file without saying it clears the pending confirmation.\",\"question\":\"If the next upload has the same digest as the file for which confirmation was shown—most simply, the owner uploads identical bytes again—does it invalidate the pending confirmation? What digest algorithm and file-identity rule make this decision?\",\"options\":[\"Every successful upload invalidates any earlier import confirmation, even when the new file has identical bytes and digest.\",\"A confirmation remains valid whenever the currently kept file has the bound digest.\",\"Use both a digest and a per-upload generation identity, and bind confirmation to both.\"],\"default_guess\":\"Bind confirmation to a per-upload generation as well as a collision-resistant file digest, so every replacement invalidates it.\",\"witness\":{\"initial\":\"The owner uploaded file F and Registry showed an import confirmation bound to F's digest.\",\"events\":[\"In the same session, the owner uploads the identical bytes F again.\",\"The owner submits the previously shown confirmation value.\"],\"outcomes\":[\"The submission is refused because the next upload replaced the file instance named by the confirmation.\",\"The submission is accepted because the currently kept file has exactly the digest bound into the confirmation.\"],\"observer\":\"The owner sees either a refused confirmation or a committed import.\"}}]}",
+ "set_aside": []
+}
