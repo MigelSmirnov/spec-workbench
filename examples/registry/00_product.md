@@ -1172,48 +1172,15 @@ action on one checked path, which the GDPR review of the platform relies on
 
 ### R0-89 — Restoring a lost store is disaster recovery, outside Registry's guarantees (owner, 2026-10-31, after State 2 rounds 5–9; narrows R0-58, R0-79)
 
-Registry makes daily encrypted backups and checks each one (State 2). When the
-store is lost, the owner restores the newest kept backup on the host: that is
-disaster recovery, the owner's administration (Explicit exclusions), not an
-action of Registry. The restored store begins its own history from the
+Registry makes daily encrypted backups and checks each one (State 2). It has
+no restore operation: when the store is lost, the owner puts a backup in its
+place on the host, outside Registry (Explicit exclusions), and Registry
+starts on it as on any store. That store begins its own history from the
 backup: every change after it is lost, the audit entries with it, and
 Registry's guarantees — the log's numbering, the closed import — hold within
-each store's history. A store lost before a checked backup holds the import
-loses the import with it, and the import may then be made again: the owner
-keeps the export file and the picks, names and aliases given in the import
-until a checked backup holds the import, and retires the VPS instance only
-then (R0-79). What the owner repeats after a restore — erasures,
-restrictions, ends of a relationship, the greatest date audit entries were
-ever erased by — follows the owner's record of the retention review (R0-60): a
-governance document, outside this case (Explicit exclusions), naming each
-action by its date, kind and the `customer_ref` or `project_id` it touched —
-an audit erasure by its date alone — with no personal value. It records
-lifts and resumptions as well, in the order the owner made them; for an end
-of a relationship it records the end date the owner gave (R0-84). The owner
-brings each record to the state its latest recorded action leaves, giving an
-ended relationship that recorded end date again; every other mark carries
-the instant of its repetition. The kept export and the import's choices hold
-personal data — the import's choices include the names, kinds and tax-id
-answers given for the Customers it made, each with the v1 `customer_ref` it
-came from, and the import's answer, which lists for each Customer it made
-its v1 value and the `customer_ref` minted for it: the owner keeps them in the vault,
-the owner's Bitwarden that only the owner reaches (R0-23), from the export's
-making until their deletion; the governance
-lists them as a copy that remains, as R0-81 lists the services' copies, and
-the owner deletes them once a checked backup holds the import. Where the
-retention record or the kept export is missing, what the restored store holds
-stands until the owner corrects it with the ordinary owner actions from what
-the owner knows; a fact that cannot be reconstructed stays as the backup
-holds it, and the governance records that. A repeated import mints new
-`customer_ref`s for the Customers it makes; a consumer that kept one the lost
-import minted relinks it in its own service, as R0-79 says for ids
-production does not hold. The kept answer of the lost import and the answer
-of the repeated one, joined by the v1 value, say which new `customer_ref`
-replaces each lost one, for the owner's record and the consumers alike.
-Projects, Customers, rooms and pointers first made after the backup are
-made again by the ordinary actions, with new identities; Registry keeps no
-correspondence between them and the lost ones, which the owner's record
-and the consumers hold.
+each store's history; a store without the migration closure accepts the
+import (R0-79). What the owner does around a restore is the owner's and is not
+part of this specification, which describes what Registry does.
 
 ### R0-81 — The one-home rule is a target the services reach; Registry does not wait (owner, 2026-10-27, after round 23 T1; narrows R0-80)
 
