@@ -1,0 +1,238 @@
+{
+ "open_points": [
+  {
+   "subject": "OwnerSession expiry and removal",
+   "kind": "contradictory timing",
+   "text": "“The session ends at the first of: 8 hours after sign-in; 30 minutes without an owner request” but also “the pass alone ends sessions by their limits” every 60 seconds.",
+   "question": "At a limit, is the session already ended with cleanup merely deferred, or is it an expired but still existing session until the pass removes it?",
+   "options": [
+    "It ends logically at the limit and the pass only removes its state and uploaded file.",
+    "It remains present but unusable until the pass ends and removes it."
+   ],
+   "default_guess": "Treat it as expired and unusable at the limit, then remove its runtime state at the next pass.",
+   "unit": "A13"
+  },
+  {
+   "subject": "OwnerSession monotonic lifetime facts",
+   "kind": "model contradiction",
+   "text": "“Every duration in this decision … is measured by the process's monotonic clock” while M11 carries “the instant it began, its expiry at the latest,” “the instant of its last request,” and confirmation “instant it was shown,” and State 1 says every recorded instant is UTC wall-clock time.",
+   "question": "What monotonic facts or deadlines does M11 carry so that session, idle, confirmation, and lockout limits can be decided without deriving them from the UTC instants?",
+   "options": [
+    "M11 also carries private monotonic start, last-request, confirmation, refusal, and lockout values.",
+    "The UTC facts are descriptive while separate unmodelled timer state supplies monotonic deadlines.",
+    "The UTC instants themselves are used despite the new monotonic-clock rule."
+   ],
+   "default_guess": "Keep UTC instants for recorded/displayed facts and separate runtime monotonic deadlines for every duration.",
+   "unit": "A13"
+  },
+  {
+   "subject": "Owner request arrival and expiry pass concurrency",
+   "kind": "race precedence",
+   "text": "“its arrival restarts the 30 minutes — of concurrent requests the latest arrival counts,” “Validity is checked when a request arrives,” and the expiry pass decides under the import and session locks, but ordinary requests are not said to take the session lock when updating the last-request value.",
+   "question": "How is an ordinary request's arrival made atomic against the expiry pass, and which wins when the request arrives before the limit but the pass acquires the session lock before the request records that arrival?",
+   "options": [
+    "The session check and last-request update occur atomically under the session lock.",
+    "Arrival publishes an atomic monotonic maximum before either side takes the session lock.",
+    "The expiry pass may end the session despite an arrival that already passed its session check."
+   ],
+   "default_guess": "Atomically validate and update the last-request deadline under the same session lock used by the expiry pass.",
+   "unit": "A13"
+  },
+  {
+   "subject": "Admitted owner request versus expiry cleanup",
+   "kind": "concurrent outcome",
+   "text": "“a request that passes it completes even if a limit … comes while it runs” but the expiry pass may “drop its pending confirmation and its uploaded file with it” while that admitted request is still running.",
+   "question": "May the expiry pass end and clear a session while an already-admitted request is using or changing its confirmation or upload, or must it wait for that request's session/import locks and apply cleanup afterward?",
+   "options": [
+    "The admitted request holds the relevant locks through completion, so cleanup runs afterward.",
+    "Cleanup may occur during the request, but the request must still complete using captured state.",
+    "The admitted request completes only its durable store change and must not recreate session state after cleanup."
+   ],
+   "default_guess": "Have admitted requests hold the relevant locks through their session-state work; the pass cleans up only after they release them.",
+   "unit": "A13"
+  },
+  {
+   "subject": "Expiry-pass schedule",
+   "kind": "undefined boundary",
+   "text": "“a pass over the sessions it makes every 60 seconds from the start” does not say whether a pass occurs at process start or first occurs 60 seconds later.",
+   "question": "When is the first expiry pass made?",
+   "options": [
+    "Immediately at process start and then every 60 seconds.",
+    "Sixty seconds after process start and then every 60 seconds."
+   ],
+   "default_guess": "Run the first pass 60 seconds after process start.",
+   "unit": "A13"
+  },
+  {
+   "subject": "Monotonic time during host suspension",
+   "kind": "undefined clock",
+   "text": "“the process's monotonic clock” does not say whether elapsed time while the host or VM is suspended counts toward the stated limits.",
+   "question": "Must session, confirmation, and lockout durations advance while the host is suspended without restarting the process?",
+   "options": [
+    "Yes, use a suspend-aware monotonic clock.",
+    "No, use a monotonic clock that stops during suspension."
+   ],
+   "default_guess": "Use the runtime's standard monotonic clock, even if it excludes suspended time.",
+   "unit": "A13"
+  },
+  {
+   "subject": "Accepted import clearing other sessions' uploads",
+   "kind": "lock ownership",
+   "text": "An accepted import “drops every session's upload” while confirmation takes “the instance's one import lock first, then their session's lock”; it does not say that the confirming request takes every other affected session's lock, although A13 serialises changes to a session under that session's lock.",
+   "question": "When an accepted import clears uploads belonging to other sessions, must it acquire those sessions' locks, and if so in what deterministic order and for how long?",
+   "options": [
+    "The import lock alone authorises clearing every upload.",
+    "Acquire the import lock, then acquire each affected session lock one at a time in a declared order.",
+    "Acquire the import lock and all affected session locks before clearing any upload."
+   ],
+   "default_guess": "Treat the import lock as exclusive ownership of uploaded-file state and clear all uploads without acquiring the other session locks.",
+   "unit": "A16"
+  },
+  {
+   "subject": "Configuration variable set",
+   "kind": "undefined refusal set",
+   "text": "“The configuration is the set of environment variables whose names begin with `REGISTRY_`” and “no unknown item” is the first check, but the exact recognized variable names are not declared.",
+   "question": "Which exact `REGISTRY_` names are accepted, so that Registry can distinguish required, optional-token, and unknown items?",
+   "options": [
+    "State 2 declares fixed names for every listed item.",
+    "A later release manifest declares the names.",
+    "Implementers choose names independently."
+   ],
+   "default_guess": "Use fixed release-declared names corresponding directly to the listed configuration items.",
+   "unit": "A17"
+  },
+  {
+   "subject": "Configuration well-formedness",
+   "kind": "vague validation",
+   "text": "The start checks “each well formed” and rule 5 says a “missing, malformed or unknown item fails,” but no well-formedness rules are given for credentials, tokens, the backup key, or locations beyond length and path checks.",
+   "question": "What exact syntax, encoding, forbidden values, and path forms make each configuration item well formed?",
+   "options": [
+    "Secrets are arbitrary nonempty environment text satisfying the byte-length rule; locations accept absolute paths only.",
+    "Secrets use a declared encoded-binary format; locations use a declared absolute-path grammar.",
+    "Relative locations and unrestricted Unicode secret text are accepted and normalized by the runtime."
+   ],
+   "default_guess": "Accept UTF-8 environment text for secrets and require absolute filesystem paths for locations.",
+   "unit": "A17"
+  },
+  {
+   "subject": "Secret length and equality",
+   "kind": "undefined byte representation",
+   "text": "“A secret … is at least 32 bytes long” and “No two secrets are equal,” although environment variables are text and no decoding or character encoding is named.",
+   "question": "Which byte representation is used for the 32-byte test, constant-time comparison, and distinctness check?",
+   "options": [
+    "UTF-8 bytes of the environment text.",
+    "A declared Base64 or hexadecimal decoding of the environment text.",
+    "Unicode characters rather than encoded bytes."
+   ],
+   "default_guess": "Use the UTF-8 encoding of the environment value for length and comparison.",
+   "unit": "A17"
+  },
+  {
+   "subject": "Relative path resolution",
+   "kind": "undefined normalization",
+   "text": "The store and backup locations are compared “by their absolute paths with every symbolic link resolved,” but the text does not say whether a configured relative path is refused or which base resolves it.",
+   "question": "Are relative store or backup locations valid, and if so, relative to what stable directory?",
+   "options": [
+    "Reject every relative location.",
+    "Resolve relative locations against the process working directory.",
+    "Resolve them against a release- or configuration-defined directory."
+   ],
+   "default_guess": "Reject relative locations.",
+   "unit": "A17"
+  },
+  {
+   "subject": "Stale store temporary file with an existing store",
+   "kind": "ambiguous start failure",
+   "text": "“at every start it first removes a file of that temporary name” but “if it cannot, and the store is absent, the start fails; otherwise the store must open.”",
+   "question": "If the real store exists but the stale temporary store file cannot be removed, does Registry fail the start or continue serving with the real store?",
+   "options": [
+    "Fail every start that cannot remove the temporary file.",
+    "Continue when the real store exists; fail only when the store is absent.",
+    "Report the failure but continue only after verifying the temporary file cannot affect the store."
+   ],
+   "default_guess": "Fail the start whenever the declared temporary file cannot be removed.",
+   "unit": "A17"
+  },
+  {
+   "subject": "Concurrent Registry processes on one installation",
+   "kind": "unverified exclusivity",
+   "text": "A17 opens the store and probes the backup location, while A18 assumes process-local run memory and non-overlapping runs; no rule detects another Registry process using the same store and backup location.",
+   "question": "What happens when a second Registry process starts against the same store or backup location?",
+   "options": [
+    "Startup acquires an exclusive installation lock and the second process fails.",
+    "Multiple processes are supported through shared locking and durable backup scheduling state.",
+    "Single-process deployment is an external invariant Registry does not verify."
+   ],
+   "default_guess": "Acquire an exclusive installation lock and refuse the second start.",
+   "unit": "A17"
+  },
+  {
+   "subject": "Backup encryption construction",
+   "kind": "undefined cryptography",
+   "text": "“Each backup is encrypted with the backup key” and “A backup cannot be read without the key,” but no authenticated-encryption algorithm, nonce construction, key encoding or derivation, authentication tag, or key-digest algorithm is declared.",
+   "question": "What exact cryptographic format and algorithms make a backup encrypted, authenticated, decryptable, and associated with the recorded key digest?",
+   "options": [
+    "Use a release-declared authenticated-encryption format with a random nonce and a cryptographic key identifier.",
+    "Use direct encryption without authenticated metadata.",
+    "Delegate the complete encryption format to an external tool fixed by the release."
+   ],
+   "default_guess": "Use a release-declared authenticated-encryption format with a random nonce and authenticate the metadata as associated data.",
+   "unit": "A18"
+  },
+  {
+   "subject": "Backup metadata integrity",
+   "kind": "unprotected decision data",
+   "text": "A backup records metadata “readable without its key,” and a record is valid when its instant, release, last sequence number and key digest “can all be read”; the checks do not say that this metadata is authenticated or matched to the encrypted copy except for the last sequence number.",
+   "question": "Must the unencrypted instant, release, sequence number, and key digest be cryptographically bound to the ciphertext, and which mismatches make the backup fail?",
+   "options": [
+    "Authenticate all metadata with the encrypted backup and verify every field.",
+    "Verify only release and last sequence as the current text explicitly lists.",
+    "Treat readable metadata as trusted because the backup directory is owner-controlled."
+   ],
+   "default_guess": "Authenticate every metadata field and refuse or delete a backup whose authenticated values do not match its header.",
+   "unit": "A18"
+  },
+  {
+   "subject": "Older kept backup validity",
+   "kind": "unverifiable invariant",
+   "text": "The invariant says “every kept backup is encrypted, consistent, checked,” but older kept files are not decrypted or integrity-checked again; a file with readable metadata counts as kept even if its ciphertext was later corrupted.",
+   "question": "How must Registry handle an older kept backup whose header remains readable but whose encrypted store is corrupt or has been altered after its creation check?",
+   "options": [
+    "Revalidate every kept backup during each run and delete/report failures.",
+    "The invariant means only that the backup passed when created; later corruption may remain undetected.",
+    "Verify a cryptographic authentication tag without decrypting the store during each run."
+   ],
+   "default_guess": "Interpret the invariant as a creation-time guarantee and verify ciphertext authentication on later runs before counting a file as kept.",
+   "unit": "A18"
+  },
+  {
+   "subject": "Backup file format and names",
+   "kind": "missing declaration",
+   "text": "“Kept and temporary names begin with two different prefixes the release declares” and “A kept name is made from the backup's instant,” but the prefixes, timestamp precision and encoding, metadata layout, and temporary-name collision rules are not declared in these texts.",
+   "question": "What exact file names and record format must all implementations use, and how are collisions between probes, encrypted temporaries, decrypted temporaries, and kept backups prevented?",
+   "options": [
+    "State 2 declares a fixed portable format and naming grammar.",
+    "Each release declares them in a specified release artifact.",
+    "Each implementation chooses them independently."
+   ],
+   "default_guess": "Put a fixed format and unique random temporary names in the release, with a UTC timestamp plus unique suffix for kept names.",
+   "unit": "A18"
+  },
+  {
+   "subject": "Daily run skipped because another run overlaps",
+   "kind": "undefined scheduler state",
+   "text": "“a 03:00 that finds a run still going makes no run of its own,” while a process remembers dates “it ran”; it does not say whether the skipped date is marked as run or may start later that same date once the earlier run finishes.",
+   "question": "If the preceding backup is still running at the first eligible look for a new date, is that date permanently missed or should its run start later after the prior run finishes?",
+   "options": [
+    "Mark the date skipped and make no run for it.",
+    "Start the date's run at the first later clock look after the previous run finishes.",
+    "Queue exactly one run for the skipped date."
+   ],
+   "default_guess": "Mark the date skipped, matching “makes no run of its own” and the stated allowance for days without a backup.",
+   "unit": "A18"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"OwnerSession expiry and removal\",\"kind\":\"contradictory timing\",\"text\":\"“The session ends at the first of: 8 hours after sign-in; 30 minutes without an owner request” but also “the pass alone ends sessions by their limits” every 60 seconds.\",\"question\":\"At a limit, is the session already ended with cleanup merely deferred, or is it an expired but still existing session until the pass removes it?\",\"options\":[\"It ends logically at the limit and the pass only removes its state and uploaded file.\",\"It remains present but unusable until the pass ends and removes it.\"],\"default_guess\":\"Treat it as expired and unusable at the limit, then remove its runtime state at the next pass.\",\"unit\":\"A13\"},{\"subject\":\"OwnerSession monotonic lifetime facts\",\"kind\":\"model contradiction\",\"text\":\"“Every duration in this decision … is measured by the process's monotonic clock” while M11 carries “the instant it began, its expiry at the latest,” “the instant of its last request,” and confirmation “instant it was shown,” and State 1 says every recorded instant is UTC wall-clock time.\",\"question\":\"What monotonic facts or deadlines does M11 carry so that session, idle, confirmation, and lockout limits can be decided without deriving them from the UTC instants?\",\"options\":[\"M11 also carries private monotonic start, last-request, confirmation, refusal, and lockout values.\",\"The UTC facts are descriptive while separate unmodelled timer state supplies monotonic deadlines.\",\"The UTC instants themselves are used despite the new monotonic-clock rule.\"],\"default_guess\":\"Keep UTC instants for recorded/displayed facts and separate runtime monotonic deadlines for every duration.\",\"unit\":\"A13\"},{\"subject\":\"Owner request arrival and expiry pass concurrency\",\"kind\":\"race precedence\",\"text\":\"“its arrival restarts the 30 minutes — of concurrent requests the latest arrival counts,” “Validity is checked when a request arrives,” and the expiry pass decides under the import and session locks, but ordinary requests are not said to take the session lock when updating the last-request value.\",\"question\":\"How is an ordinary request's arrival made atomic against the expiry pass, and which wins when the request arrives before the limit but the pass acquires the session lock before the request records that arrival?\",\"options\":[\"The session check and last-request update occur atomically under the session lock.\",\"Arrival publishes an atomic monotonic maximum before either side takes the session lock.\",\"The expiry pass may end the session despite an arrival that already passed its session check.\"],\"default_guess\":\"Atomically validate and update the last-request deadline under the same session lock used by the expiry pass.\",\"unit\":\"A13\"},{\"subject\":\"Admitted owner request versus expiry cleanup\",\"kind\":\"concurrent outcome\",\"text\":\"“a request that passes it completes even if a limit … comes while it runs” but the expiry pass may “drop its pending confirmation and its uploaded file with it” while that admitted request is still running.\",\"question\":\"May the expiry pass end and clear a session while an already-admitted request is using or changing its confirmation or upload, or must it wait for that request's session/import locks and apply cleanup afterward?\",\"options\":[\"The admitted request holds the relevant locks through completion, so cleanup runs afterward.\",\"Cleanup may occur during the request, but the request must still complete using captured state.\",\"The admitted request completes only its durable store change and must not recreate session state after cleanup.\"],\"default_guess\":\"Have admitted requests hold the relevant locks through their session-state work; the pass cleans up only after they release them.\",\"unit\":\"A13\"},{\"subject\":\"Expiry-pass schedule\",\"kind\":\"undefined boundary\",\"text\":\"“a pass over the sessions it makes every 60 seconds from the start” does not say whether a pass occurs at process start or first occurs 60 seconds later.\",\"question\":\"When is the first expiry pass made?\",\"options\":[\"Immediately at process start and then every 60 seconds.\",\"Sixty seconds after process start and then every 60 seconds.\"],\"default_guess\":\"Run the first pass 60 seconds after process start.\",\"unit\":\"A13\"},{\"subject\":\"Monotonic time during host suspension\",\"kind\":\"undefined clock\",\"text\":\"“the process's monotonic clock” does not say whether elapsed time while the host or VM is suspended counts toward the stated limits.\",\"question\":\"Must session, confirmation, and lockout durations advance while the host is suspended without restarting the process?\",\"options\":[\"Yes, use a suspend-aware monotonic clock.\",\"No, use a monotonic clock that stops during suspension.\"],\"default_guess\":\"Use the runtime's standard monotonic clock, even if it excludes suspended time.\",\"unit\":\"A13\"},{\"subject\":\"Accepted import clearing other sessions' uploads\",\"kind\":\"lock ownership\",\"text\":\"An accepted import “drops every session's upload” while confirmation takes “the instance's one import lock first, then their session's lock”; it does not say that the confirming request takes every other affected session's lock, although A13 serialises changes to a session under that session's lock.\",\"question\":\"When an accepted import clears uploads belonging to other sessions, must it acquire those sessions' locks, and if so in what deterministic order and for how long?\",\"options\":[\"The import lock alone authorises clearing every upload.\",\"Acquire the import lock, then acquire each affected session lock one at a time in a declared order.\",\"Acquire the import lock and all affected session locks before clearing any upload.\"],\"default_guess\":\"Treat the import lock as exclusive ownership of uploaded-file state and clear all uploads without acquiring the other session locks.\",\"unit\":\"A16\"},{\"subject\":\"Configuration variable set\",\"kind\":\"undefined refusal set\",\"text\":\"“The configuration is the set of environment variables whose names begin with `REGISTRY_`” and “no unknown item” is the first check, but the exact recognized variable names are not declared.\",\"question\":\"Which exact `REGISTRY_` names are accepted, so that Registry can distinguish required, optional-token, and unknown items?\",\"options\":[\"State 2 declares fixed names for every listed item.\",\"A later release manifest declares the names.\",\"Implementers choose names independently.\"],\"default_guess\":\"Use fixed release-declared names corresponding directly to the listed configuration items.\",\"unit\":\"A17\"},{\"subject\":\"Configuration well-formedness\",\"kind\":\"vague validation\",\"text\":\"The start checks “each well formed” and rule 5 says a “missing, malformed or unknown item fails,” but no well-formedness rules are given for credentials, tokens, the backup key, or locations beyond length and path checks.\",\"question\":\"What exact syntax, encoding, forbidden values, and path forms make each configuration item well formed?\",\"options\":[\"Secrets are arbitrary nonempty environment text satisfying the byte-length rule; locations accept absolute paths only.\",\"Secrets use a declared encoded-binary format; locations use a declared absolute-path grammar.\",\"Relative locations and unrestricted Unicode secret text are accepted and normalized by the runtime.\"],\"default_guess\":\"Accept UTF-8 environment text for secrets and require absolute filesystem paths for locations.\",\"unit\":\"A17\"},{\"subject\":\"Secret length and equality\",\"kind\":\"undefined byte representation\",\"text\":\"“A secret … is at least 32 bytes long” and “No two secrets are equal,” although environment variables are text and no decoding or character encoding is named.\",\"question\":\"Which byte representation is used for the 32-byte test, constant-time comparison, and distinctness check?\",\"options\":[\"UTF-8 bytes of the environment text.\",\"A declared Base64 or hexadecimal decoding of the environment text.\",\"Unicode characters rather than encoded bytes.\"],\"default_guess\":\"Use the UTF-8 encoding of the environment value for length and comparison.\",\"unit\":\"A17\"},{\"subject\":\"Relative path resolution\",\"kind\":\"undefined normalization\",\"text\":\"The store and backup locations are compared “by their absolute paths with every symbolic link resolved,” but the text does not say whether a configured relative path is refused or which base resolves it.\",\"question\":\"Are relative store or backup locations valid, and if so, relative to what stable directory?\",\"options\":[\"Reject every relative location.\",\"Resolve relative locations against the process working directory.\",\"Resolve them against a release- or configuration-defined directory.\"],\"default_guess\":\"Reject relative locations.\",\"unit\":\"A17\"},{\"subject\":\"Stale store temporary file with an existing store\",\"kind\":\"ambiguous start failure\",\"text\":\"“at every start it first removes a file of that temporary name” but “if it cannot, and the store is absent, the start fails; otherwise the store must open.”\",\"question\":\"If the real store exists but the stale temporary store file cannot be removed, does Registry fail the start or continue serving with the real store?\",\"options\":[\"Fail every start that cannot remove the temporary file.\",\"Continue when the real store exists; fail only when the store is absent.\",\"Report the failure but continue only after verifying the temporary file cannot affect the store.\"],\"default_guess\":\"Fail the start whenever the declared temporary file cannot be removed.\",\"unit\":\"A17\"},{\"subject\":\"Concurrent Registry processes on one installation\",\"kind\":\"unverified exclusivity\",\"text\":\"A17 opens the store and probes the backup location, while A18 assumes process-local run memory and non-overlapping runs; no rule detects another Registry process using the same store and backup location.\",\"question\":\"What happens when a second Registry process starts against the same store or backup location?\",\"options\":[\"Startup acquires an exclusive installation lock and the second process fails.\",\"Multiple processes are supported through shared locking and durable backup scheduling state.\",\"Single-process deployment is an external invariant Registry does not verify.\"],\"default_guess\":\"Acquire an exclusive installation lock and refuse the second start.\",\"unit\":\"A17\"},{\"subject\":\"Backup encryption construction\",\"kind\":\"undefined cryptography\",\"text\":\"“Each backup is encrypted with the backup key” and “A backup cannot be read without the key,” but no authenticated-encryption algorithm, nonce construction, key encoding or derivation, authentication tag, or key-digest algorithm is declared.\",\"question\":\"What exact cryptographic format and algorithms make a backup encrypted, authenticated, decryptable, and associated with the recorded key digest?\",\"options\":[\"Use a release-declared authenticated-encryption format with a random nonce and a cryptographic key identifier.\",\"Use direct encryption without authenticated metadata.\",\"Delegate the complete encryption format to an external tool fixed by the release.\"],\"default_guess\":\"Use a release-declared authenticated-encryption format with a random nonce and authenticate the metadata as associated data.\",\"unit\":\"A18\"},{\"subject\":\"Backup metadata integrity\",\"kind\":\"unprotected decision data\",\"text\":\"A backup records metadata “readable without its key,” and a record is valid when its instant, release, last sequence number and key digest “can all be read”; the checks do not say that this metadata is authenticated or matched to the encrypted copy except for the last sequence number.\",\"question\":\"Must the unencrypted instant, release, sequence number, and key digest be cryptographically bound to the ciphertext, and which mismatches make the backup fail?\",\"options\":[\"Authenticate all metadata with the encrypted backup and verify every field.\",\"Verify only release and last sequence as the current text explicitly lists.\",\"Treat readable metadata as trusted because the backup directory is owner-controlled.\"],\"default_guess\":\"Authenticate every metadata field and refuse or delete a backup whose authenticated values do not match its header.\",\"unit\":\"A18\"},{\"subject\":\"Older kept backup validity\",\"kind\":\"unverifiable invariant\",\"text\":\"The invariant says “every kept backup is encrypted, consistent, checked,” but older kept files are not decrypted or integrity-checked again; a file with readable metadata counts as kept even if its ciphertext was later corrupted.\",\"question\":\"How must Registry handle an older kept backup whose header remains readable but whose encrypted store is corrupt or has been altered after its creation check?\",\"options\":[\"Revalidate every kept backup during each run and delete/report failures.\",\"The invariant means only that the backup passed when created; later corruption may remain undetected.\",\"Verify a cryptographic authentication tag without decrypting the store during each run.\"],\"default_guess\":\"Interpret the invariant as a creation-time guarantee and verify ciphertext authentication on later runs before counting a file as kept.\",\"unit\":\"A18\"},{\"subject\":\"Backup file format and names\",\"kind\":\"missing declaration\",\"text\":\"“Kept and temporary names begin with two different prefixes the release declares” and “A kept name is made from the backup's instant,” but the prefixes, timestamp precision and encoding, metadata layout, and temporary-name collision rules are not declared in these texts.\",\"question\":\"What exact file names and record format must all implementations use, and how are collisions between probes, encrypted temporaries, decrypted temporaries, and kept backups prevented?\",\"options\":[\"State 2 declares a fixed portable format and naming grammar.\",\"Each release declares them in a specified release artifact.\",\"Each implementation chooses them independently.\"],\"default_guess\":\"Put a fixed format and unique random temporary names in the release, with a UTC timestamp plus unique suffix for kept names.\",\"unit\":\"A18\"},{\"subject\":\"Daily run skipped because another run overlaps\",\"kind\":\"undefined scheduler state\",\"text\":\"“a 03:00 that finds a run still going makes no run of its own,” while a process remembers dates “it ran”; it does not say whether the skipped date is marked as run or may start later that same date once the earlier run finishes.\",\"question\":\"If the preceding backup is still running at the first eligible look for a new date, is that date permanently missed or should its run start later after the prior run finishes?\",\"options\":[\"Mark the date skipped and make no run for it.\",\"Start the date's run at the first later clock look after the previous run finishes.\",\"Queue exactly one run for the skipped date.\"],\"default_guess\":\"Mark the date skipped, matching “makes no run of its own” and the stated allowance for days without a backup.\",\"unit\":\"A18\"}]}",
+ "set_aside": []
+}
