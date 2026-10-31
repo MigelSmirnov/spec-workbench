@@ -1,0 +1,291 @@
+{
+ "open_points": [
+  {
+   "subject": "restore boundary for create replay",
+   "kind": "contradiction",
+   "text": "R0-89 says \"every change after it is lost\" and Registry's guarantees hold \"within each store's history\", while A01 and R0-36 say a create repeated after a lost answer never makes a second record; A01 gives no restore exception.",
+   "question": "If a create committed after the restored backup and its caller repeats the same request id after restoration, must Registry create a new record, refuse it, or recover the former result by some external means?",
+   "options": [
+    "The request id is forgotten with the lost change and the repeat creates a new record in the new history",
+    "The replay guarantee survives restoration and requires request-id state outside the restored store",
+    "The repeat is refused when Registry cannot prove its earlier outcome"
+   ],
+   "default_guess": "Treat replay guarantees as local to a store history, so the repeat creates a new record.",
+   "unit": "context"
+  },
+  {
+   "subject": "MigrationClosure cardinality across restored histories",
+   "kind": "contradiction",
+   "text": "M10 says \"Durable, at most one per instance\", but R0-89 permits a closure to be lost with a pre-import backup and the import to be made again, producing another closure for the same instance in a later history.",
+   "question": "Does \"at most one per instance\" mean one across the instance's entire disaster-recovery lineage or one in each store history?",
+   "options": [
+    "At most one in each store history",
+    "At most one across all histories of the instance"
+   ],
+   "default_guess": "Interpret it as at most one in the current store history.",
+   "unit": "context"
+  },
+  {
+   "subject": "A01 publish replay ownership",
+   "kind": "ambiguous equality",
+   "text": "A01 says supplied facts are compared with the record's current facts, while M05 makes the publisher a pointer fact derived from the authenticated principal rather than a supplied field.",
+   "question": "Is the authenticated principal or Kernel session part of equality for a publish replay, or may another authorized principal using the same request id and supplied pointer values receive the existing pointer?",
+   "options": [
+    "Include principal and Kernel session in replay equality",
+    "Ignore principal because only caller-supplied fields are compared",
+    "Scope request ids by principal in addition to project"
+   ],
+   "default_guess": "Include the authenticated principal, including the Kernel session, in replay equality.",
+   "unit": "A01"
+  },
+  {
+   "subject": "A04 failure precedence within a stage",
+   "kind": "unspecified order",
+   "text": "A04 defines stages (1) through (6) and says the first failure is the answer, but gives no order among multiple checks inside stages (3), (4), or (6).",
+   "question": "When several checks in the same stage fail, which failure wins—for example two missing referenced records, several invalid values, or an archived project combined with an ineligible customer?",
+   "options": [
+    "Declare a total order for every check within each stage",
+    "Return one aggregate failure for all failures in a stage",
+    "Permit any failure from the earliest failing stage"
+   ],
+   "default_guess": "Declare a deterministic operation-specific order within every stage.",
+   "unit": "A04"
+  },
+  {
+   "subject": "A04 existence checks for related records",
+   "kind": "ambiguous stage",
+   "text": "Stage (3) is \"that the record named exists\", while stage (6) includes \"a customer's eligibility\" and State 0 treats an unknown newly named customer as a refusal.",
+   "question": "Does existence at stage (3) cover every referenced record, such as the customer and project named by one action, or only the action's primary target, leaving related-record existence to stage (6)?",
+   "options": [
+    "Check every named or referenced record at stage (3)",
+    "Check only the primary target at stage (3)",
+    "Define the stage separately for each operation and reference"
+   ],
+   "default_guess": "Check the primary target first at stage (3), then related-record existence with its eligibility check at stage (6).",
+   "unit": "A04"
+  },
+  {
+   "subject": "A04 confirmation-binding check",
+   "kind": "unspecified precedence",
+   "text": "A04 puts \"a confirmation value\" in stage (1), while A13 says a matching value is consumed even when its binding to another action or input causes refusal, without saying where that binding comparison occurs.",
+   "question": "Are the confirmation's action, target, revision or access version, and input bindings all checked in stage (1), or are they checked in their ordinary value, revision, and lifecycle stages after the value has been consumed?",
+   "options": [
+    "Check the entire confirmation binding in stage (1)",
+    "Check only token equality in stage (1) and bindings in later stages",
+    "Give confirmation binding its own ordered stage"
+   ],
+   "default_guess": "Check token equality and the complete binding in stage (1), consuming the token once equality succeeds.",
+   "unit": "A04"
+  },
+  {
+   "subject": "A13 owner-session cookie scope",
+   "kind": "underspecified browser boundary",
+   "text": "The session is \"carried by a cookie that scripts cannot read, sent only over HTTPS when the interface is reached from another machine, and only to Registry's own origin\"; cookies are scoped by host and path, not by web origin including port.",
+   "question": "What exact cookie attributes and deployment constraint make \"only to Registry's own origin\" true, especially when local access may use HTTP or another service shares the host?",
+   "options": [
+    "Require HTTPS everywhere and use Secure, HttpOnly, host-only, SameSite=Strict with a Registry-only path",
+    "Allow local HTTP with a host-only HttpOnly cookie and accept host-level rather than origin-level scope",
+    "Use a dedicated Registry hostname so host-only scope is equivalent to the intended origin"
+   ],
+   "default_guess": "Require a dedicated hostname and a Secure, HttpOnly, host-only, SameSite=Strict cookie with the narrowest usable path.",
+   "unit": "A13"
+  },
+  {
+   "subject": "A13 elapsed-time clock",
+   "kind": "unspecified time source",
+   "text": "Session and confirmation validity are expressed as elapsed hours or minutes from recorded UTC instants, but the text does not say how host-clock adjustments affect those limits.",
+   "question": "Are the 8-hour, 30-minute, 15-minute, and 10-minute intervals measured with a monotonic clock, UTC wall time, or a defined combination that survives restart only where state survives?",
+   "options": [
+    "Use monotonic elapsed time for runtime limits",
+    "Use UTC wall-clock instants",
+    "Use monotonic time during a process and UTC only for recorded instants"
+   ],
+   "default_guess": "Use monotonic time for all runtime lifetimes and UTC only for stored or displayed instants.",
+   "unit": "A13"
+  },
+  {
+   "subject": "A13 creation of a pending confirmation",
+   "kind": "missing preconditions",
+   "text": "A confirmation value is \"made when it showed the step\", but no rule says which authentication, existence, value, revision, access-version, or lifecycle checks must pass before Registry may show that step and replace the session's existing pending confirmation.",
+   "question": "What checks must pass before a confirmation step may be issued, and may an invalid or stale action replace an otherwise valid pending confirmation?",
+   "options": [
+    "Run all ordinary checks except the final mutation before issuing confirmation",
+    "Issue confirmation after authentication and CSRF only",
+    "Define different issuance checks for each confirmed action"
+   ],
+   "default_guess": "Run all checks against the currently shown inputs and versions before issuing and replacing a pending confirmation.",
+   "unit": "A13"
+  },
+  {
+   "subject": "no-op audit erasure",
+   "kind": "contradiction",
+   "text": "R0-66 says erasing audit entries before a date \"leaves an entry of its own naming the date\", while A15 rule 6 says an erasure removing no entry \"writes no entry and mints no confirmation id\".",
+   "question": "Does an accepted erasure that finds no matching entries append an erasure entry or leave the log unchanged?",
+   "options": [
+    "Always append the erasure entry as R0-66 states",
+    "Append only when at least one entry was removed as A15 states"
+   ],
+   "default_guess": "Follow A15 and leave the log unchanged when nothing was removed.",
+   "unit": "A15"
+  },
+  {
+   "subject": "A16 file digest",
+   "kind": "undefined identity rule",
+   "text": "The mapping, confirmation, closure, and audit entry identify the import file \"by its digest\", but no digest algorithm, byte representation, or collision rule is declared.",
+   "question": "How is the import-file digest computed, and what happens if two different uploaded byte sequences have the same digest?",
+   "options": [
+    "Fix a collision-resistant digest over the exact uploaded bytes and treat equality as file identity",
+    "Digest a canonicalized parsed representation",
+    "Store and compare both the digest and exact uploaded bytes"
+   ],
+   "default_guess": "Use SHA-256 over the exact uploaded bytes and require both the pending file and digest to match the confirmation.",
+   "unit": "A16"
+  },
+  {
+   "subject": "A16 duplicate project ids and picking",
+   "kind": "ambiguous selection",
+   "text": "A duplicate id is malformed, unpicked projects are not checked, and the mapping lets the owner pick projects by the id it shows; the text does not say how a file containing two project records with the same id can be picked unambiguously.",
+   "question": "If duplicate project ids occur, is the whole upload unusable, are both duplicate records considered picked together, or may the owner leave them unpicked and import other projects?",
+   "options": [
+    "Refuse confirmation of any mapping whose project ids are duplicated anywhere in the file",
+    "Allow other projects to be imported if every duplicate project record is unpicked",
+    "Introduce a file-local row identity for selection"
+   ],
+   "default_guess": "Treat duplicate project ids as a file-level structural error that prevents any confirmation.",
+   "unit": "A16"
+  },
+  {
+   "subject": "A16 minted Customer identity collision",
+   "kind": "missing collision behavior",
+   "text": "Each new Customer's `customer_ref` is minted only when the import is accepted, while the conflict rules cover only brought-in project, room, and pointer ids.",
+   "question": "What must happen if a newly minted `customer_ref` collides with an existing Customer or with another identity minted in the same import?",
+   "options": [
+    "Retry minting within the transaction until every new customer id is unique",
+    "Refuse the whole import as a conflict",
+    "Treat such a collision as an internal failure and allow a retry"
+   ],
+   "default_guess": "Retry minting within the transaction until unique identifiers are obtained.",
+   "unit": "A16"
+  },
+  {
+   "subject": "A17 meaning of secret length",
+   "kind": "undefined validation",
+   "text": "A secret must be \"at least 32 bytes long\", but the configuration's representation and decoding of textual secrets are not defined.",
+   "question": "Which bytes are counted and compared: literal configuration bytes, UTF-8 encoding, decoded base64 or hexadecimal bytes, or another fixed representation?",
+   "options": [
+    "Require base64 and count decoded bytes",
+    "Require hexadecimal and count decoded bytes",
+    "Treat the exact UTF-8 configuration value as the secret and count those bytes"
+   ],
+   "default_guess": "Require a canonical base64 encoding and at least 32 decoded bytes.",
+   "unit": "A17"
+  },
+  {
+   "subject": "A17 failed-start side effects",
+   "kind": "unspecified check order",
+   "text": "Registry may create a new empty store and probes the backup location by creating and removing a file, while a later failed configuration check stops the start; no atomicity or ordering is stated for these checks.",
+   "question": "May a failed start leave behind a newly created store or probe file, and in what order are non-mutating validation, path probing, and store creation performed?",
+   "options": [
+    "Validate everything possible first and roll back every probe or new store on failure",
+    "Allow a failed start to leave a valid empty store but never a probe file",
+    "Allow each check's side effects to remain"
+   ],
+   "default_guess": "Perform non-mutating checks first, clean up probes, and create the store only after every other startup check passes.",
+   "unit": "A17"
+  },
+  {
+   "subject": "A17 relationship between store and backup locations",
+   "kind": "missing refusal condition",
+   "text": "The configuration validates the store location and backup location separately but does not say whether they may be equal, nested, symlinked to one another, or point at the same file tree.",
+   "question": "Which overlap or aliasing relationships between the store and backup locations are accepted or refused?",
+   "options": [
+    "Require disjoint canonical directories and refuse every overlap",
+    "Allow the backup directory to share the store's parent but not contain the live store",
+    "Allow any relationship if generated filenames do not collide"
+   ],
+   "default_guess": "Resolve canonical paths and refuse either location containing the other or resolving to the same place.",
+   "unit": "A17"
+  },
+  {
+   "subject": "A18 scheduled run versus import run",
+   "kind": "ambiguous schedule",
+   "text": "There is \"at most one run per UTC day\" besides the run after an accepted import, but startup catch-up runs only \"if no backup was made that UTC day\"; it is unclear whether an import backup counts as that day's daily backup.",
+   "question": "If a checked import backup succeeds before 03:00 UTC, or before a catch-up start later that day, must the ordinary daily run still occur?",
+   "options": [
+    "An import backup satisfies the day's backup requirement and suppresses the daily run",
+    "The import backup is always extra and the daily run still occurs once",
+    "The next scheduled run depends on whether the import backup occurred before or after 03:00"
+   ],
+   "default_guess": "Treat a successful import backup as the backup made for that UTC day and suppress the ordinary run.",
+   "unit": "A18"
+  },
+  {
+   "subject": "A18 failed catch-up across restarts",
+   "kind": "contradictory retry rule",
+   "text": "A missed 03:00 run is made on the next start \"if no backup was made that UTC day\", failed work is retried at the next run, and there is at most one ordinary run per UTC day. After a failed catch-up, another restart that day still satisfies \"no backup was made\".",
+   "question": "Does another restart on the same UTC day retry the failed catch-up, or does the one-run-per-day limit postpone retry until the next day, and where is a failed attempt remembered across restarts?",
+   "options": [
+    "Retry on every restart until a backup succeeds, overriding the one-run limit for failures",
+    "Persist that the day's run was attempted and retry the next UTC day",
+    "Count only successful runs toward the one-run limit"
+   ],
+   "default_guess": "Persist the day's attempted run and retry on the next UTC day's run.",
+   "unit": "A18"
+  },
+  {
+   "subject": "A18 backup cryptography",
+   "kind": "undefined security mechanism",
+   "text": "Backups must be encrypted with the backup key and expose a digest of that key, but no authenticated-encryption algorithm, nonce rule, key derivation, metadata authentication, or digest algorithm is fixed.",
+   "question": "What cryptographic format makes confidentiality and integrity testable and prevents undetected modification of the unencrypted metadata or ciphertext?",
+   "options": [
+    "Specify an authenticated-encryption format with random nonces and authenticated metadata",
+    "Rely on disk encryption plus an unspecified encrypted archive format",
+    "Encrypt the store and separately sign the metadata"
+   ],
+   "default_guess": "Use a versioned authenticated-encryption format with a random nonce, authenticate all public metadata, and identify keys with a collision-resistant digest.",
+   "unit": "A18"
+  },
+  {
+   "subject": "A18 failed temporary-file cleanup",
+   "kind": "conflicting failure behavior",
+   "text": "At every start and run Registry \"first removes every temporary file\", a failed removal is retried later while Registry keeps serving, and rule 6 says a failed backup or deletion \"leaves no partial file\".",
+   "question": "If a temporary or partial file cannot be removed, does the run abort, continue using different names, or continue despite the leftover file, and is the partial-file guarantee waived for cleanup failures?",
+   "options": [
+    "Abort that backup run but keep serving, leaving the temporary file for the next run",
+    "Continue with collision-proof new temporary names",
+    "Refuse to serve until all temporary files are removed"
+   ],
+   "default_guess": "Abort only the backup run, keep serving, report the leftover, and retry cleanup at the next run.",
+   "unit": "A18"
+  },
+  {
+   "subject": "A18 last audit sequence in an empty store",
+   "kind": "undefined boundary value",
+   "text": "Every backup records \"the last audit sequence number it holds\" and the check requires the audit log to end at it, but a new store can have no audit entry.",
+   "question": "What value is recorded and checked when the backup contains no audit entries?",
+   "options": [
+    "Record 0",
+    "Record null or an explicit no-entry marker",
+    "Omit the field for an empty log"
+   ],
+   "default_guess": "Record 0 and require the store's next audit sequence to be 1.",
+   "unit": "A18"
+  },
+  {
+   "subject": "A18 unreadable kept-backup metadata",
+   "kind": "missing failure rule",
+   "text": "Retention uses the instant recorded in metadata readable without the key, but no rule covers a kept backup whose metadata later becomes unreadable, malformed, or inconsistent after its creation-time check.",
+   "question": "During a later run, is such a backup deleted, quarantined, ignored indefinitely, or treated as a run failure, and can it be selected as the newest backup for restoration?",
+   "options": [
+    "Quarantine and report it, exclude it from restoration, then retry deletion",
+    "Delete it immediately as invalid",
+    "Keep it and require owner intervention"
+   ],
+   "default_guess": "Exclude it from restoration, report it, and attempt to delete it as an invalid backup.",
+   "unit": "A18"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"restore boundary for create replay\",\"kind\":\"contradiction\",\"text\":\"R0-89 says \\\"every change after it is lost\\\" and Registry's guarantees hold \\\"within each store's history\\\", while A01 and R0-36 say a create repeated after a lost answer never makes a second record; A01 gives no restore exception.\",\"question\":\"If a create committed after the restored backup and its caller repeats the same request id after restoration, must Registry create a new record, refuse it, or recover the former result by some external means?\",\"options\":[\"The request id is forgotten with the lost change and the repeat creates a new record in the new history\",\"The replay guarantee survives restoration and requires request-id state outside the restored store\",\"The repeat is refused when Registry cannot prove its earlier outcome\"],\"default_guess\":\"Treat replay guarantees as local to a store history, so the repeat creates a new record.\",\"unit\":\"context\"},{\"subject\":\"MigrationClosure cardinality across restored histories\",\"kind\":\"contradiction\",\"text\":\"M10 says \\\"Durable, at most one per instance\\\", but R0-89 permits a closure to be lost with a pre-import backup and the import to be made again, producing another closure for the same instance in a later history.\",\"question\":\"Does \\\"at most one per instance\\\" mean one across the instance's entire disaster-recovery lineage or one in each store history?\",\"options\":[\"At most one in each store history\",\"At most one across all histories of the instance\"],\"default_guess\":\"Interpret it as at most one in the current store history.\",\"unit\":\"context\"},{\"subject\":\"A01 publish replay ownership\",\"kind\":\"ambiguous equality\",\"text\":\"A01 says supplied facts are compared with the record's current facts, while M05 makes the publisher a pointer fact derived from the authenticated principal rather than a supplied field.\",\"question\":\"Is the authenticated principal or Kernel session part of equality for a publish replay, or may another authorized principal using the same request id and supplied pointer values receive the existing pointer?\",\"options\":[\"Include principal and Kernel session in replay equality\",\"Ignore principal because only caller-supplied fields are compared\",\"Scope request ids by principal in addition to project\"],\"default_guess\":\"Include the authenticated principal, including the Kernel session, in replay equality.\",\"unit\":\"A01\"},{\"subject\":\"A04 failure precedence within a stage\",\"kind\":\"unspecified order\",\"text\":\"A04 defines stages (1) through (6) and says the first failure is the answer, but gives no order among multiple checks inside stages (3), (4), or (6).\",\"question\":\"When several checks in the same stage fail, which failure wins—for example two missing referenced records, several invalid values, or an archived project combined with an ineligible customer?\",\"options\":[\"Declare a total order for every check within each stage\",\"Return one aggregate failure for all failures in a stage\",\"Permit any failure from the earliest failing stage\"],\"default_guess\":\"Declare a deterministic operation-specific order within every stage.\",\"unit\":\"A04\"},{\"subject\":\"A04 existence checks for related records\",\"kind\":\"ambiguous stage\",\"text\":\"Stage (3) is \\\"that the record named exists\\\", while stage (6) includes \\\"a customer's eligibility\\\" and State 0 treats an unknown newly named customer as a refusal.\",\"question\":\"Does existence at stage (3) cover every referenced record, such as the customer and project named by one action, or only the action's primary target, leaving related-record existence to stage (6)?\",\"options\":[\"Check every named or referenced record at stage (3)\",\"Check only the primary target at stage (3)\",\"Define the stage separately for each operation and reference\"],\"default_guess\":\"Check the primary target first at stage (3), then related-record existence with its eligibility check at stage (6).\",\"unit\":\"A04\"},{\"subject\":\"A04 confirmation-binding check\",\"kind\":\"unspecified precedence\",\"text\":\"A04 puts \\\"a confirmation value\\\" in stage (1), while A13 says a matching value is consumed even when its binding to another action or input causes refusal, without saying where that binding comparison occurs.\",\"question\":\"Are the confirmation's action, target, revision or access version, and input bindings all checked in stage (1), or are they checked in their ordinary value, revision, and lifecycle stages after the value has been consumed?\",\"options\":[\"Check the entire confirmation binding in stage (1)\",\"Check only token equality in stage (1) and bindings in later stages\",\"Give confirmation binding its own ordered stage\"],\"default_guess\":\"Check token equality and the complete binding in stage (1), consuming the token once equality succeeds.\",\"unit\":\"A04\"},{\"subject\":\"A13 owner-session cookie scope\",\"kind\":\"underspecified browser boundary\",\"text\":\"The session is \\\"carried by a cookie that scripts cannot read, sent only over HTTPS when the interface is reached from another machine, and only to Registry's own origin\\\"; cookies are scoped by host and path, not by web origin including port.\",\"question\":\"What exact cookie attributes and deployment constraint make \\\"only to Registry's own origin\\\" true, especially when local access may use HTTP or another service shares the host?\",\"options\":[\"Require HTTPS everywhere and use Secure, HttpOnly, host-only, SameSite=Strict with a Registry-only path\",\"Allow local HTTP with a host-only HttpOnly cookie and accept host-level rather than origin-level scope\",\"Use a dedicated Registry hostname so host-only scope is equivalent to the intended origin\"],\"default_guess\":\"Require a dedicated hostname and a Secure, HttpOnly, host-only, SameSite=Strict cookie with the narrowest usable path.\",\"unit\":\"A13\"},{\"subject\":\"A13 elapsed-time clock\",\"kind\":\"unspecified time source\",\"text\":\"Session and confirmation validity are expressed as elapsed hours or minutes from recorded UTC instants, but the text does not say how host-clock adjustments affect those limits.\",\"question\":\"Are the 8-hour, 30-minute, 15-minute, and 10-minute intervals measured with a monotonic clock, UTC wall time, or a defined combination that survives restart only where state survives?\",\"options\":[\"Use monotonic elapsed time for runtime limits\",\"Use UTC wall-clock instants\",\"Use monotonic time during a process and UTC only for recorded instants\"],\"default_guess\":\"Use monotonic time for all runtime lifetimes and UTC only for stored or displayed instants.\",\"unit\":\"A13\"},{\"subject\":\"A13 creation of a pending confirmation\",\"kind\":\"missing preconditions\",\"text\":\"A confirmation value is \\\"made when it showed the step\\\", but no rule says which authentication, existence, value, revision, access-version, or lifecycle checks must pass before Registry may show that step and replace the session's existing pending confirmation.\",\"question\":\"What checks must pass before a confirmation step may be issued, and may an invalid or stale action replace an otherwise valid pending confirmation?\",\"options\":[\"Run all ordinary checks except the final mutation before issuing confirmation\",\"Issue confirmation after authentication and CSRF only\",\"Define different issuance checks for each confirmed action\"],\"default_guess\":\"Run all checks against the currently shown inputs and versions before issuing and replacing a pending confirmation.\",\"unit\":\"A13\"},{\"subject\":\"no-op audit erasure\",\"kind\":\"contradiction\",\"text\":\"R0-66 says erasing audit entries before a date \\\"leaves an entry of its own naming the date\\\", while A15 rule 6 says an erasure removing no entry \\\"writes no entry and mints no confirmation id\\\".\",\"question\":\"Does an accepted erasure that finds no matching entries append an erasure entry or leave the log unchanged?\",\"options\":[\"Always append the erasure entry as R0-66 states\",\"Append only when at least one entry was removed as A15 states\"],\"default_guess\":\"Follow A15 and leave the log unchanged when nothing was removed.\",\"unit\":\"A15\"},{\"subject\":\"A16 file digest\",\"kind\":\"undefined identity rule\",\"text\":\"The mapping, confirmation, closure, and audit entry identify the import file \\\"by its digest\\\", but no digest algorithm, byte representation, or collision rule is declared.\",\"question\":\"How is the import-file digest computed, and what happens if two different uploaded byte sequences have the same digest?\",\"options\":[\"Fix a collision-resistant digest over the exact uploaded bytes and treat equality as file identity\",\"Digest a canonicalized parsed representation\",\"Store and compare both the digest and exact uploaded bytes\"],\"default_guess\":\"Use SHA-256 over the exact uploaded bytes and require both the pending file and digest to match the confirmation.\",\"unit\":\"A16\"},{\"subject\":\"A16 duplicate project ids and picking\",\"kind\":\"ambiguous selection\",\"text\":\"A duplicate id is malformed, unpicked projects are not checked, and the mapping lets the owner pick projects by the id it shows; the text does not say how a file containing two project records with the same id can be picked unambiguously.\",\"question\":\"If duplicate project ids occur, is the whole upload unusable, are both duplicate records considered picked together, or may the owner leave them unpicked and import other projects?\",\"options\":[\"Refuse confirmation of any mapping whose project ids are duplicated anywhere in the file\",\"Allow other projects to be imported if every duplicate project record is unpicked\",\"Introduce a file-local row identity for selection\"],\"default_guess\":\"Treat duplicate project ids as a file-level structural error that prevents any confirmation.\",\"unit\":\"A16\"},{\"subject\":\"A16 minted Customer identity collision\",\"kind\":\"missing collision behavior\",\"text\":\"Each new Customer's `customer_ref` is minted only when the import is accepted, while the conflict rules cover only brought-in project, room, and pointer ids.\",\"question\":\"What must happen if a newly minted `customer_ref` collides with an existing Customer or with another identity minted in the same import?\",\"options\":[\"Retry minting within the transaction until every new customer id is unique\",\"Refuse the whole import as a conflict\",\"Treat such a collision as an internal failure and allow a retry\"],\"default_guess\":\"Retry minting within the transaction until unique identifiers are obtained.\",\"unit\":\"A16\"},{\"subject\":\"A17 meaning of secret length\",\"kind\":\"undefined validation\",\"text\":\"A secret must be \\\"at least 32 bytes long\\\", but the configuration's representation and decoding of textual secrets are not defined.\",\"question\":\"Which bytes are counted and compared: literal configuration bytes, UTF-8 encoding, decoded base64 or hexadecimal bytes, or another fixed representation?\",\"options\":[\"Require base64 and count decoded bytes\",\"Require hexadecimal and count decoded bytes\",\"Treat the exact UTF-8 configuration value as the secret and count those bytes\"],\"default_guess\":\"Require a canonical base64 encoding and at least 32 decoded bytes.\",\"unit\":\"A17\"},{\"subject\":\"A17 failed-start side effects\",\"kind\":\"unspecified check order\",\"text\":\"Registry may create a new empty store and probes the backup location by creating and removing a file, while a later failed configuration check stops the start; no atomicity or ordering is stated for these checks.\",\"question\":\"May a failed start leave behind a newly created store or probe file, and in what order are non-mutating validation, path probing, and store creation performed?\",\"options\":[\"Validate everything possible first and roll back every probe or new store on failure\",\"Allow a failed start to leave a valid empty store but never a probe file\",\"Allow each check's side effects to remain\"],\"default_guess\":\"Perform non-mutating checks first, clean up probes, and create the store only after every other startup check passes.\",\"unit\":\"A17\"},{\"subject\":\"A17 relationship between store and backup locations\",\"kind\":\"missing refusal condition\",\"text\":\"The configuration validates the store location and backup location separately but does not say whether they may be equal, nested, symlinked to one another, or point at the same file tree.\",\"question\":\"Which overlap or aliasing relationships between the store and backup locations are accepted or refused?\",\"options\":[\"Require disjoint canonical directories and refuse every overlap\",\"Allow the backup directory to share the store's parent but not contain the live store\",\"Allow any relationship if generated filenames do not collide\"],\"default_guess\":\"Resolve canonical paths and refuse either location containing the other or resolving to the same place.\",\"unit\":\"A17\"},{\"subject\":\"A18 scheduled run versus import run\",\"kind\":\"ambiguous schedule\",\"text\":\"There is \\\"at most one run per UTC day\\\" besides the run after an accepted import, but startup catch-up runs only \\\"if no backup was made that UTC day\\\"; it is unclear whether an import backup counts as that day's daily backup.\",\"question\":\"If a checked import backup succeeds before 03:00 UTC, or before a catch-up start later that day, must the ordinary daily run still occur?\",\"options\":[\"An import backup satisfies the day's backup requirement and suppresses the daily run\",\"The import backup is always extra and the daily run still occurs once\",\"The next scheduled run depends on whether the import backup occurred before or after 03:00\"],\"default_guess\":\"Treat a successful import backup as the backup made for that UTC day and suppress the ordinary run.\",\"unit\":\"A18\"},{\"subject\":\"A18 failed catch-up across restarts\",\"kind\":\"contradictory retry rule\",\"text\":\"A missed 03:00 run is made on the next start \\\"if no backup was made that UTC day\\\", failed work is retried at the next run, and there is at most one ordinary run per UTC day. After a failed catch-up, another restart that day still satisfies \\\"no backup was made\\\".\",\"question\":\"Does another restart on the same UTC day retry the failed catch-up, or does the one-run-per-day limit postpone retry until the next day, and where is a failed attempt remembered across restarts?\",\"options\":[\"Retry on every restart until a backup succeeds, overriding the one-run limit for failures\",\"Persist that the day's run was attempted and retry the next UTC day\",\"Count only successful runs toward the one-run limit\"],\"default_guess\":\"Persist the day's attempted run and retry on the next UTC day's run.\",\"unit\":\"A18\"},{\"subject\":\"A18 backup cryptography\",\"kind\":\"undefined security mechanism\",\"text\":\"Backups must be encrypted with the backup key and expose a digest of that key, but no authenticated-encryption algorithm, nonce rule, key derivation, metadata authentication, or digest algorithm is fixed.\",\"question\":\"What cryptographic format makes confidentiality and integrity testable and prevents undetected modification of the unencrypted metadata or ciphertext?\",\"options\":[\"Specify an authenticated-encryption format with random nonces and authenticated metadata\",\"Rely on disk encryption plus an unspecified encrypted archive format\",\"Encrypt the store and separately sign the metadata\"],\"default_guess\":\"Use a versioned authenticated-encryption format with a random nonce, authenticate all public metadata, and identify keys with a collision-resistant digest.\",\"unit\":\"A18\"},{\"subject\":\"A18 failed temporary-file cleanup\",\"kind\":\"conflicting failure behavior\",\"text\":\"At every start and run Registry \\\"first removes every temporary file\\\", a failed removal is retried later while Registry keeps serving, and rule 6 says a failed backup or deletion \\\"leaves no partial file\\\".\",\"question\":\"If a temporary or partial file cannot be removed, does the run abort, continue using different names, or continue despite the leftover file, and is the partial-file guarantee waived for cleanup failures?\",\"options\":[\"Abort that backup run but keep serving, leaving the temporary file for the next run\",\"Continue with collision-proof new temporary names\",\"Refuse to serve until all temporary files are removed\"],\"default_guess\":\"Abort only the backup run, keep serving, report the leftover, and retry cleanup at the next run.\",\"unit\":\"A18\"},{\"subject\":\"A18 last audit sequence in an empty store\",\"kind\":\"undefined boundary value\",\"text\":\"Every backup records \\\"the last audit sequence number it holds\\\" and the check requires the audit log to end at it, but a new store can have no audit entry.\",\"question\":\"What value is recorded and checked when the backup contains no audit entries?\",\"options\":[\"Record 0\",\"Record null or an explicit no-entry marker\",\"Omit the field for an empty log\"],\"default_guess\":\"Record 0 and require the store's next audit sequence to be 1.\",\"unit\":\"A18\"},{\"subject\":\"A18 unreadable kept-backup metadata\",\"kind\":\"missing failure rule\",\"text\":\"Retention uses the instant recorded in metadata readable without the key, but no rule covers a kept backup whose metadata later becomes unreadable, malformed, or inconsistent after its creation-time check.\",\"question\":\"During a later run, is such a backup deleted, quarantined, ignored indefinitely, or treated as a run failure, and can it be selected as the newest backup for restoration?\",\"options\":[\"Quarantine and report it, exclude it from restoration, then retry deletion\",\"Delete it immediately as invalid\",\"Keep it and require owner intervention\"],\"default_guess\":\"Exclude it from restoration, report it, and attempt to delete it as an invalid backup.\",\"unit\":\"A18\"}]}",
+ "set_aside": []
+}
