@@ -484,7 +484,10 @@ one `published` pointer of that type, or none (R0-14).
 ### Persistence candidate
 
 Durable, a record of its own naming its project (M01); kept after
-anonymisation (R0-62).
+anonymisation (R0-62). When the owner deletes the project whole, its pointers
+go with it: the project then answers `not_found` (R0-60), and so does 'list
+artifacts' on it; only anonymisation keeps them, which is what tells the two
+erasures apart (R0-52; codex round-05 T1).
 
 ### Open questions
 
