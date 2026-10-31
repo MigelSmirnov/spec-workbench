@@ -41,7 +41,8 @@ owner sets outside Registry, and no record, log line or answer holds one.
 
 Concepts are kept apart by their change axis: a Customer changes for the
 customer's reasons (contact, fiscal, relationship, rights), a Project for the
-work's reasons, an artifact pointer for a producer's publication. The object
+work's reasons, an artifact pointer for a link the agent or the owner makes
+(R0-88). The object
 changes only with its project (R0-45) and is therefore not a model of its own
 (M02). Answers a caller reads — the project card, `context`, `validate`, the
 agent projection, the session's access, the billing read, the audit view — are
