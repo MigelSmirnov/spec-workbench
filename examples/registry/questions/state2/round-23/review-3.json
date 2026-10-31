@@ -1,0 +1,150 @@
+{
+ "open_points": [
+  {
+   "subject": "owner-session request ordering around sign-out",
+   "kind": "concurrency contradiction",
+   "text": "“Validity is checked when a request arrives … a request that passes it completes even if … a sign-out comes while it runs” and “requests … are applied one at a time, in the order in which they take the session's one lock, after passing the session check — those that read or change an uploaded file take the import lock before it”",
+   "question": "If an upload-related request passes the session check, waits for the import lock, and sign-out acquires the locks and ends the session first, must the already-admitted request still complete, or must it be refused after the session has ended?",
+   "options": [
+    "Admission reserves the session and the request completes before sign-out takes effect",
+    "The session is checked again under the locks and the request is refused",
+    "Whichever request takes the locks first determines the result"
+   ],
+   "default_guess": "Treat passing the arrival check as admission and ensure the admitted request completes before sign-out takes effect.",
+   "unit": "A13"
+  },
+  {
+   "subject": "accepted import changing other owner sessions",
+   "kind": "locking contradiction",
+   "text": "A13 says requests that change one owner session are applied under “the session's one lock”; A16 says “an accepted import, holding [the import lock], drops every session's upload” while taking only the confirming session's lock.",
+   "question": "May an accepted import change another session's uploaded-file state without taking that other session's lock, or must it lock every affected session as well as the import lock?",
+   "options": [
+    "The import lock exclusively protects uploaded-file state, so other session locks are unnecessary",
+    "The import must also take every affected session lock",
+    "Dropping other sessions' uploads is not considered a session-state change"
+   ],
+   "default_guess": "Treat uploaded-file state as protected exclusively by the import lock and state an explicit exception to A13's session-lock rule.",
+   "unit": "A16"
+  },
+  {
+   "subject": "uploaded file of an expired owner session",
+   "kind": "lifetime contradiction",
+   "text": "M11 says “Everything in it ends with the session,” while A16 says “the upload of a session ended by its limits is dropped by the next holder.”",
+   "question": "Does the uploaded file cease to exist when the session expires, or may it remain in memory, inaccessible, until a later request takes the import lock?",
+   "options": [
+    "It is removed synchronously when the session ends",
+    "It may remain until the next import-lock holder removes it",
+    "Expiry marks it unreachable immediately but physical removal is deferred"
+   ],
+   "default_guess": "Mark it unreachable at expiry and allow physical removal to be deferred until the next import-lock holder.",
+   "unit": "A16"
+  },
+  {
+   "subject": "closure check for upload-related requests",
+   "kind": "undefined refusal scope",
+   "text": "A16 rule 2 says uploads, showing the mapping or confirmation step, confirming, and sign-out “check the closure while holding” both locks, but rule 8 says only “uploading and confirming an import are refused” while the closure exists.",
+   "question": "What does a closure found by showing the mapping, showing the import confirmation step, or signing out do?",
+   "options": [
+    "Mapping and confirmation-step requests are refused, while sign-out still succeeds",
+    "Every listed request, including sign-out, is refused",
+    "Only upload and confirmation are refused; the other requests merely observe the closure"
+   ],
+   "default_guess": "Refuse mapping and import-confirmation-step requests, but allow sign-out and have it discard the session state.",
+   "unit": "A16"
+  },
+  {
+   "subject": "service-token configuration in owner-only mode",
+   "kind": "rule contradiction",
+   "text": "A17 rule 1 allows “one service token for each service … or, for an owner-only start, none of the four,” while rule 2 requires “every item of rule 1 present” and rule 5 says “A missing … item fails the start.”",
+   "question": "How does the presence check distinguish the valid all-four-token mode and the valid no-token owner-only mode from an invalid partially configured mode?",
+   "options": [
+    "Exactly all four or exactly none are valid",
+    "Token variables must always be present, with a separate owner-only flag or value",
+    "Any subset is valid and grants only those services"
+   ],
+   "default_guess": "Accept exactly all four tokens or exactly none, and reject every partial set.",
+   "unit": "A17"
+  },
+  {
+   "subject": "configuration names and well-formed values",
+   "kind": "undefined validation",
+   "text": "“The configuration is the set of environment variables whose names begin with REGISTRY_” and Registry checks “each well formed,” but the exact variable names, value encodings, and well-formedness rules are not given.",
+   "question": "What are the exact REGISTRY_ variable names and how are store paths, backup paths, credentials, tokens and the backup key decoded and validated, including what counts as a byte for the 32-byte minimum?",
+   "options": [
+    "Environment values are UTF-8 strings and length is their UTF-8 byte length",
+    "Secrets use a declared encoded binary form such as base64 or hexadecimal",
+    "Length is counted in characters and paths use the host's native encoding"
+   ],
+   "default_guess": "Declare exact variable names, use filesystem paths for locations, and use base64-encoded secret bytes with the minimum applied after decoding.",
+   "unit": "A17"
+  },
+  {
+   "subject": "store and backup path separation",
+   "kind": "vague path identity",
+   "text": "“The store and the backup location are different places, neither inside the other, compared by their absolute paths with every symbolic link resolved,” while the store may be a configured file that does not yet exist.",
+   "question": "How are symlinks and containment resolved when the store file or a path component does not yet exist, and does containment compare the store file, its parent directory, or both?",
+   "options": [
+    "Resolve the nearest existing ancestors and compare the prospective store file with the backup directory",
+    "Require both configured paths to exist before comparison",
+    "Compare only normalized textual absolute paths"
+   ],
+   "default_guess": "Resolve every existing ancestor, append unresolved components canonically, and compare the prospective store file and its parent against the backup directory.",
+   "unit": "A17"
+  },
+  {
+   "subject": "backup encryption and key digest",
+   "kind": "unverifiable security invariant",
+   "text": "A18 says “Each backup is encrypted with the backup key” and records “a digest of the key,” but declares no encryption construction, authentication rule, nonce handling, key derivation, or digest algorithm.",
+   "question": "What cryptographic construction makes a backup confidential and detects tampering, and how are its nonce, authenticated metadata and non-secret key identifier produced?",
+   "options": [
+    "Authenticated encryption with a fresh random nonce and authenticated metadata",
+    "Encryption without authentication plus a separate integrity digest",
+    "A backend-specific encrypted container whose security contract is declared elsewhere"
+   ],
+   "default_guess": "Use a specified authenticated-encryption construction with a fresh random nonce, authenticate the clear metadata, and store a cryptographic key identifier rather than a raw reusable key hash.",
+   "unit": "A18"
+  },
+  {
+   "subject": "backup discovery across releases",
+   "kind": "release compatibility gap",
+   "text": "“Kept and temporary names begin with two different prefixes the release declares,” while backups are retained across releases and each run deletes old or unreadable kept files.",
+   "question": "Must every release use stable prefixes and read all earlier backup-record formats, or may a new release ignore backups made under an older prefix or format?",
+   "options": [
+    "Prefixes and the clear record format are stable and backward-compatible across releases",
+    "Each release declares migrations/readers for all backups still within retention",
+    "A release manages only backups made by that release"
+   ],
+   "default_guess": "Keep stable prefixes and require backward-compatible reading of every backup format that can still be within the 30-day retention window.",
+   "unit": "A18"
+  },
+  {
+   "subject": "backup audit sequence for an empty log",
+   "kind": "undefined boundary value",
+   "text": "A backup records “the last audit sequence number it holds” and its check verifies “that its audit log ends at the recorded sequence number,” but a new store can have no audit entry.",
+   "question": "What sequence value is recorded and checked when the audit log has never contained an entry?",
+   "options": [
+    "Record zero",
+    "Record an explicit absent value",
+    "Omit the field until the first audit entry"
+   ],
+   "default_guess": "Record zero and define an empty audit log as ending at sequence zero.",
+   "unit": "A18"
+  },
+  {
+   "subject": "backup-run success and cleanup errors",
+   "kind": "undefined outcome",
+   "text": "A18 says a file that cannot be read or deleted “is reported, and it goes on with the next,” while later rules depend on whether “daily runs succeed” and the formal invariant applies after “a run whose deletions succeeded.”",
+   "question": "Does any unreadable or undeletable kept file make the whole run failed, and what exact combination of backup creation, checking, renaming and retention-cleanup results counts as a successful run?",
+   "options": [
+    "Any error in any step makes the run failed, though cleanup continues",
+    "The run succeeds if a new checked backup is kept even when retention cleanup has errors",
+    "Backup creation and retention cleanup have separate success outcomes"
+   ],
+   "default_guess": "Give the run separate backup and cleanup results, and call the overall run failed if either result has an error.",
+   "unit": "A18"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"owner-session request ordering around sign-out\",\"kind\":\"concurrency contradiction\",\"text\":\"“Validity is checked when a request arrives … a request that passes it completes even if … a sign-out comes while it runs” and “requests … are applied one at a time, in the order in which they take the session's one lock, after passing the session check — those that read or change an uploaded file take the import lock before it”\",\"question\":\"If an upload-related request passes the session check, waits for the import lock, and sign-out acquires the locks and ends the session first, must the already-admitted request still complete, or must it be refused after the session has ended?\",\"options\":[\"Admission reserves the session and the request completes before sign-out takes effect\",\"The session is checked again under the locks and the request is refused\",\"Whichever request takes the locks first determines the result\"],\"default_guess\":\"Treat passing the arrival check as admission and ensure the admitted request completes before sign-out takes effect.\",\"unit\":\"A13\"},{\"subject\":\"accepted import changing other owner sessions\",\"kind\":\"locking contradiction\",\"text\":\"A13 says requests that change one owner session are applied under “the session's one lock”; A16 says “an accepted import, holding [the import lock], drops every session's upload” while taking only the confirming session's lock.\",\"question\":\"May an accepted import change another session's uploaded-file state without taking that other session's lock, or must it lock every affected session as well as the import lock?\",\"options\":[\"The import lock exclusively protects uploaded-file state, so other session locks are unnecessary\",\"The import must also take every affected session lock\",\"Dropping other sessions' uploads is not considered a session-state change\"],\"default_guess\":\"Treat uploaded-file state as protected exclusively by the import lock and state an explicit exception to A13's session-lock rule.\",\"unit\":\"A16\"},{\"subject\":\"uploaded file of an expired owner session\",\"kind\":\"lifetime contradiction\",\"text\":\"M11 says “Everything in it ends with the session,” while A16 says “the upload of a session ended by its limits is dropped by the next holder.”\",\"question\":\"Does the uploaded file cease to exist when the session expires, or may it remain in memory, inaccessible, until a later request takes the import lock?\",\"options\":[\"It is removed synchronously when the session ends\",\"It may remain until the next import-lock holder removes it\",\"Expiry marks it unreachable immediately but physical removal is deferred\"],\"default_guess\":\"Mark it unreachable at expiry and allow physical removal to be deferred until the next import-lock holder.\",\"unit\":\"A16\"},{\"subject\":\"closure check for upload-related requests\",\"kind\":\"undefined refusal scope\",\"text\":\"A16 rule 2 says uploads, showing the mapping or confirmation step, confirming, and sign-out “check the closure while holding” both locks, but rule 8 says only “uploading and confirming an import are refused” while the closure exists.\",\"question\":\"What does a closure found by showing the mapping, showing the import confirmation step, or signing out do?\",\"options\":[\"Mapping and confirmation-step requests are refused, while sign-out still succeeds\",\"Every listed request, including sign-out, is refused\",\"Only upload and confirmation are refused; the other requests merely observe the closure\"],\"default_guess\":\"Refuse mapping and import-confirmation-step requests, but allow sign-out and have it discard the session state.\",\"unit\":\"A16\"},{\"subject\":\"service-token configuration in owner-only mode\",\"kind\":\"rule contradiction\",\"text\":\"A17 rule 1 allows “one service token for each service … or, for an owner-only start, none of the four,” while rule 2 requires “every item of rule 1 present” and rule 5 says “A missing … item fails the start.”\",\"question\":\"How does the presence check distinguish the valid all-four-token mode and the valid no-token owner-only mode from an invalid partially configured mode?\",\"options\":[\"Exactly all four or exactly none are valid\",\"Token variables must always be present, with a separate owner-only flag or value\",\"Any subset is valid and grants only those services\"],\"default_guess\":\"Accept exactly all four tokens or exactly none, and reject every partial set.\",\"unit\":\"A17\"},{\"subject\":\"configuration names and well-formed values\",\"kind\":\"undefined validation\",\"text\":\"“The configuration is the set of environment variables whose names begin with REGISTRY_” and Registry checks “each well formed,” but the exact variable names, value encodings, and well-formedness rules are not given.\",\"question\":\"What are the exact REGISTRY_ variable names and how are store paths, backup paths, credentials, tokens and the backup key decoded and validated, including what counts as a byte for the 32-byte minimum?\",\"options\":[\"Environment values are UTF-8 strings and length is their UTF-8 byte length\",\"Secrets use a declared encoded binary form such as base64 or hexadecimal\",\"Length is counted in characters and paths use the host's native encoding\"],\"default_guess\":\"Declare exact variable names, use filesystem paths for locations, and use base64-encoded secret bytes with the minimum applied after decoding.\",\"unit\":\"A17\"},{\"subject\":\"store and backup path separation\",\"kind\":\"vague path identity\",\"text\":\"“The store and the backup location are different places, neither inside the other, compared by their absolute paths with every symbolic link resolved,” while the store may be a configured file that does not yet exist.\",\"question\":\"How are symlinks and containment resolved when the store file or a path component does not yet exist, and does containment compare the store file, its parent directory, or both?\",\"options\":[\"Resolve the nearest existing ancestors and compare the prospective store file with the backup directory\",\"Require both configured paths to exist before comparison\",\"Compare only normalized textual absolute paths\"],\"default_guess\":\"Resolve every existing ancestor, append unresolved components canonically, and compare the prospective store file and its parent against the backup directory.\",\"unit\":\"A17\"},{\"subject\":\"backup encryption and key digest\",\"kind\":\"unverifiable security invariant\",\"text\":\"A18 says “Each backup is encrypted with the backup key” and records “a digest of the key,” but declares no encryption construction, authentication rule, nonce handling, key derivation, or digest algorithm.\",\"question\":\"What cryptographic construction makes a backup confidential and detects tampering, and how are its nonce, authenticated metadata and non-secret key identifier produced?\",\"options\":[\"Authenticated encryption with a fresh random nonce and authenticated metadata\",\"Encryption without authentication plus a separate integrity digest\",\"A backend-specific encrypted container whose security contract is declared elsewhere\"],\"default_guess\":\"Use a specified authenticated-encryption construction with a fresh random nonce, authenticate the clear metadata, and store a cryptographic key identifier rather than a raw reusable key hash.\",\"unit\":\"A18\"},{\"subject\":\"backup discovery across releases\",\"kind\":\"release compatibility gap\",\"text\":\"“Kept and temporary names begin with two different prefixes the release declares,” while backups are retained across releases and each run deletes old or unreadable kept files.\",\"question\":\"Must every release use stable prefixes and read all earlier backup-record formats, or may a new release ignore backups made under an older prefix or format?\",\"options\":[\"Prefixes and the clear record format are stable and backward-compatible across releases\",\"Each release declares migrations/readers for all backups still within retention\",\"A release manages only backups made by that release\"],\"default_guess\":\"Keep stable prefixes and require backward-compatible reading of every backup format that can still be within the 30-day retention window.\",\"unit\":\"A18\"},{\"subject\":\"backup audit sequence for an empty log\",\"kind\":\"undefined boundary value\",\"text\":\"A backup records “the last audit sequence number it holds” and its check verifies “that its audit log ends at the recorded sequence number,” but a new store can have no audit entry.\",\"question\":\"What sequence value is recorded and checked when the audit log has never contained an entry?\",\"options\":[\"Record zero\",\"Record an explicit absent value\",\"Omit the field until the first audit entry\"],\"default_guess\":\"Record zero and define an empty audit log as ending at sequence zero.\",\"unit\":\"A18\"},{\"subject\":\"backup-run success and cleanup errors\",\"kind\":\"undefined outcome\",\"text\":\"A18 says a file that cannot be read or deleted “is reported, and it goes on with the next,” while later rules depend on whether “daily runs succeed” and the formal invariant applies after “a run whose deletions succeeded.”\",\"question\":\"Does any unreadable or undeletable kept file make the whole run failed, and what exact combination of backup creation, checking, renaming and retention-cleanup results counts as a successful run?\",\"options\":[\"Any error in any step makes the run failed, though cleanup continues\",\"The run succeeds if a new checked backup is kept even when retention cleanup has errors\",\"Backup creation and retention cleanup have separate success outcomes\"],\"default_guess\":\"Give the run separate backup and cleanup results, and call the overall run failed if either result has an error.\",\"unit\":\"A18\"}]}",
+ "set_aside": []
+}
