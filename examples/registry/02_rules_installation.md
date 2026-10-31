@@ -38,10 +38,14 @@ security review of States 0–2.
    and every other request that reads or changes an uploaded file — showing
    the mapping or the import's confirmation step, confirming, a sign-out —
    take the instance's one import lock first, then their session's lock
-   (A13), check the closure while holding them, and hold both until done.
+   (A13), check the closure while holding them, and hold both until done;
+   when the closure exists, uploading, showing the mapping or the import's
+   confirmation step and confirming are refused, and a sign-out goes on.
    An uploaded file is changed only by a holder of the import lock: an
    accepted import, holding it, drops every session's upload; the upload of
-   a session ended by its limits is dropped by the next holder. Other
+   a session ended by its limits is dropped by a sweep that takes the import
+   lock at least once a minute, so it stays in memory at most a minute after
+   the session ends, reachable by no request. Other
    session changes take their session's lock alone. So no upload lands after
    the import that closed it, and the two locks are always taken in that
    order. The mapping names
@@ -163,7 +167,10 @@ closure is the one proof of success.
    and remove a file in it; otherwise the start fails. It holds Registry's
    files only; the owner puts nothing else there. The store and the
    backup location are different places, neither inside the other, compared
-   by their absolute paths with every symbolic link resolved; a configuration
+   by their absolute paths with every symbolic link resolved — for a store
+   file that does not exist yet, its directory resolved and its name added; a
+   path that cannot be resolved, a broken link or a loop included, fails the
+   start; a configuration
    where they are the same or one holds the other fails the start. Aliases a
    path comparison cannot see, such as bind mounts, are the owner's to avoid
    (Explicit exclusions). When the store's
@@ -254,10 +261,15 @@ secret cannot be shared between holders.
    backup made more than 30 × 24 hours before, and every file under the kept
    prefix whose unencrypted record (rule 1) cannot be read. It takes the
    files in the order of their names; a file it cannot read or delete is
-   reported, and it goes on with the next.
+   reported, and it goes on with the next. A run succeeds only when every
+   step did; one whose backup was kept but a deletion failed is failed, and
+   its new backup stays kept.
 5. Kept and temporary names begin with two different prefixes the release
    declares; Registry removes, renames and deletes in the backup location
-   only files under them, and the location is Registry's alone (A17). A kept
+   only files under them, and the location is Registry's alone (A17): a file
+   is under a prefix when it is a regular file directly in the location whose
+   name begins with it; Registry follows no link and enters no directory
+   there. A kept
    name is made from the backup's instant and is never overwritten: a backup
    whose kept name exists, or whose rename fails, is deleted and the run
    fails. A step that fails leaves no partial kept backup —
