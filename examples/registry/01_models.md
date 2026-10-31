@@ -111,8 +111,8 @@ States 5 and 6.
 
 | class | fields |
 |---|---|
-| `personal_data` | Project display name (R0-82); Object address, kind and characteristics (R0-38); Customer name, phone, e-mail, language, tax id, legal name (R0-80) |
-| `business_confidential` | every other fact of every model: `project_id`, alias, status, revision, instants, the archived and anonymised marks; `customer_ref`, the Customer's kind, revision, instants and its erased, restricted and ended marks with their dates; `room_id`, room name and added instant; every artifact pointer fact; every agent session fact and the access request's text; every audit entry; the migration closure; the owner session |
+| `personal_data` | Project display name (R0-82); Object address, kind and characteristics (R0-38); Customer name, phone, e-mail, language, tax id, legal name (R0-80); the import file uploaded in an owner session (M11), which holds such values |
+| `business_confidential` | every other fact of every model: `project_id`, alias, status, revision, instants, the archived and anonymised marks; `customer_ref`, the Customer's kind, revision, instants and its erased, restricted and ended marks with their dates; `room_id`, room name and added instant; every artifact pointer fact; every agent session fact and the access request's text; every audit entry; the migration closure; the owner session, but for its uploaded import file |
 | `open` | nothing: a project's id is not anonymous by itself (R0-26) |
 
 Each fact has one class. An answer's class is the highest class of the facts
@@ -782,10 +782,14 @@ expiry and sign-in throttling are State 2's (R0-30, carried).
 
 Facts: its identity, minted by Registry at sign-in ("Identity formats");
 written once: the instant it began, its expiry at the latest and its CSRF
-value (R0-29); changed by the owner's requests: the instant of its last
-request, its pending confirmation values and the import file uploaded in it,
-each kept until used, replaced or the session ends (State 2 A13, A16;
-owner, 2026-10-31). The confirmation id of an action the owner confirms in it
+value (R0-29); changed by the owner's requests (State 2 A13, A16; owner,
+2026-10-31): the instant of its last request, which starts as the instant it
+began; at most one pending confirmation — its one-time value, the action, its
+target, the revision or access version and the inputs it is bound to, and
+the instant it was shown — made when a confirmation step is shown, replaced
+by the next one shown and cleared when used; and at most one uploaded import
+file, replaced by the next upload and dropped when the import is accepted.
+Everything in it ends with the session. The confirmation id of an action the owner confirms in it
 is minted per confirmation, not per session ("Identity formats").
 
 ### Identity
