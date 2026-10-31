@@ -12,28 +12,33 @@ security review of States 0–2.
 ### Normative rules
 
 1. The owner uploads the export file (R0-72) in the owner interface. Registry
-   reads it as data (A19) and answers the mapping without changing anything:
-   each project the file holds, with its id, status, rooms and pointers; for
-   each project the owner picks, the display name and alias it will arrive
-   under (R0-85); each Customer the import will make, with the v1 value it
-   comes from and the projects it will link (R0-80); every id that conflicts
-   with one production holds. For each Customer it will make, the owner gives
-   its name and kind and says whether the v1 value is its tax id (State 1
-   M04); confirmation is refused while any of these is missing (A02).
+   reads it as data (A19) and answers, without changing anything, each
+   project the file holds with its id and status. As the owner picks projects,
+   the mapping shows for the picks only: their rooms and pointers; the display
+   name and alias each will arrive under (R0-85); the Customers the import
+   will make — one for each distinct v1 `customer_ref` a picked project names,
+   which is all the file says of a customer (State 1 M04) — with the projects
+   each will link (R0-80); and every malformed record and every id that
+   conflicts with one production holds. For each Customer it will make, the
+   owner gives its name and kind and says whether the v1 value is its tax id;
+   confirmation is refused while any of these is missing (A02). Each new
+   Customer's `customer_ref` is minted when the import is accepted.
 2. The uploaded file is kept in the owner session that uploaded it, never in
-   the store, until the import is confirmed, another file is uploaded in that
-   session, or the session ends (M11); then it is dropped. The mapping names
+   the store, until the import is accepted, another file is uploaded in that
+   session, or the session ends (M11); then it is dropped. A refused
+   confirmation keeps it, and the step may be shown again. The mapping names
    the file by its digest. The owner confirms that mapping in the confirmation
    step (A13 rule 6); the confirmation applies the file of that digest, the
    picks, names, aliases and Customer values the mapping showed, nothing
    else; a file no longer kept is refused and must be uploaded again.
 3. Registry checks what the picks bring in — the picked projects with their
-   rooms and pointers and the customers they name — and nothing else of the
-   file; records only of projects the owner did not pick are neither checked
-   nor imported. A file that cannot be read as the format States 5 and 6
+   rooms and pointers and the v1 values they name — and nothing else of the
+   file: records only of projects the owner did not pick are neither checked,
+   shown as conflicts nor imported, and take no part in the duplicate-id
+   check. A file that cannot be read as the format States 5 and 6
    declare is refused whole.
 4. A brought-in record is malformed when: a required value is missing (A02);
-   it names a project, customer or room the file does not hold; an id occurs
+   it names a project or room the file does not hold; an id occurs
    twice among the file's records of one kind; a status is outside its
    vocabulary, or a pointer is `withdrawn` (v1 never withdrew one, M05); a
    pointer's type is not declared or its owner service is not the type's
@@ -46,9 +51,8 @@ security review of States 0–2.
 5. Ids are unique per kind: a project id, a room id and a pointer id are
    compared only with ids of their own kind, in the file and in production.
 6. At confirmation Registry checks again. Any conflict — a project, room or
-   pointer id production holds, a Registry-minted `customer_ref` production
-   holds — or any malformed record refuses the whole import, and nothing
-   changes (R0-50, R0-79).
+   pointer id production holds — or any malformed record refuses the whole
+   import, and nothing changes (R0-50, R0-79).
 7. An accepted import stores every picked project with its rooms and pointers,
    the Customers it makes, the migration closure (M10) and its one audit entry
    (M09) in one transaction. The import has succeeded when that transaction
@@ -73,8 +77,8 @@ conflict at confirmation => store unchanged
 1. Uploading answers the mapping and changes nothing; reading the store after
    it shows no imported record.
 2. A file whose one pointer id production holds refuses the whole import.
-3. Confirming a mapping after another file was uploaded applies only the file
-   whose digest the confirmation named.
+3. Confirming a mapping after another file was uploaded in the session is
+   refused: the file it named is no longer kept.
 4. A second import after a successful one is refused.
 5. A failure during the transaction leaves no project, no Customer and no
    closure.
@@ -146,7 +150,9 @@ secret cannot be shared between holders.
 
 1. Registry backs up its store once a day at 03:00 UTC into the backup
    location, as a consistent copy taken while it runs: a backup never holds
-   part of a transaction. A backup records its instant, the release that made
+   part of a transaction. A run that 03:00 found Registry stopped is made when
+   it next starts, if no backup was made that UTC day; there is at most one
+   run per UTC day, and runs never overlap. A backup records its instant, the release that made
    it and the last audit sequence number it holds.
 2. A backup holds every record but the agent sessions (M06): a store restored
    from it has no session, Kernel registers its sessions again and the owner
@@ -189,7 +195,8 @@ secret cannot be shared between holders.
 ### Formal invariants
 
 ```text
-after a run: no backup older than 30 days exists
+after a run whose deletions succeeded: no backup older than 30 days and no
+  backup that failed its check exists
 every kept backup is encrypted, consistent, checked, and records
   (instant, release, last sequence); no backup holds an agent session
 ```
@@ -285,8 +292,9 @@ What runs is what was verified.
 1. The categories are the nine of the Workbench's security review
    (`skills/spec-authoring/SECURITY_REVIEW_EVIDENCE.md`), the catalogue every
    case is reviewed against; this review is complete for that catalogue and
-   claims nothing beyond it. Each category has exactly one outcome below,
-   resting on the decisions it names.
+   claims nothing beyond it. That document states the questions each category
+   asks; each outcome below answers them by naming the decisions that do, or,
+   for NOT_APPLICABLE, why the category's subject is absent.
 2. A change to a decision a category names reopens this review.
 3. Every decision a category names is accepted.
 

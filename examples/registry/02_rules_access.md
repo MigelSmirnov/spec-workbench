@@ -192,7 +192,7 @@ sees every change as a new version.
    an owner request; the owner's sign-out; the instance's restart (M11 is never
    durable). An owner request is any request to the owner interface that
    carries the valid session, whatever its answer; it restarts the 30
-   minutes.
+   minutes; before the first request it runs from the sign-in.
 3. Registry counts the sign-ins refused for a wrong or missing credential
    whose instant is less than 15 minutes before now, for the whole instance:
    Registry tells no callers apart by address (R0-27). The fifth such refusal
@@ -210,7 +210,9 @@ sees every change as a new version.
    confirmation value Registry made when it showed the step: one-time, kept in
    the owner session, bound to the action, its target, the revision or access
    version the step showed, and its inputs — for the import, the file's digest
-   and the picks. It is valid only in that session, for 10 minutes, and is
+   and the picks. A session holds at most one: showing a confirmation step
+   replaces the one pending (M11). It is valid only in that session, for 10
+   minutes, and is
    used up by the first submission, whatever its answer; a refused submission
    needs the step shown again. A submission becomes the first one when it
    passes the owner session and CSRF checks (A04 rule 6, stage 1): one refused
@@ -223,7 +225,7 @@ sees every change as a new version.
 
 ```text
 owner_session s valid at t <=> t < s.began + 8h and
-                                t < s.last_action + 30min and
+                                t < s.last_request + 30min and
                                 not signed_out(s) and no restart since s.began
 refused_sign_ins(last 15min) >= 5 => sign_in refused
 ```

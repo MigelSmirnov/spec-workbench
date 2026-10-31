@@ -44,7 +44,10 @@ each create once.
 6. Facts are compared as A02 reads them: a required value as written, an
    optional value given blank the same as one not given. For 'add a room' and
    'publish an artifact pointer' the project is one of the facts.
-7. A create without a request id is refused.
+7. A create without a request id is refused. Creates of one model carrying
+   one request id are applied one at a time: of two concurrent ones, the
+   first makes the record and the second is a repeat or refused by rule 4
+   or 5.
 8. A request id leaves its record with the values anonymisation or erasure
    removes (M01, M04); a create arriving after that with the same request id
    is a new create.
