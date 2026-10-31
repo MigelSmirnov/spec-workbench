@@ -145,8 +145,10 @@ Facts a Project carries, in domain words:
 - its status: `active` or `archived` (R0-12);
 - its revision (R0-35);
 - the instant it was last changed ("Revisions and times");
-- written once: the instant it was created; the instant it was archived
-  (R0-60); the anonymised mark (R0-62, R0-87).
+- written once: the instant it was created; the request id of its create,
+  as the caller gave it (R0-36; owner, 2026-10-31, State 2 A01), absent for a
+  project the import brought in; the instant it was archived (R0-60); the
+  anonymised mark (R0-62, R0-87).
 
 The acting principal of a creation or a correction is the owner, always
 (Primary actions): the project keeps no "created by".
@@ -188,7 +190,8 @@ archived -> deleted whole     (owner, confirming; the record is gone, R0-60)
 An anonymised project is a Project with status `archived` and the anonymised
 mark: it keeps its `project_id`, its status, that mark and its artifact
 pointers (M05) and nothing else (R0-62, R0-87) — name, alias, object, customer link,
-rooms, revision and every instant are gone; when it was archived and when it
+rooms, revision, the request id of its create and every instant are gone;
+when it was archived and when it
 was anonymised, the audit log says (M09). Deleting it whole is refused
 (R0-71). `active` is never returned to.
 
@@ -279,7 +282,9 @@ the launch context of a downstream service is `project_id` and a `room_id`
 (R0-18).
 
 Facts: `room_id`, minted by Registry or kept by the import; its name, as its
-writer wrote it (R0-68); its project; written once: the instant it was added.
+writer wrote it (R0-68); its project; written once: the instant it was added
+and the request id of its create, as the caller gave it (R0-36; owner,
+2026-10-31, State 2 A01), absent for a room the import brought in.
 Who added it — the owner or the agent through Kernel — is not a fact of the
 room: no stated requirement reads it, State 0's output of "add a room" names
 id, name and project only, and a session identity would otherwise reach every
@@ -349,9 +354,11 @@ Facts a Customer carries:
     `customer_ref`, this mark and its instant, and nothing else (R0-06):
     name, phone, e-mail, language, tax id and legal name are gone (the one
     erasure covers the fiscal values, R0-06 narrowed by R0-80), and so are its
-    kind, its revision, its recorded instant and its restricted and ended
-    marks;
-- written once: the instant it was recorded.
+    kind, its revision, its recorded instant, the request id of its create
+    and its restricted and ended marks;
+- written once: the instant it was recorded; the request id of its create, as
+  the caller gave it (R0-36; owner, 2026-10-31, State 2 A01), absent for a
+  Customer the import made.
 
 A Customer is never deleted (R0-67). Recording the same person twice makes two
 Customers (R0-16): Registry has no notion of "the same person".
