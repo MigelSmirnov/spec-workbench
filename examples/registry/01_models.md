@@ -20,9 +20,12 @@ day and are marked so under M04 and M01.
 This state names the concepts Registry needs, the facts each carries in domain
 words, its identity (`value` or `entity`, `MODEL_IDENTITY_EVIDENCE.md`), who
 creates, reads and changes it, its status vocabulary and what is written once.
-Types, optionality, the complete field list and every answer shape belong to
-State 6; orders, replay mechanisms, correction semantics and token scopes
-belong to State 2 (State 0, "Carried to later states").
+The facts listed under a model are all its facts, and the facts a create
+request supplies are named with it (State 0, "Carried to later states"); a fact
+that may be absent says so in domain words ("when given"). Field names, types,
+formal optionality and every answer shape belong to State 6; orders, replay
+mechanisms, correction semantics and token scopes belong to State 2 (State 0,
+"Carried to later states"; codex round-01 T5).
 
 Every State 1 question the owner must answer is under a model's
 `Open questions`; a `BLOCK:` question stops State 2 until answered.
@@ -81,9 +84,11 @@ States 5 and 6.
   by the actions listed below, and by nothing else. Which actions must state
   the revision they were made against is State 2's (carried, R0-35).
 - Every time Registry records is an instant in UTC with time zone (L16). A
-  record carries the instant it was created and the instant it was last
-  changed; `registry_updated_at` in `context` is the project's last-changed
-  instant (R0-04, L16).
+  Project and a Customer — the records that carry a revision — carry the
+  instant they were created and the instant they were last changed;
+  `registry_updated_at` in `context` is the project's last-changed instant
+  (R0-04, L16). Every other model carries only the written-once instants its
+  own facts name (codex round-01 T5).
 - A project's last-changed instant moves by: a correction of its name, alias,
   customer link or object (R0-45). It does not move by: adding a room, publishing
   or withdrawing a pointer, a session grant, archiving an archived project
@@ -297,7 +302,13 @@ Durable, owned by its Project record.
 
 ### Open questions
 
-None.
+- Merging and splitting rooms (owner, 2026-10-31): a real planner scenario
+  that R0-10 does not allow — a room is never renamed or removed. Until a
+  consumer needs it, the planner merges by adding a new room and moving its own
+  documents; the old rooms and every reference to them stay. When the planner
+  needs it, the candidate is a room status after M05's pattern — `merged` (or
+  superseded) with a reference to the room that replaces it, lists showing
+  current rooms — as a new decision on R0-10. Does not block State 2.
 
 ## Model M04 — Customer
 
@@ -524,9 +535,9 @@ P4).
 
 ### Meaning
 
-Who did something, as Registry records it in an audit entry (R0-37), on a room
-and on a pointer (M03, M05): the owner, signed in with the owner credential
-(R0-30); a service, named by its service token (R0-27); or the agent through
+Who did something, as Registry records it in an audit entry (R0-37) and on a
+pointer (M05) — a room records none (M03; codex round-01 T3): the owner,
+signed in with the owner credential (R0-30); a service, named by its service token (R0-27); or the agent through
 Cabinet Kernel, naming the session Kernel named (R0-53). It carries no secret
 (R0-23) and no `personal_data` value.
 
@@ -554,7 +565,7 @@ None; issued once per action.
 
 ### Persistence candidate
 
-Embedded in audit entries, rooms and pointers.
+Embedded in audit entries and pointers.
 
 ### Open questions
 
@@ -619,11 +630,14 @@ Facts, all written once:
   actions that write an entry (R0-58): creating, correcting, archiving,
   anonymising and deleting a project; recording, correcting and erasing a
   customer; restricting and lifting; ending and resuming a relationship;
-  granting a project to a session, revoking one and answering a request; the
-  import, as one entry whose subject is the migration closure (M10); erasing
-  old entries. No entry is written for adding a room, publishing or withdrawing
-  a pointer, registering a session, an access request, changing or clearing
-  the active project, or any read (R0-58);
+  granting a project to a session and revoking one; the import, as one entry
+  whose subject is the migration closure (M10); erasing old entries. An answer
+  to an access request that grants a project writes the grant's entry; a
+  decline changes no session's projects and only clears the request (R0-64),
+  so it writes none (R0-58; codex round-01 T4). No entry is written for adding a
+  room, publishing or withdrawing a pointer, registering a session, an access
+  request or its decline, changing or clearing the active project, or any read
+  (R0-58);
 - the subject: the project (`project_id`) or the customer (`customer_ref`)
   changed, by identity only (R0-37) — for a session grant, the session and the
   project;
@@ -804,7 +818,8 @@ None is a model: none has facts of its own.
   (2026-10-31, after the owner's answers).
 - Every carried State 1 question of `00_product.md` is answered above or
   placed under a model's Open questions: fields and create requests (each
-  model's facts; the create request is the facts the owner gives, State 6),
+  model's facts and the facts its create request supplies; their field names
+  and types, State 6),
   identity formats and the test/production separation ("Identity formats"),
   what an anonymised project keeps (M01), revisions and times ("Revisions and
   times"), the erased and restricted Customer (M04), the alias (M01), the
