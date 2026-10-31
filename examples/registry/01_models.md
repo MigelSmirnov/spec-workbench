@@ -661,13 +661,12 @@ secret (R0-37).
 
 Facts, all written once:
 
-- its sequence number, minted by Registry: 1 for the instance's first entry,
-  then one more than the last ever written; never reused, also after old
-  entries are erased (R0-66), so the log's order is the order of the numbers
-  even where two entries share an instant (owner, 2026-10-31; codex round-02
-  T2); the last number written is held in the instance marks outside the
-  store, so a restore from an older backup does not lower it (State 2 A15,
-  A18);
+- its sequence number, minted by Registry: greater than every number minted
+  before it, starting at 1; never reused, also after old entries are erased
+  (R0-66) or the store is restored (State 2 A15), so the log's order is the
+  order of the numbers even where two entries share an instant (owner,
+  2026-10-31; codex round-02 T2). A number minted for a change that did not
+  commit is not used again, so the log may skip numbers;
 - the instant of the change;
 - the acting principal (M07);
 - the change: which action, in a closed vocabulary State 6 declares. The
@@ -764,13 +763,12 @@ Registry's own record of the accepted import (R0-79).
 
 ### Lifecycle candidate
 
-None; absent, then present forever: a restore from an older backup does not
-lose it (State 2 A18).
+None; absent, then present forever: once a backup holding it has passed its
+check, no backup without it is kept (State 2 A16, A18).
 
 ### Persistence candidate
 
-Durable, at most one per instance; also held in the instance marks outside
-the store, which a restore does not replace (State 2 A15, A18).
+Durable, at most one per instance.
 
 ### Open questions
 
