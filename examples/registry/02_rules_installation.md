@@ -155,9 +155,9 @@ closure is the one proof of success.
    5); the backup location writable, by a probe file under the temporary
    prefix (A18 rule 5); the store opening, or made new (rule 5). Within one
    check, items go in the order rule 1 lists them. A failed start leaves no
-   file it made but a probe it could not remove, which the next start or run
-   removes with the other temporary files; a stale temporary file a start
-   cannot remove is reported and does not stop the start.
+   file it made but a probe it could not remove, which the next backup run
+   removes with the other temporary files (A18 rule 4); a start leaves the
+   backup location's other files as they are.
 3. A secret — each token, the owner credential and the backup key — is at
    least 32 bytes long; a shorter one fails the start. Registry checks the
    length and, by rule 4, the distinctness, and nothing else of how the owner
@@ -181,9 +181,12 @@ closure is the one proof of success.
    temporary name — the store's name with a suffix the release declares —
    that it renames to the store's name only once the store is complete; at
    every start it first removes a file of that temporary name, left by an
-   interrupted start, and no other file there; otherwise
-   the store must open for reading and writing, pass the store engine's full
-   integrity check — the same as a backup's check (A18 rule 4) — and carry
+   interrupted start, and no other file there — if it cannot, and the store
+   is absent, the start fails; otherwise
+   the store must open for reading and writing, pass the full integrity check
+   — the store is a SQLite database, as v1's (L19), and the check passes when
+   `PRAGMA integrity_check` answers `ok` and `PRAGMA foreign_key_check` finds
+   nothing, the same as a backup's check (A18 rule 4) — and carry
    the store
    version of the running release, and a store of another version, or one
    that does not open, fails the start — bringing a store to a new version is
@@ -235,8 +238,10 @@ secret cannot be shared between holders.
    none (rule 4), so
    a restart, a start at 03:00 or a clock set back makes no second run. A
    process runs each date at most once, remembering in its memory the dates
-   it ran, a failed run included; after a clock set forward it runs only for
-   the date it then sees pass 03:00, and the dates jumped over get no run. A
+   it ran, a failed run included; a run's date is the date of the look that
+   started it. A clock set forward past 03:00 of a date gives that date no
+   run, the earlier look having seen another date, and the dates jumped over
+   get none either. A
    failed date is run again only by a later process that sees 03:00 of it
    pass, which only a clock set back makes happen, and that is allowed. Runs
    never overlap: a 03:00 that finds a run still going makes no run of its
@@ -267,7 +272,8 @@ secret cannot be shared between holders.
    temporary prefix; if a removal fails, the run stops there. Second, it
    writes the backup under a temporary name and checks it: it decrypts it
    into a second temporary file, opens that for reading only, checks that it
-   is the store version of its release, that the store's own integrity check
+   is the store version of its release, that the full integrity check (A17
+   rule 5)
    passes and that its audit log ends at the recorded sequence number, and
    removes it; a backup that passes is renamed to its kept name, one that
    fails is deleted. When the decrypted file cannot be removed, or a failed
