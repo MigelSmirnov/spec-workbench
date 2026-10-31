@@ -1,0 +1,99 @@
+{
+ "open_points": [
+  {
+   "subject": "owner-session expiry and removal",
+   "kind": "contradictory timing",
+   "text": "“The session ends at the first of” a limit, but “the pass alone ends sessions by their limits” and runs only every 60 seconds.",
+   "question": "Does reaching a limit end and remove the session immediately, or only make it invalid until a later pass removes it and drops its confirmation and uploaded file?",
+   "options": [
+    "The session becomes invalid immediately but remains allocated until the pass removes it.",
+    "The request that first observes expiry removes it immediately.",
+    "Only the pass ends it, despite requests being refused from the limit."
+   ],
+   "default_guess": "Treat it as invalid immediately and retain its state until the next pass removes it.",
+   "unit": "?"
+  },
+  {
+   "subject": "owner-request arrival and idle deadline",
+   "kind": "undefined instant",
+   "text": "“An owner request is any request to the owner interface that carries the valid session…; its arrival restarts the 30 minutes” and “Validity is checked when a request arrives”.",
+   "question": "At what exact processing boundary is a request considered to have arrived, and is that captured before any queueing or lock wait?",
+   "options": [
+    "When Registry first receives and timestamps the HTTP request.",
+    "When routing begins after the request has been parsed.",
+    "When the session check obtains the session lock."
+   ],
+   "default_guess": "Capture the monotonic reading when Registry first accepts the HTTP request for processing.",
+   "unit": "?"
+  },
+  {
+   "subject": "concurrent owner requests at the idle limit",
+   "kind": "race undefined",
+   "text": "“of concurrent requests the latest arrival counts” but session-changing requests take the session lock only “after passing the session check”.",
+   "question": "How can a later request validate against an earlier concurrent arrival that should have restarted the idle period but has not yet acquired the session lock or updated `last_request`?",
+   "options": [
+    "Record every arrival atomically before checking validity, then validate against the maximum recorded valid arrival.",
+    "Serialize validity check and `last_request` update under the session lock in arrival order.",
+    "Let lock-acquisition order decide, even when it differs from arrival order."
+   ],
+   "default_guess": "Atomically register arrival timestamps and validate/update under the session lock using the latest qualifying arrival.",
+   "unit": "?"
+  },
+  {
+   "subject": "expiry pass versus admitted requests",
+   "kind": "race undefined",
+   "text": "“a request that passes it completes even if a limit…comes while it runs” while the expiry pass takes the session lock and ends the session, and requests take that lock only after passing the session check.",
+   "question": "What prevents the expiry pass from removing the session after a request passes the session check but before that request takes the session lock and uses or changes session state?",
+   "options": [
+    "The session check and admission reserve the session under the same lock until the request finishes its session-state work.",
+    "The pass may remove the session, but an admitted request retains a private reference and must still complete.",
+    "The request must recheck after taking the lock, contradicting the promise that an admitted request completes."
+   ],
+   "default_guess": "Make admission and the request’s session-state operation one lock-protected sequence that the expiry pass cannot interleave with.",
+   "unit": "?"
+  },
+  {
+   "subject": "expiry-pass locking",
+   "kind": "ambiguous lock scope",
+   "text": "“the pass…taking the import lock and then each session's lock”",
+   "question": "Does one pass hold the import lock while it visits all sessions, acquire and release each session lock in turn, or acquire all session locks together; and may requests create or remove sessions while the pass enumerates them?",
+   "options": [
+    "Hold the import lock for the whole pass and acquire/release one session lock at a time.",
+    "Acquire the import lock separately for each session before its session lock.",
+    "Hold the import lock and all session locks simultaneously for the whole pass."
+   ],
+   "default_guess": "Hold the import lock for the whole pass, enumerate a stable session collection, and acquire/release session locks one at a time.",
+   "unit": "?"
+  },
+  {
+   "subject": "expiry-pass schedule",
+   "kind": "unspecified scheduling",
+   "text": "“a pass over the sessions it makes every 60 seconds from the start”",
+   "question": "If a pass is delayed by locks, takes longer than 60 seconds, or the process resumes after suspension past several scheduled instants, are missed passes skipped, queued, or run immediately, and may passes overlap?",
+   "options": [
+    "Fixed-rate, non-overlapping passes; after delay or resume run one overdue pass and skip missed ticks.",
+    "Run every 60 seconds after the preceding pass finishes.",
+    "Queue every missed pass, without overlap.",
+    "Allow overlapping passes on the original fixed schedule."
+   ],
+   "default_guess": "Use fixed-rate, non-overlapping passes, run one immediately when overdue, and skip additional missed ticks.",
+   "unit": "?"
+  },
+  {
+   "subject": "suspension effect on owner sessions",
+   "kind": "contradictory phrase",
+   "text": "The clock “counts the time the host or its VM was suspended, so a session does not outlive a suspension”.",
+   "question": "Does any suspension end every session, or does suspension merely count toward the 8-hour, 30-minute, 15-minute and 10-minute limits so that a short suspension may leave a session valid?",
+   "options": [
+    "Suspension only advances the duration calculations.",
+    "Any detected suspension ends all owner sessions.",
+    "Suspension ends a session only when the elapsed suspended time carries it to a limit."
+   ],
+   "default_guess": "Suspension counts as elapsed time and ends a session only if a limit is reached.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"owner-session expiry and removal\",\"kind\":\"contradictory timing\",\"text\":\"“The session ends at the first of” a limit, but “the pass alone ends sessions by their limits” and runs only every 60 seconds.\",\"question\":\"Does reaching a limit end and remove the session immediately, or only make it invalid until a later pass removes it and drops its confirmation and uploaded file?\",\"options\":[\"The session becomes invalid immediately but remains allocated until the pass removes it.\",\"The request that first observes expiry removes it immediately.\",\"Only the pass ends it, despite requests being refused from the limit.\"],\"default_guess\":\"Treat it as invalid immediately and retain its state until the next pass removes it.\"},{\"subject\":\"owner-request arrival and idle deadline\",\"kind\":\"undefined instant\",\"text\":\"“An owner request is any request to the owner interface that carries the valid session…; its arrival restarts the 30 minutes” and “Validity is checked when a request arrives”.\",\"question\":\"At what exact processing boundary is a request considered to have arrived, and is that captured before any queueing or lock wait?\",\"options\":[\"When Registry first receives and timestamps the HTTP request.\",\"When routing begins after the request has been parsed.\",\"When the session check obtains the session lock.\"],\"default_guess\":\"Capture the monotonic reading when Registry first accepts the HTTP request for processing.\"},{\"subject\":\"concurrent owner requests at the idle limit\",\"kind\":\"race undefined\",\"text\":\"“of concurrent requests the latest arrival counts” but session-changing requests take the session lock only “after passing the session check”.\",\"question\":\"How can a later request validate against an earlier concurrent arrival that should have restarted the idle period but has not yet acquired the session lock or updated `last_request`?\",\"options\":[\"Record every arrival atomically before checking validity, then validate against the maximum recorded valid arrival.\",\"Serialize validity check and `last_request` update under the session lock in arrival order.\",\"Let lock-acquisition order decide, even when it differs from arrival order.\"],\"default_guess\":\"Atomically register arrival timestamps and validate/update under the session lock using the latest qualifying arrival.\"},{\"subject\":\"expiry pass versus admitted requests\",\"kind\":\"race undefined\",\"text\":\"“a request that passes it completes even if a limit…comes while it runs” while the expiry pass takes the session lock and ends the session, and requests take that lock only after passing the session check.\",\"question\":\"What prevents the expiry pass from removing the session after a request passes the session check but before that request takes the session lock and uses or changes session state?\",\"options\":[\"The session check and admission reserve the session under the same lock until the request finishes its session-state work.\",\"The pass may remove the session, but an admitted request retains a private reference and must still complete.\",\"The request must recheck after taking the lock, contradicting the promise that an admitted request completes.\"],\"default_guess\":\"Make admission and the request’s session-state operation one lock-protected sequence that the expiry pass cannot interleave with.\"},{\"subject\":\"expiry-pass locking\",\"kind\":\"ambiguous lock scope\",\"text\":\"“the pass…taking the import lock and then each session's lock”\",\"question\":\"Does one pass hold the import lock while it visits all sessions, acquire and release each session lock in turn, or acquire all session locks together; and may requests create or remove sessions while the pass enumerates them?\",\"options\":[\"Hold the import lock for the whole pass and acquire/release one session lock at a time.\",\"Acquire the import lock separately for each session before its session lock.\",\"Hold the import lock and all session locks simultaneously for the whole pass.\"],\"default_guess\":\"Hold the import lock for the whole pass, enumerate a stable session collection, and acquire/release session locks one at a time.\"},{\"subject\":\"expiry-pass schedule\",\"kind\":\"unspecified scheduling\",\"text\":\"“a pass over the sessions it makes every 60 seconds from the start”\",\"question\":\"If a pass is delayed by locks, takes longer than 60 seconds, or the process resumes after suspension past several scheduled instants, are missed passes skipped, queued, or run immediately, and may passes overlap?\",\"options\":[\"Fixed-rate, non-overlapping passes; after delay or resume run one overdue pass and skip missed ticks.\",\"Run every 60 seconds after the preceding pass finishes.\",\"Queue every missed pass, without overlap.\",\"Allow overlapping passes on the original fixed schedule.\"],\"default_guess\":\"Use fixed-rate, non-overlapping passes, run one immediately when overdue, and skip additional missed ticks.\"},{\"subject\":\"suspension effect on owner sessions\",\"kind\":\"contradictory phrase\",\"text\":\"The clock “counts the time the host or its VM was suspended, so a session does not outlive a suspension”.\",\"question\":\"Does any suspension end every session, or does suspension merely count toward the 8-hour, 30-minute, 15-minute and 10-minute limits so that a short suspension may leave a session valid?\",\"options\":[\"Suspension only advances the duration calculations.\",\"Any detected suspension ends all owner sessions.\",\"Suspension ends a session only when the elapsed suspended time carries it to a limit.\"],\"default_guess\":\"Suspension counts as elapsed time and ends a session only if a limit is reached.\"}]}",
+ "set_aside": []
+}
