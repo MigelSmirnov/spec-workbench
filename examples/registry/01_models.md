@@ -754,8 +754,8 @@ value
 
 Substitution: there is at most one, and two records of "the migration
 succeeded at instant T" would mean the same thing. Continuity: it is written
-once and never changes; it is a fact about the instance, not a thing with a
-life.
+once and never changes; it is a fact about the store's history (R0-89), not
+a thing with a life.
 
 ### Source of truth
 
