@@ -1,0 +1,293 @@
+{
+ "open_points": [
+  {
+   "subject": "AgentSession identity reuse after ending",
+   "kind": "unverifiable invariant",
+   "text": "“Cabinet Kernel names every agent session with an identity it never uses again ... A registration of an ended identity, Kernel's defect, makes a new session with an empty set.”",
+   "question": "How can audit entries naming a session identity continue to mean one session when Registry accepts reuse of an ended identity as a new session?",
+   "options": [
+    "Registry refuses every previously used session identity permanently",
+    "Registry accepts reuse and audit entries may refer to different sessions",
+    "Registry adds a session incarnation to distinguish reuse"
+   ],
+   "default_guess": "Refuse every previously used session identity permanently.",
+   "unit": "?"
+  },
+  {
+   "subject": "Number of concurrent owner sessions",
+   "kind": "missing cardinality",
+   "text": "“The owner signs in ... and receives an owner session.”",
+   "question": "May several owner sessions exist at once, and if so does a new sign-in leave earlier sessions valid or end them?",
+   "options": [
+    "Several sessions remain valid independently",
+    "A successful sign-in ends every earlier owner session",
+    "Only one session may exist and another sign-in is refused"
+   ],
+   "default_guess": "Allow several independent owner sessions.",
+   "unit": "?"
+  },
+  {
+   "subject": "Owner-session cookie scope",
+   "kind": "vague security rule",
+   "text": "“carried by a cookie that scripts cannot read, sent only over HTTPS when the interface is reached from another machine, and only to Registry's own origin”",
+   "question": "What exact cookie scope and attributes implement “only to Registry's own origin,” given that cookies are scoped by host/domain and path rather than by full origin or port?",
+   "options": [
+    "Host-only Secure HttpOnly SameSite=Strict cookie with Path=/",
+    "Host-only HttpOnly cookie, Secure only in remote HTTPS deployments",
+    "A route-limited cookie scoped only to owner-interface paths"
+   ],
+   "default_guess": "Use a host-only Secure HttpOnly SameSite=Strict cookie with Path=/.",
+   "unit": "?"
+  },
+  {
+   "subject": "Owner-session expiry during a request",
+   "kind": "missing boundary rule",
+   "text": "“The session ends at the first of: 8 hours after sign-in; 30 minutes without an owner request” and “An owner request ... restarts the 30 minutes.”",
+   "question": "At what instant is validity decided and last_request advanced, and may a request accepted before a deadline commit after the session expires?",
+   "options": [
+    "Check and advance at request authentication; an admitted request may finish",
+    "Require the session still to be valid when the transaction commits",
+    "Use the request-arrival instant but reject if expiry occurs before any state change"
+   ],
+   "default_guess": "Check and advance atomically when authenticating the request; an admitted request may finish.",
+   "unit": "?"
+  },
+  {
+   "subject": "Removed artifact types in the agent projection",
+   "kind": "contradictory projection",
+   "text": "A22 says “'list artifacts' and the agent projection still carry them,” while State 1 says the agent projection carries “the project's current pointers — those `published`, without the superseded and withdrawn history.”",
+   "question": "After a type is removed, does the agent projection carry only its still-published pointer or every retained pointer of that removed type?",
+   "options": [
+    "Only published pointers, preserving the State 1 projection filter",
+    "Every pointer of the removed type, including superseded and withdrawn history",
+    "No pointers of removed types in the agent projection"
+   ],
+   "default_guess": "Keep the State 1 filter and show only a published pointer.",
+   "unit": "?"
+  },
+  {
+   "subject": "No-op audit erasure",
+   "kind": "formal contradiction",
+   "text": "A15 rule 6 says “An erasure that removes no entry ... writes no entry,” but its invariant says “erase(d) accepted => ... the erasure entry e has e.instant >= start_of(d).”",
+   "question": "Does every accepted audit erasure create an erasure entry, or only one that actually removes entries?",
+   "options": [
+    "Only an erasure that removes at least one entry writes an entry",
+    "Every accepted erasure writes an entry",
+    "An erasure removing nothing is refused"
+   ],
+   "default_guess": "Only an erasure that removes at least one entry writes an entry.",
+   "unit": "?"
+  },
+  {
+   "subject": "Concurrent audit erasure and audit-producing changes",
+   "kind": "missing serialization",
+   "text": "“Every entry whose instant is before 00:00 UTC of that date is removed” and “erase(d) accepted => no entry with instant < start_of(d) remains.”",
+   "question": "How is audit erasure ordered against concurrent transactions that append entries, especially one that obtains an old instant before the erasure but commits afterward?",
+   "options": [
+    "Serialize erasure with every audit-producing transaction",
+    "Erase only entries committed before the erasure snapshot, allowing a later commit with an older instant",
+    "Assign entry instants at commit so a later commit cannot reintroduce an older entry"
+   ],
+   "default_guess": "Serialize audit erasure with every audit-producing transaction and assign event time within that order.",
+   "unit": "?"
+  },
+  {
+   "subject": "Imported child records and selected projects",
+   "kind": "referential-integrity gap",
+   "text": "A16 checks that a record “names a project or room the file does not hold,” while “records only of projects the owner did not pick ... are neither checked ... nor imported.”",
+   "question": "Must every imported room and pointer name the picked project whose import includes it, or is naming an unpicked but file-present project allowed?",
+   "options": [
+    "Require every imported child to belong to a picked project and import it only there",
+    "Allow references to unpicked file-present projects even though those projects are not imported",
+    "Automatically add every referenced project to the picks"
+   ],
+   "default_guess": "Require every imported room and pointer to belong to a picked project.",
+   "unit": "?"
+  },
+  {
+   "subject": "Imported temporal invariants",
+   "kind": "incomplete validation",
+   "text": "A16 rejects a record “changed, archived or superseded before it was created, added or published,” but State 1 says archiving moves the project's last-changed instant and records the archived date, and publication supersedes the prior pointer in one transaction.",
+   "question": "Which additional relationships among created, last-changed, archived, published and superseded instants must an import satisfy?",
+   "options": [
+    "Require archived_at to equal project last_changed_at and each superseded_at to equal the next version's published_at",
+    "Require only nondecreasing temporal order",
+    "Apply only the explicit before-creation checks in A16"
+   ],
+   "default_guess": "Require the same temporal relationships that live Registry transactions produce.",
+   "unit": "?"
+  },
+  {
+   "subject": "Uploaded files after another owner session completes the import",
+   "kind": "missing cleanup rule",
+   "text": "“The uploaded file is kept in the owner session that uploaded it ... until the import is accepted” and “Everything in it ends with the session.”",
+   "question": "If multiple owner sessions have uploaded files and one session successfully imports, are files held by the other sessions dropped immediately or retained until those sessions end or replace them?",
+   "options": [
+    "Drop every session's uploaded import file when the global migration closure is created",
+    "Drop only the file in the accepting session",
+    "Retain all other files until their own replacement or session end"
+   ],
+   "default_guess": "Drop every uploaded import file when the migration closure is created.",
+   "unit": "?"
+  },
+  {
+   "subject": "Store and backup location relationship",
+   "kind": "missing refusal condition",
+   "text": "“The configuration holds ... the store's location; the backup location” and only requires that each location can be opened or written.",
+   "question": "May the backup location equal, contain, or be contained by the store location?",
+   "options": [
+    "Require distinct non-overlapping resolved locations",
+    "Allow containment but forbid exact equality",
+    "Allow any relationship that passes the access checks"
+   ],
+   "default_guess": "Require distinct, non-overlapping resolved locations.",
+   "unit": "?"
+  },
+  {
+   "subject": "Backup encryption format and authentication",
+   "kind": "underspecified cryptography",
+   "text": "“Each backup is encrypted with the backup key” and “A backup cannot be read without the key it was made with.”",
+   "question": "Which authenticated-encryption construction, nonce handling, file format, key identifier and tamper-detection rules must implementations use?",
+   "options": [
+    "State 2 specifies one authenticated-encryption format and key identifier",
+    "A later contract specifies the exact cryptographic format",
+    "Each implementation chooses any encryption method satisfying the prose"
+   ],
+   "default_guess": "Specify one versioned authenticated-encryption format with a unique nonce and non-secret key identifier.",
+   "unit": "?"
+  },
+  {
+   "subject": "Restoring backups made with old keys or releases",
+   "kind": "missing restore procedure",
+   "text": "“older backups stay encrypted with the key they were made with; the owner keeps that key in the vault” and “Restoring production replaces the store with a backup.”",
+   "question": "How does the restore operation select and receive an old key, and which release opens or migrates a backup made by an older release?",
+   "options": [
+    "Restore with the producing release and its old key, then run declared release migrations",
+    "The current release must restore every retained backup using an explicitly supplied old key",
+    "Only backups made by the current key and release are restorable"
+   ],
+   "default_guess": "Restore with the producing release and explicitly supplied old key, then apply declared migrations.",
+   "unit": "?"
+  },
+  {
+   "subject": "Post-restore replay of privacy changes",
+   "kind": "unenforceable invariant",
+   "text": "“Before any service or agent uses the restored instance again the owner repeats ... every erasure, restriction and end of a relationship made after the backup” while “Registry ... cannot list them.”",
+   "question": "What prevents Registry from serving after restore before the owner has replayed those changes, and how is completion established?",
+   "options": [
+    "Registry starts in a restore-locked mode that only the owner can clear after replay",
+    "The owner must keep services stopped manually; Registry cannot enforce the rule",
+    "Registry records and imports a signed replay manifest external to the backup"
+   ],
+   "default_guess": "Start restored Registry in a locked owner-only recovery mode until the owner explicitly completes replay.",
+   "unit": "?"
+  },
+  {
+   "subject": "Failed backup runs and retention deletion",
+   "kind": "contradictory failure effect",
+   "text": "A18 says deletion runs “whether the new backup succeeded or not,” but also says “a failed run lengthens both [backup erasure and restore loss] by the days until a run succeeds.”",
+   "question": "Does failure of backup creation lengthen backup retention even when deletion succeeds, or does only deletion failure lengthen the erasure horizon?",
+   "options": [
+    "Only deletion failure lengthens backup retention; backup failure only worsens recovery-point age",
+    "Any failure cancels deletion and lengthens both horizons",
+    "Backup and deletion succeed or fail as one atomic run"
+   ],
+   "default_guess": "Only deletion failure lengthens retention; backup failure only increases recovery-point age.",
+   "unit": "?"
+  },
+  {
+   "subject": "Audit sequence numbers after restoring an older backup",
+   "kind": "cross-text contradiction",
+   "text": "A18 says after restore “numbering continues from the backup's last number,” while M09 and A15 say sequence numbers are “never reused” and continue from “the last number ever written.”",
+   "question": "May numbers assigned after the backup and lost by restoration be reused?",
+   "options": [
+    "Yes; restoration creates a new sequence history from the backup",
+    "No; preserve an external high-water mark across restoration",
+    "No; add a restore epoch and make identity the epoch plus sequence"
+   ],
+   "default_guess": "Add a durable restore epoch so an audit-entry identity is never reused.",
+   "unit": "?"
+  },
+  {
+   "subject": "Security-review catalogue",
+   "kind": "external dependency",
+   "text": "“The categories are the nine of the Workbench's security review (`skills/spec-authoring/SECURITY_REVIEW_EVIDENCE.md`) ... That document states the questions each category asks.”",
+   "question": "What exact questions and completion criteria must later reviewers and implementers apply when that external document is not part of the accepted texts?",
+   "options": [
+    "Copy the catalogue questions into the accepted design",
+    "Make the named external document a versioned normative input",
+    "Treat the nine category names alone as the entire catalogue"
+   ],
+   "default_guess": "Copy the exact catalogue questions and criteria into the accepted design.",
+   "unit": "?"
+  },
+  {
+   "subject": "Concurrency coverage in the security review",
+   "kind": "incomplete review scope",
+   "text": "The concurrency outcome names “concurrent creates, corrections, publishes and session changes” and references A01, A04, A07, A12 and A14.",
+   "question": "Are concurrent confirmation submissions, audit erasure versus appends, import confirmations, owner-session mutations and backup/restore interactions intentionally outside the concurrency review, or must they be reviewed too?",
+   "options": [
+    "Review every concurrent state-changing path, including those omitted",
+    "Declare the omitted paths impossible by a single-process serialization invariant",
+    "Keep the listed paths as the review's complete concurrency scope"
+   ],
+   "default_guess": "Review every concurrent state-changing path.",
+   "unit": "?"
+  },
+  {
+   "subject": "Create-repeat lifecycle checks",
+   "kind": "rule contradiction",
+   "text": "A01 says a repeat passes stages (1) to (4) and “No other check of stage (6) is made again for a repeat,” while A04 says “Only an action that passes all six may be a repeat that changes nothing.”",
+   "question": "Which stage-6 lifecycle and eligibility checks apply to a create repeat?",
+   "options": [
+    "Apply only the specific archived-project checks A01 names and skip all other stage-6 checks",
+    "Apply every current stage-6 check before recognizing the repeat",
+    "Recognize the repeat first, then apply a separately enumerated replay policy"
+   ],
+   "default_guess": "Use a separately enumerated replay policy matching A01, including its explicit archived-project checks.",
+   "unit": "?"
+  },
+  {
+   "subject": "Confirmation identifier creation",
+   "kind": "cross-text contradiction",
+   "text": "M11 says “The confirmation id ... is minted per confirmation,” while A13 distinguishes the one-time confirmation value from the confirmation id and A14 says an id is minted only for an accepted confirmed action that changes state.",
+   "question": "Is a confirmation id minted when the confirmation step is shown, on every submitted confirmation, or only when a confirmed action is accepted and changes state?",
+   "options": [
+    "Only when the confirmed action is accepted and changes state",
+    "When the confirmation step is shown",
+    "On the first valid-session-and-CSRF submission, even if the action is later refused or changes nothing"
+   ],
+   "default_guess": "Mint it only when the confirmed action is accepted and changes state.",
+   "unit": "?"
+  },
+  {
+   "subject": "Storage of the owner session's uploaded import file",
+   "kind": "missing persistence boundary",
+   "text": "“at most one uploaded import file” is part of the temporary OwnerSession, and A16 says it is “kept in the owner session ... never in the store.”",
+   "question": "May the personal-data import file be written to a temporary filesystem location, or must it remain memory-only, and how is crash cleanup guaranteed?",
+   "options": [
+    "Memory-only for the life of the process",
+    "Encrypted temporary file deleted on replacement, acceptance, session end and restart cleanup",
+    "Any runtime storage outside the main store"
+   ],
+   "default_guess": "Keep it memory-only.",
+   "unit": "?"
+  },
+  {
+   "subject": "Concurrent mutations of one OwnerSession",
+   "kind": "missing serialization",
+   "text": "The changed M11 allows requests to change “the instant of its last request,” replace a pending confirmation, and replace an uploaded import file, while A13 only serializes concurrent sign-ins.",
+   "question": "How are simultaneous requests in one owner session ordered so last_request cannot move backward, only one confirmation submission can consume the value, and the winning upload or confirmation is deterministic?",
+   "options": [
+    "Serialize every request that reads or changes an OwnerSession",
+    "Use atomic compare-and-swap separately for each mutable fact",
+    "Allow last-committer-wins except for atomic confirmation consumption"
+   ],
+   "default_guess": "Serialize all mutations of one OwnerSession and update last_request monotonically.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"AgentSession identity reuse after ending\",\"kind\":\"unverifiable invariant\",\"text\":\"“Cabinet Kernel names every agent session with an identity it never uses again ... A registration of an ended identity, Kernel's defect, makes a new session with an empty set.”\",\"question\":\"How can audit entries naming a session identity continue to mean one session when Registry accepts reuse of an ended identity as a new session?\",\"options\":[\"Registry refuses every previously used session identity permanently\",\"Registry accepts reuse and audit entries may refer to different sessions\",\"Registry adds a session incarnation to distinguish reuse\"],\"default_guess\":\"Refuse every previously used session identity permanently.\"},{\"subject\":\"Number of concurrent owner sessions\",\"kind\":\"missing cardinality\",\"text\":\"“The owner signs in ... and receives an owner session.”\",\"question\":\"May several owner sessions exist at once, and if so does a new sign-in leave earlier sessions valid or end them?\",\"options\":[\"Several sessions remain valid independently\",\"A successful sign-in ends every earlier owner session\",\"Only one session may exist and another sign-in is refused\"],\"default_guess\":\"Allow several independent owner sessions.\"},{\"subject\":\"Owner-session cookie scope\",\"kind\":\"vague security rule\",\"text\":\"“carried by a cookie that scripts cannot read, sent only over HTTPS when the interface is reached from another machine, and only to Registry's own origin”\",\"question\":\"What exact cookie scope and attributes implement “only to Registry's own origin,” given that cookies are scoped by host/domain and path rather than by full origin or port?\",\"options\":[\"Host-only Secure HttpOnly SameSite=Strict cookie with Path=/\",\"Host-only HttpOnly cookie, Secure only in remote HTTPS deployments\",\"A route-limited cookie scoped only to owner-interface paths\"],\"default_guess\":\"Use a host-only Secure HttpOnly SameSite=Strict cookie with Path=/.\"},{\"subject\":\"Owner-session expiry during a request\",\"kind\":\"missing boundary rule\",\"text\":\"“The session ends at the first of: 8 hours after sign-in; 30 minutes without an owner request” and “An owner request ... restarts the 30 minutes.”\",\"question\":\"At what instant is validity decided and last_request advanced, and may a request accepted before a deadline commit after the session expires?\",\"options\":[\"Check and advance at request authentication; an admitted request may finish\",\"Require the session still to be valid when the transaction commits\",\"Use the request-arrival instant but reject if expiry occurs before any state change\"],\"default_guess\":\"Check and advance atomically when authenticating the request; an admitted request may finish.\"},{\"subject\":\"Removed artifact types in the agent projection\",\"kind\":\"contradictory projection\",\"text\":\"A22 says “'list artifacts' and the agent projection still carry them,” while State 1 says the agent projection carries “the project's current pointers — those `published`, without the superseded and withdrawn history.”\",\"question\":\"After a type is removed, does the agent projection carry only its still-published pointer or every retained pointer of that removed type?\",\"options\":[\"Only published pointers, preserving the State 1 projection filter\",\"Every pointer of the removed type, including superseded and withdrawn history\",\"No pointers of removed types in the agent projection\"],\"default_guess\":\"Keep the State 1 filter and show only a published pointer.\"},{\"subject\":\"No-op audit erasure\",\"kind\":\"formal contradiction\",\"text\":\"A15 rule 6 says “An erasure that removes no entry ... writes no entry,” but its invariant says “erase(d) accepted => ... the erasure entry e has e.instant >= start_of(d).”\",\"question\":\"Does every accepted audit erasure create an erasure entry, or only one that actually removes entries?\",\"options\":[\"Only an erasure that removes at least one entry writes an entry\",\"Every accepted erasure writes an entry\",\"An erasure removing nothing is refused\"],\"default_guess\":\"Only an erasure that removes at least one entry writes an entry.\"},{\"subject\":\"Concurrent audit erasure and audit-producing changes\",\"kind\":\"missing serialization\",\"text\":\"“Every entry whose instant is before 00:00 UTC of that date is removed” and “erase(d) accepted => no entry with instant < start_of(d) remains.”\",\"question\":\"How is audit erasure ordered against concurrent transactions that append entries, especially one that obtains an old instant before the erasure but commits afterward?\",\"options\":[\"Serialize erasure with every audit-producing transaction\",\"Erase only entries committed before the erasure snapshot, allowing a later commit with an older instant\",\"Assign entry instants at commit so a later commit cannot reintroduce an older entry\"],\"default_guess\":\"Serialize audit erasure with every audit-producing transaction and assign event time within that order.\"},{\"subject\":\"Imported child records and selected projects\",\"kind\":\"referential-integrity gap\",\"text\":\"A16 checks that a record “names a project or room the file does not hold,” while “records only of projects the owner did not pick ... are neither checked ... nor imported.”\",\"question\":\"Must every imported room and pointer name the picked project whose import includes it, or is naming an unpicked but file-present project allowed?\",\"options\":[\"Require every imported child to belong to a picked project and import it only there\",\"Allow references to unpicked file-present projects even though those projects are not imported\",\"Automatically add every referenced project to the picks\"],\"default_guess\":\"Require every imported room and pointer to belong to a picked project.\"},{\"subject\":\"Imported temporal invariants\",\"kind\":\"incomplete validation\",\"text\":\"A16 rejects a record “changed, archived or superseded before it was created, added or published,” but State 1 says archiving moves the project's last-changed instant and records the archived date, and publication supersedes the prior pointer in one transaction.\",\"question\":\"Which additional relationships among created, last-changed, archived, published and superseded instants must an import satisfy?\",\"options\":[\"Require archived_at to equal project last_changed_at and each superseded_at to equal the next version's published_at\",\"Require only nondecreasing temporal order\",\"Apply only the explicit before-creation checks in A16\"],\"default_guess\":\"Require the same temporal relationships that live Registry transactions produce.\"},{\"subject\":\"Uploaded files after another owner session completes the import\",\"kind\":\"missing cleanup rule\",\"text\":\"“The uploaded file is kept in the owner session that uploaded it ... until the import is accepted” and “Everything in it ends with the session.”\",\"question\":\"If multiple owner sessions have uploaded files and one session successfully imports, are files held by the other sessions dropped immediately or retained until those sessions end or replace them?\",\"options\":[\"Drop every session's uploaded import file when the global migration closure is created\",\"Drop only the file in the accepting session\",\"Retain all other files until their own replacement or session end\"],\"default_guess\":\"Drop every uploaded import file when the migration closure is created.\"},{\"subject\":\"Store and backup location relationship\",\"kind\":\"missing refusal condition\",\"text\":\"“The configuration holds ... the store's location; the backup location” and only requires that each location can be opened or written.\",\"question\":\"May the backup location equal, contain, or be contained by the store location?\",\"options\":[\"Require distinct non-overlapping resolved locations\",\"Allow containment but forbid exact equality\",\"Allow any relationship that passes the access checks\"],\"default_guess\":\"Require distinct, non-overlapping resolved locations.\"},{\"subject\":\"Backup encryption format and authentication\",\"kind\":\"underspecified cryptography\",\"text\":\"“Each backup is encrypted with the backup key” and “A backup cannot be read without the key it was made with.”\",\"question\":\"Which authenticated-encryption construction, nonce handling, file format, key identifier and tamper-detection rules must implementations use?\",\"options\":[\"State 2 specifies one authenticated-encryption format and key identifier\",\"A later contract specifies the exact cryptographic format\",\"Each implementation chooses any encryption method satisfying the prose\"],\"default_guess\":\"Specify one versioned authenticated-encryption format with a unique nonce and non-secret key identifier.\"},{\"subject\":\"Restoring backups made with old keys or releases\",\"kind\":\"missing restore procedure\",\"text\":\"“older backups stay encrypted with the key they were made with; the owner keeps that key in the vault” and “Restoring production replaces the store with a backup.”\",\"question\":\"How does the restore operation select and receive an old key, and which release opens or migrates a backup made by an older release?\",\"options\":[\"Restore with the producing release and its old key, then run declared release migrations\",\"The current release must restore every retained backup using an explicitly supplied old key\",\"Only backups made by the current key and release are restorable\"],\"default_guess\":\"Restore with the producing release and explicitly supplied old key, then apply declared migrations.\"},{\"subject\":\"Post-restore replay of privacy changes\",\"kind\":\"unenforceable invariant\",\"text\":\"“Before any service or agent uses the restored instance again the owner repeats ... every erasure, restriction and end of a relationship made after the backup” while “Registry ... cannot list them.”\",\"question\":\"What prevents Registry from serving after restore before the owner has replayed those changes, and how is completion established?\",\"options\":[\"Registry starts in a restore-locked mode that only the owner can clear after replay\",\"The owner must keep services stopped manually; Registry cannot enforce the rule\",\"Registry records and imports a signed replay manifest external to the backup\"],\"default_guess\":\"Start restored Registry in a locked owner-only recovery mode until the owner explicitly completes replay.\"},{\"subject\":\"Failed backup runs and retention deletion\",\"kind\":\"contradictory failure effect\",\"text\":\"A18 says deletion runs “whether the new backup succeeded or not,” but also says “a failed run lengthens both [backup erasure and restore loss] by the days until a run succeeds.”\",\"question\":\"Does failure of backup creation lengthen backup retention even when deletion succeeds, or does only deletion failure lengthen the erasure horizon?\",\"options\":[\"Only deletion failure lengthens backup retention; backup failure only worsens recovery-point age\",\"Any failure cancels deletion and lengthens both horizons\",\"Backup and deletion succeed or fail as one atomic run\"],\"default_guess\":\"Only deletion failure lengthens retention; backup failure only increases recovery-point age.\"},{\"subject\":\"Audit sequence numbers after restoring an older backup\",\"kind\":\"cross-text contradiction\",\"text\":\"A18 says after restore “numbering continues from the backup's last number,” while M09 and A15 say sequence numbers are “never reused” and continue from “the last number ever written.”\",\"question\":\"May numbers assigned after the backup and lost by restoration be reused?\",\"options\":[\"Yes; restoration creates a new sequence history from the backup\",\"No; preserve an external high-water mark across restoration\",\"No; add a restore epoch and make identity the epoch plus sequence\"],\"default_guess\":\"Add a durable restore epoch so an audit-entry identity is never reused.\"},{\"subject\":\"Security-review catalogue\",\"kind\":\"external dependency\",\"text\":\"“The categories are the nine of the Workbench's security review (`skills/spec-authoring/SECURITY_REVIEW_EVIDENCE.md`) ... That document states the questions each category asks.”\",\"question\":\"What exact questions and completion criteria must later reviewers and implementers apply when that external document is not part of the accepted texts?\",\"options\":[\"Copy the catalogue questions into the accepted design\",\"Make the named external document a versioned normative input\",\"Treat the nine category names alone as the entire catalogue\"],\"default_guess\":\"Copy the exact catalogue questions and criteria into the accepted design.\"},{\"subject\":\"Concurrency coverage in the security review\",\"kind\":\"incomplete review scope\",\"text\":\"The concurrency outcome names “concurrent creates, corrections, publishes and session changes” and references A01, A04, A07, A12 and A14.\",\"question\":\"Are concurrent confirmation submissions, audit erasure versus appends, import confirmations, owner-session mutations and backup/restore interactions intentionally outside the concurrency review, or must they be reviewed too?\",\"options\":[\"Review every concurrent state-changing path, including those omitted\",\"Declare the omitted paths impossible by a single-process serialization invariant\",\"Keep the listed paths as the review's complete concurrency scope\"],\"default_guess\":\"Review every concurrent state-changing path.\"},{\"subject\":\"Create-repeat lifecycle checks\",\"kind\":\"rule contradiction\",\"text\":\"A01 says a repeat passes stages (1) to (4) and “No other check of stage (6) is made again for a repeat,” while A04 says “Only an action that passes all six may be a repeat that changes nothing.”\",\"question\":\"Which stage-6 lifecycle and eligibility checks apply to a create repeat?\",\"options\":[\"Apply only the specific archived-project checks A01 names and skip all other stage-6 checks\",\"Apply every current stage-6 check before recognizing the repeat\",\"Recognize the repeat first, then apply a separately enumerated replay policy\"],\"default_guess\":\"Use a separately enumerated replay policy matching A01, including its explicit archived-project checks.\"},{\"subject\":\"Confirmation identifier creation\",\"kind\":\"cross-text contradiction\",\"text\":\"M11 says “The confirmation id ... is minted per confirmation,” while A13 distinguishes the one-time confirmation value from the confirmation id and A14 says an id is minted only for an accepted confirmed action that changes state.\",\"question\":\"Is a confirmation id minted when the confirmation step is shown, on every submitted confirmation, or only when a confirmed action is accepted and changes state?\",\"options\":[\"Only when the confirmed action is accepted and changes state\",\"When the confirmation step is shown\",\"On the first valid-session-and-CSRF submission, even if the action is later refused or changes nothing\"],\"default_guess\":\"Mint it only when the confirmed action is accepted and changes state.\"},{\"subject\":\"Storage of the owner session's uploaded import file\",\"kind\":\"missing persistence boundary\",\"text\":\"“at most one uploaded import file” is part of the temporary OwnerSession, and A16 says it is “kept in the owner session ... never in the store.”\",\"question\":\"May the personal-data import file be written to a temporary filesystem location, or must it remain memory-only, and how is crash cleanup guaranteed?\",\"options\":[\"Memory-only for the life of the process\",\"Encrypted temporary file deleted on replacement, acceptance, session end and restart cleanup\",\"Any runtime storage outside the main store\"],\"default_guess\":\"Keep it memory-only.\"},{\"subject\":\"Concurrent mutations of one OwnerSession\",\"kind\":\"missing serialization\",\"text\":\"The changed M11 allows requests to change “the instant of its last request,” replace a pending confirmation, and replace an uploaded import file, while A13 only serializes concurrent sign-ins.\",\"question\":\"How are simultaneous requests in one owner session ordered so last_request cannot move backward, only one confirmation submission can consume the value, and the winning upload or confirmation is deterministic?\",\"options\":[\"Serialize every request that reads or changes an OwnerSession\",\"Use atomic compare-and-swap separately for each mutable fact\",\"Allow last-committer-wins except for atomic confirmation consumption\"],\"default_guess\":\"Serialize all mutations of one OwnerSession and update last_request monotonically.\"}]}",
+ "set_aside": []
+}
