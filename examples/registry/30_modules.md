@@ -78,9 +78,12 @@ later line, and modules on one line do not know each other.
   and, when it changes the store, one store transaction (A04 rule 4). A
   request that changes only an owner session's runtime state — signing in or
   out, showing a confirmation step, uploading an import file — goes through
-  `operations` too but opens no store transaction: `owner_sessions` applies
-  it under its own locks (A13 rule 2). For every other change, `operations`
-  `operations` opens the transaction through `store.run_in_transaction`,
+  `operations` too but opens no write transaction: `owner_sessions` applies
+  it under its own locks (A13 rule 2); one that must read the store first —
+  an upload, and the import's confirmation step, check the closure (A16
+  rule 2) — reads it in one read transaction through
+  `store.read_in_transaction`. For every other change, `operations` opens
+  the transaction through `store.run_in_transaction`,
   calls each module the action
   changes inside it, appends the action's one audit entry through
   `audit_log.append_audit_entry` when the action changed state and M09 lists
