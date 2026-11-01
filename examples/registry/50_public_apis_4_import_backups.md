@@ -45,10 +45,13 @@ None.
 
 ### Enforces
 
-The closure first: when it exists, refused (A16 rule 8). The file over the
+In A04 rule 6's stage order. Stage (4) first: a pick that is not a project
+of the file is outside its closed list, and picks are a set, a project
+picked twice being picked once; the file over the
 `release_declarations.import_size_limit`, not readable as the format States
 5 and 6 declare, holding two projects with one id, or a project without a
-readable id or status, refused whole at upload (A16 rule 3, A19 rule 4). Only what the
+readable id or status, refused whole at upload (A16 rule 3, A19 rule 4).
+Then stage (6): when the closure exists, refused (A16 rule 8). Only what the
 picks bring in is checked (rule 3); a record is malformed as rule 4 says, a
 pointer of a type `release_declarations.declared_artifact_types` does not
 declare or whose owner service is not `release_declarations.owner_service_of_type`'s
@@ -78,7 +81,8 @@ rules 6, 7).
 
 ### Inputs
 
-The transaction; the kept file, or that none is kept; the bound digest; the
+The transaction; the kept upload with its number, or that none is kept; the
+bound upload number and digest; the
 picks, names, aliases and Customer values the confirmation bound; the
 action's instant.
 
@@ -98,10 +102,12 @@ their pointers' publisher, and the Customers made at the action's instant.
 
 ### Enforces
 
-The closure first (rule 8); the file of the bound digest still kept, its
-digest computed again from the kept bytes (rule 2); the picks checked
-again — any conflict, malformed record or missing value, or no pick at all,
-refuses the whole import (rule 6); the values the confirmation bound and nothing else;
+Every stage (6) failure is answered together (Conventions, "Stages"): the
+closure exists (rule 8); the upload the confirmation bound — that session's
+upload of that number, not merely bytes of that digest — is no longer kept,
+its digest computed again from the kept bytes (rule 2); the picks checked
+again — any conflict, malformed record or missing value, or no pick at all
+— refuse the whole import (rule 6); the values the confirmation bound and nothing else;
 the projects link to the Customers it makes (R0-80).
 
 ### Errors

@@ -85,8 +85,8 @@ latest counts (A13 rule 2).
 
 ### Enforces
 
-A session past 8 hours from sign-in, 30 minutes without a request, or signed
-out serves no request; a change carries the CSRF value of its session,
+A session that has reached 8 hours from sign-in or 30 minutes without a
+request, or is signed out, serves no request; a change carries the CSRF value of its session,
 compared in constant time (A13 rule 5); the import lock is taken before the
 session's lock, and both are held until the request is done (A16 rule 2);
 the session's lock is granted in the order the requests passed the session
@@ -120,7 +120,8 @@ The admitted session: the step of a sign-out request, which
 
 ### Outputs
 
-That the session ended.
+That the session ended — also for a second sign-out admitted before the
+first ended it, which finds it ended in its turn and answers the same.
 
 ### Observable effect
 
@@ -158,8 +159,9 @@ action that asks for one (A13 rule 6).
 
 The admitted session; the action; its target; the revision or access
 version the step shows, or that it shows none; the action's inputs — for an
-erasure its choice, for the import the file's digest with the picks, names,
-aliases and Customer values, for an erasure of old entries the date.
+erasure its choice, for the import the upload's number and the file's
+digest with the picks, names, aliases and Customer values, for an erasure
+of old entries the date.
 
 ### Outputs
 
@@ -252,7 +254,8 @@ when it accepted them.
 
 ### Outputs
 
-That the file is kept.
+The upload's number in the session: one more than the session's last, so
+two uploads of the same bytes are two uploads (A16 rule 2).
 
 ### Observable effect
 
@@ -287,7 +290,7 @@ The admitted session, holding the import lock and its own lock.
 
 ### Outputs
 
-The kept file's bytes and digest, or that none is kept.
+The kept file's bytes, digest and upload number, or that none is kept.
 
 ### Observable effect
 
@@ -371,9 +374,12 @@ with its pending confirmation and its uploaded file.
 
 A session that has reached a limit serves no request from that moment
 (A13 rule 2), the same moment `admit_owner_request` uses. The pass alone
-ends sessions by their limits, taking the import lock and
-then each session's lock and deciding under them, each session by a reading
-of `clock.monotonic_reading` taken once its lock is held (A13 rule 2).
+ends sessions by their limits: it takes the import lock, reads
+`clock.monotonic_reading` once, and decides every session by that one
+reading, in the order of their sign-in, each under its own lock, so the
+order decides nothing. Its turn on a session's lock comes after every change
+of the session admitted before the pass began, which completes first with
+the confirmation and the upload it may need (A13 rule 2).
 
 ### Errors
 

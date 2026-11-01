@@ -52,8 +52,10 @@ types and Python signatures are State 6's.
   `operations` appends the entry and mints a confirmation id only when it
   changed state (A14 rules 1, 3, 5); one that changes state whenever it is
   accepted answers no `changed`.
-- **What answers never carry.** No answer carries a request id: it is kept
-  with its record and never answered (A01 rule 9). The projections an
+- **What answers never carry.** No answer carries a stored request id: it
+  is kept with its record and never answered (A01 rule 9). A create form the
+  owner interface renders carries a new one, for its submission (A01 rule
+  1); that is not a stored record's. The projections an
   operation's Outputs name are complete: a fact not listed there is not in
   the answer.
 - **Erased records answer, they do not refuse.** A read of an anonymised
