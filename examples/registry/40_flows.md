@@ -112,7 +112,8 @@ diagnostic.
    remove stays, and the next start removes it first (A17 rules 2, 5). The
    answer says whether the store was made new.
 4. **Open the listeners.** Last, `module:instance_lifecycle` opens the
-   listener of each surface at the address
+   owner interface's listener and then, unless the start is owner-only, the
+   service API's, each at the address
    `capability:release_declarations.listener_addresses` gives — the
    configuration names none (A17 rules 1, 2). One that cannot be opened stops
    the start with a diagnostic naming the surface: the listeners already
@@ -122,10 +123,9 @@ diagnostic.
    (A17 rule 2). An existing store is left as it was.
 5. **Serve.** Only now the surfaces answer:
    `capability:service_api.serve_service_request` and
-   `capability:owner_interface.serve_owner_request`. In an owner-only start the service API's listener is opened too
-   and serves no operation: every service call is answered with a refusal at
-   stage (1), whatever token it carries (A17 rule 1, "refuses every service
-   call").
+   `capability:owner_interface.serve_owner_request`. An owner-only start
+   has no service API listener: a service call fails to connect and Registry
+   answers nothing (A17 rule 1, owner, 2026-11-01).
 6. **Start the passes.** Every 60 seconds from the start,
    `capability:owner_sessions.end_expired_sessions` (A13 rule 2). At least
    once a minute, `capability:backups.run_daily_backup_if_due`
@@ -136,8 +136,8 @@ diagnostic.
 
 - A running instance serving both surfaces, with no owner session, an empty
   sign-in count and no remembered backup date.
-- An owner-only instance: the owner interface served, every service call
-  refused at stage (1), no backup run.
+- An owner-only instance: the owner interface served alone, no service API
+  listener, no backup run.
 - A stopped start: one diagnostic naming the first failed item and no value,
   nothing served, no file left that the start made but one it could not
   remove — a probe, a file of the store's temporary name, or an empty store
@@ -218,10 +218,14 @@ rule 7).
 3. **Sign out.** `capability:owner_sessions.sign_out_owner` takes the import
    lock, then the session's lock, and in its turn among the session's changes
    ends the session and drops its pending confirmation and its uploaded file
-   (M11). A change admitted before it — whether it took the session's lock
-   before the sign-out or takes it after — completes its change to the store
-   and leaves nothing in the ended session; a request arriving after it is
-   refused at the session check (A13 rule 2). A sign-out goes on when the import is closed (A16
+   (M11). The session's changes are ordered by its lock (A13 rule 2): a
+   change that took the lock before the sign-out — admitted before it —
+   completes, its change to the store included, even when the sign-out
+   arrives while it runs, and leaves nothing in the ended session; a change
+   that takes the lock after the sign-out finds the session ended and is
+   refused at the session check, so a confirmation the sign-out dropped is
+   never needed by a change still to run. A request arriving after the
+   sign-out is refused at the session check. A sign-out goes on when the import is closed (A16
    rule 2).
 4. **Expire.** `capability:owner_sessions.end_expired_sessions`, every 60
    seconds (`flow:start_instance`), takes the import lock and then each
@@ -243,8 +247,11 @@ rule 7).
   answer.
 - A request with no session, an ended or expired one, or a change with a
   CSRF value of another session or none — refused at stage (1) by
-  `module:owner_sessions`; `module:owner_interface` shows the sign-in form;
-  nothing changes.
+  `module:owner_sessions`; `module:owner_interface` shows the sign-in form
+  for a request without a valid session. Nothing changes but this: a
+  request carrying a valid session restarts its 30 minutes whatever its
+  answer, a CSRF refusal included (A13 rule 2, "an owner request is any
+  request ... that carries the valid session, whatever its answer").
 - No secret, credential or session identity appears in a URL, a log line, a
   diagnostic or an answer's data (A13 rule 7).
 
@@ -547,7 +554,8 @@ recorded or absent, never contact data (R0-83).
 
 - Owner session, CSRF — stage (1), `module:owner_sessions`; a token that is
   unknown or wrong, or a service outside the operation's row — stage (1),
-  `module:service_access`; in an owner-only start every service call.
+  `module:service_access`; in an owner-only start a service call reaches no
+  listener (A17 rule 1).
 - Unknown Customer — stage (3), `module:customers`.
 - Missing name or kind, a malformed request id, a request id with other
   facts, an end date after today — stage (4), `module:customers`.
@@ -582,8 +590,8 @@ pointers.
    token and request to `capability:operations.perform_service_operation`.
    `capability:service_access.identify_service` compares the token in
    constant time with each configured one; an unknown token is refused like
-   a wrong one, without a limit (A17 rule 7); in an owner-only start every
-   call is refused (A17 rule 1). `capability:service_access.service_may_call`
+   a wrong one, without a limit (A17 rule 7); an owner-only start has no
+   service API listener, so no call gets here (A17 rule 1). `capability:service_access.service_may_call`
    refuses an operation outside the service's row, whatever the request
    holds (A09 rule 3).
 2. **Read.** In one `capability:store.read_in_transaction`:
@@ -622,8 +630,8 @@ pointers.
 
 ### Errors
 
-- Unknown or wrong token, owner-only start, operation outside the row —
-  stage (1), `module:service_access`.
+- Unknown or wrong token, operation outside the row — stage (1),
+  `module:service_access`; an owner-only start — no listener, no answer.
 - Unknown project — stage (3), `module:projects` (and, for the pointer reads,
   `module:artifact_pointers`).
 - A type not declared, a list choice outside its set — stage (4), the
@@ -917,12 +925,16 @@ minted `customer_ref`.
 - An accepted import: the picked projects under their own ids with rooms,
   pointers and links, the Customers made, the closure and one entry; every
   session's upload dropped; every later import refused.
-- A confirmation refused because another session's import closed it:
-  nothing applied, every upload already dropped, and the import refused for
-  good — no step is shown again (rule 8).
-- Any other refused confirmation: nothing applied; the file stays kept
-  unless a new upload or the session's end dropped it, and the step is to be
-  shown again.
+- A confirmation refused because the closure exists — made by any import
+  accepted before it, of another session or of this one: nothing applied,
+  every upload already dropped, and the import refused for good; no step is
+  shown again (rule 8). This outcome comes before every other.
+- A confirmation refused while no closure exists: nothing applied; the file
+  stays kept unless a new upload or the session's end dropped it. When the
+  pending value was used up or cleared, the step must be shown again; a
+  submission refused for giving another value while the pending one is still
+  valid leaves that value and its step, which may be submitted again (A13
+  rule 6).
 
 ### Errors
 
