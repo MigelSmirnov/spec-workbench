@@ -1,0 +1,109 @@
+{
+ "open_points": [
+  {
+   "subject": "backup snapshot metadata",
+   "kind": "unclear ownership",
+   "text": "`store` owns “one consistent read snapshot” while `backups` owns the backup record’s “instant, release, last sequence number and key digest”; the instant must be when the read transaction began and the sequence number must be the value in that snapshot, but no module owns capturing them together",
+   "question": "Which module captures the backup instant and audit sequence inside the same read transaction as the copied store, and through what dependency-safe capability?",
+   "options": [
+    "`store` returns the snapshot together with its transaction-start instant and snapshotted audit sequence",
+    "`backups` reads the clock and `audit_log` around `store.copy_store_snapshot`, accepting that they may not describe the snapshot",
+    "`store` exposes a snapshot transaction in which `backups` coordinates `clock`, `audit_log` and the copy"
+   ],
+   "default_guess": "Have one store snapshot capability return metadata captured within the snapshot transaction.",
+   "witness": {
+    "initial": "The store’s last audit sequence is 10 and a backup run begins while another accepted change is about to commit sequence 11.",
+    "events": [
+     "`backups` asks `store` to copy a snapshot that sees sequence 10.",
+     "The concurrent change commits sequence 11.",
+     "`backups` obtains the recorded instant and calls `audit_log.last_audit_sequence`."
+    ],
+    "outcomes": [
+     "The backup records sequence 10 and the instant at which its snapshot transaction began.",
+     "The backup records sequence 11 or an instant outside the snapshot transaction, so its metadata does not describe the copied store and its check may fail."
+    ],
+    "observer": "The owner monitoring the backup run or later inspecting the backup record."
+   },
+   "unit": "30_modules.md:`backups`"
+  },
+  {
+   "subject": "ordering of the import mapping",
+   "kind": "owner conflict",
+   "text": "`store` owns “A06: the order of every list read ... so no module sorts records itself”, but `migration_import` owns the mapping of the uploaded in-memory file, including A06 rule 8’s ordered projects, rooms, pointers and Customers",
+   "question": "Who owns and performs A06 ordering for an import mapping that has not been written to the SQLite store?",
+   "options": [
+    "`migration_import` sorts the parsed mapping itself",
+    "`store` provides an ordering capability for records that are not in the store",
+    "The mapping preserves file order despite A06 rule 8"
+   ],
+   "default_guess": "Let `migration_import` request a reusable ordering capability rather than preserve file order.",
+   "witness": {
+    "initial": "Two valid export files contain the same picked projects and records but list them in opposite orders.",
+    "events": [
+     "The owner uploads the first file and views its mapping.",
+     "The owner uploads the second file and views its mapping."
+    ],
+    "outcomes": [
+     "Both mappings have the same A06 order.",
+     "Each mapping follows its file order because only `store` may sort and these records are not in the store."
+    ],
+    "observer": "The owner viewing the import mapping."
+   },
+   "unit": "30_modules.md:`store`"
+  },
+  {
+   "subject": "creation time of an imported Customer",
+   "kind": "unclear fact owner",
+   "text": "State 1 says “A Customer the import makes is created at the import's instant”, while the new `make_imported_customer` capability has no statement saying whether `migration_import` supplies that instant or `customers` reads `clock` independently",
+   "question": "Which module owns the single import instant used as each imported Customer’s recorded instant, the migration closure’s instant and the import audit entry’s instant?",
+   "options": [
+    "`migration_import` reads one instant and passes it to every imported-Customer write and the closure/audit composition",
+    "`customers`, `migration_import` and `audit_log` each read the clock when writing their own record",
+    "Only the Customer records share an instant; the closure and audit entry may differ"
+   ],
+   "default_guess": "Read one import instant in the import composition and pass it to every participating module.",
+   "witness": {
+    "initial": "A valid import will create two Customers, and the clock advances between record writes.",
+    "events": [
+     "The owner confirms the import.",
+     "`customers.make_imported_customer` writes the first and second Customers.",
+     "`migration_import` writes the closure and `audit_log` writes the entry."
+    ],
+    "outcomes": [
+     "Both Customers, the closure and the audit entry carry one import instant.",
+     "They carry different instants according to when each owning module reads `clock.recorded_now`."
+    ],
+    "observer": "The owner reading the Customers and audit log, or code comparing the migration closure with imported records."
+   },
+   "unit": "30_modules.md:`customers`"
+  },
+  {
+   "subject": "ordered startup checks",
+   "kind": "two owners",
+   "text": "`configuration` owns “the start checks in rule 2's one order” but “Must not own” probing the backup location or opening the store, while `instance_lifecycle` owns “`configuration` first, then the backup probe and `store`”",
+   "question": "Which module owns the complete A17 failure-precedence order across configuration-only checks, the backup probe and store opening?",
+   "options": [
+    "`instance_lifecycle` owns the cross-module order and `configuration` owns only the ordered checks it performs",
+    "`configuration` returns an executable check plan that includes later modules’ checks",
+    "Each module owns its checks and startup may choose their order after configuration validation"
+   ],
+   "default_guess": "Make `instance_lifecycle` the sole owner of the cross-module sequence and limit `configuration` to its internal sub-order.",
+   "witness": {
+    "initial": "The configuration values pass syntactic checks, but the backup location is not writable and the store is corrupt.",
+    "events": [
+     "The owner starts Registry.",
+     "Startup reaches the filesystem-dependent A17 checks."
+    ],
+    "outcomes": [
+     "Startup reports the backup-location failure first, following A17’s declared order.",
+     "Startup opens the store first and reports corruption because the modules’ cross-check order is not owned in one place."
+    ],
+    "observer": "The owner reading the failed-start diagnostic."
+   },
+   "unit": "30_modules.md:`configuration`"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"backup snapshot metadata\",\"kind\":\"unclear ownership\",\"text\":\"`store` owns “one consistent read snapshot” while `backups` owns the backup record’s “instant, release, last sequence number and key digest”; the instant must be when the read transaction began and the sequence number must be the value in that snapshot, but no module owns capturing them together\",\"question\":\"Which module captures the backup instant and audit sequence inside the same read transaction as the copied store, and through what dependency-safe capability?\",\"options\":[\"`store` returns the snapshot together with its transaction-start instant and snapshotted audit sequence\",\"`backups` reads the clock and `audit_log` around `store.copy_store_snapshot`, accepting that they may not describe the snapshot\",\"`store` exposes a snapshot transaction in which `backups` coordinates `clock`, `audit_log` and the copy\"],\"default_guess\":\"Have one store snapshot capability return metadata captured within the snapshot transaction.\",\"witness\":{\"initial\":\"The store’s last audit sequence is 10 and a backup run begins while another accepted change is about to commit sequence 11.\",\"events\":[\"`backups` asks `store` to copy a snapshot that sees sequence 10.\",\"The concurrent change commits sequence 11.\",\"`backups` obtains the recorded instant and calls `audit_log.last_audit_sequence`.\"],\"outcomes\":[\"The backup records sequence 10 and the instant at which its snapshot transaction began.\",\"The backup records sequence 11 or an instant outside the snapshot transaction, so its metadata does not describe the copied store and its check may fail.\"],\"observer\":\"The owner monitoring the backup run or later inspecting the backup record.\"},\"unit\":\"30_modules.md:`backups`\"},{\"subject\":\"ordering of the import mapping\",\"kind\":\"owner conflict\",\"text\":\"`store` owns “A06: the order of every list read ... so no module sorts records itself”, but `migration_import` owns the mapping of the uploaded in-memory file, including A06 rule 8’s ordered projects, rooms, pointers and Customers\",\"question\":\"Who owns and performs A06 ordering for an import mapping that has not been written to the SQLite store?\",\"options\":[\"`migration_import` sorts the parsed mapping itself\",\"`store` provides an ordering capability for records that are not in the store\",\"The mapping preserves file order despite A06 rule 8\"],\"default_guess\":\"Let `migration_import` request a reusable ordering capability rather than preserve file order.\",\"witness\":{\"initial\":\"Two valid export files contain the same picked projects and records but list them in opposite orders.\",\"events\":[\"The owner uploads the first file and views its mapping.\",\"The owner uploads the second file and views its mapping.\"],\"outcomes\":[\"Both mappings have the same A06 order.\",\"Each mapping follows its file order because only `store` may sort and these records are not in the store.\"],\"observer\":\"The owner viewing the import mapping.\"},\"unit\":\"30_modules.md:`store`\"},{\"subject\":\"creation time of an imported Customer\",\"kind\":\"unclear fact owner\",\"text\":\"State 1 says “A Customer the import makes is created at the import's instant”, while the new `make_imported_customer` capability has no statement saying whether `migration_import` supplies that instant or `customers` reads `clock` independently\",\"question\":\"Which module owns the single import instant used as each imported Customer’s recorded instant, the migration closure’s instant and the import audit entry’s instant?\",\"options\":[\"`migration_import` reads one instant and passes it to every imported-Customer write and the closure/audit composition\",\"`customers`, `migration_import` and `audit_log` each read the clock when writing their own record\",\"Only the Customer records share an instant; the closure and audit entry may differ\"],\"default_guess\":\"Read one import instant in the import composition and pass it to every participating module.\",\"witness\":{\"initial\":\"A valid import will create two Customers, and the clock advances between record writes.\",\"events\":[\"The owner confirms the import.\",\"`customers.make_imported_customer` writes the first and second Customers.\",\"`migration_import` writes the closure and `audit_log` writes the entry.\"],\"outcomes\":[\"Both Customers, the closure and the audit entry carry one import instant.\",\"They carry different instants according to when each owning module reads `clock.recorded_now`.\"],\"observer\":\"The owner reading the Customers and audit log, or code comparing the migration closure with imported records.\"},\"unit\":\"30_modules.md:`customers`\"},{\"subject\":\"ordered startup checks\",\"kind\":\"two owners\",\"text\":\"`configuration` owns “the start checks in rule 2's one order” but “Must not own” probing the backup location or opening the store, while `instance_lifecycle` owns “`configuration` first, then the backup probe and `store`”\",\"question\":\"Which module owns the complete A17 failure-precedence order across configuration-only checks, the backup probe and store opening?\",\"options\":[\"`instance_lifecycle` owns the cross-module order and `configuration` owns only the ordered checks it performs\",\"`configuration` returns an executable check plan that includes later modules’ checks\",\"Each module owns its checks and startup may choose their order after configuration validation\"],\"default_guess\":\"Make `instance_lifecycle` the sole owner of the cross-module sequence and limit `configuration` to its internal sub-order.\",\"witness\":{\"initial\":\"The configuration values pass syntactic checks, but the backup location is not writable and the store is corrupt.\",\"events\":[\"The owner starts Registry.\",\"Startup reaches the filesystem-dependent A17 checks.\"],\"outcomes\":[\"Startup reports the backup-location failure first, following A17’s declared order.\",\"Startup opens the store first and reports corruption because the modules’ cross-check order is not owned in one place.\"],\"observer\":\"The owner reading the failed-start diagnostic.\"},\"unit\":\"30_modules.md:`configuration`\"}]}",
+ "set_aside": []
+}
