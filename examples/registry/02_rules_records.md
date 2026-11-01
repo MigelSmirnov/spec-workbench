@@ -62,8 +62,9 @@ each create once.
    after it is a new create (rule 8).
 8. A request id leaves its record with the values anonymisation or erasure
    removes (M01, M04); a create arriving after that with the same request id
-   is a new create, answered with the new record it made, so it is not silent
-   (R0-36, owner, 2026-11-01).
+   is a new create, checked as any create — a customer it names that is now
+   restricted, ended or erased refuses it — and, when accepted, answered with
+   the new record it made, so it is not silent (R0-36, owner, 2026-11-01).
 9. A request id is never an identity: it is not answered as one, and no read
    looks a record up by it.
 
