@@ -136,9 +136,14 @@ later line, and modules on one line do not know each other.
   `service_access`, and for the owner `personal_data`, the highest class, so
   no owner answer is refused for its class (Actors and trust boundaries,
   "Personal data").
-- **Time.** Every recorded instant is read from `clock.recorded_now`; every
-  limit of A13 and the minute look of A18 rule 1 from `clock.monotonic_reading`
-  and `clock.recorded_now`. No other module reads a clock.
+- **Time.** An action has one instant: `operations` reads it from
+  `clock.recorded_now` once, when the action's transaction begins, with
+  today's date (`clock.today_in_utc`), and hands both to every module the
+  action records an instant or compares a date in — the import's projects,
+  Customers, closure and entry all carry that one instant. The limits of A13
+  are read by `owner_sessions` from `clock.monotonic_reading`, the minute look
+  of A18 rule 1 and a backup's snapshot instant by `backups` and `store` from
+  `clock.recorded_now`. No other module reads a clock.
 - **Random values and secret comparison.** Every identity Registry mints
   ("Identity formats") and every 32-byte value of A13 rule 7 comes from
   `random_values`; every comparison of a presented secret with a held one goes
@@ -389,18 +394,23 @@ applied one at a time (A01 rule 7, A07 rule 2, A15 rule 5), atomicity (A04
 rule 4). A19 rule 3: every value a caller gives fills a value place of a
 statement whose structure the release fixes; a value that selects among fixed
 alternatives is checked against its closed list first. A06: the order of every
-list read — each key as A06 names it, text by Unicode code point, every key
-ending in an identity or a sequence number — so no module sorts records itself.
+list read from the store — each key as A06 names it, text by Unicode code
+point, every key ending in an identity or a sequence number — so no module
+sorts stored records itself; the import mapping, which is not stored, is
+ordered by `migration_import` by the same keys (A06 rule 8).
 For a backup (A18 rules 1, 2): one consistent read snapshot of the whole store,
 written as a store file of its own at the temporary path `backups` names and
 makes for it, with the agent
 sessions removed from that copy, so it passes the same checks; and the full
 integrity and version check of such a file, the decrypted copy included,
-opened for reading only.
+opened for reading only. The copy answers, from its one read transaction, the
+instant that transaction began and the last sequence number the audit
+counter it holds says (A15 rule 5), so a backup's record describes exactly its
+copy (A18 rule 1).
 
 ### Knows
 
-`models`, `release_declarations`, `configuration`.
+`models`, `clock`, `release_declarations`, `configuration`.
 
 ### Must not own
 
@@ -445,7 +455,7 @@ store ever wrote, for a backup's record (A18 rule 1).
 
 ### Knows
 
-`models`, `release_declarations`, `store`, `clock`.
+`models`, `release_declarations`, `store`.
 
 ### Must not own
 
@@ -579,7 +589,7 @@ Customer (R0-65, R0-83).
 
 ### Knows
 
-`models`, `given_values`, `clock`, `random_values`, `store`.
+`models`, `given_values`, `random_values`, `store`.
 
 ### Must not own
 
@@ -624,12 +634,12 @@ Customer's create `customers'`); A03 for projects; the revision and
 last-changed instant (A04 rules 1–3 for projects); the project's lifecycle —
 archive, anonymise, delete whole (M01) — and its repeated transitions (A05);
 rooms, added and never changed (M03); the project card, `context`,
-`validate` and the project's part of the agent projection; lists in A06
-rules 1, 2 and 8's orders. A05 rule 4's refusals that are project ones.
+`validate` and the project's part of the agent projection; its lists, read
+from `store` in A06 rules 1, 2 and 8's orders. A05 rule 4's refusals that are project ones.
 
 ### Knows
 
-`models`, `given_values`, `clock`, `random_values`, `store`, `customers`.
+`models`, `given_values`, `random_values`, `store`, `customers`.
 
 ### Must not own
 
@@ -679,7 +689,7 @@ refused. The pointers' list (A06 rule 3) and the latest of a type.
 
 ### Knows
 
-`models`, `given_values`, `clock`, `random_values`, `store`,
+`models`, `given_values`, `random_values`, `store`,
 `release_declarations`, `projects`.
 
 ### Must not own
@@ -725,7 +735,7 @@ sessions in A06 rule 5's order and the session's access.
 
 ### Knows
 
-`models`, `given_values`, `clock`, `store`, `projects`.
+`models`, `given_values`, `store`, `projects`.
 
 ### Must not own
 
@@ -779,7 +789,7 @@ malformed.
 
 ### Knows
 
-`models`, `given_values`, `clock`, `random_values`, `store`,
+`models`, `given_values`, `random_values`, `store`,
 `release_declarations`, `owner_sessions`, `customers`, `projects`,
 `artifact_pointers`.
 
@@ -858,9 +868,11 @@ failures. A09 rules 3 and 4 at the call: an operation outside the caller's
 rights refused, an answer above its class refused whole. A10 rule 3's
 placement: stage (2)'s refusal hides every later one. A14 rules 1 and 5:
 appending the audit entry in the action's transaction when the action changed
-state, and minting the confirmation id only then — but for the erasure of old
-audit entries, which mints one whenever it is accepted, also when it removes
-nothing (A14 rule 5, A15 rule 6). Resolving a pointer a withdrawal names to
+state. A14 rule 5: for a confirmed action `operations` mints the confirmation
+id before handing the action on, inside the transaction, and keeps it only
+when the action is accepted and changed state — or, for the erasure of old
+audit entries, whenever it is accepted, also when it removes nothing (A15 rule
+6); a discarded id is written nowhere. Resolving a pointer a withdrawal names to
 its project, through `artifact_pointers.project_of_pointer`, before stage (2)
 checks that project against the session's set (A08 rule 7). A05 rule 2's no entry and no
 confirmation id for a repeat. The compositions: erasing a project (with
@@ -869,7 +881,7 @@ joining the agent projection with its published pointers.
 
 ### Knows
 
-`models`, `random_values`, `store`, `audit_log`, `service_access`,
+`models`, `clock`, `random_values`, `store`, `audit_log`, `service_access`,
 `owner_sessions`, `customers`, `projects`, `artifact_pointers`,
 `agent_sessions`, `migration_import`, `backups`.
 
