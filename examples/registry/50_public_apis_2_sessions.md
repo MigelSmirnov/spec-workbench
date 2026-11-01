@@ -97,10 +97,13 @@ place on the session's lock at once; a request that touches one first waits
 for the import lock and then takes its place, so the locks are always taken
 import first and no place on a session's lock waits for the import lock (A16
 rule 2). The import lock is granted in the order requests asked for it, and
-the session's lock in the order places were taken; so every change of a
-session admitted before another takes its place on the session's lock
-before it, and the session's changes apply one at a time in that order
-(A13 rule 2). A second
+the session's lock in the order places were taken, and the session's
+changes apply one at a time in that order (A13 rule 2: "in the order in
+which they take the session's one lock"). A change that touches an uploaded
+file takes its place only after the import lock, so a later change that
+touches none may take its place first; the admission order is kept only
+where both the import lock and the session's lock order it, as for a
+sign-out (`sign_out_owner`). A second
 sign-out arriving after the first was admitted finds the session marked
 signed out and is refused.
 
@@ -139,10 +142,16 @@ dropped (M11).
 
 ### Enforces
 
-From its admission no request of the session passes the check (A13 rule 2).
+From its admission the session is marked signed out, and no request of the
+session arriving after it passes the check, a read included (State 4,
+`flow:owner_sign_in_and_session`: a request arriving after the sign-out is
+refused at the session check).
 Its turn on the session's lock comes after every change of the session
-admitted before it, both locks being granted in order
-(`admit_owner_request`): each completes first, its change to the store
+admitted before it: one touching no uploaded file took its place at its
+admission, before the sign-out, which takes its own only after the import
+lock; one touching an uploaded file asked for the import lock before the
+sign-out did, and that lock is granted in order (`admit_owner_request`).
+Each completes first, its change to the store
 included, with the confirmation and the upload it may need still in place,
 and leaves nothing in the ended session. It goes on when the import is
 closed (A16 rule 2).
