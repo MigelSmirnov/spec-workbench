@@ -993,9 +993,10 @@ key; the kept name made from the instant.
    failed removal stops the run (A18 rule 4).
 3. **Copy, encrypt, check.** `capability:store.copy_store_snapshot` writes one
    read snapshot of the store, the agent sessions removed, at the temporary
-   path `module:backups` named, and answers that transaction's start instant
-   and the last sequence number the audit counter holds (A18 rules 1, 2,
-   A15 rule 5). `module:backups` encrypts it into the backup, a second file
+   path `module:backups` named, and answers the last sequence number the
+   audit counter holds — the read that fixes the snapshot — with the instant
+   read from the clock at it (A18 rules 1, 2, A15 rule 5); the actions'
+   writes go on meanwhile and neither waits for the other. `module:backups` encrypts it into the backup, a second file
    under the temporary prefix, with the configured key, and removes the
    unencrypted copy before going on — a copy it cannot remove fails the run
    and is left, under the temporary prefix, for the next run's step 2; the
