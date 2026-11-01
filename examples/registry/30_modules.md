@@ -158,9 +158,11 @@ later line, and modules on one line do not know each other.
   `release_declarations`'; nothing reads them from the configuration or the
   store (A22 rule 2, A09 rule 1).
 - **Secrets never leave.** No module puts a secret, a confirmation value, a
-  CSRF value or a session identity into a record, a log line, a diagnostic,
+  CSRF value or an owner session's identity into a record, a log line, a diagnostic,
   an audit entry, a URL or the data of an answer (A13 rule 7, A17 rule 6).
-  The session identity travels only in its cookie, the CSRF and confirmation
+  An agent session's identity, which Kernel names (R0-53), is not one of them:
+  M06, M07 and M09 record it. The owner session's identity travels only in its
+  cookie, the CSRF and confirmation
   values only in the forms `owner_interface` serves (A13 rule 7).
   `configuration` holds the secrets and hands each only to the module that
   uses it: the service tokens to `service_access`, the owner credential to
