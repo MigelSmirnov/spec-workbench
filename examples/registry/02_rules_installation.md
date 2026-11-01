@@ -148,8 +148,10 @@ closure is the one proof of success.
    location; the backup location and the backup key (A18); the owner
    credential; one service token for each service of A09 — PresuPro, Client
    Portal, Cabinet, Cabinet Kernel (R0-20, R0-23) — or, for an owner-only
-   start, none of the four: Registry then serves the owner interface alone
-   and refuses every service call (A18 rule 9).
+   start, none of the four: Registry then serves the owner interface alone,
+   opening no listener of the service API, so a service call reaches no
+   Registry and is refused by its connection failing, with no answer (owner,
+   2026-11-01; A18 rule 9).
 2. Registry checks the configuration when it starts and serves nothing until
    every check passes; a failed check stops the start with a diagnostic that
    names the failed item and never its value (R0-37). The checks run in one
@@ -161,8 +163,9 @@ closure is the one proof of success.
    5); the backup location writable, by a probe file under the temporary
    prefix (A18 rule 5); the store opening, or made new (rule 5); last, the
    listener of each surface opened at the address the release fixes — the
-   configuration names none (rule 1) — one that cannot be opened failing the
-   start and closing those already opened. Within one
+   configuration names none (rule 1) — the owner interface's first, then the
+   service API's unless the start is owner-only, one that cannot be opened
+   failing the start and closing the one already opened. Within one
    check, items go in the order rule 1 lists them. A failed start leaves no
    file it made but one it could not remove: a probe, which the next backup
    run removes with the other temporary files (A18 rule 4); a file of the
@@ -229,8 +232,10 @@ for secrets s1 != s2 in config: value(s1) != value(s2) and len >= 32 bytes
 3. A 16-byte token stops the start.
 4. The start diagnostic never contains a secret's value.
 5. A start whose store is made new and whose listener then cannot be opened
-   stops, serves nothing and leaves no store; one whose listener cannot be
-   opened over an existing store leaves that store as it was.
+   stops, serves nothing and removes that store — or, when the removal
+   fails, leaves it as an empty store of the release's version; one whose
+   listener cannot be opened over an existing store leaves that store as it
+   was. An owner-only start opens no service API listener.
 
 ### Consequence
 
@@ -342,8 +347,8 @@ secret cannot be shared between holders.
    migration — and begins its own history from the backup: numbering
    continues from its last number (A15), and a store without the migration
    closure accepts the import (A16).
-9. An owner-only start (A17 rule 1) serves the owner interface alone and
-   makes no backup run.
+9. An owner-only start (A17 rule 1) serves the owner interface alone, with no
+   service API listener, and makes no backup run.
 
 ### Formal invariants
 
