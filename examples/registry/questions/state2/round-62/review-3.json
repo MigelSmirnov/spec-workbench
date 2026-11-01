@@ -1,0 +1,134 @@
+{
+ "open_points": [
+  {
+   "unit": "A17",
+   "subject": "startup conversion of an existing store to WAL mode",
+   "kind": "contradiction",
+   "text": "Rule 5 requires an existing store to \"be put in that mode when it is not in it\" before the listeners are opened, but required test 5 says a listener failure over an existing store \"leaves that store as it was.\"",
+   "question": "If an existing non-WAL store is converted successfully and a later startup check or listener opening fails, must Registry retain the WAL conversion or restore the store's previous journal mode?",
+   "options": [
+    "Retain the WAL conversion even though startup failed.",
+    "Restore the previous journal mode so the existing store is left as it was.",
+    "Do not convert until every later startup check has passed."
+   ],
+   "default_guess": "Restore the previous journal mode on any later startup failure.",
+   "witness": {
+    "initial": "An existing, otherwise valid store is not in WAL mode, and the owner-interface listener address is unavailable.",
+    "events": [
+     "Registry starts and opens the existing store.",
+     "Registry puts the store in WAL mode as rule 5 requires.",
+     "Registry fails when opening the owner-interface listener."
+    ],
+    "outcomes": [
+     "The store remains in WAL mode because the conversion already succeeded.",
+     "The store is returned to its former journal mode because the failed start must leave it as it was."
+    ],
+    "observer": "The owner or the next Registry start inspecting the store's journal mode."
+   }
+  },
+  {
+   "unit": "A18",
+   "subject": "contents of a backup snapshot",
+   "kind": "contradiction",
+   "text": "The changed rule says a backup \"holds the store as its snapshot saw it\" and that a later backup \"holds whatever the store holds when its own snapshot is fixed,\" while rule 2 says a backup holds \"every record but the agent sessions,\" which are removed from the copy after the snapshot.",
+   "question": "Is the claimed snapshot identity subject to an explicit exception for agent-session removal, or must the backup reproduce every record visible in the fixed snapshot?",
+   "options": [
+    "Agent sessions are removed; the backup is a deterministic transformation of the snapshot rather than the snapshot itself.",
+    "Agent sessions visible in the snapshot are retained.",
+    "The snapshot transaction must exclude agent-session records before the snapshot is described as fixed."
+   ],
+   "default_guess": "Treat agent-session removal as an explicit exception and describe the backup as a transformed snapshot.",
+   "witness": {
+    "initial": "A registered agent session exists in the store before the backup begins.",
+    "events": [
+     "The backup's first read fixes a snapshot that can see the session.",
+     "Registry constructs and encrypts the backup."
+    ],
+    "outcomes": [
+     "The backup contains the session because it holds whatever the snapshot saw.",
+     "The backup omits the session because rule 2 removes all agent sessions."
+    ],
+    "observer": "The owner restoring or inspecting the checked backup."
+   }
+  },
+  {
+   "unit": "A18",
+   "subject": "instant assigned to a backup snapshot",
+   "kind": "undefined ordering",
+   "text": "The snapshot is fixed by \"its first read, which is of the audit counter's last sequence number, and the instant is read from the clock at that read,\" but a database read and a wall-clock read are separate operations and their order is not stated.",
+   "question": "At which exact boundary is the backup instant sampled relative to the database read that fixes the snapshot, especially when a transaction commits or the wall clock changes between the two operations?",
+   "options": [
+    "Read the clock immediately before the database read.",
+    "Fix the database snapshot first, then read the clock.",
+    "Define another atomic or database-derived snapshot timestamp mechanism."
+   ],
+   "default_guess": "Fix the database snapshot first and immediately read the clock, defining the recorded instant as no earlier than snapshot fixation.",
+   "witness": {
+    "initial": "A backup is starting while an import transaction is ready to commit.",
+    "events": [
+     "The backup performs its wall-clock read and its first database read as separate operations.",
+     "The import commits between those operations."
+    ],
+    "outcomes": [
+     "If the clock is read first, the backup includes the import but records an instant preceding its commit.",
+     "If the database is read first, the backup excludes the import but records an instant following its commit."
+    ],
+    "observer": "The owner comparing backup metadata with the import/audit instant, and retention logic using the backup instant."
+   }
+  },
+  {
+   "unit": "A18",
+   "subject": "non-interference between backup readers and writers",
+   "kind": "unbounded invariant",
+   "text": "The rule promises that \"no write waits for, or is refused or fails for, a copy, nor a copy for a write,\" while rule 6 says Registry bounds neither how long a run takes nor how old the newest backup may be, and no resource, cancellation, checkpoint or contention policy is given that can enforce the absolute promise.",
+   "question": "What must Registry do when a long-lived backup snapshot causes WAL retention or resource pressure that would otherwise delay or fail a writer or the backup itself, and what observable threshold counts as waiting \"for\" the other operation?",
+   "options": [
+    "Abort the backup before it can affect a writer.",
+    "Allow the writer to wait or fail under defined resource conditions.",
+    "Reserve or bound resources and backup duration sufficiently to guarantee non-interference.",
+    "Narrow the promise to database-lock waiting only and define that boundary."
+   ],
+   "default_guess": "Narrow the guarantee to database-lock interference and abort the backup when continuing would impede writes.",
+   "witness": {
+    "initial": "The store has finite disk capacity and a backup snapshot remains open while writes continue.",
+    "events": [
+     "The backup reader keeps its old snapshot for an unbounded time.",
+     "Writers append enough changes that retained WAL data approaches the available capacity."
+    ],
+    "outcomes": [
+     "Registry aborts or fails the backup to keep writes progressing, so the copy fails because of writes.",
+     "Registry keeps the backup running and a writer waits or fails when resources are exhausted, so a write fails because of the copy."
+    ],
+    "observer": "A service making a write during the backup and the owner monitoring the backup run."
+   }
+  },
+  {
+   "unit": "A21",
+   "subject": "security-review verification of backup concurrency",
+   "kind": "missing verification",
+   "text": "The review says \"concurrency now names A18 too, whose one-snapshot copy and non-overlapping runs (rule 1) it relies on,\" but A18's required tests do not test the new promise that no write waits for, is refused by, or fails for a copy, nor that a copy does so for a write.",
+   "question": "What required test or other verifiable criterion establishes the new reader/writer non-interference guarantee on which the completed concurrency review relies?",
+   "options": [
+    "Add a bounded concurrency test with defined latency and refusal criteria.",
+    "Treat only snapshot consistency and non-overlapping backup runs as reviewed, excluding the non-interference promise.",
+    "Provide a structural verification tied to the exact SQLite operations and configuration used."
+   ],
+   "default_guess": "Add a bounded concurrency test and narrow the reviewed guarantee to behavior that test can observe.",
+   "witness": {
+    "initial": "Two implementations both create consistent one-snapshot backups and prevent backup runs from overlapping.",
+    "events": [
+     "Implementation one briefly blocks a writer during a backup; implementation two does not.",
+     "Both run every required test currently listed by A18 and A21."
+    ],
+    "outcomes": [
+     "Both implementations pass the stated security-review tests despite differing on the new normative guarantee.",
+     "Only the nonblocking implementation should satisfy the review if that guarantee is genuinely covered."
+    ],
+    "observer": "The reviewer and a caller whose write overlaps a backup."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A17\",\"subject\":\"startup conversion of an existing store to WAL mode\",\"kind\":\"contradiction\",\"text\":\"Rule 5 requires an existing store to \\\"be put in that mode when it is not in it\\\" before the listeners are opened, but required test 5 says a listener failure over an existing store \\\"leaves that store as it was.\\\"\",\"question\":\"If an existing non-WAL store is converted successfully and a later startup check or listener opening fails, must Registry retain the WAL conversion or restore the store's previous journal mode?\",\"options\":[\"Retain the WAL conversion even though startup failed.\",\"Restore the previous journal mode so the existing store is left as it was.\",\"Do not convert until every later startup check has passed.\"],\"default_guess\":\"Restore the previous journal mode on any later startup failure.\",\"witness\":{\"initial\":\"An existing, otherwise valid store is not in WAL mode, and the owner-interface listener address is unavailable.\",\"events\":[\"Registry starts and opens the existing store.\",\"Registry puts the store in WAL mode as rule 5 requires.\",\"Registry fails when opening the owner-interface listener.\"],\"outcomes\":[\"The store remains in WAL mode because the conversion already succeeded.\",\"The store is returned to its former journal mode because the failed start must leave it as it was.\"],\"observer\":\"The owner or the next Registry start inspecting the store's journal mode.\"}},{\"unit\":\"A18\",\"subject\":\"contents of a backup snapshot\",\"kind\":\"contradiction\",\"text\":\"The changed rule says a backup \\\"holds the store as its snapshot saw it\\\" and that a later backup \\\"holds whatever the store holds when its own snapshot is fixed,\\\" while rule 2 says a backup holds \\\"every record but the agent sessions,\\\" which are removed from the copy after the snapshot.\",\"question\":\"Is the claimed snapshot identity subject to an explicit exception for agent-session removal, or must the backup reproduce every record visible in the fixed snapshot?\",\"options\":[\"Agent sessions are removed; the backup is a deterministic transformation of the snapshot rather than the snapshot itself.\",\"Agent sessions visible in the snapshot are retained.\",\"The snapshot transaction must exclude agent-session records before the snapshot is described as fixed.\"],\"default_guess\":\"Treat agent-session removal as an explicit exception and describe the backup as a transformed snapshot.\",\"witness\":{\"initial\":\"A registered agent session exists in the store before the backup begins.\",\"events\":[\"The backup's first read fixes a snapshot that can see the session.\",\"Registry constructs and encrypts the backup.\"],\"outcomes\":[\"The backup contains the session because it holds whatever the snapshot saw.\",\"The backup omits the session because rule 2 removes all agent sessions.\"],\"observer\":\"The owner restoring or inspecting the checked backup.\"}},{\"unit\":\"A18\",\"subject\":\"instant assigned to a backup snapshot\",\"kind\":\"undefined ordering\",\"text\":\"The snapshot is fixed by \\\"its first read, which is of the audit counter's last sequence number, and the instant is read from the clock at that read,\\\" but a database read and a wall-clock read are separate operations and their order is not stated.\",\"question\":\"At which exact boundary is the backup instant sampled relative to the database read that fixes the snapshot, especially when a transaction commits or the wall clock changes between the two operations?\",\"options\":[\"Read the clock immediately before the database read.\",\"Fix the database snapshot first, then read the clock.\",\"Define another atomic or database-derived snapshot timestamp mechanism.\"],\"default_guess\":\"Fix the database snapshot first and immediately read the clock, defining the recorded instant as no earlier than snapshot fixation.\",\"witness\":{\"initial\":\"A backup is starting while an import transaction is ready to commit.\",\"events\":[\"The backup performs its wall-clock read and its first database read as separate operations.\",\"The import commits between those operations.\"],\"outcomes\":[\"If the clock is read first, the backup includes the import but records an instant preceding its commit.\",\"If the database is read first, the backup excludes the import but records an instant following its commit.\"],\"observer\":\"The owner comparing backup metadata with the import/audit instant, and retention logic using the backup instant.\"}},{\"unit\":\"A18\",\"subject\":\"non-interference between backup readers and writers\",\"kind\":\"unbounded invariant\",\"text\":\"The rule promises that \\\"no write waits for, or is refused or fails for, a copy, nor a copy for a write,\\\" while rule 6 says Registry bounds neither how long a run takes nor how old the newest backup may be, and no resource, cancellation, checkpoint or contention policy is given that can enforce the absolute promise.\",\"question\":\"What must Registry do when a long-lived backup snapshot causes WAL retention or resource pressure that would otherwise delay or fail a writer or the backup itself, and what observable threshold counts as waiting \\\"for\\\" the other operation?\",\"options\":[\"Abort the backup before it can affect a writer.\",\"Allow the writer to wait or fail under defined resource conditions.\",\"Reserve or bound resources and backup duration sufficiently to guarantee non-interference.\",\"Narrow the promise to database-lock waiting only and define that boundary.\"],\"default_guess\":\"Narrow the guarantee to database-lock interference and abort the backup when continuing would impede writes.\",\"witness\":{\"initial\":\"The store has finite disk capacity and a backup snapshot remains open while writes continue.\",\"events\":[\"The backup reader keeps its old snapshot for an unbounded time.\",\"Writers append enough changes that retained WAL data approaches the available capacity.\"],\"outcomes\":[\"Registry aborts or fails the backup to keep writes progressing, so the copy fails because of writes.\",\"Registry keeps the backup running and a writer waits or fails when resources are exhausted, so a write fails because of the copy.\"],\"observer\":\"A service making a write during the backup and the owner monitoring the backup run.\"}},{\"unit\":\"A21\",\"subject\":\"security-review verification of backup concurrency\",\"kind\":\"missing verification\",\"text\":\"The review says \\\"concurrency now names A18 too, whose one-snapshot copy and non-overlapping runs (rule 1) it relies on,\\\" but A18's required tests do not test the new promise that no write waits for, is refused by, or fails for a copy, nor that a copy does so for a write.\",\"question\":\"What required test or other verifiable criterion establishes the new reader/writer non-interference guarantee on which the completed concurrency review relies?\",\"options\":[\"Add a bounded concurrency test with defined latency and refusal criteria.\",\"Treat only snapshot consistency and non-overlapping backup runs as reviewed, excluding the non-interference promise.\",\"Provide a structural verification tied to the exact SQLite operations and configuration used.\"],\"default_guess\":\"Add a bounded concurrency test and narrow the reviewed guarantee to behavior that test can observe.\",\"witness\":{\"initial\":\"Two implementations both create consistent one-snapshot backups and prevent backup runs from overlapping.\",\"events\":[\"Implementation one briefly blocks a writer during a backup; implementation two does not.\",\"Both run every required test currently listed by A18 and A21.\"],\"outcomes\":[\"Both implementations pass the stated security-review tests despite differing on the new normative guarantee.\",\"Only the nonblocking implementation should satisfy the review if that guarantee is genuinely covered.\"],\"observer\":\"The reviewer and a caller whose write overlaps a backup.\"}}]}",
+ "set_aside": []
+}

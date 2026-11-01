@@ -1,0 +1,109 @@
+{
+ "open_points": [
+  {
+   "subject": "A17 startup conversion of an existing store to WAL mode",
+   "kind": "contradictory failure cleanup",
+   "text": "“the store must ... be put in [write-ahead-log] mode when it is not in it” conflicts with “A failed start leaves no file it made but” the listed exceptions and required test 5, under which a listener failure over an existing store “leaves that store as it was.”",
+   "question": "If an existing non-WAL store is converted to WAL mode and a later startup check fails, must Registry restore the original journal mode and remove WAL sidecar files, or may the failed start leave the existing store converted?",
+   "options": [
+    "Restore the original journal mode and remove WAL sidecars before reporting the failed start",
+    "Leave the store in WAL mode because the conversion already succeeded",
+    "Restore the main database mode but permit WAL sidecar files to remain"
+   ],
+   "default_guess": "Restore the original journal mode and remove sidecars so the failed start leaves the existing store as it was.",
+   "witness": {
+    "initial": "A valid existing SQLite store is not in WAL mode, and the owner-interface listener address is unavailable.",
+    "events": [
+     "Registry opens the existing store and puts it in WAL mode as A17 rule 5 requires.",
+     "Registry later fails while opening the owner-interface listener."
+    ],
+    "outcomes": [
+     "Registry reverts the store to its original journal mode and removes any -wal and -shm files, satisfying the failed-start cleanup and required test.",
+     "Registry leaves the persistent WAL-mode change, and possibly its sidecar files, because rule 5 required the conversion and specifies no rollback."
+    ],
+    "observer": "The owner inspecting the files, or the next Registry start reading the journal mode."
+   },
+   "unit": "A17"
+  },
+  {
+   "subject": "A18 backup contents after the snapshot is fixed",
+   "kind": "direct contradiction",
+   "text": "The changed rule says “a later backup holds whatever the store holds when its own snapshot is fixed,” while rule 2 says “A backup holds every record but the agent sessions (M06), which are removed from the copy before it is encrypted.”",
+   "question": "Does “whatever the store holds” exclude agent-session records, or does the changed snapshot rule require those records to remain in the backup?",
+   "options": [
+    "Exclude agent sessions from every backup as rule 2 requires",
+    "Include agent sessions because they existed in the fixed snapshot",
+    "Treat the snapshot as initially containing sessions but define the stored backup as a transformed snapshot that excludes them"
+   ],
+   "default_guess": "Treat the stored backup as the fixed snapshot with all agent-session records removed.",
+   "witness": {
+    "initial": "A registered agent session has project P in its granted set when a backup starts.",
+    "events": [
+     "The backup's first read fixes a snapshot containing the session and its grant.",
+     "Registry prepares and encrypts the kept backup.",
+     "The live store is lost and the owner restores this backup."
+    ],
+    "outcomes": [
+     "Following the changed sentence literally, the restored store contains the session and grant because the backup held whatever the snapshot held.",
+     "Following rule 2, the restored store contains no session and Kernel must register it again while the owner grants P again."
+    ],
+    "observer": "Cabinet Kernel and the owner reading the session's access after restore."
+   },
+   "unit": "A18"
+  },
+  {
+   "subject": "A18 recorded instant at the snapshot-fixing read",
+   "kind": "undefined linearization order",
+   "text": "“The copy's read transaction fixes its snapshot by its first read ... and the instant is read from the clock at that read.” A database read and a wall-clock read are separate operations, but the text does not say which occurs first or what instant is recorded if the clock changes between them.",
+   "question": "Must Registry sample the wall clock immediately before the first database read, immediately after it, or obtain both through some defined common linearization mechanism?",
+   "options": [
+    "Read the clock before issuing the snapshot-fixing database read",
+    "Fix the database snapshot first and then read the clock",
+    "Define another atomic or ordered mechanism that assigns the snapshot instant"
+   ],
+   "default_guess": "Fix the snapshot with the first successful database read, then sample the wall clock immediately afterward.",
+   "witness": {
+    "initial": "A backup is beginning just before a UTC date boundary, with audit counter N.",
+    "events": [
+     "Registry performs the clock read and the database read needed to fix the snapshot.",
+     "Between those two machine operations, the wall clock crosses or is adjusted across the date boundary."
+    ],
+    "outcomes": [
+     "A clock-first implementation records the earlier date even though the snapshot is fixed afterward.",
+     "A database-first implementation records the later date for the same database snapshot."
+    ],
+    "observer": "The owner interface showing the newest backup instant, and later retention and kept-name processing that use that instant."
+   },
+   "unit": "A18"
+  },
+  {
+   "subject": "A18 non-blocking WAL backup guarantee under finite resources",
+   "kind": "unhandled resource-pressure case",
+   "text": "The changed rule promises “no write waits for, or is refused or fails for, a copy, nor a copy for a write,” while rule 6 says “Registry bounds neither how long a run takes” and gives no rule for WAL growth, checkpoint pressure, disk exhaustion or a busy/error condition caused by a long-lived backup reader.",
+   "question": "When an active backup snapshot prevents WAL reclamation and continued writes exhaust an operational limit, which operation must yield, and what exact failure is allowed?",
+   "options": [
+    "Abort and fail the backup so writes can continue",
+    "Wait, refuse or fail a write until the backup reader ends",
+    "Assume enough unbounded storage that the case cannot occur",
+    "Define a bounded backup strategy that preserves both stated guarantees"
+   ],
+   "default_guess": "Abort the backup, report the failed run and keep serving writes.",
+   "witness": {
+    "initial": "Registry has finite free disk space, is serving writes, and a backup has fixed a WAL snapshot but is progressing very slowly.",
+    "events": [
+     "Services continue committing writes while the backup reader remains open.",
+     "The WAL cannot be reclaimed past the backup snapshot and consumes the remaining space."
+    ],
+    "outcomes": [
+     "Registry aborts the backup, so the copy fails because writes continued.",
+     "Registry preserves the copy and a write waits, is refused or fails when space is exhausted."
+    ],
+    "observer": "The writing service sees a delayed or failed operation, or the owner sees a failed backup run."
+   },
+   "unit": "A18"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A17 startup conversion of an existing store to WAL mode\",\"kind\":\"contradictory failure cleanup\",\"text\":\"“the store must ... be put in [write-ahead-log] mode when it is not in it” conflicts with “A failed start leaves no file it made but” the listed exceptions and required test 5, under which a listener failure over an existing store “leaves that store as it was.”\",\"question\":\"If an existing non-WAL store is converted to WAL mode and a later startup check fails, must Registry restore the original journal mode and remove WAL sidecar files, or may the failed start leave the existing store converted?\",\"options\":[\"Restore the original journal mode and remove WAL sidecars before reporting the failed start\",\"Leave the store in WAL mode because the conversion already succeeded\",\"Restore the main database mode but permit WAL sidecar files to remain\"],\"default_guess\":\"Restore the original journal mode and remove sidecars so the failed start leaves the existing store as it was.\",\"witness\":{\"initial\":\"A valid existing SQLite store is not in WAL mode, and the owner-interface listener address is unavailable.\",\"events\":[\"Registry opens the existing store and puts it in WAL mode as A17 rule 5 requires.\",\"Registry later fails while opening the owner-interface listener.\"],\"outcomes\":[\"Registry reverts the store to its original journal mode and removes any -wal and -shm files, satisfying the failed-start cleanup and required test.\",\"Registry leaves the persistent WAL-mode change, and possibly its sidecar files, because rule 5 required the conversion and specifies no rollback.\"],\"observer\":\"The owner inspecting the files, or the next Registry start reading the journal mode.\"},\"unit\":\"A17\"},{\"subject\":\"A18 backup contents after the snapshot is fixed\",\"kind\":\"direct contradiction\",\"text\":\"The changed rule says “a later backup holds whatever the store holds when its own snapshot is fixed,” while rule 2 says “A backup holds every record but the agent sessions (M06), which are removed from the copy before it is encrypted.”\",\"question\":\"Does “whatever the store holds” exclude agent-session records, or does the changed snapshot rule require those records to remain in the backup?\",\"options\":[\"Exclude agent sessions from every backup as rule 2 requires\",\"Include agent sessions because they existed in the fixed snapshot\",\"Treat the snapshot as initially containing sessions but define the stored backup as a transformed snapshot that excludes them\"],\"default_guess\":\"Treat the stored backup as the fixed snapshot with all agent-session records removed.\",\"witness\":{\"initial\":\"A registered agent session has project P in its granted set when a backup starts.\",\"events\":[\"The backup's first read fixes a snapshot containing the session and its grant.\",\"Registry prepares and encrypts the kept backup.\",\"The live store is lost and the owner restores this backup.\"],\"outcomes\":[\"Following the changed sentence literally, the restored store contains the session and grant because the backup held whatever the snapshot held.\",\"Following rule 2, the restored store contains no session and Kernel must register it again while the owner grants P again.\"],\"observer\":\"Cabinet Kernel and the owner reading the session's access after restore.\"},\"unit\":\"A18\"},{\"subject\":\"A18 recorded instant at the snapshot-fixing read\",\"kind\":\"undefined linearization order\",\"text\":\"“The copy's read transaction fixes its snapshot by its first read ... and the instant is read from the clock at that read.” A database read and a wall-clock read are separate operations, but the text does not say which occurs first or what instant is recorded if the clock changes between them.\",\"question\":\"Must Registry sample the wall clock immediately before the first database read, immediately after it, or obtain both through some defined common linearization mechanism?\",\"options\":[\"Read the clock before issuing the snapshot-fixing database read\",\"Fix the database snapshot first and then read the clock\",\"Define another atomic or ordered mechanism that assigns the snapshot instant\"],\"default_guess\":\"Fix the snapshot with the first successful database read, then sample the wall clock immediately afterward.\",\"witness\":{\"initial\":\"A backup is beginning just before a UTC date boundary, with audit counter N.\",\"events\":[\"Registry performs the clock read and the database read needed to fix the snapshot.\",\"Between those two machine operations, the wall clock crosses or is adjusted across the date boundary.\"],\"outcomes\":[\"A clock-first implementation records the earlier date even though the snapshot is fixed afterward.\",\"A database-first implementation records the later date for the same database snapshot.\"],\"observer\":\"The owner interface showing the newest backup instant, and later retention and kept-name processing that use that instant.\"},\"unit\":\"A18\"},{\"subject\":\"A18 non-blocking WAL backup guarantee under finite resources\",\"kind\":\"unhandled resource-pressure case\",\"text\":\"The changed rule promises “no write waits for, or is refused or fails for, a copy, nor a copy for a write,” while rule 6 says “Registry bounds neither how long a run takes” and gives no rule for WAL growth, checkpoint pressure, disk exhaustion or a busy/error condition caused by a long-lived backup reader.\",\"question\":\"When an active backup snapshot prevents WAL reclamation and continued writes exhaust an operational limit, which operation must yield, and what exact failure is allowed?\",\"options\":[\"Abort and fail the backup so writes can continue\",\"Wait, refuse or fail a write until the backup reader ends\",\"Assume enough unbounded storage that the case cannot occur\",\"Define a bounded backup strategy that preserves both stated guarantees\"],\"default_guess\":\"Abort the backup, report the failed run and keep serving writes.\",\"witness\":{\"initial\":\"Registry has finite free disk space, is serving writes, and a backup has fixed a WAL snapshot but is progressing very slowly.\",\"events\":[\"Services continue committing writes while the backup reader remains open.\",\"The WAL cannot be reclaimed past the backup snapshot and consumes the remaining space.\"],\"outcomes\":[\"Registry aborts the backup, so the copy fails because writes continued.\",\"Registry preserves the copy and a write waits, is refused or fails when space is exhausted.\"],\"observer\":\"The writing service sees a delayed or failed operation, or the owner sees a failed backup run.\"},\"unit\":\"A18\"}]}",
+ "set_aside": []
+}
