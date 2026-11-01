@@ -1,0 +1,123 @@
+{
+ "open_points": [
+  {
+   "unit": "A17",
+   "subject": "temporary store and SQLite WAL companion files",
+   "kind": "contradictory cleanup scope",
+   "text": "“at every start it first removes a file of that temporary name, left by an interrupted start, and no other file there” now coexists with “a store made new is made in SQLite's write-ahead-log mode”; WAL may create companion `-wal` and `-shm` files beside that temporary database, but the rule neither includes them nor permits removing them",
+   "question": "After an interrupted creation, must the next start remove the temporary database's WAL/SHM companion files, leave them, or fail when they exist; and are they part of the single ‘file of that temporary name’ for cleanup purposes?",
+   "options": [
+    "Remove the temporary database and all of its SQLite companion files",
+    "Remove only the exact temporary database file and leave companion files",
+    "Treat any companion file as an unexpected file and fail the start"
+   ],
+   "default_guess": "Treat the temporary database and its WAL/SHM companions as one temporary store and remove all of them before recreating it.",
+   "witness": {
+    "initial": "The configured store is absent, and its directory is writable.",
+    "events": [
+     "Registry starts creating the temporary SQLite store in WAL mode.",
+     "The process is interrupted after SQLite has created the temporary database's `-wal` or `-shm` companion.",
+     "Registry starts again and applies the instruction to remove the temporary-name file ‘and no other file’. "
+    ],
+    "outcomes": [
+     "The implementation removes only the main temporary database, leaving the companion files to affect or obstruct recreation.",
+     "The implementation treats the companion files as part of the temporary store and removes them too, despite ‘and no other file’. "
+    ],
+    "observer": "The owner at the next start, through a startup failure or the resulting store state."
+   }
+  },
+  {
+   "unit": "A17",
+   "subject": "cleanup after a later startup failure",
+   "kind": "uncovered WAL artifact",
+   "text": "“A failed start leaves no file it made but one it could not remove: a probe; a file of the store's temporary name; or a store it made new” does not say whether WAL/SHM companion files are part of the temporary file or store, while rule 5 now creates or converts WAL stores before later checks and listener opening",
+   "question": "If a later startup failure leaves a WAL or SHM companion that Registry created and cannot remove, is that an allowed leftover, must it be reported as the store or temporary store, or must cleanup failure produce some different persisted state?",
+   "options": [
+    "WAL/SHM companions are included in ‘store’ and may remain when their removal fails",
+    "Only the main database may remain; companion cleanup must always succeed",
+    "A companion cleanup failure has a separately specified startup outcome"
+   ],
+   "default_guess": "Include every SQLite companion in the meaning of the store and diagnose any companion that cleanup cannot remove.",
+   "witness": {
+    "initial": "An existing rollback-journal store is valid, or a new store has just been completed; the owner-interface listener cannot be opened.",
+    "events": [
+     "Startup changes or creates the store in WAL mode, causing SQLite companion files to exist.",
+     "The listener check fails.",
+     "Cleanup can remove the main new-store file, or closes the existing store, but cannot remove one companion file."
+    ],
+    "outcomes": [
+     "The companion is allowed to remain as part of the WAL-mode store.",
+     "Its presence violates the exhaustive statement that only a probe, the exact temporary file, or the new store may remain."
+    ],
+    "observer": "The owner inspecting the failed start and the next Registry start."
+   }
+  },
+  {
+   "unit": "A17",
+   "subject": "WAL write readiness before serving",
+   "kind": "ambiguous startup check",
+   "text": "“the store must open for reading and writing, be put in that mode when it is not in it — one that cannot be fails the start” does not say whether an already-WAL store must prove it can create and update its WAL/SHM companions, rather than merely open with read-write flags and report WAL mode",
+   "question": "What exact operation proves before listeners open that an existing WAL store is writable in WAL mode, including permission to create or update its companion files?",
+   "options": [
+    "Opening a read-write connection and observing WAL mode is sufficient",
+    "Startup must perform a reversible write/checkpoint probe that exercises WAL and SHM access",
+    "Startup waits for the first real write to discover WAL filesystem failures"
+   ],
+   "default_guess": "Perform a reversible WAL write/read/checkpoint probe before opening either listener.",
+   "witness": {
+    "initial": "The main SQLite file is readable and writable and records WAL mode, but its directory does not permit creating a missing `-wal` or `-shm` file.",
+    "events": [
+     "Registry opens the main file with read-write flags.",
+     "The integrity and version checks succeed without changing a record.",
+     "Registry either opens its listeners immediately or probes an actual WAL write first."
+    ],
+    "outcomes": [
+     "Startup succeeds, but the first accepted product write fails because SQLite cannot create its companion file.",
+     "Startup fails before serving because the WAL write probe fails."
+    ],
+    "observer": "The owner and the caller making the first write."
+   }
+  },
+  {
+   "unit": "A18",
+   "subject": "journal mode of a checked backup",
+   "kind": "changed prerequisite mismatch",
+   "text": "A18 says the session-stripped copy “is a store of its own that passes the same checks” and rule 4 checks the decrypted file read-only for release version, integrity and audit sequence, but changed A17 now additionally requires every existing store to be in WAL mode or be changed to it through a read-write opening",
+   "question": "Must a kept backup itself already record WAL mode, and must the backup check verify that mode; or may it be kept in another journal mode because A17 will convert it only after restoration?",
+   "options": [
+    "A backup is kept only if it is already WAL-mode and the check verifies that fact",
+    "A backup may use another journal mode and is converted by A17 after restoration",
+    "The backup check converts the decrypted copy to WAL mode, despite specifying a read-only opening"
+   ],
+   "default_guess": "Require the backup's SQLite store to already be WAL-mode and verify the mode without modifying the checked copy.",
+   "witness": {
+    "initial": "The live store is in WAL mode and contains no agent sessions in the backup snapshot after filtering.",
+    "events": [
+     "A daily run creates a consistent standalone SQLite backup whose destination journal mode is not WAL.",
+     "The decrypted file passes the version, integrity and audit-sequence checks explicitly listed in A18 rule 4."
+    ],
+    "outcomes": [
+     "The run keeps the backup because every explicitly listed backup check passed; restoration later causes A17 to convert it.",
+     "The run rejects the backup because a store ‘that passes the same checks’ must satisfy A17's new WAL-mode condition."
+    ],
+    "observer": "The owner through the newest-backup display, diagnostics, and availability of that backup for restoration."
+   }
+  },
+  {
+   "unit": "A21",
+   "subject": "security-review reopening caused by the WAL change",
+   "kind": "incomplete review scope",
+   "text": "A21 says “A change to a decision a category names reopens this review” and later says the 2026-11-01 changes to A17 were reviewed because “every category naming them was reviewed”; however A17 is named only by `authentication_credential_abuse` and `secrets`, while its new WAL behavior introduces companion-file ownership, cleanup, storage-isolation and startup/concurrency questions belonging to `files_artifacts` and `concurrency`",
+   "question": "Does an accepted decision's change reopen only categories that previously referenced that decision, or every category affected by the changed behavior; and, under that answer, were `files_artifacts` and `concurrency` reviewed for A17's WAL and companion-file behavior?",
+   "options": [
+    "Only categories already naming A17 reopen, so the existing review remains complete",
+    "Every category affected by the change reopens, requiring `files_artifacts` and `concurrency` to cover A17",
+    "A18 alone is intended to cover all WAL file and concurrency effects, and A21 must state that exception"
+   ],
+   "default_guess": "Reopen every affected category and add A17's WAL store and companion files to `files_artifacts` and `concurrency` before claiming the review complete."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A17\",\"subject\":\"temporary store and SQLite WAL companion files\",\"kind\":\"contradictory cleanup scope\",\"text\":\"“at every start it first removes a file of that temporary name, left by an interrupted start, and no other file there” now coexists with “a store made new is made in SQLite's write-ahead-log mode”; WAL may create companion `-wal` and `-shm` files beside that temporary database, but the rule neither includes them nor permits removing them\",\"question\":\"After an interrupted creation, must the next start remove the temporary database's WAL/SHM companion files, leave them, or fail when they exist; and are they part of the single ‘file of that temporary name’ for cleanup purposes?\",\"options\":[\"Remove the temporary database and all of its SQLite companion files\",\"Remove only the exact temporary database file and leave companion files\",\"Treat any companion file as an unexpected file and fail the start\"],\"default_guess\":\"Treat the temporary database and its WAL/SHM companions as one temporary store and remove all of them before recreating it.\",\"witness\":{\"initial\":\"The configured store is absent, and its directory is writable.\",\"events\":[\"Registry starts creating the temporary SQLite store in WAL mode.\",\"The process is interrupted after SQLite has created the temporary database's `-wal` or `-shm` companion.\",\"Registry starts again and applies the instruction to remove the temporary-name file ‘and no other file’. \"],\"outcomes\":[\"The implementation removes only the main temporary database, leaving the companion files to affect or obstruct recreation.\",\"The implementation treats the companion files as part of the temporary store and removes them too, despite ‘and no other file’. \"],\"observer\":\"The owner at the next start, through a startup failure or the resulting store state.\"}},{\"unit\":\"A17\",\"subject\":\"cleanup after a later startup failure\",\"kind\":\"uncovered WAL artifact\",\"text\":\"“A failed start leaves no file it made but one it could not remove: a probe; a file of the store's temporary name; or a store it made new” does not say whether WAL/SHM companion files are part of the temporary file or store, while rule 5 now creates or converts WAL stores before later checks and listener opening\",\"question\":\"If a later startup failure leaves a WAL or SHM companion that Registry created and cannot remove, is that an allowed leftover, must it be reported as the store or temporary store, or must cleanup failure produce some different persisted state?\",\"options\":[\"WAL/SHM companions are included in ‘store’ and may remain when their removal fails\",\"Only the main database may remain; companion cleanup must always succeed\",\"A companion cleanup failure has a separately specified startup outcome\"],\"default_guess\":\"Include every SQLite companion in the meaning of the store and diagnose any companion that cleanup cannot remove.\",\"witness\":{\"initial\":\"An existing rollback-journal store is valid, or a new store has just been completed; the owner-interface listener cannot be opened.\",\"events\":[\"Startup changes or creates the store in WAL mode, causing SQLite companion files to exist.\",\"The listener check fails.\",\"Cleanup can remove the main new-store file, or closes the existing store, but cannot remove one companion file.\"],\"outcomes\":[\"The companion is allowed to remain as part of the WAL-mode store.\",\"Its presence violates the exhaustive statement that only a probe, the exact temporary file, or the new store may remain.\"],\"observer\":\"The owner inspecting the failed start and the next Registry start.\"}},{\"unit\":\"A17\",\"subject\":\"WAL write readiness before serving\",\"kind\":\"ambiguous startup check\",\"text\":\"“the store must open for reading and writing, be put in that mode when it is not in it — one that cannot be fails the start” does not say whether an already-WAL store must prove it can create and update its WAL/SHM companions, rather than merely open with read-write flags and report WAL mode\",\"question\":\"What exact operation proves before listeners open that an existing WAL store is writable in WAL mode, including permission to create or update its companion files?\",\"options\":[\"Opening a read-write connection and observing WAL mode is sufficient\",\"Startup must perform a reversible write/checkpoint probe that exercises WAL and SHM access\",\"Startup waits for the first real write to discover WAL filesystem failures\"],\"default_guess\":\"Perform a reversible WAL write/read/checkpoint probe before opening either listener.\",\"witness\":{\"initial\":\"The main SQLite file is readable and writable and records WAL mode, but its directory does not permit creating a missing `-wal` or `-shm` file.\",\"events\":[\"Registry opens the main file with read-write flags.\",\"The integrity and version checks succeed without changing a record.\",\"Registry either opens its listeners immediately or probes an actual WAL write first.\"],\"outcomes\":[\"Startup succeeds, but the first accepted product write fails because SQLite cannot create its companion file.\",\"Startup fails before serving because the WAL write probe fails.\"],\"observer\":\"The owner and the caller making the first write.\"}},{\"unit\":\"A18\",\"subject\":\"journal mode of a checked backup\",\"kind\":\"changed prerequisite mismatch\",\"text\":\"A18 says the session-stripped copy “is a store of its own that passes the same checks” and rule 4 checks the decrypted file read-only for release version, integrity and audit sequence, but changed A17 now additionally requires every existing store to be in WAL mode or be changed to it through a read-write opening\",\"question\":\"Must a kept backup itself already record WAL mode, and must the backup check verify that mode; or may it be kept in another journal mode because A17 will convert it only after restoration?\",\"options\":[\"A backup is kept only if it is already WAL-mode and the check verifies that fact\",\"A backup may use another journal mode and is converted by A17 after restoration\",\"The backup check converts the decrypted copy to WAL mode, despite specifying a read-only opening\"],\"default_guess\":\"Require the backup's SQLite store to already be WAL-mode and verify the mode without modifying the checked copy.\",\"witness\":{\"initial\":\"The live store is in WAL mode and contains no agent sessions in the backup snapshot after filtering.\",\"events\":[\"A daily run creates a consistent standalone SQLite backup whose destination journal mode is not WAL.\",\"The decrypted file passes the version, integrity and audit-sequence checks explicitly listed in A18 rule 4.\"],\"outcomes\":[\"The run keeps the backup because every explicitly listed backup check passed; restoration later causes A17 to convert it.\",\"The run rejects the backup because a store ‘that passes the same checks’ must satisfy A17's new WAL-mode condition.\"],\"observer\":\"The owner through the newest-backup display, diagnostics, and availability of that backup for restoration.\"}},{\"unit\":\"A21\",\"subject\":\"security-review reopening caused by the WAL change\",\"kind\":\"incomplete review scope\",\"text\":\"A21 says “A change to a decision a category names reopens this review” and later says the 2026-11-01 changes to A17 were reviewed because “every category naming them was reviewed”; however A17 is named only by `authentication_credential_abuse` and `secrets`, while its new WAL behavior introduces companion-file ownership, cleanup, storage-isolation and startup/concurrency questions belonging to `files_artifacts` and `concurrency`\",\"question\":\"Does an accepted decision's change reopen only categories that previously referenced that decision, or every category affected by the changed behavior; and, under that answer, were `files_artifacts` and `concurrency` reviewed for A17's WAL and companion-file behavior?\",\"options\":[\"Only categories already naming A17 reopen, so the existing review remains complete\",\"Every category affected by the change reopens, requiring `files_artifacts` and `concurrency` to cover A17\",\"A18 alone is intended to cover all WAL file and concurrency effects, and A21 must state that exception\"],\"default_guess\":\"Reopen every affected category and add A17's WAL store and companion files to `files_artifacts` and `concurrency` before claiming the review complete.\"}]}",
+ "set_aside": []
+}

@@ -1,0 +1,107 @@
+{
+ "open_points": [
+  {
+   "unit": "A17",
+   "subject": "SQLite WAL companion files",
+   "kind": "undefined file ownership and cleanup",
+   "text": "“a store made new is made in SQLite's write-ahead-log mode”; “a failed start leaves no file it made but one it could not remove”; and “removes that store” do not say whether the SQLite `-wal` and `-shm` companion files are part of the store, which paths Registry owns, or when Registry removes them.",
+   "question": "How must Registry treat WAL and shared-memory companion files when creating, opening, failing after converting, or removing a store?",
+   "options": [
+    "Treat the main database and its `-wal`/`-shm` files as one store and clean up all companions when the store is removed.",
+    "Treat only the configured database file as the store and leave SQLite companion files to SQLite.",
+    "Refuse a start when unexpected or orphaned companion files exist."
+   ],
+   "default_guess": "Treat the main file and its SQLite companion files as one store, closing SQLite before cleanup and removing companions only when the rules remove the store.",
+   "witness": {
+    "initial": "The configured store file is absent and no temporary store file exists.",
+    "events": [
+     "Registry creates a new store in WAL mode.",
+     "Opening a listener fails after store creation.",
+     "Registry performs the required removal of the new store."
+    ],
+    "outcomes": [
+     "The implementation removes the main database and every `-wal`/`-shm` companion, leaving no store files.",
+     "The implementation removes only the configured main database, leaving one or more WAL companion files beside it."
+    ],
+    "observer": "The owner and the next Registry start see different files and may get different creation or recovery behaviour."
+   }
+  },
+  {
+   "unit": "A17",
+   "subject": "Changing an existing store to WAL mode",
+   "kind": "vague refusal condition",
+   "text": "“be put in that mode when it is not in it — one that cannot be fails the start” does not define what proves that the change succeeded or whether a transient busy/locking result is retried.",
+   "question": "What exact result of the WAL-mode operation passes the start check, and must Registry retry a transient failure before refusing to start?",
+   "options": [
+    "Pass only when querying the store after the change reports `wal`; fail immediately on any busy, error, or different returned mode.",
+    "Retry transient busy or locking results under a declared bound, then require the reported mode to be `wal`.",
+    "Treat an accepted mode-change command as sufficient without reading the resulting mode back."
+   ],
+   "default_guess": "Require the operation to return and a subsequent query to report `wal`; fail immediately on any other result.",
+   "witness": {
+    "initial": "A valid existing store is in rollback-journal mode, and another connection temporarily prevents changing its journal mode.",
+    "events": [
+     "Registry starts and attempts to put the store in WAL mode.",
+     "SQLite reports a transient busy condition or returns the unchanged journal mode."
+    ],
+    "outcomes": [
+     "Registry fails the start immediately because the store could not be put in WAL mode on the first attempt.",
+     "Registry retries, succeeds after the other connection releases the lock, and continues starting."
+    ],
+    "observer": "The owner sees either a failed or a serving Registry from the same initial store and transient contention."
+   }
+  },
+  {
+   "unit": "A18",
+   "subject": "Restoring a WAL-mode store",
+   "kind": "missing restore exception",
+   "text": "“A store the owner puts in place of a lost one starts as any store (A17 rule 5)” does not say what happens to pre-existing or restored SQLite `-wal` and `-shm` files now that A17 requires every store to use WAL mode.",
+   "question": "Before starting a restored main database, must the owner or Registry preserve, replace, remove, validate, or refuse any existing WAL companion files at the configured store path?",
+   "options": [
+    "The restore consists only of the checked database file; Registry removes or refuses any orphaned companion files before opening it.",
+    "The owner must replace the main database and all WAL companion files as one external restore operation.",
+    "Registry opens whatever main and companion files are present and lets SQLite recover or reject them."
+   ],
+   "default_guess": "Define the checked backup as the complete restored store and refuse unexpected companion files rather than combining them silently with it.",
+   "witness": {
+    "initial": "The configured location contains WAL companion files left by the lost newer store; the owner has a checked backup made earlier.",
+    "events": [
+     "The owner puts the backup's database file at the configured store path, as A18 rule 8 permits.",
+     "Registry starts under the changed A17 rule 5."
+    ],
+    "outcomes": [
+     "Registry discards or refuses the stale companion files and opens exactly the backed-up history.",
+     "Registry opens the restored main file with the companion files already present, allowing SQLite's recovery rules to determine whether startup fails or additional state is seen."
+    ],
+    "observer": "The owner and every caller see either the backup's history, a failed start, or potentially a different recovered state."
+   }
+  },
+  {
+   "unit": "A21",
+   "subject": "Security-review status after the A17 change",
+   "kind": "direct contradiction",
+   "text": "A21 rule 2 says, “A change to a decision a category names reopens this review,” while A17 is named by `authentication_credential_abuse` and `secrets`, yet A21 still says “Security review: PERFORMED” and that the review is complete.",
+   "question": "Has the changed A17 been reviewed under every A21 category that names it, or is A21 reopened and no longer complete?",
+   "options": [
+    "A21 is reopened until the changed WAL startup and failure behaviour is reviewed and the review record is updated.",
+    "The existing review explicitly covers this exact A17 change and remains performed."
+   ],
+   "default_guess": "Treat A21 as reopened because its own rule makes that the consequence of a later change to A17.",
+   "witness": {
+    "initial": "A21 is closed with A17 referenced by two applicable categories.",
+    "events": [
+     "A17 is changed to create or convert stores to SQLite WAL mode and to retain that mode after later startup failure.",
+     "A21's text and review record are not changed."
+    ],
+    "outcomes": [
+     "Applying A21 rule 2, the security review is reopened and cannot still be claimed complete.",
+     "Applying the unchanged status and footer, the security review remains performed and complete."
+    ],
+    "observer": "Later specification and code agents differ on whether another security review is mandatory before State 2 closes."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A17\",\"subject\":\"SQLite WAL companion files\",\"kind\":\"undefined file ownership and cleanup\",\"text\":\"“a store made new is made in SQLite's write-ahead-log mode”; “a failed start leaves no file it made but one it could not remove”; and “removes that store” do not say whether the SQLite `-wal` and `-shm` companion files are part of the store, which paths Registry owns, or when Registry removes them.\",\"question\":\"How must Registry treat WAL and shared-memory companion files when creating, opening, failing after converting, or removing a store?\",\"options\":[\"Treat the main database and its `-wal`/`-shm` files as one store and clean up all companions when the store is removed.\",\"Treat only the configured database file as the store and leave SQLite companion files to SQLite.\",\"Refuse a start when unexpected or orphaned companion files exist.\"],\"default_guess\":\"Treat the main file and its SQLite companion files as one store, closing SQLite before cleanup and removing companions only when the rules remove the store.\",\"witness\":{\"initial\":\"The configured store file is absent and no temporary store file exists.\",\"events\":[\"Registry creates a new store in WAL mode.\",\"Opening a listener fails after store creation.\",\"Registry performs the required removal of the new store.\"],\"outcomes\":[\"The implementation removes the main database and every `-wal`/`-shm` companion, leaving no store files.\",\"The implementation removes only the configured main database, leaving one or more WAL companion files beside it.\"],\"observer\":\"The owner and the next Registry start see different files and may get different creation or recovery behaviour.\"}},{\"unit\":\"A17\",\"subject\":\"Changing an existing store to WAL mode\",\"kind\":\"vague refusal condition\",\"text\":\"“be put in that mode when it is not in it — one that cannot be fails the start” does not define what proves that the change succeeded or whether a transient busy/locking result is retried.\",\"question\":\"What exact result of the WAL-mode operation passes the start check, and must Registry retry a transient failure before refusing to start?\",\"options\":[\"Pass only when querying the store after the change reports `wal`; fail immediately on any busy, error, or different returned mode.\",\"Retry transient busy or locking results under a declared bound, then require the reported mode to be `wal`.\",\"Treat an accepted mode-change command as sufficient without reading the resulting mode back.\"],\"default_guess\":\"Require the operation to return and a subsequent query to report `wal`; fail immediately on any other result.\",\"witness\":{\"initial\":\"A valid existing store is in rollback-journal mode, and another connection temporarily prevents changing its journal mode.\",\"events\":[\"Registry starts and attempts to put the store in WAL mode.\",\"SQLite reports a transient busy condition or returns the unchanged journal mode.\"],\"outcomes\":[\"Registry fails the start immediately because the store could not be put in WAL mode on the first attempt.\",\"Registry retries, succeeds after the other connection releases the lock, and continues starting.\"],\"observer\":\"The owner sees either a failed or a serving Registry from the same initial store and transient contention.\"}},{\"unit\":\"A18\",\"subject\":\"Restoring a WAL-mode store\",\"kind\":\"missing restore exception\",\"text\":\"“A store the owner puts in place of a lost one starts as any store (A17 rule 5)” does not say what happens to pre-existing or restored SQLite `-wal` and `-shm` files now that A17 requires every store to use WAL mode.\",\"question\":\"Before starting a restored main database, must the owner or Registry preserve, replace, remove, validate, or refuse any existing WAL companion files at the configured store path?\",\"options\":[\"The restore consists only of the checked database file; Registry removes or refuses any orphaned companion files before opening it.\",\"The owner must replace the main database and all WAL companion files as one external restore operation.\",\"Registry opens whatever main and companion files are present and lets SQLite recover or reject them.\"],\"default_guess\":\"Define the checked backup as the complete restored store and refuse unexpected companion files rather than combining them silently with it.\",\"witness\":{\"initial\":\"The configured location contains WAL companion files left by the lost newer store; the owner has a checked backup made earlier.\",\"events\":[\"The owner puts the backup's database file at the configured store path, as A18 rule 8 permits.\",\"Registry starts under the changed A17 rule 5.\"],\"outcomes\":[\"Registry discards or refuses the stale companion files and opens exactly the backed-up history.\",\"Registry opens the restored main file with the companion files already present, allowing SQLite's recovery rules to determine whether startup fails or additional state is seen.\"],\"observer\":\"The owner and every caller see either the backup's history, a failed start, or potentially a different recovered state.\"}},{\"unit\":\"A21\",\"subject\":\"Security-review status after the A17 change\",\"kind\":\"direct contradiction\",\"text\":\"A21 rule 2 says, “A change to a decision a category names reopens this review,” while A17 is named by `authentication_credential_abuse` and `secrets`, yet A21 still says “Security review: PERFORMED” and that the review is complete.\",\"question\":\"Has the changed A17 been reviewed under every A21 category that names it, or is A21 reopened and no longer complete?\",\"options\":[\"A21 is reopened until the changed WAL startup and failure behaviour is reviewed and the review record is updated.\",\"The existing review explicitly covers this exact A17 change and remains performed.\"],\"default_guess\":\"Treat A21 as reopened because its own rule makes that the consequence of a later change to A17.\",\"witness\":{\"initial\":\"A21 is closed with A17 referenced by two applicable categories.\",\"events\":[\"A17 is changed to create or convert stores to SQLite WAL mode and to retain that mode after later startup failure.\",\"A21's text and review record are not changed.\"],\"outcomes\":[\"Applying A21 rule 2, the security review is reopened and cannot still be claimed complete.\",\"Applying the unchanged status and footer, the security review remains performed and complete.\"],\"observer\":\"Later specification and code agents differ on whether another security review is mandatory before State 2 closes.\"}}]}",
+ "set_aside": []
+}
