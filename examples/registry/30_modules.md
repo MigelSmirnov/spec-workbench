@@ -502,8 +502,8 @@ one, without a limit (A17 rule 7) — and the service's operations and highest
 class from the release (A09 rules 1, 2, 3); that Cabinet Kernel's token alone
 carries agent authority and allows no class above `business_confidential`
 (R0-74); that no token carries the owner's rights (A09 rule 5); A08 rule 2:
-no token but Kernel's may publish or withdraw. In an owner-only start every
-service call is refused (A17 rule 1).
+no token but Kernel's may publish or withdraw. An owner-only start holds no
+token and opens no service API, so no service call reaches it (A17 rule 1).
 
 ### Knows
 
@@ -1007,7 +1007,8 @@ The start and the running instance: `configuration` first, then the backup
 probe and `store`, then the listeners at the release's addresses, serving
 nothing until every check passed and having `store` remove a store this start
 made new when a listener cannot be opened (A17 rule 2); the
-owner-only start (A17 rule 1, A18 rule 9); the two surfaces; the 60-second pass
+owner-only start, which opens the owner interface alone (A17 rule 1, A18
+rule 9); the two surfaces, the owner interface's listener opened first; the 60-second pass
 of `owner_sessions` and the minute look of `backups` (A13 rule 2, A18 rule 1);
 that a restart ends every owner session (A13 rule 2).
 
