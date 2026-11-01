@@ -1,0 +1,135 @@
+{
+ "open_points": [
+  {
+   "unit": "40_flows.md:`flow:start_instance`",
+   "subject": "existing store converted to write-ahead-log mode before listener failure",
+   "kind": "contradiction",
+   "text": "“puts it in that mode when it is not” contradicts “a listener that cannot be opened … [leaves] an existing store … as it was”",
+   "question": "When start converts an existing store to write-ahead-log mode and a listener then fails, must the mode change remain, or must the store be restored to its former journal mode?",
+   "options": [
+    "Keep the store in write-ahead-log mode despite the failed start",
+    "Restore the store's former journal mode before reporting the listener failure"
+   ],
+   "default_guess": "Keep the write-ahead-log mode, because the conversion is specified before the listener is opened.",
+   "witness": {
+    "initial": "A valid existing store is in a journal mode other than write-ahead-log mode.",
+    "events": [
+     "The host starts Registry.",
+     "module:store opens the store and successfully puts it in write-ahead-log mode.",
+     "module:instance_lifecycle fails to open a listener and stops the start."
+    ],
+    "outcomes": [
+     "The store remains in write-ahead-log mode, as required by the new store-opening passage.",
+     "The store remains exactly as it was before the start, including its former journal mode, as required by the listener-failure passage."
+    ],
+    "observer": "The owner or the next Registry start inspecting the store's journal mode."
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:start_instance`",
+   "subject": "store state after a post-conversion integrity or version failure",
+   "kind": "unstated failure outcome",
+   "text": "“puts it in that mode when it is not … runs the full integrity check and compares the store version” states no outcome for the successful mode change when either later check stops the start",
+   "question": "If an existing store is successfully changed to write-ahead-log mode but then fails integrity or version checking, is that journal-mode change retained or rolled back?",
+   "options": [
+    "Leave the rejected store in write-ahead-log mode",
+    "Restore its former journal mode before stopping",
+    "Avoid changing the mode until integrity and version have passed"
+   ],
+   "default_guess": "Leave it in write-ahead-log mode, following the stated order of operations.",
+   "witness": {
+    "initial": "An existing store is not in write-ahead-log mode and carries a store version different from the running release.",
+    "events": [
+     "The host starts Registry.",
+     "module:store opens the store and successfully changes it to write-ahead-log mode.",
+     "module:store discovers the version mismatch and stops the start."
+    ],
+    "outcomes": [
+     "The stopped start has nevertheless changed the store permanently to write-ahead-log mode.",
+     "The failed start restores or preserves the store's former journal mode."
+    ],
+    "observer": "The owner examining the rejected store, or a later release opening it."
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:start_instance`",
+   "subject": "temporary SQLite files created while making a new store in write-ahead-log mode",
+   "kind": "missing cleanup operation",
+   "text": "“a new store is made in write-ahead-log mode” is combined with “first removes a file of the store's temporary name … and no other file” without saying how the temporary database's WAL and shared-memory sidecar files are completed or removed",
+   "question": "After interruption while a new store is being built under its temporary name in write-ahead-log mode, what must the next start do with sidecar files belonging to that temporary database?",
+   "options": [
+    "Remove the temporary database and all of its SQLite sidecars",
+    "Remove only the main temporary file and leave its sidecars",
+    "Ensure creation checkpoints and removes sidecars before any interruptible point, so none can remain"
+   ],
+   "default_guess": "Treat the temporary database and its SQLite sidecars as one store artifact and remove all of them before recreating it.",
+   "witness": {
+    "initial": "The configured store is absent and its directory exists.",
+    "events": [
+     "module:store begins making the new database under the temporary name in write-ahead-log mode.",
+     "The process is interrupted after SQLite has created a WAL or shared-memory sidecar for that temporary database.",
+     "The host starts Registry again.",
+     "module:store applies the instruction to remove the temporary-name file and no other file, then attempts to make the store again."
+    ],
+    "outcomes": [
+     "Only the main temporary database is removed; an old sidecar remains and can obstruct or affect recreation.",
+     "The sidecars are removed with the temporary database, despite the instruction that no other file is removed."
+    ],
+    "observer": "The owner seeing a failed start or a newly created store whose contents differ."
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:daily_backup`",
+   "subject": "definition of the backup's recorded instant",
+   "kind": "contradiction",
+   "text": "State 3 says “a backup's instant is the one `store` reads when the copy's read transaction begins”, while the changed rules and flow say it is “the instant of the read that fixed its snapshot” and “the instant read from the clock at it”",
+   "question": "Is the recorded instant taken when the read transaction is begun, or when its first read fixes the SQLite snapshot?",
+   "options": [
+    "Record the instant when the read transaction begins",
+    "Record the instant immediately at the first read that fixes the snapshot",
+    "Require transaction begin and the snapshot-fixing read to be one indivisible operation"
+   ],
+   "default_guess": "Record it at the first snapshot-fixing read, following the newer and more specific passages.",
+   "witness": {
+    "initial": "Registry has begun a backup read transaction, but it has not yet performed the first read that fixes its snapshot.",
+    "events": [
+     "A writing action commits after the read transaction begins.",
+     "The backup performs its first read of the audit counter, fixing a snapshot that includes the committed action."
+    ],
+    "outcomes": [
+     "The backup records the earlier transaction-begin instant even though its snapshot includes the later commit.",
+     "The backup records the later first-read instant that corresponds to the snapshot boundary."
+    ],
+    "observer": "The owner reading the backup's unencrypted record or newest-backup instant."
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:daily_backup`",
+   "subject": "ordering of the clock read and the database read that fixes the snapshot",
+   "kind": "unnamed atomic capability",
+   "text": "“the instant is read from the clock at that read” requires one boundary across the clock and SQLite, but the offered operations are separate clock and store reads and no ordering is stated",
+   "question": "When a clock read cannot be atomic with SQLite's first snapshot-fixing read, which must occur first, and what causal relation must the recorded instant have to transactions included in the snapshot?",
+   "options": [
+    "Read the clock immediately before the first database read",
+    "Perform the first database read and then read the clock immediately afterward",
+    "Add one store capability that defines a single ordered snapshot-and-timestamp operation"
+   ],
+   "default_guess": "Fix the snapshot with the audit-counter read, then read the clock immediately afterward.",
+   "witness": {
+    "initial": "A backup is ready to fix its snapshot while an import transaction is about to commit.",
+    "events": [
+     "module:store and the import transaction run concurrently around the snapshot-fixing read.",
+     "The backup must separately read the wall clock and the audit counter."
+    ],
+    "outcomes": [
+     "Clock first, then import commit, then the audit-counter read: the backup includes the import but records an instant before its commit.",
+     "Audit-counter read first, then import commit, then clock: the backup excludes the import but records an instant after its commit."
+    ],
+    "observer": "The owner comparing the backup record and restored contents, especially whether the migration closure is present."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"40_flows.md:`flow:start_instance`\",\"subject\":\"existing store converted to write-ahead-log mode before listener failure\",\"kind\":\"contradiction\",\"text\":\"“puts it in that mode when it is not” contradicts “a listener that cannot be opened … [leaves] an existing store … as it was”\",\"question\":\"When start converts an existing store to write-ahead-log mode and a listener then fails, must the mode change remain, or must the store be restored to its former journal mode?\",\"options\":[\"Keep the store in write-ahead-log mode despite the failed start\",\"Restore the store's former journal mode before reporting the listener failure\"],\"default_guess\":\"Keep the write-ahead-log mode, because the conversion is specified before the listener is opened.\",\"witness\":{\"initial\":\"A valid existing store is in a journal mode other than write-ahead-log mode.\",\"events\":[\"The host starts Registry.\",\"module:store opens the store and successfully puts it in write-ahead-log mode.\",\"module:instance_lifecycle fails to open a listener and stops the start.\"],\"outcomes\":[\"The store remains in write-ahead-log mode, as required by the new store-opening passage.\",\"The store remains exactly as it was before the start, including its former journal mode, as required by the listener-failure passage.\"],\"observer\":\"The owner or the next Registry start inspecting the store's journal mode.\"}},{\"unit\":\"40_flows.md:`flow:start_instance`\",\"subject\":\"store state after a post-conversion integrity or version failure\",\"kind\":\"unstated failure outcome\",\"text\":\"“puts it in that mode when it is not … runs the full integrity check and compares the store version” states no outcome for the successful mode change when either later check stops the start\",\"question\":\"If an existing store is successfully changed to write-ahead-log mode but then fails integrity or version checking, is that journal-mode change retained or rolled back?\",\"options\":[\"Leave the rejected store in write-ahead-log mode\",\"Restore its former journal mode before stopping\",\"Avoid changing the mode until integrity and version have passed\"],\"default_guess\":\"Leave it in write-ahead-log mode, following the stated order of operations.\",\"witness\":{\"initial\":\"An existing store is not in write-ahead-log mode and carries a store version different from the running release.\",\"events\":[\"The host starts Registry.\",\"module:store opens the store and successfully changes it to write-ahead-log mode.\",\"module:store discovers the version mismatch and stops the start.\"],\"outcomes\":[\"The stopped start has nevertheless changed the store permanently to write-ahead-log mode.\",\"The failed start restores or preserves the store's former journal mode.\"],\"observer\":\"The owner examining the rejected store, or a later release opening it.\"}},{\"unit\":\"40_flows.md:`flow:start_instance`\",\"subject\":\"temporary SQLite files created while making a new store in write-ahead-log mode\",\"kind\":\"missing cleanup operation\",\"text\":\"“a new store is made in write-ahead-log mode” is combined with “first removes a file of the store's temporary name … and no other file” without saying how the temporary database's WAL and shared-memory sidecar files are completed or removed\",\"question\":\"After interruption while a new store is being built under its temporary name in write-ahead-log mode, what must the next start do with sidecar files belonging to that temporary database?\",\"options\":[\"Remove the temporary database and all of its SQLite sidecars\",\"Remove only the main temporary file and leave its sidecars\",\"Ensure creation checkpoints and removes sidecars before any interruptible point, so none can remain\"],\"default_guess\":\"Treat the temporary database and its SQLite sidecars as one store artifact and remove all of them before recreating it.\",\"witness\":{\"initial\":\"The configured store is absent and its directory exists.\",\"events\":[\"module:store begins making the new database under the temporary name in write-ahead-log mode.\",\"The process is interrupted after SQLite has created a WAL or shared-memory sidecar for that temporary database.\",\"The host starts Registry again.\",\"module:store applies the instruction to remove the temporary-name file and no other file, then attempts to make the store again.\"],\"outcomes\":[\"Only the main temporary database is removed; an old sidecar remains and can obstruct or affect recreation.\",\"The sidecars are removed with the temporary database, despite the instruction that no other file is removed.\"],\"observer\":\"The owner seeing a failed start or a newly created store whose contents differ.\"}},{\"unit\":\"40_flows.md:`flow:daily_backup`\",\"subject\":\"definition of the backup's recorded instant\",\"kind\":\"contradiction\",\"text\":\"State 3 says “a backup's instant is the one `store` reads when the copy's read transaction begins”, while the changed rules and flow say it is “the instant of the read that fixed its snapshot” and “the instant read from the clock at it”\",\"question\":\"Is the recorded instant taken when the read transaction is begun, or when its first read fixes the SQLite snapshot?\",\"options\":[\"Record the instant when the read transaction begins\",\"Record the instant immediately at the first read that fixes the snapshot\",\"Require transaction begin and the snapshot-fixing read to be one indivisible operation\"],\"default_guess\":\"Record it at the first snapshot-fixing read, following the newer and more specific passages.\",\"witness\":{\"initial\":\"Registry has begun a backup read transaction, but it has not yet performed the first read that fixes its snapshot.\",\"events\":[\"A writing action commits after the read transaction begins.\",\"The backup performs its first read of the audit counter, fixing a snapshot that includes the committed action.\"],\"outcomes\":[\"The backup records the earlier transaction-begin instant even though its snapshot includes the later commit.\",\"The backup records the later first-read instant that corresponds to the snapshot boundary.\"],\"observer\":\"The owner reading the backup's unencrypted record or newest-backup instant.\"}},{\"unit\":\"40_flows.md:`flow:daily_backup`\",\"subject\":\"ordering of the clock read and the database read that fixes the snapshot\",\"kind\":\"unnamed atomic capability\",\"text\":\"“the instant is read from the clock at that read” requires one boundary across the clock and SQLite, but the offered operations are separate clock and store reads and no ordering is stated\",\"question\":\"When a clock read cannot be atomic with SQLite's first snapshot-fixing read, which must occur first, and what causal relation must the recorded instant have to transactions included in the snapshot?\",\"options\":[\"Read the clock immediately before the first database read\",\"Perform the first database read and then read the clock immediately afterward\",\"Add one store capability that defines a single ordered snapshot-and-timestamp operation\"],\"default_guess\":\"Fix the snapshot with the audit-counter read, then read the clock immediately afterward.\",\"witness\":{\"initial\":\"A backup is ready to fix its snapshot while an import transaction is about to commit.\",\"events\":[\"module:store and the import transaction run concurrently around the snapshot-fixing read.\",\"The backup must separately read the wall clock and the audit counter.\"],\"outcomes\":[\"Clock first, then import commit, then the audit-counter read: the backup includes the import but records an instant before its commit.\",\"Audit-counter read first, then import commit, then clock: the backup excludes the import but records an instant after its commit.\"],\"observer\":\"The owner comparing the backup record and restored contents, especially whether the migration closure is present.\"}}]}",
+ "set_aside": []
+}
