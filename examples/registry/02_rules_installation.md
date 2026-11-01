@@ -199,11 +199,8 @@ closure is the one proof of success.
    that it renames to the store's name only once the store is complete; at
    every start it first removes a file of that temporary name, left by an
    interrupted start, and no other file there — if it cannot, and the store
-   is absent, the start fails; a store made new is made in SQLite's
-   write-ahead-log mode (A18 rule 1); otherwise
-   the store must open for reading and writing, be put in that mode when it
-   is not in it — one that cannot be fails the start; a start that fails
-   later does not undo it, the mode changing no record —, pass the full integrity check
+   is absent, the start fails; otherwise
+   the store must open for reading and writing, pass the full integrity check
    — the store is a SQLite database, as v1's (L19), and the check passes when
    `PRAGMA integrity_check` answers `ok` and `PRAGMA foreign_key_check` finds
    nothing, the same as a backup's check (A18 rule 4) — and carry
@@ -239,9 +236,7 @@ for secrets s1 != s2 in config: value(s1) != value(s2) and len >= 32 bytes
    stops, serves nothing and removes that store — or, when the removal
    fails, leaves it as an empty store of the release's version; one whose
    listener cannot be opened over an existing store leaves that store's
-   records as they were, in write-ahead-log mode, which a start that put it
-   in that mode does not undo (rule 5). An owner-only start opens no service
-   API listener.
+   records as they were. An owner-only start opens no service API listener.
 
 ### Consequence
 
@@ -276,10 +271,11 @@ secret cannot be shared between holders.
    one snapshot of the store, as one read transaction sees it, while other
    transactions go on; it never holds part of a transaction, and its
    recorded instant and last sequence number are those of that snapshot,
-   the instant being that of the read that fixes its snapshot (below). The store runs in
-   SQLite's write-ahead-log mode, in which a reader and the writer never
-   wait for each other, so no write waits for, or is refused or fails for,
-   a copy, nor a copy for a write. The copy's read transaction fixes its
+   the instant being that of the read that fixes its snapshot (below). No
+   write is refused or fails because a copy is being made, nor a copy
+   because of a write; how long either may wait for the other is a setting
+   of the store's engine, with the files it uses, which State 6 fixes. The
+   copy's read transaction fixes its
    snapshot by its first read, which is of the audit counter's last
    sequence number, and the instant is read from the clock at that read; a
    change committed after it is not in this backup, which holds the store as
