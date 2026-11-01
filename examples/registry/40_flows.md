@@ -103,7 +103,9 @@ diagnostic.
    exist and its directory does, it makes a new, empty store of
    `capability:release_declarations.store_version_of_release` under the
    temporary name and renames it to the store's name once complete;
-   otherwise it opens the store for reading and writing, runs the full
+   a new store is made in write-ahead-log mode (A18 rule 1); otherwise it
+   opens the store for reading and writing, puts it in that mode when it is
+   not — a store that cannot be put in it stops the start —, runs the full
    integrity check and compares the store version with the release's (A17
    rule 5). A leftover it cannot remove while the store is absent, a store
    that does not open, fails the check or carries another version stops the
@@ -149,7 +151,7 @@ diagnostic.
 - The backup location missing or not writable — `module:backups`'
   diagnostic.
 - The store's temporary file not removable while the store is absent, the
-  store not opening, failing the integrity check or of another version —
+  store not opening, not put in write-ahead-log mode, failing the integrity check or of another version —
   `module:store`'s diagnostic.
 - A new store that cannot be made — `module:store`'s diagnostic; its
   temporary file removed, or left for the next start when it cannot be.
