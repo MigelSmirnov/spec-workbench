@@ -122,7 +122,8 @@ diagnostic.
    opened are closed, and a store step 3 made new is removed by
    `capability:store.discard_new_store` — one it cannot remove is an empty
    store of the release's version, which the next start opens as any store
-   (A17 rule 2). An existing store is left as it was.
+   (A17 rule 2). An existing store keeps its records as they were; a
+   write-ahead-log mode step 3 put it in stays (A17 rule 5).
 5. **Serve.** Only now the surfaces answer:
    `capability:service_api.serve_service_request` and
    `capability:owner_interface.serve_owner_request`. An owner-only start

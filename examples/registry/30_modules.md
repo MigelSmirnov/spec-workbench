@@ -144,8 +144,9 @@ later line, and modules on one line do not know each other.
   it makes, its closure and its entry carry the action's one instant. The
   limits of A13 are read by `owner_sessions` from `clock.monotonic_reading`;
   the minute look of A18 rule 1 by `backups` from `clock.recorded_now`; a
-  backup's instant is the one `store` reads when the copy's read transaction
-  begins, which `backups` records and never reads itself. No other module
+  backup's instant is the one `store` reads at the read that fixes the
+  copy's snapshot (A18 rule 1), which `backups` records and never reads
+  itself. No other module
   reads a clock.
 - **Random values and secret comparison.** Every identity Registry mints
   ("Identity formats") and every 32-byte value of A13 rule 7 comes from
