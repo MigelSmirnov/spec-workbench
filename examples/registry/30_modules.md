@@ -8,8 +8,8 @@ module that holds the decision's central mechanism, and consumers. Ownership is
 by rule, not by decision: a consumer owns exactly the rules and parts of the
 decision its own section below names, and the primary owner owns every rule of
 the decision that no other section names, except a rule this text places
-outside the running instance (A20, A21), which no module owns. The table is the
-one mapping; `30_trace.json` records the same:
+outside the running instance (A20, A21, A22 rule 6's "never declared again"),
+which no module owns. The table is the one mapping; `30_trace.json` records the same:
 
 | decision | primary owner | consumers |
 |---|---|---|
@@ -37,13 +37,21 @@ one mapping; `30_trace.json` records the same:
 A20 and A21 have no runtime owner. A20 is a property of the release — which
 dependencies it names and installs — made and checked by the release process,
 which Registry does not manage (Explicit exclusions); A21 is an evidence record
-checked by `design_lint --state 2`. `30_trace.json` records both as such.
+checked by `design_lint --state 2`. `30_trace.json` records both as such. That
+a removed artifact type's name is never declared again (A22 rule 6) compares a
+release with the ones before it, which only the release process sees; a
+running instance reads its own release alone.
 
 Registry is one process (R0-05) serving two surfaces (Actors and trust
 boundaries, "Network surface"): the service API, for the four services of A09,
-and the owner interface. The modules are the parts of that one program, not
-services. Only `store` touches the store's database, and only `backups` the
-backup location. The dependency direction is fixed, from the bottom up:
+and the owner interface. Which networks reach each surface, and the HTTPS that
+carries the owner interface from another machine, are the host's
+administration (R0-28, R0-29, R0-48; Explicit exclusions): Registry serves
+each surface on a listener of its own and decides nothing about reachability.
+The modules are the parts of that one program, not services. Only `store`
+opens a SQLite database — the store's, and the decrypted copy of a backup that
+`backups` hands it by path to check — and only `backups` makes, renames or
+deletes a file in the backup location. The dependency direction is fixed, from the bottom up:
 
 ```text
 models
@@ -68,8 +76,12 @@ later line, and modules on one line do not know each other.
 - **One action, one transaction.** Every action is one call of `operations`
   and, when it changes state, one store transaction (A04 rule 4): `operations`
   opens it through `store.run_in_transaction`, calls each module the action
-  changes inside it, appends the audit entry when the action wrote one (A14
-  rule 1) and commits once. A domain module never opens a transaction and
+  changes inside it, appends the action's one audit entry through
+  `audit_log.append_audit_entry` when the action changed state (A14 rule 1)
+  and commits once. No other module appends an entry; the erasure of old
+  entries is the one action whose entry `audit_log` writes itself, inside
+  `erase_audit_entries_before` (A15 rule 4), and `operations` appends none
+  for it. A domain module never opens a transaction and
   never commits; it reads and writes through the transaction it is handed.
   Changes that write the store are applied one at a time (A01 rule 7, A07
   rule 2, A10 rule 6, A15 rule 5): `store` holds the one write lock and a
@@ -105,7 +117,10 @@ later line, and modules on one line do not know each other.
   published pointers) is joined by `operations`. Each fact's disclosure class
   is `models`' ("Disclosure classes by field"); `operations` computes an
   answer's class as the highest of its facts' and refuses the answer whole
-  when it is above the caller's highest (A09 rule 4).
+  when it is above the caller's highest (A09 rule 4): a service's from
+  `service_access`, and for the owner `personal_data`, the highest class, so
+  no owner answer is refused for its class (Actors and trust boundaries,
+  "Personal data").
 - **Time.** Every recorded instant is read from `clock.recorded_now`; every
   limit of A13 and the minute look of A18 rule 1 from `clock.monotonic_reading`
   and `clock.recorded_now`. No other module reads a clock.
@@ -115,20 +130,27 @@ later line, and modules on one line do not know each other.
   through `random_values.equal_in_constant_time` (A13 rule 7, A17 rule 6).
 - **What the release declares.** The artifact vocabulary (A22), the services'
   rights (A09 rule 2), the store version, the temporary-name suffix of the
-  store (A17 rule 5) and the two backup prefixes (A18 rule 5) are
+  store (A17 rule 5), the two backup prefixes (A18 rule 5) and the release's
+  and contract's versions are
   `release_declarations`'; nothing reads them from the configuration or the
   store (A22 rule 2, A09 rule 1).
 - **Secrets never leave.** No module puts a secret, a confirmation value, a
   CSRF value or a session identity into a record, a log line, a diagnostic,
-  an audit entry or an answer (A13 rule 7, A17 rule 6); `configuration` holds
-  the secrets and hands each only to the module that compares it.
+  an audit entry, a URL or the data of an answer (A13 rule 7, A17 rule 6).
+  The session identity travels only in its cookie, the CSRF and confirmation
+  values only in the forms `owner_interface` serves (A13 rule 7).
+  `configuration` holds the secrets and hands each only to the module that
+  uses it: the service tokens to `service_access`, the owner credential to
+  `owner_sessions`, the backup key to `backups`.
 
 ## `models`
 
 ### Owns
 
 The models M01–M11 as the domain's vocabulary, the declared vocabularies of
-State 1 and the disclosure class of every fact ("Disclosure classes by field"),
+State 1 — for the artifact types only the shape of a type with its owner
+service, whose members are `release_declarations`' — and the disclosure class
+of every fact ("Disclosure classes by field"),
 the order of the classes (A09 rule 4), and the refusal vocabulary: each refusal
 kind with the stage of A04 rule 6 it belongs to.
 
@@ -221,11 +243,12 @@ equal_in_constant_time
 
 What a release declares and a running instance reads from it alone: A22 — the
 artifact types with their owner services, the first release's one type
-(`estimate`, PresuPro), that a removed type's name is never declared again —
-A09 rule 2's table of the services, their operations and their highest
-classes; the store version; the store's temporary-name suffix (A17 rule 5);
-the kept and temporary backup prefixes, neither beginning with the other (A18
-rule 5); the import file's size limit (A19 rule 4, its value State 6's).
+(`estimate`, PresuPro) — A09 rule 2's table of the services, their operations
+and their highest classes; the store version; the store's temporary-name
+suffix (A17 rule 5); the kept and temporary backup prefixes, neither beginning
+with the other (A18 rule 5); the import file's size limit (A19 rule 4, its
+value State 6's); the release's own version and its contract version, which
+every audit entry (M09) and every backup's record (A18 rule 1) name.
 
 ### Knows
 
@@ -249,6 +272,7 @@ owner_service_of_type
 rights_of_service
 store_version_of_release
 backup_name_prefixes
+release_versions
 ```
 
 ### Depth assessment
@@ -351,7 +375,11 @@ statement whose structure the release fixes; a value that selects among fixed
 alternatives is checked against its closed list first. A06: the order of every
 list read — each key as A06 names it, text by Unicode code point, every key
 ending in an identity or a sequence number — so no module sorts records itself.
-A consistent read snapshot of the whole store for a backup (A18 rule 1).
+For a backup (A18 rules 1, 2): one consistent read snapshot of the whole store,
+written as a store file of its own at the path `backups` gives, with the agent
+sessions removed from that copy, so it passes the same checks; and the full
+integrity and version check of such a file, the decrypted copy included,
+opened for reading only.
 
 ### Knows
 
@@ -400,7 +428,7 @@ store ever wrote, for a backup's record (A18 rule 1).
 
 ### Knows
 
-`models`, `store`, `clock`.
+`models`, `release_declarations`, `store`, `clock`.
 
 ### Must not own
 
@@ -570,8 +598,9 @@ check_customer_eligible
 M01, M02 and M03 and their records: A01 — every create carries a request id,
 a repeat answers the record unchanged when its facts equal the record's
 current ones, a different one is refused, lookup among the same project's
-records for a room, a repeat checked only through stage (4) and its project's
-archive check, the request id leaving with the values erasure removes (rules
+records for a room, a repeat checked only through stage (4) — and, for 'add a
+room', its project's archive check; a project's repeat answers an archived
+project as it stands (A01 rule 3, test 4) — the request id leaving with the values erasure removes (rules
 2–9; the pointer's publish under the same rules is `artifact_pointers'`, the
 Customer's create `customers'`); A03 for projects; the revision and
 last-changed instant (A04 rules 1–3 for projects); the project's lifecycle —
@@ -650,6 +679,7 @@ publish_pointer
 withdraw_pointer
 list_pointers
 latest_pointer_of_type
+project_of_pointer
 ```
 
 ### Depth assessment
@@ -662,8 +692,9 @@ latest_pointer_of_type
 ### Owns
 
 M06 and M08, A10, A11 and A12: registering a session Kernel names and ending
-it, which removes its record (A11); the granted set, the active project — never
-an archived one — and the pending request, replaced by the next (M08); the
+it, which removes its record (A11); the granted set, the active project — an
+archived project is never made active, and one archived while active stays
+active (M06, R0-70) — and the pending request, replaced by the next (M08); the
 access version, moved once per accepted action that changes them, checked on
 the owner's actions (A12); A10's check of every agent-authority call — the
 session registered, the project in its set, the active project when none is
@@ -716,8 +747,9 @@ projects with one id or a project without a readable id or status (rule 3);
 the mapping for the picks — rooms, pointers, names and aliases, the Customers
 it will make, malformed records and conflicting ids (rules 1, 3–5); that the
 confirmation step is not shown while the mapping shows an error (rule 1);
-checking again at confirmation and applying the picks, the Customers, the
-closure and its audit entry in one transaction, or nothing (rules 6, 7);
+checking again at confirmation and applying the picks, the Customers and the
+closure in the one transaction `operations` opens, which appends the import's
+audit entry, or nothing (rules 6, 7);
 refusing every import once the closure exists (rule 8); the answer naming each
 Customer's minted `customer_ref` (rule 10). A22 rule 7: an undeclared type is
 malformed.
@@ -802,7 +834,11 @@ failures. A09 rules 3 and 4 at the call: an operation outside the caller's
 rights refused, an answer above its class refused whole. A10 rule 3's
 placement: stage (2)'s refusal hides every later one. A14 rules 1 and 5:
 appending the audit entry in the action's transaction when the action changed
-state, and minting the confirmation id only then. A05 rule 2's no entry and no
+state, and minting the confirmation id only then — but for the erasure of old
+audit entries, which mints one whenever it is accepted, also when it removes
+nothing (A14 rule 5, A15 rule 6). Resolving a pointer a withdrawal names to
+its project, through `artifact_pointers.project_of_pointer`, before stage (2)
+checks that project against the session's set (A08 rule 7). A05 rule 2's no entry and no
 confirmation id for a repeat. The compositions: erasing a project (with
 `agent_sessions` and `artifact_pointers`), granting through an access request,
 joining the project card and the agent projection.
