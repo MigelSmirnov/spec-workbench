@@ -270,12 +270,12 @@ secret cannot be shared between holders.
    one snapshot of the store, as one read transaction sees it, while other
    transactions go on; it never holds part of a transaction, and its
    recorded instant and last sequence number are those of that snapshot,
-   the instant being when its read transaction began. Its read transaction
-   and the store's writes do not wait for each other: a change committed
-   while the copy is made goes on and is not in this backup, which holds the
-   store as its snapshot saw it; a later backup holds whatever the store
-   holds when its own snapshot is taken. No change or run is refused or
-   fails for the other. It
+   the instant being when its read transaction began. A write and the copy
+   may wait for each other only as the store's engine orders a reader and
+   the writer; neither is refused or fails for the other. A change committed
+   after the snapshot began is not in this backup, which holds the store as
+   its snapshot saw it; a later backup holds whatever the store holds when
+   its own snapshot is taken. It
    records, readable without its key, its instant, the release that made it,
    the last audit sequence number its store ever wrote — kept apart from the
    entries (A15), 0 for a store that never wrote one, whatever the log now
