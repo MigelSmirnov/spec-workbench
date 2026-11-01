@@ -1,0 +1,158 @@
+{
+ "open_points": [
+  {
+   "unit": "50_public_apis_2_sessions.md:`public_op:owner_sessions.sign_out_owner`",
+   "subject": "owner_sessions.sign_out_owner after concurrent admission",
+   "kind": "contradiction",
+   "text": "“a request that passed completes even if … a sign-out comes while it runs” conflicts with “`unauthenticated` (`no_owner_session`) when no valid session is named.”",
+   "question": "If two sign-out requests pass the session check before either takes the session lock, what does the second return after the first has ended the session?",
+   "options": [
+    "It succeeds because admission fixed its validity at arrival.",
+    "It is refused because the session no longer exists when its step runs."
+   ],
+   "default_guess": "Treat it as an accepted no-op because it was admitted while the session was valid.",
+   "witness": {
+    "initial": "One valid owner session is open.",
+    "events": [
+     "The browser sends two sign-out requests concurrently.",
+     "Both pass `admit_owner_request` before either sign-out step takes the session lock.",
+     "The first `sign_out_owner` ends the session.",
+     "The second takes the lock and calls `sign_out_owner`."
+    ],
+    "outcomes": [
+     "The second succeeds and its response expires the cookie because validity was fixed at admission.",
+     "The second returns `unauthenticated` (`no_owner_session`) because the session has already ended."
+    ],
+    "observer": "The owner browser sees either a successful sign-out response or an authentication refusal."
+   }
+  },
+  {
+   "unit": "50_public_apis_2_sessions.md:`public_op:owner_sessions.end_expired_sessions`",
+   "subject": "order of expiry checks within a pass",
+   "kind": "unspecified ordering",
+   "text": "“taking the import lock and then each session's lock and deciding under them, each session by a reading of `clock.monotonic_reading` taken once its lock is held” does not declare the order in which sessions are visited.",
+   "question": "In what order must the pass lock and check owner sessions?",
+   "options": [
+    "A fixed order such as session identity order.",
+    "The runtime session-table iteration order.",
+    "One common monotonic reading for every session, making traversal order irrelevant."
+   ],
+   "default_guess": "Use one fixed session-identity order.",
+   "witness": {
+    "initial": "Two owner sessions are just short of their idle limit when an expiry pass starts; enough monotonic time elapses between the first and second checks for the second checked session to reach the limit.",
+    "events": [
+     "`instance_lifecycle` calls `end_expired_sessions`.",
+     "The operation checks one session, then the other, taking a fresh monotonic reading for each."
+    ],
+    "outcomes": [
+     "If session A is checked first, A remains and B ends.",
+     "If session B is checked first, B remains and A ends."
+    ],
+    "observer": "The owner using the two browser sessions sees which one remains authenticated."
+   }
+  },
+  {
+   "unit": "50_public_apis_4_import_backups.md:`public_op:migration_import.read_import_mapping`",
+   "subject": "mapping picks that do not identify file projects",
+   "kind": "missing validation",
+   "text": "“for `mapping`, the picks — possibly none” does not say what happens when a pick names no project in the uploaded file, or names the same project more than once.",
+   "question": "How does `read_import_mapping` handle unknown or duplicate project picks, and where are they represented in its answer?",
+   "options": [
+    "Refuse the request as invalid.",
+    "Return a non-clean mapping with a declared problem.",
+    "Ignore unknown picks and coalesce duplicates.",
+    "Preserve duplicate picks as separate mapping items."
+   ],
+   "default_guess": "Return a non-clean mapping identifying the invalid picks.",
+   "witness": {
+    "initial": "The accepted uploaded file contains project P only.",
+    "events": [
+     "The owner submits a mapping request whose picks contain project Q, which is absent from the file, or contain P twice."
+    ],
+    "outcomes": [
+     "The operation ignores Q or coalesces P and returns the mapping of the projects it found.",
+     "The operation reports the selection as invalid or returns a non-clean mapping."
+    ],
+    "observer": "The owner sees either an apparently usable mapping or a validation failure."
+   }
+  },
+  {
+   "unit": "50_public_apis_4_import_backups.md:`public_op:migration_import.confirm_import`",
+   "subject": "replacement upload with identical bytes",
+   "kind": "unrepresentable required check",
+   "text": "The inputs provide only “the kept file … [and] the bound digest,” while A16 requires that another upload replace the earlier file “one of the same bytes included” and that confirming the earlier mapping then be refused.",
+   "question": "What identity or generation distinguishes the upload bound to the confirmation from a later upload of identical bytes?",
+   "options": [
+    "No distinction; equal bytes and digest satisfy the old confirmation.",
+    "An upload-specific generation or identity not currently listed as an input distinguishes them."
+   ],
+   "default_guess": "Carry an upload-specific generation bound into the confirmation.",
+   "witness": {
+    "initial": "An owner session has uploaded file F and has a valid confirmation bound to F's digest and mapping.",
+    "events": [
+     "The owner uploads the exact same bytes F again, replacing the session's earlier upload as A16 requires.",
+     "The owner submits the still-pending confirmation with its originally bound inputs."
+    ],
+    "outcomes": [
+     "A16 rule 2 and its required test require refusal because the originally named file is no longer kept, even though the bytes are equal.",
+     "The State 5 operation sees kept bytes whose recomputed digest equals the bound digest and accepts the import."
+    ],
+    "observer": "The owner sees either a refused confirmation or a successful import."
+   }
+  },
+  {
+   "unit": "50_public_apis_4_import_backups.md:`public_op:migration_import.confirm_import`",
+   "subject": "ordering of successful import output collections",
+   "kind": "unspecified output order",
+   "text": "“For each written project … and, for each Customer made …” declares two collections but gives neither an order.",
+   "question": "In what order are the written projects and made Customers returned?",
+   "options": [
+    "Project id and v1 customer value order, matching the import mapping.",
+    "The owner's pick/input order.",
+    "The order in which records happen to be written."
+   ],
+   "default_guess": "Order projects by `project_id` and Customers by v1 value, matching A06's mapping order.",
+   "witness": {
+    "initial": "A clean file contains projects P2 and P1, and they cause Customers C2 and C1 to be made.",
+    "events": [
+     "The owner picks P2 before P1 and confirms the import.",
+     "The transaction succeeds."
+    ],
+    "outcomes": [
+     "The answer lists P2, P1 and C2, C1 in input/write order.",
+     "The answer lists P1, P2 and C1, C2 by the deterministic mapping keys."
+    ],
+    "observer": "The owner interface rendering the successful import sees the different ordering."
+   }
+  },
+  {
+   "unit": "50_public_apis_5_surfaces.md:`public_op:owner_interface.serve_owner_request`",
+   "subject": "cookie expiry racing a newer sign-in",
+   "kind": "missing mechanism",
+   "text": "“The cookie is expired in the browser … [for accepted sign-out or `no_owner_session`] … so it never expires a cookie of a newer session” does not define how an HTTP expiry response is prevented from deleting a newer session cookie with the same cookie name, origin and path.",
+   "question": "How must the surface correlate cookie-expiry responses with the session cookie currently installed by the browser when responses arrive out of order?",
+   "options": [
+    "Expire the ordinary session cookie unconditionally, allowing a late old response to remove a newer cookie.",
+    "Use session-specific cookie identity or another conditional mechanism so an old response cannot expire the newer cookie.",
+    "Do not expire the cookie when another sign-in may have occurred."
+   ],
+   "default_guess": "Use a cookie mechanism that makes expiry specific to the session named by the request.",
+   "witness": {
+    "initial": "The browser holds cookie S1, whose session is expired or is being signed out.",
+    "events": [
+     "A request carrying S1 is in flight and will answer with cookie expiry.",
+     "The owner signs in again and receives cookie S2.",
+     "The sign-in response installing S2 arrives before the older response that expires S1."
+    ],
+    "outcomes": [
+     "A normal expiry header for the shared cookie name arrives last and deletes S2, leaving the owner signed out.",
+     "Expiry is specific to S1, so S2 remains and the owner stays signed in."
+    ],
+    "observer": "The owner browser's next request is either authenticated as S2 or sent without a valid session cookie."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"50_public_apis_2_sessions.md:`public_op:owner_sessions.sign_out_owner`\",\"subject\":\"owner_sessions.sign_out_owner after concurrent admission\",\"kind\":\"contradiction\",\"text\":\"“a request that passed completes even if … a sign-out comes while it runs” conflicts with “`unauthenticated` (`no_owner_session`) when no valid session is named.”\",\"question\":\"If two sign-out requests pass the session check before either takes the session lock, what does the second return after the first has ended the session?\",\"options\":[\"It succeeds because admission fixed its validity at arrival.\",\"It is refused because the session no longer exists when its step runs.\"],\"default_guess\":\"Treat it as an accepted no-op because it was admitted while the session was valid.\",\"witness\":{\"initial\":\"One valid owner session is open.\",\"events\":[\"The browser sends two sign-out requests concurrently.\",\"Both pass `admit_owner_request` before either sign-out step takes the session lock.\",\"The first `sign_out_owner` ends the session.\",\"The second takes the lock and calls `sign_out_owner`.\"],\"outcomes\":[\"The second succeeds and its response expires the cookie because validity was fixed at admission.\",\"The second returns `unauthenticated` (`no_owner_session`) because the session has already ended.\"],\"observer\":\"The owner browser sees either a successful sign-out response or an authentication refusal.\"}},{\"unit\":\"50_public_apis_2_sessions.md:`public_op:owner_sessions.end_expired_sessions`\",\"subject\":\"order of expiry checks within a pass\",\"kind\":\"unspecified ordering\",\"text\":\"“taking the import lock and then each session's lock and deciding under them, each session by a reading of `clock.monotonic_reading` taken once its lock is held” does not declare the order in which sessions are visited.\",\"question\":\"In what order must the pass lock and check owner sessions?\",\"options\":[\"A fixed order such as session identity order.\",\"The runtime session-table iteration order.\",\"One common monotonic reading for every session, making traversal order irrelevant.\"],\"default_guess\":\"Use one fixed session-identity order.\",\"witness\":{\"initial\":\"Two owner sessions are just short of their idle limit when an expiry pass starts; enough monotonic time elapses between the first and second checks for the second checked session to reach the limit.\",\"events\":[\"`instance_lifecycle` calls `end_expired_sessions`.\",\"The operation checks one session, then the other, taking a fresh monotonic reading for each.\"],\"outcomes\":[\"If session A is checked first, A remains and B ends.\",\"If session B is checked first, B remains and A ends.\"],\"observer\":\"The owner using the two browser sessions sees which one remains authenticated.\"}},{\"unit\":\"50_public_apis_4_import_backups.md:`public_op:migration_import.read_import_mapping`\",\"subject\":\"mapping picks that do not identify file projects\",\"kind\":\"missing validation\",\"text\":\"“for `mapping`, the picks — possibly none” does not say what happens when a pick names no project in the uploaded file, or names the same project more than once.\",\"question\":\"How does `read_import_mapping` handle unknown or duplicate project picks, and where are they represented in its answer?\",\"options\":[\"Refuse the request as invalid.\",\"Return a non-clean mapping with a declared problem.\",\"Ignore unknown picks and coalesce duplicates.\",\"Preserve duplicate picks as separate mapping items.\"],\"default_guess\":\"Return a non-clean mapping identifying the invalid picks.\",\"witness\":{\"initial\":\"The accepted uploaded file contains project P only.\",\"events\":[\"The owner submits a mapping request whose picks contain project Q, which is absent from the file, or contain P twice.\"],\"outcomes\":[\"The operation ignores Q or coalesces P and returns the mapping of the projects it found.\",\"The operation reports the selection as invalid or returns a non-clean mapping.\"],\"observer\":\"The owner sees either an apparently usable mapping or a validation failure.\"}},{\"unit\":\"50_public_apis_4_import_backups.md:`public_op:migration_import.confirm_import`\",\"subject\":\"replacement upload with identical bytes\",\"kind\":\"unrepresentable required check\",\"text\":\"The inputs provide only “the kept file … [and] the bound digest,” while A16 requires that another upload replace the earlier file “one of the same bytes included” and that confirming the earlier mapping then be refused.\",\"question\":\"What identity or generation distinguishes the upload bound to the confirmation from a later upload of identical bytes?\",\"options\":[\"No distinction; equal bytes and digest satisfy the old confirmation.\",\"An upload-specific generation or identity not currently listed as an input distinguishes them.\"],\"default_guess\":\"Carry an upload-specific generation bound into the confirmation.\",\"witness\":{\"initial\":\"An owner session has uploaded file F and has a valid confirmation bound to F's digest and mapping.\",\"events\":[\"The owner uploads the exact same bytes F again, replacing the session's earlier upload as A16 requires.\",\"The owner submits the still-pending confirmation with its originally bound inputs.\"],\"outcomes\":[\"A16 rule 2 and its required test require refusal because the originally named file is no longer kept, even though the bytes are equal.\",\"The State 5 operation sees kept bytes whose recomputed digest equals the bound digest and accepts the import.\"],\"observer\":\"The owner sees either a refused confirmation or a successful import.\"}},{\"unit\":\"50_public_apis_4_import_backups.md:`public_op:migration_import.confirm_import`\",\"subject\":\"ordering of successful import output collections\",\"kind\":\"unspecified output order\",\"text\":\"“For each written project … and, for each Customer made …” declares two collections but gives neither an order.\",\"question\":\"In what order are the written projects and made Customers returned?\",\"options\":[\"Project id and v1 customer value order, matching the import mapping.\",\"The owner's pick/input order.\",\"The order in which records happen to be written.\"],\"default_guess\":\"Order projects by `project_id` and Customers by v1 value, matching A06's mapping order.\",\"witness\":{\"initial\":\"A clean file contains projects P2 and P1, and they cause Customers C2 and C1 to be made.\",\"events\":[\"The owner picks P2 before P1 and confirms the import.\",\"The transaction succeeds.\"],\"outcomes\":[\"The answer lists P2, P1 and C2, C1 in input/write order.\",\"The answer lists P1, P2 and C1, C2 by the deterministic mapping keys.\"],\"observer\":\"The owner interface rendering the successful import sees the different ordering.\"}},{\"unit\":\"50_public_apis_5_surfaces.md:`public_op:owner_interface.serve_owner_request`\",\"subject\":\"cookie expiry racing a newer sign-in\",\"kind\":\"missing mechanism\",\"text\":\"“The cookie is expired in the browser … [for accepted sign-out or `no_owner_session`] … so it never expires a cookie of a newer session” does not define how an HTTP expiry response is prevented from deleting a newer session cookie with the same cookie name, origin and path.\",\"question\":\"How must the surface correlate cookie-expiry responses with the session cookie currently installed by the browser when responses arrive out of order?\",\"options\":[\"Expire the ordinary session cookie unconditionally, allowing a late old response to remove a newer cookie.\",\"Use session-specific cookie identity or another conditional mechanism so an old response cannot expire the newer cookie.\",\"Do not expire the cookie when another sign-in may have occurred.\"],\"default_guess\":\"Use a cookie mechanism that makes expiry specific to the session named by the request.\",\"witness\":{\"initial\":\"The browser holds cookie S1, whose session is expired or is being signed out.\",\"events\":[\"A request carrying S1 is in flight and will answer with cookie expiry.\",\"The owner signs in again and receives cookie S2.\",\"The sign-in response installing S2 arrives before the older response that expires S1.\"],\"outcomes\":[\"A normal expiry header for the shared cookie name arrives last and deletes S2, leaving the owner signed out.\",\"Expiry is specific to S1, so S2 remains and the owner stays signed in.\"],\"observer\":\"The owner browser's next request is either authenticated as S2 or sent without a valid session cookie.\"}}]}",
+ "set_aside": []
+}

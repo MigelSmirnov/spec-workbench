@@ -1,0 +1,129 @@
+{
+ "open_points": [
+  {
+   "unit": "50_public_apis_4_import_backups.md:`public_op:migration_import.read_import_mapping`",
+   "subject": "read_import_mapping refusal precedence",
+   "kind": "contradictory check order",
+   "text": "“The closure first: when it exists, refused” contradicts “checks them in that order and answers the first failing stage”: `file_too_large` is stage (4), while `import_closed` is stage (6).",
+   "question": "When the import is closed and the uploaded file is also invalid at an earlier stage, which refusal must `read_import_mapping` return?",
+   "options": [
+    "Apply the universal stage order and return the stage-(4) file failure",
+    "Check the closure first and return only `import_closed`"
+   ],
+   "default_guess": "Apply the universal stage order.",
+   "witness": {
+    "initial": "The migration closure exists, and the owner has a valid session.",
+    "events": [
+     "The owner uploads a file larger than the release's import size limit."
+    ],
+    "outcomes": [
+     "The conventions select stage (4): `invalid_request` with `file_too_large`.",
+     "`read_import_mapping` checks the closure first and returns stage (6): `refused` with `import_closed`."
+    ],
+    "observer": "The owner and the owner interface see different refusal codes."
+   }
+  },
+  {
+   "unit": "50_public_apis_4_import_backups.md:`public_op:migration_import.confirm_import`",
+   "subject": "confirm_import simultaneous stage-(6) failures",
+   "kind": "contradictory failure aggregation",
+   "text": "“The closure first (rule 8)” conflicts with the convention that the operation “answers the first failing stage with every failure of that stage.”",
+   "question": "If the closure exists and the confirmation's bound file is no longer kept, does `confirm_import` return only `import_closed` or every applicable stage-(6) kind?",
+   "options": [
+    "Return both `import_closed` and `file_not_kept`",
+    "Short-circuit on the closure and return only `import_closed`"
+   ],
+   "default_guess": "Return every applicable kind from stage (6).",
+   "witness": {
+    "initial": "Sessions A and B each uploaded a file and obtained a valid import confirmation for nonempty picks.",
+    "events": [
+     "Session B confirms first; the import commits, writes the closure and drops every session's uploaded file.",
+     "Session A submits its still-valid confirmation."
+    ],
+    "outcomes": [
+     "The conventions return stage (6) with both `import_closed` and `file_not_kept`.",
+     "The closure-first rule returns only `import_closed` without checking the dropped file."
+    ],
+    "observer": "The owner interface in session A sees a different list of refusal kinds."
+   }
+  },
+  {
+   "unit": "50_public_apis_2_sessions.md:`public_op:owner_sessions.sign_out_owner`",
+   "subject": "sign_out_owner validation responsibility",
+   "kind": "input/error contradiction",
+   "text": "The input is “The admitted session,” but the operation also declares `unauthenticated` (`no_owner_session`) “when no valid session is named.”",
+   "question": "Can `sign_out_owner` receive and validate an absent or invalid session, or is that refusal produced only by `admit_owner_request` before `sign_out_owner` is called?",
+   "options": [
+    "It accepts only an admitted session and has no authentication error of its own",
+    "It accepts a raw session identity and independently returns `no_owner_session`"
+   ],
+   "default_guess": "Accept only an admitted session; authentication remains `admit_owner_request`'s responsibility.",
+   "witness": {
+    "initial": "The browser carries an expired owner-session cookie.",
+    "events": [
+     "The browser submits sign-out.",
+     "`operations` asks `admit_owner_request` to admit it."
+    ],
+    "outcomes": [
+     "Admission returns `no_owner_session`, and `sign_out_owner` is never called because its input must be admitted.",
+     "`sign_out_owner` is called with the expired identity and independently returns its declared `no_owner_session` error."
+    ],
+    "observer": "The `operations` module and module-level tests see which operation owns the refusal."
+   }
+  },
+  {
+   "unit": "50_public_apis_2_sessions.md:`public_op:owner_sessions.end_expired_sessions`",
+   "subject": "expiry pass racing an already-admitted request",
+   "kind": "concurrency gap",
+   "text": "A request that passed admission “completes even if a limit ... comes while it runs,” while the pass “ends every session that has reached a limit” after taking its lock; no ordering is fixed between that pass and a request already admitted but still waiting for the lock.",
+   "question": "If the absolute eight-hour limit is reached after a request passes the session check but before its step acquires the session lock, may `end_expired_sessions` end the session and drop its confirmation or uploaded file first?",
+   "options": [
+    "The admitted request gets its turn and completes before the expiry pass ends the session",
+    "The expiry pass may end the session first, but the admitted step must still receive preserved session state",
+    "The expiry pass ends the session first and the admitted step can no longer complete normally"
+   ],
+   "default_guess": "Let every already-admitted request complete before ending that session.",
+   "witness": {
+    "initial": "A session is just short of its eight-hour limit and holds an uploaded import file needed by a pending request.",
+    "events": [
+     "The owner request passes `admit_owner_request` before the limit but waits for the import or session lock.",
+     "The eight-hour limit is reached.",
+     "The scheduled expiry pass competes for the locks."
+    ],
+    "outcomes": [
+     "The admitted request runs with the uploaded file and completes; the session ends afterward.",
+     "The expiry pass gets the lock first, ends the session and drops the file, so the already-admitted request cannot perform the step it was promised would complete."
+    ],
+    "observer": "The owner sees either the requested result or a failed/lost import step."
+   }
+  },
+  {
+   "unit": "50_public_apis_5_surfaces.md:`public_op:owner_interface.serve_owner_request`",
+   "subject": "conditional browser-cookie expiry under concurrent responses",
+   "kind": "contradictory effect",
+   "text": "The surface must expire the cookie in the specified answer, yet says “the answer is never re-checked, so it never expires a cookie of a newer session.” Cookie expiry is not defined as conditional on the cookie value still being the refused or signed-out session.",
+   "question": "How can a delayed expiry response be prevented from deleting a newer session cookie that the browser installed after the old request arrived?",
+   "options": [
+    "Cookie naming or response semantics distinguish sessions so an old expiry affects only the old session",
+    "Owner-interface requests and sign-ins are serialized so the expiry response cannot arrive after a newer cookie is installed",
+    "A normal fixed-name expiry header is sent, allowing the delayed response to remove the newer cookie"
+   ],
+   "default_guess": "Use cookie semantics that let an expiry target only the session named by the request.",
+   "witness": {
+    "initial": "The browser has cookie S1, and a request carrying S1 is refused `no_owner_session`.",
+    "events": [
+     "Before that refusal response reaches the browser, the owner signs in and the browser receives a response setting cookie S2.",
+     "The delayed refusal response for S1 then reaches the browser."
+    ],
+    "outcomes": [
+     "A conventional expiry for the shared cookie name removes S2, leaving the owner signed out.",
+     "An implementation preserving the stated newer-session guarantee expires only S1, leaving S2 active."
+    ],
+    "observer": "The owner sees whether the new sign-in survives."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"50_public_apis_4_import_backups.md:`public_op:migration_import.read_import_mapping`\",\"subject\":\"read_import_mapping refusal precedence\",\"kind\":\"contradictory check order\",\"text\":\"“The closure first: when it exists, refused” contradicts “checks them in that order and answers the first failing stage”: `file_too_large` is stage (4), while `import_closed` is stage (6).\",\"question\":\"When the import is closed and the uploaded file is also invalid at an earlier stage, which refusal must `read_import_mapping` return?\",\"options\":[\"Apply the universal stage order and return the stage-(4) file failure\",\"Check the closure first and return only `import_closed`\"],\"default_guess\":\"Apply the universal stage order.\",\"witness\":{\"initial\":\"The migration closure exists, and the owner has a valid session.\",\"events\":[\"The owner uploads a file larger than the release's import size limit.\"],\"outcomes\":[\"The conventions select stage (4): `invalid_request` with `file_too_large`.\",\"`read_import_mapping` checks the closure first and returns stage (6): `refused` with `import_closed`.\"],\"observer\":\"The owner and the owner interface see different refusal codes.\"}},{\"unit\":\"50_public_apis_4_import_backups.md:`public_op:migration_import.confirm_import`\",\"subject\":\"confirm_import simultaneous stage-(6) failures\",\"kind\":\"contradictory failure aggregation\",\"text\":\"“The closure first (rule 8)” conflicts with the convention that the operation “answers the first failing stage with every failure of that stage.”\",\"question\":\"If the closure exists and the confirmation's bound file is no longer kept, does `confirm_import` return only `import_closed` or every applicable stage-(6) kind?\",\"options\":[\"Return both `import_closed` and `file_not_kept`\",\"Short-circuit on the closure and return only `import_closed`\"],\"default_guess\":\"Return every applicable kind from stage (6).\",\"witness\":{\"initial\":\"Sessions A and B each uploaded a file and obtained a valid import confirmation for nonempty picks.\",\"events\":[\"Session B confirms first; the import commits, writes the closure and drops every session's uploaded file.\",\"Session A submits its still-valid confirmation.\"],\"outcomes\":[\"The conventions return stage (6) with both `import_closed` and `file_not_kept`.\",\"The closure-first rule returns only `import_closed` without checking the dropped file.\"],\"observer\":\"The owner interface in session A sees a different list of refusal kinds.\"}},{\"unit\":\"50_public_apis_2_sessions.md:`public_op:owner_sessions.sign_out_owner`\",\"subject\":\"sign_out_owner validation responsibility\",\"kind\":\"input/error contradiction\",\"text\":\"The input is “The admitted session,” but the operation also declares `unauthenticated` (`no_owner_session`) “when no valid session is named.”\",\"question\":\"Can `sign_out_owner` receive and validate an absent or invalid session, or is that refusal produced only by `admit_owner_request` before `sign_out_owner` is called?\",\"options\":[\"It accepts only an admitted session and has no authentication error of its own\",\"It accepts a raw session identity and independently returns `no_owner_session`\"],\"default_guess\":\"Accept only an admitted session; authentication remains `admit_owner_request`'s responsibility.\",\"witness\":{\"initial\":\"The browser carries an expired owner-session cookie.\",\"events\":[\"The browser submits sign-out.\",\"`operations` asks `admit_owner_request` to admit it.\"],\"outcomes\":[\"Admission returns `no_owner_session`, and `sign_out_owner` is never called because its input must be admitted.\",\"`sign_out_owner` is called with the expired identity and independently returns its declared `no_owner_session` error.\"],\"observer\":\"The `operations` module and module-level tests see which operation owns the refusal.\"}},{\"unit\":\"50_public_apis_2_sessions.md:`public_op:owner_sessions.end_expired_sessions`\",\"subject\":\"expiry pass racing an already-admitted request\",\"kind\":\"concurrency gap\",\"text\":\"A request that passed admission “completes even if a limit ... comes while it runs,” while the pass “ends every session that has reached a limit” after taking its lock; no ordering is fixed between that pass and a request already admitted but still waiting for the lock.\",\"question\":\"If the absolute eight-hour limit is reached after a request passes the session check but before its step acquires the session lock, may `end_expired_sessions` end the session and drop its confirmation or uploaded file first?\",\"options\":[\"The admitted request gets its turn and completes before the expiry pass ends the session\",\"The expiry pass may end the session first, but the admitted step must still receive preserved session state\",\"The expiry pass ends the session first and the admitted step can no longer complete normally\"],\"default_guess\":\"Let every already-admitted request complete before ending that session.\",\"witness\":{\"initial\":\"A session is just short of its eight-hour limit and holds an uploaded import file needed by a pending request.\",\"events\":[\"The owner request passes `admit_owner_request` before the limit but waits for the import or session lock.\",\"The eight-hour limit is reached.\",\"The scheduled expiry pass competes for the locks.\"],\"outcomes\":[\"The admitted request runs with the uploaded file and completes; the session ends afterward.\",\"The expiry pass gets the lock first, ends the session and drops the file, so the already-admitted request cannot perform the step it was promised would complete.\"],\"observer\":\"The owner sees either the requested result or a failed/lost import step.\"}},{\"unit\":\"50_public_apis_5_surfaces.md:`public_op:owner_interface.serve_owner_request`\",\"subject\":\"conditional browser-cookie expiry under concurrent responses\",\"kind\":\"contradictory effect\",\"text\":\"The surface must expire the cookie in the specified answer, yet says “the answer is never re-checked, so it never expires a cookie of a newer session.” Cookie expiry is not defined as conditional on the cookie value still being the refused or signed-out session.\",\"question\":\"How can a delayed expiry response be prevented from deleting a newer session cookie that the browser installed after the old request arrived?\",\"options\":[\"Cookie naming or response semantics distinguish sessions so an old expiry affects only the old session\",\"Owner-interface requests and sign-ins are serialized so the expiry response cannot arrive after a newer cookie is installed\",\"A normal fixed-name expiry header is sent, allowing the delayed response to remove the newer cookie\"],\"default_guess\":\"Use cookie semantics that let an expiry target only the session named by the request.\",\"witness\":{\"initial\":\"The browser has cookie S1, and a request carrying S1 is refused `no_owner_session`.\",\"events\":[\"Before that refusal response reaches the browser, the owner signs in and the browser receives a response setting cookie S2.\",\"The delayed refusal response for S1 then reaches the browser.\"],\"outcomes\":[\"A conventional expiry for the shared cookie name removes S2, leaving the owner signed out.\",\"An implementation preserving the stated newer-session guarantee expires only S1, leaving S2 active.\"],\"observer\":\"The owner sees whether the new sign-in survives.\"}}]}",
+ "set_aside": []
+}
