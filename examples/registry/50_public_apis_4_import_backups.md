@@ -73,8 +73,10 @@ pointer of a type `release_declarations.declared_artifact_types` does not
 declare or whose owner service is not `release_declarations.owner_service_of_type`'s
 among them (A22 rule 7); ids compared per kind (rule 5); names read with
 `given_values` (A02): a display name, a Customer's name or kind absent or
-blank is no refusal here but a missing value the mapping shows, which keeps
-it from being clean; `confirm_import` refuses it (`mapping_not_clean`). Nothing is executed or evaluated (A19 rule 4).
+blank is no refusal here but a missing value the mapping shows — named by
+its subject, the picked project by `project_id` or the Customer by its v1
+value, and by its field — which keeps it from being clean; a required value
+missing inside a brought-in record is that record's malformation (rule 4); `confirm_import` refuses it (`mapping_not_clean`). Nothing is executed or evaluated (A19 rule 4).
 
 ### Errors
 

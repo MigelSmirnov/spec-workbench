@@ -667,9 +667,11 @@ project's name and a Customer's name and kind the owner gives the import.
 ### Errors
 
 None; `missing_value` is the answer, which the caller refuses at stage (4)
-— except `migration_import.read_import_mapping`, which shows it as a
-missing value of a non-clean mapping, the import's own refusal coming only
-at confirmation (A16 rule 1).
+— except a value the owner gives the import's mapping, a display name or a
+Customer's name or kind, which `migration_import.read_import_mapping` shows
+as a missing value of a non-clean mapping, the import's own refusal coming
+only at confirmation (A16 rule 1). A required value missing inside a record
+the file brings in is a malformed record (A16 rule 4), not a missing value.
 
 ### State impact
 
