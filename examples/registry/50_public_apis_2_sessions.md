@@ -120,8 +120,9 @@ The admitted session: the step of a sign-out request, which
 
 ### Outputs
 
-That the session ended — also for a second sign-out admitted before the
-first ended it, which finds it ended in its turn and answers the same.
+That the session ended, with `changed: true`; a second sign-out admitted
+before the first ended it finds it ended in its turn and answers that it
+ended with `changed: false`.
 
 ### Observable effect
 
@@ -254,8 +255,9 @@ when it accepted them.
 
 ### Outputs
 
-The upload's number in the session: one more than the session's last, so
-two uploads of the same bytes are two uploads (A16 rule 2).
+The upload's number in the session: 1 for the session's first accepted
+upload, then one more than the session's last, so two uploads of the same
+bytes are two uploads (A16 rule 2).
 
 ### Observable effect
 

@@ -61,7 +61,8 @@ among them (A22 rule 7); ids compared per kind (rule 5); names read with
 ### Errors
 
 `refused` (`import_closed`); `invalid_request` (`file_too_large`,
-`file_unreadable`, `file_malformed`).
+`file_unreadable`, `file_malformed`, and `outside_closed_list` for a pick
+that is not a project of the file).
 
 ### State impact
 

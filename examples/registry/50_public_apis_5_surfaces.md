@@ -205,6 +205,9 @@ Registry's origin, over HTTPS when reached from another machine (A13 rule
 1). Registry never expires or deletes the cookie: an ended session's
 cookie is refused at the session check and replaced by the next sign-in, so
 no answer, however late it arrives, can remove a newer session's cookie.
+Two sign-ins of one browser whose answers cross make two valid sessions;
+the browser keeps the cookie it received last, and the other session,
+carried by no cookie, ends by its limits (A13 rule 2).
 
 ### Enforces
 
