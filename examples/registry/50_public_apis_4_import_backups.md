@@ -72,7 +72,9 @@ picks bring in is checked (rule 3); a record is malformed as rule 4 says, a
 pointer of a type `release_declarations.declared_artifact_types` does not
 declare or whose owner service is not `release_declarations.owner_service_of_type`'s
 among them (A22 rule 7); ids compared per kind (rule 5); names read with
-`given_values` (A02). Nothing is executed or evaluated (A19 rule 4).
+`given_values` (A02): a display name, a Customer's name or kind absent or
+blank is no refusal here but a missing value the mapping shows, which keeps
+it from being clean; `confirm_import` refuses it (`mapping_not_clean`). Nothing is executed or evaluated (A19 rule 4).
 
 ### Errors
 

@@ -666,7 +666,10 @@ project's name and a Customer's name and kind the owner gives the import.
 
 ### Errors
 
-None; `missing_value` is the answer, which the caller refuses at stage (4).
+None; `missing_value` is the answer, which the caller refuses at stage (4)
+— except `migration_import.read_import_mapping`, which shows it as a
+missing value of a non-clean mapping, the import's own refusal coming only
+at confirmation (A16 rule 1).
 
 ### State impact
 
