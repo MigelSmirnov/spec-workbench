@@ -202,7 +202,8 @@ closure is the one proof of success.
    is absent, the start fails; a store made new is made in SQLite's
    write-ahead-log mode (A18 rule 1); otherwise
    the store must open for reading and writing, be put in that mode when it
-   is not in it — one that cannot be fails the start —, pass the full integrity check
+   is not in it — one that cannot be fails the start; a start that fails
+   later does not undo it, the mode changing no record —, pass the full integrity check
    — the store is a SQLite database, as v1's (L19), and the check passes when
    `PRAGMA integrity_check` answers `ok` and `PRAGMA foreign_key_check` finds
    nothing, the same as a backup's check (A18 rule 4) — and carry
@@ -237,8 +238,10 @@ for secrets s1 != s2 in config: value(s1) != value(s2) and len >= 32 bytes
 5. A start whose store is made new and whose listener then cannot be opened
    stops, serves nothing and removes that store — or, when the removal
    fails, leaves it as an empty store of the release's version; one whose
-   listener cannot be opened over an existing store leaves that store as it
-   was. An owner-only start opens no service API listener.
+   listener cannot be opened over an existing store leaves that store's
+   records as they were, in write-ahead-log mode, which a start that put it
+   in that mode does not undo (rule 5). An owner-only start opens no service
+   API listener.
 
 ### Consequence
 
