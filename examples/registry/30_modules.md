@@ -85,10 +85,10 @@ later line, and modules on one line do not know each other.
   changes inside it, appends the action's one audit entry through
   `audit_log.append_audit_entry` when the action changed state and M09 lists
   it (A14 rule 1)
-  and commits once. No other module appends an entry; the erasure of old
-  entries is the one action whose entry `audit_log` writes itself, inside
-  `erase_audit_entries_before` (A15 rule 4), and `operations` appends none
-  for it. A domain module never opens a transaction and
+  and commits once. No other module appends an entry. The erasure of old
+  entries is appended the same way, after `audit_log.erase_audit_entries_before`
+  has removed the entries in the same transaction (A15 rule 4), also when it
+  removed none (A15 rule 6). A domain module never opens a transaction and
   never commits; it reads and writes through the transaction it is handed.
   Changes that write the store are applied one at a time (A01 rule 7, A07
   rule 2, A10 rule 6, A15 rule 5): `store` holds the one write lock and a
@@ -139,11 +139,14 @@ later line, and modules on one line do not know each other.
 - **Time.** An action has one instant: `operations` reads it from
   `clock.recorded_now` once, when the action's transaction begins, with
   today's date (`clock.today_in_utc`), and hands both to every module the
-  action records an instant or compares a date in — the import's projects,
-  Customers, closure and entry all carry that one instant. The limits of A13
-  are read by `owner_sessions` from `clock.monotonic_reading`, the minute look
-  of A18 rule 1 and a backup's snapshot instant by `backups` and `store` from
-  `clock.recorded_now`. No other module reads a clock.
+  action records a new instant or compares a date in. The import's records
+  keep the instants their source holds ("Revisions and times"); the Customers
+  it makes, its closure and its entry carry the action's one instant. The
+  limits of A13 are read by `owner_sessions` from `clock.monotonic_reading`;
+  the minute look of A18 rule 1 by `backups` from `clock.recorded_now`; a
+  backup's instant is the one `store` reads when the copy's read transaction
+  begins, which `backups` records and never reads itself. No other module
+  reads a clock.
 - **Random values and secret comparison.** Every identity Registry mints
   ("Identity formats") and every 32-byte value of A13 rule 7 comes from
   `random_values`; every comparison of a presented secret with a held one goes
@@ -448,8 +451,9 @@ wrote, kept apart from the entries so an erasure never lowers it (A15 rule 5);
 the actions that write an entry and the subject each names (M09); the outcome
 `accepted` (A14 rule 6); that no entry is ever changed (A15 rule 1); the
 erasure before a date — not later than today, every entry before 00:00 UTC of
-it removed, its own entry written after the removal with its confirmation id,
-also when it removes nothing (A15 rules 3, 4, 6); reading the log by sequence
+it removed, so that the erasure's own entry `operations` appends after it,
+with its confirmation id, also when nothing was removed, is never removed by
+it (A15 rules 3, 4, 6); reading the log by sequence
 number for the owner (A15 rule 2, A06 rule 6). The last sequence number its
 store ever wrote, for a backup's record (A18 rule 1).
 
@@ -782,7 +786,8 @@ opens, which appends the import's audit entry, having each record written by
 its own module with its source identities and instants — `projects`
 the picked projects with their objects and rooms, `customers` the Customers
 it makes, `artifact_pointers` the pointers, the import as their publisher
-(M05) — and writing the closure (M10), or nothing (rules 6, 7);
+(M05) — and, once they are written, the closure (M10) with the confirmation
+id `operations` minted then, or nothing (rules 6, 7);
 refusing every import once the closure exists (rule 8); the answer naming each
 Customer's minted `customer_ref` (rule 10). A22 rule 7: an undeclared type is
 malformed.
@@ -807,6 +812,7 @@ The export file's reading and the mapping's checks.
 ```text
 read_import_mapping
 confirm_import
+record_migration_closure
 ```
 
 ### Depth assessment
@@ -868,11 +874,12 @@ failures. A09 rules 3 and 4 at the call: an operation outside the caller's
 rights refused, an answer above its class refused whole. A10 rule 3's
 placement: stage (2)'s refusal hides every later one. A14 rules 1 and 5:
 appending the audit entry in the action's transaction when the action changed
-state. A14 rule 5: for a confirmed action `operations` mints the confirmation
-id before handing the action on, inside the transaction, and keeps it only
-when the action is accepted and changed state — or, for the erasure of old
-audit entries, whenever it is accepted, also when it removes nothing (A15 rule
-6); a discarded id is written nowhere. Resolving a pointer a withdrawal names to
+state. A14 rule 5: `operations` mints a confirmed action's confirmation id
+inside the transaction only after the action's module has answered that it is
+accepted and changed state — or, for the erasure of old audit entries, that it
+is accepted, also when it removed nothing (A15 rule 6) — and hands it to the
+entry and, for the import, to the closure; a refused or unchanged action
+mints none. Resolving a pointer a withdrawal names to
 its project, through `artifact_pointers.project_of_pointer`, before stage (2)
 checks that project against the session's set (A08 rule 7). A05 rule 2's no entry and no
 confirmation id for a repeat. The compositions: erasing a project (with
