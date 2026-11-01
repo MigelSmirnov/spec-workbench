@@ -1,0 +1,84 @@
+{
+ "open_points": [
+  {
+   "unit": "30_modules.md:Facts several modules touch, and their one owner",
+   "subject": "owner-session and import-lock lifetime across stored owner actions",
+   "kind": "unclear dependency direction",
+   "text": "`owner_sessions` applies it under its own locks ... For every other change, `operations` opens the transaction through `store.run_in_transaction`",
+   "question": "Who owns holding the owner-session lock—and, for import, the import lock—from admission and confirmation consumption through completion of the store transaction, so that sign-out, replacement uploads and concurrent confirmations are ordered as A13 and A16 require?",
+   "options": [
+    "`owner_sessions` lends a held lock scope to `operations` until the transaction and response state changes finish",
+    "`operations` owns the cross-module lock scope while `owner_sessions` only supplies lock operations",
+    "`owner_sessions` releases its locks after admission or confirmation consumption, and the store transaction proceeds independently"
+   ],
+   "default_guess": "Have `operations` hold lock scopes supplied by `owner_sessions` through the complete action, including the store transaction and import-upload cleanup.",
+   "witness": {
+    "initial": "One owner session has a valid confirmation for archiving project P; a second request in the same session is ready to sign out.",
+    "events": [
+     "The archive submission passes the session, CSRF and confirmation checks.",
+     "Before its store transaction commits, the sign-out request runs."
+    ],
+    "outcomes": [
+     "If the session lock remains held through the transaction, the archive commits before sign-out, as A13 says for an admitted request.",
+     "If `take_confirmation` releases the lock before `operations` opens or commits the transaction, sign-out can end the session first while the archive still commits afterward."
+    ],
+    "observer": "The owner sees whether project P was archived after the session had already been signed out; the audit log also differs in timing and presence if the implementation refuses post-sign-out work."
+   }
+  },
+  {
+   "unit": "30_modules.md:Facts several modules touch, and their one owner",
+   "subject": "backup snapshot's last audit sequence number",
+   "kind": "two owners",
+   "text": "`audit_log` owns ... The last sequence number its store ever wrote, for a backup's record ... [but] `store` ... answers, from its one read transaction, ... the last sequence number the audit counter it holds says",
+   "question": "Does `audit_log` own reading and interpreting the never-lowered sequence counter for a backup snapshot, or does `store` own that fact as part of `copy_store_snapshot`; and how is the value read from the same snapshot without violating the dependency direction?",
+   "options": [
+    "`store` reads and returns the audit counter from the snapshot",
+    "`audit_log` reads the counter inside the snapshot transaction supplied by `store`",
+    "`backups` asks `audit_log` separately after the copy is made"
+   ],
+   "default_guess": "Let `audit_log` define the counter while `store` provides a snapshot-scoped read mechanism that keeps the counter read and copied database consistent.",
+   "witness": {
+    "initial": "The store's audit counter is 10 and a backup snapshot begins.",
+    "events": [
+     "`store` copies the snapshot containing counter 10.",
+     "A concurrent accepted change commits audit entry 11 before backup metadata is completed.",
+     "The backup records and verifies its last sequence number."
+    ],
+    "outcomes": [
+     "Reading through the snapshot records 10 and the backup passes its consistency check.",
+     "Reading the audit counter separately records 11 while the copied store contains 10, so verification fails and no backup is kept."
+    ],
+    "observer": "The owner sees either a new kept backup or a failed backup run and no new backup."
+   }
+  },
+  {
+   "unit": "30_modules.md:Facts several modules touch, and their one owner",
+   "subject": "distribution of configured secrets to their users",
+   "kind": "dependency direction contradiction",
+   "text": "`configuration` holds the secrets and hands each only to the module that uses it ... [while] A module may know only modules on earlier lines ... `configuration` [precedes] `service_access`, `owner_sessions` and `backups`",
+   "question": "Which module distributes the service tokens, owner credential and backup key to their consuming modules without making `configuration` depend on later modules or exposing all secrets to an unspecified intermediary?",
+   "options": [
+    "`configuration` constructs or directly initializes the later consuming modules, contrary to the declared dependency direction",
+    "`instance_lifecycle` receives all secret values and distributes them to the consumers",
+    "`configuration` returns separate opaque capabilities or bundles that a composition module routes without reading them"
+   ],
+   "default_guess": "Use `instance_lifecycle` as the composition owner and route separate opaque secret capabilities to each consumer."
+  },
+  {
+   "unit": "30_modules.md:Facts several modules touch, and their one owner",
+   "subject": "refusal of agent writes to archived projects",
+   "kind": "overlapping ownership",
+   "text": "`agent_sessions` owns A10 ... A write with agent authority on an archived project ... is refused; `projects` owns ... for 'add a room', its project's archive check; `artifact_pointers` owns ... both refused on an archived project",
+   "question": "Which module owns the archived-project write decision for an agent call: `agent_sessions` as part of A10, or the domain module (`projects` or `artifact_pointers`) as the lifecycle check at stage (6)?",
+   "options": [
+    "`agent_sessions` checks project status for every agent write before dispatch",
+    "Each domain module alone checks whether its write is allowed on the archived project",
+    "Both check it, with one explicitly designated as authoritative and the other only defensive"
+   ],
+   "default_guess": "Make the domain module authoritative for the stage-(6) lifecycle refusal, while `agent_sessions` owns only registration, grant and active-project checks."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"30_modules.md:Facts several modules touch, and their one owner\",\"subject\":\"owner-session and import-lock lifetime across stored owner actions\",\"kind\":\"unclear dependency direction\",\"text\":\"`owner_sessions` applies it under its own locks ... For every other change, `operations` opens the transaction through `store.run_in_transaction`\",\"question\":\"Who owns holding the owner-session lock—and, for import, the import lock—from admission and confirmation consumption through completion of the store transaction, so that sign-out, replacement uploads and concurrent confirmations are ordered as A13 and A16 require?\",\"options\":[\"`owner_sessions` lends a held lock scope to `operations` until the transaction and response state changes finish\",\"`operations` owns the cross-module lock scope while `owner_sessions` only supplies lock operations\",\"`owner_sessions` releases its locks after admission or confirmation consumption, and the store transaction proceeds independently\"],\"default_guess\":\"Have `operations` hold lock scopes supplied by `owner_sessions` through the complete action, including the store transaction and import-upload cleanup.\",\"witness\":{\"initial\":\"One owner session has a valid confirmation for archiving project P; a second request in the same session is ready to sign out.\",\"events\":[\"The archive submission passes the session, CSRF and confirmation checks.\",\"Before its store transaction commits, the sign-out request runs.\"],\"outcomes\":[\"If the session lock remains held through the transaction, the archive commits before sign-out, as A13 says for an admitted request.\",\"If `take_confirmation` releases the lock before `operations` opens or commits the transaction, sign-out can end the session first while the archive still commits afterward.\"],\"observer\":\"The owner sees whether project P was archived after the session had already been signed out; the audit log also differs in timing and presence if the implementation refuses post-sign-out work.\"}},{\"unit\":\"30_modules.md:Facts several modules touch, and their one owner\",\"subject\":\"backup snapshot's last audit sequence number\",\"kind\":\"two owners\",\"text\":\"`audit_log` owns ... The last sequence number its store ever wrote, for a backup's record ... [but] `store` ... answers, from its one read transaction, ... the last sequence number the audit counter it holds says\",\"question\":\"Does `audit_log` own reading and interpreting the never-lowered sequence counter for a backup snapshot, or does `store` own that fact as part of `copy_store_snapshot`; and how is the value read from the same snapshot without violating the dependency direction?\",\"options\":[\"`store` reads and returns the audit counter from the snapshot\",\"`audit_log` reads the counter inside the snapshot transaction supplied by `store`\",\"`backups` asks `audit_log` separately after the copy is made\"],\"default_guess\":\"Let `audit_log` define the counter while `store` provides a snapshot-scoped read mechanism that keeps the counter read and copied database consistent.\",\"witness\":{\"initial\":\"The store's audit counter is 10 and a backup snapshot begins.\",\"events\":[\"`store` copies the snapshot containing counter 10.\",\"A concurrent accepted change commits audit entry 11 before backup metadata is completed.\",\"The backup records and verifies its last sequence number.\"],\"outcomes\":[\"Reading through the snapshot records 10 and the backup passes its consistency check.\",\"Reading the audit counter separately records 11 while the copied store contains 10, so verification fails and no backup is kept.\"],\"observer\":\"The owner sees either a new kept backup or a failed backup run and no new backup.\"}},{\"unit\":\"30_modules.md:Facts several modules touch, and their one owner\",\"subject\":\"distribution of configured secrets to their users\",\"kind\":\"dependency direction contradiction\",\"text\":\"`configuration` holds the secrets and hands each only to the module that uses it ... [while] A module may know only modules on earlier lines ... `configuration` [precedes] `service_access`, `owner_sessions` and `backups`\",\"question\":\"Which module distributes the service tokens, owner credential and backup key to their consuming modules without making `configuration` depend on later modules or exposing all secrets to an unspecified intermediary?\",\"options\":[\"`configuration` constructs or directly initializes the later consuming modules, contrary to the declared dependency direction\",\"`instance_lifecycle` receives all secret values and distributes them to the consumers\",\"`configuration` returns separate opaque capabilities or bundles that a composition module routes without reading them\"],\"default_guess\":\"Use `instance_lifecycle` as the composition owner and route separate opaque secret capabilities to each consumer.\"},{\"unit\":\"30_modules.md:Facts several modules touch, and their one owner\",\"subject\":\"refusal of agent writes to archived projects\",\"kind\":\"overlapping ownership\",\"text\":\"`agent_sessions` owns A10 ... A write with agent authority on an archived project ... is refused; `projects` owns ... for 'add a room', its project's archive check; `artifact_pointers` owns ... both refused on an archived project\",\"question\":\"Which module owns the archived-project write decision for an agent call: `agent_sessions` as part of A10, or the domain module (`projects` or `artifact_pointers`) as the lifecycle check at stage (6)?\",\"options\":[\"`agent_sessions` checks project status for every agent write before dispatch\",\"Each domain module alone checks whether its write is allowed on the archived project\",\"Both check it, with one explicitly designated as authoritative and the other only defensive\"],\"default_guess\":\"Make the domain module authoritative for the stage-(6) lifecycle refusal, while `agent_sessions` owns only registration, grant and active-project checks.\"}]}",
+ "set_aside": []
+}
