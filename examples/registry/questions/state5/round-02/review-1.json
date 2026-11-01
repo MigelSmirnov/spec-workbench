@@ -1,0 +1,325 @@
+{
+ "open_points": [
+  {
+   "unit": "50_public_apis_1_foundation.md:`public_op:clock.today_in_utc`",
+   "subject": "action instant and UTC date",
+   "kind": "non-atomic readings",
+   "text": "“Today is the UTC date of `recorded_now` read at the same moment” conflicts with separate calls to `clock.recorded_now` and `clock.today_in_utc`, with no operation that obtains both atomically.",
+   "question": "How must `operations` obtain an action’s instant and matching UTC date so that crossing midnight cannot produce a date different from the instant’s date?",
+   "options": [
+    "Return the instant and its UTC date from one clock operation.",
+    "Derive today from the already-read action instant.",
+    "Allow two clock reads and define which reading controls the date."
+   ],
+   "default_guess": "Derive today from the single action instant returned by `recorded_now`.",
+   "witness": {
+    "initial": "The wall clock is immediately before 00:00 UTC and an owner action must compare a date.",
+    "events": [
+     "`operations` calls `clock.recorded_now` and receives 2026-11-01T23:59:59.999Z.",
+     "UTC midnight passes.",
+     "`operations` calls `clock.today_in_utc`."
+    ],
+    "outcomes": [
+     "The action carries instant 2026-11-01T23:59:59.999Z and today 2026-11-01 because today is derived from that instant.",
+     "The action carries the same instant but today 2026-11-02 because `today_in_utc` performs a second wall-clock read."
+    ],
+    "observer": "The owner sees whether a date accepted or refused at the UTC-day boundary."
+   }
+  },
+  {
+   "unit": "50_public_apis_2_sessions.md:`public_op:owner_sessions.show_confirmation_step`",
+   "subject": "confirmation input digest",
+   "kind": "undefined canonicalization",
+   "text": "“the digest of its inputs in a fixed order” does not name the digest algorithm, the fixed order, or the canonical representation of absent values, collections and structured inputs.",
+   "question": "What exact canonical encoding, field order and digest algorithm must both `show_confirmation_step` and the caller of `take_confirmation` use?",
+   "options": [
+    "A specified canonical byte encoding and named digest algorithm.",
+    "A structured equality comparison owned entirely by `owner_sessions`, with no externally computed digest.",
+    "Module-private encodings, provided both calls receive the already-computed same digest."
+   ],
+   "default_guess": "Use a specified canonical encoding with SHA-256 and explicit field order.",
+   "witness": {
+    "initial": "An import confirmation contains two picks, optional aliases and Customer values.",
+    "events": [
+     "`operations` asks `owner_sessions` to show the confirmation step.",
+     "The owner submits the unchanged form.",
+     "`operations` computes the submission digest and calls `take_confirmation`."
+    ],
+    "outcomes": [
+     "Both modules serialize absent aliases and ordered picks identically, so the submission is confirmed.",
+     "One module omits absent fields or orders picks differently, so the unchanged submission is refused as `confirmation_bound_elsewhere`."
+    ],
+    "observer": "The owner sees an unchanged confirmation form accepted or refused."
+   }
+  },
+  {
+   "unit": "50_public_apis_3_records.md:`public_op:projects.read_project_card`",
+   "subject": "project-card output fields",
+   "kind": "output shape ambiguous",
+   "text": "“The project, its id first, with its object, its rooms … its revision” does not say whether “the project” includes all M01 facts, notably created and last-changed instants and the stored create request id.",
+   "question": "What exact Project facts are returned in a project card, and is the create request id ever returned?",
+   "options": [
+    "Return every surviving M01 fact, including the request id.",
+    "Return public project facts and timestamps but never the request id.",
+    "Return only the fields explicitly enumerated in this operation."
+   ],
+   "default_guess": "Return the public project facts and timestamps, excluding the create request id.",
+   "witness": {
+    "initial": "A project was created with request id K and has not been archived.",
+    "events": [
+     "The owner or Client Portal calls `read_project_card`."
+    ],
+    "outcomes": [
+     "The answer includes K and all M01 instants because it returns “the project”.",
+     "The answer excludes K, and possibly the instants, because only the explicitly named card fields are returned."
+    ],
+    "observer": "The caller sees different response fields and disclosure."
+   }
+  },
+  {
+   "unit": "50_public_apis_3_records.md:`public_op:projects.validate_project_reference`",
+   "subject": "validate answer contract",
+   "kind": "contradiction",
+   "text": "State 0 fixes `validate` field for field as “exists, active, and why not (`not_found`, `archived`)”, while State 5 outputs only “`active`, `archived` … or `not_found`.”",
+   "question": "Is the public answer the established object with `exists`, `active` and reason fields, or a single three-valued result?",
+   "options": [
+    "The field-for-field object required by R0-04.",
+    "A single enum-like result: `active`, `archived` or `not_found`."
+   ],
+   "default_guess": "Keep the field-for-field object required by R0-04.",
+   "witness": {
+    "initial": "A service validates an archived project.",
+    "events": [
+     "The service calls `validate_project_reference` with the archived project id."
+    ],
+    "outcomes": [
+     "It receives an object stating that the project exists, is not active and the reason is `archived`.",
+     "It receives only the value `archived`."
+    ],
+    "observer": "PresuPro, Client Portal or Cabinet parsing the response."
+   }
+  },
+  {
+   "unit": "50_public_apis_3_records.md:`public_op:projects.list_projects`",
+   "subject": "project-list item projection",
+   "kind": "output fields missing",
+   "text": "“One answer object: the active projects, and with them the archived ones when asked” fixes filtering and order but never fixes the fields of each project item.",
+   "question": "Which fields does each listed project carry: a full card, identity and alias only, context fields, or another summary projection?",
+   "options": [
+    "Full project cards including object and rooms.",
+    "A summary containing id, display name, alias, status, customer reference, revision and times.",
+    "Only identity fields needed by the caller."
+   ],
+   "default_guess": "Use an explicit summary projection without rooms, while including the fields Cabinet and the owner need.",
+   "witness": {
+    "initial": "Production holds an active project with an object address, rooms, customer link, display name and alias.",
+    "events": [
+     "Cabinet calls `list_projects` with its permitted token."
+    ],
+    "outcomes": [
+     "Each item is a full card and includes the address and rooms.",
+     "Each item is a compact project summary and omits the object and rooms."
+    ],
+    "observer": "Cabinet sees different data and response shapes."
+   }
+  },
+  {
+   "unit": "50_public_apis_3_records.md:`public_op:projects.list_rooms`",
+   "subject": "room-list item projection",
+   "kind": "output fields ambiguous",
+   "text": "“The rooms by name, then `room_id`” does not fix whether a listed Room includes its project, added instant and stored create request id, or only the id and name exposed by State 0.",
+   "question": "What exact fields does each room returned by `list_rooms` and embedded in project projections contain?",
+   "options": [
+    "Every M03 fact, including added instant and request id.",
+    "Room id, name and project only, as State 0’s action output states.",
+    "Room id and name only because the enclosing project supplies the project id."
+   ],
+   "default_guess": "Return room id, name and project, excluding the request id.",
+   "witness": {
+    "initial": "A room was added with request id K.",
+    "events": [
+     "Kernel lists the project’s rooms or reads the agent projection."
+    ],
+    "outcomes": [
+     "The room item contains K and its added instant because they are M03 facts.",
+     "The room item contains only its id, name and project."
+    ],
+    "observer": "Kernel and ultimately the agent see different fields."
+   }
+  },
+  {
+   "unit": "50_public_apis_3_records.md:`public_op:artifact_pointers.publish_pointer`",
+   "subject": "publish-pointer answer",
+   "kind": "contradictory output",
+   "text": "State 0 says publishing outputs the new pointer with its content digest when given, but State 5 enumerates only “id, type, version, status, owner service, publisher” and omits `uri`, `payload_ref`, digest, project and instants.",
+   "question": "Does the publish answer return the complete pointer, including its reference and digest, or only the enumerated summary?",
+   "options": [
+    "Return every externally readable M05 pointer field.",
+    "Return only the enumerated summary fields.",
+    "Return the summary plus reference and digest required by State 0."
+   ],
+   "default_guess": "Return the complete externally readable pointer, excluding its request id.",
+   "witness": {
+    "initial": "Kernel publishes an estimate pointer with a URI and digest D.",
+    "events": [
+     "The publish commits and its response is returned to Kernel."
+    ],
+    "outcomes": [
+     "The response contains the URI and D as part of the new pointer.",
+     "The response contains only id, type, version, status, owner service and publisher."
+    ],
+    "observer": "Kernel and the agent receive different publish results."
+   }
+  },
+  {
+   "unit": "50_public_apis_3_records.md:`public_op:artifact_pointers.list_pointers`",
+   "subject": "artifact-history request id",
+   "kind": "internal contradiction",
+   "text": "The output promises “every fact M05 holds” but its exhaustive-looking enumeration omits the request id, which M05 says every non-imported pointer holds.",
+   "question": "Is a pointer’s stored publish request id part of artifact-history and latest-pointer answers, or is it internal idempotency state that is never returned?",
+   "options": [
+    "Include the request id because it is an M05 fact.",
+    "Exclude it because the enumeration defines the public pointer projection.",
+    "Expose it only in the immediate publish response."
+   ],
+   "default_guess": "Keep the request id internal and exclude it from every pointer projection.",
+   "witness": {
+    "initial": "A pointer was published with request id K.",
+    "events": [
+     "The owner or a service lists the project’s pointers."
+    ],
+    "outcomes": [
+     "The history item includes K because every M05 fact is returned.",
+     "The history item omits K because it is absent from the enumerated fields."
+    ],
+    "observer": "The caller sees different artifact-history fields."
+   }
+  },
+  {
+   "unit": "50_public_apis_4_import_backups.md:`public_op:migration_import.read_import_mapping`",
+   "subject": "production ids disclosed in import mapping",
+   "kind": "contradiction",
+   "text": "The output says the mapping contains “every id production holds”, while A16 says it shows “every id that conflicts” with the picked records and ignores records belonging only to unpicked projects.",
+   "question": "Does the mapping expose all production project, room and pointer ids, or only ids that conflict with records brought by the picks?",
+   "options": [
+    "All ids production currently holds.",
+    "Only conflicting ids among the picked records, grouped by kind."
+   ],
+   "default_guess": "Return only ids that conflict with the picked records.",
+   "witness": {
+    "initial": "Production holds unrelated project P1; an uploaded file contains picked project P2 with no conflicting ids.",
+    "events": [
+     "The owner requests the mapping for P2."
+    ],
+    "outcomes": [
+     "The mapping lists P1’s id because it includes every id production holds.",
+     "The mapping lists no production id because P1 does not conflict with the pick."
+    ],
+    "observer": "The owner sees unrelated production identities in one implementation but not the other."
+   }
+  },
+  {
+   "unit": "50_public_apis_3_records.md:`public_op:projects.write_imported_project`",
+   "subject": "imported project without a customer",
+   "kind": "input optionality contradiction",
+   "text": "The operation requires “the `customer_ref` it links to”, while State 0 and M01 allow a Project to have no customer and A16 creates Customers only for picked projects that name a v1 value.",
+   "question": "May `write_imported_project` receive no `customer_ref` for a picked source project with no customer, and if so how is that represented?",
+   "options": [
+    "The input is optional and the imported project keeps no customer link.",
+    "Every imported project must be assigned a Customer during mapping.",
+    "A source project without a customer is malformed."
+   ],
+   "default_guess": "Allow an absent `customer_ref` and import the project without a customer link.",
+   "witness": {
+    "initial": "The VPS export contains a valid project with no `customer_ref`, which the product model permits.",
+    "events": [
+     "The owner picks that project and supplies its required new display name.",
+     "The clean mapping is confirmed.",
+     "`migration_import` calls `write_imported_project`."
+    ],
+    "outcomes": [
+     "The project is imported with no customer link.",
+     "The import cannot call the operation as specified, or refuses the project for lacking a customer."
+    ],
+    "observer": "The owner sees the permitted project imported or refused."
+   }
+  },
+  {
+   "unit": "50_public_apis_5_surfaces.md:`public_op:service_api.serve_service_request`",
+   "subject": "unknown operation handling",
+   "kind": "check-order contradiction",
+   "text": "The surface says inputs outside the wire format become `invalid_request` (`outside_closed_list`) at stage (4), while A09 and `perform_service_operation` require `service_may_call` at stage (1) and refuse an operation outside the service’s row as `not_permitted` whatever the request holds.",
+   "question": "What response is returned when a valid token presents an unknown or malformed operation identifier, and how can stage (1) run when no valid operation was decoded?",
+   "options": [
+    "Treat an unknown identifier as outside the service’s rights and return stage-(1) `not_permitted`.",
+    "Authenticate first, then treat it as a stage-(4) `invalid_request`.",
+    "Define transport decoding failures separately from operation refusals."
+   ],
+   "default_guess": "Authenticate the token, then return `invalid_request` for an unknown operation identifier.",
+   "witness": {
+    "initial": "PresuPro has a valid token.",
+    "events": [
+     "It sends a syntactically readable request whose operation identifier is `unknown_operation`."
+    ],
+    "outcomes": [
+     "`service_may_call` finds it outside PresuPro’s row and returns `not_permitted` at stage (1).",
+     "The surface marks the identifier outside the wire format and returns `invalid_request`/`outside_closed_list` at stage (4)."
+    ],
+    "observer": "The service receives a different refusal code and stage."
+   }
+  },
+  {
+   "unit": "50_public_apis_1_foundation.md:`public_op:store.copy_store_snapshot`",
+   "subject": "snapshot-copy failure effects",
+   "kind": "error-effect contradiction",
+   "text": "The closed `internal_error`/`transaction_failed` refusal says “nothing changed”, but `copy_store_snapshot` says that on failure “the path’s file is then whatever was written” under the temporary prefix.",
+   "question": "Does `transaction_failed` mean only that the Registry store was unchanged, or that the operation left no observable filesystem effect?",
+   "options": [
+    "It guarantees only that the store transaction did not change; temporary files may remain.",
+    "It guarantees no observable change and `copy_store_snapshot` must remove partial output before returning.",
+    "Use a distinct backup-copy error that explicitly permits a temporary partial file."
+   ],
+   "default_guess": "Use a distinct backup-copy failure result and permit a temporary file for the next run to remove.",
+   "witness": {
+    "initial": "A backup run has selected a temporary snapshot path.",
+    "events": [
+     "`copy_store_snapshot` writes part of the copy.",
+     "The filesystem write fails before completion."
+    ],
+    "outcomes": [
+     "The operation returns `transaction_failed` and a partial temporary file remains, as its own Errors section permits.",
+     "The operation returns `transaction_failed` with no file remaining because the closed refusal promises nothing changed."
+    ],
+    "observer": "The next backup run and the host administrator see whether the temporary file exists."
+   }
+  },
+  {
+   "unit": "50_public_apis_2_sessions.md:`public_op:owner_sessions.sign_out_owner`",
+   "subject": "session cookie after sign-out",
+   "kind": "effect unspecified",
+   "text": "The operation ends the server-side session, but neither it nor `owner_interface.serve_owner_request` says whether the browser’s session cookie is cleared or left holding the ended identity.",
+   "question": "What response-side cookie effect must the owner interface apply after a successful sign-out?",
+   "options": [
+    "Expire or delete the cookie immediately.",
+    "Leave the cookie and let the next request receive `no_owner_session`.",
+    "Replace it with a fresh anonymous cookie."
+   ],
+   "default_guess": "Expire the session cookie in the sign-out response.",
+   "witness": {
+    "initial": "The owner is signed in and the browser holds the session cookie.",
+    "events": [
+     "The owner submits sign-out successfully.",
+     "The browser inspects its cookie store or makes another request."
+    ],
+    "outcomes": [
+     "The sign-out response removes the cookie, so the next request carries none.",
+     "The cookie remains and the next request carries an ended session identity that Registry refuses."
+    ],
+    "observer": "The owner’s browser sees different cookie state."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"50_public_apis_1_foundation.md:`public_op:clock.today_in_utc`\",\"subject\":\"action instant and UTC date\",\"kind\":\"non-atomic readings\",\"text\":\"“Today is the UTC date of `recorded_now` read at the same moment” conflicts with separate calls to `clock.recorded_now` and `clock.today_in_utc`, with no operation that obtains both atomically.\",\"question\":\"How must `operations` obtain an action’s instant and matching UTC date so that crossing midnight cannot produce a date different from the instant’s date?\",\"options\":[\"Return the instant and its UTC date from one clock operation.\",\"Derive today from the already-read action instant.\",\"Allow two clock reads and define which reading controls the date.\"],\"default_guess\":\"Derive today from the single action instant returned by `recorded_now`.\",\"witness\":{\"initial\":\"The wall clock is immediately before 00:00 UTC and an owner action must compare a date.\",\"events\":[\"`operations` calls `clock.recorded_now` and receives 2026-11-01T23:59:59.999Z.\",\"UTC midnight passes.\",\"`operations` calls `clock.today_in_utc`.\"],\"outcomes\":[\"The action carries instant 2026-11-01T23:59:59.999Z and today 2026-11-01 because today is derived from that instant.\",\"The action carries the same instant but today 2026-11-02 because `today_in_utc` performs a second wall-clock read.\"],\"observer\":\"The owner sees whether a date accepted or refused at the UTC-day boundary.\"}},{\"unit\":\"50_public_apis_2_sessions.md:`public_op:owner_sessions.show_confirmation_step`\",\"subject\":\"confirmation input digest\",\"kind\":\"undefined canonicalization\",\"text\":\"“the digest of its inputs in a fixed order” does not name the digest algorithm, the fixed order, or the canonical representation of absent values, collections and structured inputs.\",\"question\":\"What exact canonical encoding, field order and digest algorithm must both `show_confirmation_step` and the caller of `take_confirmation` use?\",\"options\":[\"A specified canonical byte encoding and named digest algorithm.\",\"A structured equality comparison owned entirely by `owner_sessions`, with no externally computed digest.\",\"Module-private encodings, provided both calls receive the already-computed same digest.\"],\"default_guess\":\"Use a specified canonical encoding with SHA-256 and explicit field order.\",\"witness\":{\"initial\":\"An import confirmation contains two picks, optional aliases and Customer values.\",\"events\":[\"`operations` asks `owner_sessions` to show the confirmation step.\",\"The owner submits the unchanged form.\",\"`operations` computes the submission digest and calls `take_confirmation`.\"],\"outcomes\":[\"Both modules serialize absent aliases and ordered picks identically, so the submission is confirmed.\",\"One module omits absent fields or orders picks differently, so the unchanged submission is refused as `confirmation_bound_elsewhere`.\"],\"observer\":\"The owner sees an unchanged confirmation form accepted or refused.\"}},{\"unit\":\"50_public_apis_3_records.md:`public_op:projects.read_project_card`\",\"subject\":\"project-card output fields\",\"kind\":\"output shape ambiguous\",\"text\":\"“The project, its id first, with its object, its rooms … its revision” does not say whether “the project” includes all M01 facts, notably created and last-changed instants and the stored create request id.\",\"question\":\"What exact Project facts are returned in a project card, and is the create request id ever returned?\",\"options\":[\"Return every surviving M01 fact, including the request id.\",\"Return public project facts and timestamps but never the request id.\",\"Return only the fields explicitly enumerated in this operation.\"],\"default_guess\":\"Return the public project facts and timestamps, excluding the create request id.\",\"witness\":{\"initial\":\"A project was created with request id K and has not been archived.\",\"events\":[\"The owner or Client Portal calls `read_project_card`.\"],\"outcomes\":[\"The answer includes K and all M01 instants because it returns “the project”.\",\"The answer excludes K, and possibly the instants, because only the explicitly named card fields are returned.\"],\"observer\":\"The caller sees different response fields and disclosure.\"}},{\"unit\":\"50_public_apis_3_records.md:`public_op:projects.validate_project_reference`\",\"subject\":\"validate answer contract\",\"kind\":\"contradiction\",\"text\":\"State 0 fixes `validate` field for field as “exists, active, and why not (`not_found`, `archived`)”, while State 5 outputs only “`active`, `archived` … or `not_found`.”\",\"question\":\"Is the public answer the established object with `exists`, `active` and reason fields, or a single three-valued result?\",\"options\":[\"The field-for-field object required by R0-04.\",\"A single enum-like result: `active`, `archived` or `not_found`.\"],\"default_guess\":\"Keep the field-for-field object required by R0-04.\",\"witness\":{\"initial\":\"A service validates an archived project.\",\"events\":[\"The service calls `validate_project_reference` with the archived project id.\"],\"outcomes\":[\"It receives an object stating that the project exists, is not active and the reason is `archived`.\",\"It receives only the value `archived`.\"],\"observer\":\"PresuPro, Client Portal or Cabinet parsing the response.\"}},{\"unit\":\"50_public_apis_3_records.md:`public_op:projects.list_projects`\",\"subject\":\"project-list item projection\",\"kind\":\"output fields missing\",\"text\":\"“One answer object: the active projects, and with them the archived ones when asked” fixes filtering and order but never fixes the fields of each project item.\",\"question\":\"Which fields does each listed project carry: a full card, identity and alias only, context fields, or another summary projection?\",\"options\":[\"Full project cards including object and rooms.\",\"A summary containing id, display name, alias, status, customer reference, revision and times.\",\"Only identity fields needed by the caller.\"],\"default_guess\":\"Use an explicit summary projection without rooms, while including the fields Cabinet and the owner need.\",\"witness\":{\"initial\":\"Production holds an active project with an object address, rooms, customer link, display name and alias.\",\"events\":[\"Cabinet calls `list_projects` with its permitted token.\"],\"outcomes\":[\"Each item is a full card and includes the address and rooms.\",\"Each item is a compact project summary and omits the object and rooms.\"],\"observer\":\"Cabinet sees different data and response shapes.\"}},{\"unit\":\"50_public_apis_3_records.md:`public_op:projects.list_rooms`\",\"subject\":\"room-list item projection\",\"kind\":\"output fields ambiguous\",\"text\":\"“The rooms by name, then `room_id`” does not fix whether a listed Room includes its project, added instant and stored create request id, or only the id and name exposed by State 0.\",\"question\":\"What exact fields does each room returned by `list_rooms` and embedded in project projections contain?\",\"options\":[\"Every M03 fact, including added instant and request id.\",\"Room id, name and project only, as State 0’s action output states.\",\"Room id and name only because the enclosing project supplies the project id.\"],\"default_guess\":\"Return room id, name and project, excluding the request id.\",\"witness\":{\"initial\":\"A room was added with request id K.\",\"events\":[\"Kernel lists the project’s rooms or reads the agent projection.\"],\"outcomes\":[\"The room item contains K and its added instant because they are M03 facts.\",\"The room item contains only its id, name and project.\"],\"observer\":\"Kernel and ultimately the agent see different fields.\"}},{\"unit\":\"50_public_apis_3_records.md:`public_op:artifact_pointers.publish_pointer`\",\"subject\":\"publish-pointer answer\",\"kind\":\"contradictory output\",\"text\":\"State 0 says publishing outputs the new pointer with its content digest when given, but State 5 enumerates only “id, type, version, status, owner service, publisher” and omits `uri`, `payload_ref`, digest, project and instants.\",\"question\":\"Does the publish answer return the complete pointer, including its reference and digest, or only the enumerated summary?\",\"options\":[\"Return every externally readable M05 pointer field.\",\"Return only the enumerated summary fields.\",\"Return the summary plus reference and digest required by State 0.\"],\"default_guess\":\"Return the complete externally readable pointer, excluding its request id.\",\"witness\":{\"initial\":\"Kernel publishes an estimate pointer with a URI and digest D.\",\"events\":[\"The publish commits and its response is returned to Kernel.\"],\"outcomes\":[\"The response contains the URI and D as part of the new pointer.\",\"The response contains only id, type, version, status, owner service and publisher.\"],\"observer\":\"Kernel and the agent receive different publish results.\"}},{\"unit\":\"50_public_apis_3_records.md:`public_op:artifact_pointers.list_pointers`\",\"subject\":\"artifact-history request id\",\"kind\":\"internal contradiction\",\"text\":\"The output promises “every fact M05 holds” but its exhaustive-looking enumeration omits the request id, which M05 says every non-imported pointer holds.\",\"question\":\"Is a pointer’s stored publish request id part of artifact-history and latest-pointer answers, or is it internal idempotency state that is never returned?\",\"options\":[\"Include the request id because it is an M05 fact.\",\"Exclude it because the enumeration defines the public pointer projection.\",\"Expose it only in the immediate publish response.\"],\"default_guess\":\"Keep the request id internal and exclude it from every pointer projection.\",\"witness\":{\"initial\":\"A pointer was published with request id K.\",\"events\":[\"The owner or a service lists the project’s pointers.\"],\"outcomes\":[\"The history item includes K because every M05 fact is returned.\",\"The history item omits K because it is absent from the enumerated fields.\"],\"observer\":\"The caller sees different artifact-history fields.\"}},{\"unit\":\"50_public_apis_4_import_backups.md:`public_op:migration_import.read_import_mapping`\",\"subject\":\"production ids disclosed in import mapping\",\"kind\":\"contradiction\",\"text\":\"The output says the mapping contains “every id production holds”, while A16 says it shows “every id that conflicts” with the picked records and ignores records belonging only to unpicked projects.\",\"question\":\"Does the mapping expose all production project, room and pointer ids, or only ids that conflict with records brought by the picks?\",\"options\":[\"All ids production currently holds.\",\"Only conflicting ids among the picked records, grouped by kind.\"],\"default_guess\":\"Return only ids that conflict with the picked records.\",\"witness\":{\"initial\":\"Production holds unrelated project P1; an uploaded file contains picked project P2 with no conflicting ids.\",\"events\":[\"The owner requests the mapping for P2.\"],\"outcomes\":[\"The mapping lists P1’s id because it includes every id production holds.\",\"The mapping lists no production id because P1 does not conflict with the pick.\"],\"observer\":\"The owner sees unrelated production identities in one implementation but not the other.\"}},{\"unit\":\"50_public_apis_3_records.md:`public_op:projects.write_imported_project`\",\"subject\":\"imported project without a customer\",\"kind\":\"input optionality contradiction\",\"text\":\"The operation requires “the `customer_ref` it links to”, while State 0 and M01 allow a Project to have no customer and A16 creates Customers only for picked projects that name a v1 value.\",\"question\":\"May `write_imported_project` receive no `customer_ref` for a picked source project with no customer, and if so how is that represented?\",\"options\":[\"The input is optional and the imported project keeps no customer link.\",\"Every imported project must be assigned a Customer during mapping.\",\"A source project without a customer is malformed.\"],\"default_guess\":\"Allow an absent `customer_ref` and import the project without a customer link.\",\"witness\":{\"initial\":\"The VPS export contains a valid project with no `customer_ref`, which the product model permits.\",\"events\":[\"The owner picks that project and supplies its required new display name.\",\"The clean mapping is confirmed.\",\"`migration_import` calls `write_imported_project`.\"],\"outcomes\":[\"The project is imported with no customer link.\",\"The import cannot call the operation as specified, or refuses the project for lacking a customer.\"],\"observer\":\"The owner sees the permitted project imported or refused.\"}},{\"unit\":\"50_public_apis_5_surfaces.md:`public_op:service_api.serve_service_request`\",\"subject\":\"unknown operation handling\",\"kind\":\"check-order contradiction\",\"text\":\"The surface says inputs outside the wire format become `invalid_request` (`outside_closed_list`) at stage (4), while A09 and `perform_service_operation` require `service_may_call` at stage (1) and refuse an operation outside the service’s row as `not_permitted` whatever the request holds.\",\"question\":\"What response is returned when a valid token presents an unknown or malformed operation identifier, and how can stage (1) run when no valid operation was decoded?\",\"options\":[\"Treat an unknown identifier as outside the service’s rights and return stage-(1) `not_permitted`.\",\"Authenticate first, then treat it as a stage-(4) `invalid_request`.\",\"Define transport decoding failures separately from operation refusals.\"],\"default_guess\":\"Authenticate the token, then return `invalid_request` for an unknown operation identifier.\",\"witness\":{\"initial\":\"PresuPro has a valid token.\",\"events\":[\"It sends a syntactically readable request whose operation identifier is `unknown_operation`.\"],\"outcomes\":[\"`service_may_call` finds it outside PresuPro’s row and returns `not_permitted` at stage (1).\",\"The surface marks the identifier outside the wire format and returns `invalid_request`/`outside_closed_list` at stage (4).\"],\"observer\":\"The service receives a different refusal code and stage.\"}},{\"unit\":\"50_public_apis_1_foundation.md:`public_op:store.copy_store_snapshot`\",\"subject\":\"snapshot-copy failure effects\",\"kind\":\"error-effect contradiction\",\"text\":\"The closed `internal_error`/`transaction_failed` refusal says “nothing changed”, but `copy_store_snapshot` says that on failure “the path’s file is then whatever was written” under the temporary prefix.\",\"question\":\"Does `transaction_failed` mean only that the Registry store was unchanged, or that the operation left no observable filesystem effect?\",\"options\":[\"It guarantees only that the store transaction did not change; temporary files may remain.\",\"It guarantees no observable change and `copy_store_snapshot` must remove partial output before returning.\",\"Use a distinct backup-copy error that explicitly permits a temporary partial file.\"],\"default_guess\":\"Use a distinct backup-copy failure result and permit a temporary file for the next run to remove.\",\"witness\":{\"initial\":\"A backup run has selected a temporary snapshot path.\",\"events\":[\"`copy_store_snapshot` writes part of the copy.\",\"The filesystem write fails before completion.\"],\"outcomes\":[\"The operation returns `transaction_failed` and a partial temporary file remains, as its own Errors section permits.\",\"The operation returns `transaction_failed` with no file remaining because the closed refusal promises nothing changed.\"],\"observer\":\"The next backup run and the host administrator see whether the temporary file exists.\"}},{\"unit\":\"50_public_apis_2_sessions.md:`public_op:owner_sessions.sign_out_owner`\",\"subject\":\"session cookie after sign-out\",\"kind\":\"effect unspecified\",\"text\":\"The operation ends the server-side session, but neither it nor `owner_interface.serve_owner_request` says whether the browser’s session cookie is cleared or left holding the ended identity.\",\"question\":\"What response-side cookie effect must the owner interface apply after a successful sign-out?\",\"options\":[\"Expire or delete the cookie immediately.\",\"Leave the cookie and let the next request receive `no_owner_session`.\",\"Replace it with a fresh anonymous cookie.\"],\"default_guess\":\"Expire the session cookie in the sign-out response.\",\"witness\":{\"initial\":\"The owner is signed in and the browser holds the session cookie.\",\"events\":[\"The owner submits sign-out successfully.\",\"The browser inspects its cookie store or makes another request.\"],\"outcomes\":[\"The sign-out response removes the cookie, so the next request carries none.\",\"The cookie remains and the next request carries an ended session identity that Registry refuses.\"],\"observer\":\"The owner’s browser sees different cookie state.\"}}]}",
+ "set_aside": []
+}

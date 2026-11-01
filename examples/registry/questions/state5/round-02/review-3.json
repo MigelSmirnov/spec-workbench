@@ -1,0 +1,199 @@
+{
+ "open_points": [
+  {
+   "unit": "50_public_apis_1_foundation.md:`public_op:clock.today_in_utc`",
+   "subject": "action instant and UTC date",
+   "kind": "non-atomic readings",
+   "text": "“Today is the UTC date of `recorded_now` read at the same moment” conflicts with the separate public operations and with `operations` reading the instant and today separately.",
+   "question": "How must `operations` obtain an action’s instant and matching UTC date so that midnight cannot separate them?",
+   "options": [
+    "Derive today from the action instant returned by `recorded_now`.",
+    "Provide one atomic operation returning both values.",
+    "Call the two operations separately and allow the date to differ from the instant’s UTC date."
+   ],
+   "default_guess": "Derive today from the recorded action instant.",
+   "witness": {
+    "initial": "A Customer exists and UTC time is immediately before midnight.",
+    "events": [
+     "The owner ends the relationship without supplying a date.",
+     "`operations` reads `clock.recorded_now` just before midnight.",
+     "UTC midnight passes before `clock.today_in_utc` is read."
+    ],
+    "outcomes": [
+     "The relationship end date is the UTC date of the action instant.",
+     "The relationship end date is the following UTC date returned by the later call."
+    ],
+    "observer": "The owner reading the Customer and the resulting audit history."
+   }
+  },
+  {
+   "unit": "50_public_apis_1_foundation.md:`public_op:configuration.load_configuration`",
+   "subject": "configuration environment schema",
+   "kind": "unspecified input contract",
+   "text": "“the set of environment variables whose names begin with `REGISTRY_`” and “each well formed” do not name the accepted variables or define the well-formed representation of any item.",
+   "question": "What are the exact environment-variable names and accepted textual forms for every location, key, credential and service token?",
+   "options": [
+    "Names and parsers chosen by the State 6 author.",
+    "A fixed environment schema declared by these texts."
+   ],
+   "default_guess": "Declare explicit names and parsing rules in State 6.",
+   "witness": {
+    "initial": "All required configuration values exist, with the store location supplied as `REGISTRY_STORE_LOCATION`.",
+    "events": [
+     "The host starts Registry."
+    ],
+    "outcomes": [
+     "An implementation expecting `REGISTRY_STORE_LOCATION` accepts the configuration and continues startup.",
+     "An implementation expecting another unlisted name such as `REGISTRY_STORE_PATH` treats `REGISTRY_STORE_LOCATION` as unknown and stops startup."
+    ],
+    "observer": "The host administrator."
+   }
+  },
+  {
+   "unit": "50_public_apis_1_foundation.md:`public_op:store.open_store`",
+   "subject": "undeletable store temporary file when the real store exists",
+   "kind": "contradictory failure condition",
+   "text": "“A leftover file of the store's temporary name is removed” is unconditional, while the error is only “a leftover it cannot remove while the store is absent”; A17 likewise makes inability to remove fatal only when the store is absent.",
+   "question": "When a valid store exists but its leftover temporary file cannot be removed, does `open_store` open the valid store or fail startup?",
+   "options": [
+    "Open the existing store and leave the temporary file.",
+    "Fail because the temporary-file removal postcondition was not met."
+   ],
+   "default_guess": "Open the existing valid store, matching A17’s explicit conditional failure.",
+   "witness": {
+    "initial": "The configured store is valid and writable, and a leftover temporary-name file exists but cannot be removed.",
+    "events": [
+     "The host starts Registry.",
+     "`store.open_store` attempts to remove the leftover file."
+    ],
+    "outcomes": [
+     "Startup proceeds using the valid existing store, leaving the temporary file.",
+     "`open_store` returns a diagnostic and startup stops."
+    ],
+    "observer": "The host administrator and every caller waiting for Registry."
+   }
+  },
+  {
+   "unit": "50_public_apis_2_sessions.md:`public_op:owner_sessions.show_confirmation_step`",
+   "subject": "confirmation input digest",
+   "kind": "unspecified cross-module encoding",
+   "text": "“the digest of its inputs in a fixed order” does not state the order or canonical encoding, while `show_confirmation_step` receives the inputs and `take_confirmation` receives a digest supplied by its caller.",
+   "question": "What exact canonical representation and ordering must `owner_sessions` and `operations` use to compute the same confirmation-input digest, including absent values, blank optional values and collections?",
+   "options": [
+    "Canonicalize normalized domain values with a specified field and collection order.",
+    "Hash the raw form fields in transport order.",
+    "Let both modules choose an internal encoding independently."
+   ],
+   "default_guess": "Use one specified canonical encoding of normalized domain values.",
+   "witness": {
+    "initial": "An import mapping has an optional alias represented as absent.",
+    "events": [
+     "The confirmation step is shown and `owner_sessions` binds a digest of the mapping inputs.",
+     "The owner submits the unchanged form, where the optional alias arrives as a blank field.",
+     "`operations` computes the digest passed to `take_confirmation`."
+    ],
+    "outcomes": [
+     "Blank and absent canonicalize alike, so the unchanged confirmation is accepted.",
+     "The blank transport value hashes differently from absence, so the submission is refused as `confirmation_bound_elsewhere`."
+    ],
+    "observer": "The owner submitting the confirmation."
+   }
+  },
+  {
+   "unit": "50_public_apis_2_sessions.md:`public_op:agent_sessions.set_active_project`",
+   "subject": "setting an unknown active project",
+   "kind": "contradictory refusal",
+   "text": "A04 requires stage (3) to check every named record exists and `flow:agent_session_access` lists an unknown project at stage (3), but this operation lists only `unknown_session`, `not_granted` and `archived` and takes merely “whether it is archived, from `projects`.”",
+   "question": "If the owner names a nonexistent project as active, is the result `not_found` (`unknown_project`) or `refused` (`not_granted`)?",
+   "options": [
+    "`not_found` with `unknown_project` at stage (3).",
+    "`refused` with `not_granted` at stage (6)."
+   ],
+   "default_guess": "Return `not_found` (`unknown_project`) because existence is an earlier stage.",
+   "witness": {
+    "initial": "Session S exists at the current access version; project id Q does not exist and is not in S’s granted set.",
+    "events": [
+     "The owner asks to make Q active in S using the current access version."
+    ],
+    "outcomes": [
+     "The stage-(3) existence rule returns `not_found` with `unknown_project`.",
+     "`set_active_project` tests membership and returns `refused` with `not_granted`."
+    ],
+    "observer": "The owner interface."
+   }
+  },
+  {
+   "unit": "50_public_apis_2_sessions.md:`public_op:agent_sessions.revoke_project`",
+   "subject": "revoking an unknown project",
+   "kind": "contradictory refusal",
+   "text": "A04 requires stage (3) to check every named record exists and `flow:agent_session_access` lists an unknown project at stage (3), while `revoke_project` has no project-existence input or `unknown_project` error and says a project outside the set is `not_granted`.",
+   "question": "If the owner tries to revoke a project id that does not exist, is it `not_found` (`unknown_project`) or `refused` (`not_granted`)?",
+   "options": [
+    "`not_found` with `unknown_project` at stage (3).",
+    "`refused` with `not_granted` at stage (6)."
+   ],
+   "default_guess": "Return `not_found` (`unknown_project`) because existence precedes membership.",
+   "witness": {
+    "initial": "Session S exists at the current access version; project id Q does not exist and is not in S’s granted set.",
+    "events": [
+     "The owner asks to revoke Q from S."
+    ],
+    "outcomes": [
+     "The stage-(3) existence check returns `not_found` with `unknown_project`.",
+     "The operation sees Q is outside the set and returns `refused` with `not_granted`."
+    ],
+    "observer": "The owner interface."
+   }
+  },
+  {
+   "unit": "50_public_apis_3_records.md:`public_op:artifact_pointers.list_pointers`",
+   "subject": "request ids in artifact history",
+   "kind": "contradictory output shape",
+   "text": "The output promises “each with every fact M05 holds” but its exhaustive-looking list omits M05’s stored publish request id.",
+   "question": "Does each pointer in artifact history expose its publish request id?",
+   "options": [
+    "Include it because it is a fact M05 holds.",
+    "Omit it because it is absent from the enumerated output fields."
+   ],
+   "default_guess": "Omit the idempotency request id from read projections.",
+   "witness": {
+    "initial": "A pointer was published with request id R and remains in the project’s history.",
+    "events": [
+     "An allowed caller lists the project’s pointers."
+    ],
+    "outcomes": [
+     "The returned pointer includes R because every M05 fact is returned.",
+     "The returned pointer omits R because only the enumerated fields are returned."
+    ],
+    "observer": "The caller reading artifact history."
+   }
+  },
+  {
+   "unit": "50_public_apis_4_import_backups.md:`public_op:migration_import.read_import_mapping`",
+   "subject": "digest returned for refused uploads",
+   "kind": "contradictory output and processing",
+   "text": "The outputs say “Always the file's digest, the SHA-256 of its bytes,” while an oversized file is “refused at upload, before it is read” and refusals otherwise contain only their code, stage and kinds.",
+   "question": "Does a refused oversized or unreadable upload return a computed file digest, and must Registry read/hash its bytes before refusing it?",
+   "options": [
+    "Return the digest even on refusal, requiring the bytes to be hashed.",
+    "Return only the refusal and do not compute a digest.",
+    "Compute the digest internally but omit it from the refusal."
+   ],
+   "default_guess": "Return only the refusal and avoid hashing an oversized file.",
+   "witness": {
+    "initial": "The owner has a valid session and uploads a file larger than the declared limit.",
+    "events": [
+     "`migration_import.read_import_mapping` checks the upload size."
+    ],
+    "outcomes": [
+     "Registry hashes the bytes and returns the digest together with `file_too_large`, following “Always”.",
+     "Registry refuses before reading or hashing the bytes and returns only `invalid_request` with `file_too_large`."
+    ],
+    "observer": "The owner interface and an operator measuring work done on the oversized upload."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"50_public_apis_1_foundation.md:`public_op:clock.today_in_utc`\",\"subject\":\"action instant and UTC date\",\"kind\":\"non-atomic readings\",\"text\":\"“Today is the UTC date of `recorded_now` read at the same moment” conflicts with the separate public operations and with `operations` reading the instant and today separately.\",\"question\":\"How must `operations` obtain an action’s instant and matching UTC date so that midnight cannot separate them?\",\"options\":[\"Derive today from the action instant returned by `recorded_now`.\",\"Provide one atomic operation returning both values.\",\"Call the two operations separately and allow the date to differ from the instant’s UTC date.\"],\"default_guess\":\"Derive today from the recorded action instant.\",\"witness\":{\"initial\":\"A Customer exists and UTC time is immediately before midnight.\",\"events\":[\"The owner ends the relationship without supplying a date.\",\"`operations` reads `clock.recorded_now` just before midnight.\",\"UTC midnight passes before `clock.today_in_utc` is read.\"],\"outcomes\":[\"The relationship end date is the UTC date of the action instant.\",\"The relationship end date is the following UTC date returned by the later call.\"],\"observer\":\"The owner reading the Customer and the resulting audit history.\"}},{\"unit\":\"50_public_apis_1_foundation.md:`public_op:configuration.load_configuration`\",\"subject\":\"configuration environment schema\",\"kind\":\"unspecified input contract\",\"text\":\"“the set of environment variables whose names begin with `REGISTRY_`” and “each well formed” do not name the accepted variables or define the well-formed representation of any item.\",\"question\":\"What are the exact environment-variable names and accepted textual forms for every location, key, credential and service token?\",\"options\":[\"Names and parsers chosen by the State 6 author.\",\"A fixed environment schema declared by these texts.\"],\"default_guess\":\"Declare explicit names and parsing rules in State 6.\",\"witness\":{\"initial\":\"All required configuration values exist, with the store location supplied as `REGISTRY_STORE_LOCATION`.\",\"events\":[\"The host starts Registry.\"],\"outcomes\":[\"An implementation expecting `REGISTRY_STORE_LOCATION` accepts the configuration and continues startup.\",\"An implementation expecting another unlisted name such as `REGISTRY_STORE_PATH` treats `REGISTRY_STORE_LOCATION` as unknown and stops startup.\"],\"observer\":\"The host administrator.\"}},{\"unit\":\"50_public_apis_1_foundation.md:`public_op:store.open_store`\",\"subject\":\"undeletable store temporary file when the real store exists\",\"kind\":\"contradictory failure condition\",\"text\":\"“A leftover file of the store's temporary name is removed” is unconditional, while the error is only “a leftover it cannot remove while the store is absent”; A17 likewise makes inability to remove fatal only when the store is absent.\",\"question\":\"When a valid store exists but its leftover temporary file cannot be removed, does `open_store` open the valid store or fail startup?\",\"options\":[\"Open the existing store and leave the temporary file.\",\"Fail because the temporary-file removal postcondition was not met.\"],\"default_guess\":\"Open the existing valid store, matching A17’s explicit conditional failure.\",\"witness\":{\"initial\":\"The configured store is valid and writable, and a leftover temporary-name file exists but cannot be removed.\",\"events\":[\"The host starts Registry.\",\"`store.open_store` attempts to remove the leftover file.\"],\"outcomes\":[\"Startup proceeds using the valid existing store, leaving the temporary file.\",\"`open_store` returns a diagnostic and startup stops.\"],\"observer\":\"The host administrator and every caller waiting for Registry.\"}},{\"unit\":\"50_public_apis_2_sessions.md:`public_op:owner_sessions.show_confirmation_step`\",\"subject\":\"confirmation input digest\",\"kind\":\"unspecified cross-module encoding\",\"text\":\"“the digest of its inputs in a fixed order” does not state the order or canonical encoding, while `show_confirmation_step` receives the inputs and `take_confirmation` receives a digest supplied by its caller.\",\"question\":\"What exact canonical representation and ordering must `owner_sessions` and `operations` use to compute the same confirmation-input digest, including absent values, blank optional values and collections?\",\"options\":[\"Canonicalize normalized domain values with a specified field and collection order.\",\"Hash the raw form fields in transport order.\",\"Let both modules choose an internal encoding independently.\"],\"default_guess\":\"Use one specified canonical encoding of normalized domain values.\",\"witness\":{\"initial\":\"An import mapping has an optional alias represented as absent.\",\"events\":[\"The confirmation step is shown and `owner_sessions` binds a digest of the mapping inputs.\",\"The owner submits the unchanged form, where the optional alias arrives as a blank field.\",\"`operations` computes the digest passed to `take_confirmation`.\"],\"outcomes\":[\"Blank and absent canonicalize alike, so the unchanged confirmation is accepted.\",\"The blank transport value hashes differently from absence, so the submission is refused as `confirmation_bound_elsewhere`.\"],\"observer\":\"The owner submitting the confirmation.\"}},{\"unit\":\"50_public_apis_2_sessions.md:`public_op:agent_sessions.set_active_project`\",\"subject\":\"setting an unknown active project\",\"kind\":\"contradictory refusal\",\"text\":\"A04 requires stage (3) to check every named record exists and `flow:agent_session_access` lists an unknown project at stage (3), but this operation lists only `unknown_session`, `not_granted` and `archived` and takes merely “whether it is archived, from `projects`.”\",\"question\":\"If the owner names a nonexistent project as active, is the result `not_found` (`unknown_project`) or `refused` (`not_granted`)?\",\"options\":[\"`not_found` with `unknown_project` at stage (3).\",\"`refused` with `not_granted` at stage (6).\"],\"default_guess\":\"Return `not_found` (`unknown_project`) because existence is an earlier stage.\",\"witness\":{\"initial\":\"Session S exists at the current access version; project id Q does not exist and is not in S’s granted set.\",\"events\":[\"The owner asks to make Q active in S using the current access version.\"],\"outcomes\":[\"The stage-(3) existence rule returns `not_found` with `unknown_project`.\",\"`set_active_project` tests membership and returns `refused` with `not_granted`.\"],\"observer\":\"The owner interface.\"}},{\"unit\":\"50_public_apis_2_sessions.md:`public_op:agent_sessions.revoke_project`\",\"subject\":\"revoking an unknown project\",\"kind\":\"contradictory refusal\",\"text\":\"A04 requires stage (3) to check every named record exists and `flow:agent_session_access` lists an unknown project at stage (3), while `revoke_project` has no project-existence input or `unknown_project` error and says a project outside the set is `not_granted`.\",\"question\":\"If the owner tries to revoke a project id that does not exist, is it `not_found` (`unknown_project`) or `refused` (`not_granted`)?\",\"options\":[\"`not_found` with `unknown_project` at stage (3).\",\"`refused` with `not_granted` at stage (6).\"],\"default_guess\":\"Return `not_found` (`unknown_project`) because existence precedes membership.\",\"witness\":{\"initial\":\"Session S exists at the current access version; project id Q does not exist and is not in S’s granted set.\",\"events\":[\"The owner asks to revoke Q from S.\"],\"outcomes\":[\"The stage-(3) existence check returns `not_found` with `unknown_project`.\",\"The operation sees Q is outside the set and returns `refused` with `not_granted`.\"],\"observer\":\"The owner interface.\"}},{\"unit\":\"50_public_apis_3_records.md:`public_op:artifact_pointers.list_pointers`\",\"subject\":\"request ids in artifact history\",\"kind\":\"contradictory output shape\",\"text\":\"The output promises “each with every fact M05 holds” but its exhaustive-looking list omits M05’s stored publish request id.\",\"question\":\"Does each pointer in artifact history expose its publish request id?\",\"options\":[\"Include it because it is a fact M05 holds.\",\"Omit it because it is absent from the enumerated output fields.\"],\"default_guess\":\"Omit the idempotency request id from read projections.\",\"witness\":{\"initial\":\"A pointer was published with request id R and remains in the project’s history.\",\"events\":[\"An allowed caller lists the project’s pointers.\"],\"outcomes\":[\"The returned pointer includes R because every M05 fact is returned.\",\"The returned pointer omits R because only the enumerated fields are returned.\"],\"observer\":\"The caller reading artifact history.\"}},{\"unit\":\"50_public_apis_4_import_backups.md:`public_op:migration_import.read_import_mapping`\",\"subject\":\"digest returned for refused uploads\",\"kind\":\"contradictory output and processing\",\"text\":\"The outputs say “Always the file's digest, the SHA-256 of its bytes,” while an oversized file is “refused at upload, before it is read” and refusals otherwise contain only their code, stage and kinds.\",\"question\":\"Does a refused oversized or unreadable upload return a computed file digest, and must Registry read/hash its bytes before refusing it?\",\"options\":[\"Return the digest even on refusal, requiring the bytes to be hashed.\",\"Return only the refusal and do not compute a digest.\",\"Compute the digest internally but omit it from the refusal.\"],\"default_guess\":\"Return only the refusal and avoid hashing an oversized file.\",\"witness\":{\"initial\":\"The owner has a valid session and uploads a file larger than the declared limit.\",\"events\":[\"`migration_import.read_import_mapping` checks the upload size.\"],\"outcomes\":[\"Registry hashes the bytes and returns the digest together with `file_too_large`, following “Always”.\",\"Registry refuses before reading or hashing the bytes and returns only `invalid_request` with `file_too_large`.\"],\"observer\":\"The owner interface and an operator measuring work done on the oversized upload.\"}}]}",
+ "set_aside": []
+}
