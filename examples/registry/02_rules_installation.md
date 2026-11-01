@@ -159,10 +159,17 @@ closure is the one proof of success.
    first missing one in rule 1's order; every other item of rule 1 present; each well formed; each secret's length (rule 3);
    their distinctness (rule 4); the store and backup location apart (rule
    5); the backup location writable, by a probe file under the temporary
-   prefix (A18 rule 5); the store opening, or made new (rule 5). Within one
+   prefix (A18 rule 5); the store opening, or made new (rule 5); last, the
+   listener of each surface opened at the address the release fixes — the
+   configuration names none (rule 1) — one that cannot be opened failing the
+   start and closing those already opened. Within one
    check, items go in the order rule 1 lists them. A failed start leaves no
-   file it made but a probe it could not remove, which the next backup run
-   removes with the other temporary files (A18 rule 4); a start leaves the
+   file it made but one it could not remove: a probe, which the next backup
+   run removes with the other temporary files (A18 rule 4); a file of the
+   store's temporary name, which the next start removes first (rule 5); or a
+   store it made new for a start a listener then failed, which it removes —
+   one it cannot remove is an empty store of the release's version, which the
+   next start opens as any store. A start leaves the
    backup location's other files as they are.
 3. A secret — each token, the owner credential and the backup key — is at
    least 32 bytes long; a shorter one fails the start. Registry checks the
@@ -221,6 +228,9 @@ for secrets s1 != s2 in config: value(s1) != value(s2) and len >= 32 bytes
 2. Two services with one token stop the start.
 3. A 16-byte token stops the start.
 4. The start diagnostic never contains a secret's value.
+5. A start whose store is made new and whose listener then cannot be opened
+   stops, serves nothing and leaves no store; one whose listener cannot be
+   opened over an existing store leaves that store as it was.
 
 ### Consequence
 
@@ -491,9 +501,9 @@ Security review: PERFORMED
 - concurrency: APPLICABLE; references: A01, A04, A07, A12, A13, A14, A16; affected: M01, M04, M05, M06, M09, M10, M11, concurrent creates, corrections, publishes, session changes, single-use confirmation values, confirmations bound to no revision, resubmitted forms on records without a revision, creates racing the erasure that removes their request id, re-uploads replacing a confirmed file, concurrent import confirmations
 - dependencies: APPLICABLE; references: A20; affected: Registry release, its Python dependencies
 
-Performed again on 2026-11-01, after that day's changes to A01, A04, A13 and A16
-reopened it (rule 2): every category naming them was reviewed, and no outcome
-and no reference changed.
+Performed again on 2026-11-01, after that day's changes to A01, A04, A13, A16
+and A17 reopened it (rule 2): every category naming them was reviewed, and no
+outcome and no reference changed.
 
 ### Consequence
 
