@@ -218,14 +218,13 @@ rule 7).
 3. **Sign out.** `capability:owner_sessions.sign_out_owner` takes the import
    lock, then the session's lock, and in its turn among the session's changes
    ends the session and drops its pending confirmation and its uploaded file
-   (M11). The session's changes are ordered by its lock (A13 rule 2): a
-   change that took the lock before the sign-out — admitted before it —
-   completes, its change to the store included, even when the sign-out
-   arrives while it runs, and leaves nothing in the ended session; a change
-   that takes the lock after the sign-out finds the session ended and is
-   refused at the session check, so a confirmation the sign-out dropped is
-   never needed by a change still to run. A request arriving after the
-   sign-out is refused at the session check. A sign-out goes on when the import is closed (A16
+   (M11). It is applied in turn with the session's other changes (A13 rule
+   2): it takes the session's lock only after every change of the session
+   that passed the session check before the sign-out arrived has had its
+   turn, so each of them — admitted before it — completes, its change to the
+   store included, with the pending confirmation and the uploaded file it may
+   need still in place, and leaves nothing in the ended session. A request
+   arriving after the sign-out is refused at the session check. A sign-out goes on when the import is closed (A16
    rule 2).
 4. **Expire.** `capability:owner_sessions.end_expired_sessions`, every 60
    seconds (`flow:start_instance`), takes the import lock and then each
@@ -928,7 +927,9 @@ minted `customer_ref`.
 - A confirmation refused because the closure exists — made by any import
   accepted before it, of another session or of this one: nothing applied,
   every upload already dropped, and the import refused for good; no step is
-  shown again (rule 8). This outcome comes before every other.
+  shown again (rule 8). Stage (1) comes first — the session, the CSRF value
+  and the confirmation value, used up when it was carried (A13 rule 6) — and
+  this refusal comes before every other of the import's own checks.
 - A confirmation refused while no closure exists: nothing applied; the file
   stays kept unless a new upload or the session's end dropped it. When the
   pending value was used up or cleared, the step must be shown again; a
