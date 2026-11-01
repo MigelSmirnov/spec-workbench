@@ -347,7 +347,7 @@ Runtime state only.
 ### Owner
 
 `module:owner_sessions`. The pass, every 60 seconds from the start, that
-ends every session past a limit (A13 rule 2).
+ends every session that has reached a limit (A13 rule 2).
 
 ### Callers
 
@@ -363,12 +363,15 @@ How many sessions it ended.
 
 ### Observable effect
 
-Each session past 8 hours or 30 minutes without a request ends, with its
-pending confirmation and its uploaded file.
+Each session that has reached a limit — 8 hours since sign-in or 30
+minutes without a request, the reading equal to the limit included — ends,
+with its pending confirmation and its uploaded file.
 
 ### Enforces
 
-The pass alone ends sessions by their limits, taking the import lock and
+A session that has reached a limit serves no request from that moment
+(A13 rule 2), the same moment `admit_owner_request` uses. The pass alone
+ends sessions by their limits, taking the import lock and
 then each session's lock and deciding under them, each session by a reading
 of `clock.monotonic_reading` taken once its lock is held (A13 rule 2).
 

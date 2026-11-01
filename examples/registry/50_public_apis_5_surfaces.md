@@ -164,8 +164,12 @@ None of its own: it refuses nothing. An operation name that is not one of
 A09 rule 2's reaches `operations`, which refuses it at stage (1) as outside
 the service's rights (`not_permitted`, `outside_service_rights`), whatever
 token it carries once the token is valid; inputs that are not of the wire
-format are answered stage (1) first and then `invalid_request`
-(`outside_closed_list`) at stage (4). Every refusal is `operations`'.
+format — a body that cannot be read as it, a field it does not declare, a
+value of another shape than its field's — are answered stage (1) first and
+then `invalid_request` (`outside_closed_list`) at stage (4). A declared
+field left out is not a wire-format failure: it reaches the operation as
+absent, and its module answers it (`missing_value`, A02). Every refusal is
+`operations`'.
 
 ### State impact
 
@@ -198,8 +202,12 @@ refusal rendered — the sign-in page for a request without a valid session.
 
 On sign-in, the session cookie set: not readable by scripts, only to
 Registry's origin, over HTTPS when reached from another machine (A13 rule
-1). On a sign-out, and on any answer to a request whose session is no
-longer valid, the cookie is expired in the browser.
+1). The cookie is expired in the browser in two answers only: to a sign-out
+that `owner_sessions.sign_out_owner` accepted, and to a request refused
+`unauthenticated` (`no_owner_session`) for the very session its cookie
+names. Validity is the one `owner_sessions.admit_owner_request` decided at
+arrival; the answer is never re-checked, so it never expires a cookie of a
+newer session.
 
 ### Enforces
 

@@ -846,9 +846,9 @@ or the owner); the action's instant.
 
 ### Outputs
 
-The pointer with every fact 'list artifacts' answers for it — id, project,
-type, version, status, owner service, `uri`, `payload_ref`, digest,
-publisher and published instant — and `changed`.
+The pointer as it stands, with every fact 'list artifacts' answers for it —
+its superseded instant, withdrawing principal and withdrawn instant included
+when a repeat answers a pointer that has since moved on — and `changed`.
 
 ### Observable effect
 
@@ -971,8 +971,8 @@ The transaction; the `project_id`.
 ### Outputs
 
 Every pointer — published, superseded, withdrawn, of removed types too —
-each with every fact M05 holds: id, project, type, version, status, owner
-service, `uri`, `payload_ref`, digest, publisher and published instant, the
+each with every fact M05 holds but its request id (Conventions): id,
+project, type, version, status, owner service, `uri`, `payload_ref`, digest, publisher and published instant, the
 superseded instant, the withdrawing principal and withdrawn instant; by type,
 then version highest first, then pointer id.
 

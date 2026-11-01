@@ -84,8 +84,9 @@ action's instant.
 
 ### Outputs
 
-The written projects and, for each Customer made, its v1 value and its
-minted `customer_ref` (rule 10).
+For each written project its `project_id`, the display name and alias it
+arrived under and its status; and, for each Customer made, its v1 value and
+its minted `customer_ref` (rule 10).
 
 ### Observable effect
 
