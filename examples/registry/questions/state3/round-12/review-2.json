@@ -1,0 +1,81 @@
+{
+ "open_points": [],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"instance_lifecycle\",\"subject\":\"owner-only start and the service API listener\",\"kind\":\"contradiction\",\"text\":\"A17 rule 1 says an owner-only start “serves the owner interface alone and refuses every service call”, while A17 rule 2 requires “the listener of each surface” to be opened, and `instance_lifecycle` says “then the listeners at the release's addresses”.\",\"question\":\"In an owner-only start, is the service API listener absent, or is it opened and all requests on it refused?\",\"options\":[\"Open only the owner-interface listener.\",\"Open both listeners, with the service API refusing every call.\"],\"default_guess\":\"Open only the owner-interface listener.\",\"witness\":{\"initial\":\"Registry has a valid owner-only configuration with none of the four service tokens, and both release-declared addresses are available.\",\"events\":[\"The owner starts Registry.\",\"A process attempts to connect to the service API address.\"],\"outcomes\":[\"No service API listener exists because the instance serves the owner interface alone.\",\"The service API listener accepts the connection but refuses the request because the instance has no service tokens.\"],\"observer\":\"The connecting process or a host-level listener check sees whether the service API port is open.\"}},{\"unit\":\"instance_lifecycle\",\"subject\":\"listener socket lifecycle\",\"kind\":\"double ownership\",\"text\":\"`instance_lifecycle` owns “the listeners at the release's addresses” and must close listeners already opened after a later bind failure, while `service_api` owns “The HTTP server of the service API” and `owner_interface` owns the server-rendered HTTP surface.\",\"question\":\"Which module owns creating, binding, activating and closing each listening socket, and what listener/server object crosses the boundary between it and the surface module?\",\"options\":[\"`instance_lifecycle` owns sockets and passes admitted requests or bound listeners to the surface modules.\",\"Each surface module owns its socket and exposes bind, activate and close operations coordinated by `instance_lifecycle`.\"],\"default_guess\":\"Let `instance_lifecycle` own socket lifetime and let each surface module own request transport and formatting.\"},{\"unit\":\"owner_sessions\",\"subject\":\"lock lifetime of uploaded-file reads\",\"kind\":\"unclear dependency contract\",\"text\":\"A16 says requests that read an uploaded file “take the instance's one import lock first, then their session's lock” and “hold both until done”; the new surface exposes only `read_uploaded_file`, while `migration_import` owns parsing and building the mapping.\",\"question\":\"How can `migration_import` keep both `owner_sessions` locks held for the entire mapping or confirmation operation rather than only while bytes are returned by `read_uploaded_file`?\",\"options\":[\"`read_uploaded_file` returns a lock-bearing lease that remains held until mapping or confirmation finishes.\",\"`owner_sessions` runs a supplied mapping or confirmation callback while holding both locks.\",\"`operations` explicitly acquires and releases an import/session lock scope around calls to both modules.\"],\"default_guess\":\"Use an explicit lock scope owned by `owner_sessions` and held by `operations` across the complete import request.\",\"witness\":{\"initial\":\"Owner session S holds uploaded file A and no migration closure exists.\",\"events\":[\"S starts a request to build A's import mapping and obtains A through `read_uploaded_file`.\",\"Before mapping construction finishes, S submits upload B in another concurrent request.\"],\"outcomes\":[\"If `read_uploaded_file` releases the locks after copying A, upload B completes while the mapping request is still producing a mapping for A.\",\"If the locks cover the complete mapping request, upload B waits until the mapping for A has finished.\"],\"observer\":\"The owner sees whether upload B can replace the session file before the mapping response for A completes.\"}},{\"unit\":\"owner_sessions\",\"subject\":\"dropping every session's upload after a successful import\",\"kind\":\"missing orchestration owner\",\"text\":\"The new capability is `owner_sessions.drop_uploaded_files`; A16 requires “An accepted import drops the uploaded file of every owner session”, but `migration_import` cannot know that the transaction committed, and the `operations` compositions do not assign the post-commit drop to any module.\",\"question\":\"Who invokes `drop_uploaded_files`, at what exact point relative to the store commit, and who keeps the import lock held across the commit and the runtime-state cleanup?\",\"options\":[\"`operations` invokes it after a successful commit while retaining the import lock.\",\"`migration_import` registers a post-commit action that invokes it.\",\"`store` supports a commit hook that invokes the owner-session cleanup.\"],\"default_guess\":\"Have `operations` retain the import lock and invoke the cleanup immediately after a successful commit.\"}]}",
+ "set_aside": [
+  {
+   "unit": "instance_lifecycle",
+   "subject": "owner-only start and the service API listener",
+   "kind": "contradiction",
+   "text": "A17 rule 1 says an owner-only start “serves the owner interface alone and refuses every service call”, while A17 rule 2 requires “the listener of each surface” to be opened, and `instance_lifecycle` says “then the listeners at the release's addresses”.",
+   "question": "In an owner-only start, is the service API listener absent, or is it opened and all requests on it refused?",
+   "options": [
+    "Open only the owner-interface listener.",
+    "Open both listeners, with the service API refusing every call."
+   ],
+   "default_guess": "Open only the owner-interface listener.",
+   "witness": {
+    "initial": "Registry has a valid owner-only configuration with none of the four service tokens, and both release-declared addresses are available.",
+    "events": [
+     "The owner starts Registry.",
+     "A process attempts to connect to the service API address."
+    ],
+    "outcomes": [
+     "No service API listener exists because the instance serves the owner interface alone.",
+     "The service API listener accepts the connection but refuses the request because the instance has no service tokens."
+    ],
+    "observer": "The connecting process or a host-level listener check sees whether the service API port is open."
+   }
+  },
+  {
+   "unit": "instance_lifecycle",
+   "subject": "listener socket lifecycle",
+   "kind": "double ownership",
+   "text": "`instance_lifecycle` owns “the listeners at the release's addresses” and must close listeners already opened after a later bind failure, while `service_api` owns “The HTTP server of the service API” and `owner_interface` owns the server-rendered HTTP surface.",
+   "question": "Which module owns creating, binding, activating and closing each listening socket, and what listener/server object crosses the boundary between it and the surface module?",
+   "options": [
+    "`instance_lifecycle` owns sockets and passes admitted requests or bound listeners to the surface modules.",
+    "Each surface module owns its socket and exposes bind, activate and close operations coordinated by `instance_lifecycle`."
+   ],
+   "default_guess": "Let `instance_lifecycle` own socket lifetime and let each surface module own request transport and formatting."
+  },
+  {
+   "unit": "owner_sessions",
+   "subject": "lock lifetime of uploaded-file reads",
+   "kind": "unclear dependency contract",
+   "text": "A16 says requests that read an uploaded file “take the instance's one import lock first, then their session's lock” and “hold both until done”; the new surface exposes only `read_uploaded_file`, while `migration_import` owns parsing and building the mapping.",
+   "question": "How can `migration_import` keep both `owner_sessions` locks held for the entire mapping or confirmation operation rather than only while bytes are returned by `read_uploaded_file`?",
+   "options": [
+    "`read_uploaded_file` returns a lock-bearing lease that remains held until mapping or confirmation finishes.",
+    "`owner_sessions` runs a supplied mapping or confirmation callback while holding both locks.",
+    "`operations` explicitly acquires and releases an import/session lock scope around calls to both modules."
+   ],
+   "default_guess": "Use an explicit lock scope owned by `owner_sessions` and held by `operations` across the complete import request.",
+   "witness": {
+    "initial": "Owner session S holds uploaded file A and no migration closure exists.",
+    "events": [
+     "S starts a request to build A's import mapping and obtains A through `read_uploaded_file`.",
+     "Before mapping construction finishes, S submits upload B in another concurrent request."
+    ],
+    "outcomes": [
+     "If `read_uploaded_file` releases the locks after copying A, upload B completes while the mapping request is still producing a mapping for A.",
+     "If the locks cover the complete mapping request, upload B waits until the mapping for A has finished."
+    ],
+    "observer": "The owner sees whether upload B can replace the session file before the mapping response for A completes."
+   }
+  },
+  {
+   "unit": "owner_sessions",
+   "subject": "dropping every session's upload after a successful import",
+   "kind": "missing orchestration owner",
+   "text": "The new capability is `owner_sessions.drop_uploaded_files`; A16 requires “An accepted import drops the uploaded file of every owner session”, but `migration_import` cannot know that the transaction committed, and the `operations` compositions do not assign the post-commit drop to any module.",
+   "question": "Who invokes `drop_uploaded_files`, at what exact point relative to the store commit, and who keeps the import lock held across the commit and the runtime-state cleanup?",
+   "options": [
+    "`operations` invokes it after a successful commit while retaining the import lock.",
+    "`migration_import` registers a post-commit action that invokes it.",
+    "`store` supports a commit hook that invokes the owner-session cleanup."
+   ],
+   "default_guess": "Have `operations` retain the import lock and invoke the cleanup immediately after a successful commit."
+  }
+ ]
+}
