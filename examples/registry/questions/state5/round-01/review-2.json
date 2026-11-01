@@ -1,0 +1,441 @@
+{
+ "open_points": [
+  {
+   "unit": "50_public_apis_1_foundation.md:`public_op:clock.today_in_utc`",
+   "subject": "relationship between an action's instant and today",
+   "kind": "unimplementable atomicity",
+   "text": "“Today is the UTC date of `recorded_now` read at the same moment, so an action's instant and its today never fall on different dates.” The two are separate zero-input operations, and no shared reading is passed between them.",
+   "question": "How must `operations` obtain an instant and its guaranteed matching UTC date without a midnight race?",
+   "options": [
+    "`today_in_utc` takes the recorded instant and derives its date",
+    "one operation returns both the instant and its UTC date",
+    "`operations` derives the date directly from the result of `recorded_now`",
+    "the two independent reads may disagree at midnight"
+   ],
+   "default_guess": "Derive today from the single recorded instant.",
+   "witness": {
+    "initial": "The wall clock is immediately before midnight UTC.",
+    "events": [
+     "`operations` calls `clock.recorded_now` and receives 2026-11-01T23:59:59.999Z.",
+     "The clock crosses midnight.",
+     "`operations` calls `clock.today_in_utc` while ending a customer relationship with an end date of 2026-11-02."
+    ],
+    "outcomes": [
+     "Today is derived from the action instant as 2026-11-01, so the supplied end date is refused as later than today.",
+     "`today_in_utc` independently returns 2026-11-02, so the supplied end date is accepted."
+    ],
+    "observer": "The owner sees whether the same request is accepted."
+   }
+  },
+  {
+   "unit": "50_public_apis_1_foundation.md:`public_op:random_values.make_secret_value`",
+   "subject": "text representation of secret values",
+   "kind": "output encoding unspecified",
+   "text": "“One value of 32 random bytes, in the text form the cookie and the forms carry.”",
+   "question": "What canonical text encoding represents the 32 random bytes, and are padding and alternate encodings accepted on return?",
+   "options": [
+    "unpadded base64url with one canonical spelling",
+    "padded base64",
+    "lowercase hexadecimal",
+    "an implementation-specific reversible text encoding"
+   ],
+   "default_guess": "Use unpadded base64url and accept only its canonical spelling.",
+   "witness": {
+    "initial": "A new owner session is being created from the same fixed 32-byte test value.",
+    "events": [
+     "`owner_sessions` calls `make_secret_value`.",
+     "The owner interface places the result in a cookie and later decodes the returned cookie for constant-time comparison."
+    ],
+    "outcomes": [
+     "The value is a 43-character unpadded base64url string and the returned cookie is admitted.",
+     "The value is a 64-character hexadecimal string; a surface or test expecting base64url rejects or decodes it differently."
+    ],
+    "observer": "The owner and cross-module contract tests see whether the session cookie works."
+   }
+  },
+  {
+   "unit": "50_public_apis_0_conventions.md:Conventions every operation follows",
+   "subject": "changed indicator on mutating operations",
+   "kind": "contradictory outputs",
+   "text": "“Every operation that changes a record answers whether it changed it,” but operations including `agent_sessions.request_project_access`, `agent_sessions.end_session`, `artifact_pointers.withdraw_pointer`, imported-record writers and `migration_import.record_migration_closure` do not declare a `changed` output.",
+   "question": "Must every record-mutating public operation return `changed`, or are operations that necessarily change exempt?",
+   "options": [
+    "every mutating operation returns an explicit `changed` boolean",
+    "only operations that can be accepted as no-ops return `changed`",
+    "callers infer change from each operation-specific success result"
+   ],
+   "default_guess": "Return `changed` only where an accepted call can be a no-op, and narrow the convention accordingly.",
+   "witness": {
+    "initial": "A registered agent session has access version 3 and no pending request.",
+    "events": [
+     "Kernel calls `request_project_access` with valid text.",
+     "`operations` receives the operation's declared output."
+    ],
+    "outcomes": [
+     "The module returns `changed: true` as the convention requires, allowing generic mutation handling.",
+     "The module returns only “pending”; `operations` must know specially that the version changed despite the convention."
+    ],
+    "observer": "The `operations` implementation and its contract tests see the different result shape."
+   }
+  },
+  {
+   "unit": "50_public_apis_0_conventions.md:Conventions every operation follows",
+   "subject": "erased form of an anonymised project",
+   "kind": "cross-state contradiction",
+   "text": "“returns the erased form of the answer — the identity and the mark, nothing else,” while State 1 M01 says an anonymised project keeps and answers its id, status `archived`, and anonymised mark.",
+   "question": "Does an anonymised-project answer include its archived status as well as its identity and anonymised mark?",
+   "options": [
+    "project id, `archived` status and anonymised mark",
+    "project id and anonymised mark only"
+   ],
+   "default_guess": "Include the project id, `archived` status and anonymised mark.",
+   "witness": {
+    "initial": "Project P is archived and then anonymised.",
+    "events": [
+     "The owner reads P's project card.",
+     "A service validates P."
+    ],
+    "outcomes": [
+     "The erased card carries P, status `archived`, and the anonymised mark, agreeing with M01; validate also says archived.",
+     "The erased card carries only P and the anonymised mark, as the State 5 convention's “nothing else” says; status is absent although validate says archived."
+    ],
+    "observer": "The owner or service consuming the erased answer sees whether status is present."
+   }
+  },
+  {
+   "unit": "50_public_apis_0_conventions.md:Closed set of refusal codes",
+   "subject": "ordering and multiplicity of refusal kinds",
+   "kind": "output nondeterminism",
+   "text": "“the list of the kinds that failed in that stage” and “answers the first failing stage with every failure of that stage” do not declare the order of kinds or whether a kind may occur more than once.",
+   "question": "In what deterministic order are multiple refusal kinds returned, and are duplicate occurrences retained or collapsed?",
+   "options": [
+    "closed-vocabulary declaration order, with duplicates collapsed",
+    "validation execution order, with duplicates collapsed",
+    "field order, retaining one occurrence per failing field"
+   ],
+   "default_guess": "Return distinct kinds in the closed-vocabulary declaration order.",
+   "witness": {
+    "initial": "The owner submits a customer create with a blank required name, an invalid kind and an invalid language.",
+    "events": [
+     "The customer module performs all stage (4) checks.",
+     "The refusal is sent through the owner interface or service contract tests."
+    ],
+    "outcomes": [
+     "The kinds are `[missing_value, outside_closed_list]`.",
+     "The kinds are `[outside_closed_list, missing_value]`, or `outside_closed_list` appears twice for the two fields."
+    ],
+    "observer": "The caller and deterministic contract tests see different refusal objects."
+   }
+  },
+  {
+   "unit": "50_public_apis_0_conventions.md:Closed set of refusal codes",
+   "subject": "classification of a reused confirmation value",
+   "kind": "unrepresentable error distinction",
+   "text": "“`confirmation_used_or_bound_elsewhere` — used up” is distinct from “`confirmation_missing_or_other` — no value,” but M11 keeps only the one pending confirmation and clears it when used; it keeps no used-value history.",
+   "question": "After a confirmation value has been used and is submitted again, which refusal kind is returned, and what state permits that distinction?",
+   "options": [
+    "return `confirmation_missing_or_other` because no confirmation is pending",
+    "retain a used-value tombstone long enough to return `confirmation_used_or_bound_elsewhere`",
+    "use `confirmation_used_or_bound_elsewhere` only for an equal pending value bound to different inputs, not for later reuse"
+   ],
+   "default_guess": "Use `confirmation_missing_or_other` after the pending value has been consumed, and reserve the other kind for a binding mismatch during first use.",
+   "witness": {
+    "initial": "An owner session has one valid pending archive confirmation.",
+    "events": [
+     "The owner submits the correct confirmation; the archive is accepted and the pending value is cleared.",
+     "The browser resubmits the identical form and value."
+    ],
+    "outcomes": [
+     "Because no pending value remains, the second submission returns `confirmation_missing_or_other`.",
+     "Because the submitted value was previously used, the second submission returns `confirmation_used_or_bound_elsewhere`, requiring history not specified in M11."
+    ],
+    "observer": "The owner interface and its tests see different refusal kinds."
+   }
+  },
+  {
+   "unit": "50_public_apis_2_sessions.md:`public_op:owner_sessions.admit_owner_request`",
+   "subject": "lifetime and release of admitted-session locks",
+   "kind": "caller protocol unspecified",
+   "text": "The output is “The admitted session, holding … the session's lock … and … the import lock,” and the locks are “held until the request is done,” but no operation, guard protocol or completion signal releases them.",
+   "question": "What exact caller-visible protocol defines when and how the locks returned by admission are released, including on refusal, exception and transaction failure?",
+   "options": [
+    "the output is a scoped/context-managed guard released when its scope exits",
+    "`operations` must call a separate release operation",
+    "`admit_owner_request` runs the entire request as a callback while holding the locks",
+    "the locks are released when `admit_owner_request` returns"
+   ],
+   "default_guess": "Make admission a scoped guard whose guaranteed cleanup releases the locks after the complete request.",
+   "witness": {
+    "initial": "One owner session has no pending confirmation.",
+    "events": [
+     "Request A is admitted to show an archive confirmation but has not yet installed it.",
+     "Request B from the same session is admitted to show an erase-audit confirmation.",
+     "Both requests finish."
+    ],
+    "outcomes": [
+     "A scoped lock remains held through A, so B waits and its confirmation deterministically replaces A's.",
+     "Admission releases the lock on return, so A and B execute concurrently and either confirmation can be left pending."
+    ],
+    "observer": "The owner sees which confirmation form remains usable."
+   }
+  },
+  {
+   "unit": "50_public_apis_2_sessions.md:`public_op:owner_sessions.sign_out_owner`",
+   "subject": "lock ownership during sign-out",
+   "kind": "contradictory locking contract",
+   "text": "`admit_owner_request` returns an admitted change already holding the import lock and session lock, while `sign_out_owner` says “It takes the import lock, then the session's lock” and takes that admitted session as input.",
+   "question": "Does sign-out receive already-held locks or acquire them itself, and must those locks be reentrant?",
+   "options": [
+    "admission acquires both locks and sign-out assumes they are held",
+    "sign-out is not admitted as a normal change and acquires both locks itself",
+    "the locks are explicitly reentrant and sign-out reacquires them"
+   ],
+   "default_guess": "Have admission acquire the locks and require sign-out to use the already-held guard without reacquiring.",
+   "witness": {
+    "initial": "The owner has a valid session with an uploaded import file and the locks are non-reentrant.",
+    "events": [
+     "The sign-out request passes `admit_owner_request` as a change that reads or changes an uploaded file, acquiring import then session lock.",
+     "`operations` calls `sign_out_owner` with the admitted session."
+    ],
+    "outcomes": [
+     "`sign_out_owner` treats the locks as already held, ends the session and returns.",
+     "`sign_out_owner` tries to acquire the same locks again and deadlocks."
+    ],
+    "observer": "The owner sees sign-out complete or hang."
+   }
+  },
+  {
+   "unit": "50_public_apis_2_sessions.md:`public_op:owner_sessions.show_confirmation_step`",
+   "subject": "confirmation input digest",
+   "kind": "canonicalization unspecified",
+   "text": "The confirmation is bound to “the digest of its inputs in a fixed order,” but neither the fixed order, serialization, digest algorithm nor normalization of absent and composite values is declared.",
+   "question": "What canonical byte representation and digest algorithm must both `show_confirmation_step` and `take_confirmation` use for every action's inputs?",
+   "options": [
+    "a specification-declared canonical field sequence and encoding with a named cryptographic hash",
+    "canonical JSON with sorted keys and a named hash",
+    "an operation-specific tuple encoded by the implementation",
+    "the raw form-field order"
+   ],
+   "default_guess": "Declare an operation-specific canonical field sequence, unambiguous encoding and SHA-256.",
+   "witness": {
+    "initial": "An import confirmation contains two project picks and object characteristics supplied in a different map order from the displayed form.",
+    "events": [
+     "`show_confirmation_step` digests the logical inputs.",
+     "The browser submits the same logical values with a different field or map order.",
+     "`take_confirmation` receives the recomputed digest."
+    ],
+    "outcomes": [
+     "Canonical ordering produces the same digest and accepts the confirmation.",
+     "Insertion or form order produces a different digest and refuses it as bound elsewhere."
+    ],
+    "observer": "The owner sees the same logical confirmation accepted or refused."
+   }
+  },
+  {
+   "unit": "50_public_apis_2_sessions.md:`public_op:owner_sessions.end_expired_sessions`",
+   "subject": "time used by one expiry pass",
+   "kind": "temporal boundary unspecified",
+   "text": "The pass “ends every session past a limit” and decides under each session's lock, but it does not say whether one monotonic reading is taken for the whole pass or a fresh reading is taken after each lock is acquired.",
+   "question": "At what monotonic instant is expiry evaluated for all sessions in a pass?",
+   "options": [
+    "one reading at the start of the pass for every session",
+    "a fresh reading under each session's lock",
+    "a reading when each lock acquisition begins"
+   ],
+   "default_guess": "Take one reading at the start so the pass has one deterministic cutoff.",
+   "witness": {
+    "initial": "Session B will reach its idle limit one second after an expiry pass starts; session A's lock delays the pass for five seconds.",
+    "events": [
+     "The expiry pass starts and first waits for or processes session A.",
+     "The pass later acquires session B's lock."
+    ],
+    "outcomes": [
+     "Using one pass-start reading leaves B alive until the next pass.",
+     "Using a fresh reading under B's lock ends B in this pass."
+    ],
+    "observer": "The owner sees whether the next request in session B is admitted."
+   }
+  },
+  {
+   "unit": "50_public_apis_2_sessions.md:`public_op:agent_sessions.check_agent_call`",
+   "subject": "unknown-pointer withdrawal with an active project",
+   "kind": "stage ambiguity",
+   "text": "A project input of “none” means use the active project, but for withdrawal the project is “resolved before”; an unknown pointer also resolves to no project and is required elsewhere to receive the stage-(2) `agent_call_refused` answer rather than fall back to the active project.",
+   "question": "How does the call distinguish “the operation omitted a project, use active” from “pointer resolution failed, do not use active”?",
+   "options": [
+    "use a distinct unresolved-pointer result that immediately produces stage-(2) `agent_call_refused`",
+    "pass an explicit `use_active_project` flag separate from the optional project id",
+    "treat every absent project as active fallback, then report `unknown_pointer` at stage (3)"
+   ],
+   "default_guess": "Use a distinct unresolved-pointer input and return `agent_call_refused` at stage (2).",
+   "witness": {
+    "initial": "Kernel session S is registered and has active granted project P; pointer X does not exist.",
+    "events": [
+     "Kernel asks to withdraw X.",
+     "`operations` calls `project_of_pointer`, which answers that no pointer exists.",
+     "`operations` invokes the agent-call check."
+    ],
+    "outcomes": [
+     "Resolution failure is distinguished from omission, so the answer is stage (2), kind `agent_call_refused`.",
+     "The absent project triggers active-project fallback to P; stage (2) passes and the answer becomes stage (3), kind `unknown_pointer`."
+    ],
+    "observer": "Kernel receives a different refusal stage and kind."
+   }
+  },
+  {
+   "unit": "50_public_apis_3_records.md:`public_op:customers.read_customer`",
+   "subject": "erased Customer answer",
+   "kind": "cross-state contradiction",
+   "text": "The output says “for an erased Customer only that it was erased,” while State 1 M04 says the read returns its `customer_ref`, erased mark and erasure instant, and the State 5 convention requires the identity and mark.",
+   "question": "Which exact non-personal facts are returned when the Customer is erased?",
+   "options": [
+    "`customer_ref`, erased mark and erasure instant",
+    "`customer_ref` and erased mark only",
+    "only a boolean or statement that it was erased"
+   ],
+   "default_guess": "Return `customer_ref`, erased mark and erasure instant.",
+   "witness": {
+    "initial": "Customer C has been erased.",
+    "events": [
+     "The owner reads C by its `customer_ref`."
+    ],
+    "outcomes": [
+     "The answer identifies C and includes the erased mark and its instant, as M04 requires.",
+     "The answer contains only an erased indication, as the operation's literal output says."
+    ],
+    "observer": "The owner sees whether the identity and erasure instant are present."
+   }
+  },
+  {
+   "unit": "50_public_apis_3_records.md:`public_op:projects.archive_project`",
+   "subject": "archival time representation",
+   "kind": "cross-state contradiction",
+   "text": "The operation takes “the action's instant and today's date” and says the project gets “its archived date,” while State 1 M01 and “Revisions and times” define the written fact as the instant it was archived.",
+   "question": "Is the stored archival fact the full action instant or only today's UTC calendar date, and why is the other input present?",
+   "options": [
+    "store the full action instant and derive any displayed date from it",
+    "store only the UTC date",
+    "store both an archival instant and an archival date"
+   ],
+   "default_guess": "Store the full action instant only.",
+   "witness": {
+    "initial": "An active project is archived at 2026-11-01T18:42:13Z.",
+    "events": [
+     "`operations` passes both that instant and the date 2026-11-01 to `archive_project`.",
+     "The owner later reads the archived project card."
+    ],
+    "outcomes": [
+     "The project records the exact archival instant 2026-11-01T18:42:13Z.",
+     "The project records only 2026-11-01, losing the time despite State 1's instant requirement."
+    ],
+    "observer": "The owner, retention tooling or contract tests see different archival facts."
+   }
+  },
+  {
+   "unit": "50_public_apis_4_import_backups.md:`public_op:migration_import.read_import_mapping`",
+   "subject": "identity and verification of the uploaded file digest",
+   "kind": "input trust unspecified",
+   "text": "The operation takes “the file's bytes and digest,” but does not say who computes the digest, which algorithm is used, or whether the supplied digest is verified against the bytes before it names the mapping, confirmation and migration closure.",
+   "question": "Must `migration_import` compute a canonical cryptographic digest from the bytes, verify a caller-supplied digest, or trust the digest input?",
+   "options": [
+    "compute the digest internally from the bytes with a named algorithm",
+    "accept a digest from `operations` only after a named shared digest operation computed it",
+    "verify a supplied digest against the bytes",
+    "trust the supplied digest without verification"
+   ],
+   "default_guess": "Compute SHA-256 internally from the uploaded bytes and expose that value as the file digest.",
+   "witness": {
+    "initial": "An upload contains file bytes A but reaches the operation with digest value B, which is not the digest of A.",
+    "events": [
+     "The owner uploads the file.",
+     "The mapping is shown and later confirmed.",
+     "The migration closure and audit entry are written."
+    ],
+    "outcomes": [
+     "Registry computes or verifies the digest and either uses digest(A) or refuses the mismatch.",
+     "Registry trusts B, imports A, and records B as the identity of the accepted file."
+    ],
+    "observer": "The owner and the audit record see which file identity is recorded."
+   }
+  },
+  {
+   "unit": "50_public_apis_4_import_backups.md:`public_op:backups.newest_backup_instant`",
+   "subject": "failure while listing or reading the backup location",
+   "kind": "missing error outcome",
+   "text": "The operation declares “Errors: None” although its state impact is to list a filesystem location whose listing or metadata reads can fail after startup.",
+   "question": "What does the operation return if the backup directory cannot be listed or a filesystem error interrupts the one listing?",
+   "options": [
+    "an internal or diagnostic error distinct from “there is none”",
+    "“there is none”",
+    "the newest value found before the failure",
+    "the last successfully cached newest instant"
+   ],
+   "default_guess": "Return a diagnostic/internal error distinct from an empty backup set.",
+   "witness": {
+    "initial": "A kept backup exists, but the backup directory becomes unreadable after Registry started.",
+    "events": [
+     "The owner opens the page that calls `newest_backup_instant`.",
+     "The directory listing fails with a permission or I/O error."
+    ],
+    "outcomes": [
+     "The page reports that backup status could not be read.",
+     "The operation returns “there is none,” falsely reporting that no backup exists."
+    ],
+    "observer": "The owner sees an error or a misleading no-backup state."
+   }
+  },
+  {
+   "unit": "50_public_apis_5_surfaces.md:`public_op:service_api.serve_service_request`",
+   "subject": "authentication versus malformed-wire refusal order",
+   "kind": "contradictory error precedence",
+   "text": "The surface says “A request that is not of the wire format answers `invalid_request` (`outside_closed_list`),” while A04 and `perform_service_operation` require stage (1) authentication and rights to precede every request-value check.",
+   "question": "For a request that is both unauthenticated and malformed, which refusal must the service API return?",
+   "options": [
+    "`unauthenticated` without disclosing whether the body is valid",
+    "`invalid_request` before authentication",
+    "parse only enough to extract the token, then authenticate before validating the operation body"
+   ],
+   "default_guess": "Extract the credential without validating the operation body, authenticate first, and return `unauthenticated`.",
+   "witness": {
+    "initial": "The service API listener is running.",
+    "events": [
+     "A caller sends no token and a malformed or unknown operation body."
+    ],
+    "outcomes": [
+     "Stage (1) wins and the response is `unauthenticated` with `no_valid_token`.",
+     "The surface's malformed-wire rule wins and the response is `invalid_request` with `outside_closed_list`."
+    ],
+    "observer": "The unauthenticated network caller can distinguish the two responses."
+   }
+  },
+  {
+   "unit": "50_public_apis_5_surfaces.md:`public_op:service_api.serve_service_request`",
+   "subject": "trusted provenance of Kernel's agent-session identity",
+   "kind": "authority input unspecified",
+   "text": "The input is only “the token and the operation's request in the wire format,” while `perform_service_operation` receives “for Kernel, the agent session it names”; R0-77 requires that session to come from Kernel's own run context, never from a value the agent's flow supplies.",
+   "question": "Through what transport field or trusted channel does the service API receive Kernel's session identity, and how is it kept outside agent-controlled operation inputs?",
+   "options": [
+    "a dedicated authenticated transport field populated only by Kernel's server-side run context",
+    "connection-local trusted metadata supplied by Kernel",
+    "an ordinary request-body field, relying on Kernel not to expose it to flows",
+    "a separate Kernel-only endpoint or binding"
+   ],
+   "default_guess": "Use a dedicated authenticated metadata field populated by Kernel outside the operation's agent-controlled input schema.",
+   "witness": {
+    "initial": "Kernel is executing agent session A; another registered session B has access to project P.",
+    "events": [
+     "Agent-controlled operation data attempts to name session B while calling with Kernel's valid token.",
+     "The service API constructs the input to `perform_service_operation`."
+    ],
+    "outcomes": [
+     "The API ignores agent-controlled session data and supplies A from trusted Kernel run metadata, so access to P is refused.",
+     "The API reads B from the ordinary request body, so the call is checked against B and can reach P."
+    ],
+    "observer": "The agent sees whether it can act with another session's grants."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"50_public_apis_1_foundation.md:`public_op:clock.today_in_utc`\",\"subject\":\"relationship between an action's instant and today\",\"kind\":\"unimplementable atomicity\",\"text\":\"“Today is the UTC date of `recorded_now` read at the same moment, so an action's instant and its today never fall on different dates.” The two are separate zero-input operations, and no shared reading is passed between them.\",\"question\":\"How must `operations` obtain an instant and its guaranteed matching UTC date without a midnight race?\",\"options\":[\"`today_in_utc` takes the recorded instant and derives its date\",\"one operation returns both the instant and its UTC date\",\"`operations` derives the date directly from the result of `recorded_now`\",\"the two independent reads may disagree at midnight\"],\"default_guess\":\"Derive today from the single recorded instant.\",\"witness\":{\"initial\":\"The wall clock is immediately before midnight UTC.\",\"events\":[\"`operations` calls `clock.recorded_now` and receives 2026-11-01T23:59:59.999Z.\",\"The clock crosses midnight.\",\"`operations` calls `clock.today_in_utc` while ending a customer relationship with an end date of 2026-11-02.\"],\"outcomes\":[\"Today is derived from the action instant as 2026-11-01, so the supplied end date is refused as later than today.\",\"`today_in_utc` independently returns 2026-11-02, so the supplied end date is accepted.\"],\"observer\":\"The owner sees whether the same request is accepted.\"}},{\"unit\":\"50_public_apis_1_foundation.md:`public_op:random_values.make_secret_value`\",\"subject\":\"text representation of secret values\",\"kind\":\"output encoding unspecified\",\"text\":\"“One value of 32 random bytes, in the text form the cookie and the forms carry.”\",\"question\":\"What canonical text encoding represents the 32 random bytes, and are padding and alternate encodings accepted on return?\",\"options\":[\"unpadded base64url with one canonical spelling\",\"padded base64\",\"lowercase hexadecimal\",\"an implementation-specific reversible text encoding\"],\"default_guess\":\"Use unpadded base64url and accept only its canonical spelling.\",\"witness\":{\"initial\":\"A new owner session is being created from the same fixed 32-byte test value.\",\"events\":[\"`owner_sessions` calls `make_secret_value`.\",\"The owner interface places the result in a cookie and later decodes the returned cookie for constant-time comparison.\"],\"outcomes\":[\"The value is a 43-character unpadded base64url string and the returned cookie is admitted.\",\"The value is a 64-character hexadecimal string; a surface or test expecting base64url rejects or decodes it differently.\"],\"observer\":\"The owner and cross-module contract tests see whether the session cookie works.\"}},{\"unit\":\"50_public_apis_0_conventions.md:Conventions every operation follows\",\"subject\":\"changed indicator on mutating operations\",\"kind\":\"contradictory outputs\",\"text\":\"“Every operation that changes a record answers whether it changed it,” but operations including `agent_sessions.request_project_access`, `agent_sessions.end_session`, `artifact_pointers.withdraw_pointer`, imported-record writers and `migration_import.record_migration_closure` do not declare a `changed` output.\",\"question\":\"Must every record-mutating public operation return `changed`, or are operations that necessarily change exempt?\",\"options\":[\"every mutating operation returns an explicit `changed` boolean\",\"only operations that can be accepted as no-ops return `changed`\",\"callers infer change from each operation-specific success result\"],\"default_guess\":\"Return `changed` only where an accepted call can be a no-op, and narrow the convention accordingly.\",\"witness\":{\"initial\":\"A registered agent session has access version 3 and no pending request.\",\"events\":[\"Kernel calls `request_project_access` with valid text.\",\"`operations` receives the operation's declared output.\"],\"outcomes\":[\"The module returns `changed: true` as the convention requires, allowing generic mutation handling.\",\"The module returns only “pending”; `operations` must know specially that the version changed despite the convention.\"],\"observer\":\"The `operations` implementation and its contract tests see the different result shape.\"}},{\"unit\":\"50_public_apis_0_conventions.md:Conventions every operation follows\",\"subject\":\"erased form of an anonymised project\",\"kind\":\"cross-state contradiction\",\"text\":\"“returns the erased form of the answer — the identity and the mark, nothing else,” while State 1 M01 says an anonymised project keeps and answers its id, status `archived`, and anonymised mark.\",\"question\":\"Does an anonymised-project answer include its archived status as well as its identity and anonymised mark?\",\"options\":[\"project id, `archived` status and anonymised mark\",\"project id and anonymised mark only\"],\"default_guess\":\"Include the project id, `archived` status and anonymised mark.\",\"witness\":{\"initial\":\"Project P is archived and then anonymised.\",\"events\":[\"The owner reads P's project card.\",\"A service validates P.\"],\"outcomes\":[\"The erased card carries P, status `archived`, and the anonymised mark, agreeing with M01; validate also says archived.\",\"The erased card carries only P and the anonymised mark, as the State 5 convention's “nothing else” says; status is absent although validate says archived.\"],\"observer\":\"The owner or service consuming the erased answer sees whether status is present.\"}},{\"unit\":\"50_public_apis_0_conventions.md:Closed set of refusal codes\",\"subject\":\"ordering and multiplicity of refusal kinds\",\"kind\":\"output nondeterminism\",\"text\":\"“the list of the kinds that failed in that stage” and “answers the first failing stage with every failure of that stage” do not declare the order of kinds or whether a kind may occur more than once.\",\"question\":\"In what deterministic order are multiple refusal kinds returned, and are duplicate occurrences retained or collapsed?\",\"options\":[\"closed-vocabulary declaration order, with duplicates collapsed\",\"validation execution order, with duplicates collapsed\",\"field order, retaining one occurrence per failing field\"],\"default_guess\":\"Return distinct kinds in the closed-vocabulary declaration order.\",\"witness\":{\"initial\":\"The owner submits a customer create with a blank required name, an invalid kind and an invalid language.\",\"events\":[\"The customer module performs all stage (4) checks.\",\"The refusal is sent through the owner interface or service contract tests.\"],\"outcomes\":[\"The kinds are `[missing_value, outside_closed_list]`.\",\"The kinds are `[outside_closed_list, missing_value]`, or `outside_closed_list` appears twice for the two fields.\"],\"observer\":\"The caller and deterministic contract tests see different refusal objects.\"}},{\"unit\":\"50_public_apis_0_conventions.md:Closed set of refusal codes\",\"subject\":\"classification of a reused confirmation value\",\"kind\":\"unrepresentable error distinction\",\"text\":\"“`confirmation_used_or_bound_elsewhere` — used up” is distinct from “`confirmation_missing_or_other` — no value,” but M11 keeps only the one pending confirmation and clears it when used; it keeps no used-value history.\",\"question\":\"After a confirmation value has been used and is submitted again, which refusal kind is returned, and what state permits that distinction?\",\"options\":[\"return `confirmation_missing_or_other` because no confirmation is pending\",\"retain a used-value tombstone long enough to return `confirmation_used_or_bound_elsewhere`\",\"use `confirmation_used_or_bound_elsewhere` only for an equal pending value bound to different inputs, not for later reuse\"],\"default_guess\":\"Use `confirmation_missing_or_other` after the pending value has been consumed, and reserve the other kind for a binding mismatch during first use.\",\"witness\":{\"initial\":\"An owner session has one valid pending archive confirmation.\",\"events\":[\"The owner submits the correct confirmation; the archive is accepted and the pending value is cleared.\",\"The browser resubmits the identical form and value.\"],\"outcomes\":[\"Because no pending value remains, the second submission returns `confirmation_missing_or_other`.\",\"Because the submitted value was previously used, the second submission returns `confirmation_used_or_bound_elsewhere`, requiring history not specified in M11.\"],\"observer\":\"The owner interface and its tests see different refusal kinds.\"}},{\"unit\":\"50_public_apis_2_sessions.md:`public_op:owner_sessions.admit_owner_request`\",\"subject\":\"lifetime and release of admitted-session locks\",\"kind\":\"caller protocol unspecified\",\"text\":\"The output is “The admitted session, holding … the session's lock … and … the import lock,” and the locks are “held until the request is done,” but no operation, guard protocol or completion signal releases them.\",\"question\":\"What exact caller-visible protocol defines when and how the locks returned by admission are released, including on refusal, exception and transaction failure?\",\"options\":[\"the output is a scoped/context-managed guard released when its scope exits\",\"`operations` must call a separate release operation\",\"`admit_owner_request` runs the entire request as a callback while holding the locks\",\"the locks are released when `admit_owner_request` returns\"],\"default_guess\":\"Make admission a scoped guard whose guaranteed cleanup releases the locks after the complete request.\",\"witness\":{\"initial\":\"One owner session has no pending confirmation.\",\"events\":[\"Request A is admitted to show an archive confirmation but has not yet installed it.\",\"Request B from the same session is admitted to show an erase-audit confirmation.\",\"Both requests finish.\"],\"outcomes\":[\"A scoped lock remains held through A, so B waits and its confirmation deterministically replaces A's.\",\"Admission releases the lock on return, so A and B execute concurrently and either confirmation can be left pending.\"],\"observer\":\"The owner sees which confirmation form remains usable.\"}},{\"unit\":\"50_public_apis_2_sessions.md:`public_op:owner_sessions.sign_out_owner`\",\"subject\":\"lock ownership during sign-out\",\"kind\":\"contradictory locking contract\",\"text\":\"`admit_owner_request` returns an admitted change already holding the import lock and session lock, while `sign_out_owner` says “It takes the import lock, then the session's lock” and takes that admitted session as input.\",\"question\":\"Does sign-out receive already-held locks or acquire them itself, and must those locks be reentrant?\",\"options\":[\"admission acquires both locks and sign-out assumes they are held\",\"sign-out is not admitted as a normal change and acquires both locks itself\",\"the locks are explicitly reentrant and sign-out reacquires them\"],\"default_guess\":\"Have admission acquire the locks and require sign-out to use the already-held guard without reacquiring.\",\"witness\":{\"initial\":\"The owner has a valid session with an uploaded import file and the locks are non-reentrant.\",\"events\":[\"The sign-out request passes `admit_owner_request` as a change that reads or changes an uploaded file, acquiring import then session lock.\",\"`operations` calls `sign_out_owner` with the admitted session.\"],\"outcomes\":[\"`sign_out_owner` treats the locks as already held, ends the session and returns.\",\"`sign_out_owner` tries to acquire the same locks again and deadlocks.\"],\"observer\":\"The owner sees sign-out complete or hang.\"}},{\"unit\":\"50_public_apis_2_sessions.md:`public_op:owner_sessions.show_confirmation_step`\",\"subject\":\"confirmation input digest\",\"kind\":\"canonicalization unspecified\",\"text\":\"The confirmation is bound to “the digest of its inputs in a fixed order,” but neither the fixed order, serialization, digest algorithm nor normalization of absent and composite values is declared.\",\"question\":\"What canonical byte representation and digest algorithm must both `show_confirmation_step` and `take_confirmation` use for every action's inputs?\",\"options\":[\"a specification-declared canonical field sequence and encoding with a named cryptographic hash\",\"canonical JSON with sorted keys and a named hash\",\"an operation-specific tuple encoded by the implementation\",\"the raw form-field order\"],\"default_guess\":\"Declare an operation-specific canonical field sequence, unambiguous encoding and SHA-256.\",\"witness\":{\"initial\":\"An import confirmation contains two project picks and object characteristics supplied in a different map order from the displayed form.\",\"events\":[\"`show_confirmation_step` digests the logical inputs.\",\"The browser submits the same logical values with a different field or map order.\",\"`take_confirmation` receives the recomputed digest.\"],\"outcomes\":[\"Canonical ordering produces the same digest and accepts the confirmation.\",\"Insertion or form order produces a different digest and refuses it as bound elsewhere.\"],\"observer\":\"The owner sees the same logical confirmation accepted or refused.\"}},{\"unit\":\"50_public_apis_2_sessions.md:`public_op:owner_sessions.end_expired_sessions`\",\"subject\":\"time used by one expiry pass\",\"kind\":\"temporal boundary unspecified\",\"text\":\"The pass “ends every session past a limit” and decides under each session's lock, but it does not say whether one monotonic reading is taken for the whole pass or a fresh reading is taken after each lock is acquired.\",\"question\":\"At what monotonic instant is expiry evaluated for all sessions in a pass?\",\"options\":[\"one reading at the start of the pass for every session\",\"a fresh reading under each session's lock\",\"a reading when each lock acquisition begins\"],\"default_guess\":\"Take one reading at the start so the pass has one deterministic cutoff.\",\"witness\":{\"initial\":\"Session B will reach its idle limit one second after an expiry pass starts; session A's lock delays the pass for five seconds.\",\"events\":[\"The expiry pass starts and first waits for or processes session A.\",\"The pass later acquires session B's lock.\"],\"outcomes\":[\"Using one pass-start reading leaves B alive until the next pass.\",\"Using a fresh reading under B's lock ends B in this pass.\"],\"observer\":\"The owner sees whether the next request in session B is admitted.\"}},{\"unit\":\"50_public_apis_2_sessions.md:`public_op:agent_sessions.check_agent_call`\",\"subject\":\"unknown-pointer withdrawal with an active project\",\"kind\":\"stage ambiguity\",\"text\":\"A project input of “none” means use the active project, but for withdrawal the project is “resolved before”; an unknown pointer also resolves to no project and is required elsewhere to receive the stage-(2) `agent_call_refused` answer rather than fall back to the active project.\",\"question\":\"How does the call distinguish “the operation omitted a project, use active” from “pointer resolution failed, do not use active”?\",\"options\":[\"use a distinct unresolved-pointer result that immediately produces stage-(2) `agent_call_refused`\",\"pass an explicit `use_active_project` flag separate from the optional project id\",\"treat every absent project as active fallback, then report `unknown_pointer` at stage (3)\"],\"default_guess\":\"Use a distinct unresolved-pointer input and return `agent_call_refused` at stage (2).\",\"witness\":{\"initial\":\"Kernel session S is registered and has active granted project P; pointer X does not exist.\",\"events\":[\"Kernel asks to withdraw X.\",\"`operations` calls `project_of_pointer`, which answers that no pointer exists.\",\"`operations` invokes the agent-call check.\"],\"outcomes\":[\"Resolution failure is distinguished from omission, so the answer is stage (2), kind `agent_call_refused`.\",\"The absent project triggers active-project fallback to P; stage (2) passes and the answer becomes stage (3), kind `unknown_pointer`.\"],\"observer\":\"Kernel receives a different refusal stage and kind.\"}},{\"unit\":\"50_public_apis_3_records.md:`public_op:customers.read_customer`\",\"subject\":\"erased Customer answer\",\"kind\":\"cross-state contradiction\",\"text\":\"The output says “for an erased Customer only that it was erased,” while State 1 M04 says the read returns its `customer_ref`, erased mark and erasure instant, and the State 5 convention requires the identity and mark.\",\"question\":\"Which exact non-personal facts are returned when the Customer is erased?\",\"options\":[\"`customer_ref`, erased mark and erasure instant\",\"`customer_ref` and erased mark only\",\"only a boolean or statement that it was erased\"],\"default_guess\":\"Return `customer_ref`, erased mark and erasure instant.\",\"witness\":{\"initial\":\"Customer C has been erased.\",\"events\":[\"The owner reads C by its `customer_ref`.\"],\"outcomes\":[\"The answer identifies C and includes the erased mark and its instant, as M04 requires.\",\"The answer contains only an erased indication, as the operation's literal output says.\"],\"observer\":\"The owner sees whether the identity and erasure instant are present.\"}},{\"unit\":\"50_public_apis_3_records.md:`public_op:projects.archive_project`\",\"subject\":\"archival time representation\",\"kind\":\"cross-state contradiction\",\"text\":\"The operation takes “the action's instant and today's date” and says the project gets “its archived date,” while State 1 M01 and “Revisions and times” define the written fact as the instant it was archived.\",\"question\":\"Is the stored archival fact the full action instant or only today's UTC calendar date, and why is the other input present?\",\"options\":[\"store the full action instant and derive any displayed date from it\",\"store only the UTC date\",\"store both an archival instant and an archival date\"],\"default_guess\":\"Store the full action instant only.\",\"witness\":{\"initial\":\"An active project is archived at 2026-11-01T18:42:13Z.\",\"events\":[\"`operations` passes both that instant and the date 2026-11-01 to `archive_project`.\",\"The owner later reads the archived project card.\"],\"outcomes\":[\"The project records the exact archival instant 2026-11-01T18:42:13Z.\",\"The project records only 2026-11-01, losing the time despite State 1's instant requirement.\"],\"observer\":\"The owner, retention tooling or contract tests see different archival facts.\"}},{\"unit\":\"50_public_apis_4_import_backups.md:`public_op:migration_import.read_import_mapping`\",\"subject\":\"identity and verification of the uploaded file digest\",\"kind\":\"input trust unspecified\",\"text\":\"The operation takes “the file's bytes and digest,” but does not say who computes the digest, which algorithm is used, or whether the supplied digest is verified against the bytes before it names the mapping, confirmation and migration closure.\",\"question\":\"Must `migration_import` compute a canonical cryptographic digest from the bytes, verify a caller-supplied digest, or trust the digest input?\",\"options\":[\"compute the digest internally from the bytes with a named algorithm\",\"accept a digest from `operations` only after a named shared digest operation computed it\",\"verify a supplied digest against the bytes\",\"trust the supplied digest without verification\"],\"default_guess\":\"Compute SHA-256 internally from the uploaded bytes and expose that value as the file digest.\",\"witness\":{\"initial\":\"An upload contains file bytes A but reaches the operation with digest value B, which is not the digest of A.\",\"events\":[\"The owner uploads the file.\",\"The mapping is shown and later confirmed.\",\"The migration closure and audit entry are written.\"],\"outcomes\":[\"Registry computes or verifies the digest and either uses digest(A) or refuses the mismatch.\",\"Registry trusts B, imports A, and records B as the identity of the accepted file.\"],\"observer\":\"The owner and the audit record see which file identity is recorded.\"}},{\"unit\":\"50_public_apis_4_import_backups.md:`public_op:backups.newest_backup_instant`\",\"subject\":\"failure while listing or reading the backup location\",\"kind\":\"missing error outcome\",\"text\":\"The operation declares “Errors: None” although its state impact is to list a filesystem location whose listing or metadata reads can fail after startup.\",\"question\":\"What does the operation return if the backup directory cannot be listed or a filesystem error interrupts the one listing?\",\"options\":[\"an internal or diagnostic error distinct from “there is none”\",\"“there is none”\",\"the newest value found before the failure\",\"the last successfully cached newest instant\"],\"default_guess\":\"Return a diagnostic/internal error distinct from an empty backup set.\",\"witness\":{\"initial\":\"A kept backup exists, but the backup directory becomes unreadable after Registry started.\",\"events\":[\"The owner opens the page that calls `newest_backup_instant`.\",\"The directory listing fails with a permission or I/O error.\"],\"outcomes\":[\"The page reports that backup status could not be read.\",\"The operation returns “there is none,” falsely reporting that no backup exists.\"],\"observer\":\"The owner sees an error or a misleading no-backup state.\"}},{\"unit\":\"50_public_apis_5_surfaces.md:`public_op:service_api.serve_service_request`\",\"subject\":\"authentication versus malformed-wire refusal order\",\"kind\":\"contradictory error precedence\",\"text\":\"The surface says “A request that is not of the wire format answers `invalid_request` (`outside_closed_list`),” while A04 and `perform_service_operation` require stage (1) authentication and rights to precede every request-value check.\",\"question\":\"For a request that is both unauthenticated and malformed, which refusal must the service API return?\",\"options\":[\"`unauthenticated` without disclosing whether the body is valid\",\"`invalid_request` before authentication\",\"parse only enough to extract the token, then authenticate before validating the operation body\"],\"default_guess\":\"Extract the credential without validating the operation body, authenticate first, and return `unauthenticated`.\",\"witness\":{\"initial\":\"The service API listener is running.\",\"events\":[\"A caller sends no token and a malformed or unknown operation body.\"],\"outcomes\":[\"Stage (1) wins and the response is `unauthenticated` with `no_valid_token`.\",\"The surface's malformed-wire rule wins and the response is `invalid_request` with `outside_closed_list`.\"],\"observer\":\"The unauthenticated network caller can distinguish the two responses.\"}},{\"unit\":\"50_public_apis_5_surfaces.md:`public_op:service_api.serve_service_request`\",\"subject\":\"trusted provenance of Kernel's agent-session identity\",\"kind\":\"authority input unspecified\",\"text\":\"The input is only “the token and the operation's request in the wire format,” while `perform_service_operation` receives “for Kernel, the agent session it names”; R0-77 requires that session to come from Kernel's own run context, never from a value the agent's flow supplies.\",\"question\":\"Through what transport field or trusted channel does the service API receive Kernel's session identity, and how is it kept outside agent-controlled operation inputs?\",\"options\":[\"a dedicated authenticated transport field populated only by Kernel's server-side run context\",\"connection-local trusted metadata supplied by Kernel\",\"an ordinary request-body field, relying on Kernel not to expose it to flows\",\"a separate Kernel-only endpoint or binding\"],\"default_guess\":\"Use a dedicated authenticated metadata field populated by Kernel outside the operation's agent-controlled input schema.\",\"witness\":{\"initial\":\"Kernel is executing agent session A; another registered session B has access to project P.\",\"events\":[\"Agent-controlled operation data attempts to name session B while calling with Kernel's valid token.\",\"The service API constructs the input to `perform_service_operation`.\"],\"outcomes\":[\"The API ignores agent-controlled session data and supplies A from trusted Kernel run metadata, so access to P is refused.\",\"The API reads B from the ordinary request body, so the call is checked against B and can reach P.\"],\"observer\":\"The agent sees whether it can act with another session's grants.\"}}]}",
+ "set_aside": []
+}

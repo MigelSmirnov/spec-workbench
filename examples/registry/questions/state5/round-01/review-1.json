@@ -1,0 +1,360 @@
+{
+ "open_points": [
+  {
+   "unit": "50_public_apis_1_foundation.md:`public_op:clock.today_in_utc`",
+   "subject": "paired action time readings",
+   "kind": "non-atomic inputs",
+   "text": "“Today is the UTC date of `recorded_now` read at the same moment, so an action's instant and its today never fall on different dates.” The two public operations are separate calls and expose no shared reading or input that makes them the same moment.",
+   "question": "How must callers obtain an action's instant and today atomically when the wall clock crosses midnight between the two calls?",
+   "options": [
+    "`today_in_utc` derives from the already-read action instant",
+    "Both operations independently read the host clock, so the dates may differ",
+    "The clock module retains or returns a paired reading"
+   ],
+   "default_guess": "Derive today from the action instant already returned by `recorded_now`.",
+   "witness": {
+    "initial": "The UTC clock is just before midnight and an owner ends a customer relationship without giving a date.",
+    "events": [
+     "`operations` calls `clock.recorded_now` immediately before midnight.",
+     "UTC midnight passes before `operations` calls `clock.today_in_utc`."
+    ],
+    "outcomes": [
+     "The relationship end date is derived from the action instant and is the previous UTC date.",
+     "The relationship end date comes from the second call and is the new UTC date, although the audit instant is on the previous date."
+    ],
+    "observer": "The owner reading the Customer and audit entry"
+   }
+  },
+  {
+   "unit": "50_public_apis_0_conventions.md:Conventions every operation follows",
+   "subject": "changed indicator on write operations",
+   "kind": "cross-operation contradiction",
+   "text": "“Every operation that changes a record answers whether it changed it.” Several declared write operations do not return `changed`, including `agent_sessions.request_project_access`, `agent_sessions.end_session`, `agent_sessions.drop_project_from_sessions`, `customers.make_imported_customer`, `projects.write_imported_project`, `artifact_pointers.withdraw_pointer`, `artifact_pointers.delete_pointers_of_project`, `artifact_pointers.write_imported_pointer`, `migration_import.confirm_import` and `migration_import.record_migration_closure`.",
+   "question": "Does the `changed` output apply to every record-changing public operation, or only operations that can be accepted as a no-op?",
+   "options": [
+    "Every listed write operation returns `changed`",
+    "Only operations that may be accepted without changing state return `changed`",
+    "Each operation decides independently despite the convention"
+   ],
+   "default_guess": "Require `changed` only where an accepted call may be a no-op, and narrow the convention accordingly.",
+   "witness": {
+    "initial": "A registered agent session has no pending request.",
+    "events": [
+     "Kernel calls `request_project_access` with valid text.",
+     "`operations` receives the public operation's answer."
+    ],
+    "outcomes": [
+     "The answer includes `changed: true` because the convention requires it.",
+     "The answer contains only that the request is pending, exactly as the operation's Outputs section says."
+    ],
+    "observer": "The `operations` module and any tests of the module API"
+   }
+  },
+  {
+   "unit": "50_public_apis_2_sessions.md:`public_op:owner_sessions.sign_out_owner`",
+   "subject": "sign-out lock ownership",
+   "kind": "locking contradiction",
+   "text": "`admit_owner_request` outputs an admitted session “holding — for a change — the session's lock, and first the instance's import lock when the request reads or changes an uploaded file,” while `sign_out_owner`, whose input is that admitted session, says “It takes the import lock, then the session's lock.”",
+   "question": "Are the locks already held on entry to `sign_out_owner`, or must that operation acquire them itself?",
+   "options": [
+    "`admit_owner_request` acquires and transfers already-held locks",
+    "`sign_out_owner` acquires both locks after admission",
+    "The locks are reentrant and acquired twice"
+   ],
+   "default_guess": "Treat the locks as already held by the admitted request and have sign-out only mutate the session.",
+   "witness": {
+    "initial": "An owner session has an uploaded file and no request currently holds its locks.",
+    "events": [
+     "The owner submits sign-out as a state-changing request.",
+     "`admit_owner_request` admits it as a request that changes an uploaded file."
+    ],
+    "outcomes": [
+     "Admission acquires both locks and `sign_out_owner` ends the session while holding them.",
+     "Admission acquires the locks and `sign_out_owner` attempts to acquire them again, blocking or failing with non-reentrant locks."
+    ],
+    "observer": "The owner, who either completes sign-out or sees the request hang/fail"
+   }
+  },
+  {
+   "unit": "50_public_apis_2_sessions.md:`public_op:owner_sessions.show_confirmation_step`",
+   "subject": "confirmation input digest",
+   "kind": "undefined canonicalization",
+   "text": "The pending confirmation is bound to “the digest of its inputs in a fixed order,” but no digest algorithm, encoding, field order, treatment of absent values, or public operation responsible for producing the digest is declared; `take_confirmation` receives a digest rather than the original inputs.",
+   "question": "What exact canonical representation and digest operation must `show_confirmation_step` and `take_confirmation` use so that equivalent submissions bind identically?",
+   "options": [
+    "`owner_sessions` canonicalizes and hashes the original structured inputs on both calls",
+    "`operations` computes a specified canonical digest before both calls",
+    "The pending confirmation stores and compares the structured inputs directly"
+   ],
+   "default_guess": "Pass the structured inputs to `owner_sessions` and let it use one hidden canonicalization on both calls.",
+   "witness": {
+    "initial": "The owner is confirming an import with two project picks and optional aliases.",
+    "events": [
+     "The confirmation step is shown with picks P1 and P2.",
+     "The same values are submitted with map keys or set-like picks presented in a different iteration order."
+    ],
+    "outcomes": [
+     "Canonical order makes the digests equal and the confirmation proceeds.",
+     "Serialization order changes the digest and the submission is refused as bound elsewhere."
+    ],
+    "observer": "The owner submitting the confirmation"
+   }
+  },
+  {
+   "unit": "50_public_apis_2_sessions.md:`public_op:owner_sessions.take_confirmation`",
+   "subject": "classification of a reused confirmation value",
+   "kind": "indistinguishable refusal states",
+   "text": "A matching value “is used up from here on,” and the closed refusal set distinguishes `confirmation_missing_or_other` from `confirmation_used_or_bound_elsewhere`; however the session model keeps only one pending confirmation and no used-value history is declared.",
+   "question": "After a confirmation is consumed and removed, how can a second submission of it be distinguished from an arbitrary value submitted when no confirmation is pending, and which refusal kind must each receive?",
+   "options": [
+    "Retain enough used-value history to return `confirmation_used_or_bound_elsewhere`",
+    "Return `confirmation_missing_or_other` whenever no pending confirmation exists",
+    "Use `confirmation_used_or_bound_elsewhere` for every supplied value when none is pending"
+   ],
+   "default_guess": "Return `confirmation_missing_or_other` when no pending confirmation exists, since no used-value history is modeled.",
+   "witness": {
+    "initial": "A confirmation value C was accepted and consumed; the session remains valid and has no new pending confirmation.",
+    "events": [
+     "The browser resubmits the form carrying C.",
+     "The browser then submits an unrelated value X."
+    ],
+    "outcomes": [
+     "C is reported as `confirmation_used_or_bound_elsewhere` while X is `confirmation_missing_or_other`, requiring retained history.",
+     "C and X receive the same `confirmation_missing_or_other` result because the session retains neither."
+    ],
+    "observer": "The owner interface and its refusal rendering"
+   }
+  },
+  {
+   "unit": "50_public_apis_2_sessions.md:`public_op:owner_sessions.end_expired_sessions`",
+   "subject": "time sampled by expiry pass",
+   "kind": "concurrency ambiguity",
+   "text": "The pass takes “the import lock and then each session's lock and decid[es] under them,” and limits use `clock.monotonic_reading`, but it does not say whether time is read once for the pass, once before each lock, or after each session lock is acquired.",
+   "question": "At what monotonic reading is each session's expiry decided during a pass that is delayed while acquiring locks?",
+   "options": [
+    "One reading fixes the cutoff for the whole pass",
+    "A new reading is taken after each session lock is acquired",
+    "A reading is taken before waiting for each session lock"
+   ],
+   "default_guess": "Read the monotonic clock after acquiring each session's lock.",
+   "witness": {
+    "initial": "A session will reach its idle limit one second after the expiry pass begins, and another request holds its lock for several seconds.",
+    "events": [
+     "The expiry pass starts and waits for the session's lock.",
+     "The session crosses the 30-minute idle limit while the pass waits.",
+     "The lock becomes available."
+    ],
+    "outcomes": [
+     "A pass-wide reading says it was not expired, so it survives until the next pass.",
+     "A reading under the session lock says it is expired, so this pass ends it."
+    ],
+    "observer": "The owner whose next request either retains or loses the session"
+   }
+  },
+  {
+   "unit": "50_public_apis_3_records.md:`public_op:projects.archive_project`",
+   "subject": "archived time representation",
+   "kind": "text contradiction",
+   "text": "The operation takes “the action's instant and today's date” and says the project gets “its archived date,” while State 1 says the Project carries “the instant it was archived” and imports preserve “archived instants.”",
+   "question": "Does archiving store and return the full action instant or only its UTC calendar date, and what is the unused time input for?",
+   "options": [
+    "Store the full action instant; derive a displayed date when needed",
+    "Store only today's UTC date",
+    "Store both an archived instant and a separate archived date"
+   ],
+   "default_guess": "Store the full action instant and derive the calendar date for displays that need one.",
+   "witness": {
+    "initial": "An active project is archived at 14:37:12 UTC.",
+    "events": [
+     "The owner confirms the archive.",
+     "Later the project card is read and the store is exported or backed up."
+    ],
+    "outcomes": [
+     "The record preserves 14:37:12 UTC as its archived instant.",
+     "The record preserves only the UTC date, so the time of archiving is unavailable outside the audit entry."
+    ],
+    "observer": "The owner and migration/backup code reading the Project record"
+   }
+  },
+  {
+   "unit": "50_public_apis_4_import_backups.md:`public_op:migration_import.read_import_mapping`",
+   "subject": "uploaded file digest provenance",
+   "kind": "unchecked derived input",
+   "text": "The operation takes “the file's bytes and digest” and the mapping later binds and records that digest, but it never says who computes it, which algorithm is used, or that the supplied digest must match the supplied bytes.",
+   "question": "Is the digest computed by Registry from the bytes, validated against a caller-supplied value, or trusted as an input?",
+   "options": [
+    "`migration_import` computes a specified digest from the bytes",
+    "`operations` computes it and passes a trusted derived value",
+    "The owner-interface request supplies it and `migration_import` trusts it"
+   ],
+   "default_guess": "Compute the digest inside Registry from the accepted bytes and never accept it from the browser.",
+   "witness": {
+    "initial": "No migration closure exists and the owner uploads file A.",
+    "events": [
+     "The upload reaches `read_import_mapping` with file A's bytes and a digest D that actually names different bytes B.",
+     "The owner confirms the mapping."
+    ],
+    "outcomes": [
+     "Registry rejects or replaces D after hashing A, and the closure/audit entry identify A.",
+     "Registry trusts D, imports A, but the closure and audit entry identify B's digest."
+    ],
+    "observer": "The owner reviewing the import audit entry and anyone identifying the imported file"
+   }
+  },
+  {
+   "unit": "50_public_apis_4_import_backups.md:`public_op:migration_import.read_import_mapping`",
+   "subject": "access to the release's import size limit",
+   "kind": "missing module operation",
+   "text": "This operation enforces “the release's size limit,” while State 3 says the value belongs to `release_declarations`; State 5 says only public operations may be called across modules, but declares no `release_declarations` operation returning that limit and does not pass it as an input here.",
+   "question": "How does `migration_import` obtain the release's import-file size limit without crossing the declared module boundary?",
+   "options": [
+    "Add a public release-declaration operation for the limit",
+    "Pass the limit into `read_import_mapping`",
+    "Hard-code the same limit independently inside `migration_import`"
+   ],
+   "default_guess": "Expose the limit through `release_declarations` and have `migration_import` call it.",
+   "witness": {
+    "initial": "A release declares limit L and an uploaded file has size between two plausible independently chosen limits.",
+    "events": [
+     "`migration_import.read_import_mapping` checks the upload.",
+     "No declared public input or operation supplies L."
+    ],
+    "outcomes": [
+     "An implementation hard-codes a smaller value and refuses `file_too_large`.",
+     "Another implementation hard-codes a larger value and accepts the same file."
+    ],
+    "observer": "The owner uploading the migration file"
+   }
+  },
+  {
+   "unit": "50_public_apis_1_foundation.md:`public_op:store.open_store`",
+   "subject": "store temporary-name suffix",
+   "kind": "missing module operation",
+   "text": "`open_store` must use “the store's temporary name” and says it is the store name with the suffix the release declares, but State 5 exposes no `release_declarations` operation returning that suffix and the suffix is not an input to `open_store`.",
+   "question": "How does `store` obtain the release-declared temporary suffix, and what exact suffix is it?",
+   "options": [
+    "Add a public release-declaration operation for the suffix",
+    "Pass the suffix to `open_store`",
+    "Let `store` hard-code a suffix independently"
+   ],
+   "default_guess": "Expose the suffix through `release_declarations`.",
+   "witness": {
+    "initial": "A previous interrupted start left `/data/registry.db<S>` using the release's intended suffix S, and the real store is absent.",
+    "events": [
+     "A new process calls `store.open_store`.",
+     "The store module has no public way to read S."
+    ],
+    "outcomes": [
+     "An implementation guesses S, removes the leftover and creates the store.",
+     "An implementation uses another suffix, leaves the intended leftover untouched and creates or refuses differently."
+    ],
+    "observer": "The host administrator and the instance start"
+   }
+  },
+  {
+   "unit": "50_public_apis_4_import_backups.md:`public_op:backups.newest_backup_instant`",
+   "subject": "backup-directory listing failure",
+   "kind": "missing error behavior",
+   "text": "The operation lists the backup location and declares “Errors: None,” but does not say what happens when the location becomes unreadable or cannot be listed after startup.",
+   "question": "Does a listing failure answer “there is none,” emit a diagnostic, return `internal_error`, or fail the request?",
+   "options": [
+    "Return no backup as if the directory were empty",
+    "Return an internal error to the owner operation",
+    "Emit a diagnostic and return no instant",
+    "Propagate a filesystem failure"
+   ],
+   "default_guess": "Return an internal error rather than report that no backup exists.",
+   "witness": {
+    "initial": "Registry started successfully and a kept backup exists; later the backup directory loses read permission.",
+    "events": [
+     "The owner opens the page that asks `newest_backup_instant`.",
+     "The module attempts its one listing."
+    ],
+    "outcomes": [
+     "The page says there is no kept backup.",
+     "The page reports an error and does not make a claim about backup existence."
+    ],
+    "observer": "The owner monitoring backups"
+   }
+  },
+  {
+   "unit": "50_public_apis_4_import_backups.md:`public_op:backups.run_daily_backup_if_due`",
+   "subject": "delivery of background backup diagnostics",
+   "kind": "unspecified output channel",
+   "text": "The operation's Outputs say “Nothing to the caller; a run's failure is a diagnostic naming it and no value,” but no destination, return channel, logging operation, or effect for that diagnostic is declared.",
+   "question": "How is a failed background run's diagnostic delivered and observed?",
+   "options": [
+    "Return the diagnostic to `instance_lifecycle`",
+    "Write it to a process diagnostic stream or logger",
+    "Keep it in runtime state for the owner interface",
+    "Discard it after the run"
+   ],
+   "default_guess": "Return a structured diagnostic to `instance_lifecycle`, which emits it through the process diagnostic channel.",
+   "witness": {
+    "initial": "Registry is running and the backup directory becomes unwritable before 03:00 UTC.",
+    "events": [
+     "The daily run becomes due.",
+     "Creating the temporary backup fails."
+    ],
+    "outcomes": [
+     "A diagnostic is emitted to a host-visible process log or stream.",
+     "The operation returns nothing and no declared state retains the failure, so the owner sees no report."
+    ],
+    "observer": "The owner monitoring the production host"
+   }
+  },
+  {
+   "unit": "50_public_apis_5_surfaces.md:`public_op:service_api.serve_service_request`",
+   "subject": "boundary between malformed wire requests and domain validation",
+   "kind": "overlapping refusal rules",
+   "text": "The surface says “A request that is not of the wire format answers `invalid_request` (`outside_closed_list`)”; domain operations separately assign `missing_value`, `malformed_request_id`, `unknown_artifact_type` and other stage-(4) kinds to malformed inputs. The text does not define when a malformed field makes the whole request “not of the wire format.”",
+   "question": "Which structural and field errors are rejected by the transport as `outside_closed_list`, and which are passed to the operation for their specific stage-(4) kinds?",
+   "options": [
+    "Only an unknown route/operation is `outside_closed_list`; known operations pass missing or malformed fields to domain validation",
+    "Any request failing its wire schema is `outside_closed_list`",
+    "The wire layer returns the same specific kinds the domain operation would"
+   ],
+   "default_guess": "Treat only an unknown operation or impossible envelope as `outside_closed_list`; pass known-operation fields to domain validation.",
+   "witness": {
+    "initial": "Kernel has a valid session and grant for project P.",
+    "events": [
+     "Kernel sends the add-room operation for P but omits the room name.",
+     "The service API parses the operation name and remaining envelope."
+    ],
+    "outcomes": [
+     "The transport declares the request outside the wire format and returns `outside_closed_list`.",
+     "The transport dispatches it and `projects.add_room` returns `missing_value`."
+    ],
+    "observer": "Cabinet Kernel, which acts differently depending on the refusal kind"
+   }
+  },
+  {
+   "unit": "50_public_apis_5_surfaces.md:`public_op:operations.perform_owner_operation`",
+   "subject": "audit entries for owner changes",
+   "kind": "internal contradiction",
+   "text": "Observable effect says: “For an accepted change: the change, its audit entry (M09) ... all in one transaction.” The Enforces section instead says the entry is appended “only when the action changed state and M09 lists it.” M09 explicitly excludes accepted changes such as adding a room, publishing or withdrawing a pointer, changing the active project and clearing a pending request by declining it.",
+   "question": "Do accepted owner changes that M09 excludes write audit entries or not?",
+   "options": [
+    "Every accepted owner change writes an entry",
+    "Only the closed set of changes M09 lists writes an entry",
+    "Excluded changes write a different non-M09 entry"
+   ],
+   "default_guess": "Only actions M09 lists write audit entries.",
+   "witness": {
+    "initial": "An active project exists and the owner has a valid session.",
+    "events": [
+     "The owner adds a room with a new request id.",
+     "The transaction commits."
+    ],
+    "outcomes": [
+     "The room and an audit entry are committed because the Observable effect covers every accepted change.",
+     "The room is committed with no audit entry because M09 excludes adding rooms and the Enforces section applies."
+    ],
+    "observer": "The owner reading the audit log"
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"50_public_apis_1_foundation.md:`public_op:clock.today_in_utc`\",\"subject\":\"paired action time readings\",\"kind\":\"non-atomic inputs\",\"text\":\"“Today is the UTC date of `recorded_now` read at the same moment, so an action's instant and its today never fall on different dates.” The two public operations are separate calls and expose no shared reading or input that makes them the same moment.\",\"question\":\"How must callers obtain an action's instant and today atomically when the wall clock crosses midnight between the two calls?\",\"options\":[\"`today_in_utc` derives from the already-read action instant\",\"Both operations independently read the host clock, so the dates may differ\",\"The clock module retains or returns a paired reading\"],\"default_guess\":\"Derive today from the action instant already returned by `recorded_now`.\",\"witness\":{\"initial\":\"The UTC clock is just before midnight and an owner ends a customer relationship without giving a date.\",\"events\":[\"`operations` calls `clock.recorded_now` immediately before midnight.\",\"UTC midnight passes before `operations` calls `clock.today_in_utc`.\"],\"outcomes\":[\"The relationship end date is derived from the action instant and is the previous UTC date.\",\"The relationship end date comes from the second call and is the new UTC date, although the audit instant is on the previous date.\"],\"observer\":\"The owner reading the Customer and audit entry\"}},{\"unit\":\"50_public_apis_0_conventions.md:Conventions every operation follows\",\"subject\":\"changed indicator on write operations\",\"kind\":\"cross-operation contradiction\",\"text\":\"“Every operation that changes a record answers whether it changed it.” Several declared write operations do not return `changed`, including `agent_sessions.request_project_access`, `agent_sessions.end_session`, `agent_sessions.drop_project_from_sessions`, `customers.make_imported_customer`, `projects.write_imported_project`, `artifact_pointers.withdraw_pointer`, `artifact_pointers.delete_pointers_of_project`, `artifact_pointers.write_imported_pointer`, `migration_import.confirm_import` and `migration_import.record_migration_closure`.\",\"question\":\"Does the `changed` output apply to every record-changing public operation, or only operations that can be accepted as a no-op?\",\"options\":[\"Every listed write operation returns `changed`\",\"Only operations that may be accepted without changing state return `changed`\",\"Each operation decides independently despite the convention\"],\"default_guess\":\"Require `changed` only where an accepted call may be a no-op, and narrow the convention accordingly.\",\"witness\":{\"initial\":\"A registered agent session has no pending request.\",\"events\":[\"Kernel calls `request_project_access` with valid text.\",\"`operations` receives the public operation's answer.\"],\"outcomes\":[\"The answer includes `changed: true` because the convention requires it.\",\"The answer contains only that the request is pending, exactly as the operation's Outputs section says.\"],\"observer\":\"The `operations` module and any tests of the module API\"}},{\"unit\":\"50_public_apis_2_sessions.md:`public_op:owner_sessions.sign_out_owner`\",\"subject\":\"sign-out lock ownership\",\"kind\":\"locking contradiction\",\"text\":\"`admit_owner_request` outputs an admitted session “holding — for a change — the session's lock, and first the instance's import lock when the request reads or changes an uploaded file,” while `sign_out_owner`, whose input is that admitted session, says “It takes the import lock, then the session's lock.”\",\"question\":\"Are the locks already held on entry to `sign_out_owner`, or must that operation acquire them itself?\",\"options\":[\"`admit_owner_request` acquires and transfers already-held locks\",\"`sign_out_owner` acquires both locks after admission\",\"The locks are reentrant and acquired twice\"],\"default_guess\":\"Treat the locks as already held by the admitted request and have sign-out only mutate the session.\",\"witness\":{\"initial\":\"An owner session has an uploaded file and no request currently holds its locks.\",\"events\":[\"The owner submits sign-out as a state-changing request.\",\"`admit_owner_request` admits it as a request that changes an uploaded file.\"],\"outcomes\":[\"Admission acquires both locks and `sign_out_owner` ends the session while holding them.\",\"Admission acquires the locks and `sign_out_owner` attempts to acquire them again, blocking or failing with non-reentrant locks.\"],\"observer\":\"The owner, who either completes sign-out or sees the request hang/fail\"}},{\"unit\":\"50_public_apis_2_sessions.md:`public_op:owner_sessions.show_confirmation_step`\",\"subject\":\"confirmation input digest\",\"kind\":\"undefined canonicalization\",\"text\":\"The pending confirmation is bound to “the digest of its inputs in a fixed order,” but no digest algorithm, encoding, field order, treatment of absent values, or public operation responsible for producing the digest is declared; `take_confirmation` receives a digest rather than the original inputs.\",\"question\":\"What exact canonical representation and digest operation must `show_confirmation_step` and `take_confirmation` use so that equivalent submissions bind identically?\",\"options\":[\"`owner_sessions` canonicalizes and hashes the original structured inputs on both calls\",\"`operations` computes a specified canonical digest before both calls\",\"The pending confirmation stores and compares the structured inputs directly\"],\"default_guess\":\"Pass the structured inputs to `owner_sessions` and let it use one hidden canonicalization on both calls.\",\"witness\":{\"initial\":\"The owner is confirming an import with two project picks and optional aliases.\",\"events\":[\"The confirmation step is shown with picks P1 and P2.\",\"The same values are submitted with map keys or set-like picks presented in a different iteration order.\"],\"outcomes\":[\"Canonical order makes the digests equal and the confirmation proceeds.\",\"Serialization order changes the digest and the submission is refused as bound elsewhere.\"],\"observer\":\"The owner submitting the confirmation\"}},{\"unit\":\"50_public_apis_2_sessions.md:`public_op:owner_sessions.take_confirmation`\",\"subject\":\"classification of a reused confirmation value\",\"kind\":\"indistinguishable refusal states\",\"text\":\"A matching value “is used up from here on,” and the closed refusal set distinguishes `confirmation_missing_or_other` from `confirmation_used_or_bound_elsewhere`; however the session model keeps only one pending confirmation and no used-value history is declared.\",\"question\":\"After a confirmation is consumed and removed, how can a second submission of it be distinguished from an arbitrary value submitted when no confirmation is pending, and which refusal kind must each receive?\",\"options\":[\"Retain enough used-value history to return `confirmation_used_or_bound_elsewhere`\",\"Return `confirmation_missing_or_other` whenever no pending confirmation exists\",\"Use `confirmation_used_or_bound_elsewhere` for every supplied value when none is pending\"],\"default_guess\":\"Return `confirmation_missing_or_other` when no pending confirmation exists, since no used-value history is modeled.\",\"witness\":{\"initial\":\"A confirmation value C was accepted and consumed; the session remains valid and has no new pending confirmation.\",\"events\":[\"The browser resubmits the form carrying C.\",\"The browser then submits an unrelated value X.\"],\"outcomes\":[\"C is reported as `confirmation_used_or_bound_elsewhere` while X is `confirmation_missing_or_other`, requiring retained history.\",\"C and X receive the same `confirmation_missing_or_other` result because the session retains neither.\"],\"observer\":\"The owner interface and its refusal rendering\"}},{\"unit\":\"50_public_apis_2_sessions.md:`public_op:owner_sessions.end_expired_sessions`\",\"subject\":\"time sampled by expiry pass\",\"kind\":\"concurrency ambiguity\",\"text\":\"The pass takes “the import lock and then each session's lock and decid[es] under them,” and limits use `clock.monotonic_reading`, but it does not say whether time is read once for the pass, once before each lock, or after each session lock is acquired.\",\"question\":\"At what monotonic reading is each session's expiry decided during a pass that is delayed while acquiring locks?\",\"options\":[\"One reading fixes the cutoff for the whole pass\",\"A new reading is taken after each session lock is acquired\",\"A reading is taken before waiting for each session lock\"],\"default_guess\":\"Read the monotonic clock after acquiring each session's lock.\",\"witness\":{\"initial\":\"A session will reach its idle limit one second after the expiry pass begins, and another request holds its lock for several seconds.\",\"events\":[\"The expiry pass starts and waits for the session's lock.\",\"The session crosses the 30-minute idle limit while the pass waits.\",\"The lock becomes available.\"],\"outcomes\":[\"A pass-wide reading says it was not expired, so it survives until the next pass.\",\"A reading under the session lock says it is expired, so this pass ends it.\"],\"observer\":\"The owner whose next request either retains or loses the session\"}},{\"unit\":\"50_public_apis_3_records.md:`public_op:projects.archive_project`\",\"subject\":\"archived time representation\",\"kind\":\"text contradiction\",\"text\":\"The operation takes “the action's instant and today's date” and says the project gets “its archived date,” while State 1 says the Project carries “the instant it was archived” and imports preserve “archived instants.”\",\"question\":\"Does archiving store and return the full action instant or only its UTC calendar date, and what is the unused time input for?\",\"options\":[\"Store the full action instant; derive a displayed date when needed\",\"Store only today's UTC date\",\"Store both an archived instant and a separate archived date\"],\"default_guess\":\"Store the full action instant and derive the calendar date for displays that need one.\",\"witness\":{\"initial\":\"An active project is archived at 14:37:12 UTC.\",\"events\":[\"The owner confirms the archive.\",\"Later the project card is read and the store is exported or backed up.\"],\"outcomes\":[\"The record preserves 14:37:12 UTC as its archived instant.\",\"The record preserves only the UTC date, so the time of archiving is unavailable outside the audit entry.\"],\"observer\":\"The owner and migration/backup code reading the Project record\"}},{\"unit\":\"50_public_apis_4_import_backups.md:`public_op:migration_import.read_import_mapping`\",\"subject\":\"uploaded file digest provenance\",\"kind\":\"unchecked derived input\",\"text\":\"The operation takes “the file's bytes and digest” and the mapping later binds and records that digest, but it never says who computes it, which algorithm is used, or that the supplied digest must match the supplied bytes.\",\"question\":\"Is the digest computed by Registry from the bytes, validated against a caller-supplied value, or trusted as an input?\",\"options\":[\"`migration_import` computes a specified digest from the bytes\",\"`operations` computes it and passes a trusted derived value\",\"The owner-interface request supplies it and `migration_import` trusts it\"],\"default_guess\":\"Compute the digest inside Registry from the accepted bytes and never accept it from the browser.\",\"witness\":{\"initial\":\"No migration closure exists and the owner uploads file A.\",\"events\":[\"The upload reaches `read_import_mapping` with file A's bytes and a digest D that actually names different bytes B.\",\"The owner confirms the mapping.\"],\"outcomes\":[\"Registry rejects or replaces D after hashing A, and the closure/audit entry identify A.\",\"Registry trusts D, imports A, but the closure and audit entry identify B's digest.\"],\"observer\":\"The owner reviewing the import audit entry and anyone identifying the imported file\"}},{\"unit\":\"50_public_apis_4_import_backups.md:`public_op:migration_import.read_import_mapping`\",\"subject\":\"access to the release's import size limit\",\"kind\":\"missing module operation\",\"text\":\"This operation enforces “the release's size limit,” while State 3 says the value belongs to `release_declarations`; State 5 says only public operations may be called across modules, but declares no `release_declarations` operation returning that limit and does not pass it as an input here.\",\"question\":\"How does `migration_import` obtain the release's import-file size limit without crossing the declared module boundary?\",\"options\":[\"Add a public release-declaration operation for the limit\",\"Pass the limit into `read_import_mapping`\",\"Hard-code the same limit independently inside `migration_import`\"],\"default_guess\":\"Expose the limit through `release_declarations` and have `migration_import` call it.\",\"witness\":{\"initial\":\"A release declares limit L and an uploaded file has size between two plausible independently chosen limits.\",\"events\":[\"`migration_import.read_import_mapping` checks the upload.\",\"No declared public input or operation supplies L.\"],\"outcomes\":[\"An implementation hard-codes a smaller value and refuses `file_too_large`.\",\"Another implementation hard-codes a larger value and accepts the same file.\"],\"observer\":\"The owner uploading the migration file\"}},{\"unit\":\"50_public_apis_1_foundation.md:`public_op:store.open_store`\",\"subject\":\"store temporary-name suffix\",\"kind\":\"missing module operation\",\"text\":\"`open_store` must use “the store's temporary name” and says it is the store name with the suffix the release declares, but State 5 exposes no `release_declarations` operation returning that suffix and the suffix is not an input to `open_store`.\",\"question\":\"How does `store` obtain the release-declared temporary suffix, and what exact suffix is it?\",\"options\":[\"Add a public release-declaration operation for the suffix\",\"Pass the suffix to `open_store`\",\"Let `store` hard-code a suffix independently\"],\"default_guess\":\"Expose the suffix through `release_declarations`.\",\"witness\":{\"initial\":\"A previous interrupted start left `/data/registry.db<S>` using the release's intended suffix S, and the real store is absent.\",\"events\":[\"A new process calls `store.open_store`.\",\"The store module has no public way to read S.\"],\"outcomes\":[\"An implementation guesses S, removes the leftover and creates the store.\",\"An implementation uses another suffix, leaves the intended leftover untouched and creates or refuses differently.\"],\"observer\":\"The host administrator and the instance start\"}},{\"unit\":\"50_public_apis_4_import_backups.md:`public_op:backups.newest_backup_instant`\",\"subject\":\"backup-directory listing failure\",\"kind\":\"missing error behavior\",\"text\":\"The operation lists the backup location and declares “Errors: None,” but does not say what happens when the location becomes unreadable or cannot be listed after startup.\",\"question\":\"Does a listing failure answer “there is none,” emit a diagnostic, return `internal_error`, or fail the request?\",\"options\":[\"Return no backup as if the directory were empty\",\"Return an internal error to the owner operation\",\"Emit a diagnostic and return no instant\",\"Propagate a filesystem failure\"],\"default_guess\":\"Return an internal error rather than report that no backup exists.\",\"witness\":{\"initial\":\"Registry started successfully and a kept backup exists; later the backup directory loses read permission.\",\"events\":[\"The owner opens the page that asks `newest_backup_instant`.\",\"The module attempts its one listing.\"],\"outcomes\":[\"The page says there is no kept backup.\",\"The page reports an error and does not make a claim about backup existence.\"],\"observer\":\"The owner monitoring backups\"}},{\"unit\":\"50_public_apis_4_import_backups.md:`public_op:backups.run_daily_backup_if_due`\",\"subject\":\"delivery of background backup diagnostics\",\"kind\":\"unspecified output channel\",\"text\":\"The operation's Outputs say “Nothing to the caller; a run's failure is a diagnostic naming it and no value,” but no destination, return channel, logging operation, or effect for that diagnostic is declared.\",\"question\":\"How is a failed background run's diagnostic delivered and observed?\",\"options\":[\"Return the diagnostic to `instance_lifecycle`\",\"Write it to a process diagnostic stream or logger\",\"Keep it in runtime state for the owner interface\",\"Discard it after the run\"],\"default_guess\":\"Return a structured diagnostic to `instance_lifecycle`, which emits it through the process diagnostic channel.\",\"witness\":{\"initial\":\"Registry is running and the backup directory becomes unwritable before 03:00 UTC.\",\"events\":[\"The daily run becomes due.\",\"Creating the temporary backup fails.\"],\"outcomes\":[\"A diagnostic is emitted to a host-visible process log or stream.\",\"The operation returns nothing and no declared state retains the failure, so the owner sees no report.\"],\"observer\":\"The owner monitoring the production host\"}},{\"unit\":\"50_public_apis_5_surfaces.md:`public_op:service_api.serve_service_request`\",\"subject\":\"boundary between malformed wire requests and domain validation\",\"kind\":\"overlapping refusal rules\",\"text\":\"The surface says “A request that is not of the wire format answers `invalid_request` (`outside_closed_list`)”; domain operations separately assign `missing_value`, `malformed_request_id`, `unknown_artifact_type` and other stage-(4) kinds to malformed inputs. The text does not define when a malformed field makes the whole request “not of the wire format.”\",\"question\":\"Which structural and field errors are rejected by the transport as `outside_closed_list`, and which are passed to the operation for their specific stage-(4) kinds?\",\"options\":[\"Only an unknown route/operation is `outside_closed_list`; known operations pass missing or malformed fields to domain validation\",\"Any request failing its wire schema is `outside_closed_list`\",\"The wire layer returns the same specific kinds the domain operation would\"],\"default_guess\":\"Treat only an unknown operation or impossible envelope as `outside_closed_list`; pass known-operation fields to domain validation.\",\"witness\":{\"initial\":\"Kernel has a valid session and grant for project P.\",\"events\":[\"Kernel sends the add-room operation for P but omits the room name.\",\"The service API parses the operation name and remaining envelope.\"],\"outcomes\":[\"The transport declares the request outside the wire format and returns `outside_closed_list`.\",\"The transport dispatches it and `projects.add_room` returns `missing_value`.\"],\"observer\":\"Cabinet Kernel, which acts differently depending on the refusal kind\"}},{\"unit\":\"50_public_apis_5_surfaces.md:`public_op:operations.perform_owner_operation`\",\"subject\":\"audit entries for owner changes\",\"kind\":\"internal contradiction\",\"text\":\"Observable effect says: “For an accepted change: the change, its audit entry (M09) ... all in one transaction.” The Enforces section instead says the entry is appended “only when the action changed state and M09 lists it.” M09 explicitly excludes accepted changes such as adding a room, publishing or withdrawing a pointer, changing the active project and clearing a pending request by declining it.\",\"question\":\"Do accepted owner changes that M09 excludes write audit entries or not?\",\"options\":[\"Every accepted owner change writes an entry\",\"Only the closed set of changes M09 lists writes an entry\",\"Excluded changes write a different non-M09 entry\"],\"default_guess\":\"Only actions M09 lists write audit entries.\",\"witness\":{\"initial\":\"An active project exists and the owner has a valid session.\",\"events\":[\"The owner adds a room with a new request id.\",\"The transaction commits.\"],\"outcomes\":[\"The room and an audit entry are committed because the Observable effect covers every accepted change.\",\"The room is committed with no audit entry because M09 excludes adding rooms and the Enforces section applies.\"],\"observer\":\"The owner reading the audit log\"}}]}",
+ "set_aside": []
+}
