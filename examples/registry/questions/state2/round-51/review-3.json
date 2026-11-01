@@ -1,0 +1,158 @@
+{
+ "open_points": [
+  {
+   "unit": "A17",
+   "subject": "listener addresses for the two network surfaces",
+   "kind": "missing release value",
+   "text": "“the listener of each surface opened at the address the release fixes — the configuration names none” does not give either fixed address anywhere in the accepted texts",
+   "question": "What exact transport, host/interface and port or socket path does the release fix for the service API and for the owner interface?",
+   "options": [
+    "Bind each surface to a distinct TCP host and port on VM Platform.",
+    "Bind both through loopback addresses for a host reverse proxy.",
+    "Bind the service API to a VM/WireGuard-reachable interface and the owner interface to a VPN-facing or proxy-facing interface."
+   ],
+   "default_guess": "Use two TCP listeners fixed by the release, with the service API reachable from VM Platform and WireGuard and the owner interface reachable only through the host's VPN-facing HTTPS proxy.",
+   "witness": {
+    "initial": "A production host has valid configuration, with both loopback and VM-interface addresses available.",
+    "events": [
+     "The owner starts Registry.",
+     "Client Portal attempts to reach the service API over WireGuard and the owner attempts to reach the owner interface through the VPN."
+    ],
+    "outcomes": [
+     "Registry binds loopback listeners; both callers require an unstated reverse proxy or forwarding arrangement.",
+     "Registry binds VM-facing listeners; the callers connect directly, with a different network exposure."
+    ],
+    "observer": "Client Portal, the owner and the host administrator"
+   }
+  },
+  {
+   "unit": "A17",
+   "subject": "listeners in an owner-only start",
+   "kind": "contradictory surface availability",
+   "text": "A17 rule 2 says “the listener of each surface” is opened, while A17 rule 1 and A18 rule 9 say an owner-only start “serves the owner interface alone” and “refuses every service call”",
+   "question": "When all four service tokens are absent, is the service-API listener opened so that calls receive an authentication or authorization refusal, or is that listener absent so connection attempts fail at the network boundary?",
+   "options": [
+    "Open only the owner-interface listener.",
+    "Open both listeners but refuse every service-API request.",
+    "Open the service listener only when all service tokens are configured."
+   ],
+   "default_guess": "Open only the owner-interface listener in an owner-only start.",
+   "witness": {
+    "initial": "The configuration has no service tokens and every other startup item is valid.",
+    "events": [
+     "The owner starts Registry in owner-only mode.",
+     "A process in VM Platform connects to the release-fixed service-API address."
+    ],
+    "outcomes": [
+     "No service listener exists, so the connection is refused or cannot be established.",
+     "The service listener accepts the connection and Registry returns a uniform refused-call answer."
+    ],
+    "observer": "The calling VM Platform process and the host administrator"
+   }
+  },
+  {
+   "unit": "A17",
+   "subject": "order of opening the surface listeners",
+   "kind": "unspecified check order",
+   "text": "The first failing startup check must stop the start, but “the listener of each surface” gives no order between the service API and owner-interface listeners; “Within one check, items go in the order rule 1 lists them” cannot order surfaces because rule 1 does not list listener items",
+   "question": "Which surface's listener is opened and checked first?",
+   "options": [
+    "Service API first, then owner interface.",
+    "Owner interface first, then service API.",
+    "Treat listener opening as one aggregate check with a defined combined diagnostic."
+   ],
+   "default_guess": "Open the service API first and the owner interface second, in the order the two surfaces are introduced in State 0.",
+   "witness": {
+    "initial": "Every non-listener startup check passes, and both release-fixed listener addresses are unavailable.",
+    "events": [
+     "The owner starts Registry."
+    ],
+    "outcomes": [
+     "The start stops with a diagnostic naming the service-API listener.",
+     "The start stops with a diagnostic naming the owner-interface listener."
+    ],
+    "observer": "The owner reading the startup diagnostic"
+   }
+  },
+  {
+   "unit": "A17",
+   "subject": "cleanup of a newly created store after listener failure",
+   "kind": "normative-test contradiction",
+   "text": "Rule 2 permits “one [store] it cannot remove” to remain as “an empty store of the release's version,” but required test 5 says a start whose store is made new and whose listener cannot be opened “leaves no store” without an exception",
+   "question": "Is leaving the empty new store permitted when cleanup cannot remove it, or must startup guarantee that no store remains after every listener-opening failure?",
+   "options": [
+    "Permit the empty store only when its removal fails, and qualify the required test accordingly.",
+    "Require removal unconditionally and treat inability to remove it as violating the startup guarantee.",
+    "Leave the empty store after every listener failure and open it on the next start."
+   ],
+   "default_guess": "Permit it only on an actual removal failure and make the required test assume successful cleanup.",
+   "witness": {
+    "initial": "The configured store does not exist, all checks through store creation pass, the listener address is unavailable, and after creation the store directory no longer permits removal.",
+    "events": [
+     "Registry creates and renames the new empty store.",
+     "Opening the listener fails.",
+     "Registry attempts and fails to remove the store."
+    ],
+    "outcomes": [
+     "Under rule 2, startup stops and the empty release-version store remains for the next start.",
+     "Under required test 5, startup stops and no store remains."
+    ],
+    "observer": "The owner inspecting the store location and the next Registry start"
+   }
+  },
+  {
+   "unit": "A17",
+   "subject": "diagnostic for failure to clean up a new store",
+   "kind": "unspecified secondary failure reporting",
+   "text": "The text says a failed check produces “a diagnostic that names the failed item” and allows a newly made store that “cannot” be removed, but says nothing about whether that cleanup failure is itself diagnosed",
+   "question": "When listener opening fails and removal of the newly created store also fails, what diagnostic or diagnostics must Registry emit?",
+   "options": [
+    "Report both the listener failure and the store-removal failure.",
+    "Report only the listener failure that stopped startup.",
+    "Replace the listener diagnostic with the cleanup failure because it determines the remaining state."
+   ],
+   "default_guess": "Report the listener failure and a separate cleanup-failure diagnostic, without values.",
+   "witness": {
+    "initial": "Registry can create the new store, cannot open a listener and cannot then remove the store.",
+    "events": [
+     "The owner starts Registry.",
+     "The listener check fails.",
+     "Cleanup of the new store fails."
+    ],
+    "outcomes": [
+     "The diagnostic names only the listener, leaving the owner unaware that a store remains.",
+     "The diagnostic names both the listener and failed store cleanup."
+    ],
+    "observer": "The owner monitoring startup diagnostics"
+   }
+  },
+  {
+   "unit": "A17",
+   "subject": "loss of a listener after successful startup",
+   "kind": "missing runtime rule",
+   "text": "The change specifies only that listeners are opened last and that one which “cannot be opened” fails startup; it says nothing about a listener that closes or fails after Registry has begun serving",
+   "question": "If either surface's listener fails after a successful start, does Registry terminate and close the other surface, continue serving the other surface, or retry the failed listener?",
+   "options": [
+    "Terminate the process and close both surfaces.",
+    "Continue serving the unaffected surface without retrying.",
+    "Keep serving the unaffected surface and retry the failed listener."
+   ],
+   "default_guess": "Terminate the process so Registry never silently changes from the release's two-surface mode to a partial mode.",
+   "witness": {
+    "initial": "Registry has passed startup and is serving both surfaces.",
+    "events": [
+     "The service-API listener encounters a fatal accept or socket error while the owner-interface listener remains usable.",
+     "The owner sends an owner-interface request."
+    ],
+    "outcomes": [
+     "Registry terminates and the owner request cannot be served.",
+     "Registry continues on the owner interface while consumer services have lost their surface."
+    ],
+    "observer": "The owner and consumer services"
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A17\",\"subject\":\"listener addresses for the two network surfaces\",\"kind\":\"missing release value\",\"text\":\"“the listener of each surface opened at the address the release fixes — the configuration names none” does not give either fixed address anywhere in the accepted texts\",\"question\":\"What exact transport, host/interface and port or socket path does the release fix for the service API and for the owner interface?\",\"options\":[\"Bind each surface to a distinct TCP host and port on VM Platform.\",\"Bind both through loopback addresses for a host reverse proxy.\",\"Bind the service API to a VM/WireGuard-reachable interface and the owner interface to a VPN-facing or proxy-facing interface.\"],\"default_guess\":\"Use two TCP listeners fixed by the release, with the service API reachable from VM Platform and WireGuard and the owner interface reachable only through the host's VPN-facing HTTPS proxy.\",\"witness\":{\"initial\":\"A production host has valid configuration, with both loopback and VM-interface addresses available.\",\"events\":[\"The owner starts Registry.\",\"Client Portal attempts to reach the service API over WireGuard and the owner attempts to reach the owner interface through the VPN.\"],\"outcomes\":[\"Registry binds loopback listeners; both callers require an unstated reverse proxy or forwarding arrangement.\",\"Registry binds VM-facing listeners; the callers connect directly, with a different network exposure.\"],\"observer\":\"Client Portal, the owner and the host administrator\"}},{\"unit\":\"A17\",\"subject\":\"listeners in an owner-only start\",\"kind\":\"contradictory surface availability\",\"text\":\"A17 rule 2 says “the listener of each surface” is opened, while A17 rule 1 and A18 rule 9 say an owner-only start “serves the owner interface alone” and “refuses every service call”\",\"question\":\"When all four service tokens are absent, is the service-API listener opened so that calls receive an authentication or authorization refusal, or is that listener absent so connection attempts fail at the network boundary?\",\"options\":[\"Open only the owner-interface listener.\",\"Open both listeners but refuse every service-API request.\",\"Open the service listener only when all service tokens are configured.\"],\"default_guess\":\"Open only the owner-interface listener in an owner-only start.\",\"witness\":{\"initial\":\"The configuration has no service tokens and every other startup item is valid.\",\"events\":[\"The owner starts Registry in owner-only mode.\",\"A process in VM Platform connects to the release-fixed service-API address.\"],\"outcomes\":[\"No service listener exists, so the connection is refused or cannot be established.\",\"The service listener accepts the connection and Registry returns a uniform refused-call answer.\"],\"observer\":\"The calling VM Platform process and the host administrator\"}},{\"unit\":\"A17\",\"subject\":\"order of opening the surface listeners\",\"kind\":\"unspecified check order\",\"text\":\"The first failing startup check must stop the start, but “the listener of each surface” gives no order between the service API and owner-interface listeners; “Within one check, items go in the order rule 1 lists them” cannot order surfaces because rule 1 does not list listener items\",\"question\":\"Which surface's listener is opened and checked first?\",\"options\":[\"Service API first, then owner interface.\",\"Owner interface first, then service API.\",\"Treat listener opening as one aggregate check with a defined combined diagnostic.\"],\"default_guess\":\"Open the service API first and the owner interface second, in the order the two surfaces are introduced in State 0.\",\"witness\":{\"initial\":\"Every non-listener startup check passes, and both release-fixed listener addresses are unavailable.\",\"events\":[\"The owner starts Registry.\"],\"outcomes\":[\"The start stops with a diagnostic naming the service-API listener.\",\"The start stops with a diagnostic naming the owner-interface listener.\"],\"observer\":\"The owner reading the startup diagnostic\"}},{\"unit\":\"A17\",\"subject\":\"cleanup of a newly created store after listener failure\",\"kind\":\"normative-test contradiction\",\"text\":\"Rule 2 permits “one [store] it cannot remove” to remain as “an empty store of the release's version,” but required test 5 says a start whose store is made new and whose listener cannot be opened “leaves no store” without an exception\",\"question\":\"Is leaving the empty new store permitted when cleanup cannot remove it, or must startup guarantee that no store remains after every listener-opening failure?\",\"options\":[\"Permit the empty store only when its removal fails, and qualify the required test accordingly.\",\"Require removal unconditionally and treat inability to remove it as violating the startup guarantee.\",\"Leave the empty store after every listener failure and open it on the next start.\"],\"default_guess\":\"Permit it only on an actual removal failure and make the required test assume successful cleanup.\",\"witness\":{\"initial\":\"The configured store does not exist, all checks through store creation pass, the listener address is unavailable, and after creation the store directory no longer permits removal.\",\"events\":[\"Registry creates and renames the new empty store.\",\"Opening the listener fails.\",\"Registry attempts and fails to remove the store.\"],\"outcomes\":[\"Under rule 2, startup stops and the empty release-version store remains for the next start.\",\"Under required test 5, startup stops and no store remains.\"],\"observer\":\"The owner inspecting the store location and the next Registry start\"}},{\"unit\":\"A17\",\"subject\":\"diagnostic for failure to clean up a new store\",\"kind\":\"unspecified secondary failure reporting\",\"text\":\"The text says a failed check produces “a diagnostic that names the failed item” and allows a newly made store that “cannot” be removed, but says nothing about whether that cleanup failure is itself diagnosed\",\"question\":\"When listener opening fails and removal of the newly created store also fails, what diagnostic or diagnostics must Registry emit?\",\"options\":[\"Report both the listener failure and the store-removal failure.\",\"Report only the listener failure that stopped startup.\",\"Replace the listener diagnostic with the cleanup failure because it determines the remaining state.\"],\"default_guess\":\"Report the listener failure and a separate cleanup-failure diagnostic, without values.\",\"witness\":{\"initial\":\"Registry can create the new store, cannot open a listener and cannot then remove the store.\",\"events\":[\"The owner starts Registry.\",\"The listener check fails.\",\"Cleanup of the new store fails.\"],\"outcomes\":[\"The diagnostic names only the listener, leaving the owner unaware that a store remains.\",\"The diagnostic names both the listener and failed store cleanup.\"],\"observer\":\"The owner monitoring startup diagnostics\"}},{\"unit\":\"A17\",\"subject\":\"loss of a listener after successful startup\",\"kind\":\"missing runtime rule\",\"text\":\"The change specifies only that listeners are opened last and that one which “cannot be opened” fails startup; it says nothing about a listener that closes or fails after Registry has begun serving\",\"question\":\"If either surface's listener fails after a successful start, does Registry terminate and close the other surface, continue serving the other surface, or retry the failed listener?\",\"options\":[\"Terminate the process and close both surfaces.\",\"Continue serving the unaffected surface without retrying.\",\"Keep serving the unaffected surface and retry the failed listener.\"],\"default_guess\":\"Terminate the process so Registry never silently changes from the release's two-surface mode to a partial mode.\",\"witness\":{\"initial\":\"Registry has passed startup and is serving both surfaces.\",\"events\":[\"The service-API listener encounters a fatal accept or socket error while the owner-interface listener remains usable.\",\"The owner sends an owner-interface request.\"],\"outcomes\":[\"Registry terminates and the owner request cannot be served.\",\"Registry continues on the owner interface while consumer services have lost their surface.\"],\"observer\":\"The owner and consumer services\"}}]}",
+ "set_aside": []
+}

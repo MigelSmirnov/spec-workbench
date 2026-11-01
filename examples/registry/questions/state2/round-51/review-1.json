@@ -1,0 +1,161 @@
+{
+ "open_points": [
+  {
+   "unit": "A17",
+   "subject": "release-fixed listener endpoints",
+   "kind": "unspecified endpoint",
+   "text": "“the listener of each surface opened at the address the release fixes — the configuration names none” does not state either surface's address, port, transport, interface binding, IPv4/IPv6 behavior, or TLS termination",
+   "question": "What exact listener endpoint and protocol does the release fix for the service API and for the owner interface?",
+   "options": [
+    "Two specified TCP endpoints, with their bind interfaces and ports fixed by the specification",
+    "One or both surfaces use Unix-domain sockets",
+    "The owner listener terminates HTTPS itself",
+    "The owner listener is HTTP behind an external HTTPS terminator"
+   ],
+   "default_guess": "Use distinct TCP endpoints fixed in release constants, with HTTPS terminated by the host's trusted proxy for the owner interface.",
+   "witness": {
+    "initial": "The configuration passes through the existing-store check, and only some host addresses and ports are available.",
+    "events": [
+     "The owner starts a release implemented from these texts."
+    ],
+    "outcomes": [
+     "One implementation binds its chosen loopback/internal ports and starts.",
+     "Another implementation chooses different release-fixed ports or interfaces, encounters a collision, and refuses the start."
+    ],
+    "observer": "The owner and every caller trying to reach either surface"
+   }
+  },
+  {
+   "unit": "A17",
+   "subject": "opening multiple surface listeners",
+   "kind": "missing check order",
+   "text": "“the listener of each surface opened at the address the release fixes … one that cannot be opened failing the start and closing those already opened” gives no order for the surfaces; “Within one check, items go in the order rule 1 lists them” cannot order the surfaces because rule 1 does not list them",
+   "question": "In what order are the service-API and owner-interface listeners opened, and which failure is reported when both cannot be opened?",
+   "options": [
+    "Open the service-API listener first",
+    "Open the owner-interface listener first",
+    "Attempt both as one aggregate check and report all failures"
+   ],
+   "default_guess": "Open the service-API listener first, then the owner-interface listener, and report the first failure.",
+   "witness": {
+    "initial": "The store opens successfully, but both listener addresses are unavailable.",
+    "events": [
+     "The owner starts Registry."
+    ],
+    "outcomes": [
+     "The start diagnostic names the service-API listener as the first failed item.",
+     "The start diagnostic names the owner-interface listener as the first failed item."
+    ],
+    "observer": "The owner reading the start diagnostic"
+   }
+  },
+  {
+   "unit": "A17",
+   "subject": "listeners during an owner-only start",
+   "kind": "ambiguous refusal condition",
+   "text": "Rule 1 says an owner-only start “serves the owner interface alone and refuses every service call”, while the changed rule 2 unconditionally requires “the listener of each surface” to open",
+   "question": "Must an owner-only start open the service-API listener, and must failure to open that unused listener stop the owner-only start?",
+   "options": [
+    "Open and check both listeners, with the service listener answering refusals",
+    "Open only the owner-interface listener in owner-only mode",
+    "Open both when possible but do not fail owner-only startup for the service listener"
+   ],
+   "default_guess": "Open only the owner-interface listener in owner-only mode.",
+   "witness": {
+    "initial": "No service tokens are configured, the owner listener is available, and the service-API address is occupied.",
+    "events": [
+     "The owner starts Registry in the expressly allowed owner-only mode."
+    ],
+    "outcomes": [
+     "Registry fails because every surface's listener must open.",
+     "Registry starts and serves the owner interface because the service surface is excluded in owner-only mode."
+    ],
+    "observer": "The owner trying to use the owner interface"
+   }
+  },
+  {
+   "unit": "A17",
+   "subject": "rollback of a newly created store after listener failure",
+   "kind": "direct contradiction",
+   "text": "Rule 2 permits “one it cannot remove [to be] an empty store of the release's version”, but required test 5 says such a start “leaves no store” without an exception",
+   "question": "What is the required outcome when listener opening fails and Registry cannot remove the store it just created?",
+   "options": [
+    "The failed start may leave the empty store, as normative rule 2 says",
+    "The start must ensure no store remains, as required test 5 says",
+    "The no-store test applies only when removal succeeds"
+   ],
+   "default_guess": "Treat the test as conditional on successful removal and leave the empty store when removal fails.",
+   "witness": {
+    "initial": "The configured store does not exist, so Registry creates it; its listener cannot be opened; removal of the new store then fails because the filesystem refuses the unlink.",
+    "events": [
+     "The owner starts Registry.",
+     "Registry creates the empty release-version store.",
+     "Listener opening fails.",
+     "Registry attempts and fails to remove the store."
+    ],
+    "outcomes": [
+     "Normative rule 2 leaves the empty store for the next start to open.",
+     "Required test 5 requires that no store be left."
+    ],
+    "observer": "The owner inspecting the store path and the next Registry start"
+   }
+  },
+  {
+   "unit": "A17",
+   "subject": "ownership of a new store during listener-failure cleanup",
+   "kind": "concurrent-start race",
+   "text": "The changed rule requires Registry to remove “a store it made new for a start a listener then failed” but gives no lock or identity check proving that another concurrent start has not opened or adopted that store before it is removed",
+   "question": "How is cleanup prevented from unlinking a newly created store that another concurrent Registry start has already opened?",
+   "options": [
+    "Starts are mutually excluded before any store creation or opening",
+    "Cleanup removes the path unconditionally, even if another process opened it",
+    "Cleanup removes it only after proving it is the same exclusively owned file and no other start adopted it",
+    "Concurrent starts using one configured store are an explicitly refused deployment condition"
+   ],
+   "default_guess": "Take an exclusive per-store startup lock before creating or opening the store and hold it through listener acquisition or rollback.",
+   "witness": {
+    "initial": "The store path is absent and two Registry processes are started concurrently with the same configuration.",
+    "events": [
+     "Process A creates and renames the new empty store.",
+     "Process B opens that store and wins the race to open the fixed listeners.",
+     "Process A fails to open a listener because B now holds it.",
+     "Process A performs the newly required cleanup."
+    ],
+    "outcomes": [
+     "A unlinks the store path while B is serving from its open file, leaving B without durable access through the configured path.",
+     "A detects that B adopted the store or is excluded by a startup lock, so it does not remove B's store."
+    ],
+    "observer": "The owner and callers of process B, especially after B restarts"
+   }
+  },
+  {
+   "unit": "A21",
+   "subject": "security re-review after A17's listener and rollback change",
+   "kind": "incomplete review scope",
+   "text": "The new statement says “every category naming [A17] was reviewed, and no outcome and no reference changed”, but the changed A17 adds multi-listener acquisition, filesystem rollback and a concurrent-start deletion race; the `concurrency` and `files_artifacts` categories do not name A17",
+   "question": "Did the re-review consider categories newly implicated by A17's new content, or only categories whose old reference lists already named A17; and should A17 now be referenced by `concurrency` and/or `files_artifacts`?",
+   "options": [
+    "Only the previously referencing authentication and secrets categories were re-reviewed",
+    "All nine categories were reconsidered and A17 was deliberately found irrelevant to concurrency and files/artifacts",
+    "The concurrency and files/artifacts references must change to include A17 after its startup rollback behavior is resolved"
+   ],
+   "default_guess": "Reconsider all nine categories and add A17 to concurrency and files/artifacts if the listener rollback remains.",
+   "witness": {
+    "initial": "A21's concurrency references omit A17, and the changed A17 has no startup mutual-exclusion rule.",
+    "events": [
+     "Two starts share an absent store path.",
+     "One start creates the store, the other opens it and wins the listeners.",
+     "The losing start follows A17 and removes the store it created."
+    ],
+    "outcomes": [
+     "The recorded re-review remains unchanged and therefore gives no concurrency or path-ownership treatment for this history.",
+     "A complete re-review treats the history under concurrency and files/artifacts, changes the references, and requires an accepted rule resolving it."
+    ],
+    "observer": "The security reviewer and the owner relying on A21's completeness claim"
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A17\",\"subject\":\"release-fixed listener endpoints\",\"kind\":\"unspecified endpoint\",\"text\":\"“the listener of each surface opened at the address the release fixes — the configuration names none” does not state either surface's address, port, transport, interface binding, IPv4/IPv6 behavior, or TLS termination\",\"question\":\"What exact listener endpoint and protocol does the release fix for the service API and for the owner interface?\",\"options\":[\"Two specified TCP endpoints, with their bind interfaces and ports fixed by the specification\",\"One or both surfaces use Unix-domain sockets\",\"The owner listener terminates HTTPS itself\",\"The owner listener is HTTP behind an external HTTPS terminator\"],\"default_guess\":\"Use distinct TCP endpoints fixed in release constants, with HTTPS terminated by the host's trusted proxy for the owner interface.\",\"witness\":{\"initial\":\"The configuration passes through the existing-store check, and only some host addresses and ports are available.\",\"events\":[\"The owner starts a release implemented from these texts.\"],\"outcomes\":[\"One implementation binds its chosen loopback/internal ports and starts.\",\"Another implementation chooses different release-fixed ports or interfaces, encounters a collision, and refuses the start.\"],\"observer\":\"The owner and every caller trying to reach either surface\"}},{\"unit\":\"A17\",\"subject\":\"opening multiple surface listeners\",\"kind\":\"missing check order\",\"text\":\"“the listener of each surface opened at the address the release fixes … one that cannot be opened failing the start and closing those already opened” gives no order for the surfaces; “Within one check, items go in the order rule 1 lists them” cannot order the surfaces because rule 1 does not list them\",\"question\":\"In what order are the service-API and owner-interface listeners opened, and which failure is reported when both cannot be opened?\",\"options\":[\"Open the service-API listener first\",\"Open the owner-interface listener first\",\"Attempt both as one aggregate check and report all failures\"],\"default_guess\":\"Open the service-API listener first, then the owner-interface listener, and report the first failure.\",\"witness\":{\"initial\":\"The store opens successfully, but both listener addresses are unavailable.\",\"events\":[\"The owner starts Registry.\"],\"outcomes\":[\"The start diagnostic names the service-API listener as the first failed item.\",\"The start diagnostic names the owner-interface listener as the first failed item.\"],\"observer\":\"The owner reading the start diagnostic\"}},{\"unit\":\"A17\",\"subject\":\"listeners during an owner-only start\",\"kind\":\"ambiguous refusal condition\",\"text\":\"Rule 1 says an owner-only start “serves the owner interface alone and refuses every service call”, while the changed rule 2 unconditionally requires “the listener of each surface” to open\",\"question\":\"Must an owner-only start open the service-API listener, and must failure to open that unused listener stop the owner-only start?\",\"options\":[\"Open and check both listeners, with the service listener answering refusals\",\"Open only the owner-interface listener in owner-only mode\",\"Open both when possible but do not fail owner-only startup for the service listener\"],\"default_guess\":\"Open only the owner-interface listener in owner-only mode.\",\"witness\":{\"initial\":\"No service tokens are configured, the owner listener is available, and the service-API address is occupied.\",\"events\":[\"The owner starts Registry in the expressly allowed owner-only mode.\"],\"outcomes\":[\"Registry fails because every surface's listener must open.\",\"Registry starts and serves the owner interface because the service surface is excluded in owner-only mode.\"],\"observer\":\"The owner trying to use the owner interface\"}},{\"unit\":\"A17\",\"subject\":\"rollback of a newly created store after listener failure\",\"kind\":\"direct contradiction\",\"text\":\"Rule 2 permits “one it cannot remove [to be] an empty store of the release's version”, but required test 5 says such a start “leaves no store” without an exception\",\"question\":\"What is the required outcome when listener opening fails and Registry cannot remove the store it just created?\",\"options\":[\"The failed start may leave the empty store, as normative rule 2 says\",\"The start must ensure no store remains, as required test 5 says\",\"The no-store test applies only when removal succeeds\"],\"default_guess\":\"Treat the test as conditional on successful removal and leave the empty store when removal fails.\",\"witness\":{\"initial\":\"The configured store does not exist, so Registry creates it; its listener cannot be opened; removal of the new store then fails because the filesystem refuses the unlink.\",\"events\":[\"The owner starts Registry.\",\"Registry creates the empty release-version store.\",\"Listener opening fails.\",\"Registry attempts and fails to remove the store.\"],\"outcomes\":[\"Normative rule 2 leaves the empty store for the next start to open.\",\"Required test 5 requires that no store be left.\"],\"observer\":\"The owner inspecting the store path and the next Registry start\"}},{\"unit\":\"A17\",\"subject\":\"ownership of a new store during listener-failure cleanup\",\"kind\":\"concurrent-start race\",\"text\":\"The changed rule requires Registry to remove “a store it made new for a start a listener then failed” but gives no lock or identity check proving that another concurrent start has not opened or adopted that store before it is removed\",\"question\":\"How is cleanup prevented from unlinking a newly created store that another concurrent Registry start has already opened?\",\"options\":[\"Starts are mutually excluded before any store creation or opening\",\"Cleanup removes the path unconditionally, even if another process opened it\",\"Cleanup removes it only after proving it is the same exclusively owned file and no other start adopted it\",\"Concurrent starts using one configured store are an explicitly refused deployment condition\"],\"default_guess\":\"Take an exclusive per-store startup lock before creating or opening the store and hold it through listener acquisition or rollback.\",\"witness\":{\"initial\":\"The store path is absent and two Registry processes are started concurrently with the same configuration.\",\"events\":[\"Process A creates and renames the new empty store.\",\"Process B opens that store and wins the race to open the fixed listeners.\",\"Process A fails to open a listener because B now holds it.\",\"Process A performs the newly required cleanup.\"],\"outcomes\":[\"A unlinks the store path while B is serving from its open file, leaving B without durable access through the configured path.\",\"A detects that B adopted the store or is excluded by a startup lock, so it does not remove B's store.\"],\"observer\":\"The owner and callers of process B, especially after B restarts\"}},{\"unit\":\"A21\",\"subject\":\"security re-review after A17's listener and rollback change\",\"kind\":\"incomplete review scope\",\"text\":\"The new statement says “every category naming [A17] was reviewed, and no outcome and no reference changed”, but the changed A17 adds multi-listener acquisition, filesystem rollback and a concurrent-start deletion race; the `concurrency` and `files_artifacts` categories do not name A17\",\"question\":\"Did the re-review consider categories newly implicated by A17's new content, or only categories whose old reference lists already named A17; and should A17 now be referenced by `concurrency` and/or `files_artifacts`?\",\"options\":[\"Only the previously referencing authentication and secrets categories were re-reviewed\",\"All nine categories were reconsidered and A17 was deliberately found irrelevant to concurrency and files/artifacts\",\"The concurrency and files/artifacts references must change to include A17 after its startup rollback behavior is resolved\"],\"default_guess\":\"Reconsider all nine categories and add A17 to concurrency and files/artifacts if the listener rollback remains.\",\"witness\":{\"initial\":\"A21's concurrency references omit A17, and the changed A17 has no startup mutual-exclusion rule.\",\"events\":[\"Two starts share an absent store path.\",\"One start creates the store, the other opens it and wins the listeners.\",\"The losing start follows A17 and removes the store it created.\"],\"outcomes\":[\"The recorded re-review remains unchanged and therefore gives no concurrency or path-ownership treatment for this history.\",\"A complete re-review treats the history under concurrency and files/artifacts, changes the references, and requires an accepted rule resolving it.\"],\"observer\":\"The security reviewer and the owner relying on A21's completeness claim\"}}]}",
+ "set_aside": []
+}
