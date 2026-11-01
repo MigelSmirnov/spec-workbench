@@ -506,8 +506,8 @@ Security review: PERFORMED
 - concurrency: APPLICABLE; references: A01, A04, A07, A12, A13, A14, A16; affected: M01, M04, M05, M06, M09, M10, M11, concurrent creates, corrections, publishes, session changes, single-use confirmation values, confirmations bound to no revision, resubmitted forms on records without a revision, creates racing the erasure that removes their request id, re-uploads replacing a confirmed file, concurrent import confirmations
 - dependencies: APPLICABLE; references: A20; affected: Registry release, its Python dependencies
 
-Performed again on 2026-11-01, after that day's changes to A01, A04, A13, A16
-and A17 reopened it (rule 2): every category naming them was reviewed, and no
+Performed again on 2026-11-01, after that day's changes to A01, A04, A13, A16,
+A17 and A18 reopened it (rule 2): every category naming them was reviewed, and no
 outcome and no reference changed.
 
 ### Consequence
