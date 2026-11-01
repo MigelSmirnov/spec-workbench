@@ -54,12 +54,11 @@ each create once.
    project is one of the facts, and for a publish its publisher too: another
    principal or session repeating the request id is refused.
 7. A create without a request id is refused. Creates of one model carrying
-   one request id are applied one at a time: of two concurrent ones, the
-   first makes the record and the second is a repeat or refused by rule 4
-   or 5. A create and the anonymisation or erasure that removes its request
-   id are applied one at a time too, each on the result of the one before: a
-   repeat applied before it answers the record as rule 4 says, one applied
-   after it is a new create (rule 8).
+   one request id, and the anonymisation or erasure that removes a request
+   id, are applied one at a time, each on the result of the one before: of
+   two concurrent creates, the first makes the record and the second is a
+   repeat or refused by rule 4 or 5 — or, when an erasure applied between
+   them removed the request id, a new create (rule 8).
 8. A request id leaves its record with the values anonymisation or erasure
    removes (M01, M04); a create arriving after that with the same request id
    is a new create, checked as any create — a customer it names that is now
