@@ -1,0 +1,122 @@
+{
+ "open_points": [
+  {
+   "unit": "40_flows.md:`flow:start_instance`",
+   "subject": "failure while creating or renaming a new store",
+   "kind": "contradiction and missing failure outcome",
+   "text": "Step 3 says it “makes a new, empty store … under the temporary name and renames it to the store's name once complete”, but the Errors section gives no outcome for either operation failing, and Outcomes says a stopped start leaves “no file … but a probe it could not remove”; A17 rule 5 meanwhile anticipates a store temporary file “left by an interrupted start”.",
+   "question": "If creation or rename of a new store fails, what diagnostic is produced, and is the temporary store removed immediately or left for the next start to remove?",
+   "options": [
+    "Report the store failure and remove the temporary store before stopping",
+    "Report the store failure and leave the temporary store for the next start",
+    "Treat the failed temporary-store cleanup as a second start failure with its own diagnostic"
+   ],
+   "default_guess": "Report the store failure, leave the temporary store, and remove it at the next start, following A17 rule 5.",
+   "witness": {
+    "initial": "The configured store is absent, its directory exists, and configuration and backup probing have passed.",
+    "events": [
+     "The host starts Registry.",
+     "module:store creates the temporary new-store file.",
+     "Creation is interrupted or the rename to the configured store name fails."
+    ],
+    "outcomes": [
+     "The stopped process leaves the temporary store, as A17 rule 5 anticipates.",
+     "The stopped process removes it, as State 4's stated stopped-start outcome requires."
+    ],
+    "observer": "The owner administering the production host sees whether the temporary store file remains and what diagnostic was emitted."
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:owner_sign_in_and_session`",
+   "subject": "ordering sign-out against already admitted requests",
+   "kind": "contradictory concurrency order",
+   "text": "Step 2 says session changes apply “in the order in which they take the session's one lock”, while step 3 says that because sign-out takes the locks, “a request admitted before it completes first”. Admission order does not determine lock-acquisition order.",
+   "question": "When a request is admitted before sign-out but sign-out acquires the session lock first, must the admitted request finish before sign-out, may it finish after sign-out, or is it cancelled?",
+   "options": [
+    "Admission reserves precedence, so every earlier-admitted request finishes before sign-out",
+    "Lock acquisition determines order, but an admitted request may still finish after sign-out",
+    "Sign-out ends the session and cancels an admitted request that has not acquired the lock"
+   ],
+   "default_guess": "Use lock-acquisition order while preserving A13's rule that an admitted request completes even if sign-out occurs, so it may finish after sign-out.",
+   "witness": {
+    "initial": "One valid owner session is open in two browser tabs.",
+    "events": [
+     "Tab A submits a project correction; owner_sessions admits it, but it has not yet acquired the session lock.",
+     "Tab B submits sign-out and acquires the session lock first."
+    ],
+    "outcomes": [
+     "Tab A is made to complete before sign-out because it was admitted first.",
+     "Sign-out completes first according to lock order, and Tab A either completes afterward or is cancelled."
+    ],
+    "observer": "The owner using the two tabs sees the order and whether the correction succeeds."
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:agent_session_access`",
+   "subject": "answering a request by granting an already granted project",
+   "kind": "contradictory state transition",
+   "text": "Step 6 first says “granting clears [the pending request]” and that one action moves the version once, but later says “A project already in the set is answered unchanged — no version move, no entry”.",
+   "question": "If a pending request is answered by granting a project already in the session's set, is the request cleared and the access version advanced, or is the whole action treated as unchanged?",
+   "options": [
+    "Clear the request and advance the access version once, with no grant audit entry",
+    "Leave the request pending and leave the version unchanged",
+    "Clear the request but leave the version unchanged"
+   ],
+   "default_guess": "Clear the request and advance the access version once, with no grant audit entry, following R0-64, M06 and A12.",
+   "witness": {
+    "initial": "Session S has project P in its granted set, has a pending request, and has access version 5.",
+    "events": [
+     "The owner answers the pending request by granting P without asking to make it active.",
+     "Cabinet Kernel reads S's access."
+    ],
+    "outcomes": [
+     "The request is cleared and Kernel sees version 6.",
+     "The action is treated as unchanged and Kernel still sees version 5, with the request either still pending or silently cleared without the required version move."
+    ],
+    "observer": "Cabinet Kernel and the agent see the pending flag and access version."
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:import_from_vps`",
+   "subject": "uploaded file after a refused confirmation",
+   "kind": "contradictory outcome",
+   "text": "The Outcomes section says “A refused confirmation: nothing applied, the file kept”, but step 5 and A16 rule 2 say that an accepted import drops every owner session's upload; a concurrent confirmation in another session is then refused because the closure exists.",
+   "question": "Does the “file kept” outcome exclude confirmations refused after another session successfully closed the import, and other refusals where the bound file is already gone?",
+   "options": [
+    "The file is kept only when no accepted concurrent import or replacement already removed it",
+    "Every refused confirmation must retain or restore its bound file",
+    "A refused confirmation never guarantees that any uploaded file remains"
+   ],
+   "default_guess": "Limit the kept-file outcome to refusals where the closure is still absent and the bound upload is still the session's current file."
+  },
+  {
+   "unit": "40_flows.md:`flow:daily_backup`",
+   "subject": "plaintext store snapshot used to make an encrypted backup",
+   "kind": "missing cleanup operation and failure outcome",
+   "text": "Step 3 says `store.copy_store_snapshot` writes a store snapshot at a temporary path and `module:backups` then encrypts it, but it states removal only for the decrypted checking file; it never says what removes or overwrites the original plaintext snapshot, or what happens if that cleanup fails.",
+   "question": "After encryption, what happens to the plaintext snapshot, which module performs that operation, and what is the run's outcome if it cannot be removed or securely overwritten?",
+   "options": [
+    "backups deletes the plaintext snapshot immediately and a deletion failure makes the run fail",
+    "backups encrypts in place so no separate plaintext file remains",
+    "The plaintext snapshot remains under the temporary prefix until the next run's cleanup"
+   ],
+   "default_guess": "Have backups delete the plaintext snapshot immediately; if deletion fails, fail the run, report it, and leave the file under the temporary prefix for the next run to remove.",
+   "witness": {
+    "initial": "The production store contains customer personal data and a daily backup is due.",
+    "events": [
+     "module:store writes the consistent unencrypted snapshot at the temporary path.",
+     "module:backups creates and successfully verifies the encrypted backup.",
+     "The run finishes."
+    ],
+    "outcomes": [
+     "The plaintext snapshot is removed as part of the run, leaving only the encrypted kept backup.",
+     "The plaintext snapshot remains under the temporary prefix until a later run."
+    ],
+    "observer": "The owner administering the backup location sees whether an unencrypted store copy remains after a successful run."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"40_flows.md:`flow:start_instance`\",\"subject\":\"failure while creating or renaming a new store\",\"kind\":\"contradiction and missing failure outcome\",\"text\":\"Step 3 says it “makes a new, empty store … under the temporary name and renames it to the store's name once complete”, but the Errors section gives no outcome for either operation failing, and Outcomes says a stopped start leaves “no file … but a probe it could not remove”; A17 rule 5 meanwhile anticipates a store temporary file “left by an interrupted start”.\",\"question\":\"If creation or rename of a new store fails, what diagnostic is produced, and is the temporary store removed immediately or left for the next start to remove?\",\"options\":[\"Report the store failure and remove the temporary store before stopping\",\"Report the store failure and leave the temporary store for the next start\",\"Treat the failed temporary-store cleanup as a second start failure with its own diagnostic\"],\"default_guess\":\"Report the store failure, leave the temporary store, and remove it at the next start, following A17 rule 5.\",\"witness\":{\"initial\":\"The configured store is absent, its directory exists, and configuration and backup probing have passed.\",\"events\":[\"The host starts Registry.\",\"module:store creates the temporary new-store file.\",\"Creation is interrupted or the rename to the configured store name fails.\"],\"outcomes\":[\"The stopped process leaves the temporary store, as A17 rule 5 anticipates.\",\"The stopped process removes it, as State 4's stated stopped-start outcome requires.\"],\"observer\":\"The owner administering the production host sees whether the temporary store file remains and what diagnostic was emitted.\"}},{\"unit\":\"40_flows.md:`flow:owner_sign_in_and_session`\",\"subject\":\"ordering sign-out against already admitted requests\",\"kind\":\"contradictory concurrency order\",\"text\":\"Step 2 says session changes apply “in the order in which they take the session's one lock”, while step 3 says that because sign-out takes the locks, “a request admitted before it completes first”. Admission order does not determine lock-acquisition order.\",\"question\":\"When a request is admitted before sign-out but sign-out acquires the session lock first, must the admitted request finish before sign-out, may it finish after sign-out, or is it cancelled?\",\"options\":[\"Admission reserves precedence, so every earlier-admitted request finishes before sign-out\",\"Lock acquisition determines order, but an admitted request may still finish after sign-out\",\"Sign-out ends the session and cancels an admitted request that has not acquired the lock\"],\"default_guess\":\"Use lock-acquisition order while preserving A13's rule that an admitted request completes even if sign-out occurs, so it may finish after sign-out.\",\"witness\":{\"initial\":\"One valid owner session is open in two browser tabs.\",\"events\":[\"Tab A submits a project correction; owner_sessions admits it, but it has not yet acquired the session lock.\",\"Tab B submits sign-out and acquires the session lock first.\"],\"outcomes\":[\"Tab A is made to complete before sign-out because it was admitted first.\",\"Sign-out completes first according to lock order, and Tab A either completes afterward or is cancelled.\"],\"observer\":\"The owner using the two tabs sees the order and whether the correction succeeds.\"}},{\"unit\":\"40_flows.md:`flow:agent_session_access`\",\"subject\":\"answering a request by granting an already granted project\",\"kind\":\"contradictory state transition\",\"text\":\"Step 6 first says “granting clears [the pending request]” and that one action moves the version once, but later says “A project already in the set is answered unchanged — no version move, no entry”.\",\"question\":\"If a pending request is answered by granting a project already in the session's set, is the request cleared and the access version advanced, or is the whole action treated as unchanged?\",\"options\":[\"Clear the request and advance the access version once, with no grant audit entry\",\"Leave the request pending and leave the version unchanged\",\"Clear the request but leave the version unchanged\"],\"default_guess\":\"Clear the request and advance the access version once, with no grant audit entry, following R0-64, M06 and A12.\",\"witness\":{\"initial\":\"Session S has project P in its granted set, has a pending request, and has access version 5.\",\"events\":[\"The owner answers the pending request by granting P without asking to make it active.\",\"Cabinet Kernel reads S's access.\"],\"outcomes\":[\"The request is cleared and Kernel sees version 6.\",\"The action is treated as unchanged and Kernel still sees version 5, with the request either still pending or silently cleared without the required version move.\"],\"observer\":\"Cabinet Kernel and the agent see the pending flag and access version.\"}},{\"unit\":\"40_flows.md:`flow:import_from_vps`\",\"subject\":\"uploaded file after a refused confirmation\",\"kind\":\"contradictory outcome\",\"text\":\"The Outcomes section says “A refused confirmation: nothing applied, the file kept”, but step 5 and A16 rule 2 say that an accepted import drops every owner session's upload; a concurrent confirmation in another session is then refused because the closure exists.\",\"question\":\"Does the “file kept” outcome exclude confirmations refused after another session successfully closed the import, and other refusals where the bound file is already gone?\",\"options\":[\"The file is kept only when no accepted concurrent import or replacement already removed it\",\"Every refused confirmation must retain or restore its bound file\",\"A refused confirmation never guarantees that any uploaded file remains\"],\"default_guess\":\"Limit the kept-file outcome to refusals where the closure is still absent and the bound upload is still the session's current file.\"},{\"unit\":\"40_flows.md:`flow:daily_backup`\",\"subject\":\"plaintext store snapshot used to make an encrypted backup\",\"kind\":\"missing cleanup operation and failure outcome\",\"text\":\"Step 3 says `store.copy_store_snapshot` writes a store snapshot at a temporary path and `module:backups` then encrypts it, but it states removal only for the decrypted checking file; it never says what removes or overwrites the original plaintext snapshot, or what happens if that cleanup fails.\",\"question\":\"After encryption, what happens to the plaintext snapshot, which module performs that operation, and what is the run's outcome if it cannot be removed or securely overwritten?\",\"options\":[\"backups deletes the plaintext snapshot immediately and a deletion failure makes the run fail\",\"backups encrypts in place so no separate plaintext file remains\",\"The plaintext snapshot remains under the temporary prefix until the next run's cleanup\"],\"default_guess\":\"Have backups delete the plaintext snapshot immediately; if deletion fails, fail the run, report it, and leave the file under the temporary prefix for the next run to remove.\",\"witness\":{\"initial\":\"The production store contains customer personal data and a daily backup is due.\",\"events\":[\"module:store writes the consistent unencrypted snapshot at the temporary path.\",\"module:backups creates and successfully verifies the encrypted backup.\",\"The run finishes.\"],\"outcomes\":[\"The plaintext snapshot is removed as part of the run, leaving only the encrypted kept backup.\",\"The plaintext snapshot remains under the temporary prefix until a later run.\"],\"observer\":\"The owner administering the backup location sees whether an unencrypted store copy remains after a successful run.\"}}]}",
+ "set_aside": []
+}

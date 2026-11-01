@@ -1,0 +1,175 @@
+{
+ "open_points": [
+  {
+   "subject": "new store created before a later listener failure",
+   "kind": "contradictory cleanup",
+   "text": "Step 3 renames a newly created store to the configured store name before Step 4 opens the listeners, but a stopped start is said to leave “no file left that the start made but a probe it could not remove”; no module offers deletion of the newly committed store.",
+   "question": "If a listener fails after the first start has created and renamed an empty store, does that store remain or is it removed, and which module performs any removal?",
+   "options": [
+    "Keep the completed empty store for the next start",
+    "Delete the newly created store before reporting the failed start"
+   ],
+   "default_guess": "Keep the completed store because no deletion capability or safe ownership rule is defined.",
+   "witness": {
+    "initial": "The configured store file does not exist; configuration and backup-location checks pass.",
+    "events": [
+     "The host starts Registry.",
+     "module:store creates the empty store under its temporary name and renames it to the configured name.",
+     "module:instance_lifecycle fails to open one listener."
+    ],
+    "outcomes": [
+     "The configured store remains, as Step 3 says after its successful rename.",
+     "The configured store is removed, as the stopped-start outcome says no start-created file remains."
+    ],
+    "observer": "The owner on the next start, which either opens the existing store or creates a new one."
+   },
+   "unit": "40_flows.md:`flow:start_instance`"
+  },
+  {
+   "subject": "service behavior in an owner-only start",
+   "kind": "contradictory refusal",
+   "text": "State 2 says an owner-only start “serves the owner interface alone and refuses every service call”, while this flow says “no service API listener” and “Registry answers no service request”.",
+   "question": "In an owner-only start, must the service endpoint accept a connection and return Registry's refusal, or must there be no service listener at all?",
+   "options": [
+    "Serve the service listener and refuse every authenticated or unauthenticated service request",
+    "Open no service listener, so connection attempts fail outside Registry"
+   ],
+   "default_guess": "Open no service listener, following the explicit State 4 Serve step.",
+   "witness": {
+    "initial": "Registry starts with none of the four service tokens, so it is in owner-only mode.",
+    "events": [
+     "Client Portal attempts to call the configured Registry service endpoint."
+    ],
+    "outcomes": [
+     "Registry accepts the request and returns a refusal, as A17 states.",
+     "No Registry service listener exists and the connection fails, as State 4 states."
+    ],
+    "observer": "Client Portal and the owner monitoring the host."
+   },
+   "unit": "40_flows.md:`flow:start_instance`"
+  },
+  {
+   "subject": "ordering of sign-out against an already admitted session-state request",
+   "kind": "concurrency contradiction",
+   "text": "The flow says sign-out takes the locks “so a request admitted before it completes first”, while A13 says state-changing requests apply in the order in which they take the session lock after admission.",
+   "question": "When a request was admitted first but sign-out acquires the session lock first, which operation must run first?",
+   "options": [
+    "Admission order wins, requiring the admitted request to acquire or reserve priority before sign-out",
+    "Lock-acquisition order wins, allowing sign-out to end the session before the earlier-admitted request changes it"
+   ],
+   "default_guess": "Admission order wins because the flow explicitly promises that an admitted request completes before sign-out.",
+   "witness": {
+    "initial": "The owner has a valid session with no uploaded import file.",
+    "events": [
+     "An import upload request passes the owner-session and CSRF checks but pauses before taking the session lock.",
+     "The owner submits sign-out, which reaches and takes the import and session locks first."
+    ],
+    "outcomes": [
+     "The upload completes first and sign-out then ends the session and drops it.",
+     "Sign-out ends and removes the session first; the already-admitted upload can no longer leave the session state described by the flow."
+    ],
+    "observer": "The owner, who either receives an accepted upload before sign-out or sees the upload fail or disappear because sign-out won."
+   },
+   "unit": "40_flows.md:`flow:owner_sign_in_and_session`"
+  },
+  {
+   "subject": "validation of the project's declared object-kind vocabulary",
+   "kind": "missing failure outcome",
+   "text": "The create and correct steps read “the object's kind … with capability:given_values.read_optional_text”, but Object kind is a closed vocabulary and neither the step nor that capability states what happens when a nonblank value is outside it.",
+   "question": "Who checks an object's kind against the release's declared vocabulary, and what outcome does create or correction return for an unknown kind?",
+   "options": [
+    "module:projects refuses the action at stage (4)",
+    "The value is accepted as arbitrary optional text"
+   ],
+   "default_guess": "Have module:projects refuse an unknown kind at stage (4).",
+   "witness": {
+    "initial": "The declared Object kinds do not include `castle`.",
+    "events": [
+     "The owner submits a project create with a valid name and address and object kind `castle`.",
+     "The request passes authentication and all other stated checks."
+    ],
+    "outcomes": [
+     "The project is refused because `castle` is outside the closed vocabulary.",
+     "The project is created with `castle` because the flow applies only optional-text handling."
+    ],
+    "observer": "The owner and every later reader of the project card."
+   },
+   "unit": "40_flows.md:`flow:create_and_correct_project`"
+  },
+  {
+   "subject": "validation of Customer kind and language vocabularies",
+   "kind": "missing failure outcome",
+   "text": "The flow checks that Customer kind is required and treats contact data as optional, but it never names a check or refusal for a kind outside `person`/`company` or a language outside the declared Customer-language vocabulary.",
+   "question": "Which capability validates Customer kind and language, and what happens when either supplied value is outside its closed vocabulary?",
+   "options": [
+    "module:customers refuses the write at stage (4)",
+    "The nonblank values are stored exactly as supplied"
+   ],
+   "default_guess": "Have module:customers refuse out-of-vocabulary values at stage (4).",
+   "witness": {
+    "initial": "Customer kind is declared as only `person` or `company`.",
+    "events": [
+     "The owner records a Customer with a nonblank name and kind `partnership`.",
+     "The request id and all other supplied values are valid."
+    ],
+    "outcomes": [
+     "The action is refused because the kind is not declared.",
+     "A Customer with kind `partnership` is stored because the flow checks only presence."
+    ],
+    "observer": "The owner and consumers of the Customer model."
+   },
+   "unit": "40_flows.md:`flow:customer_lifecycle`"
+  },
+  {
+   "subject": "validation of an imported Customer's owner-supplied kind",
+   "kind": "missing failure outcome",
+   "text": "The mapping refuses a “missing name, kind or tax-id answer”, but it does not say what happens when the owner supplies a nonblank Customer kind outside the closed `person`/`company` vocabulary.",
+   "question": "Does migration_import validate an owner-supplied imported Customer kind against the Customer-kind vocabulary before showing or accepting confirmation?",
+   "options": [
+    "Treat an unknown kind as a mapping error and do not show the confirmation step",
+    "Accept any nonblank kind during import"
+   ],
+   "default_guess": "Treat an unknown kind as a mapping error and refuse confirmation.",
+   "witness": {
+    "initial": "A picked v1 project requires creation of a new Customer.",
+    "events": [
+     "The owner supplies the Customer's name and kind `association`, and answers the tax-id question.",
+     "No imported record is otherwise malformed and no id conflicts."
+    ],
+    "outcomes": [
+     "The mapping reports the unknown kind and no confirmation step is shown.",
+     "The confirmation step is shown and the import creates a Customer whose kind is outside M04's vocabulary."
+    ],
+    "observer": "The owner and later readers of the imported Customer."
+   },
+   "unit": "40_flows.md:`flow:import_from_vps`"
+  },
+  {
+   "subject": "plaintext store snapshot used while making an encrypted backup",
+   "kind": "missing cleanup operation",
+   "text": "`capability:store.copy_store_snapshot` writes an unencrypted store copy at a temporary path and `module:backups` then encrypts it, but no step says whether encryption replaces that file or who removes the plaintext copy after success or failure.",
+   "question": "How and when is the plaintext snapshot removed or overwritten, including when encryption or a later check fails?",
+   "options": [
+    "Encrypt by atomically replacing or securely removing the plaintext temporary copy in the same run",
+    "Leave the plaintext temporary copy for the next run's temporary-file cleanup"
+   ],
+   "default_guess": "Remove the plaintext copy during the current run immediately after encryption, and attempt the same cleanup on every failure path.",
+   "witness": {
+    "initial": "The backup location contains no temporary files and a daily run is due.",
+    "events": [
+     "module:store writes a plaintext snapshot containing production personal data.",
+     "module:backups successfully creates and keeps the encrypted backup."
+    ],
+    "outcomes": [
+     "The plaintext snapshot is removed or replaced before the run completes.",
+     "The plaintext snapshot remains under the temporary prefix until the next backup run."
+    ],
+    "observer": "The owner administering the backup location, and anyone who obtains that location before the next run."
+   },
+   "unit": "40_flows.md:`flow:daily_backup`"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"new store created before a later listener failure\",\"kind\":\"contradictory cleanup\",\"text\":\"Step 3 renames a newly created store to the configured store name before Step 4 opens the listeners, but a stopped start is said to leave “no file left that the start made but a probe it could not remove”; no module offers deletion of the newly committed store.\",\"question\":\"If a listener fails after the first start has created and renamed an empty store, does that store remain or is it removed, and which module performs any removal?\",\"options\":[\"Keep the completed empty store for the next start\",\"Delete the newly created store before reporting the failed start\"],\"default_guess\":\"Keep the completed store because no deletion capability or safe ownership rule is defined.\",\"witness\":{\"initial\":\"The configured store file does not exist; configuration and backup-location checks pass.\",\"events\":[\"The host starts Registry.\",\"module:store creates the empty store under its temporary name and renames it to the configured name.\",\"module:instance_lifecycle fails to open one listener.\"],\"outcomes\":[\"The configured store remains, as Step 3 says after its successful rename.\",\"The configured store is removed, as the stopped-start outcome says no start-created file remains.\"],\"observer\":\"The owner on the next start, which either opens the existing store or creates a new one.\"},\"unit\":\"40_flows.md:`flow:start_instance`\"},{\"subject\":\"service behavior in an owner-only start\",\"kind\":\"contradictory refusal\",\"text\":\"State 2 says an owner-only start “serves the owner interface alone and refuses every service call”, while this flow says “no service API listener” and “Registry answers no service request”.\",\"question\":\"In an owner-only start, must the service endpoint accept a connection and return Registry's refusal, or must there be no service listener at all?\",\"options\":[\"Serve the service listener and refuse every authenticated or unauthenticated service request\",\"Open no service listener, so connection attempts fail outside Registry\"],\"default_guess\":\"Open no service listener, following the explicit State 4 Serve step.\",\"witness\":{\"initial\":\"Registry starts with none of the four service tokens, so it is in owner-only mode.\",\"events\":[\"Client Portal attempts to call the configured Registry service endpoint.\"],\"outcomes\":[\"Registry accepts the request and returns a refusal, as A17 states.\",\"No Registry service listener exists and the connection fails, as State 4 states.\"],\"observer\":\"Client Portal and the owner monitoring the host.\"},\"unit\":\"40_flows.md:`flow:start_instance`\"},{\"subject\":\"ordering of sign-out against an already admitted session-state request\",\"kind\":\"concurrency contradiction\",\"text\":\"The flow says sign-out takes the locks “so a request admitted before it completes first”, while A13 says state-changing requests apply in the order in which they take the session lock after admission.\",\"question\":\"When a request was admitted first but sign-out acquires the session lock first, which operation must run first?\",\"options\":[\"Admission order wins, requiring the admitted request to acquire or reserve priority before sign-out\",\"Lock-acquisition order wins, allowing sign-out to end the session before the earlier-admitted request changes it\"],\"default_guess\":\"Admission order wins because the flow explicitly promises that an admitted request completes before sign-out.\",\"witness\":{\"initial\":\"The owner has a valid session with no uploaded import file.\",\"events\":[\"An import upload request passes the owner-session and CSRF checks but pauses before taking the session lock.\",\"The owner submits sign-out, which reaches and takes the import and session locks first.\"],\"outcomes\":[\"The upload completes first and sign-out then ends the session and drops it.\",\"Sign-out ends and removes the session first; the already-admitted upload can no longer leave the session state described by the flow.\"],\"observer\":\"The owner, who either receives an accepted upload before sign-out or sees the upload fail or disappear because sign-out won.\"},\"unit\":\"40_flows.md:`flow:owner_sign_in_and_session`\"},{\"subject\":\"validation of the project's declared object-kind vocabulary\",\"kind\":\"missing failure outcome\",\"text\":\"The create and correct steps read “the object's kind … with capability:given_values.read_optional_text”, but Object kind is a closed vocabulary and neither the step nor that capability states what happens when a nonblank value is outside it.\",\"question\":\"Who checks an object's kind against the release's declared vocabulary, and what outcome does create or correction return for an unknown kind?\",\"options\":[\"module:projects refuses the action at stage (4)\",\"The value is accepted as arbitrary optional text\"],\"default_guess\":\"Have module:projects refuse an unknown kind at stage (4).\",\"witness\":{\"initial\":\"The declared Object kinds do not include `castle`.\",\"events\":[\"The owner submits a project create with a valid name and address and object kind `castle`.\",\"The request passes authentication and all other stated checks.\"],\"outcomes\":[\"The project is refused because `castle` is outside the closed vocabulary.\",\"The project is created with `castle` because the flow applies only optional-text handling.\"],\"observer\":\"The owner and every later reader of the project card.\"},\"unit\":\"40_flows.md:`flow:create_and_correct_project`\"},{\"subject\":\"validation of Customer kind and language vocabularies\",\"kind\":\"missing failure outcome\",\"text\":\"The flow checks that Customer kind is required and treats contact data as optional, but it never names a check or refusal for a kind outside `person`/`company` or a language outside the declared Customer-language vocabulary.\",\"question\":\"Which capability validates Customer kind and language, and what happens when either supplied value is outside its closed vocabulary?\",\"options\":[\"module:customers refuses the write at stage (4)\",\"The nonblank values are stored exactly as supplied\"],\"default_guess\":\"Have module:customers refuse out-of-vocabulary values at stage (4).\",\"witness\":{\"initial\":\"Customer kind is declared as only `person` or `company`.\",\"events\":[\"The owner records a Customer with a nonblank name and kind `partnership`.\",\"The request id and all other supplied values are valid.\"],\"outcomes\":[\"The action is refused because the kind is not declared.\",\"A Customer with kind `partnership` is stored because the flow checks only presence.\"],\"observer\":\"The owner and consumers of the Customer model.\"},\"unit\":\"40_flows.md:`flow:customer_lifecycle`\"},{\"subject\":\"validation of an imported Customer's owner-supplied kind\",\"kind\":\"missing failure outcome\",\"text\":\"The mapping refuses a “missing name, kind or tax-id answer”, but it does not say what happens when the owner supplies a nonblank Customer kind outside the closed `person`/`company` vocabulary.\",\"question\":\"Does migration_import validate an owner-supplied imported Customer kind against the Customer-kind vocabulary before showing or accepting confirmation?\",\"options\":[\"Treat an unknown kind as a mapping error and do not show the confirmation step\",\"Accept any nonblank kind during import\"],\"default_guess\":\"Treat an unknown kind as a mapping error and refuse confirmation.\",\"witness\":{\"initial\":\"A picked v1 project requires creation of a new Customer.\",\"events\":[\"The owner supplies the Customer's name and kind `association`, and answers the tax-id question.\",\"No imported record is otherwise malformed and no id conflicts.\"],\"outcomes\":[\"The mapping reports the unknown kind and no confirmation step is shown.\",\"The confirmation step is shown and the import creates a Customer whose kind is outside M04's vocabulary.\"],\"observer\":\"The owner and later readers of the imported Customer.\"},\"unit\":\"40_flows.md:`flow:import_from_vps`\"},{\"subject\":\"plaintext store snapshot used while making an encrypted backup\",\"kind\":\"missing cleanup operation\",\"text\":\"`capability:store.copy_store_snapshot` writes an unencrypted store copy at a temporary path and `module:backups` then encrypts it, but no step says whether encryption replaces that file or who removes the plaintext copy after success or failure.\",\"question\":\"How and when is the plaintext snapshot removed or overwritten, including when encryption or a later check fails?\",\"options\":[\"Encrypt by atomically replacing or securely removing the plaintext temporary copy in the same run\",\"Leave the plaintext temporary copy for the next run's temporary-file cleanup\"],\"default_guess\":\"Remove the plaintext copy during the current run immediately after encryption, and attempt the same cleanup on every failure path.\",\"witness\":{\"initial\":\"The backup location contains no temporary files and a daily run is due.\",\"events\":[\"module:store writes a plaintext snapshot containing production personal data.\",\"module:backups successfully creates and keeps the encrypted backup.\"],\"outcomes\":[\"The plaintext snapshot is removed or replaced before the run completes.\",\"The plaintext snapshot remains under the temporary prefix until the next backup run.\"],\"observer\":\"The owner administering the backup location, and anyone who obtains that location before the next run.\"},\"unit\":\"40_flows.md:`flow:daily_backup`\"}]}",
+ "set_aside": []
+}
