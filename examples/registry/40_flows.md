@@ -103,11 +103,15 @@ diagnostic.
    that does not open, fails the check or carries another version stops the
    start; bringing a store to a new version is the release's step, not the
    start's.
-4. **Serve.** Only now `module:instance_lifecycle` opens the two surfaces,
-   each on a listener of its own: `capability:service_api.serve_service_request`
-   and `capability:owner_interface.serve_owner_request`. In an owner-only
-   start the service API is served and every service call is refused at
-   stage (1) (A17 rule 1).
+4. **Serve.** Only now `module:instance_lifecycle` opens the surfaces, each
+   on a listener of its own: `capability:service_api.serve_service_request`
+   and `capability:owner_interface.serve_owner_request`. It opens every
+   listener it serves before either answers a request; a listener that cannot
+   be opened stops the start with a diagnostic naming the surface, and a
+   listener already opened is closed unanswered, so nothing is served (A17
+   rule 2). An owner-only start opens the owner interface's listener alone:
+   no service API is served, and every service call is refused by finding no
+   listener — Registry answers no service request (A17 rule 1).
 5. **Start the passes.** Every 60 seconds from the start,
    `capability:owner_sessions.end_expired_sessions` (A13 rule 2). At least
    once a minute, `capability:backups.run_daily_backup_if_due`
@@ -118,8 +122,8 @@ diagnostic.
 
 - A running instance serving both surfaces, with no owner session, an empty
   sign-in count and no remembered backup date.
-- An owner-only instance: the owner interface served, every service call
-  refused, no backup run.
+- An owner-only instance: the owner interface alone served, no service API
+  listener, no backup run.
 - A stopped start: one diagnostic naming the first failed item and no value,
   nothing served, no file left that the start made but a probe it could not
   remove.
@@ -132,6 +136,8 @@ diagnostic.
 - The store's temporary file not removable while the store is absent, the
   store not opening, failing the integrity check or of another version —
   `module:store`'s diagnostic.
+- A listener that cannot be opened — `module:instance_lifecycle`'s
+  diagnostic; every listener already opened is closed.
 - Every failure stops the start before anything is served; no failure is
   retried by Registry. A store that fails is never replaced or migrated by the
   start.
@@ -256,9 +262,12 @@ reached by its `customer_ref` only; no contact value crosses into a project.
    request through `capability:owner_sessions.admit_owner_request`, opens the
    transaction with `capability:store.run_in_transaction`, reads the instant
    from `capability:clock.recorded_now` and calls
-   `capability:projects.create_project`. `module:projects` checks, in A04
-   rule 6's stages: (3) a named customer exists, asked of
-   `capability:customers.check_customer_eligible`; (4) the request id's form
+   `capability:projects.create_project`. `module:projects` asks
+   `capability:customers.check_customer_eligible` once for a named customer
+   and places its answer by stage: unknown is a failure of stage (3), and
+   erased, restricted or ended one of stage (6), which a repeat never
+   reaches (A01 rule 3). It checks, in A04 rule 6's stages: (3) a named
+   customer exists; (4) the request id's form
    with `capability:given_values.check_request_id_form`, the display name and
    the object's address with `capability:given_values.read_required_text`,
    the alias, the object's kind and characteristics with
@@ -267,8 +276,9 @@ reached by its `customer_ref` only; no contact value crosses into a project.
    facts equal the given ones by `capability:given_values.facts_equal_for_repeat`
    is a repeat — answered as it stands, an archived one included, nothing
    changed, no entry (A01 rules 3, 4); one with other facts refuses the
-   create (A01 rule 5). Otherwise (6) a named customer that is erased,
-   restricted or ended refuses it (A03 rule 5), and the project is written:
+   create (A01 rule 5). Otherwise (6) a named customer that the same answer
+   called erased, restricted or ended refuses it (A03 rule 5), and the
+   project is written:
    a minted `project_id`, status `active`, revision 1, created and
    last-changed at the action's instant, the request id kept (A01 rule 2).
    `module:operations` appends the entry "creating a project" with
@@ -277,7 +287,9 @@ reached by its `customer_ref` only; no contact value crosses into a project.
 3. **Read the card.** `capability:projects.read_project_card` answers the
    project with its object, its rooms in 'list rooms' order and its revision
    (State 1, "Projections and answers"), read in
-   `capability:store.read_in_transaction`; the owner finds projects with
+   `capability:store.read_in_transaction`; for an anonymised project it
+   answers only that the project was erased, and for an unknown one refuses
+   it as not found (R0-62); the owner finds projects with
    `capability:projects.list_projects` (A06 rule 1). The card the interface
    renders carries the revision into the correction form.
 4. **Correct.** `capability:projects.correct_project` takes every editable
@@ -385,9 +397,11 @@ confirmation id, written into the entry only.
    the stated revision — none for an anonymised project (A04 rule 3); (6) an
    active project refused, deleting an anonymised project whole refused (A05
    rule 4), anonymising an anonymised one answered unchanged (A05 rule 1).
-   Anonymising keeps the id, status and pointers and removes the display
-   name, the alias, the object, the customer link and the request id (M01,
-   A01 rule 8); deleting whole removes the record and its rooms. In the same
+   Anonymising keeps the id, the status `archived`, the anonymised mark and
+   the pointers and nothing else: the display name, the alias, the object,
+   the customer link, the rooms, the revision, the request id and every
+   instant go (M01, R0-62, R0-87, A01 rule 8); deleting whole removes the
+   record and its rooms. In the same
    transaction `module:operations` calls
    `capability:agent_sessions.drop_project_from_sessions`, which removes the
    project from every set and active project, moving each changed session's
@@ -407,9 +421,10 @@ confirmation id, written into the entry only.
 ### Outcomes
 
 - An archived project, its entry with the confirmation id.
-- An anonymised project — `validate` answers `archived`, the card and
-  `context` answer that it was erased, no list shows it — out of every
-  session, its entry with the confirmation id.
+- An anonymised project — `validate` answers `archived`; the card,
+  `context`, 'list rooms' and the agent projection answer that it was erased;
+  'list projects' never lists it; its pointers are listed and read as before
+  (R0-62) — out of every session, its entry with the confirmation id.
 - A project deleted whole with its rooms and pointers — `validate` answers
   `not_found` — out of every session, its entry.
 - A repeat answered unchanged, with no entry and no confirmation id.
@@ -479,7 +494,10 @@ recorded or absent, never contact data (R0-83).
    fiscal data and stops their reaching anyone but the owner; existing
    projects keep their link (R0-51, R0-55).
 4. **Erase the contact data.** `capability:customers.erase_customer_contact`
-   with the stated revision: an erased Customer answered unchanged; otherwise
+   with the stated revision: (5) a revision stated for an erased Customer,
+   which has none — the form that erased it resubmitted included — is stale
+   (A04 rule 3); an erased Customer with none stated is answered unchanged
+   (A05 rule 1); otherwise
    the Customer keeps its identity, the erased mark and its instant and
    nothing else — no revision, no request id (M04, A01 rule 8); projects
    still name it. Entry "erasing a customer".
@@ -554,15 +572,19 @@ pointers.
    - `capability:projects.read_project_context` answers `context` field for
      field as v1 (R0-04); an anonymised project answers that it was erased;
      an unknown one is refused as not found.
-   - `capability:projects.read_project_card` answers the card, any status,
-     with the archived date for an archived project (R0-60).
+   - `capability:projects.read_project_card` answers the card, active or
+     archived, with the archived date for an archived project (R0-60); an
+     anonymised project answers that it was erased (R0-62).
    - `capability:projects.list_projects` answers the active projects, and
      with them the archived ones when asked, never an anonymised one (A06
      rule 1, R0-62); a list choice outside its closed set is refused (A19
      rule 3).
-   - `capability:projects.list_rooms` answers the rooms (A06 rule 2).
+   - `capability:projects.list_rooms` answers the rooms (A06 rule 2); an
+     anonymised project, which has none left, answers that it was erased
+     (R0-62).
    - `capability:artifact_pointers.list_pointers` answers every pointer of the
      project with its type, version and status (A06 rule 3);
+     an anonymised project's pointers are listed and read as before (R0-62);
      `capability:artifact_pointers.latest_pointer_of_type` the one published
      pointer of a declared type, or that none is published — a withdrawal
      never falls back (R0-14) — and refuses a type
@@ -627,8 +649,12 @@ agent projection, neither carrying `personal_data`.
    answered unchanged (A05). No entry (A11 rule 6).
 2. **Check every agent call.** For every later Kernel call, in the call's
    transaction, `capability:agent_sessions.check_agent_call` checks that the
-   session is registered and that the project named — or the active one when
-   none is named — is in its set (A10 rules 1, 2, 5). Every refusal of it is
+   session is registered and, for an operation on a project, that the project
+   named — or the active one when none is named — is in its set (A10 rules 1,
+   2, 5). The session's own operations — reading its access, requesting
+   access, ending it — are not on a project and need only the registered
+   session: a session with an empty set reads its access and asks for a
+   project. Every refusal of it is
    answered as a project that does not exist, and an unregistered session as a
    call outside the set (A10 rule 3); it hides every later failure. A write on
    an archived project of the set is refused by the record's module at stage
@@ -655,9 +681,13 @@ agent projection, neither carrying `personal_data`.
    `capability:projects.validate_project_reference` answered that it exists
    and is not archived (R0-70). `capability:agent_sessions.grant_project`
    alone does the same without a request. One action moves the version once
-   (A12 rule 1); a project already granted is answered unchanged (A05).
-   `module:operations` appends the grant's entry naming the session and the
-   project (M09) through `capability:audit_log.append_audit_entry`.
+   (A12 rule 1). A grant that adds the project to the set is the one that
+   writes an entry: `module:operations` appends the grant's entry naming the
+   session and the project (M09) through
+   `capability:audit_log.append_audit_entry`. A project already in the set is
+   answered unchanged — no version move, no entry (A05 rules 1, 2) — and
+   making it active along with it is a change of the active project, which
+   moves the version and writes no entry (M09).
 7. **Change the active project, revoke.**
    `capability:agent_sessions.set_active_project` makes a project of the set
    active, or clears it, which revokes nothing; an archived project cannot be
@@ -936,9 +966,12 @@ key; the kept name made from the instant.
 
 - A kept, checked backup of the date and backups older than 30 × 24 hours
   deleted; the owner interface shows the newest instant.
-- A failed run: no partial kept backup, only temporary files the next run
-  removes, a diagnostic naming the failure and no value; Registry keeps
-  serving.
+- A failed run whose backup failed: no partial kept backup, only temporary
+  files the next run removes, a diagnostic naming the failure and no value;
+  Registry keeps serving.
+- A failed run whose backup was kept but a deletion of step 4 failed: the
+  new backup kept and shown as the newest, the files it could not delete
+  still there, each reported; the run counts as failed (A18 rule 4).
 
 ### Errors
 
