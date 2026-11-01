@@ -1,0 +1,134 @@
+{
+ "open_points": [
+  {
+   "unit": "A16",
+   "subject": "Accepted import backup timing",
+   "kind": "contradiction",
+   "text": "A16 rule 10 says, “It reaches the backups with the next daily run (A18),” while changed A18 rule 9 says an owner-only start “makes no backup run.”",
+   "question": "If an import is accepted during an owner-only start, is it required to reach a backup at the next scheduled 03:00, or only after a later non-owner-only start eventually has a daily run?",
+   "options": [
+    "The import must be included at the next scheduled 03:00 despite the owner-only start.",
+    "No backup occurs while the start remains owner-only; the import reaches a backup only at the next run after a later full start.",
+    "The statement is conditional on a next run existing and gives no bound if the instance remains owner-only."
+   ],
+   "default_guess": "Treat A18's explicit exception as controlling: no backup occurs until a later full start has a daily run.",
+   "witness": {
+    "initial": "Registry is running owner-only before 03:00 UTC, with no migration closure and no kept backup containing the import.",
+    "events": [
+     "At 02:00 UTC the owner uploads, confirms and successfully imports projects through the owner interface.",
+     "The same owner-only process remains running through 03:00 UTC."
+    ],
+    "outcomes": [
+     "Reading A16 rule 10 as an unconditional next-daily-run promise, the accepted import must reach a backup at this 03:00.",
+     "Under A18 rules 1 and 9, owner-only mode makes no run, so no backup receives the import."
+    ],
+    "observer": "The owner checking the newest kept backup, or later restoring it, sees the difference."
+   }
+  },
+  {
+   "unit": "A17",
+   "subject": "Release-fixed listener endpoints",
+   "kind": "unspecified value",
+   "text": "A17 rule 2 requires “the listener of each surface opened at the address the release fixes — the configuration names none,” but no accepted text states either surface's bind address or port.",
+   "question": "What exact address and port does the release fix for the owner-interface listener and for the service-API listener?",
+   "options": [
+    "Bind each surface to a distinct loopback endpoint and rely on local forwarding.",
+    "Bind one or both surfaces to a VM network interface reachable through the stated VPN or WireGuard paths.",
+    "Use other fixed ports or interface addresses chosen by the implementer."
+   ],
+   "default_guess": "Choose distinct fixed endpoints consistent with the State 0 network boundaries, but their concrete addresses and ports cannot be derived from the texts.",
+   "witness": {
+    "initial": "VM Platform has loopback and private-network interfaces, and neither REGISTRY_ configuration nor the accepted texts contain listener endpoints.",
+    "events": [
+     "An implementer creates the release from these texts.",
+     "Client Portal or the owner attempts to connect using an endpoint chosen independently from the same texts."
+    ],
+    "outcomes": [
+     "One careful implementation binds the relevant surface to one fixed interface and port, so that endpoint accepts the connection.",
+     "Another careful implementation chooses a different interface or port, so the same connection fails even though both implementations satisfy every stated topology constraint."
+    ],
+    "observer": "The owner, Client Portal, or another service attempting to reach Registry sees the difference."
+   }
+  },
+  {
+   "unit": "A17",
+   "subject": "Exposure while listeners are being checked",
+   "kind": "startup race",
+   "text": "A17 rule 2 says Registry “serves nothing until every check passes,” but also checks listeners by opening the owner interface first and the service API afterward, closing the first if the second cannot be opened.",
+   "question": "While the owner-interface listener has been opened but the service-API listener has not yet passed its check, must an incoming owner connection be refused at the transport layer, accepted and held, or accepted and then closed without an HTTP answer?",
+   "options": [
+    "The connection is refused until all startup checks pass.",
+    "The connection may establish but receives no answer until all checks pass.",
+    "The connection may establish and is closed without an answer if the later listener check fails."
+   ],
+   "default_guess": "Do not dispatch requests before all checks pass; the text still does not determine whether the transport connection is refused, held, or dropped.",
+   "witness": {
+    "initial": "A full start has passed every check through store opening; the owner-interface endpoint is free, but the service-API endpoint cannot be opened.",
+    "events": [
+     "Registry opens the owner-interface listener.",
+     "Before the service-API open attempt finishes, the owner connects and sends a sign-in request.",
+     "The service-API listener check fails and startup closes the owner listener."
+    ],
+    "outcomes": [
+     "An implementation that gates the listener until startup completion refuses the owner's connection.",
+     "An implementation that begins listening as soon as the listener check opens it accepts the connection, then holds or drops it without an answer; both can claim that Registry served nothing."
+    ],
+    "observer": "The owner sees either an immediate connection refusal or an established connection that later stalls or closes."
+   }
+  },
+  {
+   "unit": "A17",
+   "subject": "Owner-only connection-failure guarantee",
+   "kind": "unverifiable invariant",
+   "text": "A17 rule 1 says an owner-only start opens “no listener of the service API, so a service call reaches no Registry and is refused by its connection failing, with no answer.”",
+   "question": "What guarantees that connection attempts to the unused service-API endpoint fail, rather than reaching another process already listening there, and is that guarantee Registry's startup responsibility or an external deployment precondition?",
+   "options": [
+    "The deployment guarantees that no other process can own the endpoint.",
+    "Registry must verify or reserve the endpoint even in owner-only mode.",
+    "Only the absence of a Registry listener is guaranteed; connection failure itself is not guaranteed."
+   ],
+   "default_guess": "Guarantee only that Registry opens no service-API listener; transport failure depends on deployment state outside the process.",
+   "witness": {
+    "initial": "Registry is configured for an owner-only start, and another process already listens at the release-fixed service-API endpoint.",
+    "events": [
+     "Registry starts successfully and, as required, does not open or check a service-API listener.",
+     "A service connects to the endpoint it normally uses for Registry."
+    ],
+    "outcomes": [
+     "The quoted rule requires the connection to fail with no answer.",
+     "Because another process owns the endpoint, the connection succeeds and may return that process's answer, while Registry still opened no service-API listener."
+    ],
+    "observer": "The calling service sees connection failure in one reading and a successful foreign connection in the other."
+   }
+  },
+  {
+   "unit": "A17",
+   "subject": "Interrupted start after new-store publication",
+   "kind": "incomplete failure rule",
+   "text": "A17 rule 5 renames a completed new store to its configured name before the new listener checks, while rule 2 permits a completed new store to remain only when “a listener then failed” and Registry could not remove it; it does not cover process or host interruption in the interval.",
+   "question": "If the process or host stops after the new store is renamed but before all listener checks pass, must the next start remove that store as residue of a failed start or open it as an existing empty store?",
+   "options": [
+    "The completed empty store remains and the next start opens it as any existing store.",
+    "The next start recognizes that startup never completed and removes the store before creating another.",
+    "Such an interruption is intended to count as inability to remove after listener failure, although no listener necessarily failed."
+   ],
+   "default_guess": "Open the valid completed empty store on the next start, because the stated cleanup recognizes only the temporary filename and provides no durable incomplete-start marker.",
+   "witness": {
+    "initial": "The configured store does not exist, its directory exists, and all checks before store creation have passed.",
+    "events": [
+     "Registry creates the empty release-version store under the temporary name and renames it to the configured store name.",
+     "Before either listener check completes, the host loses power.",
+     "The host returns and Registry starts again with the same configuration."
+    ],
+    "outcomes": [
+     "Treating the interrupted attempt as a failed start whose newly made store must not survive, the next start removes it and creates a new store.",
+     "Following rule 5's stated next-start cleanup, only the temporary name is removed; the completed configured store is opened as an existing store."
+    ],
+    "observer": "The next startup and the owner inspecting the store file see whether the prior start's store survived."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A16\",\"subject\":\"Accepted import backup timing\",\"kind\":\"contradiction\",\"text\":\"A16 rule 10 says, “It reaches the backups with the next daily run (A18),” while changed A18 rule 9 says an owner-only start “makes no backup run.”\",\"question\":\"If an import is accepted during an owner-only start, is it required to reach a backup at the next scheduled 03:00, or only after a later non-owner-only start eventually has a daily run?\",\"options\":[\"The import must be included at the next scheduled 03:00 despite the owner-only start.\",\"No backup occurs while the start remains owner-only; the import reaches a backup only at the next run after a later full start.\",\"The statement is conditional on a next run existing and gives no bound if the instance remains owner-only.\"],\"default_guess\":\"Treat A18's explicit exception as controlling: no backup occurs until a later full start has a daily run.\",\"witness\":{\"initial\":\"Registry is running owner-only before 03:00 UTC, with no migration closure and no kept backup containing the import.\",\"events\":[\"At 02:00 UTC the owner uploads, confirms and successfully imports projects through the owner interface.\",\"The same owner-only process remains running through 03:00 UTC.\"],\"outcomes\":[\"Reading A16 rule 10 as an unconditional next-daily-run promise, the accepted import must reach a backup at this 03:00.\",\"Under A18 rules 1 and 9, owner-only mode makes no run, so no backup receives the import.\"],\"observer\":\"The owner checking the newest kept backup, or later restoring it, sees the difference.\"}},{\"unit\":\"A17\",\"subject\":\"Release-fixed listener endpoints\",\"kind\":\"unspecified value\",\"text\":\"A17 rule 2 requires “the listener of each surface opened at the address the release fixes — the configuration names none,” but no accepted text states either surface's bind address or port.\",\"question\":\"What exact address and port does the release fix for the owner-interface listener and for the service-API listener?\",\"options\":[\"Bind each surface to a distinct loopback endpoint and rely on local forwarding.\",\"Bind one or both surfaces to a VM network interface reachable through the stated VPN or WireGuard paths.\",\"Use other fixed ports or interface addresses chosen by the implementer.\"],\"default_guess\":\"Choose distinct fixed endpoints consistent with the State 0 network boundaries, but their concrete addresses and ports cannot be derived from the texts.\",\"witness\":{\"initial\":\"VM Platform has loopback and private-network interfaces, and neither REGISTRY_ configuration nor the accepted texts contain listener endpoints.\",\"events\":[\"An implementer creates the release from these texts.\",\"Client Portal or the owner attempts to connect using an endpoint chosen independently from the same texts.\"],\"outcomes\":[\"One careful implementation binds the relevant surface to one fixed interface and port, so that endpoint accepts the connection.\",\"Another careful implementation chooses a different interface or port, so the same connection fails even though both implementations satisfy every stated topology constraint.\"],\"observer\":\"The owner, Client Portal, or another service attempting to reach Registry sees the difference.\"}},{\"unit\":\"A17\",\"subject\":\"Exposure while listeners are being checked\",\"kind\":\"startup race\",\"text\":\"A17 rule 2 says Registry “serves nothing until every check passes,” but also checks listeners by opening the owner interface first and the service API afterward, closing the first if the second cannot be opened.\",\"question\":\"While the owner-interface listener has been opened but the service-API listener has not yet passed its check, must an incoming owner connection be refused at the transport layer, accepted and held, or accepted and then closed without an HTTP answer?\",\"options\":[\"The connection is refused until all startup checks pass.\",\"The connection may establish but receives no answer until all checks pass.\",\"The connection may establish and is closed without an answer if the later listener check fails.\"],\"default_guess\":\"Do not dispatch requests before all checks pass; the text still does not determine whether the transport connection is refused, held, or dropped.\",\"witness\":{\"initial\":\"A full start has passed every check through store opening; the owner-interface endpoint is free, but the service-API endpoint cannot be opened.\",\"events\":[\"Registry opens the owner-interface listener.\",\"Before the service-API open attempt finishes, the owner connects and sends a sign-in request.\",\"The service-API listener check fails and startup closes the owner listener.\"],\"outcomes\":[\"An implementation that gates the listener until startup completion refuses the owner's connection.\",\"An implementation that begins listening as soon as the listener check opens it accepts the connection, then holds or drops it without an answer; both can claim that Registry served nothing.\"],\"observer\":\"The owner sees either an immediate connection refusal or an established connection that later stalls or closes.\"}},{\"unit\":\"A17\",\"subject\":\"Owner-only connection-failure guarantee\",\"kind\":\"unverifiable invariant\",\"text\":\"A17 rule 1 says an owner-only start opens “no listener of the service API, so a service call reaches no Registry and is refused by its connection failing, with no answer.”\",\"question\":\"What guarantees that connection attempts to the unused service-API endpoint fail, rather than reaching another process already listening there, and is that guarantee Registry's startup responsibility or an external deployment precondition?\",\"options\":[\"The deployment guarantees that no other process can own the endpoint.\",\"Registry must verify or reserve the endpoint even in owner-only mode.\",\"Only the absence of a Registry listener is guaranteed; connection failure itself is not guaranteed.\"],\"default_guess\":\"Guarantee only that Registry opens no service-API listener; transport failure depends on deployment state outside the process.\",\"witness\":{\"initial\":\"Registry is configured for an owner-only start, and another process already listens at the release-fixed service-API endpoint.\",\"events\":[\"Registry starts successfully and, as required, does not open or check a service-API listener.\",\"A service connects to the endpoint it normally uses for Registry.\"],\"outcomes\":[\"The quoted rule requires the connection to fail with no answer.\",\"Because another process owns the endpoint, the connection succeeds and may return that process's answer, while Registry still opened no service-API listener.\"],\"observer\":\"The calling service sees connection failure in one reading and a successful foreign connection in the other.\"}},{\"unit\":\"A17\",\"subject\":\"Interrupted start after new-store publication\",\"kind\":\"incomplete failure rule\",\"text\":\"A17 rule 5 renames a completed new store to its configured name before the new listener checks, while rule 2 permits a completed new store to remain only when “a listener then failed” and Registry could not remove it; it does not cover process or host interruption in the interval.\",\"question\":\"If the process or host stops after the new store is renamed but before all listener checks pass, must the next start remove that store as residue of a failed start or open it as an existing empty store?\",\"options\":[\"The completed empty store remains and the next start opens it as any existing store.\",\"The next start recognizes that startup never completed and removes the store before creating another.\",\"Such an interruption is intended to count as inability to remove after listener failure, although no listener necessarily failed.\"],\"default_guess\":\"Open the valid completed empty store on the next start, because the stated cleanup recognizes only the temporary filename and provides no durable incomplete-start marker.\",\"witness\":{\"initial\":\"The configured store does not exist, its directory exists, and all checks before store creation have passed.\",\"events\":[\"Registry creates the empty release-version store under the temporary name and renames it to the configured store name.\",\"Before either listener check completes, the host loses power.\",\"The host returns and Registry starts again with the same configuration.\"],\"outcomes\":[\"Treating the interrupted attempt as a failed start whose newly made store must not survive, the next start removes it and creates a new store.\",\"Following rule 5's stated next-start cleanup, only the temporary name is removed; the completed configured store is opened as an existing store.\"],\"observer\":\"The next startup and the owner inspecting the store file see whether the prior start's store survived.\"}}]}",
+ "set_aside": []
+}
