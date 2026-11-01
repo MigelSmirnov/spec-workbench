@@ -29,8 +29,10 @@ name, its kind and whether the v1 value is its tax id.
 For a file it reads, the file's digest, the SHA-256 of its bytes, which
 Registry computes and never takes from a caller; a file over the size limit
 is refused before it is read, and its refusal carries no digest. At `upload`, each project the file holds with
-its id and status. At `mapping`, the mapping: the picked projects by `project_id`, each one's rooms and
-pointers in their lists' orders, the name and alias each arrives under, the
+its id and status. At `mapping`, the mapping: the picked projects by `project_id`, each one's rooms —
+`room_id`, name, added instant — and pointers — every fact 'list artifacts'
+answers for a pointer but its publisher, which will be the import — in
+their lists' orders, the name and alias each arrives under, the
 Customers it will make by their v1 value with the projects each links, every
 malformed record of the picks, every id of a record the picks bring in that
 production already holds — no other production id — and every missing
@@ -47,7 +49,8 @@ None.
 
 In A04 rule 6's stage order. Stage (4) first: a pick that is not a project
 of the file is outside its closed list, and picks are a set, a project
-picked twice being picked once; the file over the
+a project given twice refused (`duplicate_pick`), whatever values each
+time carries; the file over the
 `release_declarations.import_size_limit`, not readable as the format States
 5 and 6 declare, holding two projects with one id, or a project without a
 readable id or status, refused whole at upload (A16 rule 3, A19 rule 4).
@@ -61,8 +64,8 @@ among them (A22 rule 7); ids compared per kind (rule 5); names read with
 ### Errors
 
 `refused` (`import_closed`); `invalid_request` (`file_too_large`,
-`file_unreadable`, `file_malformed`, and `outside_closed_list` for a pick
-that is not a project of the file).
+`file_unreadable`, `file_malformed`, `outside_closed_list` for a pick that
+is not a project of the file, `duplicate_pick`).
 
 ### State impact
 
@@ -103,8 +106,9 @@ their pointers' publisher, and the Customers made at the action's instant.
 
 ### Enforces
 
-Every stage (6) failure is answered together (Conventions, "Stages"): the
-closure exists (rule 8); the upload the confirmation bound — that session's
+The closure first and alone: when it exists, `import_closed` is the answer
+(rule 8; Conventions, "Stages"). Otherwise every stage (6) failure is
+answered together: the upload the confirmation bound — that session's
 upload of that number, not merely bytes of that digest — is no longer kept,
 its digest computed again from the kept bytes (rule 2); the picks checked
 again — any conflict, malformed record or missing value, or no pick at all

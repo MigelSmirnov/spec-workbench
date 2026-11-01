@@ -139,7 +139,8 @@ check. It goes on when the import is closed (A16 rule 2).
 
 ### Errors
 
-`unauthenticated` (`no_owner_session`) when no valid session is named.
+None: it receives only a session `admit_owner_request` admitted, which
+refused a request without one before.
 
 ### State impact
 

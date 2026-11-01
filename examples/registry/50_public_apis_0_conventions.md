@@ -41,7 +41,11 @@ types and Python signatures are State 6's.
   confirmation id is not checked ("Minted identities").
 - **Stages.** An operation that checks stages (3) to (6) of A04 rule 6 checks
   them in that order and answers the first failing stage with every failure
-  of that stage (A04 rule 6). Stages (1) and (2) are `operations`'. A refusal
+  of that stage (A04 rule 6): its kinds in the order the operation's Errors
+  list them, one entry for each failing input or record, each naming the
+  field or the identity it concerns. The one exception is the import's
+  closure: when it exists, `import_closed` is answered alone, every other
+  check of the import being moot (State 4, `flow:import_from_vps`). Stages (1) and (2) are `operations`'. A refusal
   changes no record and writes no entry (A14 rule 2); what it does to an
   owner session's runtime state is A13's, stated where an operation makes it.
 - **Repeats.** A transition to the state a record is in answers the record
@@ -96,7 +100,7 @@ the owner interface renders and State 6 declares as `models`' vocabulary.
 | `not_permitted` | (1) | `outside_service_rights` (A09 rule 3); `csrf_refused` (A13 rule 5); `answer_above_class` (A09 rule 4) | the caller is not allowed this call |
 | `confirmation_refused` | (1) | `confirmation_not_pending` — the session holds no pending value: never shown, used up or cleared; `confirmation_other_value` — another value while the pending one is valid, which stays; `confirmation_bound_elsewhere` — the pending value given for another action, target, revision or inputs, now used up; `confirmation_expired` — cleared (A13 rule 6) | the owner submits the pending step again, or has it shown again |
 | `not_found` | (2), (3) | `agent_call_refused` — an unregistered session, a project outside the set, none active, an unknown pointer for Kernel: one answer (A10 rule 3, A08 rule 7); `unknown_project`, `unknown_customer`, `unknown_room`, `unknown_pointer`, `unknown_session` (State 0) | the caller re-reads |
-| `invalid_request` | (4) | `missing_value` (A02 rule 1); `malformed_request_id` (A01 rule 1); `outside_closed_list` (A19 rule 3); `unknown_artifact_type` (A22 rule 5); `date_after_today` (A15 rule 3, R0-84); `file_too_large`, `file_unreadable`, `file_malformed` — two projects with one id, a project without a readable id or status (A19 rule 4, A16 rule 3) | the caller fixes the request |
+| `invalid_request` | (4) | `missing_value` (A02 rule 1); `malformed_request_id` (A01 rule 1); `outside_closed_list` (A19 rule 3); `duplicate_pick` (A16 rule 1); `unknown_artifact_type` (A22 rule 5); `date_after_today` (A15 rule 3, R0-84); `file_too_large`, `file_unreadable`, `file_malformed` — two projects with one id, a project without a readable id or status (A19 rule 4, A16 rule 3) | the caller fixes the request |
 | `stale` | (5) | `stale_revision` (A04 rules 2, 3); `stale_access_version` (A12 rule 3) | the owner reads again |
 | `refused` | (6) | `archived`, `active` (erasing an active project), `anonymised`, `erased`, `customer_restricted`, `customer_ended`, `customer_erased`, `conflict` (A01 rule 5), `not_granted`, `not_pending`, `withdrawn`, `superseded`, `import_closed`, `file_not_kept`, `mapping_not_clean`, `no_picks` | the owner reads the record's state |
 | `internal_error` | — | `transaction_failed`: a store transaction did not commit, nothing changed (A04 rule 4) | the caller reads again before repeating |
