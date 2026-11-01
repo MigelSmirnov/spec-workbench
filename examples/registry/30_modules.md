@@ -75,8 +75,13 @@ later line, and modules on one line do not know each other.
 ## Facts several modules touch, and their one owner
 
 - **One action, one transaction.** Every action is one call of `operations`
-  and, when it changes state, one store transaction (A04 rule 4): `operations`
-  opens it through `store.run_in_transaction`, calls each module the action
+  and, when it changes the store, one store transaction (A04 rule 4). A
+  request that changes only an owner session's runtime state — signing in or
+  out, showing a confirmation step, uploading an import file — goes through
+  `operations` too but opens no store transaction: `owner_sessions` applies
+  it under its own locks (A13 rule 2). For every other change, `operations`
+  `operations` opens the transaction through `store.run_in_transaction`,
+  calls each module the action
   changes inside it, appends the action's one audit entry through
   `audit_log.append_audit_entry` when the action changed state and M09 lists
   it (A14 rule 1)
@@ -94,7 +99,8 @@ later line, and modules on one line do not know each other.
 - **Minted identities.** The module that writes a record checks, inside the
   transaction, that the identity `random_values` minted for it is not one its
   model already holds, and mints again when it is; a collision never refuses
-  an action.
+  an action. A confirmation id names no record and no read looks one up; it
+  is not checked against earlier ones.
 - **The check order.** A04 rule 6 is `operations`': it runs stage (1) —
   through `service_access` for a service, `owner_sessions` for the owner — and
   stage (2) through `agent_sessions.check_agent_call`, and hands the action to
@@ -120,9 +126,10 @@ later line, and modules on one line do not know each other.
 - **Answers and their class.** The projection an operation answers — the
   project card, `context`, `validate`, the agent projection, the session's
   access, the billing read, the customer read and list, the audit view — is
-  built by the module that owns its records; one that joins records of two
-  modules (the project card with its rooms, the agent projection with its
-  published pointers) is joined by `operations`. Each fact's disclosure class
+  built by the module that owns its records — the project card, with its
+  object and its rooms in 'list rooms' order, by `projects` alone; the one
+  answer that joins records of two modules, the agent projection with its
+  project's published pointers, is joined by `operations`. Each fact's disclosure class
   is `models`' ("Disclosure classes by field"); `operations` computes an
   answer's class as the highest of its facts' and refuses the answer whole
   when it is above the caller's highest (A09 rule 4): a service's from
@@ -594,6 +601,7 @@ read_customer
 list_customers
 read_billing_data
 check_customer_eligible
+make_imported_customer
 ```
 
 ### Depth assessment
@@ -646,6 +654,7 @@ validate_project_reference
 add_room
 list_rooms
 list_projects
+write_imported_project
 ```
 
 ### Depth assessment
@@ -690,6 +699,7 @@ withdraw_pointer
 list_pointers
 latest_pointer_of_type
 project_of_pointer
+write_imported_pointer
 ```
 
 ### Depth assessment
@@ -757,9 +767,12 @@ projects with one id or a project without a readable id or status (rule 3);
 the mapping for the picks — rooms, pointers, names and aliases, the Customers
 it will make, malformed records and conflicting ids (rules 1, 3–5); that the
 confirmation step is not shown while the mapping shows an error (rule 1);
-checking again at confirmation and applying the picks, the Customers and the
-closure in the one transaction `operations` opens, which appends the import's
-audit entry, or nothing (rules 6, 7);
+checking again at confirmation and, in the one transaction `operations`
+opens, which appends the import's audit entry, having each record written by
+its own module with its source identities and instants — `projects`
+the picked projects with their objects and rooms, `customers` the Customers
+it makes, `artifact_pointers` the pointers, the import as their publisher
+(M05) — and writing the closure (M10), or nothing (rules 6, 7);
 refusing every import once the closure exists (rule 8); the answer naming each
 Customer's minted `customer_ref` (rule 10). A22 rule 7: an undeclared type is
 malformed.
@@ -796,8 +809,9 @@ confirm_import
 ### Owns
 
 A18: the daily run at 03:00 UTC while Registry runs with its tokens, from the
-minute look and the dates the process remembers (rule 1); the copy without
-agent sessions (rule 2), encrypted with the configured key, recording its
+minute look and the dates the process remembers (rule 1); the copy, without
+agent sessions, that `store` writes at the temporary path `backups` names
+(rule 2), encrypted with the configured key, recording its
 instant, release, last sequence number and key digest (rules 1, 3); the three
 steps — removing temporary files, writing and checking the backup by
 decrypting it and asking `store` to check the copy, deleting backups older
@@ -851,7 +865,7 @@ its project, through `artifact_pointers.project_of_pointer`, before stage (2)
 checks that project against the session's set (A08 rule 7). A05 rule 2's no entry and no
 confirmation id for a repeat. The compositions: erasing a project (with
 `agent_sessions` and `artifact_pointers`), granting through an access request,
-joining the project card and the agent projection.
+joining the agent projection with its published pointers.
 
 ### Knows
 
