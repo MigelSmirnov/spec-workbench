@@ -1,0 +1,178 @@
+{
+ "open_points": [
+  {
+   "unit": "50_public_apis_2_sessions.md:`public_op:owner_sessions.admit_owner_request`",
+   "subject": "Admission order for changes that require the import lock",
+   "kind": "lock-order ambiguity",
+   "text": "“the import lock is taken before the session's lock” and “a change passes the session check and takes its place on the session's lock in one step, the lock granted in the order places were taken”",
+   "question": "For a change requiring the import lock, does it reserve its ordered place on the session lock before or after acquiring the import lock, and how is inversion between the two lock queues prevented while preserving admission order?",
+   "options": [
+    "Reserve the session place at admission and require the import lock to be granted compatibly with that order.",
+    "Acquire the import lock first, then reserve the session place, allowing the execution order to differ from session-check order.",
+    "Reserve the session place first without coordinating the import lock, which can deadlock if a later request acquires the import lock and waits behind it."
+   ],
+   "default_guess": "Reserve both locks through one ordered admission mechanism, preserving session-check order without holding the import lock while waiting behind an earlier session place.",
+   "witness": {
+    "initial": "Owner session S is valid. Another session currently holds the instance import lock. S has no request executing.",
+    "events": [
+     "Owner submits upload U in S; U passes the session check first and waits for the import lock.",
+     "Owner submits sign-out O in S; O passes the session check second and also needs the import lock.",
+     "The other session releases the import lock."
+    ],
+    "outcomes": [
+     "U retains the earlier session place, acquires the import lock first, completes the upload, and then O signs out and drops it.",
+     "O acquires the import lock first but waits behind U's earlier session place; U cannot acquire the import lock, so both requests deadlock. If places are taken only after acquiring the import lock, O may instead run before U, contrary to the stated session-check order."
+    ],
+    "observer": "The owner sees either both requests complete in admission order, reversed execution, or requests that never complete."
+   }
+  },
+  {
+   "unit": "50_public_apis_0_conventions.md:Closed set of refusal codes",
+   "subject": "Multiplicity of duplicate-pick refusal entries",
+   "kind": "ambiguous refusal shape",
+   "text": "“`duplicate_pick` (A16 rule 1)” together with “one entry for each failing input or record”",
+   "question": "When the same project occurs more than twice in the picks, which occurrences produce `duplicate_pick` entries: every occurrence in the duplicate group, only occurrences after the first, or one entry for the duplicated project identity?",
+   "options": [
+    "One entry for every occurrence after the first.",
+    "One entry for every occurrence belonging to a duplicate group.",
+    "One entry per duplicated project identity regardless of occurrence count."
+   ],
+   "default_guess": "One entry for every occurrence after the first.",
+   "witness": {
+    "initial": "A readable import contains project P and the migration is open.",
+    "events": [
+     "The owner requests a mapping with picks [P, P, P]."
+    ],
+    "outcomes": [
+     "The refusal contains two `duplicate_pick` entries, naming the second and third inputs.",
+     "The refusal contains three entries because all three inputs participate in duplication, or one entry naming P because there is one duplicated identity."
+    ],
+    "observer": "The owner interface and any tests comparing the refusal's kinds see a different list."
+   }
+  },
+  {
+   "unit": "50_public_apis_4_import_backups.md:`public_op:migration_import.read_import_mapping`",
+   "subject": "Classification of unreadable versus malformed upload files",
+   "kind": "overlapping errors",
+   "text": "“not readable as the format States 5 and 6 declare” and Errors “`file_unreadable`, `file_malformed`”",
+   "question": "Which format failures are `file_unreadable` and which are `file_malformed`, especially since the operation already receives the file as bytes?",
+   "options": [
+    "Syntax/decoding failures are `file_unreadable`; structurally readable files with duplicate projects or unreadable required project fields are `file_malformed`.",
+    "Every failure to conform to the declared file format is `file_malformed`; `file_unreadable` is reserved for an external byte-read failure.",
+    "Any parse or structural failure may be returned as `file_unreadable`, with `file_malformed` limited to the explicitly named duplicate or missing-field cases."
+   ],
+   "default_guess": "Use `file_unreadable` for decoding or syntax failures and `file_malformed` for a parsed file whose structure violates the declared format.",
+   "witness": {
+    "initial": "The import is open and the owner has a valid session.",
+    "events": [
+     "The owner uploads bytes that are not syntactically parseable as the declared migration format."
+    ],
+    "outcomes": [
+     "The operation refuses with `invalid_request` and kind `file_unreadable`.",
+     "The operation refuses with `invalid_request` and kind `file_malformed`."
+    ],
+    "observer": "The owner interface sees a different refusal kind and may present a different corrective action."
+   }
+  },
+  {
+   "unit": "50_public_apis_4_import_backups.md:`public_op:migration_import.read_import_mapping`",
+   "subject": "Customer-value input identity and cardinality",
+   "kind": "input under-specified",
+   "text": "“for each Customer the import will make its name, its kind and whether the v1 value is its tax id”",
+   "question": "How are those values associated with distinct v1 customer values, and what happens when the caller supplies two value sets for one v1 value, omits an entry, or supplies an entry for a customer no picked project would create?",
+   "options": [
+    "Inputs are a map keyed by v1 value, so duplicates are impossible; missing keys become mapping missing values and extra keys are rejected.",
+    "Inputs are a list; duplicate entries are refused and extra entries are refused.",
+    "Duplicate or extra entries are ignored or resolved by a declared first/last-wins rule."
+   ],
+   "default_guess": "Use exactly one entry keyed by each distinct v1 value required by the picks; report missing required entries and reject extras.",
+   "witness": {
+    "initial": "The file contains picked project P naming v1 customer value C; no other picked project names a customer.",
+    "events": [
+     "The owner requests a mapping with two different Customer value sets both identifying C, plus one value set for unrelated C2."
+    ],
+    "outcomes": [
+     "The operation refuses the duplicate and extraneous Customer inputs.",
+     "The operation selects one value set for C and ignores C2, producing a mapping whose future Customer values depend on a first-wins or last-wins choice."
+    ],
+    "observer": "The owner sees different mapping values, and a later confirmed import can create a Customer with different personal data."
+   }
+  },
+  {
+   "unit": "50_public_apis_4_import_backups.md:`public_op:migration_import.read_import_mapping`",
+   "subject": "Representation of mapping defects",
+   "kind": "output under-specified",
+   "text": "“every malformed record of the picks, every id of a record the picks bring in that production already holds … and every missing value”",
+   "question": "What identifying information and reason must the mapping return for each malformed record, conflict and missing value, including the record kind when identical UUID text may occur in different identity kinds?",
+   "options": [
+    "Return a structured issue for each defect with record kind, record identity or input field, and the violated rule.",
+    "Return only the affected identities or fields, without a reason.",
+    "Return only aggregate lists or counts for malformed records, conflicts and missing values."
+   ],
+   "default_guess": "Return one structured issue per defect, naming the record kind, identity or field, and violated condition.",
+   "witness": {
+    "initial": "Production has room id X but no project or pointer id X. A picked file contains a new room id X and a pointer with a malformed superseded instant.",
+    "events": [
+     "The owner asks for the mapping."
+    ],
+    "outcomes": [
+     "The mapping identifies a room-id conflict for X and identifies the pointer and its missing or invalid superseded instant.",
+     "The mapping returns X and the pointer merely as generic conflict/malformed items, leaving their kinds or precise failed conditions unstated."
+    ],
+    "observer": "The owner interface cannot render the same explanation or reliably indicate what must be corrected."
+   }
+  },
+  {
+   "unit": "50_public_apis_4_import_backups.md:`public_op:migration_import.confirm_import`",
+   "subject": "Collecting all stage-(6) failures when the bound upload is unavailable",
+   "kind": "unexecutable combined check",
+   "text": "“Otherwise every stage (6) failure is answered together: the upload the confirmation bound … is no longer kept, its digest computed again from the kept bytes; the picks checked again”",
+   "question": "If the bound upload is not kept, which bytes, if any, are used to recheck the picks so that all stage-(6) failures can be answered together?",
+   "options": [
+    "Return `file_not_kept` alone because the mapping cannot be rechecked without the bound file.",
+    "If another upload is kept, recheck that upload despite its different number or digest and combine its defects with `file_not_kept`.",
+    "Retain or recover the former bound bytes elsewhere so its mapping can still be rechecked."
+   ],
+   "default_guess": "Return `file_not_kept` alone when the bound file's bytes are unavailable; never inspect a replacement upload as though it were the bound file.",
+   "witness": {
+    "initial": "Session S uploaded valid file F as upload 1 and obtained a confirmation bound to upload 1, F's digest and picks P.",
+    "events": [
+     "The owner uploads different file G in S, replacing F with upload 2.",
+     "The owner submits the old confirmation for upload 1 and picks P."
+    ],
+    "outcomes": [
+     "Confirmation reports only `file_not_kept`, because F is gone and P cannot be checked against it.",
+     "Confirmation also reports `mapping_not_clean` or other failures found by checking P against G, even though G was not the confirmed file."
+    ],
+    "observer": "The owner sees different refusal-kind lists and may be told about defects in a file they did not confirm."
+   }
+  },
+  {
+   "unit": "50_public_apis_4_import_backups.md:`public_op:migration_import.confirm_import`",
+   "subject": "Relationship between no picks and mapping not clean",
+   "kind": "overlapping refusal kinds",
+   "text": "“any conflict, malformed record or missing value, or no pick at all” and Errors “`mapping_not_clean`, `no_picks`”",
+   "question": "Does an empty pick set produce only `no_picks`, or both `no_picks` and `mapping_not_clean` because the mapping is defined as not clean when there is no pick?",
+   "options": [
+    "Return only `no_picks`; `mapping_not_clean` represents conflicts, malformed records or missing values.",
+    "Return both `no_picks` and `mapping_not_clean`.",
+    "Return only `mapping_not_clean`, with `no_picks` used only by the mapping display."
+   ],
+   "default_guess": "Return only `no_picks` when emptiness is the sole defect.",
+   "witness": {
+    "initial": "The import is open, the bound upload is still kept and valid, and it contains valid projects.",
+    "events": [
+     "The owner submits a valid confirmation whose bound pick set is empty."
+    ],
+    "outcomes": [
+     "The refusal contains only kind `no_picks`.",
+     "The refusal contains both `no_picks` and `mapping_not_clean` because an empty mapping is expressly not clean."
+    ],
+    "observer": "The owner interface and contract tests see a different refusal-kind list."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"50_public_apis_2_sessions.md:`public_op:owner_sessions.admit_owner_request`\",\"subject\":\"Admission order for changes that require the import lock\",\"kind\":\"lock-order ambiguity\",\"text\":\"“the import lock is taken before the session's lock” and “a change passes the session check and takes its place on the session's lock in one step, the lock granted in the order places were taken”\",\"question\":\"For a change requiring the import lock, does it reserve its ordered place on the session lock before or after acquiring the import lock, and how is inversion between the two lock queues prevented while preserving admission order?\",\"options\":[\"Reserve the session place at admission and require the import lock to be granted compatibly with that order.\",\"Acquire the import lock first, then reserve the session place, allowing the execution order to differ from session-check order.\",\"Reserve the session place first without coordinating the import lock, which can deadlock if a later request acquires the import lock and waits behind it.\"],\"default_guess\":\"Reserve both locks through one ordered admission mechanism, preserving session-check order without holding the import lock while waiting behind an earlier session place.\",\"witness\":{\"initial\":\"Owner session S is valid. Another session currently holds the instance import lock. S has no request executing.\",\"events\":[\"Owner submits upload U in S; U passes the session check first and waits for the import lock.\",\"Owner submits sign-out O in S; O passes the session check second and also needs the import lock.\",\"The other session releases the import lock.\"],\"outcomes\":[\"U retains the earlier session place, acquires the import lock first, completes the upload, and then O signs out and drops it.\",\"O acquires the import lock first but waits behind U's earlier session place; U cannot acquire the import lock, so both requests deadlock. If places are taken only after acquiring the import lock, O may instead run before U, contrary to the stated session-check order.\"],\"observer\":\"The owner sees either both requests complete in admission order, reversed execution, or requests that never complete.\"}},{\"unit\":\"50_public_apis_0_conventions.md:Closed set of refusal codes\",\"subject\":\"Multiplicity of duplicate-pick refusal entries\",\"kind\":\"ambiguous refusal shape\",\"text\":\"“`duplicate_pick` (A16 rule 1)” together with “one entry for each failing input or record”\",\"question\":\"When the same project occurs more than twice in the picks, which occurrences produce `duplicate_pick` entries: every occurrence in the duplicate group, only occurrences after the first, or one entry for the duplicated project identity?\",\"options\":[\"One entry for every occurrence after the first.\",\"One entry for every occurrence belonging to a duplicate group.\",\"One entry per duplicated project identity regardless of occurrence count.\"],\"default_guess\":\"One entry for every occurrence after the first.\",\"witness\":{\"initial\":\"A readable import contains project P and the migration is open.\",\"events\":[\"The owner requests a mapping with picks [P, P, P].\"],\"outcomes\":[\"The refusal contains two `duplicate_pick` entries, naming the second and third inputs.\",\"The refusal contains three entries because all three inputs participate in duplication, or one entry naming P because there is one duplicated identity.\"],\"observer\":\"The owner interface and any tests comparing the refusal's kinds see a different list.\"}},{\"unit\":\"50_public_apis_4_import_backups.md:`public_op:migration_import.read_import_mapping`\",\"subject\":\"Classification of unreadable versus malformed upload files\",\"kind\":\"overlapping errors\",\"text\":\"“not readable as the format States 5 and 6 declare” and Errors “`file_unreadable`, `file_malformed`”\",\"question\":\"Which format failures are `file_unreadable` and which are `file_malformed`, especially since the operation already receives the file as bytes?\",\"options\":[\"Syntax/decoding failures are `file_unreadable`; structurally readable files with duplicate projects or unreadable required project fields are `file_malformed`.\",\"Every failure to conform to the declared file format is `file_malformed`; `file_unreadable` is reserved for an external byte-read failure.\",\"Any parse or structural failure may be returned as `file_unreadable`, with `file_malformed` limited to the explicitly named duplicate or missing-field cases.\"],\"default_guess\":\"Use `file_unreadable` for decoding or syntax failures and `file_malformed` for a parsed file whose structure violates the declared format.\",\"witness\":{\"initial\":\"The import is open and the owner has a valid session.\",\"events\":[\"The owner uploads bytes that are not syntactically parseable as the declared migration format.\"],\"outcomes\":[\"The operation refuses with `invalid_request` and kind `file_unreadable`.\",\"The operation refuses with `invalid_request` and kind `file_malformed`.\"],\"observer\":\"The owner interface sees a different refusal kind and may present a different corrective action.\"}},{\"unit\":\"50_public_apis_4_import_backups.md:`public_op:migration_import.read_import_mapping`\",\"subject\":\"Customer-value input identity and cardinality\",\"kind\":\"input under-specified\",\"text\":\"“for each Customer the import will make its name, its kind and whether the v1 value is its tax id”\",\"question\":\"How are those values associated with distinct v1 customer values, and what happens when the caller supplies two value sets for one v1 value, omits an entry, or supplies an entry for a customer no picked project would create?\",\"options\":[\"Inputs are a map keyed by v1 value, so duplicates are impossible; missing keys become mapping missing values and extra keys are rejected.\",\"Inputs are a list; duplicate entries are refused and extra entries are refused.\",\"Duplicate or extra entries are ignored or resolved by a declared first/last-wins rule.\"],\"default_guess\":\"Use exactly one entry keyed by each distinct v1 value required by the picks; report missing required entries and reject extras.\",\"witness\":{\"initial\":\"The file contains picked project P naming v1 customer value C; no other picked project names a customer.\",\"events\":[\"The owner requests a mapping with two different Customer value sets both identifying C, plus one value set for unrelated C2.\"],\"outcomes\":[\"The operation refuses the duplicate and extraneous Customer inputs.\",\"The operation selects one value set for C and ignores C2, producing a mapping whose future Customer values depend on a first-wins or last-wins choice.\"],\"observer\":\"The owner sees different mapping values, and a later confirmed import can create a Customer with different personal data.\"}},{\"unit\":\"50_public_apis_4_import_backups.md:`public_op:migration_import.read_import_mapping`\",\"subject\":\"Representation of mapping defects\",\"kind\":\"output under-specified\",\"text\":\"“every malformed record of the picks, every id of a record the picks bring in that production already holds … and every missing value”\",\"question\":\"What identifying information and reason must the mapping return for each malformed record, conflict and missing value, including the record kind when identical UUID text may occur in different identity kinds?\",\"options\":[\"Return a structured issue for each defect with record kind, record identity or input field, and the violated rule.\",\"Return only the affected identities or fields, without a reason.\",\"Return only aggregate lists or counts for malformed records, conflicts and missing values.\"],\"default_guess\":\"Return one structured issue per defect, naming the record kind, identity or field, and violated condition.\",\"witness\":{\"initial\":\"Production has room id X but no project or pointer id X. A picked file contains a new room id X and a pointer with a malformed superseded instant.\",\"events\":[\"The owner asks for the mapping.\"],\"outcomes\":[\"The mapping identifies a room-id conflict for X and identifies the pointer and its missing or invalid superseded instant.\",\"The mapping returns X and the pointer merely as generic conflict/malformed items, leaving their kinds or precise failed conditions unstated.\"],\"observer\":\"The owner interface cannot render the same explanation or reliably indicate what must be corrected.\"}},{\"unit\":\"50_public_apis_4_import_backups.md:`public_op:migration_import.confirm_import`\",\"subject\":\"Collecting all stage-(6) failures when the bound upload is unavailable\",\"kind\":\"unexecutable combined check\",\"text\":\"“Otherwise every stage (6) failure is answered together: the upload the confirmation bound … is no longer kept, its digest computed again from the kept bytes; the picks checked again”\",\"question\":\"If the bound upload is not kept, which bytes, if any, are used to recheck the picks so that all stage-(6) failures can be answered together?\",\"options\":[\"Return `file_not_kept` alone because the mapping cannot be rechecked without the bound file.\",\"If another upload is kept, recheck that upload despite its different number or digest and combine its defects with `file_not_kept`.\",\"Retain or recover the former bound bytes elsewhere so its mapping can still be rechecked.\"],\"default_guess\":\"Return `file_not_kept` alone when the bound file's bytes are unavailable; never inspect a replacement upload as though it were the bound file.\",\"witness\":{\"initial\":\"Session S uploaded valid file F as upload 1 and obtained a confirmation bound to upload 1, F's digest and picks P.\",\"events\":[\"The owner uploads different file G in S, replacing F with upload 2.\",\"The owner submits the old confirmation for upload 1 and picks P.\"],\"outcomes\":[\"Confirmation reports only `file_not_kept`, because F is gone and P cannot be checked against it.\",\"Confirmation also reports `mapping_not_clean` or other failures found by checking P against G, even though G was not the confirmed file.\"],\"observer\":\"The owner sees different refusal-kind lists and may be told about defects in a file they did not confirm.\"}},{\"unit\":\"50_public_apis_4_import_backups.md:`public_op:migration_import.confirm_import`\",\"subject\":\"Relationship between no picks and mapping not clean\",\"kind\":\"overlapping refusal kinds\",\"text\":\"“any conflict, malformed record or missing value, or no pick at all” and Errors “`mapping_not_clean`, `no_picks`”\",\"question\":\"Does an empty pick set produce only `no_picks`, or both `no_picks` and `mapping_not_clean` because the mapping is defined as not clean when there is no pick?\",\"options\":[\"Return only `no_picks`; `mapping_not_clean` represents conflicts, malformed records or missing values.\",\"Return both `no_picks` and `mapping_not_clean`.\",\"Return only `mapping_not_clean`, with `no_picks` used only by the mapping display.\"],\"default_guess\":\"Return only `no_picks` when emptiness is the sole defect.\",\"witness\":{\"initial\":\"The import is open, the bound upload is still kept and valid, and it contains valid projects.\",\"events\":[\"The owner submits a valid confirmation whose bound pick set is empty.\"],\"outcomes\":[\"The refusal contains only kind `no_picks`.\",\"The refusal contains both `no_picks` and `mapping_not_clean` because an empty mapping is expressly not clean.\"],\"observer\":\"The owner interface and contract tests see a different refusal-kind list.\"}}]}",
+ "set_aside": []
+}

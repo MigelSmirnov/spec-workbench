@@ -1,0 +1,156 @@
+{
+ "open_points": [
+  {
+   "subject": "concurrent owner sign-outs",
+   "kind": "contradiction",
+   "text": "`sign_out_owner` says: “a second sign-out admitted before the first ended it finds it ended in its turn and answers that it ended with `changed: false`.” But every sign-out takes “the import lock, then the session's lock,” and `admit_owner_request` now makes the session check and taking a place on that lock one step. The second sign-out cannot reach that step until the first releases the import lock, by which time the session has ended and the session check refuses it.",
+   "question": "Can a concurrently submitted second sign-out be pre-admitted and return `changed: false`, or must it fail admission with `no_owner_session` after the first sign-out ends the session?",
+   "options": [
+    "The second sign-out is refused by `admit_owner_request` as `unauthenticated`/`no_owner_session`.",
+    "Both sign-outs can be admitted before either executes, and the second returns `changed: false`.",
+    "Sign-out uses a different admission or locking rule from other upload-changing requests."
+   ],
+   "default_guess": "The second sign-out is refused as `no_owner_session`, because the import-lock ordering prevents it from being admitted earlier.",
+   "witness": {
+    "initial": "One valid owner session S with no request currently holding either lock.",
+    "events": [
+     "The browser submits two sign-out requests for S concurrently.",
+     "The first request acquires the import lock, passes the session check, takes its place on S's lock, and ends S.",
+     "The second request waits for the import lock and proceeds after the first releases it."
+    ],
+    "outcomes": [
+     "The second request is refused at admission because S is ended.",
+     "The second request is treated as previously admitted and answers `changed: false`."
+    ],
+    "observer": "The owner's browser sees either an authentication refusal or a successful unchanged sign-out."
+   },
+   "unit": "50_public_apis_2_sessions.md:`public_op:owner_sessions.sign_out_owner`"
+  },
+  {
+   "subject": "duplicate picks in an import mapping",
+   "kind": "error multiplicity",
+   "text": "The conventions require “one entry for each failing input or record,” while `read_import_mapping` says “a project given twice refused (`duplicate_pick`)” without defining which occurrences are failing inputs or how many `duplicate_pick` entries are returned.",
+   "question": "When the same project appears three or more times in the picks, how many `duplicate_pick` failure entries are returned, and which occurrence or identity does each entry name?",
+   "options": [
+    "One failure for the duplicated project identity, regardless of occurrence count.",
+    "One failure for every occurrence after the first.",
+    "One failure for every occurrence, including the first, because all participate in the duplicate."
+   ],
+   "default_guess": "Return one failure for every occurrence after the first, each naming its pick position and project id.",
+   "witness": {
+    "initial": "An open import with an accepted uploaded file containing project P.",
+    "events": [
+     "The owner submits mapping picks `[P, P, P]`."
+    ],
+    "outcomes": [
+     "The refusal contains one `duplicate_pick` entry naming P.",
+     "The refusal contains two `duplicate_pick` entries, one for each repeated occurrence."
+    ],
+    "observer": "The owner interface renders a different number of validation failures."
+   },
+   "unit": "50_public_apis_0_conventions.md:Closed set of refusal codes"
+  },
+  {
+   "subject": "identity of conflicting imported records",
+   "kind": "output ambiguity",
+   "text": "The mapping returns “every id of a record the picks bring in that production already holds,” while ids are unique and compared only per kind; the output does not say that the record kind accompanies each conflicting id.",
+   "question": "Must each conflict in the mapping identify whether it is a project, room or pointer, especially when the same UUID can occur in more than one kind?",
+   "options": [
+    "Return each conflicting id together with its record kind.",
+    "Return only the id text, allowing equal ids of different kinds to be indistinguishable.",
+    "Return the entire conflicting imported record."
+   ],
+   "default_guess": "Return the record kind and id.",
+   "witness": {
+    "initial": "Production holds a Room with id X and an ArtifactPointer with the same textual id X, which is allowed because ids are unique per kind. An uploaded file's picks bring in a Room X and an ArtifactPointer X.",
+    "events": [
+     "The owner asks to read the mapping for those picks."
+    ],
+    "outcomes": [
+     "The mapping reports two kind-tagged conflicts: room X and pointer X.",
+     "The mapping reports only X, or two indistinguishable occurrences of X."
+    ],
+    "observer": "The owner cannot otherwise tell which source records must be corrected."
+   },
+   "unit": "50_public_apis_4_import_backups.md:`public_op:migration_import.read_import_mapping`"
+  },
+  {
+   "subject": "malformed-record information in the import mapping",
+   "kind": "output content",
+   "text": "The output promises “every malformed record of the picks,” but does not say which identity and record kind are returned or whether all reasons that make one record malformed are included.",
+   "question": "What information must the mapping return for each malformed record, and does it report every violated A16 rule or only that the record is malformed?",
+   "options": [
+    "Record kind and identity plus every malformed reason.",
+    "Record kind and identity plus one selected reason.",
+    "The malformed source record itself without structured reasons.",
+    "Only a count or general malformed indication."
+   ],
+   "default_guess": "Return the record kind and identity with every violated malformed-record rule.",
+   "witness": {
+    "initial": "A picked project contains pointer X whose status is outside the vocabulary, whose reference is missing, and whose superseded instant is inconsistent.",
+    "events": [
+     "The owner reads the mapping."
+    ],
+    "outcomes": [
+     "The mapping identifies pointer X and lists all three defects.",
+     "The mapping identifies X only as malformed, or reports only one of its defects."
+    ],
+    "observer": "The owner sees different correction information and may need a different number of upload-and-map attempts."
+   },
+   "unit": "50_public_apis_4_import_backups.md:`public_op:migration_import.read_import_mapping`"
+  },
+  {
+   "subject": "extraneous Customer mapping values",
+   "kind": "input handling",
+   "text": "The inputs accept values “for each Customer the import will make,” but neither the operation nor its errors say what happens when the request also supplies values for a v1 customer not created by the current picks, or supplies the same customer's values more than once.",
+   "question": "Are extraneous or duplicate Customer-value entries ignored, refused, or included in the mapping, and under which refusal kind?",
+   "options": [
+    "Refuse them as `outside_closed_list`.",
+    "Ignore them and map only Customers implied by the picks.",
+    "Treat duplicate entries as a duplicate-pick-style invalid request.",
+    "Let the wire shape prevent them and define how unknown keys or repeated fields are handled."
+   ],
+   "default_guess": "Refuse any Customer entry not implied exactly once by the picks as `outside_closed_list`.",
+   "witness": {
+    "initial": "The file contains projects P1 and P2 naming distinct v1 customer values C1 and C2.",
+    "events": [
+     "The owner requests a mapping picking only P1 but submits complete name and kind values for both C1 and C2."
+    ],
+    "outcomes": [
+     "The operation ignores C2 and returns the mapping for P1 and C1.",
+     "The operation refuses the request because C2 is outside the Customers made by the picks."
+    ],
+    "observer": "The owner interface sees either a clean mapping or an invalid-request refusal."
+   },
+   "unit": "50_public_apis_4_import_backups.md:`public_op:migration_import.read_import_mapping`"
+  },
+  {
+   "subject": "aggregation after the bound upload is no longer kept",
+   "kind": "error precedence",
+   "text": "`confirm_import` says that, after the closure check, “every stage (6) failure is answered together,” including that the bound upload “is no longer kept” and that “the picks [are] checked again.” When the bound file is gone, the operation no longer has the rooms, pointers and customer links needed to perform all of that re-check.",
+   "question": "Does `file_not_kept` stop the remaining stage-(6) checks, or must Registry retain enough mapping information to aggregate `mapping_not_clean` or `no_picks` with it?",
+   "options": [
+    "Return `file_not_kept` alone because the mapping cannot be rechecked without the bound upload.",
+    "Retain the prior parsed mapping and return all simultaneous stage-(6) failures.",
+    "Return `file_not_kept` plus only failures derivable without the file.",
+    "Treat inability to perform the re-check as an internal error."
+   ],
+   "default_guess": "Return `file_not_kept` alone and require a new upload and confirmation step.",
+   "witness": {
+    "initial": "Session S uploads file F, obtains a clean mapping and a confirmation bound to upload 1, then replaces it with upload 2. Before confirmation, production acquires an id that conflicts with a picked id from F through a later minted-record collision, an allowed history.",
+    "events": [
+     "The owner submits the still-pending confirmation bound to upload 1."
+    ],
+    "outcomes": [
+     "The operation returns only `file_not_kept`, because F is unavailable for a complete re-check.",
+     "The operation returns `file_not_kept` together with `mapping_not_clean`, using retained mapping data or the subset of conflicts it can derive."
+    ],
+    "observer": "The owner interface renders different refusal kinds and retry guidance."
+   },
+   "unit": "50_public_apis_4_import_backups.md:`public_op:migration_import.confirm_import`"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"concurrent owner sign-outs\",\"kind\":\"contradiction\",\"text\":\"`sign_out_owner` says: “a second sign-out admitted before the first ended it finds it ended in its turn and answers that it ended with `changed: false`.” But every sign-out takes “the import lock, then the session's lock,” and `admit_owner_request` now makes the session check and taking a place on that lock one step. The second sign-out cannot reach that step until the first releases the import lock, by which time the session has ended and the session check refuses it.\",\"question\":\"Can a concurrently submitted second sign-out be pre-admitted and return `changed: false`, or must it fail admission with `no_owner_session` after the first sign-out ends the session?\",\"options\":[\"The second sign-out is refused by `admit_owner_request` as `unauthenticated`/`no_owner_session`.\",\"Both sign-outs can be admitted before either executes, and the second returns `changed: false`.\",\"Sign-out uses a different admission or locking rule from other upload-changing requests.\"],\"default_guess\":\"The second sign-out is refused as `no_owner_session`, because the import-lock ordering prevents it from being admitted earlier.\",\"witness\":{\"initial\":\"One valid owner session S with no request currently holding either lock.\",\"events\":[\"The browser submits two sign-out requests for S concurrently.\",\"The first request acquires the import lock, passes the session check, takes its place on S's lock, and ends S.\",\"The second request waits for the import lock and proceeds after the first releases it.\"],\"outcomes\":[\"The second request is refused at admission because S is ended.\",\"The second request is treated as previously admitted and answers `changed: false`.\"],\"observer\":\"The owner's browser sees either an authentication refusal or a successful unchanged sign-out.\"},\"unit\":\"50_public_apis_2_sessions.md:`public_op:owner_sessions.sign_out_owner`\"},{\"subject\":\"duplicate picks in an import mapping\",\"kind\":\"error multiplicity\",\"text\":\"The conventions require “one entry for each failing input or record,” while `read_import_mapping` says “a project given twice refused (`duplicate_pick`)” without defining which occurrences are failing inputs or how many `duplicate_pick` entries are returned.\",\"question\":\"When the same project appears three or more times in the picks, how many `duplicate_pick` failure entries are returned, and which occurrence or identity does each entry name?\",\"options\":[\"One failure for the duplicated project identity, regardless of occurrence count.\",\"One failure for every occurrence after the first.\",\"One failure for every occurrence, including the first, because all participate in the duplicate.\"],\"default_guess\":\"Return one failure for every occurrence after the first, each naming its pick position and project id.\",\"witness\":{\"initial\":\"An open import with an accepted uploaded file containing project P.\",\"events\":[\"The owner submits mapping picks `[P, P, P]`.\"],\"outcomes\":[\"The refusal contains one `duplicate_pick` entry naming P.\",\"The refusal contains two `duplicate_pick` entries, one for each repeated occurrence.\"],\"observer\":\"The owner interface renders a different number of validation failures.\"},\"unit\":\"50_public_apis_0_conventions.md:Closed set of refusal codes\"},{\"subject\":\"identity of conflicting imported records\",\"kind\":\"output ambiguity\",\"text\":\"The mapping returns “every id of a record the picks bring in that production already holds,” while ids are unique and compared only per kind; the output does not say that the record kind accompanies each conflicting id.\",\"question\":\"Must each conflict in the mapping identify whether it is a project, room or pointer, especially when the same UUID can occur in more than one kind?\",\"options\":[\"Return each conflicting id together with its record kind.\",\"Return only the id text, allowing equal ids of different kinds to be indistinguishable.\",\"Return the entire conflicting imported record.\"],\"default_guess\":\"Return the record kind and id.\",\"witness\":{\"initial\":\"Production holds a Room with id X and an ArtifactPointer with the same textual id X, which is allowed because ids are unique per kind. An uploaded file's picks bring in a Room X and an ArtifactPointer X.\",\"events\":[\"The owner asks to read the mapping for those picks.\"],\"outcomes\":[\"The mapping reports two kind-tagged conflicts: room X and pointer X.\",\"The mapping reports only X, or two indistinguishable occurrences of X.\"],\"observer\":\"The owner cannot otherwise tell which source records must be corrected.\"},\"unit\":\"50_public_apis_4_import_backups.md:`public_op:migration_import.read_import_mapping`\"},{\"subject\":\"malformed-record information in the import mapping\",\"kind\":\"output content\",\"text\":\"The output promises “every malformed record of the picks,” but does not say which identity and record kind are returned or whether all reasons that make one record malformed are included.\",\"question\":\"What information must the mapping return for each malformed record, and does it report every violated A16 rule or only that the record is malformed?\",\"options\":[\"Record kind and identity plus every malformed reason.\",\"Record kind and identity plus one selected reason.\",\"The malformed source record itself without structured reasons.\",\"Only a count or general malformed indication.\"],\"default_guess\":\"Return the record kind and identity with every violated malformed-record rule.\",\"witness\":{\"initial\":\"A picked project contains pointer X whose status is outside the vocabulary, whose reference is missing, and whose superseded instant is inconsistent.\",\"events\":[\"The owner reads the mapping.\"],\"outcomes\":[\"The mapping identifies pointer X and lists all three defects.\",\"The mapping identifies X only as malformed, or reports only one of its defects.\"],\"observer\":\"The owner sees different correction information and may need a different number of upload-and-map attempts.\"},\"unit\":\"50_public_apis_4_import_backups.md:`public_op:migration_import.read_import_mapping`\"},{\"subject\":\"extraneous Customer mapping values\",\"kind\":\"input handling\",\"text\":\"The inputs accept values “for each Customer the import will make,” but neither the operation nor its errors say what happens when the request also supplies values for a v1 customer not created by the current picks, or supplies the same customer's values more than once.\",\"question\":\"Are extraneous or duplicate Customer-value entries ignored, refused, or included in the mapping, and under which refusal kind?\",\"options\":[\"Refuse them as `outside_closed_list`.\",\"Ignore them and map only Customers implied by the picks.\",\"Treat duplicate entries as a duplicate-pick-style invalid request.\",\"Let the wire shape prevent them and define how unknown keys or repeated fields are handled.\"],\"default_guess\":\"Refuse any Customer entry not implied exactly once by the picks as `outside_closed_list`.\",\"witness\":{\"initial\":\"The file contains projects P1 and P2 naming distinct v1 customer values C1 and C2.\",\"events\":[\"The owner requests a mapping picking only P1 but submits complete name and kind values for both C1 and C2.\"],\"outcomes\":[\"The operation ignores C2 and returns the mapping for P1 and C1.\",\"The operation refuses the request because C2 is outside the Customers made by the picks.\"],\"observer\":\"The owner interface sees either a clean mapping or an invalid-request refusal.\"},\"unit\":\"50_public_apis_4_import_backups.md:`public_op:migration_import.read_import_mapping`\"},{\"subject\":\"aggregation after the bound upload is no longer kept\",\"kind\":\"error precedence\",\"text\":\"`confirm_import` says that, after the closure check, “every stage (6) failure is answered together,” including that the bound upload “is no longer kept” and that “the picks [are] checked again.” When the bound file is gone, the operation no longer has the rooms, pointers and customer links needed to perform all of that re-check.\",\"question\":\"Does `file_not_kept` stop the remaining stage-(6) checks, or must Registry retain enough mapping information to aggregate `mapping_not_clean` or `no_picks` with it?\",\"options\":[\"Return `file_not_kept` alone because the mapping cannot be rechecked without the bound upload.\",\"Retain the prior parsed mapping and return all simultaneous stage-(6) failures.\",\"Return `file_not_kept` plus only failures derivable without the file.\",\"Treat inability to perform the re-check as an internal error.\"],\"default_guess\":\"Return `file_not_kept` alone and require a new upload and confirmation step.\",\"witness\":{\"initial\":\"Session S uploads file F, obtains a clean mapping and a confirmation bound to upload 1, then replaces it with upload 2. Before confirmation, production acquires an id that conflicts with a picked id from F through a later minted-record collision, an allowed history.\",\"events\":[\"The owner submits the still-pending confirmation bound to upload 1.\"],\"outcomes\":[\"The operation returns only `file_not_kept`, because F is unavailable for a complete re-check.\",\"The operation returns `file_not_kept` together with `mapping_not_clean`, using retained mapping data or the subset of conflicts it can derive.\"],\"observer\":\"The owner interface renders different refusal kinds and retry guidance.\"},\"unit\":\"50_public_apis_4_import_backups.md:`public_op:migration_import.confirm_import`\"}]}",
+ "set_aside": []
+}
