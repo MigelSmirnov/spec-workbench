@@ -882,8 +882,8 @@ minted `customer_ref`.
    upload with the import lock taken before the session's
    (`capability:owner_sessions.admit_owner_request`). Holding them,
    `capability:migration_import.read_import_mapping` refuses when the closure
-   exists (rule 8), refuses a file over the release's size limit (A19 rule
-   4) and a file that cannot be read, holds two projects with one id, or a
+   exists (rule 8), refuses a file over
+   `capability:release_declarations.import_size_limit` (A19 rule 4) and a file that cannot be read, holds two projects with one id, or a
    project without a readable id or status (rule 3), and otherwise answers
    each project with its id and status. An accepted file is kept by
    `capability:owner_sessions.keep_uploaded_file`, replacing the session's
