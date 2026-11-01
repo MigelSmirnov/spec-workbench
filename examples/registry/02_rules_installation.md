@@ -96,7 +96,8 @@ security review of States 0–2.
    attempt remains.
 10. The import answers once its transaction commits, listing for each
    Customer it made its v1 value and the `customer_ref` minted for it. It
-   reaches the backups with the next daily run (A18). A store lost before a
+   reaches the backups with the first kept backup whose snapshot begins after
+   it committed (A18 rule 1). A store lost before a
    kept backup holds the import loses it, and the import may then be made
    again (R0-89).
 
@@ -270,12 +271,15 @@ secret cannot be shared between holders.
    one snapshot of the store, as one read transaction sees it, while other
    transactions go on; it never holds part of a transaction, and its
    recorded instant and last sequence number are those of that snapshot,
-   the instant being when its read transaction began. A write and the copy
-   may wait for each other only as the store's engine orders a reader and
-   the writer; neither is refused or fails for the other. A change committed
-   after the snapshot began is not in this backup, which holds the store as
-   its snapshot saw it; a later backup holds whatever the store holds when
-   its own snapshot is taken. It
+   the instant being when its read transaction began. The store runs in
+   SQLite's write-ahead-log mode, in which a reader and the writer never
+   wait for each other, so no write waits for, or is refused or fails for,
+   a copy, nor a copy for a write. The copy's read transaction fixes its
+   snapshot by its first read, which is of the audit counter's last
+   sequence number, and the instant is read from the clock at that read; a
+   change committed after it is not in this backup, which holds the store as
+   its snapshot saw it, and a later backup holds whatever the store holds
+   when its own snapshot is fixed. It
    records, readable without its key, its instant, the release that made it,
    the last audit sequence number its store ever wrote — kept apart from the
    entries (A15), 0 for a store that never wrote one, whatever the log now
