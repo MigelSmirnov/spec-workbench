@@ -1,0 +1,128 @@
+{
+ "open_points": [
+  {
+   "unit": "40_flows.md:preamble",
+   "subject": "Effect of a refused request on owner-session runtime state",
+   "kind": "contradiction",
+   "text": "“A refusal changes nothing and writes no entry” contradicts A13 rules under which a refused submission can consume or clear a confirmation value, a refused sign-in can change the refusal count, and any request admitted with a valid owner session refreshes its idle limit.",
+   "question": "Does “changes nothing” mean only that the durable store is unchanged, or must a refusal also leave owner-session and sign-in runtime state unchanged?",
+   "options": [
+    "Only the durable store and audit log remain unchanged; A13 runtime effects still occur.",
+    "All Registry state, including owner-session and sign-in runtime state, remains unchanged."
+   ],
+   "default_guess": "Treat the sentence as limited to the durable store and audit log, preserving A13’s explicit runtime effects.",
+   "witness": {
+    "initial": "A valid owner session has a pending confirmation bound to one set of inputs.",
+    "events": [
+     "The owner submits the equal pending confirmation value with different inputs.",
+     "owner_sessions follows A13 rule 6 and refuses the action."
+    ],
+    "outcomes": [
+     "A13 consumes the pending confirmation, so retrying it is refused and the confirmation step must be shown again.",
+     "The State 4 preamble’s unqualified “changes nothing” leaves the pending confirmation available for another submission."
+    ],
+    "observer": "The owner retrying the same confirmation value."
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:start_instance`",
+   "subject": "Ordering of listener binding against required start checks",
+   "kind": "contradictory order",
+   "text": "The flow binds both listeners before probing the backup location, while A17 rule 2 says the ordered start checks include the backup-location probe and store opening, with the first failed check stopping the start.",
+   "question": "Must listener binding occur before the backup and store checks as this flow says, or only after A17’s ordered checks have all passed?",
+   "options": [
+    "Bind listeners before the backup probe, so a listener failure can preempt an earlier-listed A17 check.",
+    "Complete the backup probe and store checks first, then bind listeners, accepting that listener binding can fail after a store was made or opened."
+   ],
+   "default_guess": "Preserve A17’s accepted check order and bind listeners after all listed checks, with explicit cleanup or persistence semantics for a later bind failure.",
+   "witness": {
+    "initial": "A listener address is already occupied and the configured backup location is not writable.",
+    "events": [
+     "The host starts Registry.",
+     "instance_lifecycle begins the start sequence."
+    ],
+    "outcomes": [
+     "State 4 step 2 stops first with a diagnostic naming the listener; the backup probe is never attempted and no file is made.",
+     "A17’s ordered checks reach the backup-location probe before any unlisted listener check and stop with a diagnostic naming the backup location."
+    ],
+    "observer": "The owner reading the start diagnostic."
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:owner_sign_in_and_session`",
+   "subject": "Idle-time effect of a request refused for CSRF",
+   "kind": "contradiction",
+   "text": "Step 2 says “The arrival restarts the 30 minutes” for a request with a valid session, but Errors groups a change with a wrong or missing CSRF value under “nothing changes.”",
+   "question": "Does a valid-session request refused for CSRF refresh the session’s 30-minute idle limit?",
+   "options": [
+    "Yes; arrival refreshes the idle limit before the CSRF refusal.",
+    "No; a CSRF refusal leaves the last-request reading unchanged."
+   ],
+   "default_guess": "Refresh the idle limit, following A13 rule 2 and step 2’s explicit arrival rule.",
+   "witness": {
+    "initial": "An owner session has been idle for 29 minutes and otherwise remains within its eight-hour lifetime.",
+    "events": [
+     "The owner submits a change carrying the valid session cookie but a wrong CSRF value.",
+     "owner_sessions refuses the change at stage (1).",
+     "Two minutes pass and the owner sends a valid request."
+    ],
+    "outcomes": [
+     "If arrival refreshed the idle limit, the later request is admitted.",
+     "If “nothing changes” includes the session’s last-request reading, the session has crossed 30 minutes and the later request is refused as expired."
+    ],
+    "observer": "The owner making the later valid request."
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:publish_and_withdraw_pointer`",
+   "subject": "Stage and owner of an unknown-pointer failure for Kernel withdrawal",
+   "kind": "contradiction",
+   "text": "The preamble and withdrawal step require operations to look up the pointer during stage (2), after confirming the session is registered, so its project can be checked against the session set; the Errors section instead assigns “Unknown project or pointer” to stage (3), `module:artifact_pointers`.",
+   "question": "For a Kernel withdrawal naming an unknown pointer, is not-found produced by the exceptional pointer lookup during stage (2), or by artifact_pointers during stage (3)?",
+   "options": [
+    "operations returns the stage-(2) not-found result during project resolution and never invokes stages (3)–(6).",
+    "Stage (2) somehow completes without a project, and artifact_pointers returns the unknown-pointer failure at stage (3)."
+   ],
+   "default_guess": "Return not-found during the stage-(2) resolution, because the project needed for the access check cannot otherwise be obtained.",
+   "witness": {
+    "initial": "Kernel names a registered session; the requested pointer id does not exist.",
+    "events": [
+     "Kernel calls withdraw_pointer with that session and pointer id.",
+     "Stage (1) accepts Kernel’s token and right."
+    ],
+    "outcomes": [
+     "The preamble and step 2 perform project resolution during stage (2), receive not-found, and reach no stage-(3) module.",
+     "The Errors section assigns the same missing pointer to artifact_pointers at stage (3), producing a differently tagged refusal and requiring stage (2) to finish without its project check."
+    ],
+    "observer": "The operations integration test or later error mapping that reads the refusal’s stage and records which module was invoked."
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:import_from_vps`",
+   "subject": "Retry instruction after another session has completed the import",
+   "kind": "contradiction",
+   "text": "The changed outcome says that after a refused confirmation the file may already be gone because another session’s import was accepted, yet also says “the step is to be shown again.” A16 rules 2 and 8 refuse every mapping and confirmation step once the migration closure exists.",
+   "question": "What is shown after a confirmation loses the race to another session’s accepted import: another confirmation step, or the final refusal that import is closed?",
+   "options": [
+    "The import is permanently closed; no confirmation step can be shown again.",
+    "The owner can show another confirmation step despite the migration closure."
+   ],
+   "default_guess": "Report that the import is closed and do not offer another confirmation step.",
+   "witness": {
+    "initial": "Owner sessions A and B each hold an uploaded file and a valid confirmation step; no migration closure exists.",
+    "events": [
+     "Session B confirms first; Registry commits the import, writes the closure, and drops every session’s upload.",
+     "Session A submits its previously shown confirmation."
+    ],
+    "outcomes": [
+     "The changed State 4 outcome directs session A to show the confirmation step again.",
+     "A16 rules 2 and 8 refuse showing any mapping or confirmation step because the closure now exists."
+    ],
+    "observer": "The owner using session A after its confirmation is refused."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"40_flows.md:preamble\",\"subject\":\"Effect of a refused request on owner-session runtime state\",\"kind\":\"contradiction\",\"text\":\"“A refusal changes nothing and writes no entry” contradicts A13 rules under which a refused submission can consume or clear a confirmation value, a refused sign-in can change the refusal count, and any request admitted with a valid owner session refreshes its idle limit.\",\"question\":\"Does “changes nothing” mean only that the durable store is unchanged, or must a refusal also leave owner-session and sign-in runtime state unchanged?\",\"options\":[\"Only the durable store and audit log remain unchanged; A13 runtime effects still occur.\",\"All Registry state, including owner-session and sign-in runtime state, remains unchanged.\"],\"default_guess\":\"Treat the sentence as limited to the durable store and audit log, preserving A13’s explicit runtime effects.\",\"witness\":{\"initial\":\"A valid owner session has a pending confirmation bound to one set of inputs.\",\"events\":[\"The owner submits the equal pending confirmation value with different inputs.\",\"owner_sessions follows A13 rule 6 and refuses the action.\"],\"outcomes\":[\"A13 consumes the pending confirmation, so retrying it is refused and the confirmation step must be shown again.\",\"The State 4 preamble’s unqualified “changes nothing” leaves the pending confirmation available for another submission.\"],\"observer\":\"The owner retrying the same confirmation value.\"}},{\"unit\":\"40_flows.md:`flow:start_instance`\",\"subject\":\"Ordering of listener binding against required start checks\",\"kind\":\"contradictory order\",\"text\":\"The flow binds both listeners before probing the backup location, while A17 rule 2 says the ordered start checks include the backup-location probe and store opening, with the first failed check stopping the start.\",\"question\":\"Must listener binding occur before the backup and store checks as this flow says, or only after A17’s ordered checks have all passed?\",\"options\":[\"Bind listeners before the backup probe, so a listener failure can preempt an earlier-listed A17 check.\",\"Complete the backup probe and store checks first, then bind listeners, accepting that listener binding can fail after a store was made or opened.\"],\"default_guess\":\"Preserve A17’s accepted check order and bind listeners after all listed checks, with explicit cleanup or persistence semantics for a later bind failure.\",\"witness\":{\"initial\":\"A listener address is already occupied and the configured backup location is not writable.\",\"events\":[\"The host starts Registry.\",\"instance_lifecycle begins the start sequence.\"],\"outcomes\":[\"State 4 step 2 stops first with a diagnostic naming the listener; the backup probe is never attempted and no file is made.\",\"A17’s ordered checks reach the backup-location probe before any unlisted listener check and stop with a diagnostic naming the backup location.\"],\"observer\":\"The owner reading the start diagnostic.\"}},{\"unit\":\"40_flows.md:`flow:owner_sign_in_and_session`\",\"subject\":\"Idle-time effect of a request refused for CSRF\",\"kind\":\"contradiction\",\"text\":\"Step 2 says “The arrival restarts the 30 minutes” for a request with a valid session, but Errors groups a change with a wrong or missing CSRF value under “nothing changes.”\",\"question\":\"Does a valid-session request refused for CSRF refresh the session’s 30-minute idle limit?\",\"options\":[\"Yes; arrival refreshes the idle limit before the CSRF refusal.\",\"No; a CSRF refusal leaves the last-request reading unchanged.\"],\"default_guess\":\"Refresh the idle limit, following A13 rule 2 and step 2’s explicit arrival rule.\",\"witness\":{\"initial\":\"An owner session has been idle for 29 minutes and otherwise remains within its eight-hour lifetime.\",\"events\":[\"The owner submits a change carrying the valid session cookie but a wrong CSRF value.\",\"owner_sessions refuses the change at stage (1).\",\"Two minutes pass and the owner sends a valid request.\"],\"outcomes\":[\"If arrival refreshed the idle limit, the later request is admitted.\",\"If “nothing changes” includes the session’s last-request reading, the session has crossed 30 minutes and the later request is refused as expired.\"],\"observer\":\"The owner making the later valid request.\"}},{\"unit\":\"40_flows.md:`flow:publish_and_withdraw_pointer`\",\"subject\":\"Stage and owner of an unknown-pointer failure for Kernel withdrawal\",\"kind\":\"contradiction\",\"text\":\"The preamble and withdrawal step require operations to look up the pointer during stage (2), after confirming the session is registered, so its project can be checked against the session set; the Errors section instead assigns “Unknown project or pointer” to stage (3), `module:artifact_pointers`.\",\"question\":\"For a Kernel withdrawal naming an unknown pointer, is not-found produced by the exceptional pointer lookup during stage (2), or by artifact_pointers during stage (3)?\",\"options\":[\"operations returns the stage-(2) not-found result during project resolution and never invokes stages (3)–(6).\",\"Stage (2) somehow completes without a project, and artifact_pointers returns the unknown-pointer failure at stage (3).\"],\"default_guess\":\"Return not-found during the stage-(2) resolution, because the project needed for the access check cannot otherwise be obtained.\",\"witness\":{\"initial\":\"Kernel names a registered session; the requested pointer id does not exist.\",\"events\":[\"Kernel calls withdraw_pointer with that session and pointer id.\",\"Stage (1) accepts Kernel’s token and right.\"],\"outcomes\":[\"The preamble and step 2 perform project resolution during stage (2), receive not-found, and reach no stage-(3) module.\",\"The Errors section assigns the same missing pointer to artifact_pointers at stage (3), producing a differently tagged refusal and requiring stage (2) to finish without its project check.\"],\"observer\":\"The operations integration test or later error mapping that reads the refusal’s stage and records which module was invoked.\"}},{\"unit\":\"40_flows.md:`flow:import_from_vps`\",\"subject\":\"Retry instruction after another session has completed the import\",\"kind\":\"contradiction\",\"text\":\"The changed outcome says that after a refused confirmation the file may already be gone because another session’s import was accepted, yet also says “the step is to be shown again.” A16 rules 2 and 8 refuse every mapping and confirmation step once the migration closure exists.\",\"question\":\"What is shown after a confirmation loses the race to another session’s accepted import: another confirmation step, or the final refusal that import is closed?\",\"options\":[\"The import is permanently closed; no confirmation step can be shown again.\",\"The owner can show another confirmation step despite the migration closure.\"],\"default_guess\":\"Report that the import is closed and do not offer another confirmation step.\",\"witness\":{\"initial\":\"Owner sessions A and B each hold an uploaded file and a valid confirmation step; no migration closure exists.\",\"events\":[\"Session B confirms first; Registry commits the import, writes the closure, and drops every session’s upload.\",\"Session A submits its previously shown confirmation.\"],\"outcomes\":[\"The changed State 4 outcome directs session A to show the confirmation step again.\",\"A16 rules 2 and 8 refuse showing any mapping or confirmation step because the closure now exists.\"],\"observer\":\"The owner using session A after its confirmation is refused.\"}}]}",
+ "set_aside": []
+}
