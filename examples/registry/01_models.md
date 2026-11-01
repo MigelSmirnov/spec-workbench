@@ -51,8 +51,8 @@ States 5 and 6.
 
 ## Identity formats (R0-07, R0-16, R0-17, R0-34)
 
-- Every identity Registry mints — `project_id`, `room_id`, artifact pointer id,
-  `customer_ref` — is an opaque identifier with no meaning in its form. Its
+- Every identity of a record Registry mints — `project_id`, `room_id`,
+  artifact pointer id, `customer_ref` — is an opaque identifier with no meaning in its form. Its
   concrete format is a UUID, as the v1 ids are; the import keeps every v1
   project, room and pointer id verbatim (R0-44, R0-50, R0-79).
 - Pointer versions are small ordinal numbers per project and type, starting at
