@@ -1,0 +1,252 @@
+{
+ "open_points": [
+  {
+   "unit": "30_modules.md:Facts several modules touch, and their one owner",
+   "subject": "owner-session, CSRF and confirmation values crossing into HTTP responses",
+   "kind": "contradiction",
+   "text": "“No module puts a secret, a confirmation value, a CSRF value or a session identity into ... an answer” contradicts A13 and `owner_interface`, which require the session identity in a cookie and the CSRF and confirmation values in forms.",
+   "question": "May these protected values leave their owning module in the owner interface's HTTP response, and if so which boundary is meant by “answer”?",
+   "options": [
+    "They may appear only in the protected cookie or form fields required by A13, while domain operation answers exclude them.",
+    "They may not appear in any response, making the required cookie and forms impossible.",
+    "“Answer” excludes HTTP metadata such as cookies but includes form bodies, leaving CSRF and confirmation transport unresolved."
+   ],
+   "default_guess": "Treat “answer” as a domain-operation answer and permit the narrowly specified cookie and form transport.",
+   "witness": {
+    "initial": "The owner has supplied the correct credential and has no owner session.",
+    "events": [
+     "The owner signs in through `owner_interface`.",
+     "The owner opens an archive-confirmation form."
+    ],
+    "outcomes": [
+     "The interface sends a session cookie, CSRF value and one-time confirmation value as A13 requires.",
+     "The interface omits or refuses to send one or more of them because State 3 says no module may put them into an answer, so sign-in or confirmation cannot work."
+    ],
+    "observer": "The owner"
+   }
+  },
+  {
+   "unit": "30_modules.md:`operations`",
+   "subject": "agent-authority withdrawal of a pointer",
+   "kind": "dependency-order gap",
+   "text": "“stage (2) through `agent_sessions.check_agent_call`” must run before stage (3), while “A withdrawal names the pointer only; its project is the pointer's own”; `agent_sessions` and `artifact_pointers` are on one dependency line and may not know each other.",
+   "question": "Who resolves a pointer to its project before the session-set check, without performing the stage-(3) existence lookup before stage (2) or creating a forbidden dependency?",
+   "options": [
+    "`operations` pre-resolves the pointer solely for authorization before stage (2).",
+    "`agent_sessions` is allowed to query `artifact_pointers`.",
+    "The withdrawal request also carries a project id that stage (2) checks.",
+    "The pointer module performs a second authorization check after lookup, despite `operations` adding no check after stage (2)."
+   ],
+   "default_guess": "Have `operations` perform an internal pointer-to-project resolution before calling `agent_sessions`, with externally indistinguishable not-found handling.",
+   "witness": {
+    "initial": "Session S is granted project A but not project B; pointer P belongs to B.",
+    "events": [
+     "Kernel for S submits `withdraw(P)`; the request names no project.",
+     "`operations` attempts stage (2) before the pointer existence stage."
+    ],
+    "outcomes": [
+     "The implementation resolves P to B first and refuses the call as not found without changing P.",
+     "The implementation checks S's active or supplied project without resolving P, passes stage (2), and the pointer module withdraws P from ungranted project B."
+    ],
+    "observer": "The owner later listing B's artifacts, and the agent through the withdrawal result"
+   }
+  },
+  {
+   "unit": "30_modules.md:`projects`",
+   "subject": "project-card assembly",
+   "kind": "two owners",
+   "text": "The shared-facts section says “the project card with its rooms ... is joined by `operations`,” while `projects` says it owns “the project card” and also owns both Project and Room records.",
+   "question": "Does `projects` return the complete project card including ordered rooms, or does it return project-only data for `operations` to join with rooms?",
+   "options": [
+    "`projects` owns and returns the complete card.",
+    "`projects` returns project data and `operations` owns the card join.",
+    "`projects` returns both components and `operations` merely shapes the answer."
+   ],
+   "default_guess": "Let `projects` return the complete card because it owns both records, leaving `operations` only the disclosure and transport-neutral pipeline."
+  },
+  {
+   "unit": "30_modules.md:`audit_log`",
+   "subject": "audit-log erasure entry",
+   "kind": "two owners",
+   "text": "`audit_log` owns “the erasure before a date ... its own entry written after the removal,” while `operations` owns “appending the audit entry in the action's transaction when the action changed state”; A15 requires an entry even when the erasure removes nothing.",
+   "question": "Which module decides and writes the erasure action's mandatory audit entry, and how is the generic `operations` audit append prevented from omitting or duplicating it?",
+   "options": [
+    "`audit_log.erase_audit_entries_before` removes entries and appends exactly its own entry.",
+    "`operations` asks `audit_log` to remove entries and then invokes the ordinary append capability, including for the no-removal case.",
+    "`audit_log` reports a special mandatory-audit result that `operations` appends once."
+   ],
+   "default_guess": "Make the audit-log erasure capability perform the removal and its single mandatory append atomically after receiving the confirmation id."
+  },
+  {
+   "unit": "30_modules.md:`migration_import`",
+   "subject": "import audit entry",
+   "kind": "two owners",
+   "text": "`migration_import` owns “applying ... the closure and its audit entry in one transaction,” although `audit_log` owns every append and `operations` owns appending an action's audit entry; `migration_import` does not know `audit_log`.",
+   "question": "Who constructs and appends the import's one audit entry, and what does `migration_import` return so the closure and entry are committed exactly once together?",
+   "options": [
+    "`operations` orchestrates imported records and closure, then calls `audit_log` in the same transaction.",
+    "`migration_import` is allowed to know and call `audit_log`.",
+    "`migration_import` creates the entry data but `operations` passes it to `audit_log`."
+   ],
+   "default_guess": "Have `migration_import` apply imported domain state and closure, return the audit subject data, and have `operations` call `audit_log` once in the same transaction."
+  },
+  {
+   "unit": "30_modules.md:`release_declarations`",
+   "subject": "current contract and release version",
+   "kind": "no owner",
+   "text": "Audit entries must carry “the contract version and the release version,” and backups record “the release that made it,” but `release_declarations` owns no current contract-version or release-version value.",
+   "question": "Which module owns the authoritative current contract version and release version consumed by `audit_log`, `operations` and `backups`?",
+   "options": [
+    "`release_declarations` owns both values.",
+    "The manifest owns the contract version and release metadata owns the release version, exposed through separate modules.",
+    "`models` fixes them as vocabulary values.",
+    "They are supplied by configuration."
+   ],
+   "default_guess": "Add both immutable values to `release_declarations`.",
+   "witness": {
+    "initial": "Registry is running release 2 with contract version 3 and store schema version 5.",
+    "events": [
+     "The owner corrects a project, producing an audit entry.",
+     "The daily backup runs."
+    ],
+    "outcomes": [
+     "The audit entry records release 2 and contract 3, and the backup records release 2.",
+     "Implementers substitute available but different values such as store version 5, a package version, or a manifest schema version, producing incompatible audit and backup metadata."
+    ],
+    "observer": "The owner reading the audit log or inspecting a backup during recovery"
+   }
+  },
+  {
+   "unit": "30_modules.md:`models`",
+   "subject": "artifact-type vocabulary",
+   "kind": "two owners",
+   "text": "`models` owns “the declared vocabularies of State 1,” which include the artifact type vocabulary, while `release_declarations` owns “the artifact types with their owner services.”",
+   "question": "Does `models` own the actual artifact-type members and owner-service mapping, or only the type shape while `release_declarations` owns the members for the running release?",
+   "options": [
+    "`models` owns only the vocabulary's structural type; `release_declarations` owns its members and mapping.",
+    "`models` owns the members and `release_declarations` only loads them.",
+    "Both must contain matching copies, with an unspecified consistency check."
+   ],
+   "default_guess": "Let `models` define the structural vocabulary type and `release_declarations` exclusively own the release-specific members and mapping.",
+   "witness": {
+    "initial": "A new verified release adds artifact type `plan` owned by a planner service.",
+    "events": [
+     "The release declaration includes `plan`.",
+     "A caller publishes a `plan` pointer."
+    ],
+    "outcomes": [
+     "Validation reads the release declaration and accepts `plan`.",
+     "Validation reads the model-owned closed vocabulary, which was not changed or was changed independently, and refuses `plan`."
+    ],
+    "observer": "The publishing owner or agent"
+   }
+  },
+  {
+   "unit": "30_modules.md:preamble",
+   "subject": "access to decrypted backup database files",
+   "kind": "boundary contradiction",
+   "text": "“Only `store` touches the store's database, and only `backups` the backup location,” but `backups` checks a decrypted backup by “asking `store` to check the copy,” whose SQLite integrity checks require opening that file in the backup location.",
+   "question": "May `store` open a database file located in the backup location for integrity checking, or must `backups` perform or relocate the check?",
+   "options": [
+    "`store` may access a file handle or temporary database supplied by `backups`, despite the stated exclusive backup-location boundary.",
+    "`backups` performs the SQLite store checks itself.",
+    "`backups` places the decrypted check copy in a separate store-owned temporary location.",
+    "The exclusivity rule applies only to file creation, deletion and enumeration, not opening a file for validation."
+   ],
+   "default_guess": "Define a narrow `store` validation capability over a handle supplied by `backups`, while `backups` retains all naming and location access.",
+   "witness": {
+    "initial": "A daily run has written and decrypted a candidate backup into a temporary file under the backup prefix.",
+    "events": [
+     "`backups` requests the full SQLite integrity and foreign-key checks.",
+     "The boundary rules are applied literally."
+    ],
+    "outcomes": [
+     "`store` opens the temporary backup file and the run can keep it, violating “only backups” touching the location.",
+     "`store` refuses to touch the location, while `backups` lacks ownership of the database checks, so the run fails or duplicates store logic."
+    ],
+    "observer": "The owner viewing whether a newest kept backup exists"
+   }
+  },
+  {
+   "unit": "30_modules.md:`backups`",
+   "subject": "removing agent sessions from backup copies",
+   "kind": "missing dependency contract",
+   "text": "`store.copy_store_snapshot` is described as “a consistent read snapshot of the whole store,” while `backups` owns “the copy without agent sessions”; only `store` may touch the database, and no capability assigns the filtering step.",
+   "question": "Which module removes agent-session records from the database copy before encryption, and through what allowed capability?",
+   "options": [
+    "`store` creates a filtered snapshot when `backups` requests the no-sessions backup profile.",
+    "`backups` edits the copied SQLite database directly.",
+    "`store` copies the whole database and then provides a store-owned operation that deletes sessions from the copy.",
+    "Agent sessions are moved out of the database so an unfiltered snapshot excludes them naturally."
+   ],
+   "default_guess": "Make `store` expose a backup-snapshot operation that omits agent-session records under a fixed profile owned by `backups`.",
+   "witness": {
+    "initial": "The live store contains session S with a grant to project P.",
+    "events": [
+     "The daily backup runs.",
+     "The owner later restores that backup."
+    ],
+    "outcomes": [
+     "The filtering step is implemented through `store`, and restored Registry contains no session S as A18 requires.",
+     "The whole-store snapshot is encrypted unchanged because `backups` may not edit a database, and restored Registry contains S and its grant."
+    ],
+    "observer": "The owner and Kernel after the restore"
+   }
+  },
+  {
+   "unit": "30_modules.md:`release_declarations`",
+   "subject": "never redeclaring a removed artifact type",
+   "kind": "unenforceable ownership",
+   "text": "`release_declarations` owns “that a removed type's name is never declared again,” but it reads only the current release, and A20 places release construction and checking outside the running instance without assigning this A22 history rule there.",
+   "question": "What component knows prior releases and enforces that a removed artifact type name is never declared again?",
+   "options": [
+    "The external release process owns and checks the cross-release history rule.",
+    "`release_declarations` receives an immutable history of retired type names in every release.",
+    "The running instance stores retired type names and checks the release at startup.",
+    "The rule is documentary only and has no enforcing owner."
+   ],
+   "default_guess": "Assign the cross-release check explicitly to the release process and keep runtime `release_declarations` limited to the current release.",
+   "witness": {
+    "initial": "Release 1 declares type `estimate`; release 2 removes it while retaining its pointers.",
+    "events": [
+     "Release 3 declares `estimate` again.",
+     "The owner attempts to publish another `estimate` pointer."
+    ],
+    "outcomes": [
+     "A release-history check rejects release 3 before it runs.",
+     "The current-release loader sees `estimate` as declared and accepts the publish, continuing the old type's version history contrary to A22."
+    ],
+    "observer": "The owner or agent publishing the pointer"
+   }
+  },
+  {
+   "unit": "30_modules.md:`operations`",
+   "subject": "owner disclosure ceiling",
+   "kind": "missing fact",
+   "text": "`operations` “computes an answer's class ... and refuses the answer whole when it is above the caller's highest,” but only service tokens have an owned highest class; no module or table gives the owner a highest disclosure class.",
+   "question": "What disclosure ceiling does `operations` use for an authenticated owner session, and which module owns that fact?",
+   "options": [
+    "The owner has an explicit `personal_data` ceiling declared in `models` or `release_declarations`.",
+    "The class-ceiling check applies only to service callers; authenticated owner operations are authorized separately.",
+    "`owner_sessions` reports the owner's ceiling to `operations`.",
+    "The owner is treated as unbounded rather than assigned a class."
+   ],
+   "default_guess": "Treat the authenticated owner as explicitly allowed through `personal_data`, with that invariant owned alongside the disclosure-class policy.",
+   "witness": {
+    "initial": "The owner is signed in and a Customer contains a name and contact data classified `personal_data`.",
+    "events": [
+     "The owner requests the Customer read through the owner interface.",
+     "`operations` computes the answer's highest class."
+    ],
+    "outcomes": [
+     "The owner is implicitly or explicitly assigned `personal_data` and receives the Customer.",
+     "No highest class exists for the owner, so the implementation refuses the answer or bypasses class enforcement ad hoc."
+    ],
+    "observer": "The owner"
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"30_modules.md:Facts several modules touch, and their one owner\",\"subject\":\"owner-session, CSRF and confirmation values crossing into HTTP responses\",\"kind\":\"contradiction\",\"text\":\"“No module puts a secret, a confirmation value, a CSRF value or a session identity into ... an answer” contradicts A13 and `owner_interface`, which require the session identity in a cookie and the CSRF and confirmation values in forms.\",\"question\":\"May these protected values leave their owning module in the owner interface's HTTP response, and if so which boundary is meant by “answer”?\",\"options\":[\"They may appear only in the protected cookie or form fields required by A13, while domain operation answers exclude them.\",\"They may not appear in any response, making the required cookie and forms impossible.\",\"“Answer” excludes HTTP metadata such as cookies but includes form bodies, leaving CSRF and confirmation transport unresolved.\"],\"default_guess\":\"Treat “answer” as a domain-operation answer and permit the narrowly specified cookie and form transport.\",\"witness\":{\"initial\":\"The owner has supplied the correct credential and has no owner session.\",\"events\":[\"The owner signs in through `owner_interface`.\",\"The owner opens an archive-confirmation form.\"],\"outcomes\":[\"The interface sends a session cookie, CSRF value and one-time confirmation value as A13 requires.\",\"The interface omits or refuses to send one or more of them because State 3 says no module may put them into an answer, so sign-in or confirmation cannot work.\"],\"observer\":\"The owner\"}},{\"unit\":\"30_modules.md:`operations`\",\"subject\":\"agent-authority withdrawal of a pointer\",\"kind\":\"dependency-order gap\",\"text\":\"“stage (2) through `agent_sessions.check_agent_call`” must run before stage (3), while “A withdrawal names the pointer only; its project is the pointer's own”; `agent_sessions` and `artifact_pointers` are on one dependency line and may not know each other.\",\"question\":\"Who resolves a pointer to its project before the session-set check, without performing the stage-(3) existence lookup before stage (2) or creating a forbidden dependency?\",\"options\":[\"`operations` pre-resolves the pointer solely for authorization before stage (2).\",\"`agent_sessions` is allowed to query `artifact_pointers`.\",\"The withdrawal request also carries a project id that stage (2) checks.\",\"The pointer module performs a second authorization check after lookup, despite `operations` adding no check after stage (2).\"],\"default_guess\":\"Have `operations` perform an internal pointer-to-project resolution before calling `agent_sessions`, with externally indistinguishable not-found handling.\",\"witness\":{\"initial\":\"Session S is granted project A but not project B; pointer P belongs to B.\",\"events\":[\"Kernel for S submits `withdraw(P)`; the request names no project.\",\"`operations` attempts stage (2) before the pointer existence stage.\"],\"outcomes\":[\"The implementation resolves P to B first and refuses the call as not found without changing P.\",\"The implementation checks S's active or supplied project without resolving P, passes stage (2), and the pointer module withdraws P from ungranted project B.\"],\"observer\":\"The owner later listing B's artifacts, and the agent through the withdrawal result\"}},{\"unit\":\"30_modules.md:`projects`\",\"subject\":\"project-card assembly\",\"kind\":\"two owners\",\"text\":\"The shared-facts section says “the project card with its rooms ... is joined by `operations`,” while `projects` says it owns “the project card” and also owns both Project and Room records.\",\"question\":\"Does `projects` return the complete project card including ordered rooms, or does it return project-only data for `operations` to join with rooms?\",\"options\":[\"`projects` owns and returns the complete card.\",\"`projects` returns project data and `operations` owns the card join.\",\"`projects` returns both components and `operations` merely shapes the answer.\"],\"default_guess\":\"Let `projects` return the complete card because it owns both records, leaving `operations` only the disclosure and transport-neutral pipeline.\"},{\"unit\":\"30_modules.md:`audit_log`\",\"subject\":\"audit-log erasure entry\",\"kind\":\"two owners\",\"text\":\"`audit_log` owns “the erasure before a date ... its own entry written after the removal,” while `operations` owns “appending the audit entry in the action's transaction when the action changed state”; A15 requires an entry even when the erasure removes nothing.\",\"question\":\"Which module decides and writes the erasure action's mandatory audit entry, and how is the generic `operations` audit append prevented from omitting or duplicating it?\",\"options\":[\"`audit_log.erase_audit_entries_before` removes entries and appends exactly its own entry.\",\"`operations` asks `audit_log` to remove entries and then invokes the ordinary append capability, including for the no-removal case.\",\"`audit_log` reports a special mandatory-audit result that `operations` appends once.\"],\"default_guess\":\"Make the audit-log erasure capability perform the removal and its single mandatory append atomically after receiving the confirmation id.\"},{\"unit\":\"30_modules.md:`migration_import`\",\"subject\":\"import audit entry\",\"kind\":\"two owners\",\"text\":\"`migration_import` owns “applying ... the closure and its audit entry in one transaction,” although `audit_log` owns every append and `operations` owns appending an action's audit entry; `migration_import` does not know `audit_log`.\",\"question\":\"Who constructs and appends the import's one audit entry, and what does `migration_import` return so the closure and entry are committed exactly once together?\",\"options\":[\"`operations` orchestrates imported records and closure, then calls `audit_log` in the same transaction.\",\"`migration_import` is allowed to know and call `audit_log`.\",\"`migration_import` creates the entry data but `operations` passes it to `audit_log`.\"],\"default_guess\":\"Have `migration_import` apply imported domain state and closure, return the audit subject data, and have `operations` call `audit_log` once in the same transaction.\"},{\"unit\":\"30_modules.md:`release_declarations`\",\"subject\":\"current contract and release version\",\"kind\":\"no owner\",\"text\":\"Audit entries must carry “the contract version and the release version,” and backups record “the release that made it,” but `release_declarations` owns no current contract-version or release-version value.\",\"question\":\"Which module owns the authoritative current contract version and release version consumed by `audit_log`, `operations` and `backups`?\",\"options\":[\"`release_declarations` owns both values.\",\"The manifest owns the contract version and release metadata owns the release version, exposed through separate modules.\",\"`models` fixes them as vocabulary values.\",\"They are supplied by configuration.\"],\"default_guess\":\"Add both immutable values to `release_declarations`.\",\"witness\":{\"initial\":\"Registry is running release 2 with contract version 3 and store schema version 5.\",\"events\":[\"The owner corrects a project, producing an audit entry.\",\"The daily backup runs.\"],\"outcomes\":[\"The audit entry records release 2 and contract 3, and the backup records release 2.\",\"Implementers substitute available but different values such as store version 5, a package version, or a manifest schema version, producing incompatible audit and backup metadata.\"],\"observer\":\"The owner reading the audit log or inspecting a backup during recovery\"}},{\"unit\":\"30_modules.md:`models`\",\"subject\":\"artifact-type vocabulary\",\"kind\":\"two owners\",\"text\":\"`models` owns “the declared vocabularies of State 1,” which include the artifact type vocabulary, while `release_declarations` owns “the artifact types with their owner services.”\",\"question\":\"Does `models` own the actual artifact-type members and owner-service mapping, or only the type shape while `release_declarations` owns the members for the running release?\",\"options\":[\"`models` owns only the vocabulary's structural type; `release_declarations` owns its members and mapping.\",\"`models` owns the members and `release_declarations` only loads them.\",\"Both must contain matching copies, with an unspecified consistency check.\"],\"default_guess\":\"Let `models` define the structural vocabulary type and `release_declarations` exclusively own the release-specific members and mapping.\",\"witness\":{\"initial\":\"A new verified release adds artifact type `plan` owned by a planner service.\",\"events\":[\"The release declaration includes `plan`.\",\"A caller publishes a `plan` pointer.\"],\"outcomes\":[\"Validation reads the release declaration and accepts `plan`.\",\"Validation reads the model-owned closed vocabulary, which was not changed or was changed independently, and refuses `plan`.\"],\"observer\":\"The publishing owner or agent\"}},{\"unit\":\"30_modules.md:preamble\",\"subject\":\"access to decrypted backup database files\",\"kind\":\"boundary contradiction\",\"text\":\"“Only `store` touches the store's database, and only `backups` the backup location,” but `backups` checks a decrypted backup by “asking `store` to check the copy,” whose SQLite integrity checks require opening that file in the backup location.\",\"question\":\"May `store` open a database file located in the backup location for integrity checking, or must `backups` perform or relocate the check?\",\"options\":[\"`store` may access a file handle or temporary database supplied by `backups`, despite the stated exclusive backup-location boundary.\",\"`backups` performs the SQLite store checks itself.\",\"`backups` places the decrypted check copy in a separate store-owned temporary location.\",\"The exclusivity rule applies only to file creation, deletion and enumeration, not opening a file for validation.\"],\"default_guess\":\"Define a narrow `store` validation capability over a handle supplied by `backups`, while `backups` retains all naming and location access.\",\"witness\":{\"initial\":\"A daily run has written and decrypted a candidate backup into a temporary file under the backup prefix.\",\"events\":[\"`backups` requests the full SQLite integrity and foreign-key checks.\",\"The boundary rules are applied literally.\"],\"outcomes\":[\"`store` opens the temporary backup file and the run can keep it, violating “only backups” touching the location.\",\"`store` refuses to touch the location, while `backups` lacks ownership of the database checks, so the run fails or duplicates store logic.\"],\"observer\":\"The owner viewing whether a newest kept backup exists\"}},{\"unit\":\"30_modules.md:`backups`\",\"subject\":\"removing agent sessions from backup copies\",\"kind\":\"missing dependency contract\",\"text\":\"`store.copy_store_snapshot` is described as “a consistent read snapshot of the whole store,” while `backups` owns “the copy without agent sessions”; only `store` may touch the database, and no capability assigns the filtering step.\",\"question\":\"Which module removes agent-session records from the database copy before encryption, and through what allowed capability?\",\"options\":[\"`store` creates a filtered snapshot when `backups` requests the no-sessions backup profile.\",\"`backups` edits the copied SQLite database directly.\",\"`store` copies the whole database and then provides a store-owned operation that deletes sessions from the copy.\",\"Agent sessions are moved out of the database so an unfiltered snapshot excludes them naturally.\"],\"default_guess\":\"Make `store` expose a backup-snapshot operation that omits agent-session records under a fixed profile owned by `backups`.\",\"witness\":{\"initial\":\"The live store contains session S with a grant to project P.\",\"events\":[\"The daily backup runs.\",\"The owner later restores that backup.\"],\"outcomes\":[\"The filtering step is implemented through `store`, and restored Registry contains no session S as A18 requires.\",\"The whole-store snapshot is encrypted unchanged because `backups` may not edit a database, and restored Registry contains S and its grant.\"],\"observer\":\"The owner and Kernel after the restore\"}},{\"unit\":\"30_modules.md:`release_declarations`\",\"subject\":\"never redeclaring a removed artifact type\",\"kind\":\"unenforceable ownership\",\"text\":\"`release_declarations` owns “that a removed type's name is never declared again,” but it reads only the current release, and A20 places release construction and checking outside the running instance without assigning this A22 history rule there.\",\"question\":\"What component knows prior releases and enforces that a removed artifact type name is never declared again?\",\"options\":[\"The external release process owns and checks the cross-release history rule.\",\"`release_declarations` receives an immutable history of retired type names in every release.\",\"The running instance stores retired type names and checks the release at startup.\",\"The rule is documentary only and has no enforcing owner.\"],\"default_guess\":\"Assign the cross-release check explicitly to the release process and keep runtime `release_declarations` limited to the current release.\",\"witness\":{\"initial\":\"Release 1 declares type `estimate`; release 2 removes it while retaining its pointers.\",\"events\":[\"Release 3 declares `estimate` again.\",\"The owner attempts to publish another `estimate` pointer.\"],\"outcomes\":[\"A release-history check rejects release 3 before it runs.\",\"The current-release loader sees `estimate` as declared and accepts the publish, continuing the old type's version history contrary to A22.\"],\"observer\":\"The owner or agent publishing the pointer\"}},{\"unit\":\"30_modules.md:`operations`\",\"subject\":\"owner disclosure ceiling\",\"kind\":\"missing fact\",\"text\":\"`operations` “computes an answer's class ... and refuses the answer whole when it is above the caller's highest,” but only service tokens have an owned highest class; no module or table gives the owner a highest disclosure class.\",\"question\":\"What disclosure ceiling does `operations` use for an authenticated owner session, and which module owns that fact?\",\"options\":[\"The owner has an explicit `personal_data` ceiling declared in `models` or `release_declarations`.\",\"The class-ceiling check applies only to service callers; authenticated owner operations are authorized separately.\",\"`owner_sessions` reports the owner's ceiling to `operations`.\",\"The owner is treated as unbounded rather than assigned a class.\"],\"default_guess\":\"Treat the authenticated owner as explicitly allowed through `personal_data`, with that invariant owned alongside the disclosure-class policy.\",\"witness\":{\"initial\":\"The owner is signed in and a Customer contains a name and contact data classified `personal_data`.\",\"events\":[\"The owner requests the Customer read through the owner interface.\",\"`operations` computes the answer's highest class.\"],\"outcomes\":[\"The owner is implicitly or explicitly assigned `personal_data` and receives the Customer.\",\"No highest class exists for the owner, so the implementation refuses the answer or bypasses class enforcement ad hoc.\"],\"observer\":\"The owner\"}}]}",
+ "set_aside": []
+}

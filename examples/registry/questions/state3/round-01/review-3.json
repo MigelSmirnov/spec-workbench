@@ -1,0 +1,191 @@
+{
+ "open_points": [
+  {
+   "unit": "30_modules.md:Facts several modules touch, and their one owner",
+   "subject": "owner-session secrets in HTTP responses",
+   "kind": "contradiction",
+   "text": "“No module puts a secret, a confirmation value, a CSRF value or a session identity into … an answer” conflicts with `owner_interface` carrying the session identity in a response cookie and the CSRF and confirmation values in served forms.",
+   "question": "Does “answer” exclude the owner interface's HTTP cookie and form fields, or are those values forbidden from the very responses that must deliver them?",
+   "options": [
+    "“Answer” means only a domain-operation payload; the owner interface may transmit these values in protected cookies and forms.",
+    "The prohibition includes every HTTP response, requiring some other unspecified delivery mechanism."
+   ],
+   "default_guess": "Treat the cookie and protected form fields as explicit exceptions to “answer”.",
+   "witness": {
+    "initial": "The owner has no owner session.",
+    "events": [
+     "The owner signs in successfully.",
+     "Registry serves a state-changing form requiring CSRF protection and then a confirmation form."
+    ],
+    "outcomes": [
+     "The HTTP responses contain the session cookie, CSRF value and confirmation value, so the workflow works.",
+     "The values are omitted because they may not enter an answer, so the browser cannot maintain the session or submit the protected actions."
+    ],
+    "observer": "The owner using the browser"
+   }
+  },
+  {
+   "unit": "30_modules.md:Facts several modules touch, and their one owner",
+   "subject": "backup key disclosure between modules",
+   "kind": "contradiction",
+   "text": "“`configuration` holds the secrets and hands each only to the module that compares it” conflicts with `backups` encrypting backups with the configured backup key; `backups` uses that secret but does not compare a presented value with it.",
+   "question": "May `configuration` hand the backup key to `backups`, and if so what does “only to the module that compares it” mean for non-authentication secrets?",
+   "options": [
+    "Authentication secrets go only to their comparison modules, while the backup key goes only to `backups`.",
+    "Every secret may go only to a comparison module, leaving no module able to perform backup encryption."
+   ],
+   "default_guess": "Treat the sentence as applying to presented authentication secrets and hand the backup key only to `backups`.",
+   "witness": {
+    "initial": "Registry starts with a valid backup key and service tokens.",
+    "events": [
+     "The daily backup becomes due.",
+     "`backups` requests the configured key to encrypt the snapshot."
+    ],
+    "outcomes": [
+     "`configuration` supplies the key to `backups`, and an encrypted backup is kept.",
+     "`configuration` refuses to expose the key because `backups` does not compare it, so no conforming backup can be made."
+    ],
+    "observer": "The owner viewing the newest-backup status and the host's backup files"
+   }
+  },
+  {
+   "unit": "30_modules.md:Facts several modules touch, and their one owner",
+   "subject": "audit-entry insertion for composite and audit-erasure actions",
+   "kind": "two owners",
+   "text": "The shared rule says `operations` “appends the audit entry,” while `audit_log` owns an audit erasure whose “own entry [is] written after the removal,” and `migration_import` owns applying the import “and its audit entry.”",
+   "question": "For audit erasure and import, which module decides and performs the single audit append: `operations`, `audit_log`/`migration_import`, or a specifically stated split?",
+   "options": [
+    "`operations` decides that the action changed and calls `audit_log` exactly once; domain modules never append.",
+    "The action-owning module appends its own entry; `operations` skips its general append for these actions.",
+    "`audit_log` owns all append decisions as well as persistence, after receiving an action result."
+   ],
+   "default_guess": "Have `operations` decide and invoke `audit_log` once, with action modules returning only their state-change result.",
+   "witness": {
+    "initial": "The audit log contains entries older than the owner's chosen cutoff.",
+    "events": [
+     "The owner confirms erasing audit entries before the cutoff.",
+     "`audit_log` performs the removal and `operations` completes the accepted action."
+    ],
+    "outcomes": [
+     "Exactly one erasure entry is appended by the single designated owner.",
+     "Both the action module and `operations` follow their stated responsibility and append, leaving two erasure entries."
+    ],
+    "observer": "The owner reading the audit log"
+   }
+  },
+  {
+   "unit": "30_modules.md:`migration_import`",
+   "subject": "orchestration of an accepted import",
+   "kind": "unclear owner",
+   "text": "`operations` “calls each module the action changes inside” the transaction, but `migration_import` owns “applying the picks, the Customers, the closure and its audit entry” and knows `customers`, `projects` and `artifact_pointers`.",
+   "question": "Does `operations` directly coordinate every affected domain module during import, or does it call `migration_import`, which then coordinates those modules?",
+   "options": [
+    "`operations` opens the transaction and calls only `migration_import`; `migration_import` invokes import-specific capabilities of the domain modules.",
+    "`operations` calls `migration_import`, `customers`, `projects`, `artifact_pointers` and `audit_log` directly.",
+    "`migration_import` writes imported domain records through `store` itself, bypassing the owning domain modules."
+   ],
+   "default_guess": "Let `operations` own only the transaction and call `migration_import`, which coordinates import-specific capabilities of the domain modules."
+  },
+  {
+   "unit": "30_modules.md:`release_declarations`",
+   "subject": "current release version and contract version",
+   "kind": "no owner",
+   "text": "Audit entries must contain the contract version and release version, and backups record “the release that made it,” but `release_declarations`' exhaustive ownership list and capabilities name neither the current release identifier nor the current contract version.",
+   "question": "Which module owns and supplies the authoritative current release version and operation contract version to `audit_log` and `backups`?",
+   "options": [
+    "`release_declarations` owns both identifiers and exposes them.",
+    "`operations` owns contract versions while `release_declarations` owns the release identifier.",
+    "Each consumer obtains or hard-codes the versions independently."
+   ],
+   "default_guess": "Put the release identifier in `release_declarations`, and have the operation declaration own each contract version while `operations` passes it to `audit_log`.",
+   "witness": {
+    "initial": "A new release changes an operation's contract version.",
+    "events": [
+     "The owner corrects a project, producing an audit entry.",
+     "The daily backup runs under the same release."
+    ],
+    "outcomes": [
+     "The audit entry and backup metadata use versions from one authoritative declaration.",
+     "`audit_log`, `operations` and `backups` obtain the omitted values independently and may record different or stale versions."
+    ],
+    "observer": "The owner reading the audit log or inspecting backup metadata"
+   }
+  },
+  {
+   "unit": "30_modules.md:`projects`",
+   "subject": "project-create replay after archival",
+   "kind": "contradiction",
+   "text": "The `projects` section says “a repeat [is] checked only through stage (4) and its project's archive check,” while A01 explicitly applies the archive check only to `add a room` and pointer publication and requires a repeated project create after archival to answer the archived project.",
+   "question": "Does the archive check apply to a replay of `create a project`, or only to creates whose target project must remain writable, such as adding a room and publishing a pointer?",
+   "options": [
+    "A project-create replay is allowed after archival and returns the archived project unchanged.",
+    "Every project-related create replay performs the archive check, so the project-create replay is refused."
+   ],
+   "default_guess": "Apply the archive check only to room creation and pointer publication; return the archived project for a project-create replay.",
+   "witness": {
+    "initial": "A project was created with request id K and was later archived.",
+    "events": [
+     "The owner resubmits the original create request with K and the same supplied facts."
+    ],
+    "outcomes": [
+     "The archived project is returned unchanged, as A01's required behavior states.",
+     "The request is refused by the archive check described in the `projects` section."
+    ],
+    "observer": "The owner resubmitting the form"
+   }
+  },
+  {
+   "unit": "30_modules.md:`agent_sessions`",
+   "subject": "active project when it is subsequently archived",
+   "kind": "contradiction",
+   "text": "`agent_sessions` describes the active project as “never an archived one,” while R0-46, R0-70 and A10 say that a project archived while active stays active and only agent writes on it are refused.",
+   "question": "Is “never an archived one” only a precondition on making a project active, or an invariant that must be restored when an active project is archived?",
+   "options": [
+    "It is only a precondition on selection; a project archived afterward remains active.",
+    "It is a persistent invariant; archiving must clear the active project or refuse the archive."
+   ],
+   "default_guess": "Treat it only as a precondition on selection and retain an active project that is archived later.",
+   "witness": {
+    "initial": "Session S has active project P, and P is active.",
+    "events": [
+     "The owner archives P.",
+     "Kernel reads S's access and then performs an agent read without naming a project."
+    ],
+    "outcomes": [
+     "S still reports P as active; the implicit read resolves to archived P, while writes are refused.",
+     "P is cleared or the archive is refused to preserve the stated “never an archived one” invariant."
+    ],
+    "observer": "The owner viewing the session and Kernel acting for the agent"
+   }
+  },
+  {
+   "unit": "30_modules.md:`models`",
+   "subject": "artifact-type vocabulary ownership",
+   "kind": "two owners",
+   "text": "`models` owns “the declared vocabularies of State 1,” which include the artifact-type vocabulary, while `release_declarations` owns the artifact types, their owner services and removal/redeclaration rules.",
+   "question": "Is the artifact-type vocabulary owned wholly by `release_declarations`, or does `models` own some separately defined part of it?",
+   "options": [
+    "`models` owns only the generic ArtifactType value shape; `release_declarations` exclusively owns the concrete type-to-service vocabulary.",
+    "`models` owns the concrete vocabulary, and `release_declarations` merely serializes or exposes it.",
+    "Both keep concrete vocabularies that must be synchronized."
+   ],
+   "default_guess": "Give the concrete artifact-type vocabulary exclusively to `release_declarations`; let `models` own only its value type."
+  },
+  {
+   "unit": "30_modules.md:Facts several modules touch, and their one owner",
+   "subject": "diagnostic and ordinary-log redaction",
+   "kind": "no enforcing owner",
+   "text": "The text imposes the cross-module rule that secrets and protected runtime values never enter a log line or diagnostic, while `configuration`, `backups` and other modules emit diagnostics directly and no module owns diagnostic construction or redaction.",
+   "question": "Which module owns the diagnostic/logging boundary that guarantees protected values cannot be serialized, or is each emitting module independently responsible?",
+   "options": [
+    "A dedicated diagnostic capability owns construction and redaction; emitting modules pass only typed, non-secret facts.",
+    "Each emitting module owns and tests its own safe diagnostics.",
+    "Secret-bearing values are opaque types from `configuration` that no diagnostic serializer can render, while emitters own messages."
+   ],
+   "default_guess": "Use opaque secret-bearing values and a single diagnostic capability that accepts only explicit safe fields."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"30_modules.md:Facts several modules touch, and their one owner\",\"subject\":\"owner-session secrets in HTTP responses\",\"kind\":\"contradiction\",\"text\":\"“No module puts a secret, a confirmation value, a CSRF value or a session identity into … an answer” conflicts with `owner_interface` carrying the session identity in a response cookie and the CSRF and confirmation values in served forms.\",\"question\":\"Does “answer” exclude the owner interface's HTTP cookie and form fields, or are those values forbidden from the very responses that must deliver them?\",\"options\":[\"“Answer” means only a domain-operation payload; the owner interface may transmit these values in protected cookies and forms.\",\"The prohibition includes every HTTP response, requiring some other unspecified delivery mechanism.\"],\"default_guess\":\"Treat the cookie and protected form fields as explicit exceptions to “answer”.\",\"witness\":{\"initial\":\"The owner has no owner session.\",\"events\":[\"The owner signs in successfully.\",\"Registry serves a state-changing form requiring CSRF protection and then a confirmation form.\"],\"outcomes\":[\"The HTTP responses contain the session cookie, CSRF value and confirmation value, so the workflow works.\",\"The values are omitted because they may not enter an answer, so the browser cannot maintain the session or submit the protected actions.\"],\"observer\":\"The owner using the browser\"}},{\"unit\":\"30_modules.md:Facts several modules touch, and their one owner\",\"subject\":\"backup key disclosure between modules\",\"kind\":\"contradiction\",\"text\":\"“`configuration` holds the secrets and hands each only to the module that compares it” conflicts with `backups` encrypting backups with the configured backup key; `backups` uses that secret but does not compare a presented value with it.\",\"question\":\"May `configuration` hand the backup key to `backups`, and if so what does “only to the module that compares it” mean for non-authentication secrets?\",\"options\":[\"Authentication secrets go only to their comparison modules, while the backup key goes only to `backups`.\",\"Every secret may go only to a comparison module, leaving no module able to perform backup encryption.\"],\"default_guess\":\"Treat the sentence as applying to presented authentication secrets and hand the backup key only to `backups`.\",\"witness\":{\"initial\":\"Registry starts with a valid backup key and service tokens.\",\"events\":[\"The daily backup becomes due.\",\"`backups` requests the configured key to encrypt the snapshot.\"],\"outcomes\":[\"`configuration` supplies the key to `backups`, and an encrypted backup is kept.\",\"`configuration` refuses to expose the key because `backups` does not compare it, so no conforming backup can be made.\"],\"observer\":\"The owner viewing the newest-backup status and the host's backup files\"}},{\"unit\":\"30_modules.md:Facts several modules touch, and their one owner\",\"subject\":\"audit-entry insertion for composite and audit-erasure actions\",\"kind\":\"two owners\",\"text\":\"The shared rule says `operations` “appends the audit entry,” while `audit_log` owns an audit erasure whose “own entry [is] written after the removal,” and `migration_import` owns applying the import “and its audit entry.”\",\"question\":\"For audit erasure and import, which module decides and performs the single audit append: `operations`, `audit_log`/`migration_import`, or a specifically stated split?\",\"options\":[\"`operations` decides that the action changed and calls `audit_log` exactly once; domain modules never append.\",\"The action-owning module appends its own entry; `operations` skips its general append for these actions.\",\"`audit_log` owns all append decisions as well as persistence, after receiving an action result.\"],\"default_guess\":\"Have `operations` decide and invoke `audit_log` once, with action modules returning only their state-change result.\",\"witness\":{\"initial\":\"The audit log contains entries older than the owner's chosen cutoff.\",\"events\":[\"The owner confirms erasing audit entries before the cutoff.\",\"`audit_log` performs the removal and `operations` completes the accepted action.\"],\"outcomes\":[\"Exactly one erasure entry is appended by the single designated owner.\",\"Both the action module and `operations` follow their stated responsibility and append, leaving two erasure entries.\"],\"observer\":\"The owner reading the audit log\"}},{\"unit\":\"30_modules.md:`migration_import`\",\"subject\":\"orchestration of an accepted import\",\"kind\":\"unclear owner\",\"text\":\"`operations` “calls each module the action changes inside” the transaction, but `migration_import` owns “applying the picks, the Customers, the closure and its audit entry” and knows `customers`, `projects` and `artifact_pointers`.\",\"question\":\"Does `operations` directly coordinate every affected domain module during import, or does it call `migration_import`, which then coordinates those modules?\",\"options\":[\"`operations` opens the transaction and calls only `migration_import`; `migration_import` invokes import-specific capabilities of the domain modules.\",\"`operations` calls `migration_import`, `customers`, `projects`, `artifact_pointers` and `audit_log` directly.\",\"`migration_import` writes imported domain records through `store` itself, bypassing the owning domain modules.\"],\"default_guess\":\"Let `operations` own only the transaction and call `migration_import`, which coordinates import-specific capabilities of the domain modules.\"},{\"unit\":\"30_modules.md:`release_declarations`\",\"subject\":\"current release version and contract version\",\"kind\":\"no owner\",\"text\":\"Audit entries must contain the contract version and release version, and backups record “the release that made it,” but `release_declarations`' exhaustive ownership list and capabilities name neither the current release identifier nor the current contract version.\",\"question\":\"Which module owns and supplies the authoritative current release version and operation contract version to `audit_log` and `backups`?\",\"options\":[\"`release_declarations` owns both identifiers and exposes them.\",\"`operations` owns contract versions while `release_declarations` owns the release identifier.\",\"Each consumer obtains or hard-codes the versions independently.\"],\"default_guess\":\"Put the release identifier in `release_declarations`, and have the operation declaration own each contract version while `operations` passes it to `audit_log`.\",\"witness\":{\"initial\":\"A new release changes an operation's contract version.\",\"events\":[\"The owner corrects a project, producing an audit entry.\",\"The daily backup runs under the same release.\"],\"outcomes\":[\"The audit entry and backup metadata use versions from one authoritative declaration.\",\"`audit_log`, `operations` and `backups` obtain the omitted values independently and may record different or stale versions.\"],\"observer\":\"The owner reading the audit log or inspecting backup metadata\"}},{\"unit\":\"30_modules.md:`projects`\",\"subject\":\"project-create replay after archival\",\"kind\":\"contradiction\",\"text\":\"The `projects` section says “a repeat [is] checked only through stage (4) and its project's archive check,” while A01 explicitly applies the archive check only to `add a room` and pointer publication and requires a repeated project create after archival to answer the archived project.\",\"question\":\"Does the archive check apply to a replay of `create a project`, or only to creates whose target project must remain writable, such as adding a room and publishing a pointer?\",\"options\":[\"A project-create replay is allowed after archival and returns the archived project unchanged.\",\"Every project-related create replay performs the archive check, so the project-create replay is refused.\"],\"default_guess\":\"Apply the archive check only to room creation and pointer publication; return the archived project for a project-create replay.\",\"witness\":{\"initial\":\"A project was created with request id K and was later archived.\",\"events\":[\"The owner resubmits the original create request with K and the same supplied facts.\"],\"outcomes\":[\"The archived project is returned unchanged, as A01's required behavior states.\",\"The request is refused by the archive check described in the `projects` section.\"],\"observer\":\"The owner resubmitting the form\"}},{\"unit\":\"30_modules.md:`agent_sessions`\",\"subject\":\"active project when it is subsequently archived\",\"kind\":\"contradiction\",\"text\":\"`agent_sessions` describes the active project as “never an archived one,” while R0-46, R0-70 and A10 say that a project archived while active stays active and only agent writes on it are refused.\",\"question\":\"Is “never an archived one” only a precondition on making a project active, or an invariant that must be restored when an active project is archived?\",\"options\":[\"It is only a precondition on selection; a project archived afterward remains active.\",\"It is a persistent invariant; archiving must clear the active project or refuse the archive.\"],\"default_guess\":\"Treat it only as a precondition on selection and retain an active project that is archived later.\",\"witness\":{\"initial\":\"Session S has active project P, and P is active.\",\"events\":[\"The owner archives P.\",\"Kernel reads S's access and then performs an agent read without naming a project.\"],\"outcomes\":[\"S still reports P as active; the implicit read resolves to archived P, while writes are refused.\",\"P is cleared or the archive is refused to preserve the stated “never an archived one” invariant.\"],\"observer\":\"The owner viewing the session and Kernel acting for the agent\"}},{\"unit\":\"30_modules.md:`models`\",\"subject\":\"artifact-type vocabulary ownership\",\"kind\":\"two owners\",\"text\":\"`models` owns “the declared vocabularies of State 1,” which include the artifact-type vocabulary, while `release_declarations` owns the artifact types, their owner services and removal/redeclaration rules.\",\"question\":\"Is the artifact-type vocabulary owned wholly by `release_declarations`, or does `models` own some separately defined part of it?\",\"options\":[\"`models` owns only the generic ArtifactType value shape; `release_declarations` exclusively owns the concrete type-to-service vocabulary.\",\"`models` owns the concrete vocabulary, and `release_declarations` merely serializes or exposes it.\",\"Both keep concrete vocabularies that must be synchronized.\"],\"default_guess\":\"Give the concrete artifact-type vocabulary exclusively to `release_declarations`; let `models` own only its value type.\"},{\"unit\":\"30_modules.md:Facts several modules touch, and their one owner\",\"subject\":\"diagnostic and ordinary-log redaction\",\"kind\":\"no enforcing owner\",\"text\":\"The text imposes the cross-module rule that secrets and protected runtime values never enter a log line or diagnostic, while `configuration`, `backups` and other modules emit diagnostics directly and no module owns diagnostic construction or redaction.\",\"question\":\"Which module owns the diagnostic/logging boundary that guarantees protected values cannot be serialized, or is each emitting module independently responsible?\",\"options\":[\"A dedicated diagnostic capability owns construction and redaction; emitting modules pass only typed, non-secret facts.\",\"Each emitting module owns and tests its own safe diagnostics.\",\"Secret-bearing values are opaque types from `configuration` that no diagnostic serializer can render, while emitters own messages.\"],\"default_guess\":\"Use opaque secret-bearing values and a single diagnostic capability that accepts only explicit safe fields.\"}]}",
+ "set_aside": []
+}
