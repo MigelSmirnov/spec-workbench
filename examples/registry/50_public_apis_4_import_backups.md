@@ -31,9 +31,10 @@ pick brings is refused (`outside_closed_list`), one given twice too
 
 ### Outputs
 
-For a file it reads, the file's digest, the SHA-256 of its bytes, which
-Registry computes and never takes from a caller; a file over the size limit
-is refused before it is read, and its refusal carries no digest. At `upload`, each project the file holds with
+For an accepted file, the file's digest, the SHA-256 of its bytes, which
+Registry computes and never takes from a caller. No refusal carries a
+digest: a file over the size limit is refused before it is read, and an
+unreadable or malformed one is refused with its kind alone. At `upload`, each project the file holds with
 its id and status. At `mapping`, the mapping: the picked projects by `project_id`, each one's rooms —
 `room_id`, name, added instant — and pointers — every fact 'list artifacts'
 answers for a pointer but its publisher, which will be the import — in
@@ -43,9 +44,13 @@ malformed record of the picks, every id of a record the picks bring in that
 production already holds — no other production id — and every missing
 value; and whether the mapping is clean — no malformed record, no conflict,
 no missing value and at least one pick — which alone lets the confirmation
-step be shown. Each malformed record is named by its kind and id, with
-every rule 4 defect it has; an id that occurs twice names every record that
-carries it, each with the defect. A mapping of no pick is not clean (`no_picks`): an import of
+step be shown. Every record the mapping names — malformed or conflicting —
+is named by its kind, its id as the file gives it (or that it has none) and
+its position among the file's records of that kind, so two records of one
+id, and a record with no id, are told apart; a malformed record carries
+every rule 4 defect it has, and an id that occurs twice names every record
+that carries it. A conflict names the record's kind and id and that
+production holds that id for that kind (rule 5). A mapping of no pick is not clean (`no_picks`): an import of
 nothing is not confirmed.
 
 ### Observable effect
