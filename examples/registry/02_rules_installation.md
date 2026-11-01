@@ -270,7 +270,10 @@ secret cannot be shared between holders.
    one snapshot of the store, as one read transaction sees it, while other
    transactions go on; it never holds part of a transaction, and its
    recorded instant and last sequence number are those of that snapshot,
-   the instant being when its read transaction began. It
+   the instant being when its read transaction began. Its read transaction
+   and the store's writes do not wait for each other: a change committed
+   while the copy is made goes on, is not in this backup and is in the
+   next, and no change or run is refused or fails for the other. It
    records, readable without its key, its instant, the release that made it,
    the last audit sequence number its store ever wrote — kept apart from the
    entries (A15), 0 for a store that never wrote one, whatever the log now
@@ -503,7 +506,7 @@ Security review: PERFORMED
 - external_callbacks_webhooks: NOT_APPLICABLE; rationale: Registry calls no other service and receives no callback (R0-18, R0-54), and every request is a caller's authenticated call (R0-27)
 - browser_boundary: APPLICABLE; references: A13, A19; affected: owner interface, CSRF protection, session cookie, rendering of agent-written text
 - files_artifacts: APPLICABLE; references: A07, A08, A16, A18, A22; affected: M05, M10, import file, backups, pointers as references whose payload Registry never reads (R0-02)
-- concurrency: APPLICABLE; references: A01, A04, A07, A12, A13, A14, A16, A18; affected: M01, M04, M05, M06, M09, M10, M11, concurrent creates, corrections, publishes, session changes, single-use confirmation values, confirmations bound to no revision, resubmitted forms on records without a revision, creates racing the erasure that removes their request id, re-uploads replacing a confirmed file, concurrent import confirmations, backup snapshots taken while transactions go on, overlapping backup runs
+- concurrency: APPLICABLE; references: A01, A04, A07, A12, A13, A14, A16, A18; affected: M01, M03, M04, M05, M06, M09, M10, M11, concurrent creates, corrections, publishes, session changes, single-use confirmation values, confirmations bound to no revision, resubmitted forms on records without a revision, creates racing the erasure that removes their request id, re-uploads replacing a confirmed file, concurrent import confirmations, backup snapshots taken while transactions go on, overlapping backup runs
 - dependencies: APPLICABLE; references: A20; affected: Registry release, its Python dependencies
 
 Performed again on 2026-11-01, after that day's changes to A01, A04, A13, A16,
