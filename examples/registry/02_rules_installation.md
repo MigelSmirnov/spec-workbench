@@ -272,8 +272,10 @@ secret cannot be shared between holders.
    recorded instant and last sequence number are those of that snapshot,
    the instant being when its read transaction began. Its read transaction
    and the store's writes do not wait for each other: a change committed
-   while the copy is made goes on, is not in this backup and is in the
-   next, and no change or run is refused or fails for the other. It
+   while the copy is made goes on and is not in this backup, which holds the
+   store as its snapshot saw it; a later backup holds whatever the store
+   holds when its own snapshot is taken. No change or run is refused or
+   fails for the other. It
    records, readable without its key, its instant, the release that made it,
    the last audit sequence number its store ever wrote — kept apart from the
    entries (A15), 0 for a store that never wrote one, whatever the log now
