@@ -1,0 +1,132 @@
+{
+ "open_points": [
+  {
+   "unit": "30_modules.md:`random_values`",
+   "subject": "owner-session identity format",
+   "kind": "contradiction",
+   "text": "`random_values` owns minting “the owner session's identity … as a random UUID”, while A13 rule 7 says “The session's identity … [is] at least 32 bytes from the operating system's random source.” A UUID contains only 16 bytes of random identity data.",
+   "question": "Is an owner-session identity a UUID, or an opaque value containing at least 32 random bytes?",
+   "options": [
+    "Use the UUID format required by State 1 and `random_values`",
+    "Use at least 32 random bytes as required by A13",
+    "Define a UUID-based composite carrying at least 32 random bytes"
+   ],
+   "default_guess": "Use an opaque value containing at least 32 random bytes, because it is an authentication bearer.",
+   "witness": {
+    "initial": "Registry has no owner session, and the owner signs in successfully.",
+    "events": [
+     "`owner_sessions` asks `random_values` for the new session identity.",
+     "`owner_interface` sends that identity in the session cookie."
+    ],
+    "outcomes": [
+     "The cookie contains a UUID derived from 16 random bytes.",
+     "The cookie contains an opaque encoding of at least 32 random bytes and is not a UUID."
+    ],
+    "observer": "The owner's browser and tests validating the cookie format"
+   }
+  },
+  {
+   "unit": "30_modules.md:`store`",
+   "subject": "serialization of agent reads against access changes",
+   "kind": "missing concurrency owner",
+   "text": "`store` says only that “a transaction that changes anything takes [the one write lock] when it begins”, while A10 rule 6 requires “A call and every change of its session — a revocation, an archiving, the session's end — [to be] applied one at a time” and decides acceptance by which transaction commits first. `agent_sessions` says the access check is inside the call's transaction, but no module owns serialization of a read-only agent call against those writes.",
+   "question": "What module and lock make a read-only agent call atomic and ordered against revocation, archiving and session end?",
+   "options": [
+    "`store` serializes every agent call with those writes",
+    "`agent_sessions` owns a separate call/access lock spanning the complete operation",
+    "Snapshot ordering is sufficient, with an explicit rule defining which transaction is first"
+   ],
+   "default_guess": "Have `store` serialize the complete agent call transaction with access-changing transactions.",
+   "witness": {
+    "initial": "Session S is granted active project P.",
+    "events": [
+     "Cabinet Kernel starts reading P's agent projection for S and passes the session/set check.",
+     "Before that read completes, the owner revokes P from S and the revocation commits.",
+     "The projection read then finishes."
+    ],
+    "outcomes": [
+     "Because the read finishes after the revocation, A10 rule 6 makes it observe the changed session and return the not-found refusal.",
+     "A read transaction retains its earlier snapshot, so it returns P's projection even though the revocation committed before the read completed."
+    ],
+    "observer": "The agent through Cabinet Kernel"
+   }
+  },
+  {
+   "unit": "30_modules.md:`release_declarations`",
+   "subject": "contract version in backup metadata",
+   "kind": "contradiction",
+   "text": "`release_declarations` owns “the release's own version and its contract version, which every audit entry (M09) and every backup's record (A18 rule 1) name”, but A18 rule 1 and the `backups` section enumerate a backup record as only its instant, release, last audit sequence number and key digest.",
+   "question": "Must each backup's readable record include the contract version as well as the release version?",
+   "options": [
+    "Include both release and contract versions",
+    "Include only the release version, as A18's exhaustive list says"
+   ],
+   "default_guess": "Include only the release version, following A18's explicit backup-record definition.",
+   "witness": {
+    "initial": "A running release has release version R and contract version C.",
+    "events": [
+     "The 03:00 backup run succeeds.",
+     "The backup's unencrypted record is read."
+    ],
+    "outcomes": [
+     "The record contains both R and C, as `release_declarations` says.",
+     "The record contains R but no C, as A18 and `backups` say."
+    ],
+    "observer": "The owner or restore tooling reading the backup record"
+   }
+  },
+  {
+   "unit": "30_modules.md:`service_api`",
+   "subject": "authentication before transport-value parsing",
+   "kind": "unclear dependency direction",
+   "text": "The check-order rule says stage (1), authentication and the right to the operation, is the first failure, but `service_api` owns “reading the token and the request” and must not own any check, while `operations` owns the check and must not own transport or wire format. No interface permits authentication before `service_api` has decoded a possibly malformed request.",
+   "question": "Who orders token authentication ahead of request-body decoding failures without making `service_api` own an authorization check or `operations` own wire parsing?",
+   "options": [
+    "`service_api` identifies the route and asks `operations` to authenticate before decoding the body",
+    "`operations` accepts an undecoded request and invokes transport decoding after stage (1)",
+    "Transport syntax failures are explicitly outside A04's check order and may precede authentication"
+   ],
+   "default_guess": "Use a two-step operations entry point: authenticate the route and token first, then let `service_api` decode values and continue the operation.",
+   "witness": {
+    "initial": "The service API is running on a valid operation route.",
+    "events": [
+     "A caller sends a wrong service token and a malformed request body."
+    ],
+    "outcomes": [
+     "Stage (1) runs first and the caller receives the wrong-token refusal without body parsing.",
+     "`service_api` parses the body before it can call `operations`, so the caller receives a malformed-request refusal."
+    ],
+    "observer": "The unauthenticated caller"
+   }
+  },
+  {
+   "unit": "30_modules.md:`backups`",
+   "subject": "audit sequence verification inside a backup copy",
+   "kind": "missing module capability",
+   "text": "A18 requires the checked decrypted store's never-lowered audit sequence number to equal the backup record's number. `audit_log` owns that counter but exposes it for the live store; only `store` may open the decrypted SQLite copy, and `store` “must not own … the audit log's sequence rule”; `backups` owns the comparison but may not open SQLite. No declared capability crosses the snapshot's counter to `backups`.",
+   "question": "Which module reads the audit sequence counter from the snapshot/decrypted backup and supplies it for comparison with the backup record?",
+   "options": [
+    "`store.check_store_file` returns the raw stored counter without owning its semantics",
+    "`audit_log` gains a capability to read its counter through a store-file handle supplied by `store`",
+    "`backups` is allowed to read this one metadata value from the SQLite copy"
+   ],
+   "default_guess": "Have `store.check_store_file` return the raw counter and let `backups` own the equality check."
+  },
+  {
+   "unit": "30_modules.md:Facts several modules touch, and their one owner",
+   "subject": "diagnostic redaction guarantee",
+   "kind": "no owning module",
+   "text": "“No module puts a secret … into … a diagnostic” is stated as an obligation on every module, and State 0 also forbids personal values in diagnostics, but no module owns diagnostic construction, redaction or the diagnostic sink. `configuration` and `backups` each emit diagnostics, and parsing/store modules can also encounter caller-supplied personal values.",
+   "question": "Which module owns the mechanism that guarantees every diagnostic excludes secrets and personal data?",
+   "options": [
+    "A single diagnostic capability owns construction and redaction",
+    "Each diagnostic-producing module owns its own enforcement",
+    "Diagnostics are restricted to a closed, value-free vocabulary owned by `models`"
+   ],
+   "default_guess": "Use one value-free diagnostic capability and require producers to pass only declared diagnostic kinds and non-sensitive item names."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"30_modules.md:`random_values`\",\"subject\":\"owner-session identity format\",\"kind\":\"contradiction\",\"text\":\"`random_values` owns minting “the owner session's identity … as a random UUID”, while A13 rule 7 says “The session's identity … [is] at least 32 bytes from the operating system's random source.” A UUID contains only 16 bytes of random identity data.\",\"question\":\"Is an owner-session identity a UUID, or an opaque value containing at least 32 random bytes?\",\"options\":[\"Use the UUID format required by State 1 and `random_values`\",\"Use at least 32 random bytes as required by A13\",\"Define a UUID-based composite carrying at least 32 random bytes\"],\"default_guess\":\"Use an opaque value containing at least 32 random bytes, because it is an authentication bearer.\",\"witness\":{\"initial\":\"Registry has no owner session, and the owner signs in successfully.\",\"events\":[\"`owner_sessions` asks `random_values` for the new session identity.\",\"`owner_interface` sends that identity in the session cookie.\"],\"outcomes\":[\"The cookie contains a UUID derived from 16 random bytes.\",\"The cookie contains an opaque encoding of at least 32 random bytes and is not a UUID.\"],\"observer\":\"The owner's browser and tests validating the cookie format\"}},{\"unit\":\"30_modules.md:`store`\",\"subject\":\"serialization of agent reads against access changes\",\"kind\":\"missing concurrency owner\",\"text\":\"`store` says only that “a transaction that changes anything takes [the one write lock] when it begins”, while A10 rule 6 requires “A call and every change of its session — a revocation, an archiving, the session's end — [to be] applied one at a time” and decides acceptance by which transaction commits first. `agent_sessions` says the access check is inside the call's transaction, but no module owns serialization of a read-only agent call against those writes.\",\"question\":\"What module and lock make a read-only agent call atomic and ordered against revocation, archiving and session end?\",\"options\":[\"`store` serializes every agent call with those writes\",\"`agent_sessions` owns a separate call/access lock spanning the complete operation\",\"Snapshot ordering is sufficient, with an explicit rule defining which transaction is first\"],\"default_guess\":\"Have `store` serialize the complete agent call transaction with access-changing transactions.\",\"witness\":{\"initial\":\"Session S is granted active project P.\",\"events\":[\"Cabinet Kernel starts reading P's agent projection for S and passes the session/set check.\",\"Before that read completes, the owner revokes P from S and the revocation commits.\",\"The projection read then finishes.\"],\"outcomes\":[\"Because the read finishes after the revocation, A10 rule 6 makes it observe the changed session and return the not-found refusal.\",\"A read transaction retains its earlier snapshot, so it returns P's projection even though the revocation committed before the read completed.\"],\"observer\":\"The agent through Cabinet Kernel\"}},{\"unit\":\"30_modules.md:`release_declarations`\",\"subject\":\"contract version in backup metadata\",\"kind\":\"contradiction\",\"text\":\"`release_declarations` owns “the release's own version and its contract version, which every audit entry (M09) and every backup's record (A18 rule 1) name”, but A18 rule 1 and the `backups` section enumerate a backup record as only its instant, release, last audit sequence number and key digest.\",\"question\":\"Must each backup's readable record include the contract version as well as the release version?\",\"options\":[\"Include both release and contract versions\",\"Include only the release version, as A18's exhaustive list says\"],\"default_guess\":\"Include only the release version, following A18's explicit backup-record definition.\",\"witness\":{\"initial\":\"A running release has release version R and contract version C.\",\"events\":[\"The 03:00 backup run succeeds.\",\"The backup's unencrypted record is read.\"],\"outcomes\":[\"The record contains both R and C, as `release_declarations` says.\",\"The record contains R but no C, as A18 and `backups` say.\"],\"observer\":\"The owner or restore tooling reading the backup record\"}},{\"unit\":\"30_modules.md:`service_api`\",\"subject\":\"authentication before transport-value parsing\",\"kind\":\"unclear dependency direction\",\"text\":\"The check-order rule says stage (1), authentication and the right to the operation, is the first failure, but `service_api` owns “reading the token and the request” and must not own any check, while `operations` owns the check and must not own transport or wire format. No interface permits authentication before `service_api` has decoded a possibly malformed request.\",\"question\":\"Who orders token authentication ahead of request-body decoding failures without making `service_api` own an authorization check or `operations` own wire parsing?\",\"options\":[\"`service_api` identifies the route and asks `operations` to authenticate before decoding the body\",\"`operations` accepts an undecoded request and invokes transport decoding after stage (1)\",\"Transport syntax failures are explicitly outside A04's check order and may precede authentication\"],\"default_guess\":\"Use a two-step operations entry point: authenticate the route and token first, then let `service_api` decode values and continue the operation.\",\"witness\":{\"initial\":\"The service API is running on a valid operation route.\",\"events\":[\"A caller sends a wrong service token and a malformed request body.\"],\"outcomes\":[\"Stage (1) runs first and the caller receives the wrong-token refusal without body parsing.\",\"`service_api` parses the body before it can call `operations`, so the caller receives a malformed-request refusal.\"],\"observer\":\"The unauthenticated caller\"}},{\"unit\":\"30_modules.md:`backups`\",\"subject\":\"audit sequence verification inside a backup copy\",\"kind\":\"missing module capability\",\"text\":\"A18 requires the checked decrypted store's never-lowered audit sequence number to equal the backup record's number. `audit_log` owns that counter but exposes it for the live store; only `store` may open the decrypted SQLite copy, and `store` “must not own … the audit log's sequence rule”; `backups` owns the comparison but may not open SQLite. No declared capability crosses the snapshot's counter to `backups`.\",\"question\":\"Which module reads the audit sequence counter from the snapshot/decrypted backup and supplies it for comparison with the backup record?\",\"options\":[\"`store.check_store_file` returns the raw stored counter without owning its semantics\",\"`audit_log` gains a capability to read its counter through a store-file handle supplied by `store`\",\"`backups` is allowed to read this one metadata value from the SQLite copy\"],\"default_guess\":\"Have `store.check_store_file` return the raw counter and let `backups` own the equality check.\"},{\"unit\":\"30_modules.md:Facts several modules touch, and their one owner\",\"subject\":\"diagnostic redaction guarantee\",\"kind\":\"no owning module\",\"text\":\"“No module puts a secret … into … a diagnostic” is stated as an obligation on every module, and State 0 also forbids personal values in diagnostics, but no module owns diagnostic construction, redaction or the diagnostic sink. `configuration` and `backups` each emit diagnostics, and parsing/store modules can also encounter caller-supplied personal values.\",\"question\":\"Which module owns the mechanism that guarantees every diagnostic excludes secrets and personal data?\",\"options\":[\"A single diagnostic capability owns construction and redaction\",\"Each diagnostic-producing module owns its own enforcement\",\"Diagnostics are restricted to a closed, value-free vocabulary owned by `models`\"],\"default_guess\":\"Use one value-free diagnostic capability and require producers to pass only declared diagnostic kinds and non-sensitive item names.\"}]}",
+ "set_aside": []
+}
