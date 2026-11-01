@@ -50,8 +50,9 @@ administration (R0-28, R0-29, R0-48; Explicit exclusions): Registry serves
 each surface on a listener of its own and decides nothing about reachability.
 The modules are the parts of that one program, not services. Only `store`
 opens a SQLite database — the store's, and the decrypted copy of a backup that
-`backups` hands it by path to check — and only `backups` makes, renames or
-deletes a file in the backup location. The dependency direction is fixed, from the bottom up:
+`backups` hands it by path to check — and only `backups` names, renames or
+deletes a file in the backup location; `store` writes and opens one there only
+at the temporary path `backups` names for it. The dependency direction is fixed, from the bottom up:
 
 ```text
 models
@@ -77,7 +78,8 @@ later line, and modules on one line do not know each other.
   and, when it changes state, one store transaction (A04 rule 4): `operations`
   opens it through `store.run_in_transaction`, calls each module the action
   changes inside it, appends the action's one audit entry through
-  `audit_log.append_audit_entry` when the action changed state (A14 rule 1)
+  `audit_log.append_audit_entry` when the action changed state and M09 lists
+  it (A14 rule 1)
   and commits once. No other module appends an entry; the erasure of old
   entries is the one action whose entry `audit_log` writes itself, inside
   `erase_audit_entries_before` (A15 rule 4), and `operations` appends none
@@ -86,7 +88,13 @@ later line, and modules on one line do not know each other.
   Changes that write the store are applied one at a time (A01 rule 7, A07
   rule 2, A10 rule 6, A15 rule 5): `store` holds the one write lock and a
   transaction that changes anything takes it when it begins, so each change
-  reads the result of the one before.
+  reads the result of the one before. Every agent-authority call takes it too,
+  a read included, so a call is ordered with every change of its session
+  (A10 rule 6).
+- **Minted identities.** The module that writes a record checks, inside the
+  transaction, that the identity `random_values` minted for it is not one its
+  model already holds, and mints again when it is; a collision never refuses
+  an action.
 - **The check order.** A04 rule 6 is `operations`': it runs stage (1) —
   through `service_access` for a service, `owner_sessions` for the owner — and
   stage (2) through `agent_sessions.check_agent_call`, and hands the action to
@@ -206,10 +214,11 @@ monotonic_reading
 
 ### Owns
 
-Minting every opaque identity Registry makes — `project_id`, `room_id`,
-pointer id, `customer_ref`, the owner session's identity, the confirmation id —
-as a random UUID ("Identity formats"); making the 32-byte values of A13 rule 7
-from the operating system's random source; comparing a presented secret with a
+Minting every opaque identity of a record or an action — `project_id`,
+`room_id`, pointer id, `customer_ref`, the confirmation id — as a random UUID
+("Identity formats"); making the values of A13 rule 7 — the owner session's
+identity, its CSRF value, a confirmation value — of at least 32 bytes from the
+operating system's random source; comparing a presented secret with a
 held one in constant time (A13 rule 7, A17 rule 6).
 
 ### Knows
@@ -247,8 +256,8 @@ artifact types with their owner services, the first release's one type
 and their highest classes; the store version; the store's temporary-name
 suffix (A17 rule 5); the kept and temporary backup prefixes, neither beginning
 with the other (A18 rule 5); the import file's size limit (A19 rule 4, its
-value State 6's); the release's own version and its contract version, which
-every audit entry (M09) and every backup's record (A18 rule 1) name.
+value State 6's); the release's own version and its contract version: every
+audit entry names both (M09), a backup's record the release (A18 rule 1).
 
 ### Knows
 
@@ -326,8 +335,8 @@ facts_equal_for_repeat
 ### Owns
 
 A17: reading the `REGISTRY_` environment variables and nothing else; the start
-checks in rule 2's one order — no unknown item, the service tokens all four or
-none, the other items present, each well formed, each secret at least 32 bytes,
+checks in rule 2's one order — no unknown item, one service token for each
+service `release_declarations` lists, all or none, the other items present, each well formed, each secret at least 32 bytes,
 no two secrets equal — with the diagnostic naming the failed item and never its
 value; that no default is applied (rule 5); an owner-only start when no token
 is given (rule 1). The path checks of rule 5 that need no file — the store and
@@ -335,7 +344,7 @@ the backup location apart, compared with every link resolved — are its too.
 
 ### Knows
 
-`models`.
+`models`, `release_declarations`.
 
 ### Must not own
 
@@ -376,7 +385,8 @@ alternatives is checked against its closed list first. A06: the order of every
 list read — each key as A06 names it, text by Unicode code point, every key
 ending in an identity or a sequence number — so no module sorts records itself.
 For a backup (A18 rules 1, 2): one consistent read snapshot of the whole store,
-written as a store file of its own at the path `backups` gives, with the agent
+written as a store file of its own at the temporary path `backups` names and
+makes for it, with the agent
 sessions removed from that copy, so it passes the same checks; and the full
 integrity and version check of such a file, the decrypted copy included,
 opened for reading only.

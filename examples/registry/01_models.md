@@ -65,8 +65,9 @@ States 5 and 6.
 - The agent session's identity is not minted by Registry: Cabinet Kernel names
   the session from its own run context (R0-53, R0-77); Registry records it as
   an opaque identifier it did not create.
-- Two further identifiers Registry mints follow the same rule (opaque, UUID):
-  the owner session's (M11) and the confirmation id. Registry mints a
+- Two further identifiers Registry mints are opaque too: the owner session's
+  (M11), at least 32 random bytes (State 2 A13 rule 7), and the confirmation
+  id, a UUID. Registry mints a
   confirmation id when the owner confirms an action that asks for confirmation
   — archiving a project, erasing an archived project, the import, erasing old
   audit entries (Primary actions) — and writes it once into the audit entry of
