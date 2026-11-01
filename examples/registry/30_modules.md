@@ -868,12 +868,15 @@ newest_backup_instant
 
 ### Owns
 
-The operation table: every operation of either surface with its caller kinds,
-its stages and the modules it changes. A04 rules 4 and 6: one transaction per
+The operation table: every operation of either surface with its stages and
+the modules it changes — not which service may call it, which is the
+release's table alone (A09 rule 2), asked of `service_access.service_may_call`
+at stage (1); the owner's operations are the owner interface's. A04 rules 4 and 6: one transaction per
 action and the one check order, stages (1) and (2) run here, stages (3) to (6)
 by the record's module, the first failing stage answered with all its
-failures. A09 rules 3 and 4 at the call: an operation outside the caller's
-rights refused, an answer above its class refused whole. A10 rule 3's
+failures. A09 rule 4 at the call: an answer above the caller's class refused
+whole; an operation outside a service's rights is refused at stage (1) by
+`service_access`'s answer (A09 rule 3), never by a table of `operations`' own. A10 rule 3's
 placement: stage (2)'s refusal hides every later one. A14 rules 1 and 5:
 appending the audit entry in the action's transaction when the action changed
 state. A14 rule 5: `operations` mints a confirmed action's confirmation id
