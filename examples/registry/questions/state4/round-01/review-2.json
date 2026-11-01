@@ -1,0 +1,153 @@
+{
+ "open_points": [
+  {
+   "subject": "project-create replay after the named Customer becomes ineligible",
+   "kind": "contradictory check",
+   "text": "`flow:create_and_correct_project` says stage (3) checks that \"a named customer exists, asked of capability:customers.check_customer_eligible\"; State 3 defines that capability as refusing an unknown, erased, restricted or ended Customer, while A01 rule 3 says a create replay does not repeat the stage (6) eligibility check and may answer the existing project after its Customer became restricted.",
+   "question": "On a project-create replay, how is Customer existence checked without applying the erased, restricted or ended eligibility refusal that A01 says must be skipped?",
+   "options": [
+    "`check_customer_eligible` returns distinguishable existence and eligibility facts, and `projects` ignores eligibility for a recognized replay",
+    "A separate Customer-existence capability is used at stage (3)",
+    "The replay is refused when the Customer has since become erased, restricted or ended"
+   ],
+   "default_guess": "Follow A01: check existence separately and return the existing project for an equal replay.",
+   "witness": {
+    "initial": "Project P was created with request id R and Customer C; C still exists but is now restricted.",
+    "events": [
+     "The owner repeats creation of P with request id R and facts equal to P's current facts.",
+     "`projects` performs the stage (3) Customer check through `customers.check_customer_eligible`."
+    ],
+    "outcomes": [
+     "A01's replay rule answers P unchanged because C exists and stage (6) eligibility is not checked again.",
+     "The declared eligibility capability refuses the call because C is restricted."
+    ],
+    "observer": "The owner resubmitting the create form"
+   },
+   "unit": "40_flows.md:`flow:create_and_correct_project`"
+  },
+  {
+   "subject": "Kernel checks for session-owned operations",
+   "kind": "contradiction",
+   "text": "Step 2 says, \"For every later Kernel call ... check_agent_call checks that the session is registered and that the project named — or the active one when none is named — is in its set\"; A10 and R0-53 say reading access, requesting access and ending a session are session operations that name no project and are checked only for Kernel's token and a registered session.",
+   "question": "Which Kernel operations skip the project-or-active-project membership check and require only a registered session?",
+   "options": [
+    "Read access, request access and end session skip the project check",
+    "Only request access skips the project check",
+    "Every post-registration Kernel call requires a granted or active project"
+   ],
+   "default_guess": "Apply the project check only to operations on a project; session-owned operations require only a registered session.",
+   "witness": {
+    "initial": "Kernel has registered session S; S has an empty granted set and no active project.",
+    "events": [
+     "Kernel requests project access for S using free text."
+    ],
+    "outcomes": [
+     "The request is accepted, becomes S's pending request and moves its access version, as R0-53 and step 3 specify.",
+     "The request is refused as not found because step 2 finds no named or active project in S's set."
+    ],
+    "observer": "The agent and the owner viewing pending requests"
+   },
+   "unit": "40_flows.md:`flow:agent_session_access`"
+  },
+  {
+   "subject": "audit result of granting an already-granted project",
+   "kind": "contradictory outcome",
+   "text": "Step 6 says, \"a project already granted is answered unchanged (A05)\" and then says, \"module:operations appends the grant's entry\"; A05 and A14 say an accepted action that changes nothing writes no audit entry.",
+   "question": "Does a standalone grant of a project already in the session's set append a grant audit entry?",
+   "options": [
+    "No entry; it is an unchanged transition under A05 and A14",
+    "Append a grant entry despite no state change",
+    "Treat standalone grant and granting while answering a pending request differently"
+   ],
+   "default_guess": "Write no entry for a standalone no-op grant; if answering a request changes other session state, apply the separately stated rules for that composite action.",
+   "witness": {
+    "initial": "Session S already has project P in its granted set, P is active and eligible, and S has no pending request.",
+    "events": [
+     "The owner submits `grant_project(S, P)` with the current access version."
+    ],
+    "outcomes": [
+     "The session is returned unchanged and the audit log is unchanged, as A05 and A14 require.",
+     "The session is returned unchanged but a new grant entry is appended, as the final sentence of step 6 can require."
+    ],
+    "observer": "The owner reading the audit log"
+   },
+   "unit": "40_flows.md:`flow:agent_session_access`"
+  },
+  {
+   "subject": "service read of an anonymised project card",
+   "kind": "contradiction",
+   "text": "Step 2 says `read_project_card` \"answers the card, any status, with the archived date for an archived project\"; R0-62 says an anonymised project answers that it was erased, and M01 says its archived instant, revision, name, object and rooms are gone.",
+   "question": "What does `read_project_card` return when the id identifies an anonymised project?",
+   "options": [
+    "An erased-project answer with no card or archived date",
+    "A reduced archived card built from the surviving id, status and anonymised mark",
+    "A normal archived card, despite its fields having been erased"
+   ],
+   "default_guess": "Return the erased-project answer required by R0-62.",
+   "witness": {
+    "initial": "Archived project P has been anonymised; only its id, archived status, anonymised mark and pointers remain.",
+    "events": [
+     "Client Portal calls its allowed `read project` operation for P."
+    ],
+    "outcomes": [
+     "It receives the erased-project answer with no project card, as R0-62 requires.",
+     "It receives an archived project card with an archived date, as the State 4 read step says."
+    ],
+    "observer": "Client Portal"
+   },
+   "unit": "40_flows.md:`flow:service_reads_project`"
+  },
+  {
+   "subject": "service room listing for an anonymised project",
+   "kind": "contradiction",
+   "text": "Step 2 says `list_rooms` \"answers the rooms\" without an anonymised-project branch; R0-62 says `list rooms` on an anonymised project answers that it was erased, and anonymisation removes its rooms.",
+   "question": "Does listing rooms for an anonymised project return an erased-project answer or a successful empty room list?",
+   "options": [
+    "Return the erased-project answer",
+    "Return an empty room list",
+    "Return not found"
+   ],
+   "default_guess": "Return the erased-project answer required by R0-62.",
+   "witness": {
+    "initial": "Project P had rooms and was later anonymised, removing those room records while retaining P's id and anonymised mark.",
+    "events": [
+     "Client Portal calls `list rooms` for P."
+    ],
+    "outcomes": [
+     "Registry answers that P was erased, as R0-62 specifies.",
+     "Registry successfully answers an empty ordered room collection because the flow only says to answer P's rooms."
+    ],
+    "observer": "Client Portal"
+   },
+   "unit": "40_flows.md:`flow:service_reads_project`"
+  },
+  {
+   "subject": "files retained by a failed backup run",
+   "kind": "internal contradiction",
+   "text": "The outcomes say, \"A failed run: no partial kept backup, only temporary files the next run removes\"; the errors say that when rotation cannot delete a kept file, \"the run fails, its new backup stays kept,\" matching A18 rule 4.",
+   "question": "What retained files and newest-backup status are reported when the new backup was successfully kept but rotation later failed?",
+   "options": [
+    "The valid new backup remains kept and visible although the run is reported failed",
+    "Every failed run removes or disregards the new kept backup, leaving only temporary files",
+    "Distinguish backup-production failure from rotation failure in the flow outcomes"
+   ],
+   "default_guess": "Distinguish failure phases: a rotation failure leaves the successfully checked new backup kept and visible.",
+   "witness": {
+    "initial": "A backup run has successfully checked and renamed today's new backup; an expired kept backup cannot be deleted during rotation.",
+    "events": [
+     "`backups` reports the deletion failure and continues rotation.",
+     "The owner interface asks for the newest kept backup instant."
+    ],
+    "outcomes": [
+     "The run is failed, but today's valid backup remains kept and is shown as newest, per A18 and the flow's Errors section.",
+     "Because the run failed, no kept result remains and only temporary files are left, per the flow's Outcomes section."
+    ],
+    "observer": "The owner viewing backup status and the host administrator inspecting the backup location"
+   },
+   "unit": "40_flows.md:`flow:daily_backup`"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"project-create replay after the named Customer becomes ineligible\",\"kind\":\"contradictory check\",\"text\":\"`flow:create_and_correct_project` says stage (3) checks that \\\"a named customer exists, asked of capability:customers.check_customer_eligible\\\"; State 3 defines that capability as refusing an unknown, erased, restricted or ended Customer, while A01 rule 3 says a create replay does not repeat the stage (6) eligibility check and may answer the existing project after its Customer became restricted.\",\"question\":\"On a project-create replay, how is Customer existence checked without applying the erased, restricted or ended eligibility refusal that A01 says must be skipped?\",\"options\":[\"`check_customer_eligible` returns distinguishable existence and eligibility facts, and `projects` ignores eligibility for a recognized replay\",\"A separate Customer-existence capability is used at stage (3)\",\"The replay is refused when the Customer has since become erased, restricted or ended\"],\"default_guess\":\"Follow A01: check existence separately and return the existing project for an equal replay.\",\"witness\":{\"initial\":\"Project P was created with request id R and Customer C; C still exists but is now restricted.\",\"events\":[\"The owner repeats creation of P with request id R and facts equal to P's current facts.\",\"`projects` performs the stage (3) Customer check through `customers.check_customer_eligible`.\"],\"outcomes\":[\"A01's replay rule answers P unchanged because C exists and stage (6) eligibility is not checked again.\",\"The declared eligibility capability refuses the call because C is restricted.\"],\"observer\":\"The owner resubmitting the create form\"},\"unit\":\"40_flows.md:`flow:create_and_correct_project`\"},{\"subject\":\"Kernel checks for session-owned operations\",\"kind\":\"contradiction\",\"text\":\"Step 2 says, \\\"For every later Kernel call ... check_agent_call checks that the session is registered and that the project named — or the active one when none is named — is in its set\\\"; A10 and R0-53 say reading access, requesting access and ending a session are session operations that name no project and are checked only for Kernel's token and a registered session.\",\"question\":\"Which Kernel operations skip the project-or-active-project membership check and require only a registered session?\",\"options\":[\"Read access, request access and end session skip the project check\",\"Only request access skips the project check\",\"Every post-registration Kernel call requires a granted or active project\"],\"default_guess\":\"Apply the project check only to operations on a project; session-owned operations require only a registered session.\",\"witness\":{\"initial\":\"Kernel has registered session S; S has an empty granted set and no active project.\",\"events\":[\"Kernel requests project access for S using free text.\"],\"outcomes\":[\"The request is accepted, becomes S's pending request and moves its access version, as R0-53 and step 3 specify.\",\"The request is refused as not found because step 2 finds no named or active project in S's set.\"],\"observer\":\"The agent and the owner viewing pending requests\"},\"unit\":\"40_flows.md:`flow:agent_session_access`\"},{\"subject\":\"audit result of granting an already-granted project\",\"kind\":\"contradictory outcome\",\"text\":\"Step 6 says, \\\"a project already granted is answered unchanged (A05)\\\" and then says, \\\"module:operations appends the grant's entry\\\"; A05 and A14 say an accepted action that changes nothing writes no audit entry.\",\"question\":\"Does a standalone grant of a project already in the session's set append a grant audit entry?\",\"options\":[\"No entry; it is an unchanged transition under A05 and A14\",\"Append a grant entry despite no state change\",\"Treat standalone grant and granting while answering a pending request differently\"],\"default_guess\":\"Write no entry for a standalone no-op grant; if answering a request changes other session state, apply the separately stated rules for that composite action.\",\"witness\":{\"initial\":\"Session S already has project P in its granted set, P is active and eligible, and S has no pending request.\",\"events\":[\"The owner submits `grant_project(S, P)` with the current access version.\"],\"outcomes\":[\"The session is returned unchanged and the audit log is unchanged, as A05 and A14 require.\",\"The session is returned unchanged but a new grant entry is appended, as the final sentence of step 6 can require.\"],\"observer\":\"The owner reading the audit log\"},\"unit\":\"40_flows.md:`flow:agent_session_access`\"},{\"subject\":\"service read of an anonymised project card\",\"kind\":\"contradiction\",\"text\":\"Step 2 says `read_project_card` \\\"answers the card, any status, with the archived date for an archived project\\\"; R0-62 says an anonymised project answers that it was erased, and M01 says its archived instant, revision, name, object and rooms are gone.\",\"question\":\"What does `read_project_card` return when the id identifies an anonymised project?\",\"options\":[\"An erased-project answer with no card or archived date\",\"A reduced archived card built from the surviving id, status and anonymised mark\",\"A normal archived card, despite its fields having been erased\"],\"default_guess\":\"Return the erased-project answer required by R0-62.\",\"witness\":{\"initial\":\"Archived project P has been anonymised; only its id, archived status, anonymised mark and pointers remain.\",\"events\":[\"Client Portal calls its allowed `read project` operation for P.\"],\"outcomes\":[\"It receives the erased-project answer with no project card, as R0-62 requires.\",\"It receives an archived project card with an archived date, as the State 4 read step says.\"],\"observer\":\"Client Portal\"},\"unit\":\"40_flows.md:`flow:service_reads_project`\"},{\"subject\":\"service room listing for an anonymised project\",\"kind\":\"contradiction\",\"text\":\"Step 2 says `list_rooms` \\\"answers the rooms\\\" without an anonymised-project branch; R0-62 says `list rooms` on an anonymised project answers that it was erased, and anonymisation removes its rooms.\",\"question\":\"Does listing rooms for an anonymised project return an erased-project answer or a successful empty room list?\",\"options\":[\"Return the erased-project answer\",\"Return an empty room list\",\"Return not found\"],\"default_guess\":\"Return the erased-project answer required by R0-62.\",\"witness\":{\"initial\":\"Project P had rooms and was later anonymised, removing those room records while retaining P's id and anonymised mark.\",\"events\":[\"Client Portal calls `list rooms` for P.\"],\"outcomes\":[\"Registry answers that P was erased, as R0-62 specifies.\",\"Registry successfully answers an empty ordered room collection because the flow only says to answer P's rooms.\"],\"observer\":\"Client Portal\"},\"unit\":\"40_flows.md:`flow:service_reads_project`\"},{\"subject\":\"files retained by a failed backup run\",\"kind\":\"internal contradiction\",\"text\":\"The outcomes say, \\\"A failed run: no partial kept backup, only temporary files the next run removes\\\"; the errors say that when rotation cannot delete a kept file, \\\"the run fails, its new backup stays kept,\\\" matching A18 rule 4.\",\"question\":\"What retained files and newest-backup status are reported when the new backup was successfully kept but rotation later failed?\",\"options\":[\"The valid new backup remains kept and visible although the run is reported failed\",\"Every failed run removes or disregards the new kept backup, leaving only temporary files\",\"Distinguish backup-production failure from rotation failure in the flow outcomes\"],\"default_guess\":\"Distinguish failure phases: a rotation failure leaves the successfully checked new backup kept and visible.\",\"witness\":{\"initial\":\"A backup run has successfully checked and renamed today's new backup; an expired kept backup cannot be deleted during rotation.\",\"events\":[\"`backups` reports the deletion failure and continues rotation.\",\"The owner interface asks for the newest kept backup instant.\"],\"outcomes\":[\"The run is failed, but today's valid backup remains kept and is shown as newest, per A18 and the flow's Errors section.\",\"Because the run failed, no kept result remains and only temporary files are left, per the flow's Outcomes section.\"],\"observer\":\"The owner viewing backup status and the host administrator inspecting the backup location\"},\"unit\":\"40_flows.md:`flow:daily_backup`\"}]}",
+ "set_aside": []
+}

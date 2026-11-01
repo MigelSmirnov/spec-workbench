@@ -1,0 +1,154 @@
+{
+ "open_points": [
+  {
+   "subject": "owner-only instance service surface",
+   "kind": "contradiction",
+   "text": "A17 says an owner-only start \"serves the owner interface alone\", but `flow:start_instance` says \"the service API is served and every service call is refused at stage (1)\".",
+   "question": "In an owner-only start, is the service API listener absent, or is it running and returning authentication refusals?",
+   "options": [
+    "Serve only the owner-interface listener",
+    "Serve both listeners and refuse every service request"
+   ],
+   "default_guess": "Serve only the owner-interface listener, following A17's explicit owner-only rule.",
+   "witness": {
+    "initial": "Registry starts with the owner credential and backup settings but none of the four service tokens.",
+    "events": [
+     "The host completes startup.",
+     "A service attempts to connect to the service API."
+    ],
+    "outcomes": [
+     "No service API listener exists, so the service cannot make a Registry request.",
+     "The service API accepts the request and Registry returns a stage-(1) refusal."
+    ],
+    "observer": "The calling service and the host administrator"
+   },
+   "unit": "40_flows.md:`flow:start_instance`"
+  },
+  {
+   "subject": "failure while opening the two listeners",
+   "kind": "missing failure outcome",
+   "text": "Step 4 says `module:instance_lifecycle` \"opens the two surfaces, each on a listener of its own\", but the listed errors cover only configuration, backup-location and store failures.",
+   "question": "What happens if either listener cannot be opened after all startup checks pass, especially if the other listener was opened first?",
+   "options": [
+    "Fail the whole start, close any listener already opened and serve nothing",
+    "Keep the successfully opened surface running",
+    "Retry opening the failed listener"
+   ],
+   "default_guess": "Fail the whole start and close any listener already opened.",
+   "witness": {
+    "initial": "Configuration, backup probe and store checks have passed; the service API address is available but the owner-interface address is already in use.",
+    "events": [
+     "`instance_lifecycle` opens the service API listener.",
+     "It attempts to open the owner-interface listener and that operation fails."
+    ],
+    "outcomes": [
+     "Startup is rolled back and neither surface remains served.",
+     "Registry remains partially running with only the service API served."
+    ],
+    "observer": "The owner and the four services"
+   },
+   "unit": "40_flows.md:`flow:start_instance`"
+  },
+  {
+   "subject": "project-create replay with a now-ineligible customer",
+   "kind": "missing capability and contradictory ordering",
+   "text": "The flow uses `capability:customers.check_customer_eligible` at stage (3) to check that a named customer exists, then recognizes a request-id repeat, and only afterward checks at stage (6) whether the customer is erased, restricted or ended. State 3 offers no separate customer-existence capability, while `check_customer_eligible` owns all four refusals.",
+   "question": "How can `projects.create_project` perform only the existence check before replay recognition, so a replay still succeeds after the named customer becomes restricted or ended as A01 requires?",
+   "options": [
+    "Offer a customer existence/status read and defer eligibility to stage (6)",
+    "Make `check_customer_eligible` return enough status for `projects` to separate stage (3) from stage (6)",
+    "Run the full eligibility check before replay recognition, causing such replays to be refused"
+   ],
+   "default_guess": "Provide an existence/status result and apply eligibility only at stage (6), after replay recognition.",
+   "witness": {
+    "initial": "Customer C is eligible; project P was created naming C with request id R.",
+    "events": [
+     "The owner restricts C.",
+     "The owner retries the identical create request with R after losing the original answer."
+    ],
+    "outcomes": [
+     "Replay recognition returns existing project P, as A01 rule 3 requires.",
+     "`check_customer_eligible` refuses C before replay recognition, so the retry is refused."
+    ],
+    "observer": "The owner"
+   },
+   "unit": "40_flows.md:`flow:create_and_correct_project`"
+  },
+  {
+   "subject": "repeating customer erasure with the old form revision",
+   "kind": "contradiction",
+   "text": "The flow says `erase_customer_contact` runs \"with the stated revision: an erased Customer answered unchanged\", while A04 says an erased Customer has no revision and a resubmitted erasure carrying its former revision is refused as stale.",
+   "question": "When an erasure form is resubmitted with the revision from before erasure, is it refused as stale or accepted as an unchanged repeat?",
+   "options": [
+    "Refuse it as stale; only an erasure stating no revision returns the erased Customer unchanged",
+    "Accept it as an unchanged repeat even though it states the former revision"
+   ],
+   "default_guess": "Refuse the old-revision resubmission as stale, following A04.",
+   "witness": {
+    "initial": "Customer C is at revision 3 and the owner has an erasure form stating revision 3.",
+    "events": [
+     "The owner submits the form and C becomes erased with no revision.",
+     "The owner resubmits the same form, still stating revision 3."
+    ],
+    "outcomes": [
+     "The second submission is refused as stale and changes nothing.",
+     "The second submission is accepted and answers C unchanged as erased."
+    ],
+    "observer": "The owner"
+   },
+   "unit": "40_flows.md:`flow:customer_lifecycle`"
+  },
+  {
+   "subject": "service reads of an anonymised project's card and rooms",
+   "kind": "contradiction",
+   "text": "The flow says `read_project_card` \"answers the card, any status, with the archived date for an archived project\" and `list_rooms` \"answers the rooms\". R0-62 instead requires both operations on an anonymised project to answer that it was erased; M01 also removes its rooms, revision and archived instant.",
+   "question": "For an anonymised project, do these service operations return the erased outcome, or ordinary archived-card and room-list answers?",
+   "options": [
+    "Both answer that the project was erased",
+    "Return an archived card and an empty room list",
+    "Return an archived card but make the room read answer erased"
+   ],
+   "default_guess": "Both answer that the project was erased, following R0-62.",
+   "witness": {
+    "initial": "Archived project P has rooms and is then anonymised; its id, archived status, anonymised mark and pointers remain, but its rooms and instants are removed.",
+    "events": [
+     "Client Portal calls `read a project` for P.",
+     "Client Portal calls `list rooms` for P."
+    ],
+    "outcomes": [
+     "Both calls answer that P was erased.",
+     "The card call attempts to return an archived card and archived date, and the room call returns an empty room list."
+    ],
+    "observer": "Client Portal"
+   },
+   "unit": "40_flows.md:`flow:service_reads_project`"
+  },
+  {
+   "subject": "project checks on session-only Kernel operations",
+   "kind": "contradiction",
+   "text": "Step 2 says \"For every later Kernel call\" `check_agent_call` requires the named project—or the active project when none is named—to be in the session's set. A10 and R0-53 say session operations such as reading access, requesting access and ending the session name no project and are checked only for the Kernel token and registered session.",
+   "question": "Do `read session access`, `request access` and `end session` require an active or named project, or only a registered session?",
+   "options": [
+    "Check only that the Kernel token is valid and the session is registered",
+    "Require an active or explicitly named granted project for every post-registration Kernel call"
+   ],
+   "default_guess": "Apply only the registered-session check to session-only operations, following A10 and R0-53.",
+   "witness": {
+    "initial": "Kernel has registered session S; S has an empty granted set and no active project.",
+    "events": [
+     "Kernel requests project access for S in free text.",
+     "Kernel reads S's access."
+    ],
+    "outcomes": [
+     "Both operations succeed because they are session operations that name no project.",
+     "Both operations are refused as not found because S has no active project."
+    ],
+    "observer": "The agent through Cabinet Kernel"
+   },
+   "unit": "40_flows.md:`flow:agent_session_access`"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"owner-only instance service surface\",\"kind\":\"contradiction\",\"text\":\"A17 says an owner-only start \\\"serves the owner interface alone\\\", but `flow:start_instance` says \\\"the service API is served and every service call is refused at stage (1)\\\".\",\"question\":\"In an owner-only start, is the service API listener absent, or is it running and returning authentication refusals?\",\"options\":[\"Serve only the owner-interface listener\",\"Serve both listeners and refuse every service request\"],\"default_guess\":\"Serve only the owner-interface listener, following A17's explicit owner-only rule.\",\"witness\":{\"initial\":\"Registry starts with the owner credential and backup settings but none of the four service tokens.\",\"events\":[\"The host completes startup.\",\"A service attempts to connect to the service API.\"],\"outcomes\":[\"No service API listener exists, so the service cannot make a Registry request.\",\"The service API accepts the request and Registry returns a stage-(1) refusal.\"],\"observer\":\"The calling service and the host administrator\"},\"unit\":\"40_flows.md:`flow:start_instance`\"},{\"subject\":\"failure while opening the two listeners\",\"kind\":\"missing failure outcome\",\"text\":\"Step 4 says `module:instance_lifecycle` \\\"opens the two surfaces, each on a listener of its own\\\", but the listed errors cover only configuration, backup-location and store failures.\",\"question\":\"What happens if either listener cannot be opened after all startup checks pass, especially if the other listener was opened first?\",\"options\":[\"Fail the whole start, close any listener already opened and serve nothing\",\"Keep the successfully opened surface running\",\"Retry opening the failed listener\"],\"default_guess\":\"Fail the whole start and close any listener already opened.\",\"witness\":{\"initial\":\"Configuration, backup probe and store checks have passed; the service API address is available but the owner-interface address is already in use.\",\"events\":[\"`instance_lifecycle` opens the service API listener.\",\"It attempts to open the owner-interface listener and that operation fails.\"],\"outcomes\":[\"Startup is rolled back and neither surface remains served.\",\"Registry remains partially running with only the service API served.\"],\"observer\":\"The owner and the four services\"},\"unit\":\"40_flows.md:`flow:start_instance`\"},{\"subject\":\"project-create replay with a now-ineligible customer\",\"kind\":\"missing capability and contradictory ordering\",\"text\":\"The flow uses `capability:customers.check_customer_eligible` at stage (3) to check that a named customer exists, then recognizes a request-id repeat, and only afterward checks at stage (6) whether the customer is erased, restricted or ended. State 3 offers no separate customer-existence capability, while `check_customer_eligible` owns all four refusals.\",\"question\":\"How can `projects.create_project` perform only the existence check before replay recognition, so a replay still succeeds after the named customer becomes restricted or ended as A01 requires?\",\"options\":[\"Offer a customer existence/status read and defer eligibility to stage (6)\",\"Make `check_customer_eligible` return enough status for `projects` to separate stage (3) from stage (6)\",\"Run the full eligibility check before replay recognition, causing such replays to be refused\"],\"default_guess\":\"Provide an existence/status result and apply eligibility only at stage (6), after replay recognition.\",\"witness\":{\"initial\":\"Customer C is eligible; project P was created naming C with request id R.\",\"events\":[\"The owner restricts C.\",\"The owner retries the identical create request with R after losing the original answer.\"],\"outcomes\":[\"Replay recognition returns existing project P, as A01 rule 3 requires.\",\"`check_customer_eligible` refuses C before replay recognition, so the retry is refused.\"],\"observer\":\"The owner\"},\"unit\":\"40_flows.md:`flow:create_and_correct_project`\"},{\"subject\":\"repeating customer erasure with the old form revision\",\"kind\":\"contradiction\",\"text\":\"The flow says `erase_customer_contact` runs \\\"with the stated revision: an erased Customer answered unchanged\\\", while A04 says an erased Customer has no revision and a resubmitted erasure carrying its former revision is refused as stale.\",\"question\":\"When an erasure form is resubmitted with the revision from before erasure, is it refused as stale or accepted as an unchanged repeat?\",\"options\":[\"Refuse it as stale; only an erasure stating no revision returns the erased Customer unchanged\",\"Accept it as an unchanged repeat even though it states the former revision\"],\"default_guess\":\"Refuse the old-revision resubmission as stale, following A04.\",\"witness\":{\"initial\":\"Customer C is at revision 3 and the owner has an erasure form stating revision 3.\",\"events\":[\"The owner submits the form and C becomes erased with no revision.\",\"The owner resubmits the same form, still stating revision 3.\"],\"outcomes\":[\"The second submission is refused as stale and changes nothing.\",\"The second submission is accepted and answers C unchanged as erased.\"],\"observer\":\"The owner\"},\"unit\":\"40_flows.md:`flow:customer_lifecycle`\"},{\"subject\":\"service reads of an anonymised project's card and rooms\",\"kind\":\"contradiction\",\"text\":\"The flow says `read_project_card` \\\"answers the card, any status, with the archived date for an archived project\\\" and `list_rooms` \\\"answers the rooms\\\". R0-62 instead requires both operations on an anonymised project to answer that it was erased; M01 also removes its rooms, revision and archived instant.\",\"question\":\"For an anonymised project, do these service operations return the erased outcome, or ordinary archived-card and room-list answers?\",\"options\":[\"Both answer that the project was erased\",\"Return an archived card and an empty room list\",\"Return an archived card but make the room read answer erased\"],\"default_guess\":\"Both answer that the project was erased, following R0-62.\",\"witness\":{\"initial\":\"Archived project P has rooms and is then anonymised; its id, archived status, anonymised mark and pointers remain, but its rooms and instants are removed.\",\"events\":[\"Client Portal calls `read a project` for P.\",\"Client Portal calls `list rooms` for P.\"],\"outcomes\":[\"Both calls answer that P was erased.\",\"The card call attempts to return an archived card and archived date, and the room call returns an empty room list.\"],\"observer\":\"Client Portal\"},\"unit\":\"40_flows.md:`flow:service_reads_project`\"},{\"subject\":\"project checks on session-only Kernel operations\",\"kind\":\"contradiction\",\"text\":\"Step 2 says \\\"For every later Kernel call\\\" `check_agent_call` requires the named project—or the active project when none is named—to be in the session's set. A10 and R0-53 say session operations such as reading access, requesting access and ending the session name no project and are checked only for the Kernel token and registered session.\",\"question\":\"Do `read session access`, `request access` and `end session` require an active or named project, or only a registered session?\",\"options\":[\"Check only that the Kernel token is valid and the session is registered\",\"Require an active or explicitly named granted project for every post-registration Kernel call\"],\"default_guess\":\"Apply only the registered-session check to session-only operations, following A10 and R0-53.\",\"witness\":{\"initial\":\"Kernel has registered session S; S has an empty granted set and no active project.\",\"events\":[\"Kernel requests project access for S in free text.\",\"Kernel reads S's access.\"],\"outcomes\":[\"Both operations succeed because they are session operations that name no project.\",\"Both operations are refused as not found because S has no active project.\"],\"observer\":\"The agent through Cabinet Kernel\"},\"unit\":\"40_flows.md:`flow:agent_session_access`\"}]}",
+ "set_aside": []
+}

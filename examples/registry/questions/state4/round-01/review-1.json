@@ -1,0 +1,196 @@
+{
+ "open_points": [
+  {
+   "unit": "40_flows.md:`flow:start_instance`",
+   "subject": "owner-only service API",
+   "kind": "contradiction",
+   "text": "State 4 says, \"In an owner-only start the service API is served and every service call is refused at stage (1),\" while A17 says Registry \"serves the owner interface alone.\"",
+   "question": "In an owner-only start, is the service API listener opened to return authenticated refusals, or is only the owner-interface listener opened?",
+   "options": [
+    "Open the service API and refuse every call at stage (1)",
+    "Do not open the service API listener"
+   ],
+   "default_guess": "Open the service API and refuse every call at stage (1), following the explicit State 4 flow.",
+   "witness": {
+    "initial": "Registry starts with a valid configuration containing no service tokens.",
+    "events": [
+     "The host starts Registry.",
+     "A service attempts to connect to the service API."
+    ],
+    "outcomes": [
+     "The connection reaches Registry and the call is refused at stage (1).",
+     "No service API listener exists, so the connection fails before any Registry refusal."
+    ],
+    "observer": "The calling service and the owner monitoring the host"
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:start_instance`",
+   "subject": "listener startup",
+   "kind": "unstated failure outcome",
+   "text": "Step 4 says `module:instance_lifecycle` \"opens the two surfaces,\" but the Errors section states outcomes only for configuration, backup-location and store failures.",
+   "question": "What happens if either listener cannot be opened after all preceding checks pass?",
+   "options": [
+    "Stop the whole start and close any listener already opened",
+    "Run with whichever surface opened successfully",
+    "Retry opening the failed listener while the other surface is served"
+   ],
+   "default_guess": "Stop the whole start, close any listener already opened, and emit a diagnostic without serving either surface.",
+   "witness": {
+    "initial": "Configuration, backup probe and store checks have all succeeded; the owner-interface address is available but the service-API address is already occupied.",
+    "events": [
+     "`instance_lifecycle` opens the owner-interface listener.",
+     "It attempts to open the service-API listener and binding fails."
+    ],
+    "outcomes": [
+     "Registry closes the owner-interface listener and the start fails.",
+     "Registry continues as a partially running instance serving only the owner interface."
+    ],
+    "observer": "The owner and callers of both surfaces"
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:create_and_correct_project`",
+   "subject": "reading an anonymised project card",
+   "kind": "contradiction",
+   "text": "Step 3 says `read_project_card` \"answers the project with its object, its rooms in 'list rooms' order and its revision,\" but R0-62 and the archive flow say an anonymised project's card answers only that it was erased; its object, rooms and revision are gone.",
+   "question": "What does the owner receive when reading the card of an anonymised project by id?",
+   "options": [
+    "An erased-project answer with none of the removed card facts",
+    "A project-card-shaped answer despite the object, rooms and revision having been removed"
+   ],
+   "default_guess": "Return the erased-project answer, following R0-62.",
+   "witness": {
+    "initial": "An archived project has been anonymised and retains only its id, archived status, anonymised mark and pointers.",
+    "events": [
+     "The owner requests that project's card through the owner interface."
+    ],
+    "outcomes": [
+     "The interface shows that the project was erased and exposes no object, rooms or revision.",
+     "The interface attempts to show a normal card containing an object, rooms and revision."
+    ],
+    "observer": "The owner"
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:archive_and_erase_project`",
+   "subject": "lists after project anonymisation",
+   "kind": "contradiction",
+   "text": "The outcome says an anonymised project has \"no list shows it,\" while R0-62 says its artifacts \"are listed and read as before\" and the service-read flow lists every pointer of the project.",
+   "question": "Does \"no list shows it\" exclude only the project catalogue, or does it also suppress artifact-history reads for the anonymised project?",
+   "options": [
+    "Only `list projects` excludes it; artifact history remains listable by project id",
+    "Every list operation, including `list artifacts`, suppresses it"
+   ],
+   "default_guess": "Exclude it only from `list projects`; continue listing its retained artifact pointers.",
+   "witness": {
+    "initial": "A project with a published and a superseded pointer is archived and anonymised.",
+    "events": [
+     "The owner or Client Portal calls `list artifacts` with the retained project id."
+    ],
+    "outcomes": [
+     "The retained pointer history is returned as R0-62 requires.",
+     "No list result is returned because State 4 says no list shows the anonymised project."
+    ],
+    "observer": "The owner or Client Portal"
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:service_reads_project`",
+   "subject": "service read of an anonymised project card",
+   "kind": "contradiction",
+   "text": "Step 2 says `read_project_card` \"answers the card, any status, with the archived date for an archived project,\" but R0-62 says an anonymised project's `read a project` answer says it was erased, and M01 says its archived date was removed.",
+   "question": "What does Client Portal receive from `read project` for an anonymised project?",
+   "options": [
+    "An erased-project answer without a card or archived date",
+    "A normal archived project card with an archived date"
+   ],
+   "default_guess": "Return the erased-project answer without the removed archived date.",
+   "witness": {
+    "initial": "An archived project has been anonymised, removing every instant and all ordinary card facts.",
+    "events": [
+     "Client Portal calls its allowed `read a project` operation with that id."
+    ],
+    "outcomes": [
+     "Registry answers that the project was erased.",
+     "Registry returns an archived project card and archived date."
+    ],
+    "observer": "Client Portal"
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:service_reads_project`",
+   "subject": "room listing for an anonymised project",
+   "kind": "contradiction",
+   "text": "Step 2 says `list_rooms` \"answers the rooms,\" without the anonymised-project case, while R0-62 explicitly says `list rooms` answers that the project was erased and M01 says its rooms are gone.",
+   "question": "Does `list rooms` for an anonymised project return the erased-project outcome or an ordinary room-list result?",
+   "options": [
+    "Return the erased-project outcome",
+    "Return an ordinary empty room list"
+   ],
+   "default_guess": "Return the erased-project outcome, following R0-62.",
+   "witness": {
+    "initial": "A project with rooms is archived and anonymised, which removes those rooms.",
+    "events": [
+     "Client Portal calls `list rooms` with the retained project id."
+    ],
+    "outcomes": [
+     "Registry answers that the project was erased.",
+     "Registry answers an ordinary room list, now empty."
+    ],
+    "observer": "Client Portal"
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:agent_session_access`",
+   "subject": "checks for session-only Kernel operations",
+   "kind": "contradiction",
+   "text": "Step 2 says, \"For every later Kernel call ... `check_agent_call` checks that the session is registered and that the project named — or the active one when none is named — is in its set.\" R0-53 and A10 instead make `read access`, `request access` and `end session` session-only operations that require registration but name no project.",
+   "question": "For Kernel's session-only operations, does stage (2) check only that the session is registered, or must the session also have an active/granted project?",
+   "options": [
+    "Check registration only for session-only operations",
+    "Require an active or named granted project for every post-registration Kernel call"
+   ],
+   "default_guess": "Check registration only for `read access`, `request access` and `end session`.",
+   "witness": {
+    "initial": "Kernel has just registered session S; S has an empty granted set and no active project.",
+    "events": [
+     "Kernel calls `request access to a project` for S with nonblank free text.",
+     "Kernel then reads S's access."
+    ],
+    "outcomes": [
+     "The request is stored, the access version moves, and the access read reports a pending request.",
+     "Both calls are refused as not found because S has no active project."
+    ],
+    "observer": "The agent through Kernel, and the owner looking for the pending request"
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:agent_session_access`",
+   "subject": "audit entry for an idempotent direct grant",
+   "kind": "contradiction",
+   "text": "Step 6 says a project already granted is \"answered unchanged (A05)\" and then says `operations` \"appends the grant's entry.\" A05 and A14 say an accepted action that changes nothing writes no audit entry.",
+   "question": "Does directly granting an already-granted project append another grant entry?",
+   "options": [
+    "Return the unchanged session and write no audit entry",
+    "Append a grant entry even though the granted set and access version do not change"
+   ],
+   "default_guess": "Write no audit entry, following A05 and A14.",
+   "witness": {
+    "initial": "Session S already has project P in its granted set, with access version 4.",
+    "events": [
+     "The owner submits a direct grant of P to S with version 4.",
+     "The owner reads the audit log."
+    ],
+    "outcomes": [
+     "The grant is answered unchanged, version remains 4, and the audit log is unchanged.",
+     "The grant is answered unchanged and version remains 4, but a new grant audit entry appears."
+    ],
+    "observer": "The owner reading the audit log"
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"40_flows.md:`flow:start_instance`\",\"subject\":\"owner-only service API\",\"kind\":\"contradiction\",\"text\":\"State 4 says, \\\"In an owner-only start the service API is served and every service call is refused at stage (1),\\\" while A17 says Registry \\\"serves the owner interface alone.\\\"\",\"question\":\"In an owner-only start, is the service API listener opened to return authenticated refusals, or is only the owner-interface listener opened?\",\"options\":[\"Open the service API and refuse every call at stage (1)\",\"Do not open the service API listener\"],\"default_guess\":\"Open the service API and refuse every call at stage (1), following the explicit State 4 flow.\",\"witness\":{\"initial\":\"Registry starts with a valid configuration containing no service tokens.\",\"events\":[\"The host starts Registry.\",\"A service attempts to connect to the service API.\"],\"outcomes\":[\"The connection reaches Registry and the call is refused at stage (1).\",\"No service API listener exists, so the connection fails before any Registry refusal.\"],\"observer\":\"The calling service and the owner monitoring the host\"}},{\"unit\":\"40_flows.md:`flow:start_instance`\",\"subject\":\"listener startup\",\"kind\":\"unstated failure outcome\",\"text\":\"Step 4 says `module:instance_lifecycle` \\\"opens the two surfaces,\\\" but the Errors section states outcomes only for configuration, backup-location and store failures.\",\"question\":\"What happens if either listener cannot be opened after all preceding checks pass?\",\"options\":[\"Stop the whole start and close any listener already opened\",\"Run with whichever surface opened successfully\",\"Retry opening the failed listener while the other surface is served\"],\"default_guess\":\"Stop the whole start, close any listener already opened, and emit a diagnostic without serving either surface.\",\"witness\":{\"initial\":\"Configuration, backup probe and store checks have all succeeded; the owner-interface address is available but the service-API address is already occupied.\",\"events\":[\"`instance_lifecycle` opens the owner-interface listener.\",\"It attempts to open the service-API listener and binding fails.\"],\"outcomes\":[\"Registry closes the owner-interface listener and the start fails.\",\"Registry continues as a partially running instance serving only the owner interface.\"],\"observer\":\"The owner and callers of both surfaces\"}},{\"unit\":\"40_flows.md:`flow:create_and_correct_project`\",\"subject\":\"reading an anonymised project card\",\"kind\":\"contradiction\",\"text\":\"Step 3 says `read_project_card` \\\"answers the project with its object, its rooms in 'list rooms' order and its revision,\\\" but R0-62 and the archive flow say an anonymised project's card answers only that it was erased; its object, rooms and revision are gone.\",\"question\":\"What does the owner receive when reading the card of an anonymised project by id?\",\"options\":[\"An erased-project answer with none of the removed card facts\",\"A project-card-shaped answer despite the object, rooms and revision having been removed\"],\"default_guess\":\"Return the erased-project answer, following R0-62.\",\"witness\":{\"initial\":\"An archived project has been anonymised and retains only its id, archived status, anonymised mark and pointers.\",\"events\":[\"The owner requests that project's card through the owner interface.\"],\"outcomes\":[\"The interface shows that the project was erased and exposes no object, rooms or revision.\",\"The interface attempts to show a normal card containing an object, rooms and revision.\"],\"observer\":\"The owner\"}},{\"unit\":\"40_flows.md:`flow:archive_and_erase_project`\",\"subject\":\"lists after project anonymisation\",\"kind\":\"contradiction\",\"text\":\"The outcome says an anonymised project has \\\"no list shows it,\\\" while R0-62 says its artifacts \\\"are listed and read as before\\\" and the service-read flow lists every pointer of the project.\",\"question\":\"Does \\\"no list shows it\\\" exclude only the project catalogue, or does it also suppress artifact-history reads for the anonymised project?\",\"options\":[\"Only `list projects` excludes it; artifact history remains listable by project id\",\"Every list operation, including `list artifacts`, suppresses it\"],\"default_guess\":\"Exclude it only from `list projects`; continue listing its retained artifact pointers.\",\"witness\":{\"initial\":\"A project with a published and a superseded pointer is archived and anonymised.\",\"events\":[\"The owner or Client Portal calls `list artifacts` with the retained project id.\"],\"outcomes\":[\"The retained pointer history is returned as R0-62 requires.\",\"No list result is returned because State 4 says no list shows the anonymised project.\"],\"observer\":\"The owner or Client Portal\"}},{\"unit\":\"40_flows.md:`flow:service_reads_project`\",\"subject\":\"service read of an anonymised project card\",\"kind\":\"contradiction\",\"text\":\"Step 2 says `read_project_card` \\\"answers the card, any status, with the archived date for an archived project,\\\" but R0-62 says an anonymised project's `read a project` answer says it was erased, and M01 says its archived date was removed.\",\"question\":\"What does Client Portal receive from `read project` for an anonymised project?\",\"options\":[\"An erased-project answer without a card or archived date\",\"A normal archived project card with an archived date\"],\"default_guess\":\"Return the erased-project answer without the removed archived date.\",\"witness\":{\"initial\":\"An archived project has been anonymised, removing every instant and all ordinary card facts.\",\"events\":[\"Client Portal calls its allowed `read a project` operation with that id.\"],\"outcomes\":[\"Registry answers that the project was erased.\",\"Registry returns an archived project card and archived date.\"],\"observer\":\"Client Portal\"}},{\"unit\":\"40_flows.md:`flow:service_reads_project`\",\"subject\":\"room listing for an anonymised project\",\"kind\":\"contradiction\",\"text\":\"Step 2 says `list_rooms` \\\"answers the rooms,\\\" without the anonymised-project case, while R0-62 explicitly says `list rooms` answers that the project was erased and M01 says its rooms are gone.\",\"question\":\"Does `list rooms` for an anonymised project return the erased-project outcome or an ordinary room-list result?\",\"options\":[\"Return the erased-project outcome\",\"Return an ordinary empty room list\"],\"default_guess\":\"Return the erased-project outcome, following R0-62.\",\"witness\":{\"initial\":\"A project with rooms is archived and anonymised, which removes those rooms.\",\"events\":[\"Client Portal calls `list rooms` with the retained project id.\"],\"outcomes\":[\"Registry answers that the project was erased.\",\"Registry answers an ordinary room list, now empty.\"],\"observer\":\"Client Portal\"}},{\"unit\":\"40_flows.md:`flow:agent_session_access`\",\"subject\":\"checks for session-only Kernel operations\",\"kind\":\"contradiction\",\"text\":\"Step 2 says, \\\"For every later Kernel call ... `check_agent_call` checks that the session is registered and that the project named — or the active one when none is named — is in its set.\\\" R0-53 and A10 instead make `read access`, `request access` and `end session` session-only operations that require registration but name no project.\",\"question\":\"For Kernel's session-only operations, does stage (2) check only that the session is registered, or must the session also have an active/granted project?\",\"options\":[\"Check registration only for session-only operations\",\"Require an active or named granted project for every post-registration Kernel call\"],\"default_guess\":\"Check registration only for `read access`, `request access` and `end session`.\",\"witness\":{\"initial\":\"Kernel has just registered session S; S has an empty granted set and no active project.\",\"events\":[\"Kernel calls `request access to a project` for S with nonblank free text.\",\"Kernel then reads S's access.\"],\"outcomes\":[\"The request is stored, the access version moves, and the access read reports a pending request.\",\"Both calls are refused as not found because S has no active project.\"],\"observer\":\"The agent through Kernel, and the owner looking for the pending request\"}},{\"unit\":\"40_flows.md:`flow:agent_session_access`\",\"subject\":\"audit entry for an idempotent direct grant\",\"kind\":\"contradiction\",\"text\":\"Step 6 says a project already granted is \\\"answered unchanged (A05)\\\" and then says `operations` \\\"appends the grant's entry.\\\" A05 and A14 say an accepted action that changes nothing writes no audit entry.\",\"question\":\"Does directly granting an already-granted project append another grant entry?\",\"options\":[\"Return the unchanged session and write no audit entry\",\"Append a grant entry even though the granted set and access version do not change\"],\"default_guess\":\"Write no audit entry, following A05 and A14.\",\"witness\":{\"initial\":\"Session S already has project P in its granted set, with access version 4.\",\"events\":[\"The owner submits a direct grant of P to S with version 4.\",\"The owner reads the audit log.\"],\"outcomes\":[\"The grant is answered unchanged, version remains 4, and the audit log is unchanged.\",\"The grant is answered unchanged and version remains 4, but a new grant audit entry appears.\"],\"observer\":\"The owner reading the audit log\"}}]}",
+ "set_aside": []
+}
