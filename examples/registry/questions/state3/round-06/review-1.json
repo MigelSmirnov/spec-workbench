@@ -1,0 +1,59 @@
+{
+ "open_points": [
+  {
+   "unit": "30_modules.md:`operations`",
+   "subject": "accepted import and confirmation-id sequencing",
+   "kind": "circular ownership",
+   "text": "`operations` mints the confirmation id \"only after the action's module has answered that it is accepted and changed state\" and then hands it \"for the import, to the closure\"; `migration_import` owns an accepted import that writes the closure with that confirmation id in the same transaction.",
+   "question": "What exact intermediate result may `migration_import` return before the closure exists, so that `operations` can mint the confirmation id without treating an incomplete import as already accepted?",
+   "options": [
+    "`migration_import` first returns a provisional validated-and-staged result; `operations` then mints the id and calls it again to record the closure.",
+    "`operations` mints and supplies the id before `migration_import` reports the import accepted.",
+    "`migration_import` owns minting or otherwise obtaining the id before it can finish the accepted import."
+   ],
+   "default_guess": "Use an explicit provisional prepared/changed result inside the open transaction, then mint the id and record the closure before commit.",
+   "witness": {
+    "initial": "A valid uploaded import is confirmed, and the store has no migration closure.",
+    "events": [
+     "The owner submits the confirmation.",
+     "`migration_import` validates and stages the imported records in the transaction.",
+     "`operations` waits for the module to answer accepted and changed before minting the confirmation id, while `migration_import` needs that id to write the closure that makes the import complete."
+    ],
+    "outcomes": [
+     "Treat the module's answer as provisional: mint the id, write the closure and audit entry, then commit successfully.",
+     "Treat \"answered accepted\" as completion of `confirm_import`: the module cannot complete without the id, so the implementation must pre-mint contrary to the `operations` passage or fail the confirmation."
+    ],
+    "observer": "The owner sees a successful import in one implementation and an internal failure or refusal in the other."
+   }
+  },
+  {
+   "unit": "30_modules.md:`store`",
+   "subject": "backup snapshot's last audit sequence number",
+   "kind": "ownership/dependency conflict",
+   "text": "`audit_log` owns \"the last sequence number its store ever wrote, for a backup's record\", but `store.copy_store_snapshot` is said to answer that number from the copy's read transaction; `store` may not know `audit_log` and must not own its sequence rule.",
+   "question": "Which module reads the audit counter from the same snapshot used for the backup, and through what dependency, without giving `store` knowledge owned by `audit_log` or losing snapshot consistency?",
+   "options": [
+    "`store` knows the persisted audit-counter representation and returns its value with the snapshot.",
+    "`audit_log` reads the counter inside the snapshot transaction through a callback or snapshot handle supplied by `store`.",
+    "`backups` reads the counter separately through `audit_log`, accepting or preventing races by another unspecified mechanism."
+   ],
+   "default_guess": "Let `store` expose a snapshot transaction or callback in which `audit_log` reads its own counter, and return that value with the copied store.",
+   "witness": {
+    "initial": "The store's last audit sequence is 10 and a backup snapshot starts.",
+    "events": [
+     "`store` copies the snapshot containing counter 10.",
+     "After that snapshot begins, another action commits audit entry 11.",
+     "The backup must record and verify the sequence number describing its copied store."
+    ],
+    "outcomes": [
+     "Reading through `store` from the snapshot records 10, and the backup passes its check, but `store` has interpreted a fact owned by `audit_log`.",
+     "Preserving the stated ownership by asking `audit_log` separately can read 11; the copied store still contains 10, so the backup check fails or its metadata describes the wrong history."
+    ],
+    "observer": "The owner sees either a newly kept backup or a failed backup run."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"30_modules.md:`operations`\",\"subject\":\"accepted import and confirmation-id sequencing\",\"kind\":\"circular ownership\",\"text\":\"`operations` mints the confirmation id \\\"only after the action's module has answered that it is accepted and changed state\\\" and then hands it \\\"for the import, to the closure\\\"; `migration_import` owns an accepted import that writes the closure with that confirmation id in the same transaction.\",\"question\":\"What exact intermediate result may `migration_import` return before the closure exists, so that `operations` can mint the confirmation id without treating an incomplete import as already accepted?\",\"options\":[\"`migration_import` first returns a provisional validated-and-staged result; `operations` then mints the id and calls it again to record the closure.\",\"`operations` mints and supplies the id before `migration_import` reports the import accepted.\",\"`migration_import` owns minting or otherwise obtaining the id before it can finish the accepted import.\"],\"default_guess\":\"Use an explicit provisional prepared/changed result inside the open transaction, then mint the id and record the closure before commit.\",\"witness\":{\"initial\":\"A valid uploaded import is confirmed, and the store has no migration closure.\",\"events\":[\"The owner submits the confirmation.\",\"`migration_import` validates and stages the imported records in the transaction.\",\"`operations` waits for the module to answer accepted and changed before minting the confirmation id, while `migration_import` needs that id to write the closure that makes the import complete.\"],\"outcomes\":[\"Treat the module's answer as provisional: mint the id, write the closure and audit entry, then commit successfully.\",\"Treat \\\"answered accepted\\\" as completion of `confirm_import`: the module cannot complete without the id, so the implementation must pre-mint contrary to the `operations` passage or fail the confirmation.\"],\"observer\":\"The owner sees a successful import in one implementation and an internal failure or refusal in the other.\"}},{\"unit\":\"30_modules.md:`store`\",\"subject\":\"backup snapshot's last audit sequence number\",\"kind\":\"ownership/dependency conflict\",\"text\":\"`audit_log` owns \\\"the last sequence number its store ever wrote, for a backup's record\\\", but `store.copy_store_snapshot` is said to answer that number from the copy's read transaction; `store` may not know `audit_log` and must not own its sequence rule.\",\"question\":\"Which module reads the audit counter from the same snapshot used for the backup, and through what dependency, without giving `store` knowledge owned by `audit_log` or losing snapshot consistency?\",\"options\":[\"`store` knows the persisted audit-counter representation and returns its value with the snapshot.\",\"`audit_log` reads the counter inside the snapshot transaction through a callback or snapshot handle supplied by `store`.\",\"`backups` reads the counter separately through `audit_log`, accepting or preventing races by another unspecified mechanism.\"],\"default_guess\":\"Let `store` expose a snapshot transaction or callback in which `audit_log` reads its own counter, and return that value with the copied store.\",\"witness\":{\"initial\":\"The store's last audit sequence is 10 and a backup snapshot starts.\",\"events\":[\"`store` copies the snapshot containing counter 10.\",\"After that snapshot begins, another action commits audit entry 11.\",\"The backup must record and verify the sequence number describing its copied store.\"],\"outcomes\":[\"Reading through `store` from the snapshot records 10, and the backup passes its check, but `store` has interpreted a fact owned by `audit_log`.\",\"Preserving the stated ownership by asking `audit_log` separately can read 11; the copied store still contains 10, so the backup check fails or its metadata describes the wrong history.\"],\"observer\":\"The owner sees either a newly kept backup or a failed backup run.\"}}]}",
+ "set_aside": []
+}
