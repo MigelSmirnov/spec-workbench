@@ -24,8 +24,9 @@ for `mapping`, the picks as the owner gave them, a list that keeps a
 project given twice so it can be refused — possibly empty — each with the display name and
 alias it arrives under, and for each Customer the import will make its
 name, its kind and whether the v1 value is its tax id, keyed by that v1
-value: one entry for each v1 value the picks bring in — none missing, none
-for a v1 value no pick brings (`outside_closed_list`), none twice
+value: at most one entry for each v1 value the picks bring in — one not yet
+given is no refusal, the mapping shows it missing; one for a v1 value no
+pick brings is refused (`outside_closed_list`), one given twice too
 (`duplicate_pick`).
 
 ### Outputs

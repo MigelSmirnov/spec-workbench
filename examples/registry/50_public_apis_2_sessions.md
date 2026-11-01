@@ -55,9 +55,9 @@ Runtime state only; no store transaction, no audit entry (A14 rule 2).
 
 ### Owner
 
-`module:owner_sessions`. Admit one owner request: the session check at
-arrival, the CSRF check for a change, and the locks a change takes (A13
-rules 2, 5; A16 rule 2).
+`module:owner_sessions`. Admit one owner request at its arrival — the session
+check, the CSRF check for a change — and run its step under the locks it
+needs (A13 rules 2, 5; A16 rule 2).
 
 ### Callers
 
@@ -67,41 +67,42 @@ rules 2, 5; A16 rule 2).
 
 The session identity from the cookie, or none; whether the request is a
 change; the CSRF value it carries, for a change; whether it reads or
-changes an uploaded file; the request's step, which receives the admitted
-session.
+changes an uploaded file — an upload, the mapping, the import's
+confirmation step, a confirmation, a sign-out, change or not; whether it is
+a sign-out; the request's step, which receives the admitted session.
 
 ### Outputs
 
-The step's answer, or the refusal. For a change the step runs holding the
-session's lock — and first the instance's import lock when it reads or
-changes an uploaded file — and both are released when the step returns, on
-every path (Conventions, "Locks of an owner request").
+The step's answer, or the refusal. The step runs holding the session's
+lock when the request is a change or touches an uploaded file, and for the
+latter the import lock taken before it; both are released when the step
+returns, on every path (Conventions, "Locks of an owner request").
 
 ### Observable effect
 
-A request carrying a valid session restarts its 30 minutes at its arrival,
-whatever its answer — a CSRF refusal included; of concurrent arrivals the
-latest counts (A13 rule 2).
+At its arrival a request carrying a valid session restarts the session's
+30 minutes, whatever its answer — a CSRF refusal included; of concurrent
+arrivals the latest counts (A13 rule 2). A sign-out's admission marks the
+session signed out at once.
 
 ### Enforces
 
-A session that has reached 8 hours from sign-in or 30 minutes without a
-request, or is signed out, serves no request; a change carries the CSRF value of its session,
-compared in constant time (A13 rule 5); the import lock is taken before the
-session's lock, and both are held until the request is done (A16 rule 2);
-a change passes the session check and takes its place on the session's lock
-in one step, the lock granted in the order places were taken, so its changes
-apply one at a time in the one order in which they passed the check and took
-the lock (A13 rule 2). A request that reads or changes an uploaded file
-first waits for the import lock, and only holding it passes the session
-check and takes its place on the session's lock: its arrival for the check
-is when it holds the import lock, so the two locks are always taken import
-first and no request holds a place on a session's lock while it waits for
-the import lock (A16 rule 2). A sign-out is such a request: a second
-sign-out of a session that the first ended while the second waited fails
-the check (`no_owner_session`). A request that
-passed completes even if a limit or a sign-out comes while it runs (A13
-rule 2).
+Every request is checked at its arrival, and only then: a session that has
+reached 8 hours from sign-in or 30 minutes without a request, or is marked
+signed out, serves no request; a change carries the CSRF value of its
+session, compared in constant time (A13 rule 5). A request that passed
+completes even if a limit or a sign-out comes while it runs or waits (A13
+rule 2). After the check, a change that touches no uploaded file takes its
+place on the session's lock at once; a request that touches one first waits
+for the import lock and then takes its place, so the locks are always taken
+import first and no place on a session's lock waits for the import lock (A16
+rule 2). The import lock is granted in the order requests asked for it, and
+the session's lock in the order places were taken; so every change of a
+session admitted before another takes its place on the session's lock
+before it, and the session's changes apply one at a time in that order
+(A13 rule 2). A second
+sign-out arriving after the first was admitted finds the session marked
+signed out and is refused.
 
 ### Errors
 
@@ -129,9 +130,7 @@ The admitted session: the step of a sign-out request, which
 
 ### Outputs
 
-That the session ended. A second sign-out never finds it ended: it passes
-the session check only once it holds the import lock, after the first
-released it, and is refused there (`admit_owner_request`).
+That the session ended.
 
 ### Observable effect
 
@@ -140,11 +139,13 @@ dropped (M11).
 
 ### Enforces
 
-Its turn comes after every change of the session that passed the session
-check before the sign-out did, each having taken its place on the lock in
-that same step (Conventions): each completes, its change to the store included, and leaves nothing
-in the ended session; a request arriving after it is refused at the session
-check. It goes on when the import is closed (A16 rule 2).
+From its admission no request of the session passes the check (A13 rule 2).
+Its turn on the session's lock comes after every change of the session
+admitted before it, both locks being granted in order
+(`admit_owner_request`): each completes first, its change to the store
+included, with the confirmation and the upload it may need still in place,
+and leaves nothing in the ended session. It goes on when the import is
+closed (A16 rule 2).
 
 ### Errors
 

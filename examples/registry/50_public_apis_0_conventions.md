@@ -43,9 +43,10 @@ types and Python signatures are State 6's.
   them in that order and answers the first failing stage with every failure
   of that stage (A04 rule 6): its kinds in the order the operation's Errors
   list them, one entry for each failing input or record, each naming the
-  field or the identity it concerns. The one exception is the import's
-  closure: when it exists, `import_closed` is answered alone, every other
-  check of the import being moot (State 4, `flow:import_from_vps`). Stages (1) and (2) are `operations`'. A refusal
+  field or the identity it concerns. Two failures are answered
+  alone, every other check being moot: the import's closure, `import_closed`
+  (State 4, `flow:import_from_vps`), and then a confirmation's bound upload
+  no longer kept, `file_not_kept`, which leaves no bytes to check again. Stages (1) and (2) are `operations`'. A refusal
   changes no record and writes no entry (A14 rule 2); what it does to an
   owner session's runtime state is A13's, stated where an operation makes it.
 - **Repeats.** A transition to the state a record is in answers the record
@@ -79,11 +80,11 @@ types and Python signatures are State 6's.
 - **Locks of an owner request.** `owner_sessions.admit_owner_request` runs
   the request's step under the locks it takes and releases them when the
   step returns, on every path — an answer, a refusal or a failure — as
-  `store.run_in_transaction` does its transaction. A change passes
-  the session check and takes its place on the session's lock in one step,
-  and the lock is granted in the order places were taken, so the order in
-  which changes take the lock and the order in which they passed the check
-  are one order (A13 rule 2).
+  `store.run_in_transaction` does its transaction. Every request is checked
+  at its arrival; a change, or any request touching an uploaded file, then
+  takes its place on the session's lock — the latter after waiting for the
+  import lock, granted in the order requests asked for it — and the session's
+  lock is granted in the order places were taken (A13 rule 2, A16 rule 2).
 - **Diagnostics.** A diagnostic — a stopped start's, a failed backup run's —
   is one line on the process's standard error, which the host keeps; it
   names the failure and never a value (A17 rule 2, A18 rule 5).
@@ -103,7 +104,7 @@ the owner interface renders and State 6 declares as `models`' vocabulary.
 | `not_permitted` | (1) | `outside_service_rights` (A09 rule 3); `csrf_refused` (A13 rule 5); `answer_above_class` (A09 rule 4) | the caller is not allowed this call |
 | `confirmation_refused` | (1) | `confirmation_not_pending` — the session holds no pending value: never shown, used up or cleared; `confirmation_other_value` — another value while the pending one is valid, which stays; `confirmation_bound_elsewhere` — the pending value given for another action, target, revision or inputs, now used up; `confirmation_expired` — cleared (A13 rule 6) | the owner submits the pending step again, or has it shown again |
 | `not_found` | (2), (3) | `agent_call_refused` — an unregistered session, a project outside the set, none active, an unknown pointer for Kernel: one answer (A10 rule 3, A08 rule 7); `unknown_project`, `unknown_customer`, `unknown_room`, `unknown_pointer`, `unknown_session` (State 0) | the caller re-reads |
-| `invalid_request` | (4) | `missing_value` (A02 rule 1); `malformed_request_id` (A01 rule 1); `outside_closed_list` (A19 rule 3); `duplicate_pick` — a project, or a Customer's v1 value, given twice (A16 rule 1); `unknown_artifact_type` (A22 rule 5); `date_after_today` (A15 rule 3, R0-84); `file_too_large`; `file_unreadable` — bytes that do not parse as the format States 5 and 6 declare; `file_malformed` — a file that parses but holds two projects with one id, or a project without a readable id or status (A19 rule 4, A16 rule 3) | the caller fixes the request |
+| `invalid_request` | (4) | `missing_value` (A02 rule 1); `malformed_request_id` (A01 rule 1); `outside_closed_list` (A19 rule 3); `duplicate_pick` — a project, or a Customer's v1 value, given twice (A16 rule 1); `unknown_artifact_type` (A22 rule 5); `date_after_today` (A15 rule 3, R0-84); `file_too_large`; `file_unreadable` — bytes that do not parse as the format States 5 and 6 declare; `file_malformed` — a file that parses but holds two projects with one id, or a project whose id or status is missing or not of its field's shape; a status outside its vocabulary is not this, but a malformed record of a pick (A16 rule 4) (A19 rule 4, A16 rule 3) | the caller fixes the request |
 | `stale` | (5) | `stale_revision` (A04 rules 2, 3); `stale_access_version` (A12 rule 3) | the owner reads again |
 | `refused` | (6) | `archived`, `active` (erasing an active project), `anonymised`, `erased`, `customer_restricted`, `customer_ended`, `customer_erased`, `conflict` (A01 rule 5), `not_granted`, `not_pending`, `withdrawn`, `superseded`, `import_closed`, `file_not_kept`, `mapping_not_clean`, `no_picks` | the owner reads the record's state |
 | `internal_error` | — | `transaction_failed`: a store transaction did not commit, nothing changed (A04 rule 4) | the caller reads again before repeating |
