@@ -569,6 +569,8 @@ admit_owner_request
 show_confirmation_step
 take_confirmation
 keep_uploaded_file
+read_uploaded_file
+drop_uploaded_files
 end_expired_sessions
 ```
 
@@ -667,6 +669,7 @@ erase_project
 read_project_card
 read_project_context
 validate_project_reference
+read_agent_view
 add_room
 list_rooms
 list_projects
@@ -691,7 +694,10 @@ fixed by the type, the publisher and the withdrawing principal recorded, a
 withdrawal naming the pointer alone. A01 for the publish's request id, its
 repeat answering the pointer whatever its status now. A22 rules 3–5: a removed
 type's pointers kept as they are, its publish, latest read and withdrawal
-refused. The pointers' list (A06 rule 3) and the latest of a type.
+refused. The pointers' list (A06 rule 3), the latest of a type, and a
+project's `published` pointers in that list's order, for the agent projection
+(State 1, "Projections and answers"; A06 rule 8). Deleting every pointer of a
+project deleted whole (R0-60), in the transaction `operations` opens for it.
 
 ### Knows
 
@@ -714,6 +720,8 @@ publish_pointer
 withdraw_pointer
 list_pointers
 latest_pointer_of_type
+published_pointers
+delete_pointers_of_project
 project_of_pointer
 write_imported_pointer
 ```
