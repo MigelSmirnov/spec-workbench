@@ -20,7 +20,8 @@ its projects, or, for the owner's picks, the mapping (A16 rules 1, 3–5).
 ### Inputs
 
 The read transaction; the mode, `upload` or `mapping`; the file's bytes;
-for `mapping`, the picks — possibly none — each with the display name and
+for `mapping`, the picks as the owner gave them, a list that keeps a
+project given twice so it can be refused — possibly empty — each with the display name and
 alias it arrives under, and for each Customer the import will make its
 name, its kind and whether the v1 value is its tax id.
 
@@ -47,14 +48,15 @@ None.
 
 ### Enforces
 
-In A04 rule 6's stage order. Stage (4) first: a pick that is not a project
-of the file is outside its closed list, and picks are a set, a project
-a project given twice refused (`duplicate_pick`), whatever values each
+The closure first and alone: when it exists, `import_closed` is the answer,
+before any other check (A16 rule 8; Conventions, "Stages"). Then stage (4):
+a pick that is not a project of the file is outside its closed list, a
+project given twice refused (`duplicate_pick`), whatever values each
 time carries; the file over the
 `release_declarations.import_size_limit`, not readable as the format States
 5 and 6 declare, holding two projects with one id, or a project without a
 readable id or status, refused whole at upload (A16 rule 3, A19 rule 4).
-Then stage (6): when the closure exists, refused (A16 rule 8). Only what the
+Only what the
 picks bring in is checked (rule 3); a record is malformed as rule 4 says, a
 pointer of a type `release_declarations.declared_artifact_types` does not
 declare or whose owner service is not `release_declarations.owner_service_of_type`'s

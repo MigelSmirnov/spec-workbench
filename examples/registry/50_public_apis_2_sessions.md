@@ -89,8 +89,10 @@ A session that has reached 8 hours from sign-in or 30 minutes without a
 request, or is signed out, serves no request; a change carries the CSRF value of its session,
 compared in constant time (A13 rule 5); the import lock is taken before the
 session's lock, and both are held until the request is done (A16 rule 2);
-the session's lock is granted in the order the requests passed the session
-check, so its changes apply one at a time in that order; a request that
+a change passes the session check and takes its place on the session's lock
+in one step, the lock granted in the order places were taken, so its changes
+apply one at a time in the one order in which they passed the check and took
+the lock (A13 rule 2); a request that
 passed completes even if a limit or a sign-out comes while it runs (A13
 rule 2).
 
@@ -132,8 +134,8 @@ dropped (M11).
 ### Enforces
 
 Its turn comes after every change of the session that passed the session
-check before the sign-out did, the session's lock being granted in that
-order: each completes, its change to the store included, and leaves nothing
+check before the sign-out did, each having taken its place on the lock in
+that same step (Conventions): each completes, its change to the store included, and leaves nothing
 in the ended session; a request arriving after it is refused at the session
 check. It goes on when the import is closed (A16 rule 2).
 

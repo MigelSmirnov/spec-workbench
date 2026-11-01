@@ -79,8 +79,11 @@ types and Python signatures are State 6's.
 - **Locks of an owner request.** `owner_sessions.admit_owner_request` runs
   the request's step under the locks it takes and releases them when the
   step returns, on every path — an answer, a refusal or a failure — as
-  `store.run_in_transaction` does its transaction. The session's lock is
-  granted in the order the requests passed the session check (A13 rule 2).
+  `store.run_in_transaction` does its transaction. A change passes
+  the session check and takes its place on the session's lock in one step,
+  and the lock is granted in the order places were taken, so the order in
+  which changes take the lock and the order in which they passed the check
+  are one order (A13 rule 2).
 - **Diagnostics.** A diagnostic — a stopped start's, a failed backup run's —
   is one line on the process's standard error, which the host keeps; it
   names the failure and never a value (A17 rule 2, A18 rule 5).
