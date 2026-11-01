@@ -23,9 +23,10 @@ types and Python signatures are State 6's.
   transaction holds the store's one write lock from its beginning; every
   agent-authority call runs in one, a read included (A10 rule 6).
 - **The action's instant and today.** An operation that records an instant
-  or compares a date takes the action's instant and today's date as inputs,
-  read once by `operations` when the transaction began ("Time"); it reads no
-  clock. The exceptions are named: `owner_sessions` reads
+  or compares a date takes the action's instant and today's date as inputs:
+  `operations` reads the instant once with `clock.recorded_now` when the
+  transaction begins and derives today from it with `clock.today_in_utc`
+  ("Time"); the operation reads no clock. The exceptions are named: `owner_sessions` reads
   `clock.monotonic_reading`, `backups` reads `clock.recorded_now` for its
   look, and `store` reads it at a backup copy's first read.
 - **The acting principal.** An operation that records who acted — a
@@ -51,6 +52,10 @@ types and Python signatures are State 6's.
   `operations` appends the entry and mints a confirmation id only when it
   changed state (A14 rules 1, 3, 5); one that changes state whenever it is
   accepted answers no `changed`.
+- **What answers never carry.** No answer carries a request id: it is kept
+  with its record and never answered (A01 rule 9). The projections an
+  operation's Outputs name are complete: a fact not listed there is not in
+  the answer.
 - **Erased records answer, they do not refuse.** A read of an anonymised
   project or an erased Customer, where State 0 says it "answers that it was
   erased" (R0-62, M04), returns the erased form of the answer, not a

@@ -160,10 +160,12 @@ Nothing is reachable without a token; every request goes to
 
 ### Errors
 
-None of its own: it refuses nothing. Inputs that are not of the wire format
-reach `operations` as such, which answers stage (1) first and then
-`invalid_request` (`outside_closed_list`) at stage (4); every refusal is
-`operations`'.
+None of its own: it refuses nothing. An operation name that is not one of
+A09 rule 2's reaches `operations`, which refuses it at stage (1) as outside
+the service's rights (`not_permitted`, `outside_service_rights`), whatever
+token it carries once the token is valid; inputs that are not of the wire
+format are answered stage (1) first and then `invalid_request`
+(`outside_closed_list`) at stage (4). Every refusal is `operations`'.
 
 ### State impact
 
@@ -196,7 +198,8 @@ refusal rendered — the sign-in page for a request without a valid session.
 
 On sign-in, the session cookie set: not readable by scripts, only to
 Registry's origin, over HTTPS when reached from another machine (A13 rule
-1).
+1). On a sign-out, and on any answer to a request whose session is no
+longer valid, the cookie is expired in the browser.
 
 ### Enforces
 

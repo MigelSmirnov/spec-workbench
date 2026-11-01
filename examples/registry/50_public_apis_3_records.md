@@ -542,9 +542,12 @@ The transaction; the `project_id`.
 
 ### Outputs
 
-The project, its id first, with its object, its rooms in 'list rooms' order,
-its revision and, when archived, the date it was archived, the UTC date of its
-archived instant; for an anonymised project its erased form (R0-62).
+The card, its id first (R0-13): `project_id`, display name, alias, status,
+`customer_ref`, the object — address, kind, characteristics — revision,
+created and last-changed instants and, when archived, the date it was
+archived, the UTC date of its archived instant; and its rooms in 'list
+rooms' order, each as 'list rooms' gives it. For an anonymised project its
+erased form (R0-62).
 
 ### Observable effect
 
@@ -614,7 +617,9 @@ The transaction; the `project_id`.
 
 ### Outputs
 
-`active`, `archived` — an anonymised project included — or `not_found`.
+The `validate` answer as v1 gives it (R0-04): `exists`, `active`, and the
+reason when not active — `not_found`, or `archived`, an anonymised project
+included (R0-62).
 
 ### Observable effect
 
@@ -724,8 +729,9 @@ The transaction; the `project_id`.
 
 ### Outputs
 
-The rooms by name, then `room_id`; for an anonymised project, which has
-none left, its erased form (R0-62).
+The rooms by name, then `room_id`, each with its `room_id`, name and added
+instant — the room projection every answer that carries rooms uses; for an
+anonymised project, which has none left, its erased form (R0-62).
 
 ### Observable effect
 
@@ -761,7 +767,9 @@ The transaction; whether to include the archived ones.
 
 One answer object: the active projects, and with them the archived ones when
 asked, by last-changed instant latest first, then `project_id`; never an
-anonymised one.
+anonymised one. Each item carries `project_id`, display name, alias,
+status, `customer_ref`, the last-changed instant and, when archived, the
+date it was archived — no object and no rooms.
 
 ### Observable effect
 
@@ -794,7 +802,8 @@ under its own ids and instants (A16 rule 7).
 ### Inputs
 
 The transaction; the v1 project with its object and rooms; the display name
-and alias it arrives under; the `customer_ref` it links to.
+and alias it arrives under; the `customer_ref` it links to, or none for a v1
+project that names no customer (R0-16: a project's customer is optional).
 
 ### Outputs
 
@@ -837,8 +846,9 @@ or the owner); the action's instant.
 
 ### Outputs
 
-The pointer — id, type, version, status, owner service, publisher — and
-`changed`.
+The pointer with every fact 'list artifacts' answers for it — id, project,
+type, version, status, owner service, `uri`, `payload_ref`, digest,
+publisher and published instant — and `changed`.
 
 ### Observable effect
 

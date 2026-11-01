@@ -26,12 +26,14 @@ name, its kind and whether the v1 value is its tax id.
 
 ### Outputs
 
-Always the file's digest, the SHA-256 of its bytes, which Registry computes
-and never takes from a caller. At `upload`, each project the file holds with
+For a file it reads, the file's digest, the SHA-256 of its bytes, which
+Registry computes and never takes from a caller; a file over the size limit
+is refused before it is read, and its refusal carries no digest. At `upload`, each project the file holds with
 its id and status. At `mapping`, the mapping: the picked projects by `project_id`, each one's rooms and
 pointers in their lists' orders, the name and alias each arrives under, the
 Customers it will make by their v1 value with the projects each links, every
-malformed record of the picks, every id production holds, and every missing
+malformed record of the picks, every id of a record the picks bring in that
+production already holds — no other production id — and every missing
 value; and whether the mapping is clean — no malformed record, no conflict,
 no missing value and at least one pick — which alone lets the confirmation
 step be shown. A mapping of no pick is not clean (`no_picks`): an import of

@@ -48,7 +48,8 @@ Reads the host's wall clock; touches no record.
 
 ### Owner
 
-`module:clock`. The current date in UTC (A15 rule 3, R0-84).
+`module:clock`. The UTC date of a given instant: an action's today (A15
+rule 3, R0-84).
 
 ### Callers
 
@@ -56,11 +57,11 @@ Reads the host's wall clock; touches no record.
 
 ### Inputs
 
-None.
+One instant — the action's, read once with `recorded_now`.
 
 ### Outputs
 
-One calendar date.
+Its calendar date in UTC.
 
 ### Observable effect
 
@@ -68,8 +69,8 @@ None.
 
 ### Enforces
 
-Today is the UTC date of `recorded_now` read at the same moment, so an
-action's instant and its today never fall on different dates.
+An action's today is the date of its own instant, never a second reading of
+the clock, so the two cannot fall on different dates at midnight.
 
 ### Errors
 
@@ -77,7 +78,7 @@ None.
 
 ### State impact
 
-Reads the host's wall clock; touches no record.
+Pure; touches no record.
 
 ## `public_op:clock.monotonic_reading`
 
