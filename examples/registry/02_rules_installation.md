@@ -199,8 +199,10 @@ closure is the one proof of success.
    that it renames to the store's name only once the store is complete; at
    every start it first removes a file of that temporary name, left by an
    interrupted start, and no other file there — if it cannot, and the store
-   is absent, the start fails; otherwise
-   the store must open for reading and writing, pass the full integrity check
+   is absent, the start fails; a store made new is made in SQLite's
+   write-ahead-log mode (A18 rule 1); otherwise
+   the store must open for reading and writing, be put in that mode when it
+   is not in it — one that cannot be fails the start —, pass the full integrity check
    — the store is a SQLite database, as v1's (L19), and the check passes when
    `PRAGMA integrity_check` answers `ok` and `PRAGMA foreign_key_check` finds
    nothing, the same as a backup's check (A18 rule 4) — and carry
@@ -271,7 +273,7 @@ secret cannot be shared between holders.
    one snapshot of the store, as one read transaction sees it, while other
    transactions go on; it never holds part of a transaction, and its
    recorded instant and last sequence number are those of that snapshot,
-   the instant being when its read transaction began. The store runs in
+   the instant being that of the read that fixes its snapshot (below). The store runs in
    SQLite's write-ahead-log mode, in which a reader and the writer never
    wait for each other, so no write waits for, or is refused or fails for,
    a copy, nor a copy for a write. The copy's read transaction fixes its
