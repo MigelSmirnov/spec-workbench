@@ -391,7 +391,9 @@ load_configuration
 
 ### Owns
 
-The one SQLite database (L19) and its connection: opening it for reading and
+The one SQLite database (L19) and its connections — the one the
+transactions of actions run on, and the read connection a backup's copy
+takes its snapshot on while they go on (A18 rule 1): opening it for reading and
 writing at start, or making a new, empty store of the release's version under
 the temporary name and renaming it once complete, after removing a leftover of
 that name and no other file (A17 rule 5), and removing a store it made new
