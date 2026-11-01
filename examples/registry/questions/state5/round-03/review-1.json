@@ -1,0 +1,283 @@
+{
+ "open_points": [
+  {
+   "unit": "50_public_apis_0_conventions.md:Conventions every operation follows",
+   "subject": "refusal kinds collection",
+   "kind": "output ambiguity",
+   "text": "\"answers the first failing stage with every failure of that stage\" and \"the list of the kinds that failed in that stage\" do not define ordering or whether repeated occurrences of one kind are preserved",
+   "question": "When several checks in the first failing stage fail, is `kinds` an ordered unique list, an occurrence list that may repeat a kind, or another representation, and what fixes its order?",
+   "options": [
+    "unique kinds in the refusal vocabulary's declared order",
+    "unique kinds in check order",
+    "one item per failed field or check, allowing duplicate kinds"
+   ],
+   "default_guess": "Return unique kinds in the refusal vocabulary's declared order.",
+   "witness": {
+    "initial": "An owner submits a project create whose display name and object address are both blank.",
+    "events": [
+     "The owner interface sends the otherwise valid create request.",
+     "`projects.create_project` evaluates all stage-(4) failures."
+    ],
+    "outcomes": [
+     "The refusal carries `kinds: [\"missing_value\"]`.",
+     "The refusal carries `kinds: [\"missing_value\",\"missing_value\"]`, one occurrence for each missing field."
+    ],
+    "observer": "The owner interface rendering the refusal."
+   }
+  },
+  {
+   "unit": "50_public_apis_1_foundation.md:`public_op:store.open_store`",
+   "subject": "leftover temporary store when the real store exists",
+   "kind": "contradiction",
+   "text": "The operation says \"A leftover file of the store's temporary name is removed\", but its Errors fail for \"a leftover it cannot remove while the store is absent\"; A17 likewise says failure is required when it cannot be removed and the store is absent, then says \"otherwise the store must open\".",
+   "question": "If the real store exists but the leftover temporary file cannot be removed, must startup fail or may it open the real store and leave the temporary file?",
+   "options": [
+    "fail startup because removal is a mandatory first step",
+    "open the existing store and leave the unremovable temporary file",
+    "open the existing store only after reporting a non-fatal diagnostic"
+   ],
+   "default_guess": "Open the existing store and leave the temporary file, because the stated failure condition is limited to an absent real store.",
+   "witness": {
+    "initial": "The configured real store exists and is valid; its declared temporary-name sibling also exists and cannot be removed because of its permissions.",
+    "events": [
+     "The host starts Registry.",
+     "`store.open_store` attempts the prescribed temporary-file cleanup."
+    ],
+    "outcomes": [
+     "Startup stops with a store diagnostic.",
+     "The valid real store opens and Registry starts while the temporary file remains."
+    ],
+    "observer": "The host administrator and every caller attempting to reach Registry."
+   }
+  },
+  {
+   "unit": "50_public_apis_2_sessions.md:`public_op:owner_sessions.take_confirmation`",
+   "subject": "confirmation input digest",
+   "kind": "underspecified binding",
+   "text": "The operation takes \"the digest of its inputs\", while the confirmation is bound to \"the digest of its inputs in a fixed order\"; no digest algorithm or canonical encoding of structured values is fixed.",
+   "question": "What exact canonical byte representation, ordering rules and digest algorithm must `show_confirmation_step`, `operations` and `take_confirmation` use for action inputs?",
+   "options": [
+    "a specified canonical serialization followed by SHA-256",
+    "a typed field-by-field encoding followed by a specified digest",
+    "an implementation-private serialization and digest shared by the modules"
+   ],
+   "default_guess": "Use a specified typed canonical encoding and SHA-256.",
+   "witness": {
+    "initial": "An import confirmation was shown for picks and Customer values containing non-ASCII text and optional absent values.",
+    "events": [
+     "`show_confirmation_step` digests the displayed inputs.",
+     "The owner submits the unchanged displayed values.",
+     "`operations` independently constructs the digest passed to `take_confirmation`."
+    ],
+    "outcomes": [
+     "Both modules canonicalize the values identically and the confirmation is accepted.",
+     "Their equally reasonable encodings differ—for example omitted versus explicit absent fields or composed versus decomposed Unicode—and the unchanged confirmation is refused as `confirmation_bound_elsewhere`."
+    ],
+    "observer": "The owner submitting the confirmation."
+   }
+  },
+  {
+   "unit": "50_public_apis_2_sessions.md:`public_op:owner_sessions.end_expired_sessions`",
+   "subject": "expiry boundary",
+   "kind": "contradictory boundary",
+   "text": "A13 says a session that \"has reached a limit\" is invalid and formalizes validity with strict `<`, while this operation ends sessions \"past 8 hours or 30 minutes\".",
+   "question": "Does the expiry pass end a session when its monotonic reading is exactly equal to a limit, or only when it is greater?",
+   "options": [
+    "end at equality",
+    "end only after equality",
+    "use the same strict-validity predicate as request admission"
+   ],
+   "default_guess": "End at equality by using the same strict-validity predicate as request admission.",
+   "witness": {
+    "initial": "A session has an uploaded import file, and its idle deadline is monotonic reading N.",
+    "events": [
+     "The expiry pass takes the import and session locks at exactly N.",
+     "It evaluates whether to end the session."
+    ],
+    "outcomes": [
+     "The session ends, its upload is dropped, and the operation's count includes it.",
+     "The session remains until a later pass, its upload remains in memory, and the count excludes it."
+    ],
+    "observer": "`instance_lifecycle`, which receives the count, and the owner on a later import request."
+   }
+  },
+  {
+   "unit": "50_public_apis_3_records.md:`public_op:artifact_pointers.publish_pointer`",
+   "subject": "publish retry output after pointer status changes",
+   "kind": "contradictory output",
+   "text": "The output promises \"every fact 'list artifacts' answers for it\" but enumerates only through \"publisher and published instant\", while `list_pointers` also answers the superseded instant and the withdrawing principal and instant.",
+   "question": "When a publish retry returns its existing pointer after that pointer became superseded or withdrawn, must the answer include the status-transition facts?",
+   "options": [
+    "include every `list_pointers` field applicable to the pointer's current status",
+    "return only the explicitly enumerated publish fields",
+    "return the original publish-time projection even though status is current"
+   ],
+   "default_guess": "Include every applicable `list_pointers` field, including supersession or withdrawal facts.",
+   "witness": {
+    "initial": "Pointer P was published with request id R.",
+    "events": [
+     "A later publish supersedes P and records its superseded instant.",
+     "The original publisher retries request R with the original facts."
+    ],
+    "outcomes": [
+     "The retry returns P with status `superseded` and its superseded instant.",
+     "The retry returns P with status `superseded` but omits the superseded instant because it is absent from the publish output's enumeration."
+    ],
+    "observer": "Cabinet Kernel and the agent receiving the retry answer."
+   }
+  },
+  {
+   "unit": "50_public_apis_3_records.md:`public_op:artifact_pointers.list_pointers`",
+   "subject": "request id in artifact history",
+   "kind": "contradiction",
+   "text": "The operation returns \"each with every fact M05 holds\", while M05 includes the publish request id and the conventions state \"No answer carries a request id\".",
+   "question": "Does artifact history exclude the pointer's stored request id despite the promise to return every M05 fact?",
+   "options": [
+    "exclude every request id as the convention requires",
+    "include the request id because it is an M05 fact",
+    "replace \"every fact\" with the explicit non-request-id projection"
+   ],
+   "default_guess": "Exclude the request id and treat the explicit field enumeration as exhaustive.",
+   "witness": {
+    "initial": "A pointer was published with request id R.",
+    "events": [
+     "Client Portal calls `list artifacts` for the pointer's project."
+    ],
+    "outcomes": [
+     "The returned pointer omits R under the global no-request-id convention.",
+     "The returned pointer includes R because `list_pointers` promises every M05 fact."
+    ],
+    "observer": "Client Portal."
+   }
+  },
+  {
+   "unit": "50_public_apis_4_import_backups.md:`public_op:migration_import.read_import_mapping`",
+   "subject": "ordering of upload-mode projects",
+   "kind": "output order gap",
+   "text": "At `upload`, the operation returns \"each project the file holds with its id and status\" without fixing their order; A06 fixes `project_id` order for \"the import mapping's projects\" but does not say whether the upload-mode summary is that mapping.",
+   "question": "In what order must projects appear in the upload-mode answer?",
+   "options": [
+    "by `project_id` as in the detailed mapping",
+    "in source-file order",
+    "in an explicitly declared separate upload order"
+   ],
+   "default_guess": "Order them by `project_id`, matching the detailed mapping.",
+   "witness": {
+    "initial": "An otherwise valid export file contains project B before project A, while A's `project_id` sorts before B's.",
+    "events": [
+     "The owner uploads the file.",
+     "`read_import_mapping` runs in `upload` mode."
+    ],
+    "outcomes": [
+     "The upload page lists A then B by `project_id`.",
+     "The upload page lists B then A in source-file order."
+    ],
+    "observer": "The owner reviewing which projects can be picked."
+   }
+  },
+  {
+   "unit": "50_public_apis_4_import_backups.md:`public_op:migration_import.confirm_import`",
+   "subject": "empty-pick refusal kinds",
+   "kind": "overlapping errors",
+   "text": "`read_import_mapping` defines a mapping with no pick as not clean (`no_picks`), while `confirm_import` lists both `mapping_not_clean` and `no_picks` as refusal kinds and says \"any ... no pick at all\" refuses the import.",
+   "question": "For a confirmation with no picks, does the refusal contain `no_picks`, `mapping_not_clean`, or both?",
+   "options": [
+    "`no_picks` only as the specific reason",
+    "`mapping_not_clean` only as the aggregate reason",
+    "both kinds because both predicates fail"
+   ],
+   "default_guess": "Return `no_picks` only and reserve `mapping_not_clean` for malformed records, conflicts or missing values.",
+   "witness": {
+    "initial": "A valid upload is kept and the owner submits an import confirmation with an empty pick set.",
+    "events": [
+     "`confirm_import` rechecks the bound mapping.",
+     "It constructs the stage-(6) refusal."
+    ],
+    "outcomes": [
+     "The refusal contains only `no_picks`.",
+     "The refusal contains both `mapping_not_clean` and `no_picks` because the text defines no picks as making the mapping unclean."
+    ],
+    "observer": "The owner interface and its refusal rendering."
+   }
+  },
+  {
+   "unit": "50_public_apis_4_import_backups.md:`public_op:backups.run_daily_backup_if_due`",
+   "subject": "durable backup compatibility",
+   "kind": "persistent format gap",
+   "text": "The operation fixes an encrypted backup with a readable record, a key digest and \"a kept name made from its instant\", but fixes neither the record encoding and versioning, the key-digest algorithm, the encryption format, nor the instant-to-filename encoding.",
+   "question": "What durable format must later releases use to recognize, list, rotate and restore backups made by earlier releases, and how is format evolution handled?",
+   "options": [
+    "one fixed versioned backup format and naming scheme with specified cryptography",
+    "each release may write a new format but must retain readers for every still-retained older format",
+    "only the current release's format is readable, making older backups unreadable after an upgrade"
+   ],
+   "default_guess": "Use a fixed, versioned format and require backward readers for every format that can still be within retention.",
+   "witness": {
+    "initial": "Release N has made a valid kept backup that is less than 30 days old; Registry is upgraded to release N+1 while the backup prefixes remain unchanged as required.",
+    "events": [
+     "Release N+1 runs `newest_backup_instant`.",
+     "Its next daily run scans and rotates the backup location."
+    ],
+    "outcomes": [
+     "N+1 recognizes N's record, reports its instant and retains or deletes it according to age.",
+     "N+1 cannot parse N's equally conforming private encoding, reports no newest backup and deletes the old file as an unreadable kept-prefix file."
+    ],
+    "observer": "The owner viewing backup status and the administrator relying on retained backups."
+   }
+  },
+  {
+   "unit": "50_public_apis_5_surfaces.md:`public_op:owner_interface.serve_owner_request`",
+   "subject": "session-validity signal for cookie expiry",
+   "kind": "missing inter-module output",
+   "text": "The change requires that \"on any answer to a request whose session is no longer valid, the cookie is expired in the browser\", but `operations.perform_owner_operation` returns only the page answer or refusal and `owner_sessions.admit_owner_request` exposes no post-step validity result.",
+   "question": "At what instant is \"no longer valid\" evaluated, and how does `owner_interface` learn that a session admitted at arrival became invalid before its answer was emitted?",
+   "options": [
+    "evaluate at response time and add a validity result or query available to the surface",
+    "evaluate only at admission, expiring only when admission returns `no_owner_session`",
+    "expire only on accepted sign-out and explicit `no_owner_session` refusals"
+   ],
+   "default_guess": "Evaluate at response time and provide the surface an explicit post-step session-validity result.",
+   "witness": {
+    "initial": "A valid owner session is just short of its eight-hour limit, and the browser starts a long-running read request.",
+    "events": [
+     "The request passes `admit_owner_request`.",
+     "The hard limit is reached and the expiry pass ends the session while the read continues.",
+     "The read completes with an ordinary successful page answer."
+    ],
+    "outcomes": [
+     "The response expires the cookie because the session is invalid when the answer is emitted.",
+     "The response leaves the stale cookie because the request was valid when admitted and no returned value tells the surface it ended later."
+    ],
+    "observer": "The owner's browser, which either removes the cookie or sends it on the next request."
+   }
+  },
+  {
+   "unit": "50_public_apis_5_surfaces.md:`public_op:owner_interface.serve_owner_request`",
+   "subject": "cookie expiry on refused sign-out",
+   "kind": "ambiguous effect trigger",
+   "text": "The change says \"On a sign-out ... the cookie is expired in the browser\" without saying whether \"a sign-out\" means an accepted sign-out or any request targeting the sign-out action.",
+   "question": "Must a refused sign-out request expire the browser cookie when the server-side session remains valid?",
+   "options": [
+    "expire only after `sign_out_owner` accepts and ends the session",
+    "expire on every request targeting sign-out, including CSRF or confirmation refusal",
+    "expire on sign-out requests only for selected refusal classes"
+   ],
+   "default_guess": "Expire only after an accepted sign-out; otherwise the browser and server would disagree about whether the session ended.",
+   "witness": {
+    "initial": "The browser has a valid owner session, but submits the sign-out form with a wrong CSRF value.",
+    "events": [
+     "`admit_owner_request` refuses the request with `csrf_refused`.",
+     "The server-side session remains valid."
+    ],
+    "outcomes": [
+     "The surface treats the request as \"a sign-out\" and expires the cookie, so the browser loses access to the still-live session.",
+     "The surface treats only an accepted operation as a sign-out and retains the cookie, so the owner remains signed in."
+    ],
+    "observer": "The owner on the next browser request."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"50_public_apis_0_conventions.md:Conventions every operation follows\",\"subject\":\"refusal kinds collection\",\"kind\":\"output ambiguity\",\"text\":\"\\\"answers the first failing stage with every failure of that stage\\\" and \\\"the list of the kinds that failed in that stage\\\" do not define ordering or whether repeated occurrences of one kind are preserved\",\"question\":\"When several checks in the first failing stage fail, is `kinds` an ordered unique list, an occurrence list that may repeat a kind, or another representation, and what fixes its order?\",\"options\":[\"unique kinds in the refusal vocabulary's declared order\",\"unique kinds in check order\",\"one item per failed field or check, allowing duplicate kinds\"],\"default_guess\":\"Return unique kinds in the refusal vocabulary's declared order.\",\"witness\":{\"initial\":\"An owner submits a project create whose display name and object address are both blank.\",\"events\":[\"The owner interface sends the otherwise valid create request.\",\"`projects.create_project` evaluates all stage-(4) failures.\"],\"outcomes\":[\"The refusal carries `kinds: [\\\"missing_value\\\"]`.\",\"The refusal carries `kinds: [\\\"missing_value\\\",\\\"missing_value\\\"]`, one occurrence for each missing field.\"],\"observer\":\"The owner interface rendering the refusal.\"}},{\"unit\":\"50_public_apis_1_foundation.md:`public_op:store.open_store`\",\"subject\":\"leftover temporary store when the real store exists\",\"kind\":\"contradiction\",\"text\":\"The operation says \\\"A leftover file of the store's temporary name is removed\\\", but its Errors fail for \\\"a leftover it cannot remove while the store is absent\\\"; A17 likewise says failure is required when it cannot be removed and the store is absent, then says \\\"otherwise the store must open\\\".\",\"question\":\"If the real store exists but the leftover temporary file cannot be removed, must startup fail or may it open the real store and leave the temporary file?\",\"options\":[\"fail startup because removal is a mandatory first step\",\"open the existing store and leave the unremovable temporary file\",\"open the existing store only after reporting a non-fatal diagnostic\"],\"default_guess\":\"Open the existing store and leave the temporary file, because the stated failure condition is limited to an absent real store.\",\"witness\":{\"initial\":\"The configured real store exists and is valid; its declared temporary-name sibling also exists and cannot be removed because of its permissions.\",\"events\":[\"The host starts Registry.\",\"`store.open_store` attempts the prescribed temporary-file cleanup.\"],\"outcomes\":[\"Startup stops with a store diagnostic.\",\"The valid real store opens and Registry starts while the temporary file remains.\"],\"observer\":\"The host administrator and every caller attempting to reach Registry.\"}},{\"unit\":\"50_public_apis_2_sessions.md:`public_op:owner_sessions.take_confirmation`\",\"subject\":\"confirmation input digest\",\"kind\":\"underspecified binding\",\"text\":\"The operation takes \\\"the digest of its inputs\\\", while the confirmation is bound to \\\"the digest of its inputs in a fixed order\\\"; no digest algorithm or canonical encoding of structured values is fixed.\",\"question\":\"What exact canonical byte representation, ordering rules and digest algorithm must `show_confirmation_step`, `operations` and `take_confirmation` use for action inputs?\",\"options\":[\"a specified canonical serialization followed by SHA-256\",\"a typed field-by-field encoding followed by a specified digest\",\"an implementation-private serialization and digest shared by the modules\"],\"default_guess\":\"Use a specified typed canonical encoding and SHA-256.\",\"witness\":{\"initial\":\"An import confirmation was shown for picks and Customer values containing non-ASCII text and optional absent values.\",\"events\":[\"`show_confirmation_step` digests the displayed inputs.\",\"The owner submits the unchanged displayed values.\",\"`operations` independently constructs the digest passed to `take_confirmation`.\"],\"outcomes\":[\"Both modules canonicalize the values identically and the confirmation is accepted.\",\"Their equally reasonable encodings differ—for example omitted versus explicit absent fields or composed versus decomposed Unicode—and the unchanged confirmation is refused as `confirmation_bound_elsewhere`.\"],\"observer\":\"The owner submitting the confirmation.\"}},{\"unit\":\"50_public_apis_2_sessions.md:`public_op:owner_sessions.end_expired_sessions`\",\"subject\":\"expiry boundary\",\"kind\":\"contradictory boundary\",\"text\":\"A13 says a session that \\\"has reached a limit\\\" is invalid and formalizes validity with strict `<`, while this operation ends sessions \\\"past 8 hours or 30 minutes\\\".\",\"question\":\"Does the expiry pass end a session when its monotonic reading is exactly equal to a limit, or only when it is greater?\",\"options\":[\"end at equality\",\"end only after equality\",\"use the same strict-validity predicate as request admission\"],\"default_guess\":\"End at equality by using the same strict-validity predicate as request admission.\",\"witness\":{\"initial\":\"A session has an uploaded import file, and its idle deadline is monotonic reading N.\",\"events\":[\"The expiry pass takes the import and session locks at exactly N.\",\"It evaluates whether to end the session.\"],\"outcomes\":[\"The session ends, its upload is dropped, and the operation's count includes it.\",\"The session remains until a later pass, its upload remains in memory, and the count excludes it.\"],\"observer\":\"`instance_lifecycle`, which receives the count, and the owner on a later import request.\"}},{\"unit\":\"50_public_apis_3_records.md:`public_op:artifact_pointers.publish_pointer`\",\"subject\":\"publish retry output after pointer status changes\",\"kind\":\"contradictory output\",\"text\":\"The output promises \\\"every fact 'list artifacts' answers for it\\\" but enumerates only through \\\"publisher and published instant\\\", while `list_pointers` also answers the superseded instant and the withdrawing principal and instant.\",\"question\":\"When a publish retry returns its existing pointer after that pointer became superseded or withdrawn, must the answer include the status-transition facts?\",\"options\":[\"include every `list_pointers` field applicable to the pointer's current status\",\"return only the explicitly enumerated publish fields\",\"return the original publish-time projection even though status is current\"],\"default_guess\":\"Include every applicable `list_pointers` field, including supersession or withdrawal facts.\",\"witness\":{\"initial\":\"Pointer P was published with request id R.\",\"events\":[\"A later publish supersedes P and records its superseded instant.\",\"The original publisher retries request R with the original facts.\"],\"outcomes\":[\"The retry returns P with status `superseded` and its superseded instant.\",\"The retry returns P with status `superseded` but omits the superseded instant because it is absent from the publish output's enumeration.\"],\"observer\":\"Cabinet Kernel and the agent receiving the retry answer.\"}},{\"unit\":\"50_public_apis_3_records.md:`public_op:artifact_pointers.list_pointers`\",\"subject\":\"request id in artifact history\",\"kind\":\"contradiction\",\"text\":\"The operation returns \\\"each with every fact M05 holds\\\", while M05 includes the publish request id and the conventions state \\\"No answer carries a request id\\\".\",\"question\":\"Does artifact history exclude the pointer's stored request id despite the promise to return every M05 fact?\",\"options\":[\"exclude every request id as the convention requires\",\"include the request id because it is an M05 fact\",\"replace \\\"every fact\\\" with the explicit non-request-id projection\"],\"default_guess\":\"Exclude the request id and treat the explicit field enumeration as exhaustive.\",\"witness\":{\"initial\":\"A pointer was published with request id R.\",\"events\":[\"Client Portal calls `list artifacts` for the pointer's project.\"],\"outcomes\":[\"The returned pointer omits R under the global no-request-id convention.\",\"The returned pointer includes R because `list_pointers` promises every M05 fact.\"],\"observer\":\"Client Portal.\"}},{\"unit\":\"50_public_apis_4_import_backups.md:`public_op:migration_import.read_import_mapping`\",\"subject\":\"ordering of upload-mode projects\",\"kind\":\"output order gap\",\"text\":\"At `upload`, the operation returns \\\"each project the file holds with its id and status\\\" without fixing their order; A06 fixes `project_id` order for \\\"the import mapping's projects\\\" but does not say whether the upload-mode summary is that mapping.\",\"question\":\"In what order must projects appear in the upload-mode answer?\",\"options\":[\"by `project_id` as in the detailed mapping\",\"in source-file order\",\"in an explicitly declared separate upload order\"],\"default_guess\":\"Order them by `project_id`, matching the detailed mapping.\",\"witness\":{\"initial\":\"An otherwise valid export file contains project B before project A, while A's `project_id` sorts before B's.\",\"events\":[\"The owner uploads the file.\",\"`read_import_mapping` runs in `upload` mode.\"],\"outcomes\":[\"The upload page lists A then B by `project_id`.\",\"The upload page lists B then A in source-file order.\"],\"observer\":\"The owner reviewing which projects can be picked.\"}},{\"unit\":\"50_public_apis_4_import_backups.md:`public_op:migration_import.confirm_import`\",\"subject\":\"empty-pick refusal kinds\",\"kind\":\"overlapping errors\",\"text\":\"`read_import_mapping` defines a mapping with no pick as not clean (`no_picks`), while `confirm_import` lists both `mapping_not_clean` and `no_picks` as refusal kinds and says \\\"any ... no pick at all\\\" refuses the import.\",\"question\":\"For a confirmation with no picks, does the refusal contain `no_picks`, `mapping_not_clean`, or both?\",\"options\":[\"`no_picks` only as the specific reason\",\"`mapping_not_clean` only as the aggregate reason\",\"both kinds because both predicates fail\"],\"default_guess\":\"Return `no_picks` only and reserve `mapping_not_clean` for malformed records, conflicts or missing values.\",\"witness\":{\"initial\":\"A valid upload is kept and the owner submits an import confirmation with an empty pick set.\",\"events\":[\"`confirm_import` rechecks the bound mapping.\",\"It constructs the stage-(6) refusal.\"],\"outcomes\":[\"The refusal contains only `no_picks`.\",\"The refusal contains both `mapping_not_clean` and `no_picks` because the text defines no picks as making the mapping unclean.\"],\"observer\":\"The owner interface and its refusal rendering.\"}},{\"unit\":\"50_public_apis_4_import_backups.md:`public_op:backups.run_daily_backup_if_due`\",\"subject\":\"durable backup compatibility\",\"kind\":\"persistent format gap\",\"text\":\"The operation fixes an encrypted backup with a readable record, a key digest and \\\"a kept name made from its instant\\\", but fixes neither the record encoding and versioning, the key-digest algorithm, the encryption format, nor the instant-to-filename encoding.\",\"question\":\"What durable format must later releases use to recognize, list, rotate and restore backups made by earlier releases, and how is format evolution handled?\",\"options\":[\"one fixed versioned backup format and naming scheme with specified cryptography\",\"each release may write a new format but must retain readers for every still-retained older format\",\"only the current release's format is readable, making older backups unreadable after an upgrade\"],\"default_guess\":\"Use a fixed, versioned format and require backward readers for every format that can still be within retention.\",\"witness\":{\"initial\":\"Release N has made a valid kept backup that is less than 30 days old; Registry is upgraded to release N+1 while the backup prefixes remain unchanged as required.\",\"events\":[\"Release N+1 runs `newest_backup_instant`.\",\"Its next daily run scans and rotates the backup location.\"],\"outcomes\":[\"N+1 recognizes N's record, reports its instant and retains or deletes it according to age.\",\"N+1 cannot parse N's equally conforming private encoding, reports no newest backup and deletes the old file as an unreadable kept-prefix file.\"],\"observer\":\"The owner viewing backup status and the administrator relying on retained backups.\"}},{\"unit\":\"50_public_apis_5_surfaces.md:`public_op:owner_interface.serve_owner_request`\",\"subject\":\"session-validity signal for cookie expiry\",\"kind\":\"missing inter-module output\",\"text\":\"The change requires that \\\"on any answer to a request whose session is no longer valid, the cookie is expired in the browser\\\", but `operations.perform_owner_operation` returns only the page answer or refusal and `owner_sessions.admit_owner_request` exposes no post-step validity result.\",\"question\":\"At what instant is \\\"no longer valid\\\" evaluated, and how does `owner_interface` learn that a session admitted at arrival became invalid before its answer was emitted?\",\"options\":[\"evaluate at response time and add a validity result or query available to the surface\",\"evaluate only at admission, expiring only when admission returns `no_owner_session`\",\"expire only on accepted sign-out and explicit `no_owner_session` refusals\"],\"default_guess\":\"Evaluate at response time and provide the surface an explicit post-step session-validity result.\",\"witness\":{\"initial\":\"A valid owner session is just short of its eight-hour limit, and the browser starts a long-running read request.\",\"events\":[\"The request passes `admit_owner_request`.\",\"The hard limit is reached and the expiry pass ends the session while the read continues.\",\"The read completes with an ordinary successful page answer.\"],\"outcomes\":[\"The response expires the cookie because the session is invalid when the answer is emitted.\",\"The response leaves the stale cookie because the request was valid when admitted and no returned value tells the surface it ended later.\"],\"observer\":\"The owner's browser, which either removes the cookie or sends it on the next request.\"}},{\"unit\":\"50_public_apis_5_surfaces.md:`public_op:owner_interface.serve_owner_request`\",\"subject\":\"cookie expiry on refused sign-out\",\"kind\":\"ambiguous effect trigger\",\"text\":\"The change says \\\"On a sign-out ... the cookie is expired in the browser\\\" without saying whether \\\"a sign-out\\\" means an accepted sign-out or any request targeting the sign-out action.\",\"question\":\"Must a refused sign-out request expire the browser cookie when the server-side session remains valid?\",\"options\":[\"expire only after `sign_out_owner` accepts and ends the session\",\"expire on every request targeting sign-out, including CSRF or confirmation refusal\",\"expire on sign-out requests only for selected refusal classes\"],\"default_guess\":\"Expire only after an accepted sign-out; otherwise the browser and server would disagree about whether the session ended.\",\"witness\":{\"initial\":\"The browser has a valid owner session, but submits the sign-out form with a wrong CSRF value.\",\"events\":[\"`admit_owner_request` refuses the request with `csrf_refused`.\",\"The server-side session remains valid.\"],\"outcomes\":[\"The surface treats the request as \\\"a sign-out\\\" and expires the cookie, so the browser loses access to the still-live session.\",\"The surface treats only an accepted operation as a sign-out and retains the cookie, so the owner remains signed in.\"],\"observer\":\"The owner on the next browser request.\"}}]}",
+ "set_aside": []
+}
