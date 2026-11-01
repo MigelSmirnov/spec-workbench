@@ -51,8 +51,9 @@ States 5 and 6.
 
 ## Identity formats (R0-07, R0-16, R0-17, R0-34)
 
-- Every identity of a record Registry mints — `project_id`, `room_id`,
-  artifact pointer id, `customer_ref` — is an opaque identifier with no meaning in its form. Its
+- The identities Registry mints for projects, rooms, artifact pointers and
+  Customers — `project_id`, `room_id`, artifact pointer id, `customer_ref` —
+  and the confirmation id (below) are each an opaque identifier with no meaning in its form. Its
   concrete format is a UUID, as the v1 ids are; the import keeps every v1
   project, room and pointer id verbatim (R0-44, R0-50, R0-79).
 - Pointer versions are small ordinal numbers per project and type, starting at
@@ -65,9 +66,10 @@ States 5 and 6.
 - The agent session's identity is not minted by Registry: Cabinet Kernel names
   the session from its own run context (R0-53, R0-77); Registry records it as
   an opaque identifier it did not create.
-- Two further identifiers Registry mints are opaque too: the owner session's
-  (M11), at least 32 random bytes (State 2 A13 rule 7), and the confirmation
-  id, a UUID. Registry mints a
+- The owner session's identity (M11) is opaque too, but made of at least 32
+  random bytes, not a UUID (State 2 A13 rule 7); an audit entry is told by its
+  sequence number (M09) and a pointer's version is an ordinal, as above.
+  The confirmation id is a UUID. Registry mints a
   confirmation id when the owner confirms an action that asks for confirmation
   — archiving a project, erasing an archived project, the import, erasing old
   audit entries (Primary actions) — and writes it once into the audit entry of
