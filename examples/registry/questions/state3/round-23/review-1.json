@@ -1,0 +1,86 @@
+{
+ "open_points": [
+  {
+   "unit": "30_modules.md:Facts several modules touch, and their one owner",
+   "subject": "backup snapshot instant",
+   "kind": "ordering ambiguity",
+   "text": "“a backup's instant is the one `store` reads at the read that fixes the copy's snapshot”",
+   "question": "Must `store` read the clock immediately before or immediately after the audit-counter read that fixes the SQLite snapshot, and which ordering defines the recorded instant when a commit occurs between the two operations?",
+   "options": [
+    "read the clock before issuing the audit-counter read",
+    "perform the audit-counter read first and read the clock immediately after it",
+    "require another mechanism that defines one ordered snapshot-and-clock event"
+   ],
+   "default_guess": "Read the clock immediately before issuing the audit-counter read and document that ordering.",
+   "witness": {
+    "initial": "A backup read transaction exists but has made no read; an action transaction is ready to commit.",
+    "events": [
+     "`store` performs one of the clock read and audit-counter read.",
+     "The action commits.",
+     "`store` performs the other read and completes the backup."
+    ],
+    "outcomes": [
+     "If the clock is read first, the backup includes the action although its recorded instant is earlier than the action's commit.",
+     "If the audit counter is read first, the backup excludes the action although its recorded instant is later than the action's commit."
+    ],
+    "observer": "The owner comparing the backup record with committed changes, and later deciding what a restore contains."
+   }
+  },
+  {
+   "unit": "30_modules.md:`store`",
+   "subject": "SQLite WAL companion files",
+   "kind": "unowned file lifecycle",
+   "text": "The store is put in write-ahead-log mode, but startup still removes “a file of that temporary name ... and no other file” and later removes “a store it made new” without saying whether SQLite's `-wal` and `-shm` companion files belong to either target.",
+   "question": "Which module owns WAL and shared-memory companion files, and must startup, interrupted temporary-store cleanup, and failed-listener cleanup remove them or leave them?",
+   "options": [
+    "`store` treats the exact main-file companions as parts of the logical store and manages them with it",
+    "the literal main database file is the only managed file and companions are left to SQLite",
+    "another module owns cleanup of the companions"
+   ],
+   "default_guess": "Have `store` treat the exact SQLite companion files of the configured or temporary database as parts of that logical store.",
+   "witness": {
+    "initial": "The configured store is absent and startup creates the temporary SQLite store in WAL mode.",
+    "events": [
+     "SQLite creates companion files for the temporary store.",
+     "The process is interrupted, or a listener later fails after the temporary store is renamed.",
+     "A later start performs the specified cleanup."
+    ],
+    "outcomes": [
+     "An implementation reading “no other file” literally removes only the main temporary or final database and leaves the companion files.",
+     "An implementation treating the companions as part of the store removes them too."
+    ],
+    "observer": "The owner inspecting the store directory, and the later startup that opens or recreates the store."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"30_modules.md:Facts several modules touch, and their one owner\",\"subject\":\"backup snapshot instant\",\"kind\":\"ordering ambiguity\",\"text\":\"“a backup's instant is the one `store` reads at the read that fixes the copy's snapshot”\",\"question\":\"Must `store` read the clock immediately before or immediately after the audit-counter read that fixes the SQLite snapshot, and which ordering defines the recorded instant when a commit occurs between the two operations?\",\"options\":[\"read the clock before issuing the audit-counter read\",\"perform the audit-counter read first and read the clock immediately after it\",\"require another mechanism that defines one ordered snapshot-and-clock event\"],\"default_guess\":\"Read the clock immediately before issuing the audit-counter read and document that ordering.\",\"witness\":{\"initial\":\"A backup read transaction exists but has made no read; an action transaction is ready to commit.\",\"events\":[\"`store` performs one of the clock read and audit-counter read.\",\"The action commits.\",\"`store` performs the other read and completes the backup.\"],\"outcomes\":[\"If the clock is read first, the backup includes the action although its recorded instant is earlier than the action's commit.\",\"If the audit counter is read first, the backup excludes the action although its recorded instant is later than the action's commit.\"],\"observer\":\"The owner comparing the backup record with committed changes, and later deciding what a restore contains.\"}},{\"unit\":\"context: agreement of the earlier states' texts with this state\",\"subject\":\"when an import reaches a backup\",\"kind\":\"terminology contradiction\",\"text\":\"A16 rule 10 says “the first kept backup whose snapshot begins after it committed”, while A18 rule 1 says the read transaction “fixes its snapshot by its first read”.\",\"question\":\"Does “snapshot begins” in A16 mean the read transaction begins or the first read fixes its snapshot?\",\"options\":[\"the read transaction's beginning\",\"the first audit-counter read that fixes the snapshot\"],\"default_guess\":\"Treat “snapshot begins” as the first read that fixes the snapshot.\",\"witness\":{\"initial\":\"A backup read transaction has begun but has not read anything, and the import has not committed.\",\"events\":[\"`store` begins the backup's read transaction.\",\"The owner import commits.\",\"`store` first reads the audit counter, fixing a snapshot that contains the import.\",\"The backup is checked and kept.\"],\"outcomes\":[\"If the snapshot began with the transaction, this is not the first kept backup whose snapshot begins after the import, despite containing it.\",\"If the snapshot began when the first read fixed it, this is the first qualifying backup and contains the import.\"],\"observer\":\"The owner assessing whether the import is protected by a kept backup before a store loss.\"}},{\"unit\":\"30_modules.md:`store`\",\"subject\":\"SQLite WAL companion files\",\"kind\":\"unowned file lifecycle\",\"text\":\"The store is put in write-ahead-log mode, but startup still removes “a file of that temporary name ... and no other file” and later removes “a store it made new” without saying whether SQLite's `-wal` and `-shm` companion files belong to either target.\",\"question\":\"Which module owns WAL and shared-memory companion files, and must startup, interrupted temporary-store cleanup, and failed-listener cleanup remove them or leave them?\",\"options\":[\"`store` treats the exact main-file companions as parts of the logical store and manages them with it\",\"the literal main database file is the only managed file and companions are left to SQLite\",\"another module owns cleanup of the companions\"],\"default_guess\":\"Have `store` treat the exact SQLite companion files of the configured or temporary database as parts of that logical store.\",\"witness\":{\"initial\":\"The configured store is absent and startup creates the temporary SQLite store in WAL mode.\",\"events\":[\"SQLite creates companion files for the temporary store.\",\"The process is interrupted, or a listener later fails after the temporary store is renamed.\",\"A later start performs the specified cleanup.\"],\"outcomes\":[\"An implementation reading “no other file” literally removes only the main temporary or final database and leaves the companion files.\",\"An implementation treating the companions as part of the store removes them too.\"],\"observer\":\"The owner inspecting the store directory, and the later startup that opens or recreates the store.\"}}]}",
+ "set_aside": [
+  {
+   "unit": "context: agreement of the earlier states' texts with this state",
+   "subject": "when an import reaches a backup",
+   "kind": "terminology contradiction",
+   "text": "A16 rule 10 says “the first kept backup whose snapshot begins after it committed”, while A18 rule 1 says the read transaction “fixes its snapshot by its first read”.",
+   "question": "Does “snapshot begins” in A16 mean the read transaction begins or the first read fixes its snapshot?",
+   "options": [
+    "the read transaction's beginning",
+    "the first audit-counter read that fixes the snapshot"
+   ],
+   "default_guess": "Treat “snapshot begins” as the first read that fixes the snapshot.",
+   "witness": {
+    "initial": "A backup read transaction has begun but has not read anything, and the import has not committed.",
+    "events": [
+     "`store` begins the backup's read transaction.",
+     "The owner import commits.",
+     "`store` first reads the audit counter, fixing a snapshot that contains the import.",
+     "The backup is checked and kept."
+    ],
+    "outcomes": [
+     "If the snapshot began with the transaction, this is not the first kept backup whose snapshot begins after the import, despite containing it.",
+     "If the snapshot began when the first read fixed it, this is the first qualifying backup and contains the import."
+    ],
+    "observer": "The owner assessing whether the import is protected by a kept backup before a store loss."
+   }
+  }
+ ]
+}

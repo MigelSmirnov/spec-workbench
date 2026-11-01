@@ -1,0 +1,57 @@
+{
+ "open_points": [
+  {
+   "unit": "30_modules.md:`store`",
+   "subject": "backup snapshot's first read of the audit counter",
+   "kind": "owner/dependency conflict",
+   "text": "`store` owns “the snapshot fixed by its first read, of the audit counter” and “the copy answers ... the last sequence number the audit counter it holds says”, but `audit_log` owns “the last sequence number its store ever wrote, for a backup's record”; `store` may know only earlier modules and therefore may not know `audit_log`.",
+   "question": "Which module owns and performs the snapshot-fixing read of the audit counter, and how may it do so without either moving audit-counter ownership into `store` or reversing the declared dependency direction?",
+   "options": [
+    "`store` knows the audit counter's representation and reads it directly",
+    "`audit_log` performs the first read on the backup connection supplied by `store`",
+    "`store` provides a generic snapshot-read mechanism that `audit_log` drives without either module knowing the other's internals"
+   ],
+   "default_guess": "Let `audit_log` supply the snapshot-fixing counter read through a store transaction abstraction.",
+   "witness": {
+    "initial": "The audit counter is 10 and the backup connection has not yet fixed its snapshot.",
+    "events": [
+     "`backups` starts a copy.",
+     "A concurrent action commits audit entry 11 between a separate counter read and the copy connection's first read."
+    ],
+    "outcomes": [
+     "An implementation letting `store` read the counter directly copies entry 11 and records counter 11, but makes `store` know a fact owned by the later `audit_log` module.",
+     "An implementation preserving ownership by asking `audit_log` for the counter before invoking `store.copy_store_snapshot` records 10 while the copy contains 11; the backup check then fails and no backup is kept."
+    ],
+    "observer": "The owner sees a kept backup in one implementation and a failed run with no new kept backup in the other."
+   }
+  },
+  {
+   "unit": "30_modules.md:Facts several modules touch, and their one owner",
+   "subject": "linearization of a backup's recorded instant with its snapshot",
+   "kind": "timing ambiguity",
+   "text": "“a backup's instant is the one `store` reads at the read that fixes the copy's snapshot” and “with the clock read then” do not say whether the clock is sampled before or after the SQLite read that fixes the snapshot; those operations cannot be one atomic read.",
+   "question": "What exact ordering and semantic boundary relates the clock sample to the snapshot-fixing audit-counter read when a write commits between them?",
+   "options": [
+    "Read the clock immediately before executing the snapshot-fixing database read",
+    "Execute the snapshot-fixing database read first and then read the clock",
+    "Define another explicit linearization rule that determines which concurrent commits may be on each side of the recorded instant"
+   ],
+   "default_guess": "Read the clock immediately after the snapshot-fixing read succeeds.",
+   "witness": {
+    "initial": "A backup connection has no snapshot yet, and action X is ready to commit.",
+    "events": [
+     "`store` begins the operation described as the read that fixes the snapshot.",
+     "Action X commits between the wall-clock sample and the SQLite audit-counter read."
+    ],
+    "outcomes": [
+     "If the clock is sampled first, the backup includes X even though X committed after the backup's recorded instant.",
+     "If the SQLite read occurs first, the backup excludes X even though X committed before the backup's recorded instant."
+    ],
+    "observer": "The owner comparing the backup record's instant with action X's audit instant, and later restoring that backup, sees the difference."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"30_modules.md:`store`\",\"subject\":\"backup snapshot's first read of the audit counter\",\"kind\":\"owner/dependency conflict\",\"text\":\"`store` owns “the snapshot fixed by its first read, of the audit counter” and “the copy answers ... the last sequence number the audit counter it holds says”, but `audit_log` owns “the last sequence number its store ever wrote, for a backup's record”; `store` may know only earlier modules and therefore may not know `audit_log`.\",\"question\":\"Which module owns and performs the snapshot-fixing read of the audit counter, and how may it do so without either moving audit-counter ownership into `store` or reversing the declared dependency direction?\",\"options\":[\"`store` knows the audit counter's representation and reads it directly\",\"`audit_log` performs the first read on the backup connection supplied by `store`\",\"`store` provides a generic snapshot-read mechanism that `audit_log` drives without either module knowing the other's internals\"],\"default_guess\":\"Let `audit_log` supply the snapshot-fixing counter read through a store transaction abstraction.\",\"witness\":{\"initial\":\"The audit counter is 10 and the backup connection has not yet fixed its snapshot.\",\"events\":[\"`backups` starts a copy.\",\"A concurrent action commits audit entry 11 between a separate counter read and the copy connection's first read.\"],\"outcomes\":[\"An implementation letting `store` read the counter directly copies entry 11 and records counter 11, but makes `store` know a fact owned by the later `audit_log` module.\",\"An implementation preserving ownership by asking `audit_log` for the counter before invoking `store.copy_store_snapshot` records 10 while the copy contains 11; the backup check then fails and no backup is kept.\"],\"observer\":\"The owner sees a kept backup in one implementation and a failed run with no new kept backup in the other.\"}},{\"unit\":\"30_modules.md:Facts several modules touch, and their one owner\",\"subject\":\"linearization of a backup's recorded instant with its snapshot\",\"kind\":\"timing ambiguity\",\"text\":\"“a backup's instant is the one `store` reads at the read that fixes the copy's snapshot” and “with the clock read then” do not say whether the clock is sampled before or after the SQLite read that fixes the snapshot; those operations cannot be one atomic read.\",\"question\":\"What exact ordering and semantic boundary relates the clock sample to the snapshot-fixing audit-counter read when a write commits between them?\",\"options\":[\"Read the clock immediately before executing the snapshot-fixing database read\",\"Execute the snapshot-fixing database read first and then read the clock\",\"Define another explicit linearization rule that determines which concurrent commits may be on each side of the recorded instant\"],\"default_guess\":\"Read the clock immediately after the snapshot-fixing read succeeds.\",\"witness\":{\"initial\":\"A backup connection has no snapshot yet, and action X is ready to commit.\",\"events\":[\"`store` begins the operation described as the read that fixes the snapshot.\",\"Action X commits between the wall-clock sample and the SQLite audit-counter read.\"],\"outcomes\":[\"If the clock is sampled first, the backup includes X even though X committed after the backup's recorded instant.\",\"If the SQLite read occurs first, the backup excludes X even though X committed before the backup's recorded instant.\"],\"observer\":\"The owner comparing the backup record's instant with action X's audit instant, and later restoring that backup, sees the difference.\"}}]}",
+ "set_aside": []
+}
