@@ -103,9 +103,7 @@ diagnostic.
    exist and its directory does, it makes a new, empty store of
    `capability:release_declarations.store_version_of_release` under the
    temporary name and renames it to the store's name once complete;
-   a new store is made in write-ahead-log mode (A18 rule 1); otherwise it
-   opens the store for reading and writing, puts it in that mode when it is
-   not — a store that cannot be put in it stops the start —, runs the full
+   otherwise it opens the store for reading and writing, runs the full
    integrity check and compares the store version with the release's (A17
    rule 5). A leftover it cannot remove while the store is absent, a store
    that does not open, fails the check or carries another version stops the
@@ -122,8 +120,7 @@ diagnostic.
    opened are closed, and a store step 3 made new is removed by
    `capability:store.discard_new_store` — one it cannot remove is an empty
    store of the release's version, which the next start opens as any store
-   (A17 rule 2). An existing store keeps its records as they were; a
-   write-ahead-log mode step 3 put it in stays (A17 rule 5).
+   (A17 rule 2). An existing store keeps its records as they were.
 5. **Serve.** Only now the surfaces answer:
    `capability:service_api.serve_service_request` and
    `capability:owner_interface.serve_owner_request`. An owner-only start
@@ -152,7 +149,7 @@ diagnostic.
 - The backup location missing or not writable — `module:backups`'
   diagnostic.
 - The store's temporary file not removable while the store is absent, the
-  store not opening, not put in write-ahead-log mode, failing the integrity check or of another version —
+  store not opening, failing the integrity check or of another version —
   `module:store`'s diagnostic.
 - A new store that cannot be made — `module:store`'s diagnostic; its
   temporary file removed, or left for the next start when it cannot be.
@@ -999,7 +996,8 @@ key; the kept name made from the instant.
    path `module:backups` named, and answers the last sequence number the
    audit counter holds — the read that fixes the snapshot — with the instant
    read from the clock at it (A18 rules 1, 2, A15 rule 5); the actions'
-   writes go on meanwhile and neither waits for the other. `module:backups` encrypts it into the backup, a second file
+   writes go on meanwhile, and neither is refused or fails for the other
+   (A18 rule 1). `module:backups` encrypts it into the backup, a second file
    under the temporary prefix, with the configured key, and removes the
    unencrypted copy before going on — a copy it cannot remove fails the run
    and is left, under the temporary prefix, for the next run's step 2; the
