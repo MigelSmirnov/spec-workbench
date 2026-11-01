@@ -420,7 +420,12 @@ integrity and version check of such a file, the decrypted copy included,
 opened for reading only. The copy answers, from its one read transaction, the
 instant of the read that fixed its snapshot and the last sequence number the audit
 counter it holds says (A15 rule 5), so a backup's record describes exactly its
-copy (A18 rule 1).
+copy (A18 rule 1). The counter is a value `audit_log` keeps through `store`,
+which holds it where the release's statements put it: `audit_log` alone
+decides when it moves and what it means (A15 rule 5), and `store` reads it as
+the copy's first read, and in a checked file, as it reads any stored value,
+deciding nothing about it — so the reading needs no call upward to
+`audit_log`.
 
 ### Knows
 
