@@ -1,0 +1,58 @@
+{
+ "open_points": [
+  {
+   "subject": "WAL sidecar-file lifecycle during a failed start",
+   "kind": "contradictory cleanup outcome",
+   "text": "“a write-ahead-log mode step 3 put it in stays” conflicts with the exhaustive outcome “no file left that the start made but one it could not remove — a probe, a file of the store's temporary name, or an empty store made new”",
+   "question": "After an existing store is switched to write-ahead-log mode and a later start step fails, are WAL-associated files left as part of the persistent mode or closed/checkpointed and removed before the stopped-start outcome is reached?",
+   "options": [
+    "Leave WAL-associated files while retaining the WAL mode",
+    "Close and checkpoint the store so WAL-associated files are removed while the database remains configured for WAL mode",
+    "Treat WAL-associated files as additional permitted leftovers and state their cleanup on the next start"
+   ],
+   "default_guess": "Close and checkpoint all store connections on failure, remove transient WAL-associated files, and retain the WAL setting in the main database.",
+   "witness": {
+    "initial": "An existing valid store is not in write-ahead-log mode and has no WAL-associated files.",
+    "events": [
+     "The host starts Registry.",
+     "module:store opens the store and switches it to write-ahead-log mode.",
+     "module:instance_lifecycle fails to open a listener and stops the start."
+    ],
+    "outcomes": [
+     "The main database remains configured for WAL mode, but clean closure removes the WAL-associated files, matching the exhaustive stopped-start file outcome.",
+     "The WAL-associated files remain as artifacts of the persistent mode, matching the statement that the mode stays but leaving files outside the exhaustive stopped-start outcome."
+    ],
+    "observer": "The owner inspecting the store directory, and the next start that encounters those files."
+   },
+   "unit": "40_flows.md:`flow:start_instance`"
+  },
+  {
+   "subject": "Linearization of a backup snapshot's recorded instant",
+   "kind": "missing operation ordering",
+   "text": "“the read that fixes the snapshot — with the instant read from the clock at it” and “the actions' writes go on meanwhile and neither waits for the other” do not order the clock read against the database read that fixes the snapshot",
+   "question": "What exact linearization rule binds the clock reading to the first audit-counter read when a write can commit between those two primitive operations?",
+   "options": [
+    "Read the clock immediately before the first database read and use that value",
+    "Fix the database snapshot first and read the clock immediately afterward",
+    "Provide one explicitly defined combined operation and state on which side of a concurrent commit its instant lies"
+   ],
+   "default_guess": "Read the clock immediately before issuing the first audit-counter read and define that clock reading as the snapshot instant.",
+   "witness": {
+    "initial": "The audit counter is 10, and an action transaction that will advance it to 11 is ready to commit while a backup begins.",
+    "events": [
+     "module:store starts copy_store_snapshot.",
+     "The backup obtains its clock value and performs its first audit-counter read, while the action commits between those two operations."
+    ],
+    "outcomes": [
+     "With clock-first ordering, the snapshot can include counter 11 while carrying an instant obtained before that commit.",
+     "With database-read-first ordering, the snapshot can hold counter 10 while carrying an instant obtained after the action committed."
+    ],
+    "observer": "The owner comparing the backup's readable metadata with the records present after restoring it."
+   },
+   "unit": "40_flows.md:`flow:daily_backup`"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"WAL sidecar-file lifecycle during a failed start\",\"kind\":\"contradictory cleanup outcome\",\"text\":\"“a write-ahead-log mode step 3 put it in stays” conflicts with the exhaustive outcome “no file left that the start made but one it could not remove — a probe, a file of the store's temporary name, or an empty store made new”\",\"question\":\"After an existing store is switched to write-ahead-log mode and a later start step fails, are WAL-associated files left as part of the persistent mode or closed/checkpointed and removed before the stopped-start outcome is reached?\",\"options\":[\"Leave WAL-associated files while retaining the WAL mode\",\"Close and checkpoint the store so WAL-associated files are removed while the database remains configured for WAL mode\",\"Treat WAL-associated files as additional permitted leftovers and state their cleanup on the next start\"],\"default_guess\":\"Close and checkpoint all store connections on failure, remove transient WAL-associated files, and retain the WAL setting in the main database.\",\"witness\":{\"initial\":\"An existing valid store is not in write-ahead-log mode and has no WAL-associated files.\",\"events\":[\"The host starts Registry.\",\"module:store opens the store and switches it to write-ahead-log mode.\",\"module:instance_lifecycle fails to open a listener and stops the start.\"],\"outcomes\":[\"The main database remains configured for WAL mode, but clean closure removes the WAL-associated files, matching the exhaustive stopped-start file outcome.\",\"The WAL-associated files remain as artifacts of the persistent mode, matching the statement that the mode stays but leaving files outside the exhaustive stopped-start outcome.\"],\"observer\":\"The owner inspecting the store directory, and the next start that encounters those files.\"},\"unit\":\"40_flows.md:`flow:start_instance`\"},{\"subject\":\"Linearization of a backup snapshot's recorded instant\",\"kind\":\"missing operation ordering\",\"text\":\"“the read that fixes the snapshot — with the instant read from the clock at it” and “the actions' writes go on meanwhile and neither waits for the other” do not order the clock read against the database read that fixes the snapshot\",\"question\":\"What exact linearization rule binds the clock reading to the first audit-counter read when a write can commit between those two primitive operations?\",\"options\":[\"Read the clock immediately before the first database read and use that value\",\"Fix the database snapshot first and read the clock immediately afterward\",\"Provide one explicitly defined combined operation and state on which side of a concurrent commit its instant lies\"],\"default_guess\":\"Read the clock immediately before issuing the first audit-counter read and define that clock reading as the snapshot instant.\",\"witness\":{\"initial\":\"The audit counter is 10, and an action transaction that will advance it to 11 is ready to commit while a backup begins.\",\"events\":[\"module:store starts copy_store_snapshot.\",\"The backup obtains its clock value and performs its first audit-counter read, while the action commits between those two operations.\"],\"outcomes\":[\"With clock-first ordering, the snapshot can include counter 11 while carrying an instant obtained before that commit.\",\"With database-read-first ordering, the snapshot can hold counter 10 while carrying an instant obtained after the action committed.\"],\"observer\":\"The owner comparing the backup's readable metadata with the records present after restoring it.\"},\"unit\":\"40_flows.md:`flow:daily_backup`\"}]}",
+ "set_aside": []
+}
