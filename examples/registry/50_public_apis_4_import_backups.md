@@ -43,7 +43,9 @@ malformed record of the picks, every id of a record the picks bring in that
 production already holds — no other production id — and every missing
 value; and whether the mapping is clean — no malformed record, no conflict,
 no missing value and at least one pick — which alone lets the confirmation
-step be shown. A mapping of no pick is not clean (`no_picks`): an import of
+step be shown. Each malformed record is named by its kind and id, with
+every rule 4 defect it has; an id that occurs twice names every record that
+carries it, each with the defect. A mapping of no pick is not clean (`no_picks`): an import of
 nothing is not confirmed.
 
 ### Observable effect
