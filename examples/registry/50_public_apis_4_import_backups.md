@@ -23,7 +23,10 @@ The read transaction; the mode, `upload` or `mapping`; the file's bytes;
 for `mapping`, the picks as the owner gave them, a list that keeps a
 project given twice so it can be refused — possibly empty — each with the display name and
 alias it arrives under, and for each Customer the import will make its
-name, its kind and whether the v1 value is its tax id.
+name, its kind and whether the v1 value is its tax id, keyed by that v1
+value: one entry for each v1 value the picks bring in — none missing, none
+for a v1 value no pick brings (`outside_closed_list`), none twice
+(`duplicate_pick`).
 
 ### Outputs
 
@@ -109,10 +112,11 @@ their pointers' publisher, and the Customers made at the action's instant.
 ### Enforces
 
 The closure first and alone: when it exists, `import_closed` is the answer
-(rule 8; Conventions, "Stages"). Otherwise every stage (6) failure is
-answered together: the upload the confirmation bound — that session's
-upload of that number, not merely bytes of that digest — is no longer kept,
-its digest computed again from the kept bytes (rule 2); the picks checked
+(rule 8; Conventions, "Stages"). Then the upload the confirmation bound —
+that session's upload of that number, not merely bytes of that digest: when
+it is no longer kept, `file_not_kept` is answered alone, there being no
+bytes to check again (rule 2). Otherwise every other stage (6) failure is
+answered together, the kept bytes' digest computed again: the picks checked
 again — any conflict, malformed record or missing value, or no pick at all
 — refuse the whole import (rule 6); the values the confirmation bound and nothing else;
 the projects link to the Customers it makes (R0-80).

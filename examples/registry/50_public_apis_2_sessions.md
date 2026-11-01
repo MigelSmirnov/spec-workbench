@@ -92,7 +92,14 @@ session's lock, and both are held until the request is done (A16 rule 2);
 a change passes the session check and takes its place on the session's lock
 in one step, the lock granted in the order places were taken, so its changes
 apply one at a time in the one order in which they passed the check and took
-the lock (A13 rule 2); a request that
+the lock (A13 rule 2). A request that reads or changes an uploaded file
+first waits for the import lock, and only holding it passes the session
+check and takes its place on the session's lock: its arrival for the check
+is when it holds the import lock, so the two locks are always taken import
+first and no request holds a place on a session's lock while it waits for
+the import lock (A16 rule 2). A sign-out is such a request: a second
+sign-out of a session that the first ended while the second waited fails
+the check (`no_owner_session`). A request that
 passed completes even if a limit or a sign-out comes while it runs (A13
 rule 2).
 
@@ -122,9 +129,9 @@ The admitted session: the step of a sign-out request, which
 
 ### Outputs
 
-That the session ended, with `changed: true`; a second sign-out admitted
-before the first ended it finds it ended in its turn and answers that it
-ended with `changed: false`.
+That the session ended. A second sign-out never finds it ended: it passes
+the session check only once it holds the import lock, after the first
+released it, and is refused there (`admit_owner_request`).
 
 ### Observable effect
 
