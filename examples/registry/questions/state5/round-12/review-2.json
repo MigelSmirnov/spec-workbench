@@ -1,0 +1,132 @@
+{
+ "open_points": [
+  {
+   "unit": "50_public_apis_2_sessions.md:`public_op:owner_sessions.admit_owner_request`",
+   "subject": "concurrent sign-out admission",
+   "kind": "atomicity gap",
+   "text": "“Every request is checked at its arrival, and only then” and “A sign-out's admission marks the session signed out at once”, while the session's lock is taken only later, after the import lock",
+   "question": "What serializes the session-validity check with the immediate signed-out mark, so that two concurrent sign-outs or a sign-out and another arrival cannot both pass the check?",
+   "options": [
+    "The check and signed-out mark are one atomic admission step under a separate admission guard",
+    "The sign-out mark waits for the session lock, despite being described as immediate",
+    "Concurrent arrivals may both pass before either mark becomes visible"
+   ],
+   "default_guess": "Make the validity check and signed-out mark atomic with a per-session admission guard distinct from the ordered session lock.",
+   "witness": {
+    "initial": "One valid owner session with no request running.",
+    "events": [
+     "Two browser tabs submit valid sign-out requests concurrently.",
+     "Both calls enter owner_sessions.admit_owner_request before either has obtained the import lock or the session lock."
+    ],
+    "outcomes": [
+     "One admission atomically marks the session signed out; the other is refused with no_owner_session, as the second-sign-out sentence requires.",
+     "Both session checks observe the session as valid and both sign-outs are admitted; each later runs its step."
+    ],
+    "observer": "The two browser tabs, which see either one success and one refusal or two successes."
+   }
+  },
+  {
+   "unit": "50_public_apis_0_conventions.md:Closed set of refusal codes",
+   "subject": "duplicate Customer mapping inputs",
+   "kind": "representation contradiction",
+   "text": "“duplicate_pick — a project, or a Customer's v1 value, given twice” conflicts with read_import_mapping's input “keyed by that v1 value: at most one entry for each v1 value”",
+   "question": "Must the abstract operation input preserve repeated Customer-value entries so duplicate_pick can be produced, or are duplicates eliminated or rejected before read_import_mapping is called?",
+   "options": [
+    "Accept an ordered list of Customer entries and let read_import_mapping report duplicate_pick",
+    "Accept a unique-key mapping, making Customer duplicate_pick unreachable inside this operation",
+    "Have the surface reject duplicate keys as a wire-format failure before the operation"
+   ],
+   "default_guess": "Use a list that preserves duplicates and let read_import_mapping return duplicate_pick.",
+   "witness": {
+    "initial": "An uploaded file has one picked project referring to v1 customer value C.",
+    "events": [
+     "The owner submission supplies two Customer mapping entries for C with different names.",
+     "The surface decodes the submission and calls read_import_mapping."
+    ],
+    "outcomes": [
+     "Both entries reach the operation and it refuses duplicate_pick.",
+     "The keyed input retains only one entry, so the mapping proceeds using either the first or last value, or the surface refuses before the operation."
+    ],
+    "observer": "The owner sees duplicate_pick, a clean or dirty mapping using one value, or a wire-format refusal."
+   }
+  },
+  {
+   "unit": "50_public_apis_4_import_backups.md:`public_op:migration_import.read_import_mapping`",
+   "subject": "upload listing of an out-of-vocabulary project status",
+   "kind": "output gap",
+   "text": "“a status outside its vocabulary is not [file_malformed], but a malformed record of a pick” while upload output is “each project the file holds with its id and status”",
+   "question": "What does upload mode output for a project whose status parses in the file's field shape but is outside the Project status vocabulary, before the owner has made any picks?",
+   "options": [
+    "Return the raw status text despite it not being a Project-status value",
+    "Return the project with a separate invalid-status marker instead of a status value",
+    "Refuse the upload, contrary to the distinction that such a status is only a malformed record of a pick"
+   ],
+   "default_guess": "Return the raw status text and mark it malformed only if the project is picked.",
+   "witness": {
+    "initial": "The migration is open and the owner has a valid session with no prior upload.",
+    "events": [
+     "The owner uploads a syntactically readable export containing project P with status paused.",
+     "No projects have yet been picked."
+    ],
+    "outcomes": [
+     "Upload succeeds and lists P with the raw status paused.",
+     "Upload cannot construct its declared project-status output and either refuses the file or substitutes/marks the status."
+    ],
+    "observer": "The owner viewing the upload result."
+   }
+  },
+  {
+   "unit": "50_public_apis_4_import_backups.md:`public_op:migration_import.confirm_import`",
+   "subject": "empty-pick confirmation refusal",
+   "kind": "error aggregation gap",
+   "text": "“every other stage (6) failure is answered together” and “no pick at all” while Errors lists both `mapping_not_clean` and `no_picks`, and the mapping defines no picks as not clean",
+   "question": "When confirmation has an empty pick list and no closure or file problem, does the refusal contain only no_picks, only mapping_not_clean, or both kinds?",
+   "options": [
+    "Return only no_picks as the specific failure",
+    "Return both mapping_not_clean and no_picks because every stage-(6) failure is collected",
+    "Return only mapping_not_clean because an empty mapping is not clean"
+   ],
+   "default_guess": "Return only no_picks, treating mapping_not_clean as the aggregate kind for record, conflict, or missing-value failures.",
+   "witness": {
+    "initial": "The import is open; the bound upload is still kept and valid.",
+    "events": [
+     "The owner obtains a confirmation bound to an empty pick list, or submits such a bound confirmation if the operation is called directly.",
+     "operations calls confirm_import."
+    ],
+    "outcomes": [
+     "The refusal contains one kind: no_picks.",
+     "The refusal contains mapping_not_clean as well as no_picks, or mapping_not_clean alone."
+    ],
+    "observer": "The owner interface and any test asserting the exact closed refusal list."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "store transaction used by upload and import confirmation-step requests",
+   "kind": "cross-text contradiction",
+   "text": "The change says an upload and the import's confirmation step “read it in one read transaction through store.read_in_transaction”, while operations.perform_owner_operation says “The transaction through store.run_in_transaction” and “One transaction per change”",
+   "question": "Must these runtime-changing owner requests use a read transaction or a write transaction for their closure check?",
+   "options": [
+    "Use store.read_in_transaction while the import/session locks protect the runtime mutation",
+    "Use store.run_in_transaction because the owner request changes runtime state",
+    "Use a read transaction for the closure check followed by a separate runtime step, and explicitly exempt it from perform_owner_operation's write-transaction statement"
+   ],
+   "default_guess": "Use one read transaction for the closure check while retaining the import and session locks through the runtime mutation.",
+   "witness": {
+    "initial": "The import is open; owner session A uploads a valid file while an unrelated store-changing owner request is ready.",
+    "events": [
+     "Session A's upload is admitted and checks the migration closure.",
+     "The unrelated request attempts to begin its store write transaction."
+    ],
+    "outcomes": [
+     "The upload uses a read transaction and may overlap the unrelated writer under the configured reader/writer behavior.",
+     "The upload takes the one write lock through run_in_transaction, serializing and delaying the unrelated store change."
+    ],
+    "observer": "The callers observe different completion order and blocking behavior."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"50_public_apis_2_sessions.md:`public_op:owner_sessions.admit_owner_request`\",\"subject\":\"concurrent sign-out admission\",\"kind\":\"atomicity gap\",\"text\":\"“Every request is checked at its arrival, and only then” and “A sign-out's admission marks the session signed out at once”, while the session's lock is taken only later, after the import lock\",\"question\":\"What serializes the session-validity check with the immediate signed-out mark, so that two concurrent sign-outs or a sign-out and another arrival cannot both pass the check?\",\"options\":[\"The check and signed-out mark are one atomic admission step under a separate admission guard\",\"The sign-out mark waits for the session lock, despite being described as immediate\",\"Concurrent arrivals may both pass before either mark becomes visible\"],\"default_guess\":\"Make the validity check and signed-out mark atomic with a per-session admission guard distinct from the ordered session lock.\",\"witness\":{\"initial\":\"One valid owner session with no request running.\",\"events\":[\"Two browser tabs submit valid sign-out requests concurrently.\",\"Both calls enter owner_sessions.admit_owner_request before either has obtained the import lock or the session lock.\"],\"outcomes\":[\"One admission atomically marks the session signed out; the other is refused with no_owner_session, as the second-sign-out sentence requires.\",\"Both session checks observe the session as valid and both sign-outs are admitted; each later runs its step.\"],\"observer\":\"The two browser tabs, which see either one success and one refusal or two successes.\"}},{\"unit\":\"50_public_apis_0_conventions.md:Closed set of refusal codes\",\"subject\":\"duplicate Customer mapping inputs\",\"kind\":\"representation contradiction\",\"text\":\"“duplicate_pick — a project, or a Customer's v1 value, given twice” conflicts with read_import_mapping's input “keyed by that v1 value: at most one entry for each v1 value”\",\"question\":\"Must the abstract operation input preserve repeated Customer-value entries so duplicate_pick can be produced, or are duplicates eliminated or rejected before read_import_mapping is called?\",\"options\":[\"Accept an ordered list of Customer entries and let read_import_mapping report duplicate_pick\",\"Accept a unique-key mapping, making Customer duplicate_pick unreachable inside this operation\",\"Have the surface reject duplicate keys as a wire-format failure before the operation\"],\"default_guess\":\"Use a list that preserves duplicates and let read_import_mapping return duplicate_pick.\",\"witness\":{\"initial\":\"An uploaded file has one picked project referring to v1 customer value C.\",\"events\":[\"The owner submission supplies two Customer mapping entries for C with different names.\",\"The surface decodes the submission and calls read_import_mapping.\"],\"outcomes\":[\"Both entries reach the operation and it refuses duplicate_pick.\",\"The keyed input retains only one entry, so the mapping proceeds using either the first or last value, or the surface refuses before the operation.\"],\"observer\":\"The owner sees duplicate_pick, a clean or dirty mapping using one value, or a wire-format refusal.\"}},{\"unit\":\"50_public_apis_4_import_backups.md:`public_op:migration_import.read_import_mapping`\",\"subject\":\"upload listing of an out-of-vocabulary project status\",\"kind\":\"output gap\",\"text\":\"“a status outside its vocabulary is not [file_malformed], but a malformed record of a pick” while upload output is “each project the file holds with its id and status”\",\"question\":\"What does upload mode output for a project whose status parses in the file's field shape but is outside the Project status vocabulary, before the owner has made any picks?\",\"options\":[\"Return the raw status text despite it not being a Project-status value\",\"Return the project with a separate invalid-status marker instead of a status value\",\"Refuse the upload, contrary to the distinction that such a status is only a malformed record of a pick\"],\"default_guess\":\"Return the raw status text and mark it malformed only if the project is picked.\",\"witness\":{\"initial\":\"The migration is open and the owner has a valid session with no prior upload.\",\"events\":[\"The owner uploads a syntactically readable export containing project P with status paused.\",\"No projects have yet been picked.\"],\"outcomes\":[\"Upload succeeds and lists P with the raw status paused.\",\"Upload cannot construct its declared project-status output and either refuses the file or substitutes/marks the status.\"],\"observer\":\"The owner viewing the upload result.\"}},{\"unit\":\"50_public_apis_4_import_backups.md:`public_op:migration_import.confirm_import`\",\"subject\":\"empty-pick confirmation refusal\",\"kind\":\"error aggregation gap\",\"text\":\"“every other stage (6) failure is answered together” and “no pick at all” while Errors lists both `mapping_not_clean` and `no_picks`, and the mapping defines no picks as not clean\",\"question\":\"When confirmation has an empty pick list and no closure or file problem, does the refusal contain only no_picks, only mapping_not_clean, or both kinds?\",\"options\":[\"Return only no_picks as the specific failure\",\"Return both mapping_not_clean and no_picks because every stage-(6) failure is collected\",\"Return only mapping_not_clean because an empty mapping is not clean\"],\"default_guess\":\"Return only no_picks, treating mapping_not_clean as the aggregate kind for record, conflict, or missing-value failures.\",\"witness\":{\"initial\":\"The import is open; the bound upload is still kept and valid.\",\"events\":[\"The owner obtains a confirmation bound to an empty pick list, or submits such a bound confirmation if the operation is called directly.\",\"operations calls confirm_import.\"],\"outcomes\":[\"The refusal contains one kind: no_picks.\",\"The refusal contains mapping_not_clean as well as no_picks, or mapping_not_clean alone.\"],\"observer\":\"The owner interface and any test asserting the exact closed refusal list.\"}},{\"unit\":\"context\",\"subject\":\"store transaction used by upload and import confirmation-step requests\",\"kind\":\"cross-text contradiction\",\"text\":\"The change says an upload and the import's confirmation step “read it in one read transaction through store.read_in_transaction”, while operations.perform_owner_operation says “The transaction through store.run_in_transaction” and “One transaction per change”\",\"question\":\"Must these runtime-changing owner requests use a read transaction or a write transaction for their closure check?\",\"options\":[\"Use store.read_in_transaction while the import/session locks protect the runtime mutation\",\"Use store.run_in_transaction because the owner request changes runtime state\",\"Use a read transaction for the closure check followed by a separate runtime step, and explicitly exempt it from perform_owner_operation's write-transaction statement\"],\"default_guess\":\"Use one read transaction for the closure check while retaining the import and session locks through the runtime mutation.\",\"witness\":{\"initial\":\"The import is open; owner session A uploads a valid file while an unrelated store-changing owner request is ready.\",\"events\":[\"Session A's upload is admitted and checks the migration closure.\",\"The unrelated request attempts to begin its store write transaction.\"],\"outcomes\":[\"The upload uses a read transaction and may overlap the unrelated writer under the configured reader/writer behavior.\",\"The upload takes the one write lock through run_in_transaction, serializing and delaying the unrelated store change.\"],\"observer\":\"The callers observe different completion order and blocking behavior.\"}}]}",
+ "set_aside": []
+}

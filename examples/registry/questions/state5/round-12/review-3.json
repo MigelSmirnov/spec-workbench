@@ -1,0 +1,104 @@
+{
+ "open_points": [
+  {
+   "unit": "50_public_apis_2_sessions.md:`public_op:owner_sessions.admit_owner_request`",
+   "subject": "sign-out admission and session-lock ordering",
+   "kind": "contradictory effect ordering",
+   "text": "“A sign-out's admission marks the session signed out at once” conflicts with A13 rule 2's rule that requests changing session state, including sign-out, “are applied one at a time, in the order in which they take the session's one lock.”",
+   "question": "Does sign-out make the session fail later arrival checks immediately after admission, before acquiring its locks, or only when its step obtains the session lock?",
+   "options": [
+    "Admission immediately marks the session signed out, while cleanup waits for the sign-out step's lock turn.",
+    "The session remains valid until the sign-out step obtains the session lock and applies the sign-out.",
+    "Admission sets a separate closing state that refuses later arrivals, while the signed-out state itself is applied under the lock."
+   ],
+   "default_guess": "Use a separate closing state at admission, refuse later arrivals, and perform termination and cleanup in the locked step.",
+   "witness": {
+    "initial": "Owner session S is valid and another request is holding the import lock, so a sign-out cannot yet take its session-lock place.",
+    "events": [
+     "The owner submits a valid sign-out for S; it passes the arrival and CSRF checks and waits for the import lock.",
+     "Before the sign-out obtains either lock, the browser sends a read using S."
+    ],
+    "outcomes": [
+     "Under the immediate-mark passage, the read is refused because S is already marked signed out.",
+     "Under the rule that sign-out's session-state change is applied in its lock turn, the read passes its arrival check and completes before the sign-out step applies."
+    ],
+    "observer": "The owner sees either the requested page or the sign-in page."
+   }
+  },
+  {
+   "unit": "50_public_apis_2_sessions.md:`public_op:owner_sessions.admit_owner_request`",
+   "subject": "classification of confirmation requests as touching an uploaded file",
+   "kind": "ambiguous lock scope",
+   "text": "“whether it reads or changes an uploaded file — an upload, the mapping, the import's confirmation step, a confirmation, a sign-out” does not say whether “a confirmation” means only confirmation of an import or every confirmed owner action.",
+   "question": "Which confirmation submissions must take the import lock before the session lock?",
+   "options": [
+    "Only import confirmation submissions touch the uploaded file and take the import lock.",
+    "Every confirmation submission, including archive, project erasure and audit erasure, takes the import lock.",
+    "Only confirmations whose bound inputs explicitly contain an upload number take the import lock."
+   ],
+   "default_guess": "Treat only the import confirmation as touching an uploaded file.",
+   "witness": {
+    "initial": "Session A is running a long import mapping while holding the instance import lock; session B has a pending confirmation for archiving a project.",
+    "events": [
+     "The owner submits the archive confirmation in session B while session A still holds the import lock."
+    ],
+    "outcomes": [
+     "If every confirmation is covered, the archive waits for the import lock before taking B's session lock.",
+     "If only import confirmation is covered, the archive takes B's session lock immediately and can commit while the mapping continues."
+    ],
+    "observer": "The owner sees when the archive completes and concurrent requests can observe whether the project has already become archived."
+   }
+  },
+  {
+   "unit": "50_public_apis_0_conventions.md:Closed set of refusal codes",
+   "subject": "duplicate Customer mapping entries",
+   "kind": "unrepresentable validation input",
+   "text": "The new kind says “`duplicate_pick` — a project, or a Customer's v1 value, given twice,” while `read_import_mapping` describes Customer values as “keyed by that v1 value: at most one entry for each v1 value” and also says one given twice is refused.",
+   "question": "In what operation input representation are two entries for the same Customer v1 value preserved so that `duplicate_pick` can be produced, and which layer detects the duplicate before any keyed representation collapses it?",
+   "options": [
+    "The operation receives an ordered list of Customer-value entries and detects duplicate keys itself.",
+    "The surface detects duplicates in the submitted wire fields and passes a duplicate failure to the operation.",
+    "The operation receives a keyed map, so duplicate Customer entries cannot reach it and `duplicate_pick` applies only to project picks."
+   ],
+   "default_guess": "Pass an ordered list to the operation and reject repeated v1 values before constructing a keyed mapping.",
+   "witness": {
+    "initial": "An accepted upload contains two picked projects that both name v1 Customer value C.",
+    "events": [
+     "The owner submits the mapping form with two Customer-value entries keyed by C, carrying different names or kinds."
+    ],
+    "outcomes": [
+     "A list-preserving implementation observes both entries and refuses `duplicate_pick`.",
+     "A keyed-map implementation collapses them, keeps either the first or last entry, and proceeds without the duplicate refusal."
+    ],
+    "observer": "The owner sees either a duplicate refusal or a mapping containing one silently selected Customer value."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "transaction used by upload and import confirmation-step requests",
+   "kind": "transaction contradiction",
+   "text": "The changed State 3 passage says an upload and the import's confirmation step “read it in one read transaction through `store.read_in_transaction`,” while `operations.perform_owner_operation` says “The transaction through `store.run_in_transaction`” without excluding these runtime-state changes.",
+   "question": "Must upload and import-confirmation-step requests use `store.read_in_transaction`, `store.run_in_transaction`, or a read transaction followed by some separate runtime-only step?",
+   "options": [
+    "Use one read transaction for the closure check and perform the session mutation under the owner-session locks after that read.",
+    "Use a write transaction for the whole request even though it changes no store record.",
+    "Use no store transaction and inspect closure through another store capability."
+   ],
+   "default_guess": "Use one read transaction for the closure check while holding the owner-request locks, then apply the runtime session change before releasing those locks.",
+   "witness": {
+    "initial": "An unrelated store-changing action holds the store's one write lock; no migration closure exists, and the owner has a valid session.",
+    "events": [
+     "The owner uploads a valid import file while the unrelated write remains open."
+    ],
+    "outcomes": [
+     "With `read_in_transaction`, the upload may perform its closure read concurrently where the store permits readers beside the writer and then keep the upload.",
+     "With `run_in_transaction`, the upload queues for the one write lock even though it changes no store record."
+    ],
+    "observer": "The owner sees whether the upload and mapping answer is delayed behind the unrelated write; other concurrent requests also observe when the session begins holding the new upload."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"50_public_apis_2_sessions.md:`public_op:owner_sessions.admit_owner_request`\",\"subject\":\"sign-out admission and session-lock ordering\",\"kind\":\"contradictory effect ordering\",\"text\":\"“A sign-out's admission marks the session signed out at once” conflicts with A13 rule 2's rule that requests changing session state, including sign-out, “are applied one at a time, in the order in which they take the session's one lock.”\",\"question\":\"Does sign-out make the session fail later arrival checks immediately after admission, before acquiring its locks, or only when its step obtains the session lock?\",\"options\":[\"Admission immediately marks the session signed out, while cleanup waits for the sign-out step's lock turn.\",\"The session remains valid until the sign-out step obtains the session lock and applies the sign-out.\",\"Admission sets a separate closing state that refuses later arrivals, while the signed-out state itself is applied under the lock.\"],\"default_guess\":\"Use a separate closing state at admission, refuse later arrivals, and perform termination and cleanup in the locked step.\",\"witness\":{\"initial\":\"Owner session S is valid and another request is holding the import lock, so a sign-out cannot yet take its session-lock place.\",\"events\":[\"The owner submits a valid sign-out for S; it passes the arrival and CSRF checks and waits for the import lock.\",\"Before the sign-out obtains either lock, the browser sends a read using S.\"],\"outcomes\":[\"Under the immediate-mark passage, the read is refused because S is already marked signed out.\",\"Under the rule that sign-out's session-state change is applied in its lock turn, the read passes its arrival check and completes before the sign-out step applies.\"],\"observer\":\"The owner sees either the requested page or the sign-in page.\"}},{\"unit\":\"50_public_apis_2_sessions.md:`public_op:owner_sessions.admit_owner_request`\",\"subject\":\"classification of confirmation requests as touching an uploaded file\",\"kind\":\"ambiguous lock scope\",\"text\":\"“whether it reads or changes an uploaded file — an upload, the mapping, the import's confirmation step, a confirmation, a sign-out” does not say whether “a confirmation” means only confirmation of an import or every confirmed owner action.\",\"question\":\"Which confirmation submissions must take the import lock before the session lock?\",\"options\":[\"Only import confirmation submissions touch the uploaded file and take the import lock.\",\"Every confirmation submission, including archive, project erasure and audit erasure, takes the import lock.\",\"Only confirmations whose bound inputs explicitly contain an upload number take the import lock.\"],\"default_guess\":\"Treat only the import confirmation as touching an uploaded file.\",\"witness\":{\"initial\":\"Session A is running a long import mapping while holding the instance import lock; session B has a pending confirmation for archiving a project.\",\"events\":[\"The owner submits the archive confirmation in session B while session A still holds the import lock.\"],\"outcomes\":[\"If every confirmation is covered, the archive waits for the import lock before taking B's session lock.\",\"If only import confirmation is covered, the archive takes B's session lock immediately and can commit while the mapping continues.\"],\"observer\":\"The owner sees when the archive completes and concurrent requests can observe whether the project has already become archived.\"}},{\"unit\":\"50_public_apis_0_conventions.md:Closed set of refusal codes\",\"subject\":\"duplicate Customer mapping entries\",\"kind\":\"unrepresentable validation input\",\"text\":\"The new kind says “`duplicate_pick` — a project, or a Customer's v1 value, given twice,” while `read_import_mapping` describes Customer values as “keyed by that v1 value: at most one entry for each v1 value” and also says one given twice is refused.\",\"question\":\"In what operation input representation are two entries for the same Customer v1 value preserved so that `duplicate_pick` can be produced, and which layer detects the duplicate before any keyed representation collapses it?\",\"options\":[\"The operation receives an ordered list of Customer-value entries and detects duplicate keys itself.\",\"The surface detects duplicates in the submitted wire fields and passes a duplicate failure to the operation.\",\"The operation receives a keyed map, so duplicate Customer entries cannot reach it and `duplicate_pick` applies only to project picks.\"],\"default_guess\":\"Pass an ordered list to the operation and reject repeated v1 values before constructing a keyed mapping.\",\"witness\":{\"initial\":\"An accepted upload contains two picked projects that both name v1 Customer value C.\",\"events\":[\"The owner submits the mapping form with two Customer-value entries keyed by C, carrying different names or kinds.\"],\"outcomes\":[\"A list-preserving implementation observes both entries and refuses `duplicate_pick`.\",\"A keyed-map implementation collapses them, keeps either the first or last entry, and proceeds without the duplicate refusal.\"],\"observer\":\"The owner sees either a duplicate refusal or a mapping containing one silently selected Customer value.\"}},{\"unit\":\"context\",\"subject\":\"transaction used by upload and import confirmation-step requests\",\"kind\":\"transaction contradiction\",\"text\":\"The changed State 3 passage says an upload and the import's confirmation step “read it in one read transaction through `store.read_in_transaction`,” while `operations.perform_owner_operation` says “The transaction through `store.run_in_transaction`” without excluding these runtime-state changes.\",\"question\":\"Must upload and import-confirmation-step requests use `store.read_in_transaction`, `store.run_in_transaction`, or a read transaction followed by some separate runtime-only step?\",\"options\":[\"Use one read transaction for the closure check and perform the session mutation under the owner-session locks after that read.\",\"Use a write transaction for the whole request even though it changes no store record.\",\"Use no store transaction and inspect closure through another store capability.\"],\"default_guess\":\"Use one read transaction for the closure check while holding the owner-request locks, then apply the runtime session change before releasing those locks.\",\"witness\":{\"initial\":\"An unrelated store-changing action holds the store's one write lock; no migration closure exists, and the owner has a valid session.\",\"events\":[\"The owner uploads a valid import file while the unrelated write remains open.\"],\"outcomes\":[\"With `read_in_transaction`, the upload may perform its closure read concurrently where the store permits readers beside the writer and then keep the upload.\",\"With `run_in_transaction`, the upload queues for the one write lock even though it changes no store record.\"],\"observer\":\"The owner sees whether the upload and mapping answer is delayed behind the unrelated write; other concurrent requests also observe when the session begins holding the new upload.\"}}]}",
+ "set_aside": []
+}
