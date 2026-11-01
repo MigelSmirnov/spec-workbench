@@ -155,7 +155,8 @@ diagnostic.
   temporary file removed, or left for the next start when it cannot be.
 - A listener that cannot be opened — `module:instance_lifecycle`'s
   diagnostic; the listeners already opened closed, a store made new by this
-  start removed by `module:store`.
+  start removed by `module:store` — or, when that removal fails, left as an
+  empty store of the release's version (A17 rule 2).
 - Every failure stops the start before anything is served; no failure is
   retried by Registry. A store that fails is never replaced or migrated by the
   start.
