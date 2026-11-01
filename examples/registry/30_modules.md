@@ -274,7 +274,9 @@ and their highest classes; the store version; the store's temporary-name
 suffix (A17 rule 5); the kept and temporary backup prefixes, neither beginning
 with the other (A18 rule 5); the import file's size limit (A19 rule 4, its
 value State 6's); the release's own version and its contract version: every
-audit entry names both (M09), a backup's record the release (A18 rule 1).
+audit entry names both (M09), a backup's record the release (A18 rule 1); the
+address each surface listens on, which the configuration does not name (A17
+rules 1, 2).
 
 ### Knows
 
@@ -299,6 +301,7 @@ rights_of_service
 store_version_of_release
 backup_name_prefixes
 release_versions
+listener_addresses
 ```
 
 ### Depth assessment
@@ -391,7 +394,8 @@ load_configuration
 The one SQLite database (L19) and its connection: opening it for reading and
 writing at start, or making a new, empty store of the release's version under
 the temporary name and renaming it once complete, after removing a leftover of
-that name and no other file (A17 rule 5); the full integrity check —
+that name and no other file (A17 rule 5), and removing a store it made new
+when the start then fails at a listener (A17 rule 2); the full integrity check —
 `PRAGMA integrity_check` answering `ok`, `PRAGMA foreign_key_check` finding
 nothing — and the store version check (A17 rule 5), the same check `backups`
 asks of a backup's copy. Every transaction: one write lock, so changes are
@@ -432,6 +436,7 @@ the temporary-name dance of a new store, the integrity pragmas.
 
 ```text
 open_store
+discard_new_store
 run_in_transaction
 read_in_transaction
 check_store_file
@@ -999,15 +1004,17 @@ serve_owner_request
 ### Owns
 
 The start and the running instance: `configuration` first, then the backup
-probe and `store`, serving nothing until every check passed (A17 rule 2); the
+probe and `store`, then the listeners at the release's addresses, serving
+nothing until every check passed and having `store` remove a store this start
+made new when a listener cannot be opened (A17 rule 2); the
 owner-only start (A17 rule 1, A18 rule 9); the two surfaces; the 60-second pass
 of `owner_sessions` and the minute look of `backups` (A13 rule 2, A18 rule 1);
 that a restart ends every owner session (A13 rule 2).
 
 ### Knows
 
-`models`, `configuration`, `store`, `owner_sessions`, `backups`,
-`service_api`, `owner_interface`.
+`models`, `release_declarations`, `configuration`, `store`,
+`owner_sessions`, `backups`, `service_api`, `owner_interface`.
 
 ### Must not own
 
