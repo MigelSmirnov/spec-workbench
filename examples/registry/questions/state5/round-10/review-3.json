@@ -1,0 +1,165 @@
+{
+ "open_points": [
+  {
+   "unit": "50_public_apis_2_sessions.md:`public_op:owner_sessions.admit_owner_request`",
+   "subject": "owner request arrival and session expiry",
+   "kind": "contradiction",
+   "text": "A13 says \"Validity is checked when a request arrives\" and that its arrival restarts the 30 minutes, but this operation says a file request's \"arrival for the check is when it holds the import lock\".",
+   "question": "For a request that physically arrives while its session is valid but waits for the import lock until after a session limit, is validity and the idle restart determined at physical arrival or only after acquiring the import lock?",
+   "options": [
+    "Use physical arrival for validity and idle restart, even though lock placement occurs later.",
+    "Treat acquisition of the import lock as arrival for both validity and idle restart."
+   ],
+   "default_guess": "Use physical arrival, preserving A13's general definition of arrival.",
+   "witness": {
+    "initial": "Owner session S is valid but will reach its idle limit in one minute; another session holds the import lock for two minutes.",
+    "events": [
+     "The owner sends a mapping request in S while S is still valid.",
+     "The request waits for the import lock and acquires it after S has crossed its idle limit."
+    ],
+    "outcomes": [
+     "The request was valid at physical arrival, restarts S's idle period, and proceeds.",
+     "The session check occurs only after the import lock is acquired, so the request is refused with no_owner_session."
+    ],
+    "observer": "The owner sees either the mapping or the sign-in page."
+   }
+  },
+  {
+   "unit": "50_public_apis_2_sessions.md:`public_op:owner_sessions.sign_out_owner`",
+   "subject": "sign-out as a barrier for already queued session changes",
+   "kind": "concurrency gap",
+   "text": "A request that \"passed completes even if ... a sign-out comes while it runs\", while sign-out \"leaves nothing in the ended session\" and \"a request arriving after it is refused at the session check\"; admission does not say that taking a sign-out's queue place marks the session as closing.",
+   "question": "May a later change pass the session check and take a queue place behind an admitted but not-yet-executed sign-out, and if so does that later change execute after the session has been ended?",
+   "options": [
+    "Sign-out admission closes the queue: later requests are refused even before sign-out executes.",
+    "Later requests may queue behind sign-out and, having passed, execute after it.",
+    "Later requests may queue but are rechecked and refused after sign-out executes."
+   ],
+   "default_guess": "Mark the session as closing when sign-out is admitted, so later requests are refused.",
+   "witness": {
+    "initial": "Session S is valid and change A currently holds S's lock.",
+    "events": [
+     "A sign-out acquires the import lock, passes S's check, and takes the next place on S's lock.",
+     "Before A releases the lock, a non-file correction request for S arrives and attempts admission."
+    ],
+    "outcomes": [
+     "The correction passes, queues behind sign-out, and changes the store after S has ended.",
+     "The sign-out's admission acts as a barrier, so the correction is refused with no_owner_session."
+    ],
+    "observer": "The owner sees whether the correction succeeds, and the corrected record differs."
+   }
+  },
+  {
+   "unit": "50_public_apis_4_import_backups.md:`public_op:migration_import.confirm_import`",
+   "subject": "file_not_kept refusal aggregation",
+   "kind": "contradiction",
+   "text": "Conventions says \"The one exception is the import's closure\" to answering every failure of the first failing stage, but confirm_import adds: \"when it is no longer kept, file_not_kept is answered alone\".",
+   "question": "Is `file_not_kept` a second exception that must be returned alone, or must it be aggregated with every other discoverable stage-(6) failure?",
+   "options": [
+    "Return `file_not_kept` alone and amend the conventions to name this second exception.",
+    "Apply the conventions literally and aggregate it with other stage-(6) failures."
+   ],
+   "default_guess": "Return `file_not_kept` alone, as the changed operation explicitly requires.",
+   "witness": {
+    "initial": "A session has upload 1 and a clean confirmation bound to it; no migration closure exists.",
+    "events": [
+     "The owner accepts upload 2 in the same session, replacing upload 1.",
+     "The owner submits the confirmation bound to upload 1."
+    ],
+    "outcomes": [
+     "The refusal contains only `file_not_kept`, as confirm_import says.",
+     "The implementation follows the convention that only `import_closed` may be answered alone and attempts to aggregate stage-(6) failures."
+    ],
+    "observer": "The owner interface and contract tests see different refusal-kind lists."
+   }
+  },
+  {
+   "unit": "50_public_apis_4_import_backups.md:`public_op:migration_import.read_import_mapping`",
+   "subject": "admissible Customer-value mapping inputs",
+   "kind": "input contradiction",
+   "text": "Inputs require Customer values with \"none missing, none for a v1 value no pick brings ... none twice\", while Outputs explicitly include \"every missing value\" and Errors define `outside_closed_list` and `duplicate_pick` for the prohibited cases.",
+   "question": "Must the operation accept missing, extraneous and duplicate Customer-value entries so it can classify them, or are those states excluded by its input contract?",
+   "options": [
+    "Accept all three shapes: report missing values in the mapping and refuse extraneous or duplicate entries with the declared kinds.",
+    "Exclude them at the caller boundary, making the mapping and refusal branches unreachable.",
+    "Accept missing entries but exclude extraneous and duplicate entries before this operation."
+   ],
+   "default_guess": "Accept them and produce the documented mapping result or refusal.",
+   "witness": {
+    "initial": "An accepted upload contains a picked project naming v1 customer value C.",
+    "events": [
+     "The owner asks for its mapping before supplying C's required name and kind."
+    ],
+    "outcomes": [
+     "The operation returns a mapping that identifies C's missing values and marks it not clean.",
+     "The call violates the operation's stated Inputs because C's entry is missing and cannot be made."
+    ],
+    "observer": "The owner either sees the incomplete mapping needed to fill the form or cannot open that mapping."
+   }
+  },
+  {
+   "unit": "50_public_apis_0_conventions.md:Closed set of refusal codes",
+   "subject": "meaning of a readable imported project id or status",
+   "kind": "classification ambiguity",
+   "text": "`file_malformed` is now \"a file that parses but holds two projects with one id, or a project without a readable id or status\", while A16 treats \"a status ... outside its vocabulary\" as a malformed record checked only for picked projects.",
+   "question": "Does \"readable id or status\" mean merely a syntactically readable field, or a semantically valid UUID/status vocabulary member?",
+   "options": [
+    "Readable means syntactically present and decodable; vocabulary validity is checked only for picked records.",
+    "Readable includes UUID and vocabulary validity, so any invalid project id or status makes the whole upload `file_malformed`.",
+    "Readable validity is fixed separately for ids and statuses."
+   ],
+   "default_guess": "Treat it as syntactic readability so the rule that unpicked records are not checked remains effective.",
+   "witness": {
+    "initial": "An export parses and contains valid project P plus unpicked project Q whose status is the readable string `paused`, outside the project-status vocabulary.",
+    "events": [
+     "The owner uploads the file and later picks only P."
+    ],
+    "outcomes": [
+     "Upload is refused as `file_malformed` because Q lacks a semantically readable status.",
+     "Upload succeeds; Q is not checked because it was not picked, and P can have a clean mapping."
+    ],
+    "observer": "The owner sees either an upload refusal or a usable mapping for P."
+   }
+  },
+  {
+   "unit": "50_public_apis_4_import_backups.md:`public_op:migration_import.confirm_import`",
+   "subject": "no-picks refusal kinds",
+   "kind": "output ambiguity",
+   "text": "A mapping is not clean when there is not \"at least one pick\", while confirm_import lists both `mapping_not_clean` and `no_picks` and says every stage-(6) failure is answered together.",
+   "question": "When the picks are empty, does the refusal contain `no_picks` alone or both `no_picks` and `mapping_not_clean`?",
+   "options": [
+    "Return both because absence of picks also makes the mapping not clean.",
+    "Return only the more specific `no_picks`.",
+    "Return only the general `mapping_not_clean`."
+   ],
+   "default_guess": "Return only `no_picks` as the specific cause."
+  },
+  {
+   "unit": "50_public_apis_0_conventions.md:Conventions every operation follows",
+   "subject": "ordering repeated refusal kinds",
+   "kind": "ordering gap",
+   "text": "Failures are ordered by \"the operation's Errors list\", but there is \"one entry for each failing input or record\" and no order is given when several entries have the same kind.",
+   "question": "What deterministic order applies to multiple failures of the same kind within one refusal?",
+   "options": [
+    "Order by the operation's declared input/field order, then by record identity.",
+    "Order by field or identity in Unicode code-point order.",
+    "Treat entries of the same kind as unordered."
+   ],
+   "default_guess": "Use the operation's declared input order, then identity order.",
+   "witness": {
+    "initial": "The owner submits a project create whose display name and object address are both blank.",
+    "events": [
+     "The create reaches stage (4), where both fields fail as `missing_value`."
+    ],
+    "outcomes": [
+     "The refusal lists display-name failure before address failure.",
+     "The refusal lists address failure before display-name failure."
+    ],
+    "observer": "The owner interface, service wire response, and contract tests observe a different ordered list."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"50_public_apis_2_sessions.md:`public_op:owner_sessions.admit_owner_request`\",\"subject\":\"owner request arrival and session expiry\",\"kind\":\"contradiction\",\"text\":\"A13 says \\\"Validity is checked when a request arrives\\\" and that its arrival restarts the 30 minutes, but this operation says a file request's \\\"arrival for the check is when it holds the import lock\\\".\",\"question\":\"For a request that physically arrives while its session is valid but waits for the import lock until after a session limit, is validity and the idle restart determined at physical arrival or only after acquiring the import lock?\",\"options\":[\"Use physical arrival for validity and idle restart, even though lock placement occurs later.\",\"Treat acquisition of the import lock as arrival for both validity and idle restart.\"],\"default_guess\":\"Use physical arrival, preserving A13's general definition of arrival.\",\"witness\":{\"initial\":\"Owner session S is valid but will reach its idle limit in one minute; another session holds the import lock for two minutes.\",\"events\":[\"The owner sends a mapping request in S while S is still valid.\",\"The request waits for the import lock and acquires it after S has crossed its idle limit.\"],\"outcomes\":[\"The request was valid at physical arrival, restarts S's idle period, and proceeds.\",\"The session check occurs only after the import lock is acquired, so the request is refused with no_owner_session.\"],\"observer\":\"The owner sees either the mapping or the sign-in page.\"}},{\"unit\":\"50_public_apis_2_sessions.md:`public_op:owner_sessions.sign_out_owner`\",\"subject\":\"sign-out as a barrier for already queued session changes\",\"kind\":\"concurrency gap\",\"text\":\"A request that \\\"passed completes even if ... a sign-out comes while it runs\\\", while sign-out \\\"leaves nothing in the ended session\\\" and \\\"a request arriving after it is refused at the session check\\\"; admission does not say that taking a sign-out's queue place marks the session as closing.\",\"question\":\"May a later change pass the session check and take a queue place behind an admitted but not-yet-executed sign-out, and if so does that later change execute after the session has been ended?\",\"options\":[\"Sign-out admission closes the queue: later requests are refused even before sign-out executes.\",\"Later requests may queue behind sign-out and, having passed, execute after it.\",\"Later requests may queue but are rechecked and refused after sign-out executes.\"],\"default_guess\":\"Mark the session as closing when sign-out is admitted, so later requests are refused.\",\"witness\":{\"initial\":\"Session S is valid and change A currently holds S's lock.\",\"events\":[\"A sign-out acquires the import lock, passes S's check, and takes the next place on S's lock.\",\"Before A releases the lock, a non-file correction request for S arrives and attempts admission.\"],\"outcomes\":[\"The correction passes, queues behind sign-out, and changes the store after S has ended.\",\"The sign-out's admission acts as a barrier, so the correction is refused with no_owner_session.\"],\"observer\":\"The owner sees whether the correction succeeds, and the corrected record differs.\"}},{\"unit\":\"50_public_apis_4_import_backups.md:`public_op:migration_import.confirm_import`\",\"subject\":\"file_not_kept refusal aggregation\",\"kind\":\"contradiction\",\"text\":\"Conventions says \\\"The one exception is the import's closure\\\" to answering every failure of the first failing stage, but confirm_import adds: \\\"when it is no longer kept, file_not_kept is answered alone\\\".\",\"question\":\"Is `file_not_kept` a second exception that must be returned alone, or must it be aggregated with every other discoverable stage-(6) failure?\",\"options\":[\"Return `file_not_kept` alone and amend the conventions to name this second exception.\",\"Apply the conventions literally and aggregate it with other stage-(6) failures.\"],\"default_guess\":\"Return `file_not_kept` alone, as the changed operation explicitly requires.\",\"witness\":{\"initial\":\"A session has upload 1 and a clean confirmation bound to it; no migration closure exists.\",\"events\":[\"The owner accepts upload 2 in the same session, replacing upload 1.\",\"The owner submits the confirmation bound to upload 1.\"],\"outcomes\":[\"The refusal contains only `file_not_kept`, as confirm_import says.\",\"The implementation follows the convention that only `import_closed` may be answered alone and attempts to aggregate stage-(6) failures.\"],\"observer\":\"The owner interface and contract tests see different refusal-kind lists.\"}},{\"unit\":\"50_public_apis_4_import_backups.md:`public_op:migration_import.read_import_mapping`\",\"subject\":\"admissible Customer-value mapping inputs\",\"kind\":\"input contradiction\",\"text\":\"Inputs require Customer values with \\\"none missing, none for a v1 value no pick brings ... none twice\\\", while Outputs explicitly include \\\"every missing value\\\" and Errors define `outside_closed_list` and `duplicate_pick` for the prohibited cases.\",\"question\":\"Must the operation accept missing, extraneous and duplicate Customer-value entries so it can classify them, or are those states excluded by its input contract?\",\"options\":[\"Accept all three shapes: report missing values in the mapping and refuse extraneous or duplicate entries with the declared kinds.\",\"Exclude them at the caller boundary, making the mapping and refusal branches unreachable.\",\"Accept missing entries but exclude extraneous and duplicate entries before this operation.\"],\"default_guess\":\"Accept them and produce the documented mapping result or refusal.\",\"witness\":{\"initial\":\"An accepted upload contains a picked project naming v1 customer value C.\",\"events\":[\"The owner asks for its mapping before supplying C's required name and kind.\"],\"outcomes\":[\"The operation returns a mapping that identifies C's missing values and marks it not clean.\",\"The call violates the operation's stated Inputs because C's entry is missing and cannot be made.\"],\"observer\":\"The owner either sees the incomplete mapping needed to fill the form or cannot open that mapping.\"}},{\"unit\":\"50_public_apis_0_conventions.md:Closed set of refusal codes\",\"subject\":\"meaning of a readable imported project id or status\",\"kind\":\"classification ambiguity\",\"text\":\"`file_malformed` is now \\\"a file that parses but holds two projects with one id, or a project without a readable id or status\\\", while A16 treats \\\"a status ... outside its vocabulary\\\" as a malformed record checked only for picked projects.\",\"question\":\"Does \\\"readable id or status\\\" mean merely a syntactically readable field, or a semantically valid UUID/status vocabulary member?\",\"options\":[\"Readable means syntactically present and decodable; vocabulary validity is checked only for picked records.\",\"Readable includes UUID and vocabulary validity, so any invalid project id or status makes the whole upload `file_malformed`.\",\"Readable validity is fixed separately for ids and statuses.\"],\"default_guess\":\"Treat it as syntactic readability so the rule that unpicked records are not checked remains effective.\",\"witness\":{\"initial\":\"An export parses and contains valid project P plus unpicked project Q whose status is the readable string `paused`, outside the project-status vocabulary.\",\"events\":[\"The owner uploads the file and later picks only P.\"],\"outcomes\":[\"Upload is refused as `file_malformed` because Q lacks a semantically readable status.\",\"Upload succeeds; Q is not checked because it was not picked, and P can have a clean mapping.\"],\"observer\":\"The owner sees either an upload refusal or a usable mapping for P.\"}},{\"unit\":\"50_public_apis_4_import_backups.md:`public_op:migration_import.confirm_import`\",\"subject\":\"no-picks refusal kinds\",\"kind\":\"output ambiguity\",\"text\":\"A mapping is not clean when there is not \\\"at least one pick\\\", while confirm_import lists both `mapping_not_clean` and `no_picks` and says every stage-(6) failure is answered together.\",\"question\":\"When the picks are empty, does the refusal contain `no_picks` alone or both `no_picks` and `mapping_not_clean`?\",\"options\":[\"Return both because absence of picks also makes the mapping not clean.\",\"Return only the more specific `no_picks`.\",\"Return only the general `mapping_not_clean`.\"],\"default_guess\":\"Return only `no_picks` as the specific cause.\"},{\"unit\":\"50_public_apis_0_conventions.md:Conventions every operation follows\",\"subject\":\"ordering repeated refusal kinds\",\"kind\":\"ordering gap\",\"text\":\"Failures are ordered by \\\"the operation's Errors list\\\", but there is \\\"one entry for each failing input or record\\\" and no order is given when several entries have the same kind.\",\"question\":\"What deterministic order applies to multiple failures of the same kind within one refusal?\",\"options\":[\"Order by the operation's declared input/field order, then by record identity.\",\"Order by field or identity in Unicode code-point order.\",\"Treat entries of the same kind as unordered.\"],\"default_guess\":\"Use the operation's declared input order, then identity order.\",\"witness\":{\"initial\":\"The owner submits a project create whose display name and object address are both blank.\",\"events\":[\"The create reaches stage (4), where both fields fail as `missing_value`.\"],\"outcomes\":[\"The refusal lists display-name failure before address failure.\",\"The refusal lists address failure before display-name failure.\"],\"observer\":\"The owner interface, service wire response, and contract tests observe a different ordered list.\"}}]}",
+ "set_aside": []
+}

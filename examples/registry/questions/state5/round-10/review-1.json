@@ -1,0 +1,105 @@
+{
+ "open_points": [
+  {
+   "unit": "50_public_apis_2_sessions.md:`public_op:owner_sessions.admit_owner_request`",
+   "subject": "owner request arrival and session-expiry check",
+   "kind": "contradictory timing",
+   "text": "“A request carrying a valid session restarts its 30 minutes at its arrival” and A13 says “Validity is checked when a request arrives”; but an uploaded-file request’s “arrival for the check is when it holds the import lock”",
+   "question": "For a request waiting on the import lock, are session validity and the idle-time restart determined at the HTTP arrival or only when the import lock is acquired?",
+   "options": [
+    "Check and restart at the HTTP arrival; once admitted, the request completes even if the session limit passes while it waits.",
+    "Treat import-lock acquisition as arrival; a session that expires while the request waits is refused."
+   ],
+   "default_guess": "Treat the actual HTTP arrival as the validity and idle-restart instant, while delaying only its place on the session lock.",
+   "witness": {
+    "initial": "An owner session will reach its 30-minute idle limit in one minute; another import request holds the import lock for two minutes.",
+    "events": [
+     "The owner sends a mapping request that reads the uploaded file while the session is still valid.",
+     "The mapping request waits for the import lock.",
+     "The idle limit passes before the mapping request acquires the import lock."
+    ],
+    "outcomes": [
+     "The request was valid at HTTP arrival, restarts the idle period, and completes after acquiring the lock.",
+     "Its check-time arrival is import-lock acquisition; the session is then expired and the request is refused with no_owner_session."
+    ],
+    "observer": "The owner sees either the mapping or the sign-in page."
+   }
+  },
+  {
+   "unit": "50_public_apis_2_sessions.md:`public_op:owner_sessions.admit_owner_request`",
+   "subject": "locking of read-only requests that read an uploaded file",
+   "kind": "contradictory lock contract",
+   "text": "The Outputs say “For a change the step runs holding the session's lock — and first the instance's import lock when it reads or changes an uploaded file”; the Enforces section says “A request that reads or changes an uploaded file first waits for the import lock ... and takes its place on the session's lock.”",
+   "question": "Does a read-only mapping request that reads the session’s uploaded file hold both locks, or are those locks taken only when the request is classified as a change?",
+   "options": [
+    "Every request that reads or changes an uploaded file holds the import lock and session lock, including read-only mapping requests.",
+    "Only changes hold locks; a read-only mapping request reads the upload without the two-lock critical section."
+   ],
+   "default_guess": "Every request that reads or changes an uploaded file holds both locks, regardless of whether it changes state.",
+   "witness": {
+    "initial": "A session has an uploaded file and a pending confirmation; no import closure exists.",
+    "events": [
+     "The owner starts a read-only mapping request for the uploaded file.",
+     "Concurrently, the owner uploads a replacement file in the same session."
+    ],
+    "outcomes": [
+     "The mapping holds both locks and sees the old upload or the replacement as one serial state.",
+     "The mapping is treated as a read and takes no locks, so it can read while replacement occurs; its bytes, digest and upload number need not come from one serial session state."
+    ],
+    "observer": "The owner sees which file the mapping describes and which confirmation can subsequently be shown."
+   }
+  },
+  {
+   "unit": "50_public_apis_2_sessions.md:`public_op:owner_sessions.sign_out_owner`",
+   "subject": "ordering sign-out against later non-import changes",
+   "kind": "cross-text contradiction",
+   "text": "The sign-out operation says its turn follows changes that passed the session check before sign-out did, while State 4 says it follows changes admitted “before the sign-out arrived” and that a request arriving after sign-out is refused; the changed admission rule delays sign-out’s check and lock position until it acquires the import lock.",
+   "question": "If sign-out has physically arrived but is waiting for the import lock, may a later ordinary change pass the session check and complete before that sign-out?",
+   "options": [
+    "Yes; sign-out has not passed its delayed check or taken its lock position, so the later ordinary change may precede it.",
+    "No; physical arrival fixes sign-out’s order, so later requests must follow it and be refused after it ends the session."
+   ],
+   "default_guess": "Use the changed admission rule: the later non-import change may precede a sign-out still waiting for the import lock.",
+   "witness": {
+    "initial": "Owner session S is valid and idle; another session’s import request holds the instance import lock.",
+    "events": [
+     "The owner sends sign-out for S; it waits for the import lock.",
+     "The owner then sends an ordinary project correction in S, which does not need the import lock.",
+     "The other session releases the import lock."
+    ],
+    "outcomes": [
+     "The correction passes, takes the session-lock position before sign-out, commits, and sign-out then ends S.",
+     "Sign-out’s earlier physical arrival orders it first; S ends and the later correction is refused with no_owner_session."
+    ],
+    "observer": "The owner and subsequent readers see whether the project correction committed."
+   }
+  },
+  {
+   "unit": "50_public_apis_0_conventions.md:Closed set of refusal codes",
+   "subject": "scope of duplicate_pick for a Customer v1 value",
+   "kind": "ambiguous duplicate domain",
+   "text": "“duplicate_pick — a project, or a Customer's v1 value, given twice”",
+   "question": "Does a Customer v1 value count as duplicated only when the owner supplies its mapping entry twice, or also when two picked source projects legitimately contain the same v1 customer value?",
+   "options": [
+    "Only duplicate owner-supplied project selections or Customer mapping entries are duplicate_pick; repeated source references from several projects are one distinct Customer mapping.",
+    "Any second occurrence of the v1 value among picked projects is duplicate_pick."
+   ],
+   "default_guess": "Apply duplicate_pick only to duplicate owner inputs; allow multiple picked projects to share one distinct v1 customer value.",
+   "witness": {
+    "initial": "The export contains projects P1 and P2, both naming the same v1 customer value V.",
+    "events": [
+     "The owner picks P1 and P2 once each.",
+     "The owner supplies one Customer mapping entry keyed by V."
+    ],
+    "outcomes": [
+     "The mapping is valid on duplication grounds, makes one Customer for V and links both projects to it.",
+     "The mapping is refused with invalid_request/duplicate_pick because V occurs in two picked projects."
+    ],
+    "observer": "The owner sees either the shared-Customer mapping or a duplicate-pick refusal."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"50_public_apis_2_sessions.md:`public_op:owner_sessions.admit_owner_request`\",\"subject\":\"owner request arrival and session-expiry check\",\"kind\":\"contradictory timing\",\"text\":\"“A request carrying a valid session restarts its 30 minutes at its arrival” and A13 says “Validity is checked when a request arrives”; but an uploaded-file request’s “arrival for the check is when it holds the import lock”\",\"question\":\"For a request waiting on the import lock, are session validity and the idle-time restart determined at the HTTP arrival or only when the import lock is acquired?\",\"options\":[\"Check and restart at the HTTP arrival; once admitted, the request completes even if the session limit passes while it waits.\",\"Treat import-lock acquisition as arrival; a session that expires while the request waits is refused.\"],\"default_guess\":\"Treat the actual HTTP arrival as the validity and idle-restart instant, while delaying only its place on the session lock.\",\"witness\":{\"initial\":\"An owner session will reach its 30-minute idle limit in one minute; another import request holds the import lock for two minutes.\",\"events\":[\"The owner sends a mapping request that reads the uploaded file while the session is still valid.\",\"The mapping request waits for the import lock.\",\"The idle limit passes before the mapping request acquires the import lock.\"],\"outcomes\":[\"The request was valid at HTTP arrival, restarts the idle period, and completes after acquiring the lock.\",\"Its check-time arrival is import-lock acquisition; the session is then expired and the request is refused with no_owner_session.\"],\"observer\":\"The owner sees either the mapping or the sign-in page.\"}},{\"unit\":\"50_public_apis_2_sessions.md:`public_op:owner_sessions.admit_owner_request`\",\"subject\":\"locking of read-only requests that read an uploaded file\",\"kind\":\"contradictory lock contract\",\"text\":\"The Outputs say “For a change the step runs holding the session's lock — and first the instance's import lock when it reads or changes an uploaded file”; the Enforces section says “A request that reads or changes an uploaded file first waits for the import lock ... and takes its place on the session's lock.”\",\"question\":\"Does a read-only mapping request that reads the session’s uploaded file hold both locks, or are those locks taken only when the request is classified as a change?\",\"options\":[\"Every request that reads or changes an uploaded file holds the import lock and session lock, including read-only mapping requests.\",\"Only changes hold locks; a read-only mapping request reads the upload without the two-lock critical section.\"],\"default_guess\":\"Every request that reads or changes an uploaded file holds both locks, regardless of whether it changes state.\",\"witness\":{\"initial\":\"A session has an uploaded file and a pending confirmation; no import closure exists.\",\"events\":[\"The owner starts a read-only mapping request for the uploaded file.\",\"Concurrently, the owner uploads a replacement file in the same session.\"],\"outcomes\":[\"The mapping holds both locks and sees the old upload or the replacement as one serial state.\",\"The mapping is treated as a read and takes no locks, so it can read while replacement occurs; its bytes, digest and upload number need not come from one serial session state.\"],\"observer\":\"The owner sees which file the mapping describes and which confirmation can subsequently be shown.\"}},{\"unit\":\"50_public_apis_2_sessions.md:`public_op:owner_sessions.sign_out_owner`\",\"subject\":\"ordering sign-out against later non-import changes\",\"kind\":\"cross-text contradiction\",\"text\":\"The sign-out operation says its turn follows changes that passed the session check before sign-out did, while State 4 says it follows changes admitted “before the sign-out arrived” and that a request arriving after sign-out is refused; the changed admission rule delays sign-out’s check and lock position until it acquires the import lock.\",\"question\":\"If sign-out has physically arrived but is waiting for the import lock, may a later ordinary change pass the session check and complete before that sign-out?\",\"options\":[\"Yes; sign-out has not passed its delayed check or taken its lock position, so the later ordinary change may precede it.\",\"No; physical arrival fixes sign-out’s order, so later requests must follow it and be refused after it ends the session.\"],\"default_guess\":\"Use the changed admission rule: the later non-import change may precede a sign-out still waiting for the import lock.\",\"witness\":{\"initial\":\"Owner session S is valid and idle; another session’s import request holds the instance import lock.\",\"events\":[\"The owner sends sign-out for S; it waits for the import lock.\",\"The owner then sends an ordinary project correction in S, which does not need the import lock.\",\"The other session releases the import lock.\"],\"outcomes\":[\"The correction passes, takes the session-lock position before sign-out, commits, and sign-out then ends S.\",\"Sign-out’s earlier physical arrival orders it first; S ends and the later correction is refused with no_owner_session.\"],\"observer\":\"The owner and subsequent readers see whether the project correction committed.\"}},{\"unit\":\"50_public_apis_0_conventions.md:Closed set of refusal codes\",\"subject\":\"scope of duplicate_pick for a Customer v1 value\",\"kind\":\"ambiguous duplicate domain\",\"text\":\"“duplicate_pick — a project, or a Customer's v1 value, given twice”\",\"question\":\"Does a Customer v1 value count as duplicated only when the owner supplies its mapping entry twice, or also when two picked source projects legitimately contain the same v1 customer value?\",\"options\":[\"Only duplicate owner-supplied project selections or Customer mapping entries are duplicate_pick; repeated source references from several projects are one distinct Customer mapping.\",\"Any second occurrence of the v1 value among picked projects is duplicate_pick.\"],\"default_guess\":\"Apply duplicate_pick only to duplicate owner inputs; allow multiple picked projects to share one distinct v1 customer value.\",\"witness\":{\"initial\":\"The export contains projects P1 and P2, both naming the same v1 customer value V.\",\"events\":[\"The owner picks P1 and P2 once each.\",\"The owner supplies one Customer mapping entry keyed by V.\"],\"outcomes\":[\"The mapping is valid on duplication grounds, makes one Customer for V and links both projects to it.\",\"The mapping is refused with invalid_request/duplicate_pick because V occurs in two picked projects.\"],\"observer\":\"The owner sees either the shared-Customer mapping or a duplicate-pick refusal.\"}}]}",
+ "set_aside": []
+}
