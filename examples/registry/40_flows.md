@@ -930,7 +930,10 @@ minted `customer_ref`.
   every upload already dropped, and the import refused for good; no step is
   shown again (rule 8). Stage (1) comes first — the session, the CSRF value
   and the confirmation value, used up when it was carried (A13 rule 6) — and
-  this refusal comes before every other of the import's own checks.
+  this refusal comes before every other of the import's own checks. So a
+  resubmission of the very confirmation that was accepted is refused at
+  stage (1), its value used up; a confirmation of another session that
+  still holds a valid value is refused because the closure exists.
 - A confirmation refused while no closure exists: nothing applied; the file
   stays kept unless a new upload or the session's end dropped it. When the
   pending value was used up or cleared, the step must be shown again; a
