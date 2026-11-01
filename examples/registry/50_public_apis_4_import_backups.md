@@ -19,20 +19,23 @@ its projects, or, for the owner's picks, the mapping (A16 rules 1, 3–5).
 
 ### Inputs
 
-The read transaction; the file's bytes and digest; the picks, each with the
-display name and alias it arrives under, and for each Customer the import
-will make its name, its kind and whether the v1 value is its tax id — none
-of these at upload.
+The read transaction; the mode, `upload` or `mapping`; the file's bytes;
+for `mapping`, the picks — possibly none — each with the display name and
+alias it arrives under, and for each Customer the import will make its
+name, its kind and whether the v1 value is its tax id.
 
 ### Outputs
 
-At upload, each project the file holds with its id and status. With picks,
-the mapping: the picked projects by `project_id`, each one's rooms and
+Always the file's digest, the SHA-256 of its bytes, which Registry computes
+and never takes from a caller. At `upload`, each project the file holds with
+its id and status. At `mapping`, the mapping: the picked projects by `project_id`, each one's rooms and
 pointers in their lists' orders, the name and alias each arrives under, the
 Customers it will make by their v1 value with the projects each links, every
 malformed record of the picks, every id production holds, and every missing
-value; and whether the mapping is clean, which alone lets the confirmation
-step be shown.
+value; and whether the mapping is clean — no malformed record, no conflict,
+no missing value and at least one pick — which alone lets the confirmation
+step be shown. A mapping of no pick is not clean (`no_picks`): an import of
+nothing is not confirmed.
 
 ### Observable effect
 
@@ -41,9 +44,9 @@ None.
 ### Enforces
 
 The closure first: when it exists, refused (A16 rule 8). The file over the
-release's size limit, not readable as the format States 5 and 6 declare,
-holding two projects with one id, or a project without a readable id or
-status, refused whole at upload (A16 rule 3, A19 rule 4). Only what the
+`release_declarations.import_size_limit`, not readable as the format States
+5 and 6 declare, holding two projects with one id, or a project without a
+readable id or status, refused whole at upload (A16 rule 3, A19 rule 4). Only what the
 picks bring in is checked (rule 3); a record is malformed as rule 4 says, a
 pointer of a type `release_declarations.declared_artifact_types` does not
 declare or whose owner service is not `release_declarations.owner_service_of_type`'s
@@ -53,7 +56,7 @@ among them (A22 rule 7); ids compared per kind (rule 5); names read with
 ### Errors
 
 `refused` (`import_closed`); `invalid_request` (`file_too_large`,
-`file_unreadable`).
+`file_unreadable`, `file_malformed`).
 
 ### State impact
 
@@ -92,14 +95,16 @@ their pointers' publisher, and the Customers made at the action's instant.
 
 ### Enforces
 
-The closure first (rule 8); the file of the bound digest still kept (rule
-2); the picks checked again — any conflict or malformed record refuses the
-whole import (rule 6); the values the confirmation bound and nothing else;
+The closure first (rule 8); the file of the bound digest still kept, its
+digest computed again from the kept bytes (rule 2); the picks checked
+again — any conflict, malformed record or missing value, or no pick at all,
+refuses the whole import (rule 6); the values the confirmation bound and nothing else;
 the projects link to the Customers it makes (R0-80).
 
 ### Errors
 
-`refused` (`import_closed`, `file_not_kept`, `mapping_not_clean`).
+`refused` (`import_closed`, `file_not_kept`, `mapping_not_clean`,
+`no_picks`).
 
 ### State impact
 
@@ -199,8 +204,8 @@ The configured backup location and key.
 
 ### Outputs
 
-Nothing to the caller; a run's failure is a diagnostic naming it and no
-value.
+Nothing to the caller; a run's failure, and each file step 3 could not read
+or delete, is a diagnostic (Conventions, "Diagnostics").
 
 ### Observable effect
 
@@ -247,8 +252,9 @@ The configured backup location.
 
 ### Outputs
 
-The instant of the newest kept backup whose record can be read, or that
-there is none.
+The instant of the newest kept backup whose record can be read; that there
+is none; or that the location could not be listed, which is never shown as
+"none".
 
 ### Observable effect
 

@@ -20,8 +20,10 @@ transaction, the record's module, the answer's class (A04 rules 4, 6; A09).
 
 ### Inputs
 
-The presented token; the operation, one of A09 rule 2's; its inputs; for
-Kernel, the agent session it names.
+The presented token; the operation, one of A09 rule 2's; its inputs, or
+that they are not of the wire format; for Kernel, the agent session the
+request's envelope names beside the token, never among the operation's
+inputs (R0-53).
 
 ### Outputs
 
@@ -42,7 +44,9 @@ Stage (1): `service_access.identify_service` and
 `service_access.service_may_call`. Stage (2), for Kernel: the registration
 checked for the token only (A10 rule 1); every other call through
 `agent_sessions.check_agent_call`, a withdrawal's pointer resolved first by
-`artifact_pointers.project_of_pointer` (A08 rule 7). Every Kernel call runs
+`artifact_pointers.project_of_pointer` — an unknown pointer answered
+`not_found` (`agent_call_refused`) without the session's check, the same
+answer as any refusal of it (A08 rule 7, A10 rule 3). Every Kernel call runs
 in a write transaction (A10 rule 6); every other read in
 `store.read_in_transaction`, every change in `store.run_in_transaction`,
 with the instant of `clock.recorded_now`. The agent projection joins
@@ -87,8 +91,9 @@ step, an accepted change, the newest backup's instant from
 
 ### Observable effect
 
-For an accepted change: the change, its audit entry (M09) and, for a
-confirmed action, its confirmation id, all in one transaction; for a
+For an accepted change: the change and, when the action changed state and
+M09 lists it, its audit entry with, for a confirmed action, its
+confirmation id, all in one transaction; for a
 session's runtime change, that change; nothing for a read or a refusal
 beyond what A13 says a refused request does to its session.
 
@@ -131,8 +136,12 @@ One transaction per change; runtime state of the session.
 
 ### Inputs
 
-One HTTP request on the service API's listener: the token and the
-operation's request in the wire format States 5 and 6 declare.
+One HTTP request on the service API's listener: the token, the operation
+and, for Kernel, the agent session in the request's envelope, apart from
+the operation's inputs; the inputs in the wire format States 5 and 6
+declare. Kernel fills the session from its own run context and never from a
+value the agent's flow supplies (R0-53); Registry relies on it as it relies
+on Kernel naming the session.
 
 ### Outputs
 
@@ -151,8 +160,10 @@ Nothing is reachable without a token; every request goes to
 
 ### Errors
 
-A request that is not of the wire format answers `invalid_request`
-(`outside_closed_list`); every other refusal is `operations`'.
+None of its own: it refuses nothing. Inputs that are not of the wire format
+reach `operations` as such, which answers stage (1) first and then
+`invalid_request` (`outside_closed_list`) at stage (4); every refusal is
+`operations`'.
 
 ### State impact
 

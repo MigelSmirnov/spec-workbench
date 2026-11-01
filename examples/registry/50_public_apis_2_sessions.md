@@ -67,13 +67,15 @@ rules 2, 5; A16 rule 2).
 
 The session identity from the cookie, or none; whether the request is a
 change; the CSRF value it carries, for a change; whether it reads or
-changes an uploaded file.
+changes an uploaded file; the request's step, which receives the admitted
+session.
 
 ### Outputs
 
-The admitted session, holding — for a change — the session's lock, and
-first the instance's import lock when the request reads or changes an
-uploaded file; or the refusal.
+The step's answer, or the refusal. For a change the step runs holding the
+session's lock — and first the instance's import lock when it reads or
+changes an uploaded file — and both are released when the step returns, on
+every path (Conventions, "Locks of an owner request").
 
 ### Observable effect
 
@@ -87,8 +89,9 @@ A session past 8 hours from sign-in, 30 minutes without a request, or signed
 out serves no request; a change carries the CSRF value of its session,
 compared in constant time (A13 rule 5); the import lock is taken before the
 session's lock, and both are held until the request is done (A16 rule 2);
-the session's changes apply one at a time in the order they take its lock;
-a request that passed completes even if a limit comes while it runs (A13
+the session's lock is granted in the order the requests passed the session
+check, so its changes apply one at a time in that order; a request that
+passed completes even if a limit or a sign-out comes while it runs (A13
 rule 2).
 
 ### Errors
@@ -112,7 +115,8 @@ session's changes (A13 rule 2).
 
 ### Inputs
 
-The admitted session.
+The admitted session: the step of a sign-out request, which
+`admit_owner_request` runs holding the import lock and the session's lock.
 
 ### Outputs
 
@@ -125,11 +129,11 @@ dropped (M11).
 
 ### Enforces
 
-It takes the import lock, then the session's lock, only after every change
-of the session that passed the session check before the sign-out arrived
-had its turn: each completes, its change to the store included, and leaves
-nothing in the ended session; a request arriving after it is refused at the
-session check. It goes on when the import is closed (A16 rule 2).
+Its turn comes after every change of the session that passed the session
+check before the sign-out did, the session's lock being granted in that
+order: each completes, its change to the store included, and leaves nothing
+in the ended session; a request arriving after it is refused at the session
+check. It goes on when the import is closed (A16 rule 2).
 
 ### Errors
 
@@ -209,7 +213,9 @@ That the submission is confirmed, or the refusal.
 A value equal to the pending one is used up from here on, whatever the
 answer, a binding to another action, target, revision or inputs included; an
 expired one is cleared; another value while the pending one is valid leaves
-it as it was.
+it as it was. A session without a pending value — never shown, used up or
+cleared — keeps no memory of earlier values, so any value then is
+`confirmation_not_pending`.
 
 ### Enforces
 
@@ -219,8 +225,9 @@ compared in constant time; it is not the confirmation id, which
 
 ### Errors
 
-`confirmation_refused` (`confirmation_missing_or_other`,
-`confirmation_used_or_bound_elsewhere`, `confirmation_expired`).
+`confirmation_refused` (`confirmation_not_pending`,
+`confirmation_other_value`, `confirmation_bound_elsewhere`,
+`confirmation_expired`).
 
 ### State impact
 
@@ -240,7 +247,8 @@ replacing the session's earlier one (A16 rule 2).
 ### Inputs
 
 The admitted session, holding the import lock and its own lock; the file's
-bytes and digest, which `migration_import` accepted.
+bytes and the digest `migration_import.read_import_mapping` computed of them
+when it accepted them.
 
 ### Outputs
 
@@ -361,8 +369,8 @@ pending confirmation and its uploaded file.
 ### Enforces
 
 The pass alone ends sessions by their limits, taking the import lock and
-then each session's lock and deciding under them; a limit is measured by
-`clock.monotonic_reading` (A13 rule 2).
+then each session's lock and deciding under them, each session by a reading
+of `clock.monotonic_reading` taken once its lock is held (A13 rule 2).
 
 ### Errors
 
@@ -426,8 +434,11 @@ the project in its set (A10 rules 1–3, 5).
 ### Inputs
 
 The transaction; the session identity; whether the operation is on a
-project; the project it names, or none — for a withdrawal the project of
-the pointer, resolved before.
+project; the project it names, or none to use the active one — for a
+withdrawal the project of the pointer, which `operations` resolved before;
+a withdrawal whose pointer does not exist never reaches this operation:
+`operations` answers it `not_found` (`agent_call_refused`) itself, the same
+answer as every refusal here (A08 rule 7, A10 rule 3).
 
 ### Outputs
 
@@ -473,6 +484,7 @@ The transaction; the session; the request text; the action's instant.
 ### Outputs
 
 That the request is pending — nothing about which projects exist (R0-47).
+It changes state whenever accepted, so it answers no `changed`.
 
 ### Observable effect
 
@@ -700,7 +712,7 @@ The transaction; the session; the stated access version; the project.
 
 ### Outputs
 
-The session's access and `changed: true`.
+The session's access.
 
 ### Observable effect
 

@@ -188,9 +188,10 @@ The transaction; the `customer_ref`.
 
 ### Outputs
 
-Name, kind, phone, e-mail, language, tax id, legal name, revision, whether
-it is restricted, the date it was ended; for an erased Customer only that it
-was erased.
+`customer_ref`, name, kind, phone, e-mail, language, tax id, legal name,
+revision, created and last-changed instants, the restricted mark with its
+instant, the date the relationship was ended; for an erased Customer its
+erased form (Conventions).
 
 ### Observable effect
 
@@ -225,8 +226,9 @@ The transaction.
 ### Outputs
 
 The Customers that are not erased by name, then `customer_ref`, each with
-its `customer_ref`, name and marks; then the erased ones by `customer_ref`,
-as erased only.
+its `customer_ref`, name, the restricted mark with its instant and the date
+its relationship was ended; then the erased ones by `customer_ref`, each in
+its erased form (Conventions).
 
 ### Observable effect
 
@@ -454,8 +456,8 @@ Writes one Project.
 
 ### Inputs
 
-The transaction; the `project_id`; the stated revision; the action's instant
-and today's date.
+The transaction; the `project_id`; the stated revision; the action's
+instant.
 
 ### Outputs
 
@@ -463,8 +465,8 @@ The project card and `changed`.
 
 ### Observable effect
 
-The project becomes `archived` with its archived date; its revision and
-last-changed instant move once. Archiving an archived project changes
+The project becomes `archived`, its archived instant the action's (M01);
+its revision and last-changed instant move once. Archiving an archived project changes
 nothing (A05).
 
 ### Enforces
@@ -541,8 +543,8 @@ The transaction; the `project_id`.
 ### Outputs
 
 The project, its id first, with its object, its rooms in 'list rooms' order,
-its revision and, when archived, its archived date; for an anonymised
-project only that it was erased (R0-62).
+its revision and, when archived, the date it was archived, the UTC date of its
+archived instant; for an anonymised project its erased form (R0-62).
 
 ### Observable effect
 
@@ -577,7 +579,7 @@ The transaction; the `project_id`.
 ### Outputs
 
 `project_id`, display name, status, address, `customer_ref`, created and
-`registry_updated_at`; for an anonymised project only that it was erased.
+`registry_updated_at`; for an anonymised project its erased form (Conventions).
 
 ### Observable effect
 
@@ -646,8 +648,8 @@ The transaction; the `project_id`.
 
 ### Outputs
 
-`project_id`, alias, status and rooms; for an anonymised project only that
-it was erased (R0-62).
+`project_id`, alias, status and rooms; for an anonymised project its erased form
+(R0-62).
 
 ### Observable effect
 
@@ -722,8 +724,8 @@ The transaction; the `project_id`.
 
 ### Outputs
 
-The rooms by name, then `room_id`; for an anonymised project that it was
-erased.
+The rooms by name, then `room_id`; for an anonymised project, which has
+none left, its erased form (R0-62).
 
 ### Observable effect
 
@@ -959,8 +961,10 @@ The transaction; the `project_id`.
 ### Outputs
 
 Every pointer — published, superseded, withdrawn, of removed types too —
-each with its type, version and status, by type, then version highest
-first, then pointer id.
+each with every fact M05 holds: id, project, type, version, status, owner
+service, `uri`, `payload_ref`, digest, publisher and published instant, the
+superseded instant, the withdrawing principal and withdrawn instant; by type,
+then version highest first, then pointer id.
 
 ### Observable effect
 

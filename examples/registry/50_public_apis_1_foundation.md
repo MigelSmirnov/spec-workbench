@@ -227,6 +227,41 @@ None; values of different lengths answer unequal.
 
 Pure; touches no record.
 
+## `public_op:release_declarations.import_size_limit`
+
+### Owner
+
+`module:release_declarations`. The import file's size limit the release
+declares (A19 rule 4).
+
+### Callers
+
+`module:migration_import`.
+
+### Inputs
+
+None.
+
+### Outputs
+
+The limit in bytes; its value is State 6's.
+
+### Observable effect
+
+None.
+
+### Enforces
+
+A file over it is refused at upload, before it is read (A19 rule 4).
+
+### Errors
+
+None.
+
+### State impact
+
+Reads the release; touches no record.
+
 ## `public_op:release_declarations.backup_name_prefixes`
 
 ### Owner
@@ -244,7 +279,8 @@ None.
 
 ### Outputs
 
-The two prefixes, neither beginning with the other.
+The two prefixes, neither beginning with the other; their values are State
+6's.
 
 ### Observable effect
 
@@ -252,7 +288,9 @@ None.
 
 ### Enforces
 
-The prefixes are the release's, never the configuration's (A18 rule 5).
+The prefixes are the release's, never the configuration's (A18 rule 5), and
+a release keeps the prefixes of the one before it, so a kept backup of an
+earlier release is still counted and rotated.
 
 ### Errors
 
@@ -452,7 +490,7 @@ Reads the release; touches no record.
 ### Owner
 
 `module:release_declarations`. The store version the running release
-carries (A17 rule 5).
+carries, with the suffix of the store's temporary name (A17 rule 5).
 
 ### Callers
 
@@ -464,7 +502,7 @@ None.
 
 ### Outputs
 
-One store version.
+One store version, and the temporary-name suffix.
 
 ### Observable effect
 
@@ -472,8 +510,10 @@ None.
 
 ### Enforces
 
-A store opened at the start and a backup's checked copy carry this version
-(A17 rule 5, A18 rule 4).
+A store opened at the start and a backup's checked copy carry this version;
+a new store is made under the store's name with this suffix, and only a file
+of that name is removed as a leftover (A17 rule 5, A18 rule 4). Its value is
+State 6's.
 
 ### Errors
 
