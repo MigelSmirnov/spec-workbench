@@ -569,6 +569,11 @@ A create repeated after a lost answer — with or without a caller-supplied id �
 never silently makes a second project, customer or room, and never damages one.
 The mechanism belongs to State 2.
 
+This holds while the record the first create made keeps its values (owner,
+2026-11-01). Erasing a customer or anonymising a project removes everything
+that would tell a repeat (R0-06, R0-62); a create repeated after that is a new
+create, and its answer shows the new record it made.
+
 ### R0-37 — Data protection the specification guarantees (owner, 2026-10-27; vNext §12, §13; narrows R0-06)
 
 The specification guarantees the technical side of data protection and the
