@@ -17,8 +17,11 @@ answer as escaped text (A19 rules 1, 2). `operations` runs A04 rule 6: stage
 (1) through `service_access` for a service or `owner_sessions` for the owner,
 stage (2) through `agent_sessions` for agent authority, and hands the action
 to the module that owns its record for stages (3) to (6), which answers every
-failure of the first failing stage. A refusal at stage (1) or (2) reaches no
-other module and records nothing.
+failure of the first failing stage. A refusal at stage (1) or (2) records
+nothing and reaches no module of stages (3) to (6); the one lookup stage (2)
+makes of another module is a withdrawal's pointer, resolved to its project
+after the session is found registered (A08 rule 7,
+`flow:publish_and_withdraw_pointer`).
 
 Every action that changes the store is one transaction `operations` opens
 through `store` (A04 rule 4), taking the one write lock when it begins; every
@@ -32,9 +35,10 @@ caller is answered that the action failed, in the form State 5 declares. A
 read runs in one read transaction of `store` and records nothing (A14 rule 4).
 A refusal changes nothing and writes no entry (A14 rule 2).
 
-Every identity Registry mints comes from `random_values`, checked by the
-writing module against its model and minted again on a collision ("Minted
-identities"). Every answer's disclosure class is the highest of its facts'
+Every identity Registry mints comes from `random_values`. A record's
+identity is checked by the writing module against its model and minted again
+on a collision; a confirmation id names no record and is not checked against
+earlier ones ("Minted identities"). Every answer's disclosure class is the highest of its facts'
 (State 1, "Disclosure classes by field"); `operations` refuses a service's
 answer whole when it is above the service's highest class (A09 rule 4), and no
 owner answer is refused for its class. A flow references a module or a
@@ -84,14 +88,19 @@ diagnostic.
    equal (rule 4); the store and the backup location apart, every link
    resolved (rule 5). The first failure stops the start with a diagnostic
    naming the item and never its value. No default is applied (rule 5).
-2. **Probe the backup location.** `capability:backups.probe_backup_location`
+2. **Bind the listeners.** `module:instance_lifecycle` binds the listener of
+   each surface, at the addresses the release fixes, and accepts nothing on
+   them yet; a listener that cannot be bound stops the start with a
+   diagnostic naming the surface, and a listener already bound is closed.
+   No file has been made yet.
+3. **Probe the backup location.** `capability:backups.probe_backup_location`
    creates and removes a probe file under the temporary prefix
    `capability:release_declarations.backup_name_prefixes` names (A17 rule 2,
    A18 rule 5). A location that does not exist, or where the file cannot be
    created or removed, stops the start; a probe it could not remove stays
    and the next backup run removes it (A18 rule 4). No other file there is
    touched.
-3. **Open or make the store.** `capability:store.open_store` first removes a
+4. **Open or make the store.** `capability:store.open_store` first removes a
    file of the store's temporary name — the store's name with the suffix the
    release declares — and no other file. When the store's file does not
    exist and its directory does, it makes a new, empty store of
@@ -102,17 +111,19 @@ diagnostic.
    rule 5). A leftover it cannot remove while the store is absent, a store
    that does not open, fails the check or carries another version stops the
    start; bringing a store to a new version is the release's step, not the
-   start's.
-4. **Serve.** Only now `module:instance_lifecycle` opens the surfaces, each
-   on a listener of its own: `capability:service_api.serve_service_request`
-   and `capability:owner_interface.serve_owner_request`. It opens every
-   listener it serves before either answers a request; a listener that cannot
-   be opened stops the start with a diagnostic naming the surface, and a
-   listener already opened is closed unanswered, so nothing is served (A17
-   rule 2). An owner-only start opens the owner interface's listener alone:
-   no service API is served, and every service call is refused by finding no
-   listener — Registry answers no service request (A17 rule 1).
-5. **Start the passes.** Every 60 seconds from the start,
+   start's. A making that fails removes its temporary file, so a stopped
+   start leaves no store it made; one it cannot remove is reported in the
+   diagnostic and removed first by the next start. The store is the start's
+   last check: a store made new and renamed is followed by no step that can
+   fail.
+5. **Serve.** Only now `module:instance_lifecycle` starts accepting on the
+   bound listeners, each surface on its own:
+   `capability:service_api.serve_service_request` and
+   `capability:owner_interface.serve_owner_request` (A17 rule 2). In an owner-only start the service API's listener is opened too
+   and serves no operation: every service call is answered with a refusal at
+   stage (1), whatever token it carries (A17 rule 1, "refuses every service
+   call").
+6. **Start the passes.** Every 60 seconds from the start,
    `capability:owner_sessions.end_expired_sessions` (A13 rule 2). At least
    once a minute, `capability:backups.run_daily_backup_if_due`
    (`flow:daily_backup`), except in an owner-only start, which makes no
@@ -122,8 +133,8 @@ diagnostic.
 
 - A running instance serving both surfaces, with no owner session, an empty
   sign-in count and no remembered backup date.
-- An owner-only instance: the owner interface alone served, no service API
-  listener, no backup run.
+- An owner-only instance: the owner interface served, every service call
+  refused at stage (1), no backup run.
 - A stopped start: one diagnostic naming the first failed item and no value,
   nothing served, no file left that the start made but a probe it could not
   remove.
@@ -136,8 +147,11 @@ diagnostic.
 - The store's temporary file not removable while the store is absent, the
   store not opening, failing the integrity check or of another version —
   `module:store`'s diagnostic.
-- A listener that cannot be opened — `module:instance_lifecycle`'s
-  diagnostic; every listener already opened is closed.
+- A listener that cannot be bound — `module:instance_lifecycle`'s
+  diagnostic, before any file is made; every listener already bound is
+  closed.
+- A new store that cannot be made — `module:store`'s diagnostic; its
+  temporary file removed, or named in the diagnostic when it cannot be.
 - Every failure stops the start before anything is served; no failure is
   retried by Registry. A store that fails is never replaced or migrated by the
   start.
@@ -198,9 +212,12 @@ rule 7).
    instance's import lock first (A16 rule 2). The request goes on as its
    own flow.
 3. **Sign out.** `capability:owner_sessions.sign_out_owner` takes the import
-   lock, then the session's lock, so a request admitted before it completes
-   first; it ends the session and drops its pending confirmation and its
-   uploaded file (M11). A sign-out goes on when the import is closed (A16
+   lock, then the session's lock, and in its turn among the session's changes
+   ends the session and drops its pending confirmation and its uploaded file
+   (M11). A change admitted before it — whether it took the session's lock
+   before the sign-out or takes it after — completes its change to the store
+   and leaves nothing in the ended session; a request arriving after it is
+   refused at the session check (A13 rule 2). A sign-out goes on when the import is closed (A16
    rule 2).
 4. **Expire.** `capability:owner_sessions.end_expired_sessions`, every 60
    seconds (`flow:start_instance`), takes the import lock and then each
@@ -687,7 +704,9 @@ agent projection, neither carrying `personal_data`.
    `capability:audit_log.append_audit_entry`. A project already in the set is
    answered unchanged — no version move, no entry (A05 rules 1, 2) — and
    making it active along with it is a change of the active project, which
-   moves the version and writes no entry (M09).
+   moves the version and writes no entry (M09). Answering a request by
+   granting a project already in the set clears the request, which moves the
+   version once, and writes no entry: no project joined the set.
 7. **Change the active project, revoke.**
    `capability:agent_sessions.set_active_project` makes a project of the set
    active, or clears it, which revokes nothing; an archived project cannot be
@@ -776,9 +795,12 @@ owner.
    `capability:release_declarations.owner_service_of_type` and its
    publisher; the type's published pointer becomes `superseded` with its
    instant, all in the one transaction (A07 rules 1–3).
-2. **Withdraw.** The call names the pointer only. `module:operations` finds
-   its project with `capability:artifact_pointers.project_of_pointer`, and
-   for Kernel stage (2) checks that project against the set; a pointer that
+2. **Withdraw.** The call names the pointer only. For Kernel, stage (2)
+   first finds the session registered — an unregistered one is refused
+   before any pointer is looked up — then `module:operations` finds the
+   pointer's project with `capability:artifact_pointers.project_of_pointer`
+   and `capability:agent_sessions.check_agent_call` checks that project
+   against the set; for the owner the project is found the same way; a pointer that
    does not exist or whose project is outside the set is answered as not
    found (A08 rule 7). `capability:artifact_pointers.withdraw_pointer`: a
    withdrawn or superseded pointer refused (A05 rule 4), a pointer of a
@@ -887,8 +909,9 @@ minted `customer_ref`.
 - An accepted import: the picked projects under their own ids with rooms,
   pointers and links, the Customers made, the closure and one entry; every
   session's upload dropped; every later import refused.
-- A refused confirmation: nothing applied, the file kept, the step to be
-  shown again.
+- A refused confirmation: nothing applied; the file stays kept unless it
+  was already gone — dropped by another session's accepted import, a new
+  upload or the session's end — and the step is to be shown again.
 
 ### Errors
 
@@ -944,13 +967,17 @@ key; the kept name made from the instant.
    read snapshot of the store, the agent sessions removed, at the temporary
    path `module:backups` named, and answers that transaction's start instant
    and the last sequence number the audit counter holds (A18 rules 1, 2,
-   A15 rule 5). `module:backups` encrypts it with the configured key,
-   recording the instant, the release from
+   A15 rule 5). `module:backups` encrypts it into the backup, a second file
+   under the temporary prefix, with the configured key, and removes the
+   unencrypted copy before going on — a copy it cannot remove fails the run
+   and is left, under the temporary prefix, for the next run's step 2; the
+   backup records the instant, the release from
    `capability:release_declarations.release_versions`, the sequence number
    and the key's digest; decrypts it into a second temporary file;
    `capability:store.check_store_file` opens that for reading only and checks
    the release's store version, the full integrity check and that its kept
-   sequence number equals the recorded one; `module:backups` removes it. A
+   sequence number equals the recorded one; `module:backups` removes it. No
+   unencrypted file of the store is left by a run that succeeds. A
    backup that passes is renamed to its kept name, made from its instant; one
    that fails, or whose kept name exists, or whose rename fails, is deleted
    and the run fails (A18 rules 4, 5).
