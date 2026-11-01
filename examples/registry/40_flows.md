@@ -304,7 +304,8 @@ reached by its `customer_ref` only; no contact value crosses into a project.
    facts equal the given ones by `capability:given_values.facts_equal_for_repeat`
    is a repeat — answered as it stands, an archived one included, nothing
    changed, no entry (A01 rules 3, 4); one with other facts refuses the
-   create (A01 rule 5). Otherwise (6) a named customer that the same answer
+   create as a conflict, a refusal of stage (6) (A01 rule 5, A04 rule 6).
+   Otherwise (6) a named customer that the same answer
    called erased, restricted or ended refuses it (A03 rule 5), and the
    project is written:
    a minted `project_id`, status `active`, revision 1, created and
@@ -361,10 +362,11 @@ reached by its `customer_ref` only; no contact value crosses into a project.
   active — stage (2), `module:agent_sessions`, answered as a project that does
   not exist (A10 rule 3).
 - Unknown project, unknown customer — stage (3), `module:projects`.
-- Missing name or address, a malformed request id, a request id carried by a
-  record with other facts — stage (4), `module:projects`.
+- Missing name or address, a malformed request id — stage (4),
+  `module:projects`.
 - A stale or missing revision — stage (5), `module:projects`; nothing changes.
-- An archived project; a customer erased, restricted or ended — stage (6),
+- An archived project; a customer erased, restricted or ended; a request id
+  carried by a record with other facts, a conflict — stage (6),
   `module:projects`.
 - Every refusal names every failure of its stage (A04 rule 6) and writes
   nothing.
@@ -501,7 +503,7 @@ recorded or absent, never contact data (R0-83).
    `capability:customers.record_customer`: (4) the request id's form, the
    name and kind required, the contact and fiscal data optional (A02); a
    request id a Customer carries with equal facts is a repeat answered as it
-   stands, with other facts refused (A01). A new Customer gets a minted
+   stands, with other facts refused as a conflict at stage (6) (A01 rule 5). A new Customer gets a minted
    `customer_ref` from `capability:random_values.mint_identity`, revision 1,
    its instants. The same person recorded again is a second Customer (R0-16).
    `module:operations` appends "recording a customer" with
@@ -557,11 +559,12 @@ recorded or absent, never contact data (R0-83).
   `module:service_access`; in an owner-only start a service call reaches no
   listener (A17 rule 1).
 - Unknown Customer — stage (3), `module:customers`.
-- Missing name or kind, a malformed request id, a request id with other
-  facts, an end date after today — stage (4), `module:customers`.
+- Missing name or kind, a malformed request id, an end date after today —
+  stage (4), `module:customers`.
 - A stale revision — stage (5), `module:customers`.
 - Correcting or marking an erased Customer; billing data of an erased or
-  restricted one — stage (6), `module:customers`.
+  restricted one; a request id with other facts, a conflict — stage (6),
+  `module:customers`.
 
 ## `flow:service_reads_project`
 
@@ -802,7 +805,8 @@ owner.
    (A07 rule 6, A22 rule 5); the request id looked up among that project's
    pointers, its project and publisher among the facts — a repeat answers
    the pointer whatever its status now, and the archive check applies to it
-   (A01 rules 3, 4, 6); (6) an archived project refused. A new pointer gets a
+   (A01 rules 3, 4, 6), and one with other facts is refused as a conflict;
+   (6) an archived project refused, and the conflict. A new pointer gets a
    minted id, the next version of its type, the owner service of
    `capability:release_declarations.owner_service_of_type` and its
    publisher; the type's published pointer becomes `superseded` with its
@@ -839,10 +843,10 @@ owner.
 - Kernel's session or set — stage (2), `module:agent_sessions`, as not found.
 - Unknown project — stage (3), `module:artifact_pointers`; an unknown pointer
   the same for the owner, and for Kernel stage (2)'s not-found answer.
-- An undeclared or removed type, neither `uri` nor `payload_ref`, a request id
-  with other facts — stage (4), `module:artifact_pointers`.
-- An archived project; a pointer already withdrawn or superseded — stage (6),
+- An undeclared or removed type, neither `uri` nor `payload_ref` — stage (4),
   `module:artifact_pointers`.
+- An archived project; a pointer already withdrawn or superseded; a request
+  id with other facts, a conflict — stage (6), `module:artifact_pointers`.
 
 ## `flow:import_from_vps`
 
