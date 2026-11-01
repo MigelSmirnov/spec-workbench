@@ -1,0 +1,72 @@
+{
+ "open_points": [
+  {
+   "unit": "30_modules.md:Facts several modules touch, and their one owner",
+   "subject": "backup snapshot's last audit sequence number",
+   "kind": "owner/knowledge contradiction",
+   "text": "`audit_log` owns “the last sequence number its store ever wrote”, while `store` says “The copy answers, from its one read transaction, ... the last sequence number the audit counter it holds says”; `store` also “Must not own ... the audit log's sequence rule”.",
+   "question": "Which module reads the audit sequence counter inside the backup snapshot, and through what dependency can it guarantee that the number and copied store describe the same read transaction?",
+   "options": [
+    "`store` owns the snapshot-level read of the counter despite `audit_log` owning the counter and its representation",
+    "`audit_log` reads the counter through a snapshot capability supplied by `store`",
+    "`backups` coordinates a shared snapshot between `store` and `audit_log`"
+   ],
+   "default_guess": "Give `audit_log` a read capability scoped to the transaction or snapshot owned by `store`, and let `backups` receive the resulting number with the copy.",
+   "witness": {
+    "initial": "The store's last audit sequence is 10 and a daily backup begins.",
+    "events": [
+     "`store` begins the backup read transaction and sees sequence 10.",
+     "Another action commits audit entry 11 before backup metadata is assembled.",
+     "The backup code obtains the sequence number using whichever module boundary it inferred."
+    ],
+    "outcomes": [
+     "The backup records 10, matching the store snapshot.",
+     "The backup records 11 while its copied store contains state only through sequence 10, causing its required check to fail or producing mismatched metadata."
+    ],
+    "observer": "The backup checker and the owner attempting disaster recovery"
+   }
+  },
+  {
+   "unit": "30_modules.md:`operations`",
+   "subject": "agent-authority pointer withdrawal check order",
+   "kind": "ordering contradiction",
+   "text": "The shared check-order passage says `operations` “runs stage (2) through `agent_sessions.check_agent_call`, and hands the action to the module that owns its record for stages (3) to (6)”, but the changed `operations` passage requires “Resolving a pointer a withdrawal names to its project, through `artifact_pointers.project_of_pointer`, before stage (2) checks that project”.",
+   "question": "Is resolving the pointer an allowed routing lookup before stage (2), or is it stage (3)'s existence check; and which module owns the refusal when the pointer cannot be resolved?",
+   "options": [
+    "Treat pointer resolution as a special pre-stage routing lookup owned by `operations`",
+    "Keep pointer existence in stage (3) and add an `agent_sessions` check that can operate on a pointer without first resolving its project",
+    "Move the withdrawal-specific authorization and existence composition into `artifact_pointers`"
+   ],
+   "default_guess": "Treat the lookup as a withdrawal-specific routing step in `operations`, while deferring any observable not-found decision until the ordered checks are evaluated."
+  },
+  {
+   "unit": "30_modules.md:`operations`",
+   "subject": "import acceptance, confirmation-id minting and migration closure",
+   "kind": "two-phase ownership gap",
+   "text": "`operations` “mints ... only after the action's module has answered that it is accepted and changed state ... and hands it ... for the import, to the closure”, while `migration_import` owns confirming the import and storing “the migration closure ... with the confirmation id ... or nothing” in the import's one transaction.",
+   "question": "What exact module call or intermediate result declares the import accepted and changed before its required closure exists, and which module resumes the same transaction to store that closure after `operations` mints the confirmation id?",
+   "options": [
+    "`migration_import` prepares and writes the imported records, returns a pending accepted result, then `operations` mints the id and calls `migration_import.record_migration_closure`",
+    "`operations` validates the import itself, mints the id, and passes it into one `migration_import.confirm_import` call",
+    "`migration_import` receives a deferred confirmation-id supplier that it invokes only after all acceptance checks pass"
+   ],
+   "default_guess": "Use an explicit pending-import result inside the open transaction, followed by `operations` minting the id and calling `migration_import.record_migration_closure` before commit."
+  },
+  {
+   "unit": "30_modules.md:`migration_import`",
+   "subject": "import/session lock orchestration",
+   "kind": "dependency direction unclear",
+   "text": "`migration_import` knows `owner_sessions` but “Must not own the session's locks and its kept file”; `owner_sessions` owns the import lock and uploaded files; and `operations` also knows both modules, without the text assigning which one orchestrates mapping and confirmation while both locks remain held.",
+   "question": "Which module acquires the import lock and session lock, obtains the uploaded file, calls `migration_import`, and keeps those locks held through confirmation and the store transaction?",
+   "options": [
+    "`operations` orchestrates `owner_sessions` and `migration_import`",
+    "`migration_import` calls lock-scoped capabilities of `owner_sessions`",
+    "`owner_sessions` invokes a supplied migration operation while it owns both locks"
+   ],
+   "default_guess": "Let `operations` orchestrate a lock-scoped `owner_sessions` capability and call `migration_import` while that scope remains active."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"30_modules.md:Facts several modules touch, and their one owner\",\"subject\":\"backup snapshot's last audit sequence number\",\"kind\":\"owner/knowledge contradiction\",\"text\":\"`audit_log` owns “the last sequence number its store ever wrote”, while `store` says “The copy answers, from its one read transaction, ... the last sequence number the audit counter it holds says”; `store` also “Must not own ... the audit log's sequence rule”.\",\"question\":\"Which module reads the audit sequence counter inside the backup snapshot, and through what dependency can it guarantee that the number and copied store describe the same read transaction?\",\"options\":[\"`store` owns the snapshot-level read of the counter despite `audit_log` owning the counter and its representation\",\"`audit_log` reads the counter through a snapshot capability supplied by `store`\",\"`backups` coordinates a shared snapshot between `store` and `audit_log`\"],\"default_guess\":\"Give `audit_log` a read capability scoped to the transaction or snapshot owned by `store`, and let `backups` receive the resulting number with the copy.\",\"witness\":{\"initial\":\"The store's last audit sequence is 10 and a daily backup begins.\",\"events\":[\"`store` begins the backup read transaction and sees sequence 10.\",\"Another action commits audit entry 11 before backup metadata is assembled.\",\"The backup code obtains the sequence number using whichever module boundary it inferred.\"],\"outcomes\":[\"The backup records 10, matching the store snapshot.\",\"The backup records 11 while its copied store contains state only through sequence 10, causing its required check to fail or producing mismatched metadata.\"],\"observer\":\"The backup checker and the owner attempting disaster recovery\"}},{\"unit\":\"30_modules.md:`operations`\",\"subject\":\"agent-authority pointer withdrawal check order\",\"kind\":\"ordering contradiction\",\"text\":\"The shared check-order passage says `operations` “runs stage (2) through `agent_sessions.check_agent_call`, and hands the action to the module that owns its record for stages (3) to (6)”, but the changed `operations` passage requires “Resolving a pointer a withdrawal names to its project, through `artifact_pointers.project_of_pointer`, before stage (2) checks that project”.\",\"question\":\"Is resolving the pointer an allowed routing lookup before stage (2), or is it stage (3)'s existence check; and which module owns the refusal when the pointer cannot be resolved?\",\"options\":[\"Treat pointer resolution as a special pre-stage routing lookup owned by `operations`\",\"Keep pointer existence in stage (3) and add an `agent_sessions` check that can operate on a pointer without first resolving its project\",\"Move the withdrawal-specific authorization and existence composition into `artifact_pointers`\"],\"default_guess\":\"Treat the lookup as a withdrawal-specific routing step in `operations`, while deferring any observable not-found decision until the ordered checks are evaluated.\"},{\"unit\":\"30_modules.md:`operations`\",\"subject\":\"import acceptance, confirmation-id minting and migration closure\",\"kind\":\"two-phase ownership gap\",\"text\":\"`operations` “mints ... only after the action's module has answered that it is accepted and changed state ... and hands it ... for the import, to the closure”, while `migration_import` owns confirming the import and storing “the migration closure ... with the confirmation id ... or nothing” in the import's one transaction.\",\"question\":\"What exact module call or intermediate result declares the import accepted and changed before its required closure exists, and which module resumes the same transaction to store that closure after `operations` mints the confirmation id?\",\"options\":[\"`migration_import` prepares and writes the imported records, returns a pending accepted result, then `operations` mints the id and calls `migration_import.record_migration_closure`\",\"`operations` validates the import itself, mints the id, and passes it into one `migration_import.confirm_import` call\",\"`migration_import` receives a deferred confirmation-id supplier that it invokes only after all acceptance checks pass\"],\"default_guess\":\"Use an explicit pending-import result inside the open transaction, followed by `operations` minting the id and calling `migration_import.record_migration_closure` before commit.\"},{\"unit\":\"30_modules.md:`migration_import`\",\"subject\":\"import/session lock orchestration\",\"kind\":\"dependency direction unclear\",\"text\":\"`migration_import` knows `owner_sessions` but “Must not own the session's locks and its kept file”; `owner_sessions` owns the import lock and uploaded files; and `operations` also knows both modules, without the text assigning which one orchestrates mapping and confirmation while both locks remain held.\",\"question\":\"Which module acquires the import lock and session lock, obtains the uploaded file, calls `migration_import`, and keeps those locks held through confirmation and the store transaction?\",\"options\":[\"`operations` orchestrates `owner_sessions` and `migration_import`\",\"`migration_import` calls lock-scoped capabilities of `owner_sessions`\",\"`owner_sessions` invokes a supplied migration operation while it owns both locks\"],\"default_guess\":\"Let `operations` orchestrate a lock-scoped `owner_sessions` capability and call `migration_import` while that scope remains active.\"}]}",
+ "set_aside": []
+}
