@@ -1,0 +1,79 @@
+{
+ "open_points": [
+  {
+   "unit": "50_public_apis_2_sessions.md:`public_op:owner_sessions.admit_owner_request`",
+   "subject": "session-lock ordering for changes that touch uploaded files",
+   "kind": "contradiction",
+   "text": "“a request that touches one first waits for the import lock and then takes its place” contradicts “so every change of a session admitted before another takes its place on the session's lock before it”",
+   "question": "May a later admitted change that does not touch an uploaded file take the session lock and run before an earlier admitted change that is still waiting for the import lock?",
+   "options": [
+    "Yes: lock order determines execution, so the later change may overtake.",
+    "No: admission order must be preserved across both kinds of change, requiring some reservation or other ordering mechanism."
+   ],
+   "default_guess": "Allow overtaking, following the explicit import-lock-then-session-lock mechanism.",
+   "witness": {
+    "initial": "Owner session S is valid and has a clean import confirmation ready; another session currently holds the import lock for a long mapping read.",
+    "events": [
+     "S submits the import confirmation; it is admitted first and waits for the import lock without taking a place on S's session lock.",
+     "S then submits a customer correction, which touches no uploaded file and is admitted second."
+    ],
+    "outcomes": [
+     "Following the stated lock mechanism, the correction takes S's session lock and commits before the import.",
+     "Following the stated admission-order guarantee, the import must take its place before the correction and commit first."
+    ],
+    "observer": "The owner sees the opposite order in the audit log and in which response completes first."
+   }
+  },
+  {
+   "unit": "50_public_apis_4_import_backups.md:`public_op:migration_import.read_import_mapping`",
+   "subject": "store transaction used by an upload",
+   "kind": "contradiction",
+   "text": "The operation requires “The read transaction” and “Reads the closure and the ids production holds”, while State 3 says “uploading an import file ... opens no store transaction”.",
+   "question": "Does the upload-mode call of `read_import_mapping` run in a store read transaction, or must upload remain a runtime-only request with no store transaction?",
+   "options": [
+    "Open a read transaction for upload mode so it can read the migration closure consistently.",
+    "Open no transaction for upload mode and obtain or maintain the closure check by some other unspecified mechanism.",
+    "Use a transaction only for mapping mode, despite the operation declaring one input contract for both modes."
+   ],
+   "default_guess": "Open a read transaction in both modes, following this operation's explicit input and the domain-operation convention.",
+   "witness": {
+    "initial": "The owner has a valid session, the migration closure is absent, and the store temporarily cannot begin a read transaction.",
+    "events": [
+     "The owner uploads a syntactically valid import file."
+    ],
+    "outcomes": [
+     "If upload mode requires the declared read transaction, the request returns `internal_error` and the file is not kept.",
+     "If uploads open no store transaction as State 3 requires, the file can be parsed and kept successfully."
+    ],
+    "observer": "The owner sees either an upload failure or the project list from the accepted upload."
+   }
+  },
+  {
+   "unit": "50_public_apis_4_import_backups.md:`public_op:migration_import.read_import_mapping`",
+   "subject": "duplicate Customer mapping values",
+   "kind": "input representation gap",
+   "text": "Customer values are “keyed by that v1 value: at most one entry for each v1 value”, but “one given twice” must be refused as `duplicate_pick`.",
+   "question": "What input representation preserves two submitted entries with the same Customer v1 value long enough for `read_import_mapping` to detect `duplicate_pick`, and if the transport supplies duplicates, are they rejected or collapsed before this operation?",
+   "options": [
+    "Pass an ordered list of Customer-value entries and detect duplicate keys in this operation.",
+    "Pass a keyed map and let the surface reject duplicate keys before this operation.",
+    "Pass a keyed map that silently keeps the first or last duplicate, making `duplicate_pick` unreachable for Customer values."
+   ],
+   "default_guess": "Use a duplicate-preserving list and let `read_import_mapping` return `duplicate_pick`.",
+   "witness": {
+    "initial": "A valid uploaded file has two picked projects that share v1 Customer value `C1`.",
+    "events": [
+     "The owner submits the mapping form with two Customer-value entries keyed by `C1`, carrying different names or kinds."
+    ],
+    "outcomes": [
+     "A duplicate-preserving representation reaches the operation and is refused with `duplicate_pick`.",
+     "A keyed representation collapses the entries before the operation, so one value is accepted and the mapping may be clean."
+    ],
+    "observer": "The owner sees either a duplicate refusal or a mapping based silently on one of the two entries."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"50_public_apis_2_sessions.md:`public_op:owner_sessions.admit_owner_request`\",\"subject\":\"session-lock ordering for changes that touch uploaded files\",\"kind\":\"contradiction\",\"text\":\"“a request that touches one first waits for the import lock and then takes its place” contradicts “so every change of a session admitted before another takes its place on the session's lock before it”\",\"question\":\"May a later admitted change that does not touch an uploaded file take the session lock and run before an earlier admitted change that is still waiting for the import lock?\",\"options\":[\"Yes: lock order determines execution, so the later change may overtake.\",\"No: admission order must be preserved across both kinds of change, requiring some reservation or other ordering mechanism.\"],\"default_guess\":\"Allow overtaking, following the explicit import-lock-then-session-lock mechanism.\",\"witness\":{\"initial\":\"Owner session S is valid and has a clean import confirmation ready; another session currently holds the import lock for a long mapping read.\",\"events\":[\"S submits the import confirmation; it is admitted first and waits for the import lock without taking a place on S's session lock.\",\"S then submits a customer correction, which touches no uploaded file and is admitted second.\"],\"outcomes\":[\"Following the stated lock mechanism, the correction takes S's session lock and commits before the import.\",\"Following the stated admission-order guarantee, the import must take its place before the correction and commit first.\"],\"observer\":\"The owner sees the opposite order in the audit log and in which response completes first.\"}},{\"unit\":\"50_public_apis_4_import_backups.md:`public_op:migration_import.read_import_mapping`\",\"subject\":\"store transaction used by an upload\",\"kind\":\"contradiction\",\"text\":\"The operation requires “The read transaction” and “Reads the closure and the ids production holds”, while State 3 says “uploading an import file ... opens no store transaction”.\",\"question\":\"Does the upload-mode call of `read_import_mapping` run in a store read transaction, or must upload remain a runtime-only request with no store transaction?\",\"options\":[\"Open a read transaction for upload mode so it can read the migration closure consistently.\",\"Open no transaction for upload mode and obtain or maintain the closure check by some other unspecified mechanism.\",\"Use a transaction only for mapping mode, despite the operation declaring one input contract for both modes.\"],\"default_guess\":\"Open a read transaction in both modes, following this operation's explicit input and the domain-operation convention.\",\"witness\":{\"initial\":\"The owner has a valid session, the migration closure is absent, and the store temporarily cannot begin a read transaction.\",\"events\":[\"The owner uploads a syntactically valid import file.\"],\"outcomes\":[\"If upload mode requires the declared read transaction, the request returns `internal_error` and the file is not kept.\",\"If uploads open no store transaction as State 3 requires, the file can be parsed and kept successfully.\"],\"observer\":\"The owner sees either an upload failure or the project list from the accepted upload.\"}},{\"unit\":\"50_public_apis_4_import_backups.md:`public_op:migration_import.read_import_mapping`\",\"subject\":\"duplicate Customer mapping values\",\"kind\":\"input representation gap\",\"text\":\"Customer values are “keyed by that v1 value: at most one entry for each v1 value”, but “one given twice” must be refused as `duplicate_pick`.\",\"question\":\"What input representation preserves two submitted entries with the same Customer v1 value long enough for `read_import_mapping` to detect `duplicate_pick`, and if the transport supplies duplicates, are they rejected or collapsed before this operation?\",\"options\":[\"Pass an ordered list of Customer-value entries and detect duplicate keys in this operation.\",\"Pass a keyed map and let the surface reject duplicate keys before this operation.\",\"Pass a keyed map that silently keeps the first or last duplicate, making `duplicate_pick` unreachable for Customer values.\"],\"default_guess\":\"Use a duplicate-preserving list and let `read_import_mapping` return `duplicate_pick`.\",\"witness\":{\"initial\":\"A valid uploaded file has two picked projects that share v1 Customer value `C1`.\",\"events\":[\"The owner submits the mapping form with two Customer-value entries keyed by `C1`, carrying different names or kinds.\"],\"outcomes\":[\"A duplicate-preserving representation reaches the operation and is refused with `duplicate_pick`.\",\"A keyed representation collapses the entries before the operation, so one value is accepted and the mapping may be clean.\"],\"observer\":\"The owner sees either a duplicate refusal or a mapping based silently on one of the two entries.\"}}]}",
+ "set_aside": []
+}
