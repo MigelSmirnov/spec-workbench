@@ -20,8 +20,7 @@ to the module that owns its record for stages (3) to (6), which answers every
 failure of the first failing stage. A refusal at stage (1) or (2) records
 nothing and reaches no module of stages (3) to (6); the one lookup stage (2)
 makes of another module is a withdrawal's pointer, resolved to its project
-after the session is found registered (A08 rule 7,
-`flow:publish_and_withdraw_pointer`).
+before the session's check (A08 rule 7, `flow:publish_and_withdraw_pointer`).
 
 Every action that changes the store is one transaction `operations` opens
 through `store` (A04 rule 4), taking the one write lock when it begins; every
@@ -33,7 +32,10 @@ rule 1), naming the release and contract versions, and commits once. A
 transaction that fails changes nothing (A04 rule 4) and writes no entry; the
 caller is answered that the action failed, in the form State 5 declares. A
 read runs in one read transaction of `store` and records nothing (A14 rule 4).
-A refusal changes nothing and writes no entry (A14 rule 2).
+A refusal changes no record and writes no entry (A14 rule 2); what a refused
+owner request still does to its session's runtime state — the arrival
+restarting the 30 minutes, a confirmation value used up or cleared — is A13's
+and stated in the flows that make it.
 
 Every identity Registry mints comes from `random_values`. A record's
 identity is checked by the writing module against its model and minted again
@@ -88,19 +90,14 @@ diagnostic.
    equal (rule 4); the store and the backup location apart, every link
    resolved (rule 5). The first failure stops the start with a diagnostic
    naming the item and never its value. No default is applied (rule 5).
-2. **Bind the listeners.** `module:instance_lifecycle` binds the listener of
-   each surface, at the addresses the release fixes, and accepts nothing on
-   them yet; a listener that cannot be bound stops the start with a
-   diagnostic naming the surface, and a listener already bound is closed.
-   No file has been made yet.
-3. **Probe the backup location.** `capability:backups.probe_backup_location`
+2. **Probe the backup location.** `capability:backups.probe_backup_location`
    creates and removes a probe file under the temporary prefix
    `capability:release_declarations.backup_name_prefixes` names (A17 rule 2,
    A18 rule 5). A location that does not exist, or where the file cannot be
    created or removed, stops the start; a probe it could not remove stays
    and the next backup run removes it (A18 rule 4). No other file there is
    touched.
-4. **Open or make the store.** `capability:store.open_store` first removes a
+3. **Open or make the store.** `capability:store.open_store` first removes a
    file of the store's temporary name — the store's name with the suffix the
    release declares — and no other file. When the store's file does not
    exist and its directory does, it makes a new, empty store of
@@ -111,15 +108,21 @@ diagnostic.
    rule 5). A leftover it cannot remove while the store is absent, a store
    that does not open, fails the check or carries another version stops the
    start; bringing a store to a new version is the release's step, not the
-   start's. A making that fails removes its temporary file, so a stopped
-   start leaves no store it made; one it cannot remove is reported in the
-   diagnostic and removed first by the next start. The store is the start's
-   last check: a store made new and renamed is followed by no step that can
-   fail.
-5. **Serve.** Only now `module:instance_lifecycle` starts accepting on the
-   bound listeners, each surface on its own:
+   start's. A making that fails removes its temporary file; one it cannot
+   remove stays, and the next start removes it first (A17 rules 2, 5). The
+   answer says whether the store was made new.
+4. **Open the listeners.** Last, `module:instance_lifecycle` opens the
+   listener of each surface at the address
+   `capability:release_declarations.listener_addresses` gives — the
+   configuration names none (A17 rules 1, 2). One that cannot be opened stops
+   the start with a diagnostic naming the surface: the listeners already
+   opened are closed, and a store step 3 made new is removed by
+   `capability:store.discard_new_store` — one it cannot remove is an empty
+   store of the release's version, which the next start opens as any store
+   (A17 rule 2). An existing store is left as it was.
+5. **Serve.** Only now the surfaces answer:
    `capability:service_api.serve_service_request` and
-   `capability:owner_interface.serve_owner_request` (A17 rule 2). In an owner-only start the service API's listener is opened too
+   `capability:owner_interface.serve_owner_request`. In an owner-only start the service API's listener is opened too
    and serves no operation: every service call is answered with a refusal at
    stage (1), whatever token it carries (A17 rule 1, "refuses every service
    call").
@@ -136,8 +139,9 @@ diagnostic.
 - An owner-only instance: the owner interface served, every service call
   refused at stage (1), no backup run.
 - A stopped start: one diagnostic naming the first failed item and no value,
-  nothing served, no file left that the start made but a probe it could not
-  remove.
+  nothing served, no file left that the start made but one it could not
+  remove — a probe, a file of the store's temporary name, or an empty store
+  made new (A17 rule 2).
 
 ### Errors
 
@@ -147,11 +151,11 @@ diagnostic.
 - The store's temporary file not removable while the store is absent, the
   store not opening, failing the integrity check or of another version —
   `module:store`'s diagnostic.
-- A listener that cannot be bound — `module:instance_lifecycle`'s
-  diagnostic, before any file is made; every listener already bound is
-  closed.
 - A new store that cannot be made — `module:store`'s diagnostic; its
-  temporary file removed, or named in the diagnostic when it cannot be.
+  temporary file removed, or left for the next start when it cannot be.
+- A listener that cannot be opened — `module:instance_lifecycle`'s
+  diagnostic; the listeners already opened closed, a store made new by this
+  start removed by `module:store`.
 - Every failure stops the start before anything is served; no failure is
   retried by Registry. A store that fails is never replaced or migrated by the
   start.
@@ -795,12 +799,15 @@ owner.
    `capability:release_declarations.owner_service_of_type` and its
    publisher; the type's published pointer becomes `superseded` with its
    instant, all in the one transaction (A07 rules 1–3).
-2. **Withdraw.** The call names the pointer only. For Kernel, stage (2)
-   first finds the session registered — an unregistered one is refused
-   before any pointer is looked up — then `module:operations` finds the
-   pointer's project with `capability:artifact_pointers.project_of_pointer`
-   and `capability:agent_sessions.check_agent_call` checks that project
-   against the set; for the owner the project is found the same way; a pointer that
+2. **Withdraw.** The call names the pointer only. `module:operations` finds
+   the pointer's project with `capability:artifact_pointers.project_of_pointer`
+   first, and for Kernel stage (2) is then
+   `capability:agent_sessions.check_agent_call` on that project — so it never
+   falls back to the active project. An unknown pointer, an unregistered
+   session and a project outside the set are one answer, as not found, at
+   stage (2) (A08 rule 7, A10 rule 3), so the order of the lookup and the
+   session's check shows nothing; for the owner an unknown pointer is refused
+   at stage (3); a pointer that
    does not exist or whose project is outside the set is answered as not
    found (A08 rule 7). `capability:artifact_pointers.withdraw_pointer`: a
    withdrawn or superseded pointer refused (A05 rule 4), a pointer of a
@@ -822,7 +829,8 @@ owner.
 
 - Another service's token — stage (1), `module:service_access`.
 - Kernel's session or set — stage (2), `module:agent_sessions`, as not found.
-- Unknown project or pointer — stage (3), `module:artifact_pointers`.
+- Unknown project — stage (3), `module:artifact_pointers`; an unknown pointer
+  the same for the owner, and for Kernel stage (2)'s not-found answer.
 - An undeclared or removed type, neither `uri` nor `payload_ref`, a request id
   with other facts — stage (4), `module:artifact_pointers`.
 - An archived project; a pointer already withdrawn or superseded — stage (6),
@@ -909,9 +917,12 @@ minted `customer_ref`.
 - An accepted import: the picked projects under their own ids with rooms,
   pointers and links, the Customers made, the closure and one entry; every
   session's upload dropped; every later import refused.
-- A refused confirmation: nothing applied; the file stays kept unless it
-  was already gone — dropped by another session's accepted import, a new
-  upload or the session's end — and the step is to be shown again.
+- A confirmation refused because another session's import closed it:
+  nothing applied, every upload already dropped, and the import refused for
+  good — no step is shown again (rule 8).
+- Any other refused confirmation: nothing applied; the file stays kept
+  unless a new upload or the session's end dropped it, and the step is to be
+  shown again.
 
 ### Errors
 
