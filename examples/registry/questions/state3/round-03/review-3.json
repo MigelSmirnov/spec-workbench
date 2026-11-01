@@ -1,0 +1,96 @@
+{
+ "open_points": [
+  {
+   "unit": "30_modules.md:Facts several modules touch, and their one owner",
+   "subject": "transaction boundary for runtime owner-session changes",
+   "kind": "scope ambiguity",
+   "text": "“Every action is one call of `operations` and, when it changes state, one store transaction” conflicts with `owner_sessions` owning sign-in, sign-out, pending confirmations, uploads and last-request changes as “all runtime state” held under session locks rather than in the store.",
+   "question": "Does “every action” include actions that change only M11 runtime state, and if so, must those actions open a SQLite transaction and pass through `operations`?",
+   "options": [
+    "Only durable domain changes use a store transaction; owner-session-only changes run through `owner_sessions`.",
+    "Every owner-interface action, including sign-in, sign-out and confirmation display, passes through `operations` and opens a store transaction.",
+    "Owner-session-only actions pass through `operations` but are explicit exceptions to the store-transaction rule."
+   ],
+   "default_guess": "Treat the rule as applying only to durable domain changes and keep owner-session-only changes in `owner_sessions`.",
+   "witness": {
+    "initial": "Registry is serving, no owner session exists, and a long-running domain write holds the store's one write lock.",
+    "events": [
+     "The owner submits the correct credential to sign in while that write is still running."
+    ],
+    "outcomes": [
+     "If every state-changing action needs a store transaction, sign-in waits behind the write lock before creating the session.",
+     "If M11 runtime changes are outside that rule, `owner_sessions` creates the session immediately without using the store."
+    ],
+    "observer": "The owner sees whether sign-in is delayed by an unrelated domain write."
+   }
+  },
+  {
+   "unit": "30_modules.md:`migration_import`",
+   "subject": "creation of imported domain records",
+   "kind": "missing owner/interface",
+   "text": "`migration_import` owns “applying the picks, the Customers and the closure,” but `projects`, `customers` and `artifact_pointers` each own their records and expose only ordinary create/publish capabilities; none of their sections names its A16 consumer responsibility or an import capability that preserves supplied ids, source instants and imported statuses.",
+   "question": "Which module owns writing imported Projects, Rooms, Customers and ArtifactPointers, and through what transaction-scoped capability can `migration_import` create them without applying the ordinary minting, request-id and active-project rules?",
+   "options": [
+    "Each record-owning module exposes an import-only insertion capability, and `migration_import` orchestrates them.",
+    "`migration_import` writes all imported domain records directly through `store`.",
+    "The ordinary domain capabilities gain an import mode that changes their validation and identity rules."
+   ],
+   "default_guess": "Give each record-owning module a transaction-scoped import capability and let `migration_import` orchestrate them.",
+   "witness": {
+    "initial": "The uploaded file contains a picked archived project with source ids and instants, a room, and a published pointer.",
+    "events": [
+     "The owner confirms the valid mapping.",
+     "`migration_import` attempts to store the picked records in the transaction."
+    ],
+    "outcomes": [
+     "A privileged import path preserves the project, room and pointer ids and source instants and accepts the archived project.",
+     "Routing through the declared ordinary capabilities either mints new identities and times or refuses adding the room and publishing the pointer because the project is archived."
+    ],
+    "observer": "The owner sees success versus refusal or changed identities; consumers later see whether the imported links were preserved."
+   }
+  },
+  {
+   "unit": "30_modules.md:`backups`",
+   "subject": "removal of agent sessions from backup snapshots",
+   "kind": "double ownership",
+   "text": "`store` owns producing a backup copy “with the agent sessions removed from that copy,” while `backups` also owns “the copy without agent sessions (rule 2).”",
+   "question": "Which module owns the rule and mechanism that removes M06 records from the backup copy: `store`, `backups`, or a split with an explicit boundary?",
+   "options": [
+    "`store.copy_store_snapshot` returns an already filtered store file.",
+    "`backups` asks `store` for an unfiltered snapshot and invokes a separate `store` capability to remove sessions.",
+    "`backups` itself edits the SQLite copy, contradicting the rule that only `store` opens SQLite databases."
+   ],
+   "default_guess": "Make `backups` own the policy and `store.copy_store_snapshot` own and perform the SQLite-level filtering."
+  },
+  {
+   "unit": "30_modules.md:`audit_log`",
+   "subject": "confirmation id for audit-log erasure",
+   "kind": "dependency/protocol gap",
+   "text": "The audit erasure is the exception whose entry “`audit_log` writes itself,” but `operations` owns minting its confirmation id only when the erasure is accepted. `audit_log` does not know `random_values`, and `operations` cannot know acceptance until `audit_log` has applied the date rule.",
+   "question": "How is acceptance established and the confirmation id supplied without either minting one for a refused erasure or giving `audit_log` knowledge of randomness owned elsewhere?",
+   "options": [
+    "`audit_log` exposes a validation/plan step, then `operations` mints the id and calls an apply step in the same transaction.",
+    "`audit_log` accepts a lazy confirmation-id supplier owned by `operations`.",
+    "`operations` takes ownership of the erasure orchestration and calls separate remove and append capabilities.",
+    "`audit_log` is allowed to know `random_values` and mint this id itself."
+   ],
+   "default_guess": "Use an audit-log validation result followed by an apply call with the id minted by `operations`, within the same transaction."
+  },
+  {
+   "unit": "30_modules.md:`projects`",
+   "subject": "project-card composition with rooms",
+   "kind": "contradictory owner",
+   "text": "The shared-facts section says a projection joining records of two modules — specifically “the project card with its rooms” — is joined by `operations`, while `projects` owns both Project and Room records and explicitly owns “the project card” and `list_rooms`.",
+   "question": "Does `projects.read_project_card` return the complete card including rooms, or does it return only the Project/Object portion for `operations` to join with rooms?",
+   "options": [
+    "`projects` owns and returns the complete project card because it owns both record kinds.",
+    "`operations` owns the composition and calls separate project-card-core and room capabilities on `projects`.",
+    "Rooms move to a separate module, making the stated two-module join true."
+   ],
+   "default_guess": "Have `projects` return the complete card, since it owns both Projects and Rooms."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"30_modules.md:Facts several modules touch, and their one owner\",\"subject\":\"transaction boundary for runtime owner-session changes\",\"kind\":\"scope ambiguity\",\"text\":\"“Every action is one call of `operations` and, when it changes state, one store transaction” conflicts with `owner_sessions` owning sign-in, sign-out, pending confirmations, uploads and last-request changes as “all runtime state” held under session locks rather than in the store.\",\"question\":\"Does “every action” include actions that change only M11 runtime state, and if so, must those actions open a SQLite transaction and pass through `operations`?\",\"options\":[\"Only durable domain changes use a store transaction; owner-session-only changes run through `owner_sessions`.\",\"Every owner-interface action, including sign-in, sign-out and confirmation display, passes through `operations` and opens a store transaction.\",\"Owner-session-only actions pass through `operations` but are explicit exceptions to the store-transaction rule.\"],\"default_guess\":\"Treat the rule as applying only to durable domain changes and keep owner-session-only changes in `owner_sessions`.\",\"witness\":{\"initial\":\"Registry is serving, no owner session exists, and a long-running domain write holds the store's one write lock.\",\"events\":[\"The owner submits the correct credential to sign in while that write is still running.\"],\"outcomes\":[\"If every state-changing action needs a store transaction, sign-in waits behind the write lock before creating the session.\",\"If M11 runtime changes are outside that rule, `owner_sessions` creates the session immediately without using the store.\"],\"observer\":\"The owner sees whether sign-in is delayed by an unrelated domain write.\"}},{\"unit\":\"30_modules.md:`migration_import`\",\"subject\":\"creation of imported domain records\",\"kind\":\"missing owner/interface\",\"text\":\"`migration_import` owns “applying the picks, the Customers and the closure,” but `projects`, `customers` and `artifact_pointers` each own their records and expose only ordinary create/publish capabilities; none of their sections names its A16 consumer responsibility or an import capability that preserves supplied ids, source instants and imported statuses.\",\"question\":\"Which module owns writing imported Projects, Rooms, Customers and ArtifactPointers, and through what transaction-scoped capability can `migration_import` create them without applying the ordinary minting, request-id and active-project rules?\",\"options\":[\"Each record-owning module exposes an import-only insertion capability, and `migration_import` orchestrates them.\",\"`migration_import` writes all imported domain records directly through `store`.\",\"The ordinary domain capabilities gain an import mode that changes their validation and identity rules.\"],\"default_guess\":\"Give each record-owning module a transaction-scoped import capability and let `migration_import` orchestrate them.\",\"witness\":{\"initial\":\"The uploaded file contains a picked archived project with source ids and instants, a room, and a published pointer.\",\"events\":[\"The owner confirms the valid mapping.\",\"`migration_import` attempts to store the picked records in the transaction.\"],\"outcomes\":[\"A privileged import path preserves the project, room and pointer ids and source instants and accepts the archived project.\",\"Routing through the declared ordinary capabilities either mints new identities and times or refuses adding the room and publishing the pointer because the project is archived.\"],\"observer\":\"The owner sees success versus refusal or changed identities; consumers later see whether the imported links were preserved.\"}},{\"unit\":\"30_modules.md:`backups`\",\"subject\":\"removal of agent sessions from backup snapshots\",\"kind\":\"double ownership\",\"text\":\"`store` owns producing a backup copy “with the agent sessions removed from that copy,” while `backups` also owns “the copy without agent sessions (rule 2).”\",\"question\":\"Which module owns the rule and mechanism that removes M06 records from the backup copy: `store`, `backups`, or a split with an explicit boundary?\",\"options\":[\"`store.copy_store_snapshot` returns an already filtered store file.\",\"`backups` asks `store` for an unfiltered snapshot and invokes a separate `store` capability to remove sessions.\",\"`backups` itself edits the SQLite copy, contradicting the rule that only `store` opens SQLite databases.\"],\"default_guess\":\"Make `backups` own the policy and `store.copy_store_snapshot` own and perform the SQLite-level filtering.\"},{\"unit\":\"30_modules.md:`audit_log`\",\"subject\":\"confirmation id for audit-log erasure\",\"kind\":\"dependency/protocol gap\",\"text\":\"The audit erasure is the exception whose entry “`audit_log` writes itself,” but `operations` owns minting its confirmation id only when the erasure is accepted. `audit_log` does not know `random_values`, and `operations` cannot know acceptance until `audit_log` has applied the date rule.\",\"question\":\"How is acceptance established and the confirmation id supplied without either minting one for a refused erasure or giving `audit_log` knowledge of randomness owned elsewhere?\",\"options\":[\"`audit_log` exposes a validation/plan step, then `operations` mints the id and calls an apply step in the same transaction.\",\"`audit_log` accepts a lazy confirmation-id supplier owned by `operations`.\",\"`operations` takes ownership of the erasure orchestration and calls separate remove and append capabilities.\",\"`audit_log` is allowed to know `random_values` and mint this id itself.\"],\"default_guess\":\"Use an audit-log validation result followed by an apply call with the id minted by `operations`, within the same transaction.\"},{\"unit\":\"30_modules.md:`projects`\",\"subject\":\"project-card composition with rooms\",\"kind\":\"contradictory owner\",\"text\":\"The shared-facts section says a projection joining records of two modules — specifically “the project card with its rooms” — is joined by `operations`, while `projects` owns both Project and Room records and explicitly owns “the project card” and `list_rooms`.\",\"question\":\"Does `projects.read_project_card` return the complete card including rooms, or does it return only the Project/Object portion for `operations` to join with rooms?\",\"options\":[\"`projects` owns and returns the complete project card because it owns both record kinds.\",\"`operations` owns the composition and calls separate project-card-core and room capabilities on `projects`.\",\"Rooms move to a separate module, making the stated two-module join true.\"],\"default_guess\":\"Have `projects` return the complete card, since it owns both Projects and Rooms.\"}]}",
+ "set_aside": []
+}

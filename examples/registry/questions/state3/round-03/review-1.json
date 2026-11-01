@@ -1,0 +1,107 @@
+{
+ "open_points": [
+  {
+   "unit": "context",
+   "subject": "confirmation-id collision handling",
+   "kind": "missing owner",
+   "text": "“The confirmation id is a UUID. Registry mints a confirmation id” and “The module that writes a record checks, inside the transaction, that the identity `random_values` minted for it is not one its model already holds, and mints again when it is”",
+   "question": "Which module detects and handles a confirmation UUID colliding with one already used, given that there is no Confirmation record and an audit entry is identified by its sequence number rather than its confirmation id?",
+   "options": [
+    "Treat a random confirmation UUID as sufficient and store a duplicate if the random source repeats one",
+    "Have `operations` check confirmation ids already held by `audit_log` and `migration_import` and mint again",
+    "Keep a separate durable set of every confirmation id ever minted, including those whose audit entries were erased"
+   ],
+   "default_guess": "Use a random UUID without a durable collision registry, because the texts define no Confirmation record or historical confirmation-id index.",
+   "witness": {
+    "initial": "The store has an unerased audit entry whose confirmation id is C.",
+    "events": [
+     "The owner confirms another state-changing action.",
+     "The random source returns UUID C for the new confirmation id."
+    ],
+    "outcomes": [
+     "`operations` accepts C as generated, and the audit view contains two entries with the same confirmation id.",
+     "A module checks existing confirmation ids, rejects the collision internally and mints a different UUID."
+    ],
+    "observer": "The owner reading the audit log, and later code implementing confirmation-id minting"
+   }
+  },
+  {
+   "unit": "30_modules.md:`migration_import`",
+   "subject": "materializing imported domain records",
+   "kind": "missing ownership boundary",
+   "text": "“applying the picks, the Customers and the closure in the one transaction `operations` opens” while `migration_import` only exposes `read_import_mapping` and `confirm_import`, and the `projects`, `customers` and `artifact_pointers` sections name no import-specific write capability or responsibility",
+   "question": "Who constructs and persists imported Projects, Rooms, Customers and ArtifactPointers with caller-supplied identities, source statuses and source instants: `migration_import` itself or the modules that own those records?",
+   "options": [
+    "`migration_import` writes the domain records directly through `store`",
+    "Each domain module exposes an import-only capability, and `migration_import` orchestrates those capabilities",
+    "`store` exposes a domain-aware bulk-import operation"
+   ],
+   "default_guess": "Give each domain module an import-only capability and let `migration_import` coordinate them in the transaction.",
+   "witness": {
+    "initial": "A valid selected import contains an archived project, its source instants, rooms and a superseded/published pointer history; production has no conflicting ids.",
+    "events": [
+     "The owner uploads the file and confirms its mapping.",
+     "`operations` opens the import transaction and calls `migration_import`."
+    ],
+    "outcomes": [
+     "`migration_import` knows the persistence representation and inserts every imported domain record itself.",
+     "`migration_import` delegates construction and insertion to new, unstated import capabilities on `projects`, `customers` and `artifact_pointers`."
+    ],
+    "observer": "The agents that later implement and test the module boundaries"
+   }
+  },
+  {
+   "unit": "30_modules.md:`backups`",
+   "subject": "removing agent sessions from backup copies",
+   "kind": "double ownership",
+   "text": "`store` owns “one consistent read snapshot of the whole store ... with the agent sessions removed from that copy”, while `backups` owns “the copy without agent sessions (rule 2)”",
+   "question": "Which module owns the rule and mechanism that excludes AgentSession records from a backup copy?",
+   "options": [
+    "`store.copy_store_snapshot` creates an already-filtered SQLite copy",
+    "`backups` owns the filtering and asks `store` to modify or produce the copy through an additional capability",
+    "`backups` opens and edits the copied database itself"
+   ],
+   "default_guess": "`store` should produce the filtered snapshot, because only `store` may open SQLite databases; `backups` should own only orchestration and verification.",
+   "witness": {
+    "initial": "The store contains a live agent session with a granted and active project.",
+    "events": [
+     "The scheduled daily backup begins.",
+     "A consistent store snapshot is produced before encryption."
+    ],
+    "outcomes": [
+     "The snapshot returned by `store` already contains no AgentSession records.",
+     "The snapshot initially contains the session and `backups` must cause its removal through an unstated operation, despite being forbidden to open SQLite itself."
+    ],
+    "observer": "The implementers and tests of `store.copy_store_snapshot` and the backup workflow"
+   }
+  },
+  {
+   "unit": "30_modules.md:Facts several modules touch, and their one owner",
+   "subject": "assembling the project card with rooms",
+   "kind": "double ownership",
+   "text": "“one that joins records of two modules (the project card with its rooms ... ) is joined by `operations`”, while `projects` owns M01, M02 and M03, owns “the project card”, and exposes `read_project_card`",
+   "question": "Does `projects.read_project_card` return the complete card including its ordered rooms, or does `operations` assemble the card from separate project and room results?",
+   "options": [
+    "`projects` builds and returns the complete project card because it owns both projects and rooms",
+    "`projects` returns only the project and embedded object, and `operations` joins the rooms",
+    "`store` returns the already-joined projection"
+   ],
+   "default_guess": "Have `projects.read_project_card` return the complete card, since `projects` owns both records and their list ordering contract.",
+   "witness": {
+    "initial": "Project P has an embedded object and room R.",
+    "events": [
+     "The owner reads P's project card.",
+     "The operation must include R in the declared room order."
+    ],
+    "outcomes": [
+     "`projects.read_project_card` reads and assembles P, its object and R as one domain projection.",
+     "`operations` separately obtains the project data and room list and assembles the card, making it the projection owner."
+    ],
+    "observer": "The agents implementing `projects` and `operations`, and their module-level tests"
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"context\",\"subject\":\"confirmation-id collision handling\",\"kind\":\"missing owner\",\"text\":\"“The confirmation id is a UUID. Registry mints a confirmation id” and “The module that writes a record checks, inside the transaction, that the identity `random_values` minted for it is not one its model already holds, and mints again when it is”\",\"question\":\"Which module detects and handles a confirmation UUID colliding with one already used, given that there is no Confirmation record and an audit entry is identified by its sequence number rather than its confirmation id?\",\"options\":[\"Treat a random confirmation UUID as sufficient and store a duplicate if the random source repeats one\",\"Have `operations` check confirmation ids already held by `audit_log` and `migration_import` and mint again\",\"Keep a separate durable set of every confirmation id ever minted, including those whose audit entries were erased\"],\"default_guess\":\"Use a random UUID without a durable collision registry, because the texts define no Confirmation record or historical confirmation-id index.\",\"witness\":{\"initial\":\"The store has an unerased audit entry whose confirmation id is C.\",\"events\":[\"The owner confirms another state-changing action.\",\"The random source returns UUID C for the new confirmation id.\"],\"outcomes\":[\"`operations` accepts C as generated, and the audit view contains two entries with the same confirmation id.\",\"A module checks existing confirmation ids, rejects the collision internally and mints a different UUID.\"],\"observer\":\"The owner reading the audit log, and later code implementing confirmation-id minting\"}},{\"unit\":\"30_modules.md:`migration_import`\",\"subject\":\"materializing imported domain records\",\"kind\":\"missing ownership boundary\",\"text\":\"“applying the picks, the Customers and the closure in the one transaction `operations` opens” while `migration_import` only exposes `read_import_mapping` and `confirm_import`, and the `projects`, `customers` and `artifact_pointers` sections name no import-specific write capability or responsibility\",\"question\":\"Who constructs and persists imported Projects, Rooms, Customers and ArtifactPointers with caller-supplied identities, source statuses and source instants: `migration_import` itself or the modules that own those records?\",\"options\":[\"`migration_import` writes the domain records directly through `store`\",\"Each domain module exposes an import-only capability, and `migration_import` orchestrates those capabilities\",\"`store` exposes a domain-aware bulk-import operation\"],\"default_guess\":\"Give each domain module an import-only capability and let `migration_import` coordinate them in the transaction.\",\"witness\":{\"initial\":\"A valid selected import contains an archived project, its source instants, rooms and a superseded/published pointer history; production has no conflicting ids.\",\"events\":[\"The owner uploads the file and confirms its mapping.\",\"`operations` opens the import transaction and calls `migration_import`.\"],\"outcomes\":[\"`migration_import` knows the persistence representation and inserts every imported domain record itself.\",\"`migration_import` delegates construction and insertion to new, unstated import capabilities on `projects`, `customers` and `artifact_pointers`.\"],\"observer\":\"The agents that later implement and test the module boundaries\"}},{\"unit\":\"30_modules.md:`backups`\",\"subject\":\"removing agent sessions from backup copies\",\"kind\":\"double ownership\",\"text\":\"`store` owns “one consistent read snapshot of the whole store ... with the agent sessions removed from that copy”, while `backups` owns “the copy without agent sessions (rule 2)”\",\"question\":\"Which module owns the rule and mechanism that excludes AgentSession records from a backup copy?\",\"options\":[\"`store.copy_store_snapshot` creates an already-filtered SQLite copy\",\"`backups` owns the filtering and asks `store` to modify or produce the copy through an additional capability\",\"`backups` opens and edits the copied database itself\"],\"default_guess\":\"`store` should produce the filtered snapshot, because only `store` may open SQLite databases; `backups` should own only orchestration and verification.\",\"witness\":{\"initial\":\"The store contains a live agent session with a granted and active project.\",\"events\":[\"The scheduled daily backup begins.\",\"A consistent store snapshot is produced before encryption.\"],\"outcomes\":[\"The snapshot returned by `store` already contains no AgentSession records.\",\"The snapshot initially contains the session and `backups` must cause its removal through an unstated operation, despite being forbidden to open SQLite itself.\"],\"observer\":\"The implementers and tests of `store.copy_store_snapshot` and the backup workflow\"}},{\"unit\":\"30_modules.md:Facts several modules touch, and their one owner\",\"subject\":\"assembling the project card with rooms\",\"kind\":\"double ownership\",\"text\":\"“one that joins records of two modules (the project card with its rooms ... ) is joined by `operations`”, while `projects` owns M01, M02 and M03, owns “the project card”, and exposes `read_project_card`\",\"question\":\"Does `projects.read_project_card` return the complete card including its ordered rooms, or does `operations` assemble the card from separate project and room results?\",\"options\":[\"`projects` builds and returns the complete project card because it owns both projects and rooms\",\"`projects` returns only the project and embedded object, and `operations` joins the rooms\",\"`store` returns the already-joined projection\"],\"default_guess\":\"Have `projects.read_project_card` return the complete card, since `projects` owns both records and their list ordering contract.\",\"witness\":{\"initial\":\"Project P has an embedded object and room R.\",\"events\":[\"The owner reads P's project card.\",\"The operation must include R in the declared room order.\"],\"outcomes\":[\"`projects.read_project_card` reads and assembles P, its object and R as one domain projection.\",\"`operations` separately obtains the project data and room list and assembles the card, making it the projection owner.\"],\"observer\":\"The agents implementing `projects` and `operations`, and their module-level tests\"}}]}",
+ "set_aside": []
+}
