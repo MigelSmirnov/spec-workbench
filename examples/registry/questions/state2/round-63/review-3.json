@@ -1,0 +1,84 @@
+{
+ "open_points": [
+  {
+   "unit": "A17",
+   "subject": "temporary store creation and recovery in write-ahead-log mode",
+   "kind": "contradictory cleanup rules",
+   "text": "“a store made new is made in SQLite's write-ahead-log mode” but “at every start it first removes a file of that temporary name ... and no other file there”",
+   "question": "After an interrupted start leaves SQLite WAL or shared-memory sidecar files for the temporary store, must the next start remove those sidecars, leave them, or refuse the start?",
+   "options": [
+    "Remove the temporary database and all of its SQLite sidecars before recreating it.",
+    "Remove only the temporary database file and let SQLite encounter the surviving sidecars.",
+    "Refuse the start when temporary-store sidecars exist."
+   ],
+   "default_guess": "Treat the SQLite database and its WAL/SHM sidecars as one temporary-store file set and remove the whole set.",
+   "witness": {
+    "initial": "The configured store is absent. Registry has created the temporary SQLite store in WAL mode and written its schema or version, leaving the temporary main file and its WAL/SHM sidecars.",
+    "events": [
+     "The Registry process is interrupted before renaming the temporary store.",
+     "The owner starts Registry again.",
+     "Startup finds the temporary main file and its WAL/SHM sidecars."
+    ],
+    "outcomes": [
+     "Following “and no other file there,” startup removes only the main temporary file; the stale sidecars remain and may make recreation fail or recover old temporary contents.",
+     "Treating the sidecars as part of the temporary store, startup removes them too and creates a clean store, despite the literal prohibition on removing another file there."
+    ],
+    "observer": "The owner sees either a successful clean start or a failed/contaminated start, and can see the different files left in the store directory."
+   }
+  },
+  {
+   "unit": "A16",
+   "subject": "when an accepted import first reaches a backup",
+   "kind": "changed snapshot boundary",
+   "text": "A16 says the import “reaches the backups with the first kept backup whose snapshot begins after it committed,” while changed A18 says “The copy's read transaction fixes its snapshot by its first read.”",
+   "question": "Does “snapshot begins” in A16 mean the beginning of the read transaction or A18's later first read that fixes the snapshot?",
+   "options": [
+    "It means the transaction begins; a transaction opened before the import must exclude it.",
+    "It means the first snapshot-fixing read; a transaction opened earlier includes the import when that read occurs after the commit."
+   ],
+   "default_guess": "Use A18's snapshot-fixing first read as the boundary and revise A16's phrase to that same event.",
+   "witness": {
+    "initial": "No migration closure exists, and a daily backup run and the owner's confirmed import are concurrent.",
+    "events": [
+     "The backup opens a deferred read transaction but has not read the audit counter.",
+     "The owner's import transaction commits its projects, Customers, closure and audit entry.",
+     "The backup performs its first read of the audit counter."
+    ],
+    "outcomes": [
+     "Reading A16's “snapshot begins” as transaction start, this backup is before the import and the next kept backup is the first one required to contain it.",
+     "Reading it as A18's snapshot-fixing read, this backup contains the imported records and migration closure and is the first backup to which the import has reached."
+    ],
+    "observer": "The owner restoring this backup sees either the imported projects and closed import or the pre-import store."
+   }
+  },
+  {
+   "unit": "A18",
+   "subject": "backup snapshot instant",
+   "kind": "non-atomic timestamp boundary",
+   "text": "“the instant being that of the read that fixes its snapshot” and “the instant is read from the clock at that read”",
+   "question": "Must Registry sample the wall clock immediately before or immediately after the database read that fixes the snapshot, especially if the wall clock changes between those operations?",
+   "options": [
+    "Read the clock immediately before issuing the first database read.",
+    "Perform the first database read, then read the clock.",
+    "Define a synchronization rule that makes one of those samples authoritative when the clock changes concurrently."
+   ],
+   "default_guess": "Read the clock immediately after the successful snapshot-fixing database read and use that value consistently for metadata, naming and retention.",
+   "witness": {
+    "initial": "A backup is starting while the UTC wall clock is about to be corrected backward; the store and audit counter are otherwise valid.",
+    "events": [
+     "The backup begins the operation that first reads the audit counter.",
+     "The host clock is corrected backward between the application's possible pre-read and post-read clock samples.",
+     "The database read completes and fixes the snapshot."
+    ],
+    "outcomes": [
+     "An implementation sampling before the database read records the pre-correction instant and may give the backup the earlier date/name and retention cutoff.",
+     "An implementation sampling after the database read records the post-correction instant and may give the same snapshot a different date/name and retention cutoff."
+    ],
+    "observer": "The owner sees a different newest-backup instant in the owner interface, and later backup scheduling, filename collision and 30-day deletion behavior can differ."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A17\",\"subject\":\"temporary store creation and recovery in write-ahead-log mode\",\"kind\":\"contradictory cleanup rules\",\"text\":\"“a store made new is made in SQLite's write-ahead-log mode” but “at every start it first removes a file of that temporary name ... and no other file there”\",\"question\":\"After an interrupted start leaves SQLite WAL or shared-memory sidecar files for the temporary store, must the next start remove those sidecars, leave them, or refuse the start?\",\"options\":[\"Remove the temporary database and all of its SQLite sidecars before recreating it.\",\"Remove only the temporary database file and let SQLite encounter the surviving sidecars.\",\"Refuse the start when temporary-store sidecars exist.\"],\"default_guess\":\"Treat the SQLite database and its WAL/SHM sidecars as one temporary-store file set and remove the whole set.\",\"witness\":{\"initial\":\"The configured store is absent. Registry has created the temporary SQLite store in WAL mode and written its schema or version, leaving the temporary main file and its WAL/SHM sidecars.\",\"events\":[\"The Registry process is interrupted before renaming the temporary store.\",\"The owner starts Registry again.\",\"Startup finds the temporary main file and its WAL/SHM sidecars.\"],\"outcomes\":[\"Following “and no other file there,” startup removes only the main temporary file; the stale sidecars remain and may make recreation fail or recover old temporary contents.\",\"Treating the sidecars as part of the temporary store, startup removes them too and creates a clean store, despite the literal prohibition on removing another file there.\"],\"observer\":\"The owner sees either a successful clean start or a failed/contaminated start, and can see the different files left in the store directory.\"}},{\"unit\":\"A16\",\"subject\":\"when an accepted import first reaches a backup\",\"kind\":\"changed snapshot boundary\",\"text\":\"A16 says the import “reaches the backups with the first kept backup whose snapshot begins after it committed,” while changed A18 says “The copy's read transaction fixes its snapshot by its first read.”\",\"question\":\"Does “snapshot begins” in A16 mean the beginning of the read transaction or A18's later first read that fixes the snapshot?\",\"options\":[\"It means the transaction begins; a transaction opened before the import must exclude it.\",\"It means the first snapshot-fixing read; a transaction opened earlier includes the import when that read occurs after the commit.\"],\"default_guess\":\"Use A18's snapshot-fixing first read as the boundary and revise A16's phrase to that same event.\",\"witness\":{\"initial\":\"No migration closure exists, and a daily backup run and the owner's confirmed import are concurrent.\",\"events\":[\"The backup opens a deferred read transaction but has not read the audit counter.\",\"The owner's import transaction commits its projects, Customers, closure and audit entry.\",\"The backup performs its first read of the audit counter.\"],\"outcomes\":[\"Reading A16's “snapshot begins” as transaction start, this backup is before the import and the next kept backup is the first one required to contain it.\",\"Reading it as A18's snapshot-fixing read, this backup contains the imported records and migration closure and is the first backup to which the import has reached.\"],\"observer\":\"The owner restoring this backup sees either the imported projects and closed import or the pre-import store.\"}},{\"unit\":\"A18\",\"subject\":\"backup snapshot instant\",\"kind\":\"non-atomic timestamp boundary\",\"text\":\"“the instant being that of the read that fixes its snapshot” and “the instant is read from the clock at that read”\",\"question\":\"Must Registry sample the wall clock immediately before or immediately after the database read that fixes the snapshot, especially if the wall clock changes between those operations?\",\"options\":[\"Read the clock immediately before issuing the first database read.\",\"Perform the first database read, then read the clock.\",\"Define a synchronization rule that makes one of those samples authoritative when the clock changes concurrently.\"],\"default_guess\":\"Read the clock immediately after the successful snapshot-fixing database read and use that value consistently for metadata, naming and retention.\",\"witness\":{\"initial\":\"A backup is starting while the UTC wall clock is about to be corrected backward; the store and audit counter are otherwise valid.\",\"events\":[\"The backup begins the operation that first reads the audit counter.\",\"The host clock is corrected backward between the application's possible pre-read and post-read clock samples.\",\"The database read completes and fixes the snapshot.\"],\"outcomes\":[\"An implementation sampling before the database read records the pre-correction instant and may give the backup the earlier date/name and retention cutoff.\",\"An implementation sampling after the database read records the post-correction instant and may give the same snapshot a different date/name and retention cutoff.\"],\"observer\":\"The owner sees a different newest-backup instant in the owner interface, and later backup scheduling, filename collision and 30-day deletion behavior can differ.\"}}]}",
+ "set_aside": []
+}
