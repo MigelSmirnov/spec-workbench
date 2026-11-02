@@ -319,17 +319,20 @@ remains admissible but receives an explicit warning.
 ## GitHub Actions CI
 
 `.github/workflows/spec-workbench-ci.yml` runs the complete Workbench test
-suite and Cabinet assembly gates on every push and pull request. This makes
-the checks available when changes are authored through a GitHub connector
-that cannot execute local commands.
+suite on every push and pull request of `main` and `tools/*` branches, and the
+patch integrity check everywhere. This makes the checks available when
+changes are authored through a GitHub connector that cannot execute local
+commands.
 
-The cross-repository admission job additionally checks out the private
-`MigelSmirnov/code-factory` repository (branch `main`) and runs the real Factory
-validator. It authenticates with a dedicated read-only deploy key whose
-private half is stored in `spec-workbench` as the Actions secret
-`FACTORY_REPO_DEPLOY_KEY`; no personal GitHub token is exposed to the job.
-Without the secret, Workbench CI still runs and the Factory job records an
-explicit skip notice.
+No case is assembled or admitted in CI today. The canonical Cabinet cases
+(`cabinet-backend`, `cabinet-web-backend`) are off active development since
+2026-09-27; their projection, assembly, Stage 8.1 and cross-repository
+admission jobs were removed on 2026-11-03, together with the Stage 8.1
+workflow over the `examples/cabinet-backend` snapshot. Tests that need a
+canonical case skip truthfully when it is not checked out
+(`tests/canonical_cases.py`). The active line, `cabinet-kernel`, gets the
+same checks once it assembles; the Factory deploy key secret
+`FACTORY_REPO_DEPLOY_KEY` stays configured for that job.
 
 Export an admitted case into a new Factory project with:
 
