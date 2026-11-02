@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from imports_workbench.model import MODELS_MODULE, ImportsError
+from imports_workbench.model import MODELS_MODULE, TARGET_FILE, ImportsError
 
 IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 
@@ -131,11 +131,17 @@ def _read_json(path: Path) -> Any:
 
 
 def factory_target(project: Path) -> str | None:
-    path = project / "90_factory_target.json"
+    """The Factory project the case targets. A target file that cannot be read is
+    an error, never "no target": that would turn a block into not_applicable
+    (obligation_workbench.factory_parity treats it as absent, so it is not reused)."""
+    path = project / TARGET_FILE
     if not path.is_file():
         return None
-    value = _read_json(path).get("factory_project")
-    return value if isinstance(value, str) and value else None
+    payload = _read_json(path)
+    value = payload.get("factory_project") if isinstance(payload, dict) else None
+    if not isinstance(value, str) or not value:
+        raise ImportsError(f"{TARGET_FILE} must be an object with a non-empty factory_project")
+    return value
 
 
 def load(project: Path) -> Case:

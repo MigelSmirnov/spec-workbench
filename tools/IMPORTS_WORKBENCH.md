@@ -174,6 +174,7 @@ module_internal[m][p] = ⋃ { u.symbol : u ∈ scope.uses, scope ∈ m, u.provid
 | `imports_use_invalid` | строка `uses` без `symbol`/`provider`/`basis` или с `as` вне набора |
 | `imports_basis_invalid` | `note:` не клауза этого скоупа, `knows:` не из `Knows`, `code` — а код символ не называет, неизвестная форма |
 | `imports_rejection_without_reason` | отклонение без причины |
+| `imports_decision_conflict` | символ одного поставщика в одном скоупе и принят, и отклонён |
 
 `summary`: `scopes`, `pending`, `stale`, `code_evidence`
 (`available`/`unavailable`/`not_applicable`), `handoff_ready`,
@@ -194,7 +195,13 @@ python -m tools.slicer report --spec <база проекта в фабрике>
 спеки зависит только путями модулей.
 
 - Корень фабрики — `--factory-root` или `SPEC_WORKBENCH_FACTORY_ROOT`,
-  проект — `90_factory_target.json`.
+  проект — `90_factory_target.json`. Названный корень окончателен: если в нём
+  нет `tools/slicer`, доказательство `unavailable`, а не другой чекаут,
+  найденный выше по дереву. Соседний `code_factory` ищется, только когда не
+  названо ничего. Файл цели, который не читается или не несёт
+  `factory_project`, — ошибка ввода, а не «цели нет».
+- Отчёт, который не уложился в 600 с, вернул не JSON или не форму
+  «поставщик → символы», — `unavailable`.
 - Нет цели в фабрике (новый проект) → `code_evidence: not_applicable`;
   гейт может закрыться, но `strict_ready: false` видно в статусе.
 - Цель есть, а фабрика или дерево недоступны → блок
@@ -318,6 +325,13 @@ tests/test_imports_workbench.py
   `{"symbol": "*", "provider": <модуль>, "candidate": "knows", "reason": …}`.
 - **Отказ от символа из кода** — строка `rejected` с `candidate: code_used`:
   новая спека может отказаться от того, что называет старый код.
+- **`knows:<модуль>`** обосновывает только символ этого же поставщика.
+- **`imports_code_unused`** судит каждую строку `uses` своего скоупа: освобождённая
+  строка (`contract`, `annotates`, `code_outdated`) одного скоупа не прощает
+  такую же строку другого.
+- **Черновик не выбирает поставщика**: тип сигнатуры принимается, только если
+  его даёт ровно один поставщик и порядок State 3 разрешает ребро; иначе
+  он в `pending`.
 - **Кандидаты растут вместе с решениями.** Принятый `calls` приносит типы
   сигнатуры вызываемого (`contract:<символ>`), принятая модель — свои поля и
   варианты. Поэтому `--draft` запускают снова, пока `pending` не опустеет;

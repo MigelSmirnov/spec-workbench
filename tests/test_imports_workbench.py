@@ -419,3 +419,150 @@ def test_cli_reports_input_errors(tmp_path, capsys):
     (tmp_path / "65_imports.json").write_text("{", encoding="utf-8")
     with pytest.raises(Exception):
         service.load_table(tmp_path)
+
+
+# -- review of #137: one regression test per finding ---------------------------
+
+def test_redrafting_keeps_code_only_candidates_in_the_module_scope():
+    case = _case()
+    first = service.draft_table(case, None, _code(**CODE))
+    second = service.draft_table(case, first, _code(**CODE))
+    third = service.draft_table(case, second, _code(**CODE))
+
+    pending = [{row["symbol"] for row in t["scopes"]["consumer"]["pending"]} for t in (first, second, third)]
+    assert pending[0] == pending[1] == pending[2] and "StoreChange" in pending[0]
+
+
+def test_malformed_rows_are_findings_not_crashes():
+    case = _case()
+    table = _closed_table(case)
+    table["scopes"]["store"]["uses"].append({"symbol": ["x"], "provider": "models", "as": "reads", "basis": "author:x"})
+    table["scopes"]["store"]["rejected"].append({"symbol": {"x": 1}, "provider": "models", "reason": "x"})
+
+    assert _codes(service.analyze(case, table, NO_CODE)) == ["imports_use_invalid", "imports_use_invalid"]
+
+
+@pytest.mark.parametrize("payload", [[], "x", 3])
+def test_a_table_that_is_not_an_object_is_invalid(payload):
+    assert _codes(service.analyze(_case(), payload, NO_CODE)) == ["imports_table_invalid"]
+
+
+def test_an_unreadable_table_is_an_input_error(tmp_path):
+    (tmp_path / "65_imports.json").write_bytes(b"\xff\xfe")
+    with pytest.raises(service.ImportsError):
+        service.load_table(tmp_path)
+
+
+def test_accepting_and_rejecting_the_same_symbol_is_a_conflict():
+    case = _case()
+    table = _closed_table(case)
+    table["scopes"]["consumer.use_widget"]["rejected"].append(
+        {"symbol": "Cardinality", "provider": "models", "candidate": "field_name", "reason": "x"})
+
+    assert _codes(service.analyze(case, table, NO_CODE)) == ["imports_decision_conflict"]
+
+
+def test_the_draft_leaves_provider_choices_and_forbidden_edges_to_the_author():
+    case = _case()
+    case.exports["store"] = [*case.exports["store"], "UsesWidget"]   # two providers of UsesWidget
+    case.exports["consumer"] = [*case.exports["consumer"], "Gizmo"]  # a later module's type
+    case.models["Gizmo"] = {"fields": {}}
+    case.contracts["record_change"] = "(change: StoreChange, gizmo: Gizmo) -> None"
+
+    table = service.draft_table(case, None, NO_CODE)
+
+    accepted = {(row["symbol"], row["provider"]) for row in table["scopes"]["consumer.use_widget"]["uses"]}
+    assert ("UsesWidget", "models") not in accepted and ("UsesWidget", "store") not in accepted
+    assert {("UsesWidget", "models"), ("UsesWidget", "store")} <= {
+        (row["symbol"], row["provider"]) for row in table["scopes"]["consumer.use_widget"]["pending"]}
+    record = table["scopes"]["store.record_change"]
+    assert ("Gizmo", "consumer") not in {(row["symbol"], row["provider"]) for row in record["uses"]}
+    assert ("Gizmo", "consumer") in {(row["symbol"], row["provider"]) for row in record["pending"]}
+
+
+def test_a_named_factory_root_without_a_slicer_is_final(tmp_path, monkeypatch):
+    sibling = tmp_path / "code_factory" / "tools" / "slicer"
+    sibling.mkdir(parents=True)
+    (sibling / "__main__.py").write_text("", encoding="utf-8")
+    case_dir = tmp_path / "work" / "case"
+    case_dir.mkdir(parents=True)
+    monkeypatch.delenv(factory.FACTORY_ROOT_ENV, raising=False)
+
+    assert factory.factory_root(case_dir)[0] == (tmp_path / "code_factory").resolve()
+    assert factory.factory_root(case_dir, tmp_path / "typo")[0] is None
+    monkeypatch.setenv(factory.FACTORY_ROOT_ENV, str(tmp_path / "typo"))
+    assert factory.factory_root(case_dir)[0] is None
+    assert factory.evidence(case_dir, "widgets")["status"] == UNAVAILABLE
+
+
+def test_code_unused_judges_every_scope_row():
+    case = _case()
+    table = _closed_table(case)
+    # store.record_change annotates StoreChange (exempt); consumer.add_case creates it (not exempt)
+    code = _code(**{**CODE, "consumer": {**CODE["consumer"], "models": ["Cardinality", "UsesWidget"]},
+                    "store": {}})
+    findings = service.analyze(case, table, code)["findings"]
+
+    assert [(f["code"], f["subject"], f["symbol"]) for f in findings] == [
+        ("imports_code_unused", "consumer.add_case", "StoreChange")]
+
+    table["scopes"]["consumer.use_widget"]["uses"].append(
+        {"symbol": "StoreChange", "provider": "models", "as": "annotates", "basis": "author:x"})
+    table["scopes"]["consumer.use_widget"]["rejected"] = [
+        row for row in table["scopes"]["consumer.use_widget"]["rejected"]]
+    codes = [(f["code"], f["subject"]) for f in service.analyze(case, table, code)["findings"]]
+    assert ("imports_code_unused", "consumer.add_case") in codes   # another scope's exempt row excuses nothing
+
+
+def test_a_knows_basis_justifies_only_its_own_provider():
+    case = _case()
+    table = _closed_table(case)
+    table["scopes"]["consumer.add_case"]["uses"][1]["basis"] = "knows:catalog"   # StoreChange from models
+
+    assert _codes(service.analyze(case, table, NO_CODE)) == ["imports_basis_invalid"]
+    table["scopes"]["consumer.add_case"]["uses"][0]["basis"] = "knows:store"     # record_change from store
+    table["scopes"]["consumer.add_case"]["uses"][1]["basis"] = "note:consumer.add_case#1"
+    assert _codes(service.analyze(case, table, NO_CODE)) == []
+
+
+def _fake_factory(tmp_path: Path, main: str) -> Path:
+    root = tmp_path / "fake_factory"
+    (root / "tools" / "slicer").mkdir(parents=True, exist_ok=True)
+    (root / "tools" / "__init__.py").write_text("", encoding="utf-8")
+    (root / "tools" / "slicer" / "__init__.py").write_text("", encoding="utf-8")
+    (root / "project_index").mkdir(exist_ok=True)
+    (root / "project_index" / "structure.json").write_text(json.dumps(
+        {"projects_dir": "projects", "files": {"global_spec": "spec.json"}}), encoding="utf-8")
+    (root / "projects" / "widgets").mkdir(parents=True, exist_ok=True)
+    (root / "projects" / "widgets" / "spec.json").write_text("{}", encoding="utf-8")
+    (root / "tools" / "slicer" / "__main__.py").write_text(main, encoding="utf-8")
+    return root
+
+
+@pytest.mark.parametrize("report", [
+    {"modules": {"m": None}},
+    {"modules": {"m": {"code_imports": ["x"]}}},
+    {"modules": {"m": {"code_imports": {"p": "x"}}}},
+])
+def test_a_malformed_factory_report_is_unavailable(tmp_path, report):
+    root = _fake_factory(tmp_path, f"import json\nprint(json.dumps({report!r}))\n")
+
+    assert factory.evidence(tmp_path, "widgets", root)["status"] == UNAVAILABLE
+
+
+def test_a_hung_factory_report_is_unavailable(tmp_path, monkeypatch):
+    root = _fake_factory(tmp_path, "import time\ntime.sleep(5)\n")
+    monkeypatch.setattr(factory, "REPORT_TIMEOUT_SECONDS", 0.5)
+
+    found = factory.evidence(tmp_path, "widgets", root)
+
+    assert found["status"] == UNAVAILABLE and "did not finish" in found["reason"]
+
+
+@pytest.mark.parametrize("payload", ['["x"]', '{"factory_project": ""}', "{"])
+def test_a_broken_factory_target_is_an_error_not_no_target(tmp_path, payload):
+    from imports_workbench.case import factory_target
+
+    (tmp_path / "90_factory_target.json").write_text(payload, encoding="utf-8")
+    with pytest.raises(service.ImportsError):
+        factory_target(tmp_path)

@@ -42,9 +42,11 @@ def load_table(project: Path) -> dict[str, Any] | None:
         return None
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError) as exc:
+        raise ImportsError(f"{TABLE_FILE} cannot be read: {exc}") from exc
     except json.JSONDecodeError as exc:
         raise ImportsError(f"{TABLE_FILE} is not valid JSON: {exc}") from exc
-    return payload
+    return payload  # any other shape is imports_table_invalid, reported by the gate
 
 
 def _rows(entry: Any, key: str) -> list[dict[str, Any]]:
@@ -52,8 +54,11 @@ def _rows(entry: Any, key: str) -> list[dict[str, Any]]:
     return [row for row in rows if isinstance(row, dict)] if isinstance(rows, list) else []
 
 
-def _key(row: dict[str, Any]) -> tuple[Any, Any]:
-    return row.get("symbol"), row.get("provider")
+def _key(row: dict[str, Any]) -> tuple[str | None, str | None]:
+    """(symbol, provider), hashable whatever the row holds; a non-string part is None
+    (the row itself is reported as imports_use_invalid)."""
+    symbol, provider = row.get("symbol"), row.get("provider")
+    return (symbol if isinstance(symbol, str) else None, provider if isinstance(provider, str) else None)
 
 
 def derive(table: dict[str, Any] | None) -> dict[str, dict[str, list[str]]]:
@@ -109,6 +114,8 @@ def _basis_problem(basis: Any, scope: Scope, case: Case, code: dict[str, list[st
     if kind == "knows":
         if value not in case.knows.get(scope.module, ()):
             return f"{value} is not in State 3 Knows of {scope.module}"
+        if value != row.get("provider"):
+            return f"knows:{value} justifies a symbol of {value}, not of {row.get('provider')}"
         return None
     if kind == "author" and value.strip():
         return None
@@ -154,7 +161,8 @@ def analyze(case: Case, table: dict[str, Any] | None, code: dict[str, Any], proj
     table_scopes: dict[str, Any] = {}
     if table is None:
         findings.append(_finding("imports_table_missing", case.project_root))
-    elif table.get("schema_version") != TABLE_SCHEMA or not isinstance(table.get("scopes"), dict):
+    elif (not isinstance(table, dict) or table.get("schema_version") != TABLE_SCHEMA
+          or not isinstance(table.get("scopes"), dict)):
         findings.append(_finding("imports_table_invalid", case.project_root,
                                  f"{TABLE_FILE} must have schema_version {TABLE_SCHEMA!r} and a scopes object"))
         table = None
@@ -166,7 +174,8 @@ def analyze(case: Case, table: dict[str, Any] | None, code: dict[str, Any], proj
 
     status: dict[str, dict[str, Any]] = {}
     pending = stale = 0
-    uses_by_module: dict[str, dict[tuple[Any, Any], dict[str, Any]]] = {}
+    # every use row of a module, with its scope: one key may be used by several scopes
+    uses_by_module: dict[str, list[tuple[str, dict[str, Any]]]] = {}
     rejected_by_module: dict[str, list[dict[str, Any]]] = {}
     for scope_id, scope in scopes.items():
         entry = table_scopes.get(scope_id)
@@ -187,10 +196,16 @@ def analyze(case: Case, table: dict[str, Any] | None, code: dict[str, Any], proj
                                      current=scope.basis_sha256))
         for row in uses:
             findings += _check_use(row, scope, case, order, module_code, candidates.get(_key(row)))
-            uses_by_module.setdefault(scope.module, {})[_key(row)] = row
+            uses_by_module.setdefault(scope.module, []).append((scope_id, row))
         for row in rejected:
+            if None in _key(row) and row.get("symbol") != "*":
+                findings.append(_finding("imports_use_invalid", scope_id,
+                                         "a rejected row needs a symbol and a provider", row=row))
             if not isinstance(row.get("reason"), str) or not row["reason"].strip():
                 findings.append(_finding("imports_rejection_without_reason", scope_id, row=row))
+        conflicts = {_key(row) for row in uses} & {_key(row) for row in rejected}
+        for key in sorted((key for key in conflicts if None not in key), key=str):
+            findings.append(_finding("imports_decision_conflict", scope_id, symbol=key[0], provider=key[1]))
         rejected_by_module.setdefault(scope.module, []).extend(rejected)
         decided = {_key(row) for row in uses} | {_key(row) for row in rejected}
         undecided = [candidate for key, candidate in candidates.items() if key not in decided]
@@ -204,7 +219,8 @@ def analyze(case: Case, table: dict[str, Any] | None, code: dict[str, Any], proj
     # without a table every module-level check would only repeat imports_table_missing
     judged_modules = {scope.module for scope in scopes.values()} if table is not None else set()
     for module in sorted(judged_modules, key=lambda m: order.get(m, 0)):
-        uses = uses_by_module.get(module, {})
+        module_rows = uses_by_module.get(module, [])
+        uses = {_key(row) for _, row in module_rows}
         rejected = rejected_by_module.get(module, [])
         rejected_keys = {_key(row) for row in rejected}
         for known in case.knows.get(module, ()):
@@ -224,12 +240,14 @@ def analyze(case: Case, table: dict[str, Any] | None, code: dict[str, Any], proj
             if key not in uses and key not in rejected_keys:
                 findings.append(_finding("imports_code_undeclared", module, candidate=candidate.as_json()))
                 pending += 1
-        for key, row in uses.items():
+        # each row is judged on its own: an exempt row of one scope does not excuse another's
+        for scope_id, row in module_rows:
+            key = _key(row)
             if key in named or row.get("basis") in _CODE_EXEMPT_BASIS or row.get("as") in _CODE_EXEMPT_AS:
                 continue
             if isinstance(row.get("code_outdated"), str) and row["code_outdated"].strip():
                 continue
-            findings.append(_finding("imports_code_unused", module, symbol=key[0], provider=key[1]))
+            findings.append(_finding("imports_code_unused", scope_id, symbol=key[0], provider=key[1]))
 
     if code_status == UNAVAILABLE and case.factory_target is not None:
         findings.append(_finding("imports_factory_unavailable", case.project_root,
@@ -284,15 +302,23 @@ def draft_table(case: Case, table: dict[str, Any] | None, code: dict[str, Any]) 
     result: dict[str, Any] = {"schema_version": TABLE_SCHEMA, "scopes": dict(table.get("scopes") or {})}
     code_modules = code.get("modules") or {} if code.get("status") == AVAILABLE else {}
     scopes = case.scopes()
+    order = _order(case)
     # operation scopes first: the module scope's code and Knows pending see their uses
     for scope_id, scope in sorted(scopes.items(), key=lambda item: item[1].contract is None):
         entry = result["scopes"].get(scope_id)
         if not isinstance(entry, dict):
             own = scope_candidates(case, scope)
+            providers: dict[str, list[str]] = {}
+            for c in own.values():
+                providers.setdefault(c.symbol, []).append(c.provider)
+            # a signature type is accepted only when exactly one provider may give it;
+            # a choice of providers, or one the module order forbids, waits for the author
             entry = {
                 "basis_sha256": scope.basis_sha256,
                 "uses": [{"symbol": c.symbol, "provider": c.provider, "as": "annotates", "basis": "contract"}
-                         for c in own.values() if "contract" in c.evidence],
+                         for c in own.values()
+                         if "contract" in c.evidence and len(providers[c.symbol]) == 1
+                         and order.get(c.provider, len(order)) < order.get(scope.module, -1)],
                 "rejected": [],
             }
         else:
@@ -301,8 +327,9 @@ def draft_table(case: Case, table: dict[str, Any] | None, code: dict[str, Any]) 
         decided = {_key(row) for row in uses} | {_key(row) for row in rejected}
         pending = [c.as_json() for key, c in scope_candidates(case, scope, uses).items() if key not in decided]
         if scope.contract is None:
+            # the operation scopes of the module; its own old entry is being rebuilt
             module_scopes = [e for sid, e in result["scopes"].items()
-                             if str(sid).split(".", 1)[0] == scope.module and sid in scopes]
+                             if str(sid).split(".", 1)[0] == scope.module and sid in scopes and sid != scope_id]
             module_uses = {_key(row) for e in module_scopes for row in _rows(e, "uses")} | {
                 _key(row) for row in uses}
             module_rejected = {_key(row) for e in module_scopes for row in _rows(e, "rejected")} | {

@@ -21,23 +21,28 @@ from typing import Any
 from imports_workbench.model import AVAILABLE, NOT_APPLICABLE, UNAVAILABLE
 
 FACTORY_ROOT_ENV = "SPEC_WORKBENCH_FACTORY_ROOT"
+REPORT_TIMEOUT_SECONDS = 600
 SLICER = Path("tools") / "slicer" / "__main__.py"
 STRUCTURE = Path("project_index") / "structure.json"
 
 
-def factory_root(project: Path, explicit: Path | None = None) -> Path | None:
-    candidates: list[Path] = []
-    if explicit is not None:
-        candidates.append(Path(explicit))
-    configured = os.environ.get(FACTORY_ROOT_ENV)
-    if configured:
-        candidates.append(Path(configured))
+def factory_root(project: Path, explicit: Path | None = None) -> tuple[Path | None, str]:
+    """The Factory checkout and where it came from.
+
+    A root the author names (--factory-root, then SPEC_WORKBENCH_FACTORY_ROOT) is
+    final: when it has no slicer the evidence is unavailable, never a checkout
+    found elsewhere. Only with neither is a sibling ``code_factory`` looked for.
+    """
+    named = Path(explicit) if explicit is not None else (
+        Path(os.environ[FACTORY_ROOT_ENV]) if os.environ.get(FACTORY_ROOT_ENV) else None)
+    if named is not None:
+        source = "--factory-root" if explicit is not None else FACTORY_ROOT_ENV
+        return (named.resolve() if (named / SLICER).is_file() else None), f"{source} {named}"
     for parent in [project, *project.parents]:
-        candidates += [parent / "code_factory", parent / "code-factory"]
-    for candidate in candidates:
-        if (candidate / SLICER).is_file():
-            return candidate.resolve()
-    return None
+        for candidate in (parent / "code_factory", parent.parent / "code_factory"):
+            if (candidate / SLICER).is_file():
+                return candidate.resolve(), "sibling code_factory"
+    return None, "no --factory-root, no SPEC_WORKBENCH_FACTORY_ROOT and no sibling code_factory"
 
 
 def _unavailable(reason: str, **extra: Any) -> dict[str, Any]:
@@ -54,9 +59,10 @@ def evidence(project: Path, factory_project: str | None, explicit_root: Path | N
     if factory_project is None:
         return {"status": NOT_APPLICABLE, "reason": "the case has no Factory target (90_factory_target.json)",
                 "modules": {}}
-    root = factory_root(project, explicit_root)
+    root, source = factory_root(project, explicit_root)
     if root is None:
-        return _unavailable(f"no Factory checkout with {SLICER.as_posix()}; pass --factory-root or set {FACTORY_ROOT_ENV}")
+        return _unavailable(f"no Factory checkout with {SLICER.as_posix()} ({source}); "
+                            f"pass --factory-root or set {FACTORY_ROOT_ENV}")
     try:
         code_root, spec = _project_paths(root, factory_project)
     except (OSError, KeyError, json.JSONDecodeError) as exc:
@@ -66,7 +72,12 @@ def evidence(project: Path, factory_project: str | None, explicit_root: Path | N
                             factory_root=str(root))
     command = [sys.executable, "-m", "tools.slicer", "report", "--spec", str(spec), "--code-root", str(code_root),
                "--json"]
-    result = subprocess.run(command, cwd=root, text=True, capture_output=True, check=False)
+    try:
+        result = subprocess.run(command, cwd=root, text=True, capture_output=True, check=False,
+                                timeout=REPORT_TIMEOUT_SECONDS)
+    except subprocess.TimeoutExpired:
+        return _unavailable(f"the Factory report did not finish in {REPORT_TIMEOUT_SECONDS}s",
+                            factory_root=str(root))
     if result.returncode != 0:
         tail = (result.stderr or result.stdout).strip().splitlines()
         return _unavailable(f"the Factory report failed: {tail[-1] if tail else result.returncode}",
@@ -76,9 +87,17 @@ def evidence(project: Path, factory_project: str | None, explicit_root: Path | N
     except json.JSONDecodeError as exc:
         return _unavailable(f"the Factory report is not JSON: {exc}", factory_root=str(root))
     modules = report.get("modules") if isinstance(report, dict) else None
-    if not isinstance(modules, dict) or any("code_imports" not in m for m in modules.values()):
+    if not isinstance(modules, dict) or any(not isinstance(m, dict) or "code_imports" not in m
+                                            for m in modules.values()):
         return _unavailable("the Factory report has no code_imports (the Factory predates --code-root)",
                             factory_root=str(root))
+    for name, module in modules.items():
+        imports = module["code_imports"]
+        if imports is not None and not (isinstance(imports, dict) and all(
+                isinstance(p, str) and isinstance(s, list) and all(isinstance(x, str) for x in s)
+                for p, s in imports.items())):
+            return _unavailable(f"the Factory report's code_imports of {name} is not provider -> symbols",
+                                factory_root=str(root))
     return {
         "status": AVAILABLE,
         "factory_root": str(root),
