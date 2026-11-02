@@ -566,3 +566,25 @@ def test_a_broken_factory_target_is_an_error_not_no_target(tmp_path, payload):
     (tmp_path / "90_factory_target.json").write_text(payload, encoding="utf-8")
     with pytest.raises(service.ImportsError):
         factory_target(tmp_path)
+
+
+# -- step 3: the assembly check --------------------------------------------------
+
+def test_the_assembly_check_reports_drift_only_for_judged_modules(tmp_path, monkeypatch):
+    case = _case()
+    table = _closed_table(case)
+    derived = service.derive(table)
+    (tmp_path / "65_imports.json").write_text(json.dumps(table), encoding="utf-8")
+    monkeypatch.setattr(service.case_loader, "load", lambda project: case)
+    monkeypatch.setattr(service, "_code_evidence", lambda project, case, root: NO_CODE)
+
+    # models is not judged: its edges are an emitter's, never drift
+    case.module_internal = {**copy.deepcopy(derived), "models": {"catalog": ["X"]}}
+    report = service.assembly_report(tmp_path)
+    assert report["summary"]["handoff_ready"] and report["summary"]["drift"] == 0
+
+    case.module_internal["consumer"]["models"].append("Part")
+    report = service.assembly_report(tmp_path)
+    assert not report["summary"]["handoff_ready"]
+    assert [(f["code"], f["subject"], f["extra"]) for f in report["findings"]] == [
+        ("imports_projection_drift", "consumer", ["Part"])]

@@ -17,6 +17,8 @@ from pathlib import Path
 from typing import Any
 
 import design_decision_witness
+from imports_workbench import service as imports_closure
+from imports_workbench.model import ImportsError
 import design_emitter_binding
 import design_lint
 import design_router_context
@@ -467,6 +469,41 @@ def _router_step(sequence: dict[str, Any], project: Path, project_text: str) -> 
     return None
 
 
+def _imports_step(sequence: dict[str, Any], project: Path, project_text: str) -> dict[str, Any] | None:
+    """The imports_closure phase; None once every candidate is decided.
+
+    imports.module_internal is projected from the author's decisions; State 8
+    cannot be reached while a candidate is undecided (IMPORTS_WORKBENCH.md §9).
+    """
+    try:
+        imports = imports_closure.coverage(project)
+    except ImportsError as exc:
+        return _result(
+            sequence=sequence, project=project, project_text=project_text,
+            phase="imports_closure", blocked=True,
+            reason=f"The imports closure cannot read the case: {exc}",
+            summary={"errors": 1},
+            router_allowed=False, persistence_allowed=False,
+        )
+    if not imports["summary"]["handoff_ready"]:
+        table_missing = any(item["code"] == "imports_table_missing" for item in imports["findings"])
+        return _result(
+            sequence=sequence, project=project, project_text=project_text,
+            phase="imports_closure", blocked=not table_missing,
+            reason=(
+                "Every project symbol an operation or module names directly is a decision of the author: "
+                "run tools/design_imports.py <case> --draft, accept each candidate with how and why it is "
+                "used or reject it with a reason, and rerun the draft until nothing is pending."
+                if table_missing else
+                "The imports closure is not closed: decide every pending candidate, refresh stale scopes and "
+                "settle what the accepted code says, before anything is assembled."
+            ),
+            summary=imports["summary"], findings=imports["findings"],
+            router_allowed=False, persistence_allowed=False,
+        )
+    return None
+
+
 def _post_state5_step(sequence: dict[str, Any], project: Path, project_text: str) -> dict[str, Any]:
     """Post-State-5 chain: data closure -> contracts -> backend closures -> notes -> assembly."""
     data_path = project / design_stage6_data.DEFAULT_FILE
@@ -588,6 +625,10 @@ def _post_state5_step(sequence: dict[str, Any], project: Path, project_text: str
             summary=witnesses["summary"], findings=witnesses["findings"],
             router_allowed=False, persistence_allowed=False,
         )
+
+    imports_step = _imports_step(sequence, project, project_text)
+    if imports_step is not None:
+        return imports_step
 
     return _result(
         sequence=sequence, project=project, project_text=project_text,

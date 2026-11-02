@@ -61,6 +61,10 @@ def _project(tmp_path):
     (project / "global_spec.json").write_text(
         json.dumps(current, indent=2) + "\n", encoding="utf-8"
     )
+    # the imports closure owns imports.module_internal (IMPORTS_WORKBENCH.md §4)
+    (project / "65_imports.json").write_text(
+        json.dumps({"schema_version": "spec_workbench_imports.v1", "scopes": {}}) + "\n", encoding="utf-8"
+    )
     return project
 
 
@@ -546,3 +550,65 @@ def test_malformed_keyed_file_spool_closure_blocks_projection(tmp_path, monkeypa
     assert [row["code"] for row in plan["findings"]] == ["standard_backend_closure_not_closed"]
     _, projected, _, _ = service._project(project)
     assert "keyed_file_spool_backend" not in projected["rules"]
+
+
+# -- imports.module_internal belongs to the imports closure (IMPORTS_WORKBENCH.md §4) --
+
+def _imports_table(project, scopes):
+    (project / "65_imports.json").write_text(json.dumps(
+        {"schema_version": "spec_workbench_imports.v1", "scopes": scopes}) + "\n", encoding="utf-8")
+
+
+def _with_edges(project, edges):
+    current = json.loads((project / "global_spec.json").read_text(encoding="utf-8"))
+    current["imports"]["module_internal"] = edges
+    (project / "global_spec.json").write_text(json.dumps(current, indent=2) + "\n", encoding="utf-8")
+
+
+def test_module_internal_is_derived_from_the_imports_table(tmp_path, monkeypatch) -> None:
+    project = _project(tmp_path)
+    _patch_ready_sources(monkeypatch)
+    (project / "70_persistence_closure.json").write_text("{}", encoding="utf-8")
+    # alpha is judged by the closure; emitted keeps the edges an emitter writes
+    _with_edges(project, {"alpha": {"models": ["Stale"]}, "emitted": {"models": ["Row"]}})
+    _imports_table(project, {
+        "alpha": {"uses": [], "rejected": []},
+        "alpha.new": {"uses": [{"symbol": "Thing", "provider": "models", "as": "creates", "basis": "contract"}],
+                      "rejected": []},
+    })
+
+    _, projected, findings, _ = service._project(project)
+
+    assert projected["imports"]["module_internal"] == {"alpha": {"models": ["Thing"]}, "emitted": {"models": ["Row"]}}
+    assert not [f for f in findings if f["severity"] == "block"]
+    service.apply(project)
+    assert service.verify(project)["in_sync"] is True
+
+
+def test_a_hand_edit_of_module_internal_is_drift(tmp_path, monkeypatch) -> None:
+    project = _project(tmp_path)
+    _patch_ready_sources(monkeypatch)
+    (project / "70_persistence_closure.json").write_text("{}", encoding="utf-8")
+    _imports_table(project, {"alpha": {"uses": [], "rejected": []}})
+    service.apply(project)
+    _with_edges(project, {"alpha": {"models": ["Thing"]}})
+
+    report = service.verify(project)
+
+    assert report["in_sync"] is False
+    assert {"address": "imports.module_internal", "action": "replace"} in report["changes"]
+
+
+def test_without_the_table_projection_blocks_but_the_closure_can_still_read_the_case(tmp_path, monkeypatch) -> None:
+    project = _project(tmp_path)
+    _patch_ready_sources(monkeypatch)
+    (project / "70_persistence_closure.json").write_text("{}", encoding="utf-8")
+    (project / "65_imports.json").unlink()
+
+    plan = service.build_plan(project)
+
+    assert "imports_table_missing" in {f["code"] for f in plan["findings"]}
+    assert plan["ready_to_apply"] is False
+    with pytest.raises(service.SpecProjectionError, match="imports_table_missing"):
+        service.projected_spec(project)
+    assert service.projected_spec(project, imports=False)["contracts"]["new"] == "() -> str"

@@ -92,6 +92,9 @@ TYPES: dict[str, ObligationType] = {
            "a note or rule carries undecided language", "check:language"),
         _t("notes_undecided", "convergence", "function",
            "a contract scope lacks a note or its note fails the gate", "check:notes"),
+        _t("imports_undecided", "convergence", "module function",
+           "a project symbol an operation or module names is not decided in 65_imports.json, or the assembly "
+           "does not carry the table's projection", "check:imports"),
         # ---- implementation ------------------------------------------------------
         _t("router_closure_unproven", "implementation", "public_op",
            "the router closure cannot be proven for this operation yet", "check:router"),
@@ -149,6 +152,7 @@ CHECK_FALLBACK: dict[str, str] = {
     "router": "router_closure_unproven",
     "persistence": "persistence_closure_unproven",
     "witness": "decision_without_witness",
+    "imports": "imports_undecided",
     "flows": "capability_unreachable",
     "factory": "factory_validation_rejected",
 }

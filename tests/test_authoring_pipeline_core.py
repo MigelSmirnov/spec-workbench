@@ -33,6 +33,7 @@ def test_machine_sequence_covers_promoted_state0_through_state5_tools():
         "deterministic_backend_binding",
         "state7_notes",
         "decision_witness_resolution",
+        "imports_closure",
         "state8_assembly",
         "stage8_1_module_review",
         "stage9_factory_admission",
@@ -163,3 +164,38 @@ def test_transport_api_delegates_to_same_sequencer(tmp_path: Path, monkeypatch):
     assert result["authoring"]["phase"] == "state1_models"
     assert result["authoring"]["action"]["execution"] == "pipeline_managed_project_checkout"
     assert result["authoring"]["action"]["command"] is None
+
+
+def _report(ready: bool, codes=()):
+    return {"summary": {"handoff_ready": ready, "pending": len(codes)},
+            "findings": [{"code": code, "severity": "error"} for code in codes]}
+
+
+def test_imports_closure_stands_between_witnesses_and_assembly(tmp_path: Path, monkeypatch):
+    sequence = design_authoring_next.load_sequence()
+    calls = []
+    monkeypatch.setattr(design_authoring_next.imports_closure, "coverage",
+                        lambda project: calls.append(project) or _report(False, ["imports_table_missing"]))
+
+    missing = design_authoring_next._imports_step(sequence, tmp_path, "examples/case")
+    assert missing["phase"] == "imports_closure" and missing["blocked"] is False
+    assert missing["action"]["tool"] == "tools/design_imports.py"
+    assert "--draft" in missing["reason"]
+
+    monkeypatch.setattr(design_authoring_next.imports_closure, "coverage",
+                        lambda project: _report(False, ["imports_candidate_undecided"]))
+    open_ = design_authoring_next._imports_step(sequence, tmp_path, "examples/case")
+    assert open_["blocked"] is True and open_["findings"][0]["code"] == "imports_candidate_undecided"
+
+    monkeypatch.setattr(design_authoring_next.imports_closure, "coverage", lambda project: _report(True))
+    assert design_authoring_next._imports_step(sequence, tmp_path, "examples/case") is None
+    assert calls == [tmp_path]
+
+
+def test_an_unreadable_case_blocks_the_imports_phase(tmp_path: Path, monkeypatch):
+    def refuse(project):
+        raise design_authoring_next.ImportsError("the projector cannot build the specification")
+
+    monkeypatch.setattr(design_authoring_next.imports_closure, "coverage", refuse)
+    step = design_authoring_next._imports_step(design_authoring_next.load_sequence(), tmp_path, "x")
+    assert step["blocked"] is True and "cannot read the case" in step["reason"]
