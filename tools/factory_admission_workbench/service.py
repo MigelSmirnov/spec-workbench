@@ -600,6 +600,46 @@ def _projection_drift_check(case_root: Path | None) -> AdmissionCheck:
     )
 
 
+def _imports_closure_check(case_root: Path | None, factory_root: Path) -> AdmissionCheck:
+    """FA022: every internal import of the exported specification is an author's decision.
+
+    imports.module_internal is projected from 65_imports.json (FA016 catches a
+    hand edit). This check recomputes the closure at admission: every candidate
+    decided, no scope stale against the contracts and notes being exported, and
+    the accepted code agreeing with the decisions. Recomputing is stronger than
+    a hash recorded when the phase closed: an edit after closing reopens the
+    scope it touched (basis_sha256), and there is no recorded value to forge.
+    """
+    if case_root is None:
+        return AdmissionCheck("FA022", CHECK_NOT_APPLICABLE,
+                              "Explicit --spec admission has no Workbench imports closure.", {})
+    from imports_workbench import service as imports_closure
+    from imports_workbench.model import ImportsError
+
+    try:
+        report = imports_closure.assembly_report(case_root, factory_root)
+    except ImportsError as error:
+        return AdmissionCheck("FA022", CHECK_BLOCK, f"The imports closure cannot read the case: {error}",
+                              {"error": str(error)})
+    summary = report["summary"]
+    if not summary.get("handoff_ready"):
+        codes: dict[str, int] = {}
+        for item in report["findings"]:
+            codes[item["code"]] = codes.get(item["code"], 0) + 1
+        return AdmissionCheck(
+            "FA022", CHECK_BLOCK,
+            "The imports closure is not closed: imports.module_internal is not the author's decision "
+            f"({', '.join(f'{code} {count}' for code, count in sorted(codes.items()))}).",
+            {"summary": summary, "codes": codes, "code_evidence": report.get("code_evidence")},
+        )
+    return AdmissionCheck(
+        "FA022", CHECK_PASS,
+        "Every internal import is decided and imports.module_internal is its projection"
+        + ("; the accepted code agrees (strict imports may be enabled)." if summary.get("strict_ready") else "."),
+        {"summary": summary},
+    )
+
+
 # The standard and its quick index are one document in two repositories;
 # each must be byte-identical, or the two sources of truth drift unseen.
 STANDARD_FILES = (
@@ -1312,6 +1352,7 @@ def check(
         _external_contract_check(case_root),
         _closure_gaps_check(case_root),
         _projection_drift_check(case_root),
+        _imports_closure_check(case_root, factory_root),
     ]
     validation_check, validation_report = _factory_validation_check(factory_root, source)
     inspector_check, inspector_report = _factory_inspector_check(

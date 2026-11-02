@@ -993,3 +993,45 @@ def test_fa021_blocks_a_factory_without_the_same_emitter_tables(tmp_path: Path, 
 
 def test_fa021_runs_in_every_admission_report(tmp_path: Path) -> None:
     assert _fa(_run(tmp_path), "FA021")["status"] == "NOT_APPLICABLE"
+
+
+# -- FA022: the imports closure (IMPORTS_WORKBENCH.md §9.4) ----------------------
+
+def _imports_report(ready: bool, codes=(), strict=False):
+    return {"summary": {"handoff_ready": ready, "strict_ready": strict},
+            "findings": [{"code": code} for code in codes], "code_evidence": {"status": "available"}}
+
+
+def test_imports_closure_check_not_applicable_without_case(tmp_path) -> None:
+    from factory_admission_workbench.service import _imports_closure_check
+
+    result = _imports_closure_check(None, tmp_path)
+    assert (result.check_id, result.status) == ("FA022", "NOT_APPLICABLE")
+
+
+def test_imports_closure_check_blocks_an_open_closure_and_names_its_findings(tmp_path, monkeypatch) -> None:
+    from factory_admission_workbench import service
+    from imports_workbench import service as imports_closure
+
+    monkeypatch.setattr(imports_closure, "assembly_report", lambda case, root: _imports_report(
+        False, ["imports_candidate_undecided", "imports_candidate_undecided", "imports_projection_drift"]))
+    result = service._imports_closure_check(tmp_path, tmp_path)
+
+    assert (result.check_id, result.status) == ("FA022", "BLOCK")
+    assert result.evidence["codes"] == {"imports_candidate_undecided": 2, "imports_projection_drift": 1}
+
+    monkeypatch.setattr(imports_closure, "assembly_report", lambda case, root: _imports_report(True, strict=True))
+    passed = service._imports_closure_check(tmp_path, tmp_path)
+    assert passed.status == "PASS" and "strict imports" in passed.summary
+
+
+def test_imports_closure_check_blocks_an_unreadable_case(tmp_path, monkeypatch) -> None:
+    from factory_admission_workbench import service
+    from imports_workbench import service as imports_closure
+    from imports_workbench.model import ImportsError
+
+    def refuse(case, root):
+        raise ImportsError("the projector cannot build the specification")
+
+    monkeypatch.setattr(imports_closure, "assembly_report", refuse)
+    assert service._imports_closure_check(tmp_path, tmp_path).status == "BLOCK"

@@ -43,6 +43,7 @@ FINDING_MESSAGES = {
     "imports_use_invalid": "a use row needs symbol, provider, an `as` from the closed set and a basis",
     "imports_basis_invalid": "the basis names a note that is not a note of this scope, or has an unknown form",
     "imports_rejection_without_reason": "a rejection needs a reason",
+    "imports_projection_drift": "imports.module_internal in global_spec.json is not the projection of the table",
     "imports_decision_conflict": "the same symbol and provider are both accepted and rejected in one scope",
     "imports_weak_without_basis": "a weak candidate (field name, union variant) is accepted only on a note clause of the scope or on the code",
     "imports_knows_uncovered": "a module from State 3 Knows gave no symbol to the module and its edge is not rejected",

@@ -403,7 +403,63 @@ def _source_check(
     }
 
 
-def _project(project: Path) -> tuple[dict[str, Any], dict[str, Any], list[dict[str, Any]], list[dict[str, Any]]]:
+IMPORTS_TABLE = "65_imports.json"
+
+
+def _project_module_internal(
+    project: Path,
+    current: dict[str, Any],
+    projected: dict[str, Any],
+    findings: list[dict[str, Any]],
+    source_checks: list[dict[str, Any]],
+) -> None:
+    """imports.module_internal is derived from the imports closure table, never hand-edited.
+
+    The table's scopes name the modules the closure judges; their edges are
+    exactly the table's uses (IMPORTS_WORKBENCH.md §4). A module the closure does
+    not judge (``models``, modules an emitter writes) keeps its edges. Whether
+    every candidate is decided is the imports_closure gate's question, not the
+    projector's: the gate reads the case through this projection, so asking it
+    here would be circular.
+    """
+    from imports_workbench.service import derive
+
+    path = project / IMPORTS_TABLE
+    if not path.is_file():
+        source_checks.append(_source_check(IMPORTS_TABLE, enabled=True, ready=False, status="missing", errors=1))
+        findings.append(_finding(
+            "block", "imports_table_missing",
+            f"imports.module_internal is projected from {IMPORTS_TABLE}: run "
+            "tools/design_imports.py <case> --draft and close the imports_closure phase",
+            source=IMPORTS_TABLE,
+        ))
+        return
+    table = _read_json(path, IMPORTS_TABLE)
+    scopes = table.get("scopes")
+    if not isinstance(scopes, dict):
+        source_checks.append(_source_check(IMPORTS_TABLE, enabled=True, ready=False, status="invalid", errors=1))
+        findings.append(_finding("block", "imports_table_invalid", f"{IMPORTS_TABLE} has no scopes object",
+                                 source=IMPORTS_TABLE))
+        return
+    judged = {str(scope).split(".", 1)[0] for scope in scopes}
+    derived = derive(table)
+    current_edges = _get(current, "imports.module_internal")
+    current_edges = current_edges if isinstance(current_edges, dict) else {}
+    order = [str(m) for m in projected.get("module_order") or []]
+    modules = [m for m in order if m in judged or m in current_edges]
+    modules += sorted((set(judged) | set(current_edges)) - set(modules))
+    edges: dict[str, Any] = {}
+    for module in modules:
+        value = derived.get(module) if module in judged else current_edges.get(module)
+        if value:
+            edges[module] = copy.deepcopy(value)
+    source_checks.append(_source_check(IMPORTS_TABLE, enabled=True, ready=True, status="present"))
+    _set(projected, "imports.module_internal", edges)
+
+
+def _project(
+    project: Path, *, imports: bool = True
+) -> tuple[dict[str, Any], dict[str, Any], list[dict[str, Any]], list[dict[str, Any]]]:
     project = project.resolve()
     if not project.is_dir():
         raise SpecProjectionError(f"project directory not found: {project}")
@@ -772,6 +828,9 @@ def _project(project: Path) -> tuple[dict[str, Any], dict[str, Any], list[dict[s
             continue
         _set(projected, f"rules.{standard.rule_key}", authored)
 
+    if imports:
+        _project_module_internal(project, current, projected, findings, source_checks)
+
     return current, projected, findings, source_checks
 
 
@@ -783,6 +842,7 @@ def build_plan(project: Path) -> dict[str, Any]:
         "contracts",
         "function_order",
         "imports.internal",
+        "imports.module_internal",
         "module_functions",
         "module_order",
         "module_paths",
@@ -824,14 +884,18 @@ def _canonical_text(payload: dict[str, Any]) -> str:
     return json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
 
 
-def projected_spec(project: Path) -> dict[str, Any]:
+def projected_spec(project: Path, *, imports: bool = True) -> dict[str, Any]:
     """The specification the authored sources project to, in memory; the
     project's ``global_spec.json`` is not written.
+
+    ``imports=False`` leaves imports.module_internal as it is: the imports
+    closure reads the case through this projection to build the very table the
+    field is projected from.
 
     A source that is not ready leaves its section as the last assembly wrote
     it, so a projection with a blocking finding does not stand for the
     authored texts: it raises SpecProjectionError naming the findings."""
-    _, projected, findings, _ = _project(project.resolve())
+    _, projected, findings, _ = _project(project.resolve(), imports=imports)
     blocks = sorted({str(row.get("code")) for row in findings if row.get("severity") == "block"})
     if blocks:
         raise SpecProjectionError(f"the authored sources do not project: {', '.join(blocks)}")

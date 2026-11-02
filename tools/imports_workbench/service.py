@@ -81,10 +81,16 @@ def derive(table: dict[str, Any] | None) -> dict[str, dict[str, list[str]]]:
 
 
 def drift(case: Case, table: dict[str, Any] | None) -> list[dict[str, Any]]:
-    """Where the specification's module_internal differs from the derived one (for the projector, §4)."""
+    """Where the specification's module_internal differs from the derived one (§4).
+
+    Only modules the table judges are compared: the edges of a module the
+    closure does not judge (models, emitter-written modules) are not its own.
+    """
     derived = derive(table)
+    scopes = (table or {}).get("scopes") if isinstance(table, dict) else None
+    judged = {str(scope).split(".", 1)[0] for scope in (scopes if isinstance(scopes, dict) else ())}
     differences = []
-    for module in sorted(set(derived) | set(case.module_internal)):
+    for module in sorted(judged & (set(derived) | set(case.module_internal) | judged)):
         current = case.module_internal.get(module) or {}
         expected = derived.get(module) or {}
         for provider in sorted(set(current) | set(expected)):
@@ -295,6 +301,30 @@ def coverage(project: Path, factory_root: Path | None = None) -> dict[str, Any]:
     project = Path(project).resolve()
     case = case_loader.load(project)
     return analyze(case, load_table(project), _code_evidence(project, case, factory_root), project)
+
+
+def assembly_report(project: Path, factory_root: Path | None = None) -> dict[str, Any]:
+    """The assembly check: the closure is closed and global_spec.json carries its projection.
+
+    A hand edit of imports.module_internal, or an assembly older than the last
+    decision, is ``imports_projection_drift`` (IMPORTS_WORKBENCH.md §9.3).
+    """
+    project = Path(project).resolve()
+    case = case_loader.load(project)
+    table = load_table(project)
+    report = analyze(case, table, _code_evidence(project, case, factory_root), project)
+    if table is not None and isinstance(table, dict) and isinstance(table.get("scopes"), dict):
+        extra = [_finding("imports_projection_drift", item["module"],
+                          f"imports.module_internal.{item['module']}.{item['provider']} in global_spec.json is not "
+                          "the projection of 65_imports.json: run tools/design_spec_projection.py --apply", **item)
+                 for item in drift(case, table)]
+        if extra:
+            report["findings"] = fence.enforce(report["findings"] + extra)
+            report["summary"]["errors"] = fence.stops(report["findings"])
+            report["summary"]["handoff_ready"] = False
+            report["summary"]["strict_ready"] = False
+        report["summary"]["drift"] = len(extra)
+    return report
 
 
 # -- the draft ---------------------------------------------------------------
