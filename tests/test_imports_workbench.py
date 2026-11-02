@@ -588,3 +588,72 @@ def test_the_assembly_check_reports_drift_only_for_judged_modules(tmp_path, monk
     assert not report["summary"]["handoff_ready"]
     assert [(f["code"], f["subject"], f["extra"]) for f in report["findings"]] == [
         ("imports_projection_drift", "consumer", ["Part"])]
+
+
+# -- defects reported by the cabinet-kernel table (step 4) -----------------------
+
+def test_rejecting_a_note_candidate_does_not_silence_the_code():
+    case = _case()
+    table = _closed_table(case)
+    scope = table["scopes"]["consumer.use_widget"]
+    scope["uses"] = [row for row in scope["uses"] if row["symbol"] != "CATALOG_VERSION"]
+    scope["rejected"].append({"symbol": "CATALOG_VERSION", "provider": "catalog", "candidate": "note_mention",
+                              "reason": "the note only names it"})
+
+    report = service.analyze(case, table, _code(**CODE))
+    assert [(f["code"], f["candidate"]["symbol"]) for f in report["findings"]] == [
+        ("imports_code_undeclared", "CATALOG_VERSION")]
+    assert not report["summary"]["strict_ready"]
+
+    scope["rejected"].append({"symbol": "CATALOG_VERSION", "provider": "catalog", "candidate": "code_used",
+                              "reason": "the code predates the specification that drops it"})
+    assert _codes(service.analyze(case, table, _code(**CODE))) == []
+
+
+def test_a_knows_rejection_in_the_module_scope_is_decided_for_the_draft():
+    case = _case(knows={"consumer": ["catalog", "store"], "store": ["catalog"]})
+    table = _closed_table(case)
+    table["scopes"]["store"]["rejected"].append(
+        {"symbol": "*", "provider": "catalog", "candidate": "knows", "reason": "stores what it is given"})
+    assert _codes(service.analyze(case, table, NO_CODE)) == []
+
+    drafted = service.draft_table(case, table, NO_CODE)
+
+    assert "pending" not in drafted["scopes"]["store"]
+    assert drafted == service.draft_table(case, drafted, NO_CODE)
+
+
+def test_knows_reads_the_leading_list_not_the_prose(tmp_path):
+    from imports_workbench.case import knows
+
+    (tmp_path / "30_modules.md").write_text(
+        "## `surface`\n\n### Knows\n\nEvery module's public capabilities, except `store_persistence` and\n"
+        "`store_spool`, which only `store` calls.\n\n"
+        "## `run_graph`\n\n### Knows\n\n`models`, `data_provider` (conclusion and edge-delivery tables), `store`,\n"
+        "`effects` (an operation's conclusion); no clock — the time of a draft is the `now` `runs` passes.\n\n"
+        "## `bindings`\n\n### Knows\n\n- `models` (effect classes)\n- `store` and `clock`\n\n"
+        "## `facade`\n\n### Knows\n\nNothing.\n\n**Delegates to:** `store`, `clock`.\n",
+        encoding="utf-8")
+    modules = {"surface", "run_graph", "bindings", "facade", "models", "data_provider", "store", "effects",
+               "runs", "clock", "store_persistence", "store_spool"}
+
+    assert knows(tmp_path, modules) == {
+        "run_graph": ["data_provider", "effects", "models", "store"],
+        "bindings": ["clock", "models", "store"],
+        "facade": ["clock", "store"],
+    }
+
+
+@pytest.mark.parametrize("text, symbol, negative", [
+    ("MUST raise make_widget_error when the reference does not exist", "make_widget_error", False),
+    ("it never calls make_widget", "make_widget", True),
+    ("MUST NOT read CATALOG_VERSION", "CATALOG_VERSION", True),
+    ("MUST compute the result without CATALOG_VERSION", "CATALOG_VERSION", True),
+    ("make_widget is not called for a cached value", "make_widget", True),
+    ("MUST read CATALOG_VERSION, and never cache it", "CATALOG_VERSION", False),
+])
+def test_a_negation_marks_only_the_symbol_it_governs(text, symbol, negative):
+    case = _case(notes=[Note("add_case", text, "BEHAVIOR")])
+    case.exports["catalog"] = [*case.exports["catalog"], "make_widget_error"]
+
+    assert _candidates(case, "consumer.add_case")[(symbol, "catalog")].negative is negative

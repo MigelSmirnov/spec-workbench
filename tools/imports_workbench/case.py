@@ -123,6 +123,59 @@ class Case:
         return scopes.get(module) if module else None
 
 
+_MODULE_SECTION = re.compile(r"^## `([A-Za-z_][A-Za-z0-9_]*)`\s*$", re.MULTILINE)
+_KNOWS_SECTION = re.compile(r"^### Knows\s*$(.*?)(?=^### |\Z)", re.MULTILINE | re.DOTALL)
+# "**Delegates to**: ..." and "**Delegates to:** ..." alike
+_DELEGATES = re.compile(r"^[-*\s]*\**delegates to\s*(?::\**|\**\s*:)\s*(.*?)\s*$", re.MULTILINE | re.IGNORECASE)
+_PARENTHESIS = re.compile(r"\([^()]*\)")
+_LEAD_NAME = re.compile(r"\s*`(?:module:)?([A-Za-z_][A-Za-z0-9_]*)`")
+_LEAD_SEPARATOR = re.compile(r"\s*(?:,|\band\b)")
+_ITEM = re.compile(r"(?:^|\n)\s*[-*]\s+")
+
+
+def leading_names(text: str) -> list[str]:
+    """The backticked names a Knows list leads with: `a`, `b` (why) and `c`.
+
+    Parenthetical comments are skipped; the list ends at the first word that is
+    not a name. A backticked name later in prose ("except `x`", "the `now`
+    `runs` passes") is not a collaborator. Each bullet item is a list of its own.
+    """
+    found: list[str] = []
+    for item in _ITEM.split(_PARENTHESIS.sub(" ", text)):
+        position = 0
+        while True:
+            name = _LEAD_NAME.match(item, position)
+            if name is None:
+                break
+            found.append(name.group(1))
+            separator = _LEAD_SEPARATOR.match(item, name.end())
+            if separator is None:
+                break
+            position = separator.end()
+    return found
+
+
+def knows(project: Path, modules: set[str]) -> dict[str, list[str]]:
+    """State 3 collaborators of each module, read from the lists Knows and
+    "delegates to" lead with (IMPORTS_WORKBENCH.md §14). Prose is not parsed:
+    "every module except `x`" names no collaborator here."""
+    path = project / "30_modules.md"
+    if not path.is_file():
+        return {}
+    parts = _MODULE_SECTION.split(path.read_text(encoding="utf-8"))
+    result: dict[str, list[str]] = {}
+    for position in range(1, len(parts), 2):
+        module, body = parts[position], parts[position + 1]
+        section = _KNOWS_SECTION.search(body)
+        named = leading_names(section.group(1)) if section else []
+        for delegates in _DELEGATES.findall(body):
+            named += leading_names(delegates)
+        named = sorted({name for name in named if name in modules and name != module})
+        if named:
+            result[module] = named
+    return result
+
+
 def _read_json(path: Path) -> Any:
     try:
         return json.loads(path.read_text(encoding="utf-8"))
@@ -150,7 +203,6 @@ def load(project: Path) -> Case:
     from notes_workbench.language import _iter_authored_notes
     from spec_projection_workbench import service as projection
     from spec_projection_workbench.model import SpecProjectionError
-    from value_flow_workbench.case import _knows
 
     project = project.resolve()
     try:
@@ -174,7 +226,7 @@ def load(project: Path) -> Case:
         contracts={str(k): str(v) for k, v in (spec.get("contracts") or {}).items() if isinstance(v, str)},
         models={str(k): v for k, v in (spec.get("models") or {}).items() if isinstance(v, dict)},
         notes=notes,
-        knows=_knows(project, set(modules)),
+        knows=knows(project, set(modules)),
         deterministic=set(notes_gate._load_deterministic_callable_scopes(project)),
         module_internal=imports.get("module_internal") or {},
         factory_target=factory_target(project),
