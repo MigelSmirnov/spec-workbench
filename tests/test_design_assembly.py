@@ -29,11 +29,12 @@ def test_cabinet_assembly_stops_on_every_undecided_fact() -> None:
     assert report["ready"] is False
     assert [check["name"] for check in report["checks"]] == [
         "language", "modules", "identity", "fields", "data", "contracts", "external_contracts",
-        "notes", "closure_gaps", "router", "persistence", "witness", "flows", "factory",
+        "notes", "closure_gaps", "router", "persistence", "witness", "imports", "flows", "factory",
     ]
     by_name = {check["name"]: check for check in report["checks"]}
     assert all(check["warnings"] == 0 for check in report["checks"])
-    for name in ("modules", "contracts", "notes", "closure_gaps", "persistence", "witness", "flows"):
+    # imports: the case has no 65_imports.json, so imports.module_internal has no author
+    for name in ("modules", "contracts", "notes", "closure_gaps", "persistence", "witness", "imports", "flows"):
         if name == "persistence" and _factory_storage_resolver() is not None:
             assert by_name[name]["ready"] is True, name  # the factory registry proved the codec coverage
             continue

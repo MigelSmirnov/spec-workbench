@@ -206,7 +206,7 @@ def load(project: Path) -> Case:
 
     project = project.resolve()
     try:
-        spec = projection.projected_spec(project)
+        spec = projection.projected_spec(project, imports=False)
     except SpecProjectionError as exc:
         raise ImportsError(f"the projector cannot build the specification: {exc}") from exc
     imports = spec.get("imports") or {}

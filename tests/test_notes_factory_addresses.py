@@ -151,10 +151,10 @@ def test_a_projection_with_a_blocking_finding_is_not_used(tmp_path: Path, monkey
     from spec_projection_workbench import service as projection
     from spec_projection_workbench.model import SpecProjectionError
 
-    monkeypatch.setattr(projection, "_project", lambda project: (
+    monkeypatch.setattr(projection, "_project", lambda project, **_: (
         {}, {"models": {}}, [{"severity": "block", "code": "model_handoff_not_ready"}], [],
     ))
     with pytest.raises(SpecProjectionError, match="model_handoff_not_ready"):
         projection.projected_spec(tmp_path)
-    monkeypatch.setattr(projection, "_project", lambda project: ({}, {"models": {}}, [{"severity": "warning"}], []))
+    monkeypatch.setattr(projection, "_project", lambda project, **_: ({}, {"models": {}}, [{"severity": "warning"}], []))
     assert projection.projected_spec(tmp_path) == {"models": {}}
