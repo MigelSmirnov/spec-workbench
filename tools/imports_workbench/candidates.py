@@ -77,8 +77,22 @@ def _clauses(text: str) -> Iterable[str]:
     return (part for part in _CLAUSE_END.split(text) if part.strip())
 
 
-def _negative(clause: str) -> bool:
-    return any(token.lower() in NEGATIVE_WORDS for token in _identifiers(clause))
+# A negation governs a symbol only inside its own part of the clause: commas and
+# subordinators start a new part ("MUST raise X when the ref does not exist").
+_PART_BREAK = re.compile(r",|\b(?:when|if|unless|where|whose|that|which|while|because|after|before|until)\b",
+                         re.IGNORECASE)
+_NEGATED_AFTER = re.compile(r"^\s*(?:(?:is|are|was|were|must|may|shall|does|do|can|will)\s+)?(?:not|never)\b",
+                            re.IGNORECASE)
+
+
+def _negative(clause: str, start: int, end: int) -> bool:
+    """The symbol at clause[start:end] is negated: a negative word before it in its own
+    part of the clause ("never calls X", "MUST NOT read X", "without X"), or right after
+    it ("X is not called")."""
+    before = _PART_BREAK.split(clause[:start])[-1]
+    if any(token.lower() in NEGATIVE_WORDS for token in _identifiers(before)):
+        return True
+    return bool(_NEGATED_AFTER.match(_PART_BREAK.split(clause[end:])[0]))
 
 
 def _model_types(case: Case, annotation: str) -> list[str]:
@@ -119,13 +133,13 @@ def scope_candidates(case: Case, scope: Scope, accepted: Iterable[dict[str, Any]
 
     for address, note in scope.notes:
         for clause in _clauses(note.text):
-            negative = _negative(clause)
             for match in IDENTIFIER.finditer(clause):
                 symbol = match.group(0)
                 if symbol not in collector.catalog:
                     continue
                 called = clause[match.end():].lstrip().startswith("(")
-                collector.add(symbol, "note_call" if called else "note_mention", address, negative)
+                collector.add(symbol, "note_call" if called else "note_mention", address,
+                              _negative(clause, match.start(), match.end()))
 
     words = set(_identifiers(scope.text)) | set(_identifiers(scope.signature))
     roots = list(dict.fromkeys(
