@@ -166,16 +166,36 @@ predicate или method shape не замкнуты, diagnostic emitter возв
 ## Как заполнять module_internal
 
 - `imports.internal[provider]` — полный публичный export surface provider-а.
-- `imports.module_internal[consumer][provider]` — только минимальный набор
-  символов, которые consumer прямо импортирует для contracts, classified notes,
-  deterministic backend wiring или иного явно объявленного module-local поведения.
+- `imports.module_internal[consumer][provider]` — единственный источник
+  внутренних импортов consumer-а: **полный и минимальный** набор символов,
+  которые его код называет напрямую (вызывает, конструирует, проверяет, пишет
+  в аннотации) для contracts, classified notes, deterministic backend wiring
+  или иного явно объявленного module-local поведения. Недостающий символ —
+  ошибка спеки, как и лишний.
+- Типы из сигнатур contracts consumer-а и объявленных provider-функций
+  проектор импортирует сам; перечислять их не обязательно.
 - Не копируй в consumer весь `imports.internal[provider]` и не добавляй весь
   реестр `models` «на всякий случай»: явные записи расширяют dependency graph,
   affected-set и prompt context.
 - Для `models` прямой runtime-import и транзитивный model-context различаются:
   типы полей/variants входят в context closure, но не в Python-import, пока
-  consumer не обращается к ним непосредственно.
+  consumer не обращается к ним непосредственно (сравнивает с членом enum,
+  конструирует, проверяет тип) — тогда входят.
 - Если прямых импортов из provider-а нет, ребро provider-а отсутствует.
+- Вывод импортов из текста — подсказка: каждый выведенный и не объявленный
+  символ — находка `SLICE_IMPORT_UNDECLARED`. До включения строгого режима
+  (`CODE_FACTORY_STRICT_IMPORTS=1`) фабрика ещё добавляет такие символы к
+  объявленным; в строгом режиме — нет
+  ([раздел 7](SPEC_STANDARD.md#7-imports)).
+
+Что объявить и что лишнее — отчёт проектора (read-only); с `--code-dir`
+каждая находка говорит, использует ли символ принятый код:
+
+```bash
+python -m tools.slicer report \
+  --spec projects/<project>/specs/base/global_spec.json \
+  --code-dir projects/<project>/<package>
+```
 
 Проверка импортной поверхности (read-only, без переписывания спеки):
 
@@ -250,5 +270,5 @@ call-факт), а не из `imports.internal`. Это advisory-инструм�
 3. Новый marker не продуктовый (`CIRCUIT_LOGIC`, `RENDERING_RULES` и т.п. не добавлять).
 4. Адреса `= config/models/rules.*` реально существуют.
 5. `module_order`, `imports.internal`, `module_internal`, `module_paths`
-   обновлены, если добавлен модуль; `module_internal` не шире прямых runtime-зависимостей.
+   обновлены, если добавлен модуль; `module_internal` ровно равен прямым runtime-зависимостям — не шире и не уже.
 6. API не стал владельцем бизнес-логики.
