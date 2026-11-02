@@ -42,6 +42,14 @@ HINTS: dict[str, str] = {
     "declared_clock_not_named": "a clock the note does not name is not handed to the module: name the wall-clock accessor in the note of this function",
     "declared_callee_not_named": "name the callee in a note of the calling module so the module receives it",
     "declared_sink_unknown": "the declared sink does not exist in the design: add the model field or contract first, then declare it",
+    "imports_candidate_undecided": "accept the symbol into the scope's uses with how it is used and why (basis), or reject it with a reason (65_imports.json)",
+    "imports_scope_missing": "run design_imports.py <case> --draft and decide the new scope's candidates",
+    "imports_scope_stale": "the contract or notes changed: re-read the scope's candidates, then record the new basis_sha256",
+    "imports_weak_without_basis": "cite the note clause (note:<scope>#<n>) or the code (basis code) that makes the module use this type",
+    "imports_knows_uncovered": "accept the symbol the module takes from this State 3 collaborator, or reject the edge (symbol *, candidate knows) with a reason",
+    "imports_code_undeclared": "the accepted code names this symbol: accept it into the scope that uses it, or reject it with a reason if the new specification drops it",
+    "imports_code_unused": "drop the use, or record code_outdated with the reason the code lags the specification",
+    "imports_factory_unavailable": "make the Factory reachable (--factory-root or SPEC_WORKBENCH_FACTORY_ROOT) with a slicer report that has --code-root",
     "table_access_unnamed": "a note naming a record table names its access: spell the match in the row model's field vocabulary, or name the contract that owns it (NOTE_GATE.md 'Table access must be named')",
 }
 

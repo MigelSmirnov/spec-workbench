@@ -19,6 +19,17 @@ own documents — only earlier states, closed by their own rounds, or the later
 texts the judge searched (a note, a contract) — is a gap of those texts, not of
 this state: it does not block, and is kept with the states it belongs to. A
 contradiction blocks wherever its passages are.
+
+A blocking kind needs a witness (owner, 2026-11-01, after the Registry State 2
+experiments): one admissible history — an initial state, the events in order
+with who acts, the two outcomes the texts allow, the observer who sees the
+difference, and the passages that make the history admissible, quoted
+verbatim. A contradiction or a quoted gap without a complete witness is kept
+as a `hypothesis`: recorded, not blocking, and put to the next round's
+reviewers, who are asked for a witness. A contradiction also names, for each
+of its two passages, the earlier-state passage it rests on (verbatim, or none):
+a side that rests on no State 0 or State 1 passage is usually the side to
+change. State 7 asks for contradictions inside one prompt and keeps its rule.
 """
 from __future__ import annotations
 
@@ -28,7 +39,10 @@ BLOCKING = {"contradiction", "consequential_gap"}
 DEFERRED_TO = "State 6 contracts or State 7 notes"
 LAST_DEFERRING_STATE = 5
 MODULE_STATE = 7
-KINDS = BLOCKING | {"answered", "answered_later", "later_state", "indifferent", "preexisting", "judged_before"}
+HYPOTHESIS = "hypothesis"
+KINDS = BLOCKING | {"answered", "answered_later", "later_state", "indifferent", "preexisting", "judged_before",
+                    HYPOTHESIS}
+WITNESS_FIELDS = ("initial", "events", "outcomes", "observer", "basis")
 
 
 def _norm(text: str) -> str:
@@ -56,12 +70,67 @@ def precedent_holds(precedent: dict[str, Any], texts: str, later_texts: str | No
     return all(_found(q, where) for q in precedent.get("quotes") or [])
 
 
+def witness_problem(witness: Any, corpus: str, later_corpus: str = "") -> str | None:
+    """Why `witness` is not a complete witness, or None when it is. Its basis
+    quotes are checked like any quote: verbatim in the texts (or the later
+    states' texts the judge searched)."""
+    if not isinstance(witness, dict):
+        return "no witness"
+    def text(name: str) -> str:
+        value = witness.get(name)
+        return value.strip() if isinstance(value, str) else ""
+    def items(name: str) -> list[str]:
+        value = witness.get(name)
+        return [v.strip() for v in value if isinstance(v, str) and v.strip()] if isinstance(value, list) else []
+    if not text("initial"):
+        return "the witness names no initial state"
+    if not items("events"):
+        return "the witness names no event"
+    if len(set(items("outcomes"))) < 2:
+        return "the witness names fewer than two different outcomes"
+    if not text("observer"):
+        return "the witness names no observer"
+    basis = items("basis")
+    if not basis:
+        return "the witness quotes no passage that makes the history admissible"
+    if not all(_found(q, corpus) or (later_corpus and _found(q, later_corpus)) for q in basis):
+        return "a basis passage of the witness is not found verbatim in the texts"
+    return None
+
+
+def _kept_witness(witness: Any) -> dict[str, Any] | None:
+    if not isinstance(witness, dict):
+        return None
+    return {name: witness.get(name) for name in WITNESS_FIELDS if witness.get(name) not in (None, "", [])}
+
+
+def _bases(judgement: dict[str, Any], earlier: str | None) -> tuple[list[dict[str, str]] | None, str | None]:
+    """A contradiction's bases: for each side, the earlier-state passage it rests
+    on. Returns (bases, failure)."""
+    raw = judgement.get("bases")
+    if not isinstance(raw, list) or not raw:
+        return None, None
+    bases = []
+    for entry in raw:
+        if not isinstance(entry, dict):
+            continue
+        rests_on = str(entry.get("rests_on") or "").strip()
+        if rests_on and earlier is not None and not _found(rests_on, _norm(earlier)):
+            return None, "a basis a contradiction rests on is not found verbatim in the earlier states' texts"
+        bases.append({"passage": str(entry.get("passage") or ""), "rests_on": rests_on})
+    return bases, None
+
+
 def check(judgement: dict[str, Any] | None, state: int, texts: str, old_texts: str | None,
           later_texts: str | None = None, precedents: dict[str, dict[str, Any]] | None = None,
-          own_texts: str | None = None) -> dict[str, Any]:
+          own_texts: str | None = None, witness_required: bool = False,
+          earlier_texts: str | None = None) -> dict[str, Any]:
     """The judgement as kept in the round, with `verified` and `blocking`.
     `own_texts` are the asked state's own documents; without them every text
-    counts as the state's own."""
+    counts as the state's own. With `witness_required`, a contradiction or a
+    quoted gap without a complete witness becomes a non-blocking `hypothesis`.
+    `earlier_texts` are the documents of the states before this one, where a
+    contradiction's bases are looked up."""
     if not isinstance(judgement, dict):
         return {"kind": None, "verified": False, "blocking": True, "failure": "the judge gave no judgement"}
     kind = judgement.get("kind")
@@ -121,17 +190,37 @@ def check(judgement: dict[str, Any] | None, state: int, texts: str, old_texts: s
     elif kind == "indifferent":
         if not kept["why"].strip():
             failure = "an indifferent topic needs the reason no one acts on the difference"
+    elif kind == HYPOTHESIS:
+        if not kept["why"].strip():
+            failure = "a hypothesis needs the reason no witness could be built"
     elif kind == "preexisting":
         if old_texts is None:
             failure = "preexisting is allowed only for a reopened state (--since)"
         elif not quotes or not all(_found(q, corpus) and _found(q, _norm(old_texts)) for q in quotes):
             failure = "the quoted passage is not found verbatim in both versions"
+    if failure is None and kind == "contradiction":
+        bases, failure = _bases(judgement, earlier_texts)
+        if bases is not None:
+            kept["bases"] = bases
+            kept["unsupported_sides"] = [b["passage"] for b in bases if not b["rests_on"]]
+        elif earlier_texts is not None and witness_required:
+            kept["bases_missing"] = True
     if failure is not None:
         kept.pop("deferred_to", None)  # an unverified judgement defers nothing, even after a deferred precedent
     kept["verified"] = failure is None
     deferred = (failure is None and kind == "consequential_gap"
                 and (not quotes or kept.get("quoted_elsewhere"))
                 and state <= LAST_DEFERRING_STATE)
+    witness = _kept_witness(judgement.get("witness"))
+    if witness:
+        kept["witness"] = witness
+    if failure is None and witness_required and kind in BLOCKING and not deferred:
+        problem = witness_problem(judgement.get("witness"), corpus,
+                                  _norm(later_texts) if later_texts is not None else "")
+        if problem is not None:
+            kept["claimed_kind"] = kind
+            kept["kind"] = kind = HYPOTHESIS
+            kept["witness_missing"] = problem
     if deferred:
         kept["deferred_to"] = DEFERRED_TO if not quotes else "the states whose texts it quotes"
     # State 7 asks only for contradictions inside a module's prompt: a gap the

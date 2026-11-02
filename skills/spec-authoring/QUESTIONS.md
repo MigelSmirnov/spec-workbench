@@ -25,7 +25,8 @@ python tools/design_questions.py status examples/<case> --state <N>
 prompt, below) to several independent reviews (three by default) with the
 state's `question_scope` from `authoring_sequence.json`, then
 groups their open points into topics, and has every topic raised by two or more
-reviews judged (below). The round is kept under
+reviews judged (below) — in States 0–5 also a topic one review raised with a
+witness. The round is kept under
 `examples/<case>/questions/state<N>/round-<k>/`: each review, and `summary.json`
 with the texts' digests, every topic, how many reviews raised it and, for a
 repeated topic, its judgement.
@@ -59,6 +60,7 @@ repeated topic into one kind, and only two kinds keep a state open:
 | `judged_before` | the same question a recent round already judged non-blocking, on passages that have not changed | the prior judgement's id; its quotes still verbatim in the texts | no |
 | `indifferent` | no one acts differently on any answer | the reason | no |
 | `preexisting` | only with `--since`: about a passage the change did not touch | the quote, verbatim in both versions | no |
+| `hypothesis` | States 0–5: a contradiction or quoted gap the judge could not give a witness | the reason no witness could be built | no; put to the next round's reviewers |
 
 The judge reads the same `question_scope` as the reviewers. Without it, State 0
 of Cabinet Kernel (its first round, 2026-10-10) was held open by seven
@@ -69,6 +71,62 @@ and the judge, told only that "orders, encodings, formats, schemas, signatures,
 field types and notes" are later, could not place them there. A topic outside
 the state's scope is `later_state`, however real; the owning state's own round
 asks it.
+
+### A blocking topic needs a witness
+
+A question that sounds right is not yet a defect. In States 0–5 a
+`contradiction` or a `consequential_gap` that quotes a passage blocks only with
+a **witness**: one admissible history in which the texts give two different
+outcomes. Its parts:
+
+- `initial` — a state the product can be in;
+- `events` — the actions in order, each with who does it;
+- `outcomes` — the two outcomes the texts allow; for a contradiction, the
+  outcome each passage gives;
+- `observer` — who sees the difference;
+- `basis` — passages, verbatim, that make the history admissible: these
+  actions exist and these actors may take them.
+
+The tool checks that every part is present, that the two outcomes differ, and
+that every basis passage is found verbatim, like any quote.
+
+A topic whose evidence otherwise holds but has no complete witness is kept as a
+`hypothesis`. It does not block, and it is never offered as a precedent. The
+next round's reviewers are shown the latest round's hypotheses and asked to
+raise one again only with a witness.
+
+A failed quote still blocks as before: an unverified judgement is not
+downgraded.
+
+Registry State 2 (2026-10-31, spec-workbench
+`experiments/registry-state2-investigation/`) is where this came from. Every
+defect its 34 rounds found had a witness. Most of the long tail that kept the
+state open had none: a host's sleep, an undeletable probe file, the clock
+stepping back. Each was plausible, but no one showed a history in which the
+product went wrong. Decided by the owner 2026-11-01.
+
+**A single review with a witness is judged.** Reviewers may attach a witness to
+a point. In States 0–5 a topic is judged when two or more reviews raise it, or
+when one review raises it with a witness: an initial state, events and two
+different outcomes. The judge sees that witness as a draft to check, not as
+evidence. On Registry the defect "an erasure that removes nothing leaves no
+entry, against R0-66" was raised by a single review in rounds 2 and 10 and
+never judged. It was only judged in round 11, eight rounds after it first
+appeared.
+
+**A contradiction names what each side rests on.** In `bases`, for each of its
+two passages, the judge quotes verbatim the earlier-state passage it rests on,
+or gives none. A basis not found in the earlier states' texts fails the
+judgement. The round keeps `unsupported_sides`, the passages that rest on no
+earlier passage: usually the side to change.
+
+On Registry round 4 the judge named a contradiction between A15 rule 6 and
+A15's formal invariant without naming R0-66, the State 0 promise behind the
+invariant. The author changed the invariant to agree with the defective rule,
+and the defect stood seven more rounds.
+
+State 7 keeps its own rule: a contradiction inside one module's prompt, quoted
+on both sides. A witness does not apply there.
 
 ### A gap no passage speaks to
 
@@ -178,6 +236,18 @@ closed, or whose closed text git no longer holds, carries nothing: its first
 two unit rounds review everything. A state already closing in units (State 2)
 needs no carrying.
 
+**A closed unit that names an edited decision is asked again.** When a
+decision changed since its own closure, every closed unit whose text names it
+(`A15`, as a word) comes back into the round. It is reviewed only for whether it
+still agrees with that change: a rule there that the change contradicts, or
+leaves without its exception. The round keeps them as `referenced_by_change`.
+A clear review on the referencing unit's unchanged text keeps it closed.
+
+On Registry the reversal of A15 rule 6 left A14 rule 5 contradicting it. A14 had
+been closed since round 3. It came back into a round only because its rule 3
+happened to be edited in the same change, and the contradiction was found one
+round later.
+
 A unit that was closed and then edited is reviewed for its edit, not again
 whole: the round finds the text it closed on in the case's git history, gives
 the reviewers the diff, and asks only about the change and what it affects; a
@@ -260,6 +330,22 @@ its current texts becomes the step, blocked, with its open units and the `ask`
 command — with `--since` the ref it last closed at, when it did. Stage 9
 admission checks the same as `FA019`. A case with no round for a state is
 blocked too ("no question round yet"): that is the rule, not a migration gap.
+
+### Where a quoted earlier passage came from
+
+Every passage of an earlier state that a judgement quotes is kept in the round
+with the commit and the date that introduced it (`provenance`, by `git log
+-S`). This covers its quotes, its witness's basis and its contradiction bases.
+A passage outside git, or too short to look up, is kept without a commit.
+
+A history can decide what the texts cannot. On Registry the State 0 row
+"erasing an erased customer returns it unchanged" was written on 2026-10-26.
+R0-35, which introduced revisions, came a day later. The two promises never
+met, so the State 2 question of a resubmitted erasure was the owner's to
+answer (`experiments/registry-state2-authoring/`).
+
+When a quoted passage is older than the promise that narrows it, ask the owner.
+Do not choose for them.
 
 ## Closing a question
 

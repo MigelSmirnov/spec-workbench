@@ -9,7 +9,13 @@ import design_questions
 from questions_workbench import documents, judge, provider, service
 
 
-QUOTED_GAP = {"kind": "consequential_gap", "quotes": ["## Model M01 — Thing"], "divergence": "a or b; the owner notices"}
+# A blocking judgement in a document state carries a witness (judge.py); its
+# basis is quoted verbatim from the demo texts.
+WITNESS = {"initial": "one Thing exists", "events": ["the owner reads the Thing"],
+           "outcomes": ["the owner sees a", "the owner sees b"], "observer": "the owner",
+           "basis": ["## Model M01 — Thing"]}
+QUOTED_GAP = {"kind": "consequential_gap", "quotes": ["## Model M01 — Thing"], "divergence": "a or b; the owner notices",
+              "witness": WITNESS}
 UNQUOTED_GAP = {"kind": "consequential_gap", "divergence": "a or b; the owner notices"}
 
 
@@ -198,7 +204,8 @@ def test_a_judgement_whose_evidence_fails_blocks(tmp_path, verdict, failure):
 
 def test_contradiction_and_consequential_gap_block_even_when_verified(tmp_path):
     case = _case(tmp_path)
-    summary, _ = _repeated(case, {"kind": "contradiction", "quotes": ["# State 0 — Demo", "## Model M01 — Thing"]})
+    summary, _ = _repeated(case, {"kind": "contradiction", "quotes": ["# State 0 — Demo", "## Model M01 — Thing"],
+                                  "witness": WITNESS})
     assert summary["topics"][0]["judgement"]["verified"] is True
     assert summary["blocking_topics"] == 1
     summary, _ = _repeated(case, QUOTED_GAP)
@@ -356,14 +363,16 @@ def test_a_contradiction_between_earlier_states_still_blocks(tmp_path):
     case = _case(tmp_path)
     (case / "02_rules.md").write_text("# State 2 — Demo rules\n\nA rule of its own here.\n", encoding="utf-8")
     provider = FakeProvider([[_point("M01")], [_point("M01")], []],
-                            {"kind": "contradiction", "quotes": ["# State 0 — Demo", "## Model M01 — Thing"]})
+                            {"kind": "contradiction", "quotes": ["# State 0 — Demo", "## Model M01 — Thing"],
+                             "witness": WITNESS})
     summary = service.ask_round(case, 2, provider)
     assert summary["topics"][0]["judgement"]["blocking"] is True
 
 
 def test_a_gap_quoting_this_state_and_a_later_one_still_blocks(tmp_path):
     case = _case(tmp_path)
-    summary, _ = _repeated_with_files(case, {**UNQUOTED_GAP, "quotes": ["# State 2 — Demo rules", "## Model M01 — Thing"]})
+    summary, _ = _repeated_with_files(case, {**UNQUOTED_GAP, "quotes": ["# State 2 — Demo rules", "## Model M01 — Thing"],
+                                             "witness": WITNESS})
     judgement = summary["topics"][0]["judgement"]
     assert judgement["verified"] is True and judgement["blocking"] is True and "deferred_to" not in judgement
 

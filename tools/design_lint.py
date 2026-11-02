@@ -773,6 +773,114 @@ def _unindexed_state1_model_findings(
     return findings
 
 
+RULE_REFERENCE_RE = re.compile(
+    r"\b(A\d+)\s+rules?\s+(\d+(?:\s*(?:,|and|or|to|–|-)\s*\d+)*)")
+OWNER_DECISION_REFERENCE_RE = re.compile(r"\b(R0-\d+)\b")
+OWNER_DECISION_HEADING_RE = re.compile(r"^#{2,4}\s+(R0-\d+)\b")
+DECISION_HEADING_RE = re.compile(r"^##\s+Accepted decision\s+(A\d+)\b")
+NORMATIVE_HEADING_RE = re.compile(r"^###\s+Normative rules\s*$")
+NUMBERED_RULE_RE = re.compile(r"^(\d+)\.\s")
+
+
+def _state_documents(project: Path) -> list[tuple[int, Path]]:
+    """The case's top-level design documents with the state their text names."""
+    found = []
+    for path in sorted(project.glob("*.md")):
+        lines = path.read_text(encoding="utf-8").splitlines()[:5]
+        state = design_index._state_from_lines(lines)
+        if state is not None:
+            found.append((state, path))
+    return found
+
+
+def _decision_rules(documents: list[tuple[int, Path]]) -> dict[str, set[int]]:
+    """Each accepted decision of State 2 and the numbers of its normative rules."""
+    rules: dict[str, set[int]] = {}
+    for state, path in documents:
+        if state != 2:
+            continue
+        decision, in_rules = None, False
+        for line in path.read_text(encoding="utf-8").splitlines():
+            heading = DECISION_HEADING_RE.match(line)
+            if heading:
+                decision, in_rules = heading.group(1), False
+                rules.setdefault(decision, set())
+                continue
+            if line.startswith("## "):
+                decision, in_rules = None, False
+                continue
+            if line.startswith("### "):
+                in_rules = bool(NORMATIVE_HEADING_RE.match(line))
+                continue
+            numbered = NUMBERED_RULE_RE.match(line)
+            if decision and in_rules and numbered:
+                rules[decision].add(int(numbered.group(1)))
+    return rules
+
+
+def _item_at_line(items: list[dict[str, object]], path: str, line: int) -> dict[str, object] | None:
+    best = None
+    for item in items:
+        source = item["source"]
+        if source["path"] == path and source["start_line"] <= line <= source["end_line"]:
+            if best is None or source["start_line"] >= best["source"]["start_line"]:
+                best = item
+    return best
+
+
+def _line_item(path: str, line: int, state: int) -> dict[str, object]:
+    return {"key": f"source:{path}#{line}", "kind": "reference", "title": path, "state": state,
+            "source": {"path": path, "start_line": line, "end_line": line},
+            "explicit_id": None, "explicit_refs": [], "sections": []}
+
+
+def _rule_reference_findings(project: Path, index: dict[str, object], state: int) -> list[_FindingDraft]:
+    """A reference to a decision's rule, `A18 rule 10`, names a rule that decision
+    has; a reference to an owner decision, `(R0-89)`, names one State 0 holds.
+    Renumbering rules or rewording a decision broke such references silently on
+    Registry State 2 (2026-10-31): nothing else checks them."""
+    documents = _state_documents(project)
+    rules = _decision_rules(documents)
+    owner = set()
+    for doc_state, path in documents:
+        if doc_state == 0:
+            for line in path.read_text(encoding="utf-8").splitlines():
+                heading = OWNER_DECISION_HEADING_RE.match(line)
+                if heading:
+                    owner.add(heading.group(1))
+    items = list(index["items"])
+    findings: list[_FindingDraft] = []
+    for doc_state, path in documents:
+        if doc_state != state and not (state == 1 and doc_state == 0):
+            continue
+        rel = path.relative_to(project).as_posix()
+        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+            if OWNER_DECISION_HEADING_RE.match(line):
+                continue
+            item = _item_at_line(items, rel, number) or _line_item(rel, number, doc_state)
+            for match in RULE_REFERENCE_RE.finditer(line):
+                decision = match.group(1)
+                if decision not in rules:
+                    continue  # an unknown decision is unresolved_reference's
+                bounds = [int(n) for n in re.findall(r"\d+", match.group(2))]
+                missing = [n for n in bounds if n not in rules[decision]]
+                if missing:
+                    have = sorted(rules[decision])
+                    findings.append(_draft(
+                        "warning", "unresolved_rule_reference", item,
+                        f"{match.group(0)!r} names rule {', '.join(map(str, missing))} of {decision}, which has "
+                        + (f"rules {have[0]}–{have[-1]}." if have else "no numbered normative rule."),
+                        line=number))
+            if owner:
+                for match in OWNER_DECISION_REFERENCE_RE.finditer(line):
+                    if match.group(1) not in owner:
+                        findings.append(_draft(
+                            "warning", "unresolved_owner_decision_reference", item,
+                            f"{match.group(1)!r} is no owner decision of State 0 (no '### {match.group(1)}' heading).",
+                            line=number))
+    return findings
+
+
 def _enrich_finding(project: Path, draft: _FindingDraft) -> Finding:
     item = draft.item
     item_start = item["source"]["start_line"]
@@ -856,6 +964,7 @@ def lint_project(project: Path, *, state: int = DEFAULT_STATE) -> LintReport:
         drafts.extend(
             _security_review_findings(project, index, selected_items, decisions)
         )
+    drafts.extend(_rule_reference_findings(project, index, state))
 
     for item in decisions if state == 2 else []:
         drafts.extend(_duplicate_section_findings(item))

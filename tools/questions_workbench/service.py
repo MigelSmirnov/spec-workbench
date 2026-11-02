@@ -19,6 +19,14 @@ the case's assembled specification.
 
 Rounds kept before the judge existed (no "judge" in the summary) keep their
 own rule: clear when no topic was raised by two reviews.
+
+In the document states (0-5) a blocking topic needs a witness (judge.py). A
+topic raised by one review is judged too when that review gave it a witness;
+the judge's hypotheses — topics it could not give a witness — are put to the
+next round's reviewers. A unit that was closed and names a decision changed
+since its own closure is reviewed again for that change. Each passage of an
+earlier state a judgement quotes is kept with the commit and date that
+introduced it.
 """
 from __future__ import annotations
 
@@ -31,6 +39,7 @@ from pathlib import Path
 from typing import Any
 
 from . import documents, judge, prompts, units
+from .provenance import QuoteProvenance
 from .provider import LATER_DIR, Provider
 
 PROMPTS_DIR = "prompts"
@@ -99,9 +108,31 @@ def _group(provider: Provider, reviews: list[dict[str, Any]], keep_points: bool 
         named = sorted({str(points[m]["unit"]) for m in topic["members"] if points[m].get("unit")})
         if named:
             topic["units"] = named
+        witnessed = [m for m in topic["members"] if _has_witness(points[m])]
+        if witnessed:
+            topic["witnessed_by"] = witnessed
         if keep_points:
-            topic["points"] = [f"{points[m].get('text', '')} -> {points[m].get('question', '')}" for m in topic["members"]]
+            topic["points"] = [f"{points[m].get('text', '')} -> {points[m].get('question', '')}"
+                               + (f" | reviewer's witness: {json.dumps(points[m]['witness'], ensure_ascii=False)}"
+                                  if _has_witness(points[m]) else "")
+                               for m in topic["members"]]
     return sorted(topics, key=lambda t: (-len(t["runs"]), t["topic"]))
+
+
+def _has_witness(point: Any) -> bool:
+    """A reviewer's witness: an initial state, events and two different outcomes."""
+    witness = point.get("witness") if isinstance(point, dict) else None
+    if not isinstance(witness, dict):
+        return False
+    outcomes = [o for o in witness.get("outcomes") or [] if isinstance(o, str) and o.strip()]
+    return (bool(str(witness.get("initial") or "").strip()) and bool(witness.get("events"))
+            and len(set(outcomes)) >= 2)
+
+
+def _judged(topics: list[dict[str, Any]], witness: bool) -> list[dict[str, Any]]:
+    """The topics a round judges: raised by two or more reviews, or — where a
+    blocking topic needs a witness — by one review that gave a witness."""
+    return [t for t in topics if len(t["runs"]) >= REPEATED or (witness and t.get("witnessed_by"))]
 
 
 def _texts_at(case: Path, names: list[str], ref: str) -> dict[str, str]:
@@ -136,8 +167,9 @@ def _precedents(case: Path, state: int) -> list[dict[str, Any]]:
     for summary in [s for s in judged if "judge" in s][-PRECEDENT_ROUNDS:][::-1]:
         for topic in summary.get("topics", []):
             judgement = topic.get("judgement") or {}
-            if not judgement.get("verified") or judgement.get("blocking") or topic["topic"] in seen:
-                continue
+            if (not judgement.get("verified") or judgement.get("blocking") or topic["topic"] in seen
+                    or judgement.get("kind") == judge.HYPOTHESIS):
+                continue  # a hypothesis is an open question, not an answer to follow
             source = judgement.get("precedent") or judgement
             seen.add(topic["topic"])
             found.append({"id": f"P{len(found) + 1}", "round": source.get("round", summary["round"]),
@@ -150,7 +182,8 @@ def _precedents(case: Path, state: int) -> list[dict[str, Any]]:
 def _judge(provider: Provider, state: int, text: str, texts: list[tuple[int, str, str]],
            repeated: list[dict[str, Any]], old: dict[str, str] | None,
            later: dict[str, str] | None = None,
-           precedents: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+           precedents: list[dict[str, Any]] | None = None,
+           witness: bool = False, case: Path | None = None) -> dict[str, Any]:
     """Judge the repeated topics. `later` maps the later states' documents to
     their texts; a provider that reads files gets them as files to search, so
     the judge can find a topic already decided below without receiving them
@@ -179,7 +212,7 @@ def _judge(provider: Provider, state: int, text: str, texts: list[tuple[int, str
         scope = documents.question_scope(state)
     except documents.QuestionScopeError:
         scope = None
-    instruction = prompts.judge_instruction(state, old is not None, later_files, bool(precedents), scope)
+    instruction = prompts.judge_instruction(state, old is not None, later_files, bool(precedents), scope, witness)
     judge_text = prompts.judge_input(text, items, change, precedents)
     if later:
         answer = provider.complete_with_files(instruction, judge_text, later)[0]
@@ -188,11 +221,19 @@ def _judge(provider: Provider, state: int, text: str, texts: list[tuple[int, str
     judgements = {j.get("id"): j for j in _json_object(answer).get("judgements") or [] if isinstance(j, dict)}
     body = "\n\n".join(b for _, _, b in texts)
     old_body = None if old is None else "\n\n".join(old.values())
+    earlier = "\n\n".join(b for s, _, b in texts if s < state) if state > 0 else None
     for topic in repeated:
         topic["judgement"] = judge.check(judgements.get(topic["id"]), state, body, old_body,
                                          "\n\n".join(later.values()) if later else None,
                                          {p["id"]: p for p in precedents or []},
-                                         "\n\n".join(b for s, _, b in texts if s == state))
+                                         "\n\n".join(b for s, _, b in texts if s == state),
+                                         witness_required=witness, earlier_texts=earlier)
+    if case is not None and state > 0:
+        provenance = QuoteProvenance(case, [(s, n, b) for s, n, b in texts if s < state])
+        for topic in repeated:
+            found = provenance.of_judgement(topic["judgement"])
+            if found:
+                topic["judgement"]["provenance"] = found
     result = {"provider": provider.name, "raw": answer}
     if later:
         result["later_documents"] = {name: hashlib.sha256(body.encode("utf-8")).hexdigest()
@@ -481,27 +522,40 @@ def _old_texts(case: Path, state: int, names: list[str], since: str | None,
 
 def _document_round(provider: Provider, state: int, runs: int, read: StateTexts, scope: list[str],
                     changed: dict[str, tuple[str, list[str]]], old: dict[str, str] | None,
-                    case: Path) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
+                    case: Path, referencing: dict[str, list[str]] | None = None
+                    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
     """States 0-6: every review reads the texts of States 0..N, asked about the open units."""
     instruction = prompts.ask_instruction(state, documents.question_scope(state))
     instruction += prompts.unit_scope(state, [(key, read.units[key]["title"]) for key in scope],
-                                      {key: diff for key, (diff, _) in changed.items()})
+                                      {key: diff for key, (diff, _) in changed.items()}, referencing)
+    instruction += prompts.hypotheses_note(_previous_hypotheses(case, state))
     text = prompts.ask_input(read.texts)
     with ThreadPoolExecutor(max_workers=runs) as pool:
         reviews = list(pool.map(lambda _: _review(provider, instruction, text), range(runs)))
     for review in reviews:
         _set_aside(review, scope, changed, read.units)
     topics = _group(provider, reviews, keep_points=True)
-    repeated = [t for t in topics if len(t["runs"]) >= REPEATED]
+    repeated = _judged(topics, witness=True)
     later = {p.name: p.read_text(encoding="utf-8") for _, p in documents.later_documents(case, state)}
-    judged = (_judge(provider, state, text, read.texts, repeated, old, later, _precedents(case, state)) if repeated
+    judged = (_judge(provider, state, text, read.texts, repeated, old, later, _precedents(case, state),
+                     witness=True, case=case) if repeated
               else {"provider": provider.name})
     return reviews, topics, repeated, judged
 
 
+def _previous_hypotheses(case: Path, state: int) -> list[tuple[str, str]]:
+    """The hypotheses of the state's latest round: topics judged without a witness."""
+    summaries = _summaries(case, state)
+    if not summaries:
+        return []
+    return [(t["topic"], (t.get("judgement") or {}).get("witness_missing") or (t.get("judgement") or {}).get("why", ""))
+            for t in summaries[-1].get("topics", [])
+            if (t.get("judgement") or {}).get("kind") == judge.HYPOTHESIS]
+
+
 def _module_round(provider: Provider, state: int, runs: int, read: StateTexts, scope: list[str],
                   changed: dict[str, tuple[str, list[str]]], old: dict[str, str] | None,
-                  case: Path) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
+                  case: Path, referencing: dict[str, list[str]] | None = None) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
     """State 7: each review reads one module's prompt, as its generator would."""
     scope_text = documents.question_scope(state)
 
@@ -561,9 +615,15 @@ def ask_round(case: Path, state: int, provider: Provider, runs: int = DEFAULT_RU
     if not scope:
         raise QuestionRoundError(f"every unit of State {state} is closed on its current text; nothing to ask")
     changed = _changed_units(case, read.texts, state, scope, read.units, previous_summaries)
+    # a closed unit that names a decision changed since its closure is asked
+    # again, for that change only
+    referencing = (units.referencing(read.units, list(changed), scope)
+                   if state != documents.MODULE_STATE else {})
+    if referencing:
+        scope = [key for key in read.units if key in scope or key in referencing]
     old = _old_texts(case, state, [name for _, name, _ in read.texts], since, factory_root)
     asked = _module_round if state == documents.MODULE_STATE else _document_round
-    reviews, topics, repeated, judged = asked(provider, state, runs, read, scope, changed, old, case)
+    reviews, topics, repeated, judged = asked(provider, state, runs, read, scope, changed, old, case, referencing)
     for topic in topics:
         topic.pop("points", None)
     directory = _next_round(case, state)
@@ -590,6 +650,8 @@ def ask_round(case: Path, state: int, provider: Provider, runs: int = DEFAULT_RU
         "since": since,
         "judge": judged,
         "repeated_topics": len(repeated),
+        "witness_singletons": sum(1 for t in repeated if len(t["runs"]) < REPEATED),
+        "hypothesis_topics": sum(1 for t in repeated if t["judgement"].get("kind") == judge.HYPOTHESIS),
         "blocking_topics": len(blocking),
         "deferred_topics": len(deferred),
         "clear": not blocking,
@@ -597,6 +659,7 @@ def ask_round(case: Path, state: int, provider: Provider, runs: int = DEFAULT_RU
         "units": {key: unit["digest"] for key, unit in read.units.items()},
         "scope": scope,
         "changed_units": sorted(changed),
+        "referenced_by_change": referencing,
         "blocked_units": units.blocked(repeated, scope),
         "set_aside": [len(r["set_aside"]) for r in reviews],
         "topics": topics,

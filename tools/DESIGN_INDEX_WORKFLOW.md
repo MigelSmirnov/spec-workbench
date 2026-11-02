@@ -44,6 +44,16 @@ python tools/design_lint.py examples/<case> --state 2
 sections. Fix the Markdown hierarchy; do not broaden the parser to reinterpret a
 flat document.
 
+`unresolved_rule_reference` means a reference such as `A18 rule 10` (or `A16
+rules 2 and 4`) names a decision that exists but a rule number its `### Normative
+rules` list does not hold — usually rules renumbered or a decision shortened
+after the reference was written. `unresolved_owner_decision_reference` means
+an `R0-NN` names no `### R0-NN` heading of State 0; it is checked only in a case
+whose State 0 numbers its owner decisions that way. State 2 lint checks the
+State 2 documents; State 1 lint checks the State 0 and State 1 documents. A
+reference to a decision that does not exist at all stays
+`unresolved_reference`'s.
+
 ## State 2 -> State 3 required loop
 
 When a candidate responsibility is derived from State 2, use the following navigation loop before assigning ownership.
