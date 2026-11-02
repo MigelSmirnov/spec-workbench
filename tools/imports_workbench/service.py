@@ -61,6 +61,11 @@ def _key(row: dict[str, Any]) -> tuple[str | None, str | None]:
     return (symbol if isinstance(symbol, str) else None, provider if isinstance(provider, str) else None)
 
 
+def _rejects_code(row: dict[str, Any]) -> bool:
+    candidates = row.get("candidates") if isinstance(row.get("candidates"), list) else []
+    return row.get("candidate") == "code_used" or "code_used" in candidates
+
+
 def derive(table: dict[str, Any] | None) -> dict[str, dict[str, list[str]]]:
     """module_internal[m][p] = the symbols of every use of every scope of m from p (§4)."""
     result: dict[str, dict[str, set[str]]] = {}
@@ -222,7 +227,9 @@ def analyze(case: Case, table: dict[str, Any] | None, code: dict[str, Any], proj
         module_rows = uses_by_module.get(module, [])
         uses = {_key(row) for _, row in module_rows}
         rejected = rejected_by_module.get(module, [])
-        rejected_keys = {_key(row) for row in rejected}
+        # only a rejection of the code evidence itself (candidate code_used) answers what
+        # the code names; rejecting a note candidate of the same symbol does not
+        code_rejected = {_key(row) for row in rejected if _rejects_code(row)}
         for known in case.knows.get(module, ()):
             covered = any(provider == known for _, provider in uses) or any(
                 row.get("provider") == known and row.get("candidate") == KNOWS for row in rejected)
@@ -237,7 +244,7 @@ def analyze(case: Case, table: dict[str, Any] | None, code: dict[str, Any], proj
             continue
         named = code_candidates(case, module, module_code)
         for key, candidate in named.items():
-            if key not in uses and key not in rejected_keys:
+            if key not in uses and key not in code_rejected:
                 findings.append(_finding("imports_code_undeclared", module, candidate=candidate.as_json()))
                 pending += 1
         # each row is judged on its own: an exempt row of one scope does not excuse another's
@@ -332,8 +339,8 @@ def draft_table(case: Case, table: dict[str, Any] | None, code: dict[str, Any]) 
                              if str(sid).split(".", 1)[0] == scope.module and sid in scopes and sid != scope_id]
             module_uses = {_key(row) for e in module_scopes for row in _rows(e, "uses")} | {
                 _key(row) for row in uses}
-            module_rejected = {_key(row) for e in module_scopes for row in _rows(e, "rejected")} | {
-                _key(row) for row in rejected}
+            module_rejected_rows = [row for e in module_scopes for row in _rows(e, "rejected")] + rejected
+            module_rejected = {_key(row) for row in module_rejected_rows if _rejects_code(row)}
             # a symbol the code names that an operation scope already has pending is
             # marked there (the author decides it once); the rest waits in the module scope
             elsewhere: dict[tuple[Any, Any], list[dict[str, Any]]] = {}
@@ -353,7 +360,7 @@ def draft_table(case: Case, table: dict[str, Any] | None, code: dict[str, Any]) 
             for known in case.knows.get(scope.module, ()):
                 if not any(provider == known for _, provider in module_uses) and not any(
                         row.get("provider") == known and row.get("candidate") == KNOWS
-                        for e in module_scopes for row in _rows(e, "rejected")):
+                        for row in module_rejected_rows):
                     pending.append({"symbol": "*", "provider": known, "candidates": [KNOWS],
                                     "evidence": [f"knows:{known}"]})
         entry["uses"], entry["rejected"] = uses, rejected
