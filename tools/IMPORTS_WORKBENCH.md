@@ -1,7 +1,10 @@
 # Замыкание импортов: проект инструмента (2026-11-02)
 
-> Статус: **проект**, не реализовано. Документ станет описанием инструмента,
-> когда тот будет сделан; до тех пор он фиксирует, что и почему строится.
+> Статус: **шаги 1–2 из §12 сделаны** (2026-11-02): отчёт фабрики с
+> `--code-root` и пакет `tools/imports_workbench` — таблица, кандидаты, гейт,
+> черновик, тесты §10. Фазы конвейера, владения полем проектором, проверки
+> сборки и FA022 ещё нет (шаг 3): гейт запускается руками и ничего не
+> блокирует. Решения владельца — §13; что уточнила реализация — §14.
 
 `imports.module_internal` — единственный источник внутренних импортов модуля
 (SPEC_STANDARD §7, code-factory `42bb8ade`): полный и минимальный список
@@ -135,7 +138,7 @@ module_internal[m][p] = ⋃ { u.symbol : u ∈ scope.uses, scope ∈ m, u.provid
 | `knows` | модуль из State 3 `Knows`: хотя бы один его символ должен оказаться в `uses` модуля или ребро — в `rejected` с причиной | сильный | всегда |
 | `field_name` | тип поля модели из `uses`/сигнатуры, если имя поля названо в notes или контракте скоупа (до 3 уровней) | слабый | всегда |
 | `variant` | вариант discriminated union модели из `uses` | слабый | всегда |
-| `code_used` | символ проекта, который использует принятый код модуля и которого нет в `uses` | доказательство | `available` / `unavailable` / `not_applicable` (§8) |
+| `code_used` | символ проекта, который использует принятый код модуля и которого нет в `uses` (`code_imports` отчёта фабрики) | доказательство | `available` / `unavailable` / `not_applicable` (§8) |
 
 `code_used` относится к модулю, а не к операции: автор кладёт символ в
 нужный скоуп или в скоуп модуля.
@@ -166,6 +169,11 @@ module_internal[m][p] = ⋃ { u.symbol : u ∈ scope.uses, scope ∈ m, u.provid
 | `imports_code_undeclared` | код использует символ, которого нет в `uses` |
 | `imports_code_unused` | символ в `uses` (кроме `contract`/`annotates`), который код не использует; закрывается решением `{"code_outdated": "<причина>"}` на строке |
 | `imports_factory_unavailable` | у проекта есть цель в фабрике (`90_factory_target.json`), но фабрика или её отчёт недоступны |
+| `imports_table_missing` / `imports_table_invalid` | таблицы нет или у неё не та форма (остальные проверки молчат) |
+| `imports_scope_unknown` | в таблице скоуп, которого нет в дизайне |
+| `imports_use_invalid` | строка `uses` без `symbol`/`provider`/`basis` или с `as` вне набора |
+| `imports_basis_invalid` | `note:` не клауза этого скоупа, `knows:` не из `Knows`, `code` — а код символ не называет, неизвестная форма |
+| `imports_rejection_without_reason` | отклонение без причины |
 
 `summary`: `scopes`, `pending`, `stale`, `code_evidence`
 (`available`/`unavailable`/`not_applicable`), `handoff_ready`,
@@ -178,8 +186,12 @@ module_internal[m][p] = ⋃ { u.symbol : u ∈ scope.uses, scope ∈ m, u.provid
 запускает её CLI (`subprocess`, `cwd=<factory root>`):
 
 ```bash
-python -m tools.slicer report --spec <экспорт спеки> --code-root <дерево продукта> --json
+python -m tools.slicer report --spec <база проекта в фабрике> --code-root <дерево продукта> --json
 ```
+
+Спека — базовая `global_spec.json` проекта фабрики, дерево — каталог проекта
+(`project_index/structure.json`): код написан по ней, а `code_imports` от
+спеки зависит только путями модулей.
 
 - Корень фабрики — `--factory-root` или `SPEC_WORKBENCH_FACTORY_ROOT`,
   проект — `90_factory_target.json`.
@@ -188,9 +200,14 @@ python -m tools.slicer report --spec <экспорт спеки> --code-root <д
 - Цель есть, а фабрика или дерево недоступны → блок
   `imports_factory_unavailable`, как у проверки срезов, а не пропуск, как у
   `factory_parity`.
-- **Требуется в фабрике:** `--code-root` (сопоставление модулей файлам через
-  `module_paths`; сейчас отчёт принимает `--code-dir` с плоскими
-  `<module>.py`). Небольшое изменение отчёта `tools/slicer`.
+- **Сделано в фабрике** (шаг 1): `--code-root` находит файл модуля по
+  `modules.<m>.path`, и отчёт каждого модуля несёт `code_imports` — символы
+  проекта, которые код называет напрямую: импорт `from`, использованный по
+  имени, или атрибут импортированного модуля. Фабрика без `code_imports`
+  даёт `unavailable` («predates --code-root»), а не пустой список.
+  На cabinet_kernel: 181 символ, который код называет, а `module_internal`
+  не заявляет (166 из §2 — только те, что билдер ещё и угадал), и 140
+  заявленных, которых код не называет.
 
 ## 9. Как шаг нельзя пропустить
 
@@ -242,8 +259,8 @@ python -m tools.slicer report --spec <экспорт спеки> --code-root <д
 (хеш и статус):
 
 ```text
-tools/imports_workbench/        __init__.py, model.py, candidates.py,
-                                factory.py, service.py
+tools/imports_workbench/        __init__.py, model.py, case.py,
+                                candidates.py, factory.py, service.py
 tools/design_imports.py         <case> --draft | --coverage | --json
                                 [--factory-root]
 tests/test_imports_workbench.py
@@ -259,8 +276,8 @@ tests/test_imports_workbench.py
 
 | Шаг | Где | Что |
 | --- | --- | --- |
-| 1 | фабрика | `--code-root` у `python -m tools.slicer report` |
-| 2 | workbench, `tools/` | пакет, таблица, кандидаты, гейт, тесты (§10) — без фазы |
+| 1 ✓ | фабрика | `--code-root` у `python -m tools.slicer report` |
+| 2 ✓ | workbench, `tools/` | пакет, таблица, кандидаты, гейт, тесты (§10) — без фазы |
 | 3 | workbench, `tools/` | фаза, проектор, сборка, FA022 |
 | 4 | `agent/cabinet-kernel` | `--draft`, решения автора по 166 + кандидатам, закрытие фазы |
 | 5 | фабрика | строгий режим для cabinet_kernel, когда `strict_ready: true` |
@@ -271,11 +288,49 @@ tests/test_imports_workbench.py
 
 ## 13. Решения владельца
 
-- **I1. Фаза для всех проектов сразу или по проектам?** Включение для всех
-  блокирует активные проекты до заполнения таблицы; по проектам — через
-  `workbench_extensions.json`, но тогда шаг можно «не включить».
-- **I2. Гранулярность скоупа:** операция (точнее, больше записей) или модуль
-  (проще, но `basis_sha256` устаревает от правки любой операции модуля).
-- **I3. `imports_code_unused` — блок или находка с решением
-  `code_outdated`?** Проект предлагает второе: код может отставать от новой
-  спеки.
+Решено владельцем 2026-11-02:
+
+- **I1. Фаза для всех проектов сразу.** Шаг нельзя «не включить»; активные
+  проекты блокируются до заполнения таблицы (шаг 3).
+- **I2. Скоуп — операция плюс модуль**, как в §3: `basis_sha256` устаревает
+  точечно.
+- **I3. `imports_code_unused` закрывается решением `code_outdated`** с
+  причиной на строке `uses`: код может отставать от новой спеки.
+
+## 14. Что уточнила реализация
+
+- **Откуда инструмент читает кейс** (`case.py`). Каталог символов — кто чем
+  владеет и что экспортирует, контракты, модели, константы бэкендов — это
+  `spec_projection_workbench.projected_spec`: ровно та спека, которую соберёт
+  State 8 и получит фабрика. Экспорт — `imports.internal` поставщика: символ
+  из `module_functions`, которого нет в экспорте, — `imports_symbol_unknown`.
+  Notes — авторские клаузы `80_notes*.md`; адрес клаузы —
+  `note:<скоуп>#<n>`, n — номер среди клауз скоупа в порядке файлов.
+  `Knows` — `30_modules.md`, как у `value_flow_workbench`.
+- **Скоупы.** Модуль `models` эмитится детерминированно и не оценивается;
+  контракт, который эмиттер опускает из закрытого IR
+  (`notes_workbench.gate._load_deterministic_callable_scopes`), не получает
+  скоупа; модуль без единого такого контракта не оценивается. Каждый такой
+  модуль назван в `out_of_scope` с причиной — молча ничего не выпадает.
+  На cabinet-kernel: 134 скоупа, вне оценки `models`, `data_provider`,
+  `clock`, `store_persistence`, `store_spool`.
+- **Отклонение ребра `Knows`** — строка `rejected`
+  `{"symbol": "*", "provider": <модуль>, "candidate": "knows", "reason": …}`.
+- **Отказ от символа из кода** — строка `rejected` с `candidate: code_used`:
+  новая спека может отказаться от того, что называет старый код.
+- **Кандидаты растут вместе с решениями.** Принятый `calls` приносит типы
+  сигнатуры вызываемого (`contract:<символ>`), принятая модель — свои поля и
+  варианты. Поэтому `--draft` запускают снова, пока `pending` не опустеет;
+  он хранит решения и идемпотентен. Символ, который называет код и который
+  уже ждёт решения в скоупе операции, черновик отмечает там (`code_used`),
+  а не повторяет в скоупе модуля.
+- **Без таблицы** гейт даёт одну находку `imports_table_missing`, проверки
+  модулей молчат.
+- **`derive` и `drift`** готовы для шага 3: `derive` — вывод §4, `drift` —
+  расхождение `module_internal` спеки с выводом; сейчас их никто не вызывает
+  как гейт.
+- **Слепое принятие ловится.** Прогон на cabinet-kernel, где принято всё из
+  черновика: 129 `imports_code_unused`, 98 `imports_weak_without_basis`,
+  426 новых кандидатов от принятых решений, и
+  `EDGE_DELIVERY_RULES`: код `run_graph` его называет, `data_provider` его
+  не экспортирует.
