@@ -7,8 +7,8 @@ the case must read the canonical one or say truthfully that it is absent.
 Resolution order:
 
 1. ``SPEC_WORKBENCH_CANONICAL_CASES`` — a directory holding ``examples/<case>``;
-2. ``canonical-cases/examples/<case>`` inside the checkout (CI fetches it by
-   canonical_ref, see .github/workflows/spec-workbench-ci.yml);
+2. ``canonical-cases/examples/<case>`` inside the checkout (CI fetched the
+   Cabinet cases there until 2026-11-03; it fetches none today);
 3. ``examples/<case>`` of this checkout when the checked-out branch is the
    canonical ref itself;
 4. otherwise the test is skipped with the reason.
@@ -62,6 +62,6 @@ def canonical_case(case_id: str) -> Path:
     if found is None:
         pytest.skip(
             f"canonical case {case_id} ({canonical_ref(case_id)}) is not checked out; "
-            "CI fetches it into canonical-cases/, locally set SPEC_WORKBENCH_CANONICAL_CASES"
+            "put it in canonical-cases/ or set SPEC_WORKBENCH_CANONICAL_CASES"
         )
     return found
