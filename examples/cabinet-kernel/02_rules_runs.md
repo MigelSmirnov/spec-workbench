@@ -293,7 +293,7 @@ Reuses cabinet-flow decision 18, narrowed by K-09: no timed retries, no reconcil
    outcome whose run change was lost), and advances, as the
    kernel actor, every run that derivation leaves `running`: a
    function element without a
-   concluded record is executed again, which is safe because it is pure; a `read`
+   concluded record is executed again, which is safe because it has no effect; a `read`
    element without one is sent again; an operation element of another class with
    neither a concluded record nor an EffectAttempt was never sent and is advanced
    as if reached for the first time — an approved, unused approval covers it
@@ -325,8 +325,8 @@ startup: in_flight -> unknown; running runs advanced by kernel before surface op
    [witness: verification:kernel_a14_resume_resends_unreachable]
 2. A resume of a run waiting only for approval is refused.
    [witness: verification:kernel_a14_resume_without_unreachable_refused]
-3. Restarting the kernel during a function execution executes it again with the
-   same output digest; during an effect it yields `unknown` and no second request.
+3. Restarting the kernel during a function execution executes it again, with the
+   same output digest when it obtains no time and no chance; during an effect it yields `unknown` and no second request.
    [witness: verification:kernel_a14_restart_in_flight_becomes_unknown]
 4. A cancelled run executes nothing further, keeps its trace and has no spool.
    [witness: verification:kernel_a14_cancel_empties_spool_keeps_trace]
