@@ -977,3 +977,25 @@ them otherwise refused every edge at a flow endpoint. Contracts, models, phases 
 are unchanged. What moved: the `prove_version` note in `flows`; the text of A05 in the packets of
 `canonical_values`, `bindings` and `flows`; only source line numbers in `run_values`, `functions`,
 `effects`, `runs` and `surface`. Structural review: 0 blocks. All 19 modules remain PASS.
+
+## Request of 2026-11-03: three notes of `surface` from its sampling
+
+A delta review against the previous stamp, by comparing the packet with its previous form. No
+slice was read again as a whole. Only the `surface` packet moved, by three notes; no other
+packet, no contract, model, decision or import changed.
+
+- `answer_request`: a discriminated union reaches the `tools/list` walk as the Union of its
+  variants at the top of a field's annotation and as an `Annotated` alias nested in `tuple[...]`
+  or `X | None`; the walk takes both. The rule of that note already required a schema for every
+  request model; this names the two shapes the models have at runtime, read from `models.py`.
+- `answer_request`: a tuple answer, which `handle_try_implementation` has, is one JSON array in
+  the text T. "The answer as JSON text" already covered it without saying how.
+- `serve_kernel`: the reason written after a failed start is the exception's own message and not
+  `translate_failure`'s, whose `internal_error` reason is empty. The existing note says "the
+  exception's reason"; this rules out the other source.
+
+Evidence: ten samples of `surface` on the factory's strict-imports prompt, tested on a temporary
+copy with `run_graph` deployed. `tools/list` failed in 7 of 10 on "unsupported request schema"; a
+tuple answer failed in 2 of 10; the sandbox-refusal test failed in 2 of 10 on an empty reason.
+These are measurements of the samples, not of code generated from these notes, which this review
+has not seen. Structural review: 0 blocks. All 19 modules remain PASS.
