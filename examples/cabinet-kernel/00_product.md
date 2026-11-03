@@ -109,11 +109,11 @@ first application, not kernel concepts.
 ### K-02 — Two node kinds; functions are pure (keeps D0-034)
 
 A function node runs one admitted implementation of one contract: declared input
-in, declared output out, no network, no filesystem beyond its input, no clock, no
-randomness, no secret, no service handle. The clock and randomness are withheld
-from a function that calls the standard library's own entry points for them, which
-guards against depending on the time or on chance by accident; it is no guarantee
-against code written to get around it. An operation node invokes one declared
+in, declared output out, no network, no filesystem beyond its input, no secret, no
+service handle. The standard library's own entry points for the clock and for
+randomness raise in a function, so it cannot depend on the time or on chance by
+accident; code written to get time or chance some other way is not detected and is
+judged by its outputs like any other. An operation node invokes one declared
 operation of one microservice; only the kernel performs it. An effect is never
 hidden in code.
 
