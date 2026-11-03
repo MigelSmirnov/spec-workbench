@@ -22,3 +22,39 @@
    already contains Expenses, allocations, progress, and payments?
 9. How are internal PresuPro zones mapped to stable client-facing Budget
    Sections?
+
+## Operational questions discovered after the baseline
+
+### Q10 — Recovery after one-time service credential delivery is lost
+
+Observed on 2026-11-04 while onboarding the PresuPro estimate producer for
+`Proyecto Demo Facebook`:
+
+- creating a service principal succeeds independently of credential issuance;
+- credential issuance persists an active credential and returns its plaintext
+  exactly once;
+- the administrative HTTP surface exposes create, issue, revoke, grant and
+  status-change operations, but no operation to list or read service
+  principals and their non-secret credential metadata;
+- if the response is lost, or the operator fails after issuance but before
+  durably recording `principal_id` and `credential_id`, the plaintext is
+  correctly unrecoverable, yet the administrator also cannot address the
+  unknown active credential through the supported HTTP API to revoke it.
+
+Questions requiring an explicit product/security decision:
+
+1. Must the administrative API expose a list/read projection for service
+   principals, credential metadata, and producer grants so an administrator
+   can locate and revoke an orphaned credential?
+2. Should credential issuance require an operator-supplied idempotency key or
+   a prepare/confirm protocol, or is recovery by listing metadata and rotating
+   credentials sufficient?
+3. Must the one-time-secret response contract be shared by operator tooling so
+   a response-shape mismatch cannot silently strand an active credential?
+4. What recovery procedure and audit evidence are required when principal
+   creation and credential issuance succeed but local secret custody fails?
+
+Until this is decided, an operator must not blindly repeat principal or
+credential creation after an ambiguous or lost response. The incident must be
+reconciled and the orphaned credential revoked through an authorized
+administrative recovery procedure first.
