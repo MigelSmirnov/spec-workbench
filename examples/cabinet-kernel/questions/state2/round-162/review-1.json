@@ -1,0 +1,131 @@
+{
+ "open_points": [
+  {
+   "unit": "A03",
+   "subject": "sandbox clock and randomness traps after module import",
+   "kind": "contradiction",
+   "text": "Rule 4 replaces clock and randomness entry points only \"Before loading the module\", while the change says \"sys.modules stays an ordinary mapping: what the code itself does to it is the code's own.\" Standard-library modules can therefore be removed from sys.modules and imported again, or reloaded, after their trapped functions were replaced. This conflicts with K-02 and A19 rule 4, \"Functions have no clock\", and with rule 4's closed trap promise.",
+   "question": "Must the sandbox prevent or retrap reloads and reimports that restore clock or entropy entry points, or are those restored functions usable despite the no-clock/no-randomness rules?",
+   "options": [
+    "Block or retrap every reload or reimport of affected standard-library modules",
+    "Allow reload or reimport, making restored clock and entropy functions usable",
+    "Allow reload or reimport but classify any later call through a restored entry point as sandbox_violation"
+   ],
+   "default_guess": "Keep the affected entry points trapped across reloads and reimports.",
+   "witness": {
+    "initial": "A contract has no inputs and one numeric output; its implementation imports time, reloads or removes and reimports the time module, then returns time.time().",
+    "events": [
+     "An authoring agent submits the implementation and admission executes it.",
+     "The same implementation is executed again on the same input."
+    ],
+    "outcomes": [
+     "A runner applying only the stated pre-load replacement restores time.time during reload and the executions succeed with clock-dependent outputs.",
+     "A runner preserving the no-clock invariant blocks or retraps the reload and records sandbox_violation."
+    ],
+    "observer": "The submitting agent, the trace reader, and any downstream node consuming the output"
+   }
+  },
+  {
+   "unit": "A04",
+   "subject": "deterministic admission and cached verdicts",
+   "kind": "contradiction",
+   "text": "The A03 change says loader facts including \"its file's path, importlib metadata, the file's timestamps\" are outside the contract and code depending on them \"may answer differently between releases and between executions\". A03 required test 6 requires the same implementation and input to yield the same output digest, M08 calls admission deterministic, and A04 rule 2 reuses an existing verdict without executing the corpus again.",
+   "question": "Can an implementation admitted using one permitted set of loader facts keep a reusable admitted verdict when the same implementation and case may produce a different result under another permitted execution's loader facts?",
+   "options": [
+    "Make all implementation-observable loader facts stable for equal executions",
+    "Permit loader variation but rerun admission instead of reusing a verdict when those facts may differ",
+    "Treat an AdmissionVerdict only as historical evidence and allow activation despite a later execution no longer passing the corpus"
+   ],
+   "default_guess": "Do not expose varying loader facts to implementation code; preserve deterministic execution and reusable verdicts.",
+   "witness": {
+    "initial": "A trial case expects the integer exposed by a loader timestamp or importlib metadata field, and the implementation returns that field.",
+    "events": [
+     "An agent submits the implementation during an execution where the field is T; the whole corpus passes and the implementation is admitted.",
+     "A later execution or equal resubmission occurs where the loader is permitted to expose T2 instead."
+    ],
+    "outcomes": [
+     "With stable loader facts, the cached admitted verdict remains a deterministic verdict and later executions return T.",
+     "With per-execution loader facts, A04 reuses the admitted verdict even though rerunning its case would return T2 and fail."
+    ],
+    "observer": "The agent inspecting admission and any caller or downstream node observing the later output"
+   }
+  },
+  {
+   "unit": "A03",
+   "subject": "runner behavior after code mutates its own sys.modules entry",
+   "kind": "missing rule",
+   "text": "The runner \"enters it in sys.modules under that name before its body runs and never removes it\", but \"what the code itself does to it is the code's own.\" The text does not say whether, after the body deletes or replaces that entry, the runner obtains run from the original module object or looks the module up again by its fixed name.",
+   "question": "After module code deletes or replaces sys.modules['cabinet_sandbox_code'] but defines run on the originally executing module object, which object is used to find and invoke run, and what outcome results?",
+   "options": [
+    "Retain the original module object and invoke its run function",
+    "Resolve the module again through sys.modules and record crashed if the entry is absent or unsuitable",
+    "Treat mutation of the implementation's own sys.modules entry as sandbox_violation"
+   ],
+   "default_guess": "Retain the original module object used for execution and obtain run from it.",
+   "witness": {
+    "initial": "An implementation deletes sys.modules[__name__] in its module body and then defines a conforming run function.",
+    "events": [
+     "An agent submits the implementation.",
+     "Admission loads its module and attempts to call run."
+    ],
+    "outcomes": [
+     "A runner retaining the original module reference calls run and the case passes.",
+     "A runner resolving the fixed name after the body cannot find the module and records crashed."
+    ],
+    "observer": "The submitting agent and the recorded TrialExecution"
+   }
+  },
+  {
+   "unit": "A16",
+   "subject": "validation of MCP discovery requests",
+   "kind": "ambiguous precedence",
+   "text": "The change says initialize, ping and tools/list \"get their answer after the size, token and depth checks of rule 1.\" Rule 4 separately says \"Every request is validated against its schema\" and rule 1 places operation/schema validation after depth. No schemas or exception from that validation are stated for the three discovery methods.",
+   "question": "After size, token and depth pass, are initialize, ping and tools/list schema-validated, including rejection of unknown fields and over-bound strings, and where does that validation occur relative to answering?",
+   "options": [
+    "Apply the same schema and carried-JSON validation as every other request",
+    "Apply only size, token and depth checks, then answer regardless of remaining fields",
+    "Give each discovery method a separate stated validation sequence"
+   ],
+   "default_guess": "Apply a fixed method schema and all applicable rule 1 validation after depth and before answering.",
+   "witness": {
+    "initial": "The kernel is serving and the caller has a known agent token.",
+    "events": [
+     "The agent sends tools/list with valid size and depth but with an unknown field containing an over-bound string."
+    ],
+    "outcomes": [
+     "Applying rule 4 refuses invalid_request before producing the catalogue.",
+     "Reading the new discovery exception as exhaustive ignores the field and returns every operation schema."
+    ],
+    "observer": "The agent calling tools/list"
+   }
+  },
+  {
+   "unit": "A16",
+   "subject": "MCP initialize negotiation and session state",
+   "kind": "missing refusal conditions",
+   "text": "The change only says initialize is a discovery method for which a known token \"gets their answer\"; it does not state the supported MCP protocol version or capabilities, how an unsupported version is handled, or whether successful initialize is required before ping, tools/list, or catalogue operation calls.",
+   "question": "What protocol versions does initialize accept, what happens on a mismatch, and are later requests permitted before a successful initialize?",
+   "options": [
+    "Require a successful initialize for later methods and refuse unsupported protocol versions",
+    "Negotiate among a fixed supported set and require the negotiated session thereafter",
+    "Treat every authenticated request independently, allow tools/list and operations before initialize, and answer initialize for any version"
+   ],
+   "default_guess": "Pin a supported MCP protocol version, refuse an incompatible initialize request, and require successful initialization on that connection before later methods.",
+   "witness": {
+    "initial": "A new MCP connection is authenticated with a known owner token but has not initialized.",
+    "events": [
+     "The client sends tools/list before initialize.",
+     "It then sends initialize naming an unsupported protocol version."
+    ],
+    "outcomes": [
+     "A session-oriented implementation refuses the first call and rejects the incompatible initialize request.",
+     "A stateless implementation returns the catalogue immediately and answers initialize without enforcing version compatibility."
+    ],
+    "observer": "The MCP client"
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A03\",\"subject\":\"sandbox clock and randomness traps after module import\",\"kind\":\"contradiction\",\"text\":\"Rule 4 replaces clock and randomness entry points only \\\"Before loading the module\\\", while the change says \\\"sys.modules stays an ordinary mapping: what the code itself does to it is the code's own.\\\" Standard-library modules can therefore be removed from sys.modules and imported again, or reloaded, after their trapped functions were replaced. This conflicts with K-02 and A19 rule 4, \\\"Functions have no clock\\\", and with rule 4's closed trap promise.\",\"question\":\"Must the sandbox prevent or retrap reloads and reimports that restore clock or entropy entry points, or are those restored functions usable despite the no-clock/no-randomness rules?\",\"options\":[\"Block or retrap every reload or reimport of affected standard-library modules\",\"Allow reload or reimport, making restored clock and entropy functions usable\",\"Allow reload or reimport but classify any later call through a restored entry point as sandbox_violation\"],\"default_guess\":\"Keep the affected entry points trapped across reloads and reimports.\",\"witness\":{\"initial\":\"A contract has no inputs and one numeric output; its implementation imports time, reloads or removes and reimports the time module, then returns time.time().\",\"events\":[\"An authoring agent submits the implementation and admission executes it.\",\"The same implementation is executed again on the same input.\"],\"outcomes\":[\"A runner applying only the stated pre-load replacement restores time.time during reload and the executions succeed with clock-dependent outputs.\",\"A runner preserving the no-clock invariant blocks or retraps the reload and records sandbox_violation.\"],\"observer\":\"The submitting agent, the trace reader, and any downstream node consuming the output\"}},{\"unit\":\"A04\",\"subject\":\"deterministic admission and cached verdicts\",\"kind\":\"contradiction\",\"text\":\"The A03 change says loader facts including \\\"its file's path, importlib metadata, the file's timestamps\\\" are outside the contract and code depending on them \\\"may answer differently between releases and between executions\\\". A03 required test 6 requires the same implementation and input to yield the same output digest, M08 calls admission deterministic, and A04 rule 2 reuses an existing verdict without executing the corpus again.\",\"question\":\"Can an implementation admitted using one permitted set of loader facts keep a reusable admitted verdict when the same implementation and case may produce a different result under another permitted execution's loader facts?\",\"options\":[\"Make all implementation-observable loader facts stable for equal executions\",\"Permit loader variation but rerun admission instead of reusing a verdict when those facts may differ\",\"Treat an AdmissionVerdict only as historical evidence and allow activation despite a later execution no longer passing the corpus\"],\"default_guess\":\"Do not expose varying loader facts to implementation code; preserve deterministic execution and reusable verdicts.\",\"witness\":{\"initial\":\"A trial case expects the integer exposed by a loader timestamp or importlib metadata field, and the implementation returns that field.\",\"events\":[\"An agent submits the implementation during an execution where the field is T; the whole corpus passes and the implementation is admitted.\",\"A later execution or equal resubmission occurs where the loader is permitted to expose T2 instead.\"],\"outcomes\":[\"With stable loader facts, the cached admitted verdict remains a deterministic verdict and later executions return T.\",\"With per-execution loader facts, A04 reuses the admitted verdict even though rerunning its case would return T2 and fail.\"],\"observer\":\"The agent inspecting admission and any caller or downstream node observing the later output\"}},{\"unit\":\"A03\",\"subject\":\"runner behavior after code mutates its own sys.modules entry\",\"kind\":\"missing rule\",\"text\":\"The runner \\\"enters it in sys.modules under that name before its body runs and never removes it\\\", but \\\"what the code itself does to it is the code's own.\\\" The text does not say whether, after the body deletes or replaces that entry, the runner obtains run from the original module object or looks the module up again by its fixed name.\",\"question\":\"After module code deletes or replaces sys.modules['cabinet_sandbox_code'] but defines run on the originally executing module object, which object is used to find and invoke run, and what outcome results?\",\"options\":[\"Retain the original module object and invoke its run function\",\"Resolve the module again through sys.modules and record crashed if the entry is absent or unsuitable\",\"Treat mutation of the implementation's own sys.modules entry as sandbox_violation\"],\"default_guess\":\"Retain the original module object used for execution and obtain run from it.\",\"witness\":{\"initial\":\"An implementation deletes sys.modules[__name__] in its module body and then defines a conforming run function.\",\"events\":[\"An agent submits the implementation.\",\"Admission loads its module and attempts to call run.\"],\"outcomes\":[\"A runner retaining the original module reference calls run and the case passes.\",\"A runner resolving the fixed name after the body cannot find the module and records crashed.\"],\"observer\":\"The submitting agent and the recorded TrialExecution\"}},{\"unit\":\"A16\",\"subject\":\"validation of MCP discovery requests\",\"kind\":\"ambiguous precedence\",\"text\":\"The change says initialize, ping and tools/list \\\"get their answer after the size, token and depth checks of rule 1.\\\" Rule 4 separately says \\\"Every request is validated against its schema\\\" and rule 1 places operation/schema validation after depth. No schemas or exception from that validation are stated for the three discovery methods.\",\"question\":\"After size, token and depth pass, are initialize, ping and tools/list schema-validated, including rejection of unknown fields and over-bound strings, and where does that validation occur relative to answering?\",\"options\":[\"Apply the same schema and carried-JSON validation as every other request\",\"Apply only size, token and depth checks, then answer regardless of remaining fields\",\"Give each discovery method a separate stated validation sequence\"],\"default_guess\":\"Apply a fixed method schema and all applicable rule 1 validation after depth and before answering.\",\"witness\":{\"initial\":\"The kernel is serving and the caller has a known agent token.\",\"events\":[\"The agent sends tools/list with valid size and depth but with an unknown field containing an over-bound string.\"],\"outcomes\":[\"Applying rule 4 refuses invalid_request before producing the catalogue.\",\"Reading the new discovery exception as exhaustive ignores the field and returns every operation schema.\"],\"observer\":\"The agent calling tools/list\"}},{\"unit\":\"A16\",\"subject\":\"MCP initialize negotiation and session state\",\"kind\":\"missing refusal conditions\",\"text\":\"The change only says initialize is a discovery method for which a known token \\\"gets their answer\\\"; it does not state the supported MCP protocol version or capabilities, how an unsupported version is handled, or whether successful initialize is required before ping, tools/list, or catalogue operation calls.\",\"question\":\"What protocol versions does initialize accept, what happens on a mismatch, and are later requests permitted before a successful initialize?\",\"options\":[\"Require a successful initialize for later methods and refuse unsupported protocol versions\",\"Negotiate among a fixed supported set and require the negotiated session thereafter\",\"Treat every authenticated request independently, allow tools/list and operations before initialize, and answer initialize for any version\"],\"default_guess\":\"Pin a supported MCP protocol version, refuse an incompatible initialize request, and require successful initialization on that connection before later methods.\",\"witness\":{\"initial\":\"A new MCP connection is authenticated with a known owner token but has not initialized.\",\"events\":[\"The client sends tools/list before initialize.\",\"It then sends initialize naming an unsupported protocol version.\"],\"outcomes\":[\"A session-oriented implementation refuses the first call and rejects the incompatible initialize request.\",\"A stateless implementation returns the catalogue immediately and answers initialize without enforcing version compatibility.\"],\"observer\":\"The MCP client\"}}]}",
+ "set_aside": []
+}

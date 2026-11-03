@@ -171,15 +171,10 @@ and no detection promises the runtime cannot keep.
    taking one argument, a dict with one entry per input port, and returning a dict
    with exactly one entry per output port. It is loaded under the one fixed name
    `cabinet_sandbox_code`, which no module of the standard library has, and the
-   runner enters it in `sys.modules` under that name before its body runs and never
-   removes it, so code that looks its own module up by name (`dataclasses` under
+   runner enters it in `sys.modules` under that name before its body runs and does
+   not remove it, so code that looks its own module up by name (`dataclasses` under
    postponed annotations, `typing.get_type_hints`) behaves as it does under an
-   import. `sys.modules` stays an ordinary mapping: what the code itself does to it
-   is the code's own. Beyond that name and that entry, how the module is loaded
-   (its file's path, `importlib` metadata, the file's timestamps) is no fact of the
-   contract: code that depends on it, as on any fact of the runtime rule 2 does not
-   fix, may answer differently between releases and between executions, and rule 4
-   promises no trap for it. A `value` port carries the JSON value
+   import; the runner calls `run` on the module object it loaded. A `value` port carries the JSON value
    decoded to Python (`dict`, `list`, `str`, `int`, `float`, `bool`, `None`); a
    `file` port carries `bytes`, and a `many` port a Python `list` of its element
    type — of `bytes` for a `many` file port, each element validated like a single
