@@ -1,0 +1,107 @@
+{
+ "open_points": [
+  {
+   "subject": "sandbox execution filesystem and process view",
+   "kind": "contradiction and undefined environment member",
+   "text": "A03 adds `own_proc` to `environment = {python_stdlib_runtime, code, inputs, exchange_dir, own_proc}`, while rule 4 still says the audit hook raises on opening \"any path outside the exchange directory and the read-only runtime\" and K-02 still says \"no filesystem beyond its input\"; `own_proc` is nowhere defined.",
+   "question": "What exactly is `own_proc`, is it mounted or otherwise readable by function code, which paths does it expose, and are accesses to it allowed or recorded as sandbox violations?",
+   "options": [
+    "A private `/proc` view is mounted and reads within it are allowed.",
+    "A private `/proc` view exists but every function access to it is trapped.",
+    "`own_proc` denotes process isolation only and exposes no readable filesystem."
+   ],
+   "default_guess": "Treat `own_proc` as a private `/proc` mount needed by the sandbox runtime, but trap function code that opens it.",
+   "witness": {
+    "initial": "A contract has one value output accepting an object, and an admitted implementation calls `open('/proc/self/stat')`, catches any exception, and returns whether the read succeeded.",
+    "events": [
+     "An agent tries the implementation on a trial case.",
+     "The sandbox creates the newly specified environment containing `own_proc`.",
+     "The implementation attempts to read its own process information."
+    ],
+    "outcomes": [
+     "The read is permitted as access to `own_proc`; the trial succeeds and returns process facts.",
+     "The audit hook treats `/proc/self/stat` as outside the exchange directory and runtime; the trial concludes `sandbox_violation` even if the exception is caught."
+    ],
+    "observer": "The agent reading the TrialExecution, and later any run caller."
+   },
+   "unit": "context"
+  },
+  {
+   "subject": "sandbox module loading metadata",
+   "kind": "underspecified observable runtime state",
+   "text": "The implementation \"is loaded under the one fixed name `cabinet_sandbox_code`\" and is entered in `sys.modules` before its body runs, but the text fixes no import metadata other than the name and registry entry.",
+   "question": "Which import-visible module attributes and related state must the runner set—especially `__name__`, `__spec__`, `__loader__`, `__package__`, `__file__`, and `__cached__`—and to what values?",
+   "options": [
+    "Construct a bare `ModuleType`, set only `__name__`, and execute the source.",
+    "Load through an importlib loader and provide ordinary import metadata.",
+    "Define a release-fixed subset of import metadata with sandbox-specific values."
+   ],
+   "default_guess": "Use an importlib module spec with the fixed name, a sandbox loader, no package, and a fixed in-sandbox source path.",
+   "witness": {
+    "initial": "A contract has one boolean output, and an implementation returns whether `__spec__` is non-null or whether `__file__` exists.",
+    "events": [
+     "An agent submits the implementation.",
+     "Admission loads it under `cabinet_sandbox_code` and executes `run`."
+    ],
+    "outcomes": [
+     "A bare-module loader leaves `__spec__` null or `__file__` absent, and admission records the corresponding output.",
+     "An importlib-based loader supplies those attributes, and admission records the opposite output."
+    ],
+    "observer": "The agent inspecting trial evidence and any caller receiving the function output."
+   },
+   "unit": "context"
+  },
+  {
+   "subject": "MCP discovery request validation",
+   "kind": "contradictory check sequence",
+   "text": "A16 rule 1 says a request next \"names a known operation and fits that operation's schema\" after depth checking, while the change says `initialize`, `ping` and `tools/list` \"get their answer after the size, token and depth checks of rule 1.\"",
+   "question": "Do discovery methods undergo operation-name and request-schema validation after the three named checks, including rejection of unknown fields, or do they answer immediately after depth checking?",
+   "options": [
+    "Apply their own fixed request schemas and reject malformed discovery requests as `invalid_request`.",
+    "Bypass operation and schema validation for all three discovery methods.",
+    "Validate `initialize` but treat `ping` and `tools/list` as argument-insensitive protocol methods."
+   ],
+   "default_guess": "Give each discovery method a closed schema and apply normal `invalid_request` validation after size, token and depth checks.",
+   "witness": {
+    "initial": "The kernel is serving and the caller has a known agent token.",
+    "events": [
+     "The agent sends `ping` with an extra unknown field."
+    ],
+    "outcomes": [
+     "The ordinary A16 schema step rejects the request as `invalid_request`.",
+     "The discovery exception answers the ping because size, token and depth passed."
+    ],
+    "observer": "The MCP client."
+   },
+   "unit": "context"
+  },
+  {
+   "subject": "MCP initialize and ping operations",
+   "kind": "inputs and outputs not fixed",
+   "text": "The change says `initialize`, `ping` and `tools/list` \"get their answer\", but only `tools/list` has any required answer described; no request fields, response facts, protocol version, capabilities, errors after authentication, or initialization state are fixed for `initialize` or `ping`.",
+   "question": "What exact requests and responses do `initialize` and `ping` support, which MCP protocol version and capabilities does `initialize` advertise, and does initialization create any per-connection state affecting later calls?",
+   "options": [
+    "Implement one explicitly pinned MCP protocol version with its standard initialize and ping payloads and connection state.",
+    "Return fixed kernel-specific stateless responses for both methods.",
+    "Negotiate among protocol versions and retain initialization state per connection."
+   ],
+   "default_guess": "Pin one MCP protocol version, implement its standard schemas, and retain only the minimum connection initialization state that version requires.",
+   "witness": {
+    "initial": "The kernel has just accepted a new authenticated MCP connection.",
+    "events": [
+     "The client sends `initialize` offering more than one protocol version.",
+     "The client then sends `ping` and `tools/list`."
+    ],
+    "outcomes": [
+     "The kernel negotiates a version, advertises capabilities, records the connection initialized, and permits later discovery calls.",
+     "The kernel returns a fixed stateless initialization answer and treats the later calls independently of initialization."
+    ],
+    "observer": "The MCP client, which receives different payloads and may decide differently whether the kernel is compatible."
+   },
+   "unit": "context"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"sandbox execution filesystem and process view\",\"kind\":\"contradiction and undefined environment member\",\"text\":\"A03 adds `own_proc` to `environment = {python_stdlib_runtime, code, inputs, exchange_dir, own_proc}`, while rule 4 still says the audit hook raises on opening \\\"any path outside the exchange directory and the read-only runtime\\\" and K-02 still says \\\"no filesystem beyond its input\\\"; `own_proc` is nowhere defined.\",\"question\":\"What exactly is `own_proc`, is it mounted or otherwise readable by function code, which paths does it expose, and are accesses to it allowed or recorded as sandbox violations?\",\"options\":[\"A private `/proc` view is mounted and reads within it are allowed.\",\"A private `/proc` view exists but every function access to it is trapped.\",\"`own_proc` denotes process isolation only and exposes no readable filesystem.\"],\"default_guess\":\"Treat `own_proc` as a private `/proc` mount needed by the sandbox runtime, but trap function code that opens it.\",\"witness\":{\"initial\":\"A contract has one value output accepting an object, and an admitted implementation calls `open('/proc/self/stat')`, catches any exception, and returns whether the read succeeded.\",\"events\":[\"An agent tries the implementation on a trial case.\",\"The sandbox creates the newly specified environment containing `own_proc`.\",\"The implementation attempts to read its own process information.\"],\"outcomes\":[\"The read is permitted as access to `own_proc`; the trial succeeds and returns process facts.\",\"The audit hook treats `/proc/self/stat` as outside the exchange directory and runtime; the trial concludes `sandbox_violation` even if the exception is caught.\"],\"observer\":\"The agent reading the TrialExecution, and later any run caller.\"},\"unit\":\"context\"},{\"subject\":\"sandbox module loading metadata\",\"kind\":\"underspecified observable runtime state\",\"text\":\"The implementation \\\"is loaded under the one fixed name `cabinet_sandbox_code`\\\" and is entered in `sys.modules` before its body runs, but the text fixes no import metadata other than the name and registry entry.\",\"question\":\"Which import-visible module attributes and related state must the runner set—especially `__name__`, `__spec__`, `__loader__`, `__package__`, `__file__`, and `__cached__`—and to what values?\",\"options\":[\"Construct a bare `ModuleType`, set only `__name__`, and execute the source.\",\"Load through an importlib loader and provide ordinary import metadata.\",\"Define a release-fixed subset of import metadata with sandbox-specific values.\"],\"default_guess\":\"Use an importlib module spec with the fixed name, a sandbox loader, no package, and a fixed in-sandbox source path.\",\"witness\":{\"initial\":\"A contract has one boolean output, and an implementation returns whether `__spec__` is non-null or whether `__file__` exists.\",\"events\":[\"An agent submits the implementation.\",\"Admission loads it under `cabinet_sandbox_code` and executes `run`.\"],\"outcomes\":[\"A bare-module loader leaves `__spec__` null or `__file__` absent, and admission records the corresponding output.\",\"An importlib-based loader supplies those attributes, and admission records the opposite output.\"],\"observer\":\"The agent inspecting trial evidence and any caller receiving the function output.\"},\"unit\":\"context\"},{\"subject\":\"MCP discovery request validation\",\"kind\":\"contradictory check sequence\",\"text\":\"A16 rule 1 says a request next \\\"names a known operation and fits that operation's schema\\\" after depth checking, while the change says `initialize`, `ping` and `tools/list` \\\"get their answer after the size, token and depth checks of rule 1.\\\"\",\"question\":\"Do discovery methods undergo operation-name and request-schema validation after the three named checks, including rejection of unknown fields, or do they answer immediately after depth checking?\",\"options\":[\"Apply their own fixed request schemas and reject malformed discovery requests as `invalid_request`.\",\"Bypass operation and schema validation for all three discovery methods.\",\"Validate `initialize` but treat `ping` and `tools/list` as argument-insensitive protocol methods.\"],\"default_guess\":\"Give each discovery method a closed schema and apply normal `invalid_request` validation after size, token and depth checks.\",\"witness\":{\"initial\":\"The kernel is serving and the caller has a known agent token.\",\"events\":[\"The agent sends `ping` with an extra unknown field.\"],\"outcomes\":[\"The ordinary A16 schema step rejects the request as `invalid_request`.\",\"The discovery exception answers the ping because size, token and depth passed.\"],\"observer\":\"The MCP client.\"},\"unit\":\"context\"},{\"subject\":\"MCP initialize and ping operations\",\"kind\":\"inputs and outputs not fixed\",\"text\":\"The change says `initialize`, `ping` and `tools/list` \\\"get their answer\\\", but only `tools/list` has any required answer described; no request fields, response facts, protocol version, capabilities, errors after authentication, or initialization state are fixed for `initialize` or `ping`.\",\"question\":\"What exact requests and responses do `initialize` and `ping` support, which MCP protocol version and capabilities does `initialize` advertise, and does initialization create any per-connection state affecting later calls?\",\"options\":[\"Implement one explicitly pinned MCP protocol version with its standard initialize and ping payloads and connection state.\",\"Return fixed kernel-specific stateless responses for both methods.\",\"Negotiate among protocol versions and retain initialization state per connection.\"],\"default_guess\":\"Pin one MCP protocol version, implement its standard schemas, and retain only the minimum connection initialization state that version requires.\",\"witness\":{\"initial\":\"The kernel has just accepted a new authenticated MCP connection.\",\"events\":[\"The client sends `initialize` offering more than one protocol version.\",\"The client then sends `ping` and `tools/list`.\"],\"outcomes\":[\"The kernel negotiates a version, advertises capabilities, records the connection initialized, and permits later discovery calls.\",\"The kernel returns a fixed stateless initialization answer and treats the later calls independently of initialization.\"],\"observer\":\"The MCP client, which receives different payloads and may decide differently whether the kernel is compatible.\"},\"unit\":\"context\"}]}",
+ "set_aside": []
+}

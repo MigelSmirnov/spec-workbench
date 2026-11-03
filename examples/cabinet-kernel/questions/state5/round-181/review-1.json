@@ -1,0 +1,93 @@
+{
+ "open_points": [
+  {
+   "subject": "sandbox execution environment",
+   "kind": "undefined environment member",
+   "text": "environment = {python_stdlib_runtime, code, inputs, exchange_dir, own_proc}",
+   "question": "What exactly is `own_proc`, who can access it, how is it created or mounted, and what observable filesystem/process information does it expose during `sandbox.execute_function`?",
+   "options": [
+    "A private procfs mounted for the execution's PID namespace and readable by sandboxed code",
+    "A procfs or handle available only to the runner or parent for process accounting and cleanup",
+    "No mounted procfs; process control is implemented through pidfds or equivalent facilities"
+   ],
+   "default_guess": "Mount a private procfs for the execution's PID namespace but keep it inaccessible to agent code under the audit-hook path policy.",
+   "unit": "?"
+  },
+  {
+   "subject": "sandbox module loading",
+   "kind": "incomplete import semantics",
+   "text": "It is loaded under the one fixed name `cabinet_sandbox_code`, which no module of the standard library has, and the runner enters it in `sys.modules` under that name before its body runs and does not remove it, so code that looks its own module up by name (`dataclasses` under postponed annotations, `typing.get_type_hints`) behaves as it does under an import",
+   "question": "Which normal import metadata and loader semantics must the created module have beyond `__name__` and its `sys.modules` entry, including `__spec__`, `__loader__`, `__package__`, `__file__`, and import-time self-import behavior?",
+   "options": [
+    "Create the module through normal importlib machinery with a complete ModuleSpec and loader metadata",
+    "Create a bare ModuleType, set only the fixed name and `sys.modules` entry, then execute the source",
+    "Specify only the particular metadata needed by the named dataclasses and typing cases"
+   ],
+   "default_guess": "Use importlib with a real ModuleSpec while loading source from the exchange directory.",
+   "witness": {
+    "initial": "A contract has one boolean output and an admitted implementation whose module body records whether `__spec__` is `None`.",
+    "events": [
+     "An owner or agent starts a run containing that function node.",
+     "The sandbox runner loads the implementation under `cabinet_sandbox_code` and calls `run`."
+    ],
+    "outcomes": [
+     "A runner using a bare `ModuleType` returns `true` because `__spec__` is `None`.",
+     "A runner using normal importlib machinery returns `false` because a ModuleSpec is present."
+    ],
+    "observer": "The run caller sees different output values and digests."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "MCP discovery request validation",
+   "kind": "contradictory check sequence",
+   "text": "The MCP discovery methods `initialize`, `ping` and `tools/list` are no action of this table: they name no operation and read no record, and any known token, the owner's or an agent's, gets their answer after the size, token and depth checks of rule 1.",
+   "question": "After size, token, and depth checks, are discovery requests still validated against method-specific schemas, and what happens to unknown fields or malformed parameters?",
+   "options": [
+    "Discovery methods answer immediately after depth checking and ignore otherwise well-formed extra parameters",
+    "Each discovery method has a fixed request schema and malformed parameters are `invalid_request`",
+    "They follow MCP protocol validation and return its protocol error rather than the kernel refusal codes"
+   ],
+   "default_guess": "Give each discovery method a strict schema and return `invalid_request` before producing its answer.",
+   "witness": {
+    "initial": "The kernel is serving and the caller has a valid agent token.",
+    "events": [
+     "The agent calls `tools/list` with a correctly formed MCP request containing an additional unknown parameter."
+    ],
+    "outcomes": [
+     "The kernel answers the tool catalogue because discovery answers after the three named checks.",
+     "The kernel refuses `invalid_request` because A16 rule 1 and rule 4 reject unknown fields."
+    ],
+    "observer": "The MCP client sees either a catalogue or an error."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "MCP initialize, ping and tools/list answers",
+   "kind": "unspecified operation outputs",
+   "text": "The MCP discovery methods `initialize`, `ping` and `tools/list` are no action of this table: they name no operation and read no record, and any known token, the owner's or an agent's, gets their answer after the size, token and depth checks of rule 1.",
+   "question": "What exact responses do `initialize` and `ping` return, and what ordering, pagination or continuation behavior and response envelope does `tools/list` use when returning every catalogue operation?",
+   "options": [
+    "Use one explicitly pinned MCP protocol version and its exact discovery response shapes",
+    "Return minimal implementation-defined initialize and ping objects and one unpaged tools list in catalogue order",
+    "Page or order tools through the kernel's general paging conventions"
+   ],
+   "default_guess": "Pin one MCP protocol version, return its standard initialize and ping responses, and return one unpaged tools list in the State 5 catalogue order.",
+   "witness": {
+    "initial": "The kernel is serving with all catalogue operations and the caller has a valid token.",
+    "events": [
+     "An MCP client calls `initialize`, then `ping`, then `tools/list`."
+    ],
+    "outcomes": [
+     "One implementation returns a minimal initialize result, an empty ping result, and an unpaged list in State 5 table order.",
+     "Another advertises different capabilities or protocol metadata and returns tools in lexical order or through a continuation cursor."
+    ],
+    "observer": "The MCP client sees different response objects and may initialize or enumerate tools differently."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"sandbox execution environment\",\"kind\":\"undefined environment member\",\"text\":\"environment = {python_stdlib_runtime, code, inputs, exchange_dir, own_proc}\",\"question\":\"What exactly is `own_proc`, who can access it, how is it created or mounted, and what observable filesystem/process information does it expose during `sandbox.execute_function`?\",\"options\":[\"A private procfs mounted for the execution's PID namespace and readable by sandboxed code\",\"A procfs or handle available only to the runner or parent for process accounting and cleanup\",\"No mounted procfs; process control is implemented through pidfds or equivalent facilities\"],\"default_guess\":\"Mount a private procfs for the execution's PID namespace but keep it inaccessible to agent code under the audit-hook path policy.\"},{\"subject\":\"sandbox module loading\",\"kind\":\"incomplete import semantics\",\"text\":\"It is loaded under the one fixed name `cabinet_sandbox_code`, which no module of the standard library has, and the runner enters it in `sys.modules` under that name before its body runs and does not remove it, so code that looks its own module up by name (`dataclasses` under postponed annotations, `typing.get_type_hints`) behaves as it does under an import\",\"question\":\"Which normal import metadata and loader semantics must the created module have beyond `__name__` and its `sys.modules` entry, including `__spec__`, `__loader__`, `__package__`, `__file__`, and import-time self-import behavior?\",\"options\":[\"Create the module through normal importlib machinery with a complete ModuleSpec and loader metadata\",\"Create a bare ModuleType, set only the fixed name and `sys.modules` entry, then execute the source\",\"Specify only the particular metadata needed by the named dataclasses and typing cases\"],\"default_guess\":\"Use importlib with a real ModuleSpec while loading source from the exchange directory.\",\"witness\":{\"initial\":\"A contract has one boolean output and an admitted implementation whose module body records whether `__spec__` is `None`.\",\"events\":[\"An owner or agent starts a run containing that function node.\",\"The sandbox runner loads the implementation under `cabinet_sandbox_code` and calls `run`.\"],\"outcomes\":[\"A runner using a bare `ModuleType` returns `true` because `__spec__` is `None`.\",\"A runner using normal importlib machinery returns `false` because a ModuleSpec is present.\"],\"observer\":\"The run caller sees different output values and digests.\"}},{\"subject\":\"MCP discovery request validation\",\"kind\":\"contradictory check sequence\",\"text\":\"The MCP discovery methods `initialize`, `ping` and `tools/list` are no action of this table: they name no operation and read no record, and any known token, the owner's or an agent's, gets their answer after the size, token and depth checks of rule 1.\",\"question\":\"After size, token, and depth checks, are discovery requests still validated against method-specific schemas, and what happens to unknown fields or malformed parameters?\",\"options\":[\"Discovery methods answer immediately after depth checking and ignore otherwise well-formed extra parameters\",\"Each discovery method has a fixed request schema and malformed parameters are `invalid_request`\",\"They follow MCP protocol validation and return its protocol error rather than the kernel refusal codes\"],\"default_guess\":\"Give each discovery method a strict schema and return `invalid_request` before producing its answer.\",\"witness\":{\"initial\":\"The kernel is serving and the caller has a valid agent token.\",\"events\":[\"The agent calls `tools/list` with a correctly formed MCP request containing an additional unknown parameter.\"],\"outcomes\":[\"The kernel answers the tool catalogue because discovery answers after the three named checks.\",\"The kernel refuses `invalid_request` because A16 rule 1 and rule 4 reject unknown fields.\"],\"observer\":\"The MCP client sees either a catalogue or an error.\"}},{\"subject\":\"MCP initialize, ping and tools/list answers\",\"kind\":\"unspecified operation outputs\",\"text\":\"The MCP discovery methods `initialize`, `ping` and `tools/list` are no action of this table: they name no operation and read no record, and any known token, the owner's or an agent's, gets their answer after the size, token and depth checks of rule 1.\",\"question\":\"What exact responses do `initialize` and `ping` return, and what ordering, pagination or continuation behavior and response envelope does `tools/list` use when returning every catalogue operation?\",\"options\":[\"Use one explicitly pinned MCP protocol version and its exact discovery response shapes\",\"Return minimal implementation-defined initialize and ping objects and one unpaged tools list in catalogue order\",\"Page or order tools through the kernel's general paging conventions\"],\"default_guess\":\"Pin one MCP protocol version, return its standard initialize and ping responses, and return one unpaged tools list in the State 5 catalogue order.\",\"witness\":{\"initial\":\"The kernel is serving with all catalogue operations and the caller has a valid token.\",\"events\":[\"An MCP client calls `initialize`, then `ping`, then `tools/list`.\"],\"outcomes\":[\"One implementation returns a minimal initialize result, an empty ping result, and an unpaged list in State 5 table order.\",\"Another advertises different capabilities or protocol metadata and returns tools in lexical order or through a continuation cursor.\"],\"observer\":\"The MCP client sees different response objects and may initialize or enumerate tools differently.\"}}]}",
+ "set_aside": []
+}
