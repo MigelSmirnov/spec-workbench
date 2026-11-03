@@ -394,10 +394,10 @@ the verdict for that pair. Continuity: none; a grown corpus needs a new verdict.
 
 ### Source of truth
 
-Computed by the kernel when an implementation is submitted, from the
-TrialExecutions of that admission: every active
-case of the corpus is run again for the implementation at admission time, and the
-verdict covers exactly those executions.
+Computed by the kernel when an implementation is submitted and no verdict for it and
+the current corpus digest exists, from the TrialExecutions of that admission: every
+active case of the corpus is run again for the implementation at admission time, and
+the verdict covers exactly those executions.
 
 ### Lifecycle candidate
 
