@@ -1,0 +1,105 @@
+{
+ "open_points": [
+  {
+   "unit": "A03",
+   "subject": "fresh-import audit trap",
+   "kind": "ambiguous scope",
+   "text": "“The audit hook also raises on a fresh import of any module these paths name” does not define whether “these paths” means every trapped entry point in rule 4, only the newly added entry points, or an explicit set of exact module names.",
+   "question": "Exactly which module names cause a fresh import to record a trap hit, and are names matched exactly or by package/submodule relationship?",
+   "options": [
+    "Trap fresh imports of every module named anywhere in rule 4, with an explicit exact-name set.",
+    "Trap only modules named by the entry points added on 2026-11-03.",
+    "Trap a named module and all of its submodules."
+   ],
+   "default_guess": "Use an explicit exact-name set containing every module that owns a replaced entry point in rule 4.",
+   "witness": {
+    "initial": "The runner has patched `random`, then the function removes `random` from `sys.modules`.",
+    "events": [
+     "The function freshly imports `random` and calls `random.random()`.",
+     "The function catches any import or call exception and otherwise returns the sampled value."
+    ],
+    "outcomes": [
+     "If `random` is among “these paths,” the import records a trap hit and the execution is `sandbox_violation`.",
+     "If only the newly added modules are covered, the fresh import succeeds and can expose an unpatched random module."
+    ],
+    "observer": "The caller and trace reader see `sandbox_violation` versus a successful execution."
+   }
+  },
+  {
+   "unit": "A03",
+   "subject": "stat-family timestamp masking",
+   "kind": "undefined fields",
+   "text": "“A file's timestamps read through `os.stat`, `os.lstat`, `os.fstat`, `os.scandir` and their `posix` namesakes are zero” does not identify which returned fields count as timestamps.",
+   "question": "Which fields of `stat_result` and `DirEntry.stat()` must be zeroed, including second and nanosecond forms and any platform-provided creation-time fields?",
+   "options": [
+    "Zero `st_atime`, `st_mtime`, `st_ctime` and all corresponding `*_ns` fields.",
+    "Zero only access and modification times.",
+    "Zero every time-valued field exposed by the release interpreter, including any creation/birth-time field."
+   ],
+   "default_guess": "Zero every time-valued stat field exposed by the pinned interpreter, with an explicit release list.",
+   "witness": {
+    "initial": "A scratch file exists and the function may stat it.",
+    "events": [
+     "The function calls `os.stat` and returns `st_ctime_ns`."
+    ],
+    "outcomes": [
+     "An implementation treating all stat time fields as timestamps returns zero.",
+     "An implementation masking only access and modification times returns the filesystem's nonzero change time."
+    ],
+    "observer": "The run caller sees different successful output values."
+   }
+  },
+  {
+   "unit": "A03",
+   "subject": "classification of stat paths",
+   "kind": "undefined path semantics",
+   "text": "“for every path not under the read-only runtime, judged on the path as the code gives it, without resolving a link” does not say how `.` and `..`, relative paths, `dir_fd`, bytes paths or path-like objects are classified as under the runtime.",
+   "question": "What exact lexical or descriptor-relative algorithm decides whether a stat-family path is under the read-only runtime?",
+   "options": [
+    "Normalize `.` and `..` lexically but do not resolve symbolic links, then compare the resulting absolute path with the runtime root.",
+    "Compare the supplied path components literally without normalization.",
+    "Resolve relative paths against the current directory or `dir_fd`, normalize components, but do not follow symbolic links."
+   ],
+   "default_guess": "Convert the supplied path relative to its effective directory, normalize `.` and `..` without following symbolic links, and compare components against the runtime root.",
+   "witness": {
+    "initial": "The function has a descriptor for a directory under the read-only runtime and a runtime file named `x`.",
+    "events": [
+     "The function calls `os.stat(\"x\", dir_fd=runtime_directory_fd)` and returns its modification time."
+    ],
+    "outcomes": [
+     "Classifying the effective descriptor-relative path as under the runtime preserves the release timestamp.",
+     "Classifying only the literal path string `x` as given treats it as outside the runtime and returns zero."
+    ],
+    "observer": "The run caller sees the release timestamp versus zero."
+   }
+  },
+  {
+   "unit": "A03",
+   "subject": "`os.scandir` timestamp masking",
+   "kind": "undefined wrapper behaviour",
+   "text": "The rule names `os.scandir` as a route through which timestamps are zeroed, but `os.scandir` itself returns directory entries and the timestamps are later obtained through `DirEntry.stat()`; the text does not define how those entries are classified or wrapped.",
+   "question": "Must every `DirEntry.stat()` result be masked according to the path passed to `scandir`, the entry's constructed path, its underlying descriptor, or some other rule, and does the answer change with `follow_symlinks`?",
+   "options": [
+    "Wrap each directory entry and classify its constructed lexical path under the same path rule as `os.stat`.",
+    "Treat directory-entry metadata as descriptor-based and always zero its timestamps.",
+    "Mask only the directory's own stat result, leaving `DirEntry.stat()` unchanged."
+   ],
+   "default_guess": "Wrap each entry and classify its constructed lexical path, without resolving symbolic links, consistently for both values of `follow_symlinks`.",
+   "witness": {
+    "initial": "The function can scan a directory in the read-only runtime containing file `x`.",
+    "events": [
+     "The function calls `os.scandir(runtime_directory)`.",
+     "It calls `entry.stat()` for `x` and returns `st_mtime_ns`."
+    ],
+    "outcomes": [
+     "Path-based classification preserves the runtime file's installed timestamp.",
+     "Descriptor-based treatment zeros the timestamp because the rule says descriptor timestamps are zero."
+    ],
+    "observer": "The run caller sees a fixed release timestamp versus zero."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A03\",\"subject\":\"fresh-import audit trap\",\"kind\":\"ambiguous scope\",\"text\":\"“The audit hook also raises on a fresh import of any module these paths name” does not define whether “these paths” means every trapped entry point in rule 4, only the newly added entry points, or an explicit set of exact module names.\",\"question\":\"Exactly which module names cause a fresh import to record a trap hit, and are names matched exactly or by package/submodule relationship?\",\"options\":[\"Trap fresh imports of every module named anywhere in rule 4, with an explicit exact-name set.\",\"Trap only modules named by the entry points added on 2026-11-03.\",\"Trap a named module and all of its submodules.\"],\"default_guess\":\"Use an explicit exact-name set containing every module that owns a replaced entry point in rule 4.\",\"witness\":{\"initial\":\"The runner has patched `random`, then the function removes `random` from `sys.modules`.\",\"events\":[\"The function freshly imports `random` and calls `random.random()`.\",\"The function catches any import or call exception and otherwise returns the sampled value.\"],\"outcomes\":[\"If `random` is among “these paths,” the import records a trap hit and the execution is `sandbox_violation`.\",\"If only the newly added modules are covered, the fresh import succeeds and can expose an unpatched random module.\"],\"observer\":\"The caller and trace reader see `sandbox_violation` versus a successful execution.\"}},{\"unit\":\"A03\",\"subject\":\"stat-family timestamp masking\",\"kind\":\"undefined fields\",\"text\":\"“A file's timestamps read through `os.stat`, `os.lstat`, `os.fstat`, `os.scandir` and their `posix` namesakes are zero” does not identify which returned fields count as timestamps.\",\"question\":\"Which fields of `stat_result` and `DirEntry.stat()` must be zeroed, including second and nanosecond forms and any platform-provided creation-time fields?\",\"options\":[\"Zero `st_atime`, `st_mtime`, `st_ctime` and all corresponding `*_ns` fields.\",\"Zero only access and modification times.\",\"Zero every time-valued field exposed by the release interpreter, including any creation/birth-time field.\"],\"default_guess\":\"Zero every time-valued stat field exposed by the pinned interpreter, with an explicit release list.\",\"witness\":{\"initial\":\"A scratch file exists and the function may stat it.\",\"events\":[\"The function calls `os.stat` and returns `st_ctime_ns`.\"],\"outcomes\":[\"An implementation treating all stat time fields as timestamps returns zero.\",\"An implementation masking only access and modification times returns the filesystem's nonzero change time.\"],\"observer\":\"The run caller sees different successful output values.\"}},{\"unit\":\"A03\",\"subject\":\"classification of stat paths\",\"kind\":\"undefined path semantics\",\"text\":\"“for every path not under the read-only runtime, judged on the path as the code gives it, without resolving a link” does not say how `.` and `..`, relative paths, `dir_fd`, bytes paths or path-like objects are classified as under the runtime.\",\"question\":\"What exact lexical or descriptor-relative algorithm decides whether a stat-family path is under the read-only runtime?\",\"options\":[\"Normalize `.` and `..` lexically but do not resolve symbolic links, then compare the resulting absolute path with the runtime root.\",\"Compare the supplied path components literally without normalization.\",\"Resolve relative paths against the current directory or `dir_fd`, normalize components, but do not follow symbolic links.\"],\"default_guess\":\"Convert the supplied path relative to its effective directory, normalize `.` and `..` without following symbolic links, and compare components against the runtime root.\",\"witness\":{\"initial\":\"The function has a descriptor for a directory under the read-only runtime and a runtime file named `x`.\",\"events\":[\"The function calls `os.stat(\\\"x\\\", dir_fd=runtime_directory_fd)` and returns its modification time.\"],\"outcomes\":[\"Classifying the effective descriptor-relative path as under the runtime preserves the release timestamp.\",\"Classifying only the literal path string `x` as given treats it as outside the runtime and returns zero.\"],\"observer\":\"The run caller sees the release timestamp versus zero.\"}},{\"unit\":\"A03\",\"subject\":\"`os.scandir` timestamp masking\",\"kind\":\"undefined wrapper behaviour\",\"text\":\"The rule names `os.scandir` as a route through which timestamps are zeroed, but `os.scandir` itself returns directory entries and the timestamps are later obtained through `DirEntry.stat()`; the text does not define how those entries are classified or wrapped.\",\"question\":\"Must every `DirEntry.stat()` result be masked according to the path passed to `scandir`, the entry's constructed path, its underlying descriptor, or some other rule, and does the answer change with `follow_symlinks`?\",\"options\":[\"Wrap each directory entry and classify its constructed lexical path under the same path rule as `os.stat`.\",\"Treat directory-entry metadata as descriptor-based and always zero its timestamps.\",\"Mask only the directory's own stat result, leaving `DirEntry.stat()` unchanged.\"],\"default_guess\":\"Wrap each entry and classify its constructed lexical path, without resolving symbolic links, consistently for both values of `follow_symlinks`.\",\"witness\":{\"initial\":\"The function can scan a directory in the read-only runtime containing file `x`.\",\"events\":[\"The function calls `os.scandir(runtime_directory)`.\",\"It calls `entry.stat()` for `x` and returns `st_mtime_ns`.\"],\"outcomes\":[\"Path-based classification preserves the runtime file's installed timestamp.\",\"Descriptor-based treatment zeros the timestamp because the rule says descriptor timestamps are zero.\"],\"observer\":\"The run caller sees a fixed release timestamp versus zero.\"}}]}",
+ "set_aside": []
+}

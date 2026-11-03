@@ -654,6 +654,7 @@ def test_no_clock_through_other_doors(semantic_runtime):
         "scratch": "import os\nf = os.path.join(os.path.dirname(__file__), 'p')\nopen(f, 'w').close()\ns = os.stat(f)",
         "code": "import os\ns = os.stat(__file__)",
         "proc": "import os\ns = os.stat('/proc/self')",
+        "runtime": "import os\ns = os.stat(os.__file__)",
         "lstat": "import os\ns = os.lstat(__file__)",
         "fstat": "import os\nf = open(__file__)\ns = os.fstat(f.fileno())",
         "posix": "import posix\ns = posix.stat(__file__)",

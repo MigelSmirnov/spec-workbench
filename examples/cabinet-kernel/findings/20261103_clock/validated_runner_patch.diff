@@ -18,7 +18,7 @@ index 4224ffd4..fa2a639f 100644
 +
 +SANDBOX_TIMESTAMP_FUNCTIONS: tuple[str, ...] = ('os.stat', 'os.lstat', 'os.fstat', 'os.scandir', 'posix.stat', 'posix.lstat', 'posix.fstat', 'posix.scandir')
 diff --git a/projects/cabinet_kernel/cabinet_kernel/sandbox_runner.py b/projects/cabinet_kernel/cabinet_kernel/sandbox_runner.py
-index 4389ae66..a694bae6 100644
+index 4389ae66..642400bf 100644
 --- a/projects/cabinet_kernel/cabinet_kernel/sandbox_runner.py
 +++ b/projects/cabinet_kernel/cabinet_kernel/sandbox_runner.py
 @@ -3,7 +3,7 @@ import json
@@ -97,7 +97,7 @@ index 4389ae66..a694bae6 100644
      if event == "open":
          target = args[0]
          if isinstance(target, int):
-@@ -521,6 +539,77 @@ def audit_hook(event, args):
+@@ -521,6 +539,71 @@ def audit_hook(event, args):
  
  sys.addaudithook(audit_hook)
  
@@ -108,13 +108,6 @@ index 4389ae66..a694bae6 100644
 +        "st_atime_ns": 0, "st_mtime_ns": 0, "st_ctime_ns": 0,
 +        "st_blksize": result.st_blksize, "st_blocks": result.st_blocks, "st_rdev": result.st_rdev,
 +    })
-+
-+
-+def timestamps_are_fixed(target):
-+    if isinstance(target, int):
-+        return False
-+    resolved = os.path.abspath(os.fsdecode(target))
-+    return any(resolved == root or resolved.startswith(root.rstrip("/") + "/") for root in configuration["readable_paths"])
 +
 +
 +class ZeroedEntry:
@@ -129,7 +122,7 @@ index 4389ae66..a694bae6 100644
 +
 +    def stat(self, **keywords):
 +        result = self._entry.stat(**keywords)
-+        return result if timestamps_are_fixed(self._entry.path) else zeroed_stat(result)
++        return zeroed_stat(result)
 +
 +
 +class ZeroedIterator:
@@ -155,7 +148,7 @@ index 4389ae66..a694bae6 100644
 +def zero_stat_function(original):
 +    def trapped_stat(target, *arguments, **keywords):
 +        result = original(target, *arguments, **keywords)
-+        return result if timestamps_are_fixed(target) else zeroed_stat(result)
++        return zeroed_stat(result)
 +    return trapped_stat
 +
 +
@@ -165,6 +158,7 @@ index 4389ae66..a694bae6 100644
 +    return trapped_scandir
 +
 +
++sys.dont_write_bytecode = True
 +for timestamp_path in configuration["zero_timestamps"]:
 +    timestamp_module_name, _, timestamp_name = timestamp_path.rpartition(".")
 +    timestamp_module = importlib.import_module(timestamp_module_name)
@@ -175,7 +169,7 @@ index 4389ae66..a694bae6 100644
  task_creation_lock = threading.RLock()
  original_fork = os.fork
  original_start_new_thread = _thread.start_new_thread
-@@ -746,6 +835,7 @@ try:
+@@ -746,6 +829,7 @@ try:
          raise ImportError(configuration["code_file"])
  
      code_module = importlib.util.module_from_spec(module_specification)

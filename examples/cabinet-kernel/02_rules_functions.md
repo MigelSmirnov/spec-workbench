@@ -209,10 +209,9 @@ and no detection promises the runtime cannot keep.
    hook also raises on a fresh import of any module these paths name, so taking a
    trapped module out of `sys.modules` and importing it anew is a trap hit. A file's
    timestamps read through `os.stat`, `os.lstat`, `os.fstat`, `os.scandir` and their
-   `posix` namesakes are zero for a descriptor and for every path not under the
-   read-only runtime, judged on the path as the code gives it, without resolving a
-   link; a file of the runtime keeps the timestamps its release installed, which
-   are no clock because they never change. The list is closed for the release;
+   `posix` namesakes are zero, whatever the file. The runner writes no bytecode, so
+   a module of the standard library that its file's zero timestamp leaves without a
+   valid cached form is compiled from its source. The list is closed for the release;
    an entry point found missing is a defect of that release, and a new release adds it. "Every function the
    module exports" is the release interpreter's `random.__all__` without the
    classes `Random` and `SystemRandom`; for release v1 (CPython 3.12, A20 rule 3)

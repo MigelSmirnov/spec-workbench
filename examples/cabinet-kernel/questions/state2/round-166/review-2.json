@@ -1,0 +1,128 @@
+{
+ "open_points": [
+  {
+   "unit": "A04",
+   "subject": "AdmissionVerdict reuse after the A03 sandbox change",
+   "kind": "release-invalidated evidence unspecified",
+   "text": "A04 rule 2 says an existing AdmissionVerdict for an implementation and current corpus digest \"is used\", while the changed A03 makes previously permitted executions hit new sandbox traps; neither verdict identity nor reuse includes the sandbox release.",
+   "question": "After upgrading to this release, may an AdmissionVerdict produced under the former A03 rules still admit and activate an implementation, or must admission run again under the changed sandbox rules?",
+   "options": [
+    "Reuse the existing verdict because implementation and corpus identities are unchanged.",
+    "Invalidate or distinguish verdicts by sandbox release and rerun admission.",
+    "Keep existing activations but rerun admission only when the implementation is submitted again."
+   ],
+   "default_guess": "Rerun admission whenever the sandbox release differs from the release that produced the verdict.",
+   "witness": {
+    "initial": "Under the previous release, a nonempty corpus exists and an implementation calling time.clock_gettime is admitted; another implementation is currently active when the installation is upgraded.",
+    "events": [
+     "An authoring agent resubmits the clock_gettime implementation under the changed release."
+    ],
+    "outcomes": [
+     "A04 reuses its existing admitted verdict and activates it without execution.",
+     "The changed A03 requires fresh admission; clock_gettime records a trap, the verdict is refused, and the serving activation is unchanged."
+    ],
+    "observer": "The submitting agent, and anyone starting a later run of the slot."
+   }
+  },
+  {
+   "unit": "A03",
+   "subject": "Modules covered by the fresh-import trap",
+   "kind": "ambiguous antecedent",
+   "text": "\"The audit hook also raises on a fresh import of any module these paths name\" follows a newly appended list, while the rule contains an earlier list of other trapped paths such as uuid.uuid1, uuid.uuid4, random and secrets.",
+   "question": "Does the fresh-import rule cover every module named anywhere in rule 4's complete replacement list, or only modules named in the newly appended list beginning with time.clock_gettime?",
+   "options": [
+    "Trap fresh imports of every module named by the complete rule-4 replacement list.",
+    "Trap only modules named by the newly appended entry-point list.",
+    "Trap a separately enumerated closed set of module names."
+   ],
+   "default_guess": "Trap fresh imports of every module named by the complete replacement list.",
+   "witness": {
+    "initial": "The runner has installed its replacements and the implementation begins executing.",
+    "events": [
+     "The implementation removes uuid from sys.modules.",
+     "It imports uuid anew but calls no UUID or time function, then returns a conforming constant output."
+    ],
+    "outcomes": [
+     "uuid is among all modules named by trapped paths, so the import itself records a trap and the execution is sandbox_violation.",
+     "uuid is not in the appended list to which \"these paths\" refers, so the import succeeds and the execution succeeds."
+    ],
+    "observer": "The agent reading the TrialExecution or NodeExecution."
+   }
+  },
+  {
+   "unit": "A03",
+   "subject": "Classification of stat paths as under the read-only runtime",
+   "kind": "path semantics unspecified",
+   "text": "\"for every path not under the read-only runtime, judged on the path as the code gives it, without resolving a link\" does not say how relative paths, dot segments, PathLike or bytes values, or os.stat calls using dir_fd are classified.",
+   "question": "What exact lexical operation determines whether a stat-family path is under the runtime, especially when the supplied path is relative or is interpreted relative to dir_fd?",
+   "options": [
+    "Judge only the literal supplied pathname, without making it absolute or applying dir_fd.",
+    "Lexically normalize dot segments and resolve relative paths against the working directory or dir_fd, but do not follow symbolic links.",
+    "Judge the actual target path while declining only symbolic-link resolution."
+   ],
+   "default_guess": "Convert relative paths using the applicable working-directory or dir_fd path and lexically normalize dot segments, without following symbolic links.",
+   "witness": {
+    "initial": "The implementation can open a directory descriptor for the read-only runtime and that directory contains lib.py with its fixed release timestamp.",
+    "events": [
+     "The implementation calls os.stat(\"lib.py\", dir_fd=runtime_fd).st_mtime."
+    ],
+    "outcomes": [
+     "The supplied path is literally \"lib.py\", which is not under the runtime, so the result is zero.",
+     "The dir_fd makes the pathname a runtime path, so the result is the timestamp installed by the release."
+    ],
+    "observer": "The function caller through the returned output and its digest."
+   }
+  },
+  {
+   "unit": "A03",
+   "subject": "Fields zeroed in stat-family results",
+   "kind": "incomplete field definition",
+   "text": "\"A file's timestamps read through os.stat, os.lstat, os.fstat, os.scandir and their posix namesakes are zero\" does not enumerate the timestamp fields or state whether both second-valued and nanosecond-valued fields are rewritten.",
+   "question": "Which members of stat_result and DirEntry.stat results must be zeroed, including st_atime, st_mtime, st_ctime and their *_ns forms?",
+   "options": [
+    "Zero every timestamp-valued member exposed by the release interpreter, including all *_ns members.",
+    "Zero only st_atime, st_mtime and st_ctime and leave the *_ns members unchanged.",
+    "Zero a specifically enumerated closed set of fields."
+   ],
+   "default_guess": "Zero st_atime, st_mtime, st_ctime and all corresponding *_ns fields exposed by CPython 3.12.",
+   "witness": {
+    "initial": "A scratch file exists and its underlying filesystem metadata has a nonzero modification time.",
+    "events": [
+     "The implementation calls os.stat on it and returns both st_mtime and st_mtime_ns."
+    ],
+    "outcomes": [
+     "Both values are zero because both are timestamps.",
+     "st_mtime is zero but st_mtime_ns retains the filesystem value because only the conventional timestamp members were rewritten."
+    ],
+    "observer": "The agent or owner receiving the function output."
+   }
+  },
+  {
+   "unit": "A03",
+   "subject": "Availability of /proc in the sandbox",
+   "kind": "required-test contradiction",
+   "text": "Rule 1 and its formal invariant describe the environment as containing only the runtime, code, inputs and exchange directory and say no host directory is mounted except the runtime and exchange directory, while required test 13 requires a timestamp read \"on ... /proc\" to read zero.",
+   "question": "Must the sandbox mount a private proc filesystem so /proc exists, or must /proc be absent under the closed environment described by rule 1?",
+   "options": [
+    "Mount a private proc filesystem for the new PID namespace and sanitize its stat timestamps.",
+    "Do not mount /proc; access to it fails because it is outside the stated environment.",
+    "Require only that, if /proc happens to exist, its timestamps are zero."
+   ],
+   "default_guess": "Mount a private proc filesystem and sanitize its stat timestamps, because required test 13 otherwise cannot pass.",
+   "witness": {
+    "initial": "A fresh sandbox is created exactly as rule 1 describes.",
+    "events": [
+     "The implementation calls os.stat(\"/proc\") and catches FileNotFoundError so it can return a conforming result in either environment."
+    ],
+    "outcomes": [
+     "Under the closed environment, /proc is absent and the function reports that absence.",
+     "Under required test 13, /proc exists and its timestamp is returned as zero."
+    ],
+    "observer": "The function caller and the verifier running required test 13."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A04\",\"subject\":\"AdmissionVerdict reuse after the A03 sandbox change\",\"kind\":\"release-invalidated evidence unspecified\",\"text\":\"A04 rule 2 says an existing AdmissionVerdict for an implementation and current corpus digest \\\"is used\\\", while the changed A03 makes previously permitted executions hit new sandbox traps; neither verdict identity nor reuse includes the sandbox release.\",\"question\":\"After upgrading to this release, may an AdmissionVerdict produced under the former A03 rules still admit and activate an implementation, or must admission run again under the changed sandbox rules?\",\"options\":[\"Reuse the existing verdict because implementation and corpus identities are unchanged.\",\"Invalidate or distinguish verdicts by sandbox release and rerun admission.\",\"Keep existing activations but rerun admission only when the implementation is submitted again.\"],\"default_guess\":\"Rerun admission whenever the sandbox release differs from the release that produced the verdict.\",\"witness\":{\"initial\":\"Under the previous release, a nonempty corpus exists and an implementation calling time.clock_gettime is admitted; another implementation is currently active when the installation is upgraded.\",\"events\":[\"An authoring agent resubmits the clock_gettime implementation under the changed release.\"],\"outcomes\":[\"A04 reuses its existing admitted verdict and activates it without execution.\",\"The changed A03 requires fresh admission; clock_gettime records a trap, the verdict is refused, and the serving activation is unchanged.\"],\"observer\":\"The submitting agent, and anyone starting a later run of the slot.\"}},{\"unit\":\"A03\",\"subject\":\"Modules covered by the fresh-import trap\",\"kind\":\"ambiguous antecedent\",\"text\":\"\\\"The audit hook also raises on a fresh import of any module these paths name\\\" follows a newly appended list, while the rule contains an earlier list of other trapped paths such as uuid.uuid1, uuid.uuid4, random and secrets.\",\"question\":\"Does the fresh-import rule cover every module named anywhere in rule 4's complete replacement list, or only modules named in the newly appended list beginning with time.clock_gettime?\",\"options\":[\"Trap fresh imports of every module named by the complete rule-4 replacement list.\",\"Trap only modules named by the newly appended entry-point list.\",\"Trap a separately enumerated closed set of module names.\"],\"default_guess\":\"Trap fresh imports of every module named by the complete replacement list.\",\"witness\":{\"initial\":\"The runner has installed its replacements and the implementation begins executing.\",\"events\":[\"The implementation removes uuid from sys.modules.\",\"It imports uuid anew but calls no UUID or time function, then returns a conforming constant output.\"],\"outcomes\":[\"uuid is among all modules named by trapped paths, so the import itself records a trap and the execution is sandbox_violation.\",\"uuid is not in the appended list to which \\\"these paths\\\" refers, so the import succeeds and the execution succeeds.\"],\"observer\":\"The agent reading the TrialExecution or NodeExecution.\"}},{\"unit\":\"A03\",\"subject\":\"Classification of stat paths as under the read-only runtime\",\"kind\":\"path semantics unspecified\",\"text\":\"\\\"for every path not under the read-only runtime, judged on the path as the code gives it, without resolving a link\\\" does not say how relative paths, dot segments, PathLike or bytes values, or os.stat calls using dir_fd are classified.\",\"question\":\"What exact lexical operation determines whether a stat-family path is under the runtime, especially when the supplied path is relative or is interpreted relative to dir_fd?\",\"options\":[\"Judge only the literal supplied pathname, without making it absolute or applying dir_fd.\",\"Lexically normalize dot segments and resolve relative paths against the working directory or dir_fd, but do not follow symbolic links.\",\"Judge the actual target path while declining only symbolic-link resolution.\"],\"default_guess\":\"Convert relative paths using the applicable working-directory or dir_fd path and lexically normalize dot segments, without following symbolic links.\",\"witness\":{\"initial\":\"The implementation can open a directory descriptor for the read-only runtime and that directory contains lib.py with its fixed release timestamp.\",\"events\":[\"The implementation calls os.stat(\\\"lib.py\\\", dir_fd=runtime_fd).st_mtime.\"],\"outcomes\":[\"The supplied path is literally \\\"lib.py\\\", which is not under the runtime, so the result is zero.\",\"The dir_fd makes the pathname a runtime path, so the result is the timestamp installed by the release.\"],\"observer\":\"The function caller through the returned output and its digest.\"}},{\"unit\":\"A03\",\"subject\":\"Fields zeroed in stat-family results\",\"kind\":\"incomplete field definition\",\"text\":\"\\\"A file's timestamps read through os.stat, os.lstat, os.fstat, os.scandir and their posix namesakes are zero\\\" does not enumerate the timestamp fields or state whether both second-valued and nanosecond-valued fields are rewritten.\",\"question\":\"Which members of stat_result and DirEntry.stat results must be zeroed, including st_atime, st_mtime, st_ctime and their *_ns forms?\",\"options\":[\"Zero every timestamp-valued member exposed by the release interpreter, including all *_ns members.\",\"Zero only st_atime, st_mtime and st_ctime and leave the *_ns members unchanged.\",\"Zero a specifically enumerated closed set of fields.\"],\"default_guess\":\"Zero st_atime, st_mtime, st_ctime and all corresponding *_ns fields exposed by CPython 3.12.\",\"witness\":{\"initial\":\"A scratch file exists and its underlying filesystem metadata has a nonzero modification time.\",\"events\":[\"The implementation calls os.stat on it and returns both st_mtime and st_mtime_ns.\"],\"outcomes\":[\"Both values are zero because both are timestamps.\",\"st_mtime is zero but st_mtime_ns retains the filesystem value because only the conventional timestamp members were rewritten.\"],\"observer\":\"The agent or owner receiving the function output.\"}},{\"unit\":\"A03\",\"subject\":\"Availability of /proc in the sandbox\",\"kind\":\"required-test contradiction\",\"text\":\"Rule 1 and its formal invariant describe the environment as containing only the runtime, code, inputs and exchange directory and say no host directory is mounted except the runtime and exchange directory, while required test 13 requires a timestamp read \\\"on ... /proc\\\" to read zero.\",\"question\":\"Must the sandbox mount a private proc filesystem so /proc exists, or must /proc be absent under the closed environment described by rule 1?\",\"options\":[\"Mount a private proc filesystem for the new PID namespace and sanitize its stat timestamps.\",\"Do not mount /proc; access to it fails because it is outside the stated environment.\",\"Require only that, if /proc happens to exist, its timestamps are zero.\"],\"default_guess\":\"Mount a private proc filesystem and sanitize its stat timestamps, because required test 13 otherwise cannot pass.\",\"witness\":{\"initial\":\"A fresh sandbox is created exactly as rule 1 describes.\",\"events\":[\"The implementation calls os.stat(\\\"/proc\\\") and catches FileNotFoundError so it can return a conforming result in either environment.\"],\"outcomes\":[\"Under the closed environment, /proc is absent and the function reports that absence.\",\"Under required test 13, /proc exists and its timestamp is returned as zero.\"],\"observer\":\"The function caller and the verifier running required test 13.\"}}]}",
+ "set_aside": []
+}

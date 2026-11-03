@@ -1,0 +1,160 @@
+{
+ "open_points": [
+  {
+   "unit": "A03",
+   "subject": "fresh imports of trapped modules",
+   "kind": "ambiguous scope",
+   "text": "“The audit hook also raises on a fresh import of any module these paths name”",
+   "question": "Exactly which module names are covered: every module named anywhere in rule 4’s full replacement list, or only the modules named by the newly added entry points?",
+   "options": [
+    "Every module named by any trapped path in rule 4, including uuid, secrets, random and datetime",
+    "Only time, os, posix, resource, _datetime, sqlite3, _sqlite3 and importlib from the added passage",
+    "A separately enumerated closed module-name set"
+   ],
+   "default_guess": "Trap a fresh import of every module named by any entry point in the full rule-4 list.",
+   "witness": {
+    "initial": "The runner has patched and cached `uuid`; the implementation has not yet run.",
+    "events": [
+     "The implementation removes `uuid` from `sys.modules`.",
+     "The implementation imports `uuid` afresh and returns a conforming constant without calling a UUID function."
+    ],
+    "outcomes": [
+     "The import itself records a trap and the execution is `sandbox_violation`.",
+     "`uuid` is outside the newly added module set, so the import succeeds and the execution succeeds."
+    ],
+    "observer": "The agent reading the TrialExecution or NodeExecution"
+   }
+  },
+  {
+   "unit": "A03",
+   "subject": "meaning of a fresh import",
+   "kind": "undefined event",
+   "text": "“raises on a fresh import”",
+   "question": "What exact event counts as a fresh import: any import-system load after the name is absent from `sys.modules`, only a direct import statement by the implementation, or also a transitive import performed by another standard-library module?",
+   "options": [
+    "Any attempted module load while the target name is absent from `sys.modules`, direct or transitive",
+    "Only a direct import requested by the implementation module",
+    "Only a successful re-execution of the target module’s loader"
+   ],
+   "default_guess": "Treat any direct or transitive load attempt for an absent covered module as a trap hit, before its loader executes.",
+   "witness": {
+    "initial": "A covered module has been removed from `sys.modules`; an otherwise allowed standard-library module that imports it is also absent.",
+    "events": [
+     "The implementation imports the otherwise allowed module.",
+     "That module attempts to import the covered module as a dependency."
+    ],
+    "outcomes": [
+     "The transitive load is a fresh import, so the execution is `sandbox_violation`.",
+     "Only the implementation’s direct import is considered, so the dependency loads and execution may succeed."
+    ],
+    "observer": "The agent reading the execution outcome"
+   }
+  },
+  {
+   "unit": "A03",
+   "subject": "classification of stat paths under the runtime",
+   "kind": "undefined path semantics",
+   "text": "“for every path not under the read-only runtime, judged on the path as the code gives it, without resolving a link”",
+   "question": "How is “under” decided for relative paths and paths containing `.`, `..`, repeated separators, bytes, or `PathLike` values; in particular, are dot segments normalized before the runtime-boundary check?",
+   "options": [
+    "Pure lexical prefix check on the supplied spelling",
+    "Normalize separators and dot segments but do not resolve symbolic links",
+    "Resolve the path relative to its directory or `dir_fd`, while declining only symbolic-link resolution"
+   ],
+   "default_guess": "Convert through `os.fspath`, resolve relative location and normalize dot segments, but do not follow symbolic links; zero timestamps if the normalized location is outside the runtime.",
+   "witness": {
+    "initial": "The runtime is mounted at `/sandbox/runtime`; the exchange directory is `/sandbox/exchange`; the implementation has created `/sandbox/exchange/x`.",
+    "events": [
+     "The implementation calls `os.stat('/sandbox/runtime/../exchange/x')`.",
+     "It returns the timestamp fields as an output."
+    ],
+    "outcomes": [
+     "A lexical-prefix reading classifies the supplied spelling as under the runtime and exposes the scratch file’s nonzero timestamps.",
+     "A dot-normalized reading classifies the actual path outside the runtime and returns zero timestamps."
+    ],
+    "observer": "The caller receiving the function output and the admission verdict derived from it"
+   }
+  },
+  {
+   "unit": "A03",
+   "subject": "symbolic links below the runtime",
+   "kind": "rule contradiction",
+   "text": "“judged on the path as the code gives it, without resolving a link” versus “a file of the runtime keeps the timestamps its release installed, which are no clock because they never change”",
+   "question": "What happens when a path lexically below the runtime is a symbolic link to a changing file outside it?",
+   "options": [
+    "Classify solely by the supplied runtime path and preserve the target’s real timestamps",
+    "Follow enough of the link to classify the target and zero its timestamps",
+    "Require the release runtime to contain no symbolic link that can escape the runtime",
+    "Refuse stat through such a link"
+   ],
+   "default_guess": "Require runtime links to remain within the runtime and zero or refuse an escaping target.",
+   "witness": {
+    "initial": "The release runtime contains `/sandbox/runtime/to_exchange`, a symbolic link to `/sandbox/exchange/x`; the implementation may create `x` in its exchange directory.",
+    "events": [
+     "The implementation creates `/sandbox/exchange/x`.",
+     "It calls `os.stat('/sandbox/runtime/to_exchange')` and returns the modification time."
+    ],
+    "outcomes": [
+     "The supplied path is under the runtime, so the followed target’s current timestamp is preserved, exposing a clock-dependent value.",
+     "Because the target is outside the runtime and its timestamp can change, the timestamp is zeroed or the access is refused to preserve the no-clock rule."
+    ],
+    "observer": "The caller receiving the function output"
+   }
+  },
+  {
+   "unit": "A03",
+   "subject": "location and timestamp class of the implementation code file",
+   "kind": "test-rule gap",
+   "text": "Rule 1 gives the environment “a read-only runtime, and one private exchange directory”, while required test 13 requires “the code file … reads zero”; no rule places the implementation’s code file on either side of the timestamp boundary.",
+   "question": "Where is `cabinet_sandbox_code` stored or mounted, and is its `__file__` always classified outside the read-only runtime so that its timestamps must be zero?",
+   "options": [
+    "The code file is in the exchange or another non-runtime location and has zero timestamps",
+    "The code file is mounted read-only below the runtime and keeps release or materialization timestamps",
+    "The code file has a separately stated timestamp rule independent of its path"
+   ],
+   "default_guess": "Place the implementation file outside the runtime tree and return zero for all of its stat timestamps.",
+   "witness": {
+    "initial": "An admitted implementation returns timestamp information obtained from `os.stat(__file__)`.",
+    "events": [
+     "One sandbox mounts the generated module below its read-only runtime tree.",
+     "Another mounts it in the private exchange area.",
+     "Each executes the same implementation on the same input."
+    ],
+    "outcomes": [
+     "The runtime-mounted code file keeps nonzero timestamps under the normative path rule.",
+     "The exchange-mounted code file returns zero, as required test 13 expects."
+    ],
+    "observer": "The caller comparing the two output digests"
+   }
+  },
+  {
+   "unit": "A03",
+   "subject": "timestamps retained for runtime files",
+   "kind": "unspecified release data",
+   "text": "“a file of the runtime keeps the timestamps its release installed, which are no clock because they never change”",
+   "question": "What exact timestamp values belong to a release, where are they recorded, and what guarantees that two installations and later starts of the same release expose the same immutable values rather than build, extraction or host-modification times?",
+   "options": [
+    "Exact timestamps are fixed release data and reproduced identically by every installation",
+    "Whatever timestamps the packaged runtime files happen to have at installation are exposed",
+    "Runtime timestamps are normalized to one stated constant value",
+    "Determinism is required only within one running installation, so installations may differ"
+   ],
+   "default_guess": "Make the complete runtime timestamp set fixed release data, normalized and immutable across installations of that release.",
+   "witness": {
+    "initial": "Two installations run the same kernel release and the same implementation; their runtime trees were extracted at different times.",
+    "events": [
+     "The implementation stats `os.__file__`.",
+     "It returns the runtime file’s modification timestamp."
+    ],
+    "outcomes": [
+     "Each installation exposes its extraction or packaging timestamp, producing different output digests for equal code and inputs.",
+     "The release fixes or normalizes the timestamp, so both installations produce the same output digest."
+    ],
+    "observer": "The owner or agent comparing trial or run outputs across installations"
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A03\",\"subject\":\"fresh imports of trapped modules\",\"kind\":\"ambiguous scope\",\"text\":\"“The audit hook also raises on a fresh import of any module these paths name”\",\"question\":\"Exactly which module names are covered: every module named anywhere in rule 4’s full replacement list, or only the modules named by the newly added entry points?\",\"options\":[\"Every module named by any trapped path in rule 4, including uuid, secrets, random and datetime\",\"Only time, os, posix, resource, _datetime, sqlite3, _sqlite3 and importlib from the added passage\",\"A separately enumerated closed module-name set\"],\"default_guess\":\"Trap a fresh import of every module named by any entry point in the full rule-4 list.\",\"witness\":{\"initial\":\"The runner has patched and cached `uuid`; the implementation has not yet run.\",\"events\":[\"The implementation removes `uuid` from `sys.modules`.\",\"The implementation imports `uuid` afresh and returns a conforming constant without calling a UUID function.\"],\"outcomes\":[\"The import itself records a trap and the execution is `sandbox_violation`.\",\"`uuid` is outside the newly added module set, so the import succeeds and the execution succeeds.\"],\"observer\":\"The agent reading the TrialExecution or NodeExecution\"}},{\"unit\":\"A03\",\"subject\":\"meaning of a fresh import\",\"kind\":\"undefined event\",\"text\":\"“raises on a fresh import”\",\"question\":\"What exact event counts as a fresh import: any import-system load after the name is absent from `sys.modules`, only a direct import statement by the implementation, or also a transitive import performed by another standard-library module?\",\"options\":[\"Any attempted module load while the target name is absent from `sys.modules`, direct or transitive\",\"Only a direct import requested by the implementation module\",\"Only a successful re-execution of the target module’s loader\"],\"default_guess\":\"Treat any direct or transitive load attempt for an absent covered module as a trap hit, before its loader executes.\",\"witness\":{\"initial\":\"A covered module has been removed from `sys.modules`; an otherwise allowed standard-library module that imports it is also absent.\",\"events\":[\"The implementation imports the otherwise allowed module.\",\"That module attempts to import the covered module as a dependency.\"],\"outcomes\":[\"The transitive load is a fresh import, so the execution is `sandbox_violation`.\",\"Only the implementation’s direct import is considered, so the dependency loads and execution may succeed.\"],\"observer\":\"The agent reading the execution outcome\"}},{\"unit\":\"A03\",\"subject\":\"classification of stat paths under the runtime\",\"kind\":\"undefined path semantics\",\"text\":\"“for every path not under the read-only runtime, judged on the path as the code gives it, without resolving a link”\",\"question\":\"How is “under” decided for relative paths and paths containing `.`, `..`, repeated separators, bytes, or `PathLike` values; in particular, are dot segments normalized before the runtime-boundary check?\",\"options\":[\"Pure lexical prefix check on the supplied spelling\",\"Normalize separators and dot segments but do not resolve symbolic links\",\"Resolve the path relative to its directory or `dir_fd`, while declining only symbolic-link resolution\"],\"default_guess\":\"Convert through `os.fspath`, resolve relative location and normalize dot segments, but do not follow symbolic links; zero timestamps if the normalized location is outside the runtime.\",\"witness\":{\"initial\":\"The runtime is mounted at `/sandbox/runtime`; the exchange directory is `/sandbox/exchange`; the implementation has created `/sandbox/exchange/x`.\",\"events\":[\"The implementation calls `os.stat('/sandbox/runtime/../exchange/x')`.\",\"It returns the timestamp fields as an output.\"],\"outcomes\":[\"A lexical-prefix reading classifies the supplied spelling as under the runtime and exposes the scratch file’s nonzero timestamps.\",\"A dot-normalized reading classifies the actual path outside the runtime and returns zero timestamps.\"],\"observer\":\"The caller receiving the function output and the admission verdict derived from it\"}},{\"unit\":\"A03\",\"subject\":\"symbolic links below the runtime\",\"kind\":\"rule contradiction\",\"text\":\"“judged on the path as the code gives it, without resolving a link” versus “a file of the runtime keeps the timestamps its release installed, which are no clock because they never change”\",\"question\":\"What happens when a path lexically below the runtime is a symbolic link to a changing file outside it?\",\"options\":[\"Classify solely by the supplied runtime path and preserve the target’s real timestamps\",\"Follow enough of the link to classify the target and zero its timestamps\",\"Require the release runtime to contain no symbolic link that can escape the runtime\",\"Refuse stat through such a link\"],\"default_guess\":\"Require runtime links to remain within the runtime and zero or refuse an escaping target.\",\"witness\":{\"initial\":\"The release runtime contains `/sandbox/runtime/to_exchange`, a symbolic link to `/sandbox/exchange/x`; the implementation may create `x` in its exchange directory.\",\"events\":[\"The implementation creates `/sandbox/exchange/x`.\",\"It calls `os.stat('/sandbox/runtime/to_exchange')` and returns the modification time.\"],\"outcomes\":[\"The supplied path is under the runtime, so the followed target’s current timestamp is preserved, exposing a clock-dependent value.\",\"Because the target is outside the runtime and its timestamp can change, the timestamp is zeroed or the access is refused to preserve the no-clock rule.\"],\"observer\":\"The caller receiving the function output\"}},{\"unit\":\"A03\",\"subject\":\"location and timestamp class of the implementation code file\",\"kind\":\"test-rule gap\",\"text\":\"Rule 1 gives the environment “a read-only runtime, and one private exchange directory”, while required test 13 requires “the code file … reads zero”; no rule places the implementation’s code file on either side of the timestamp boundary.\",\"question\":\"Where is `cabinet_sandbox_code` stored or mounted, and is its `__file__` always classified outside the read-only runtime so that its timestamps must be zero?\",\"options\":[\"The code file is in the exchange or another non-runtime location and has zero timestamps\",\"The code file is mounted read-only below the runtime and keeps release or materialization timestamps\",\"The code file has a separately stated timestamp rule independent of its path\"],\"default_guess\":\"Place the implementation file outside the runtime tree and return zero for all of its stat timestamps.\",\"witness\":{\"initial\":\"An admitted implementation returns timestamp information obtained from `os.stat(__file__)`.\",\"events\":[\"One sandbox mounts the generated module below its read-only runtime tree.\",\"Another mounts it in the private exchange area.\",\"Each executes the same implementation on the same input.\"],\"outcomes\":[\"The runtime-mounted code file keeps nonzero timestamps under the normative path rule.\",\"The exchange-mounted code file returns zero, as required test 13 expects.\"],\"observer\":\"The caller comparing the two output digests\"}},{\"unit\":\"A03\",\"subject\":\"timestamps retained for runtime files\",\"kind\":\"unspecified release data\",\"text\":\"“a file of the runtime keeps the timestamps its release installed, which are no clock because they never change”\",\"question\":\"What exact timestamp values belong to a release, where are they recorded, and what guarantees that two installations and later starts of the same release expose the same immutable values rather than build, extraction or host-modification times?\",\"options\":[\"Exact timestamps are fixed release data and reproduced identically by every installation\",\"Whatever timestamps the packaged runtime files happen to have at installation are exposed\",\"Runtime timestamps are normalized to one stated constant value\",\"Determinism is required only within one running installation, so installations may differ\"],\"default_guess\":\"Make the complete runtime timestamp set fixed release data, normalized and immutable across installations of that release.\",\"witness\":{\"initial\":\"Two installations run the same kernel release and the same implementation; their runtime trees were extracted at different times.\",\"events\":[\"The implementation stats `os.__file__`.\",\"It returns the runtime file’s modification timestamp.\"],\"outcomes\":[\"Each installation exposes its extraction or packaging timestamp, producing different output digests for equal code and inputs.\",\"The release fixes or normalizes the timestamp, so both installations produce the same output digest.\"],\"observer\":\"The owner or agent comparing trial or run outputs across installations\"}}]}",
+ "set_aside": []
+}
