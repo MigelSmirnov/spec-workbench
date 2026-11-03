@@ -64,8 +64,8 @@ def main(argv: list[str] | None = None) -> int:
     ask.add_argument("case", type=Path)
     ask.add_argument("--state", type=int, required=True)
     ask.add_argument("--runs", type=int, default=service.DEFAULT_RUNS)
-    ask.add_argument("--provider", choices=("openai", "codex"), default="openai",
-                     help="codex asks through the Codex CLI login; its rounds are recorded under that provider")
+    ask.add_argument("--provider", choices=("openai", "codex"), default="codex",
+                     help="codex, the standard provider, asks through the Codex CLI login; its rounds are recorded under that provider")
     ask.add_argument("--model")
     ask.add_argument("--reasoning")
     ask.add_argument("--since", help="git ref at which a reopened state was closed")

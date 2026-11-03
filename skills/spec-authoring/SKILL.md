@@ -18,7 +18,7 @@ normative. The method reaches you one phase at a time, from the pipeline — do 
 4. Answer every `Ask:` question in the state document. They are the judgement no gate can make.
 5. Run the gate. A finding names the rule it enforces and the fix. There are no warnings and no waivers
    (`tools/fence.py`): a finding that is not an error is an undecided fact.
-6. Ask the generator's own model what the state still leaves open: the `questions:` command of the phase
+6. Ask a model what the state still leaves open, as the generator would: the `questions:` command of the phase
    (`python tools/design_questions.py ask examples/<case> --state <N>`), States 0–7. A state is closed
    when every unit of it — a section, a decision, for State 7 a generated module's prompt — is clear in
    its two latest reviews on its current text — [QUESTIONS.md](QUESTIONS.md). Gates see form; only this
