@@ -302,8 +302,10 @@ cleanup_unconfirmed -> output_discarded AND kernel_process_stops
     [witness: verification:kernel_a03_unconfirmed_cleanup_stops_kernel]
 12. A module using `dataclasses` under `from __future__ import annotations`, and
     one reading its own entry in `sys.modules`, load and conclude `passed`.
+    [witness: verification:kernel_a03_module_loaded_as_by_import]
 13. `datetime.datetime.now`, `datetime.date.today`, `time.clock_gettime`,
     `time.thread_time` and `os.times` each conclude `sandbox_violation`.
+    [witness: verification:kernel_a03_clock_entry_points_trapped]
 
 ### Consequence
 
