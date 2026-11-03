@@ -971,7 +971,9 @@ A delta review against the previous stamp, by comparing each packet with its pre
 No slice was read again as a whole. A05 rule 1.3 and the `prove_version` note say that an
 edge's source exists as an output of a node or an input of the flow, then its target as an
 input of a node or an output of the flow, a port of the other direction not counting. That is
-the reading the old words implied; `tests/semantic` passes on it, and the deployed draft that
-read them otherwise failed there. Contracts, models, phases and their order are unchanged.
-What moved: the `prove_version` note in `flows`, and the text of A05 in the eight packets that
-carry it. Structural review: 0 blocks. All 19 modules remain PASS.
+the reading the old words implied: of ten sampled `flows` drafts, those that read them this
+way passed the A05 tests on a temporary copy, and the deployed draft and one sample that read
+them otherwise refused every edge at a flow endpoint. Contracts, models, phases and their order
+are unchanged. What moved: the `prove_version` note in `flows`; the text of A05 in the packets of
+`canonical_values`, `bindings` and `flows`; only source line numbers in `run_values`, `functions`,
+`effects`, `runs` and `surface`. Structural review: 0 blocks. All 19 modules remain PASS.
