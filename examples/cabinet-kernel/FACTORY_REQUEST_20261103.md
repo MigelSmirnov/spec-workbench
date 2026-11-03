@@ -20,7 +20,9 @@ Add to `verification/configs/cabinet_kernel.yaml`, as its other witnesses:
 - `kernel_a16_tools_list_serves_every_operation` —
   `test_tools_list_serves_every_operation`.
 
-Then return here: A03 Required test 12 and A16 Required test 13 take their
+- `kernel_a03_no_clock_through_other_doors` — `test_no_clock_through_other_doors`.
+
+Then return here: A03 Required tests 12 and 13 and A16 Required test 13 take their
 `[witness: verification:<name>]` tags. They carry none until then, because
 `design_decision_witness` resolves a tag against that config and an absent check
 is an error.
@@ -35,3 +37,9 @@ Checked 2026-11-03 on `projects/cabinet_kernel` at code-factory `1cdcf9e9`, in a
 temporary copy of the code: both witnesses fail on the accepted code; they pass
 once the runner enters the module in `sys.modules` and `_annotation_schema` unwraps
 `typing.Annotated`. Those two patches were not kept: the code is generated.
+
+The owner's decision of 2026-11-03 keeps K-02 categorical: functions have no clock.
+`findings/20261103_clock/` holds what the probes found and the patch that turned
+`kernel_a03_no_clock_through_other_doors` from red to green with the whole semantic
+suite passing. `data_provider` gains `SANDBOX_TIMESTAMP_FUNCTIONS` and a longer
+`SANDBOX_TRAPPED_FUNCTIONS`, both from `70_data_provider_closure.json`.

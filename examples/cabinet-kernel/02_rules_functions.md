@@ -200,8 +200,18 @@ and no detection promises the runtime cannot keep.
    `random.SystemRandom`, and `random.Random` constructed without a seed or with
    `None`; `random.Random(seed)`
    with an explicit seed stays usable: it draws no entropy, so equal inputs
-   still give equal outputs, which is what State 0's "no randomness" asks. The list is closed for the release; an
-   entry point found missing is added by a new release. "Every function the
+   still give equal outputs, which is what State 0's "no randomness" asks. The replaced entry points also are, since each
+   answers the time: `time.clock_gettime`, `time.clock_gettime_ns`,
+   `time.thread_time`, `time.thread_time_ns`, `os.times`, `posix.times`,
+   `resource.getrusage`, `_datetime.datetime.now`, `_datetime.datetime.utcnow`,
+   `_datetime.datetime.today`, `_datetime.date.today`,
+   `sqlite3.connect` and `_sqlite3.connect`. The audit
+   hook also raises on a fresh import of any module these paths name, so taking a
+   trapped module out of `sys.modules` and importing it anew is a trap hit. A file's
+   timestamps read through `os.stat`, `os.lstat`, `os.fstat`, `os.scandir` and their
+   `posix` namesakes are zero for a descriptor and for every path outside the
+   read-only runtime, whose files do not change. The list is closed for the release;
+   an entry point found missing is a defect of that release, and a new release adds it. "Every function the
    module exports" is the release interpreter's `random.__all__` without the
    classes `Random` and `SystemRandom`; for release v1 (CPython 3.12, A20 rule 3)
    it is, written out: `betavariate`, `binomialvariate`, `choice`, `choices`,
@@ -299,6 +309,9 @@ cleanup_unconfirmed -> output_discarded AND kernel_process_stops
     [witness: verification:kernel_a03_unconfirmed_cleanup_stops_kernel]
 12. A module using `dataclasses` under `from __future__ import annotations`, and
     one reading its own entry in `sys.modules`, load and conclude `passed`.
+13. No clock through the other doors: each entry point of rule 4 added on 2026-11-03,
+    and a fresh import of `time`, concludes `sandbox_violation`; a file's timestamp read
+    through the stat family, on a scratch file, the code file and `/proc`, reads zero.
 
 ### Consequence
 
