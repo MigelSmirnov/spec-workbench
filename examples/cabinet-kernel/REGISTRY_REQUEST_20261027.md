@@ -6,6 +6,10 @@ For the session that next opens this case. The Registry case (spec-workbench
 questions about K-14. None of them is a decision of this case yet: each is
 taken up here, by this case's own rounds and the owner.
 
+**Status, owner 2026-11-03:** open and deferred. Confidentiality is a goal of the platform,
+so section 2 matters, but it is taken up separately, not in the 2026-11-03 change. Registry
+itself is not in work now.
+
 ## 1. Requirement: Kernel names the agent session from its run context (Registry R0-77)
 
 Registry gives each agent session its own set of projects (R0-46). On every
