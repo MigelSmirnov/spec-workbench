@@ -799,12 +799,55 @@ def test_agent_code_not_run_in_kernel(semantic_runtime):
     assert not marker.exists()
 
 
+def _request_model(operation):
+    """The request model of a catalogue operation, by the name decision 58's script reads."""
+    from cabinet_kernel import models
+
+    return getattr(models, "".join(part.capitalize() for part in operation.split("_")) + "Request")
+
+
+def _request_schema(annotation):
+    """Decision 58's rule, derived on its own from the emitted models."""
+    import enum
+    import types
+    import typing
+
+    from pydantic import BaseModel
+
+    if annotation is str:
+        return {"type": "string"}
+    if annotation is int:
+        return {"type": "integer"}
+    if annotation is type(None):
+        return {"type": "null"}
+    origin = typing.get_origin(annotation)
+    arguments = typing.get_args(annotation)
+    if origin is typing.Annotated:
+        return _request_schema(arguments[0])
+    if origin is typing.Literal:
+        return {"const": arguments[0]}
+    if origin is tuple:
+        return {"type": "array", "items": _request_schema(arguments[0])}
+    if origin in (typing.Union, types.UnionType):
+        return {"anyOf": [_request_schema(argument) for argument in arguments]}
+    if issubclass(annotation, enum.Enum):
+        return {"type": "string", "enum": [member.value for member in annotation]}
+    assert issubclass(annotation, BaseModel), annotation
+    fields = annotation.model_fields
+    return {
+        "type": "object",
+        "properties": {name: _request_schema(field.annotation) for name, field in fields.items()},
+        "required": [name for name, field in fields.items() if type(None) not in typing.get_args(field.annotation)],
+        "additionalProperties": False,
+    }
+
+
 def test_tools_list_serves_every_operation(semantic_runtime):
     """[witness: verification:kernel_a16_tools_list_serves_every_operation]
 
     A16 Required test 13: ``tools/list`` is the entrance's discovery method. It
-    derives the schema of every catalogue operation by the rule of the
-    ``answer_request`` note, a discriminated union as ``anyOf`` of its variants.
+    answers the schema of every catalogue operation from the ``data_provider``
+    constants of decision 58, a discriminated union as ``anyOf`` of its variants.
     Found by the Registry pilot of 2026-10-31
     (``findings/20261031_registry_pilot/``): the derivation raised on the
     request of ``add_trial_case`` and of ``list_records``, the answer was
@@ -822,6 +865,11 @@ def test_tools_list_serves_every_operation(semantic_runtime):
     variants = inputs["items"]["anyOf"]
     assert len(variants) >= 2
     assert all(variant["type"] == "object" for variant in variants)
+
+    # Decision 58: every schema is what the rule gives on the emitted model, so
+    # a request model changed without build_tool_schemas.py fails here.
+    for name, schema in tools.items():
+        assert schema == _request_schema(_request_model(name)), name
 
     # Asking again changes nothing, and the kernel still serves.
     again = semantic_runtime.mcp_discovery("tools/list", token=author_token)

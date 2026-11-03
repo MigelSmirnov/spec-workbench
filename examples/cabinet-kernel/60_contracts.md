@@ -244,8 +244,8 @@ each the narrowest the MCP specification allows.
       notification and the server `MCP_SERVER_NAME` / `MCP_SERVER_VERSION`,
       whatever version the client asked; `ping` answers an empty result;
       `tools/list` answers one tool per catalogue operation, in catalogue
-      order, without pagination, its `inputSchema` derived from the
-      operation's request model by a closed rule (State 7); `tools/call`
+      order, without pagination, its `inputSchema` the `data_provider`
+      constant of decision 58; `tools/call`
       runs the operation. A batch, an unknown method, or a call whose name
       is no catalogue operation is a JSON-RPC error.
     - *Answers.* An operation's answer is a tool result with one text
@@ -2056,6 +2056,24 @@ why.
       A18 rule 4); attempt numbers; which runs' spools are removed (`runs`);
       `FileFacts` from the returned digest, the content's length and the media
       type; and the reading of a record before its bytes.
+
+58. **The `tools/list` schemas are `data_provider` constants.** Decision 22's
+    closed rule for `inputSchema` stood in the `answer_request` note as a table
+    of JSON forms, data in prose (SPEC_STANDARD §2, §15.3), and each generation
+    wrote its own walk over the request models: ten samples of 2026-11-03 failed
+    it in seven, and the first Route B after them failed it on `None`. Nothing
+    of this walk needs a choice, so no generator writes it.
+    - *The constants.* `MCP_CATALOGUE_OPERATIONS` (`string_tuple`) holds the
+      State 5 catalogue order; `MCP_TOOL_INPUT_SCHEMAS` (`string_mapping`) holds
+      each operation's schema as JSON text. A mapping is emitted sorted by key,
+      so the order needs its own constant.
+    - *The rule and its home.* The rule is unchanged and lives in
+      `experiments/cabinet-kernel/build_tool_schemas.py`, which builds both
+      constants from State 5 and the specification's request models. A changed
+      request model needs that script run again.
+    - *Drift.* `test_tools_list_serves_every_operation` derives every schema
+      from the emitted models by the same rule on its own and compares it with
+      the answer, so a model changed without the script fails that witness.
 
 ## Texts of earlier states changed by State 6
 
