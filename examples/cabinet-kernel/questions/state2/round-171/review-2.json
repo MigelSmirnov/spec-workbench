@@ -1,0 +1,110 @@
+{
+ "open_points": [
+  {
+   "unit": "A03",
+   "subject": "sandbox environment own_proc",
+   "kind": "undefined environment member",
+   "text": "environment = {python_stdlib_runtime, code, inputs, exchange_dir, own_proc}; rule 4 traps opening any path outside the exchange directory and the read-only runtime",
+   "question": "What exactly is own_proc: whether and where a private proc filesystem is mounted, which entries and access modes it exposes, and whether accesses to it are permitted or must trigger the outside-path trap?",
+   "options": [
+    "Mount a private proc filesystem but leave all user-code path access trapped",
+    "Mount a private proc filesystem and exempt it from the path trap",
+    "Treat own_proc as the PID namespace/process set without mounting a proc filesystem"
+   ],
+   "default_guess": "Mount a private proc filesystem at /proc for the sandbox PID namespace, while retaining the stated path trap for direct user-code access.",
+   "witness": {
+    "initial": "A host supports bubblewrap PID namespaces and a function execution is started.",
+    "events": [
+     "The sandbox builder interprets own_proc while constructing the execution environment.",
+     "An isolation test inspects the execution's mounts from outside the sandbox."
+    ],
+    "outcomes": [
+     "The test sees a private proc filesystem mounted at /proc.",
+     "The test sees no proc filesystem because own_proc was interpreted as only the private process namespace."
+    ],
+    "observer": "The release verifier and host operator"
+   }
+  },
+  {
+   "unit": "A03",
+   "subject": "repeatability of function executions",
+   "kind": "contradictory determinism condition",
+   "text": "An implementation that obtains no time and no chance yields the same output digest twice on the same input.",
+   "question": "Does the sandbox have to eliminate every other source of varying observable state, or is equal output promised only for a narrower, unstated class of implementations beyond obtaining no time and no chance?",
+   "options": [
+    "Stabilize or trap all other varying observations available from the standard library and host",
+    "Allow the closed trap list and fresh sandbox as written, even when another observation changes the output",
+    "Define obtains no time and no chance broadly enough to include every nondeterministic observation"
+   ],
+   "default_guess": "Treat the promise as requiring the sandbox to exclude every varying external observation, not merely the listed clocks and random APIs.",
+   "witness": {
+    "initial": "An admitted function returns os.cpu_count() and uses no clock or randomness API; the same release and input are used twice.",
+    "events": [
+     "The function executes and returns the current CPU count.",
+     "The host's visible CPU topology changes.",
+     "The function executes again on the same input."
+    ],
+    "outcomes": [
+     "The second output digest differs, as permitted by the closed trap list and unpinned host observation.",
+     "The second output digest must be equal because the function obtained neither time nor chance."
+    ],
+    "observer": "The caller comparing the executions and the A03 conformance test"
+   }
+  },
+  {
+   "unit": "A14",
+   "subject": "restart recovery of an unfinished function",
+   "kind": "contradictory replay guarantee",
+   "text": "Restarting the kernel during a function execution executes it again, with the same output digest when it obtains no time and no chance",
+   "question": "When an unfinished function observes varying state other than a clock or randomness, must recovery reproduce the original unrecorded execution's output, or may the re-execution produce a different digest?",
+   "options": [
+    "Recovery must reproduce the digest, requiring all other observations to be stabilized",
+    "Recovery may produce a different digest because only effects, not deterministic output, are required for safety",
+    "Every varying observation is deemed obtaining chance and excludes the function from the guarantee"
+   ],
+   "default_guess": "Permit recovery to use the re-execution's result, but do not promise the same digest unless all nondeterministic observations are excluded.",
+   "witness": {
+    "initial": "A function returning os.cpu_count() is executing when the kernel stops before writing its NodeExecution.",
+    "events": [
+     "The first execution observes one CPU count but its conclusion is not recorded.",
+     "The host's visible CPU topology changes.",
+     "The kernel restarts and A14 re-executes the function on the same input."
+    ],
+    "outcomes": [
+     "Recovery records the newly observed, different output digest.",
+     "Recovery is required to record the same digest the interrupted execution would have produced."
+    ],
+    "observer": "The run owner reading the recovered output and trace"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "scope of repeatability promises",
+   "kind": "unverifiable applicability condition",
+   "text": "Every promise in these documents that a function repeats itself — equal outputs on equal inputs, a repaired slot staying repaired, a verdict that holds — is a promise about code that obtains neither.",
+   "question": "Is obtains neither a property of the implementation, of one execution path, or of a pair/history of executions, and how can later modules or conformance tests determine that the condition holds when indirect acquisition of time or chance is expressly not detected?",
+   "options": [
+    "A semantic property of the entire implementation, established outside the kernel",
+    "A property of each individual execution path",
+    "Equivalent to recording no listed A03 trap hit",
+    "No repeatability promise applies unless the verifier can independently prove the property"
+   ],
+   "default_guess": "Treat it as a semantic property of each execution path, not a kernel-recorded or enforceable classification.",
+   "witness": {
+    "initial": "A function has one branch using only its input and another branch obtaining time through an untrapped mechanism; the kernel records no classification of the implementation.",
+    "events": [
+     "Admission exercises only the input-only branch and records an admitted verdict.",
+     "Later verification asks whether the verdict and repaired-slot guarantees hold for that implementation."
+    ],
+    "outcomes": [
+     "The guarantees apply to the admitted executions because those paths obtained no time or chance.",
+     "The guarantees do not apply to any execution of the implementation because the code can obtain time on another path."
+    ],
+    "observer": "The conformance verifier and an agent relying on the admission verdict"
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A03\",\"subject\":\"sandbox environment own_proc\",\"kind\":\"undefined environment member\",\"text\":\"environment = {python_stdlib_runtime, code, inputs, exchange_dir, own_proc}; rule 4 traps opening any path outside the exchange directory and the read-only runtime\",\"question\":\"What exactly is own_proc: whether and where a private proc filesystem is mounted, which entries and access modes it exposes, and whether accesses to it are permitted or must trigger the outside-path trap?\",\"options\":[\"Mount a private proc filesystem but leave all user-code path access trapped\",\"Mount a private proc filesystem and exempt it from the path trap\",\"Treat own_proc as the PID namespace/process set without mounting a proc filesystem\"],\"default_guess\":\"Mount a private proc filesystem at /proc for the sandbox PID namespace, while retaining the stated path trap for direct user-code access.\",\"witness\":{\"initial\":\"A host supports bubblewrap PID namespaces and a function execution is started.\",\"events\":[\"The sandbox builder interprets own_proc while constructing the execution environment.\",\"An isolation test inspects the execution's mounts from outside the sandbox.\"],\"outcomes\":[\"The test sees a private proc filesystem mounted at /proc.\",\"The test sees no proc filesystem because own_proc was interpreted as only the private process namespace.\"],\"observer\":\"The release verifier and host operator\"}},{\"unit\":\"A03\",\"subject\":\"repeatability of function executions\",\"kind\":\"contradictory determinism condition\",\"text\":\"An implementation that obtains no time and no chance yields the same output digest twice on the same input.\",\"question\":\"Does the sandbox have to eliminate every other source of varying observable state, or is equal output promised only for a narrower, unstated class of implementations beyond obtaining no time and no chance?\",\"options\":[\"Stabilize or trap all other varying observations available from the standard library and host\",\"Allow the closed trap list and fresh sandbox as written, even when another observation changes the output\",\"Define obtains no time and no chance broadly enough to include every nondeterministic observation\"],\"default_guess\":\"Treat the promise as requiring the sandbox to exclude every varying external observation, not merely the listed clocks and random APIs.\",\"witness\":{\"initial\":\"An admitted function returns os.cpu_count() and uses no clock or randomness API; the same release and input are used twice.\",\"events\":[\"The function executes and returns the current CPU count.\",\"The host's visible CPU topology changes.\",\"The function executes again on the same input.\"],\"outcomes\":[\"The second output digest differs, as permitted by the closed trap list and unpinned host observation.\",\"The second output digest must be equal because the function obtained neither time nor chance.\"],\"observer\":\"The caller comparing the executions and the A03 conformance test\"}},{\"unit\":\"A14\",\"subject\":\"restart recovery of an unfinished function\",\"kind\":\"contradictory replay guarantee\",\"text\":\"Restarting the kernel during a function execution executes it again, with the same output digest when it obtains no time and no chance\",\"question\":\"When an unfinished function observes varying state other than a clock or randomness, must recovery reproduce the original unrecorded execution's output, or may the re-execution produce a different digest?\",\"options\":[\"Recovery must reproduce the digest, requiring all other observations to be stabilized\",\"Recovery may produce a different digest because only effects, not deterministic output, are required for safety\",\"Every varying observation is deemed obtaining chance and excludes the function from the guarantee\"],\"default_guess\":\"Permit recovery to use the re-execution's result, but do not promise the same digest unless all nondeterministic observations are excluded.\",\"witness\":{\"initial\":\"A function returning os.cpu_count() is executing when the kernel stops before writing its NodeExecution.\",\"events\":[\"The first execution observes one CPU count but its conclusion is not recorded.\",\"The host's visible CPU topology changes.\",\"The kernel restarts and A14 re-executes the function on the same input.\"],\"outcomes\":[\"Recovery records the newly observed, different output digest.\",\"Recovery is required to record the same digest the interrupted execution would have produced.\"],\"observer\":\"The run owner reading the recovered output and trace\"}},{\"unit\":\"context\",\"subject\":\"scope of repeatability promises\",\"kind\":\"unverifiable applicability condition\",\"text\":\"Every promise in these documents that a function repeats itself — equal outputs on equal inputs, a repaired slot staying repaired, a verdict that holds — is a promise about code that obtains neither.\",\"question\":\"Is obtains neither a property of the implementation, of one execution path, or of a pair/history of executions, and how can later modules or conformance tests determine that the condition holds when indirect acquisition of time or chance is expressly not detected?\",\"options\":[\"A semantic property of the entire implementation, established outside the kernel\",\"A property of each individual execution path\",\"Equivalent to recording no listed A03 trap hit\",\"No repeatability promise applies unless the verifier can independently prove the property\"],\"default_guess\":\"Treat it as a semantic property of each execution path, not a kernel-recorded or enforceable classification.\",\"witness\":{\"initial\":\"A function has one branch using only its input and another branch obtaining time through an untrapped mechanism; the kernel records no classification of the implementation.\",\"events\":[\"Admission exercises only the input-only branch and records an admitted verdict.\",\"Later verification asks whether the verdict and repaired-slot guarantees hold for that implementation.\"],\"outcomes\":[\"The guarantees apply to the admitted executions because those paths obtained no time or chance.\",\"The guarantees do not apply to any execution of the implementation because the code can obtain time on another path.\"],\"observer\":\"The conformance verifier and an agent relying on the admission verdict\"}}]}",
+ "set_aside": []
+}

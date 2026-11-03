@@ -115,7 +115,8 @@ randomness raise in a function, so it cannot depend on the time or on chance by
 accident; code written to get time or chance some other way is not detected and is
 judged by its outputs like any other. Every promise in these documents that a function
 repeats itself — equal outputs on equal inputs, a repaired slot staying repaired, a
-verdict that holds — is a promise about code that obtains neither. An operation node invokes one declared
+verdict that holds — is a promise about code whose outputs depend only on its inputs;
+the kernel neither checks that nor masks any other fact of the process. An operation node invokes one declared
 operation of one microservice; only the kernel performs it. An effect is never
 hidden in code.
 
