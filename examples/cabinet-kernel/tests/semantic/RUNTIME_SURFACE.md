@@ -96,6 +96,7 @@ the witnesses the next section lists for it.
 | `installation` | the installation's configuration file: `owner_token`, `agent_token(name)`, `set_agent_tokens([AgentToken])`, `set_owner_token(token)`, `write_config_text(text)`, `set_config_mode(mode)`, `select_instance(service_id, instance_name)`, `set_credential(service_id, header_name, secret_value)` (writes an owner-only secret file and its reference; `None` references a missing file), `write_secret(service_id, value)`, `set_manifest_revision(revision)` |
 | `clock` | the kernel clock (`clock.kernel_now`) injected by the fixture: `set(epoch_us)`, `advance(ms=0, days=0)`; `fix_monotonic(ns)` fixes its monotonic source; a setting holds in the running kernel at once and carries over `restart()`, which returns only once the surface answers |
 | `mcp_request(operation, request, *, token=None, raw=None)` | one request over the MCP entrance: `request` the fields as sent, unknown ones included, `token` (not given: the actor's token; `token=None`: no Authorization header at all), `raw` the exact bytes of the HTTP request body (one JSON-RPC message), sent as they are; returns the answer or raises with `code` and `reason` |
+| `mcp_discovery(method, *, token)` | one JSON-RPC request of a discovery method (`initialize`, `ping`, `tools/list`) over the MCP entrance, carrying `token`; returns the response's `result` as plain JSON values, which is no tool result, or raises with `code` and `reason` |
 | `restart()` | stop the kernel process and start it again on the same data directory and configuration; returns StartOutcome (`started`, `exit_code`, `stderr`) |
 | `kernel_exited()` | the exit status of the kernel process when it ended on its own since its last start, `None` while it runs |
 | `host` | host conditions for the next start: `remove_bubblewrap()`, `set_env(name, value)` |
@@ -136,6 +137,7 @@ is not written around.
 | `kernel_a03_fresh_env_no_network_no_host_mounts` | `sandbox_executions()`, `sandbox_runtime_paths()`: the environment inspected from outside |
 | `kernel_a03_unconfirmed_cleanup_stops_kernel` | `faults.unconfirmed_cleanup()`, `kernel_exited()`, `restart()`: a cleanup that cannot be confirmed, and the process stopping |
 | `kernel_a03_unloadable_module_is_crashed` | `sandbox_executions()`: that the outcome comes from executions in the sandbox, not from the kernel reading the code |
+| `kernel_a03_module_loaded_as_by_import` | no capability beyond the public calls |
 | `kernel_a04_verdict_set_only_by_kernel` | `mcp_request`: requests carrying a verdict field, by the owner and by an author |
 | `kernel_a05_proof_recomputed_on_demand` | `manifest.write_record`, `installation.select_instance`, `stub_service()`: an accepted binding needs a manifest record and a selected instance |
 | `kernel_a05_highest_effect_class_max_or_read` | `manifest.write_record`, `installation.select_instance`, `stub_service()` |
@@ -196,6 +198,7 @@ is not written around.
 | `kernel_a15_file_outlives_run_only_as_fixture` | `run_spool()` |
 | `kernel_a15_one_record_per_conclusion` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, stub action `drop_after_request`, `stub.requests` |
 | `kernel_a16_owner_only_actions_refuse_agents` | `manifest.write_record`, `installation.select_instance`, `stub_service()` (a real binding to accept) |
+| `kernel_a16_tools_list_serves_every_operation` | `mcp_discovery`, `installation.agent_token`, `kernel_exited()` |
 | `kernel_a16_unknown_token_uniform_refusal` | `mcp_request` (unknown and missing token), `surface_answers()` |
 | `kernel_a16_revoked_token_refused_without_restart` | `mcp_request`, `installation` (token list rewritten) |
 | `kernel_a16_schema_checked_before_record_read` | `mcp_request` (an unknown field) |

@@ -583,3 +583,42 @@ def run(inputs):
     ]
     assert history.serving_activation.store_position == serving.store_position
     assert history.serving_activation.implementation_id == control_id
+
+
+def test_module_loaded_as_by_import(semantic_runtime):
+    """[witness: verification:kernel_a03_module_loaded_as_by_import]
+
+    A03 Required test 12, rule 3: the implementation is loaded as a standard
+    import loads a module, entered in ``sys.modules`` under its own name before
+    its body runs. Found by the Registry pilot of 2026-10-31
+    (``findings/20261031_registry_pilot/``): ``dataclasses`` looks up
+    ``sys.modules[cls.__module__]`` for string annotations, and the runner did
+    not register the module, so the class definition raised while it loaded.
+    """
+    cv = _function(semantic_runtime, "a03_loaded_as_by_import")
+
+    postponed_dataclass = """
+from __future__ import annotations
+from dataclasses import dataclass
+
+@dataclass(frozen=True)
+class Box:
+    text: str
+
+def run(inputs):
+    return {"y": Box(inputs["x"]).text}
+"""
+    own_entry = """
+import sys
+
+ENTERED = sys.modules[__name__].__name__ == __name__
+
+def run(inputs):
+    if not ENTERED or sys.modules[__name__].run is not run:
+        raise RuntimeError("the module is not its own entry in sys.modules")
+    return {"y": inputs["x"]}
+"""
+    for code in (postponed_dataclass, own_entry):
+        submission, execution = _conclude(semantic_runtime, cv, code)
+        assert execution.failure_detail is None
+        _assert_concluded(submission, execution, "passed")

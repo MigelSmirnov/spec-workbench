@@ -146,6 +146,8 @@ page_size <= page_size_max
     [witness: verification:kernel_a16_agent_code_not_run_in_kernel]
 12. A token is compared in constant time with the owner token and with each
     agent token.
+13. `tools/list` answers every catalogue operation's schema, those whose request
+    holds a discriminated union included, and the kernel keeps serving.
 
 ### Consequence
 

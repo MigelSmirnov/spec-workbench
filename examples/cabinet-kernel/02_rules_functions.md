@@ -169,7 +169,10 @@ and no detection promises the runtime cannot keep.
    library is a new kernel release.
 3. An implementation is a Python module that defines a top-level function `run`
    taking one argument, a dict with one entry per input port, and returning a dict
-   with exactly one entry per output port. A `value` port carries the JSON value
+   with exactly one entry per output port. It is loaded as a standard import loads
+   a module: entered in `sys.modules` under its own name before its body runs, so
+   code that looks its own module up by name (`dataclasses` under postponed
+   annotations, `typing.get_type_hints`) behaves as it does under an import. A `value` port carries the JSON value
    decoded to Python (`dict`, `list`, `str`, `int`, `float`, `bool`, `None`); a
    `file` port carries `bytes`, and a `many` port a Python `list` of its element
    type — of `bytes` for a `many` file port, each element validated like a single
@@ -292,6 +295,8 @@ cleanup_unconfirmed -> output_discarded AND kernel_process_stops
     recorded `crashed` with detail `cleanup_failed`, its output is discarded and
     the kernel process stops.
     [witness: verification:kernel_a03_unconfirmed_cleanup_stops_kernel]
+12. A module using `dataclasses` under `from __future__ import annotations`, and
+    one reading its own entry in `sys.modules`, load and conclude `passed`.
 
 ### Consequence
 

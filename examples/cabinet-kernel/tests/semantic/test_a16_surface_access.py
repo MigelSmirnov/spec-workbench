@@ -797,3 +797,34 @@ def test_agent_code_not_run_in_kernel(semantic_runtime):
         tried.verdict.reason.outcome, "value", tried.verdict.reason.outcome
     ) == "sandbox_violation"
     assert not marker.exists()
+
+
+def test_tools_list_serves_every_operation(semantic_runtime):
+    """[witness: verification:kernel_a16_tools_list_serves_every_operation]
+
+    A16 Required test 13: ``tools/list`` is the entrance's discovery method. It
+    derives the schema of every catalogue operation by the rule of the
+    ``answer_request`` note, a discriminated union as ``anyOf`` of its variants.
+    Found by the Registry pilot of 2026-10-31
+    (``findings/20261031_registry_pilot/``): the derivation raised on the
+    request of ``add_trial_case`` and of ``list_records``, the answer was
+    ``internal_error`` and the kernel stopped, which any agent token could do.
+    """
+    author_token = semantic_runtime.installation.agent_token("author")
+    answer = semantic_runtime.mcp_discovery("tools/list", token=author_token)
+    tools = {tool["name"]: tool["inputSchema"] for tool in answer["tools"]}
+    assert {"add_trial_case", "list_records", "get_run"} <= set(tools)
+    assert all(schema["type"] == "object" for schema in tools.values())
+
+    # The union of a trial case input is its variants, in declared order.
+    inputs = tools["add_trial_case"]["properties"]["inputs"]
+    assert inputs["type"] == "array"
+    variants = inputs["items"]["anyOf"]
+    assert len(variants) >= 2
+    assert all(variant["type"] == "object" for variant in variants)
+
+    # Asking again changes nothing, and the kernel still serves.
+    again = semantic_runtime.mcp_discovery("tools/list", token=author_token)
+    assert again["tools"] == answer["tools"]
+    assert semantic_runtime.kernel_exited() is None
+    assert _list_slots(semantic_runtime, author_token) is not None
