@@ -611,7 +611,7 @@ def run(inputs):
     own_entry = """
 import sys
 
-ENTERED = sys.modules[__name__].__name__ == __name__
+ENTERED = __name__ == "cabinet_sandbox_code" and sys.modules[__name__].__spec__.origin == __file__
 
 def run(inputs):
     if not ENTERED or sys.modules[__name__].run is not run:

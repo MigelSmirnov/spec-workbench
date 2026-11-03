@@ -169,8 +169,11 @@ and no detection promises the runtime cannot keep.
    library is a new kernel release.
 3. An implementation is a Python module that defines a top-level function `run`
    taking one argument, a dict with one entry per input port, and returning a dict
-   with exactly one entry per output port. It is loaded as a standard import loads
-   a module: entered in `sys.modules` under its own name before its body runs, so
+   with exactly one entry per output port. It is loaded from its file in the
+   exchange directory as `importlib` loads a source file, with the metadata
+   `importlib` gives it, under the one fixed name `cabinet_sandbox_code`, which no
+   module of the standard library has; the module is entered in `sys.modules` under
+   that name before its body runs and stays there until the execution ends, so
    code that looks its own module up by name (`dataclasses` under postponed
    annotations, `typing.get_type_hints`) behaves as it does under an import. A `value` port carries the JSON value
    decoded to Python (`dict`, `list`, `str`, `int`, `float`, `bool`, `None`); a

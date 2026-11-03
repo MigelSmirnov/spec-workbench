@@ -71,7 +71,10 @@ Reuses cabinet-flow decisions 21 and 22, narrowed by K-11 and K-15.
      failed run, read a trace — the activate call passes this actor table and A06
      then refuses an agent's version above `read` as the operation's own refusal — except that reading
      a spooled file's or a trial fixture's bytes is owner only (A10 rule 2).
-   No request field names or changes the actor.
+   No request field names or changes the actor. The MCP discovery methods
+   `initialize`, `ping` and `tools/list` are no action of this table: they name no
+   operation and read no record, and any known token, the owner's or an agent's,
+   gets their answer after the size, token and depth checks of rule 1.
 4. The surface is one fixed set of typed operations (K-11). Every request is
    validated against its schema at the step rule 1 gives it — after its size and
    its token, before anything else; an unknown operation, an unknown field, or a

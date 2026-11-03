@@ -1,0 +1,185 @@
+{
+ "open_points": [
+  {
+   "unit": "A03",
+   "subject": "sandbox implementation module name",
+   "kind": "unspecified identity",
+   "text": "“entered in `sys.modules` under its own name” does not define that name or how it is derived.",
+   "question": "What exact, deterministic module name is assigned to an implementation, and how are collisions with standard-library or runner modules prevented or handled?",
+   "options": [
+    "derive a reserved name from `implementation_id`",
+    "use a fixed name for every implementation",
+    "derive it from the slot or contract",
+    "use a fresh name per execution"
+   ],
+   "default_guess": "Use a reserved prefix followed by `implementation_id`, refusing no user code on account of a collision.",
+   "witness": {
+    "initial": "An admitted implementation has a value output accepting a string.",
+    "events": [
+     "The agent submits code whose `run` returns `__name__`.",
+     "The kernel executes the same implementation on the same input."
+    ],
+    "outcomes": [
+     "The output is a fixed implementation-derived module name.",
+     "The output is a fixed generic name, a slot-derived name, or a fresh execution name."
+    ],
+    "observer": "The owner or agent reading the run output sees different values; a fresh name can also violate the required repeatable-output result."
+   }
+  },
+  {
+   "unit": "A03",
+   "subject": "lifetime of the implementation's `sys.modules` entry",
+   "kind": "ambiguous import semantics",
+   "text": "The module is “entered in `sys.modules` under its own name before its body runs,” but the text does not expressly say whether the entry remains while `run` executes.",
+   "question": "Must the implementation remain at `sys.modules[__name__]` through the call to `run`, or may the runner remove it after module initialization?",
+   "options": [
+    "retain it through `run`, as an ordinary successful import would",
+    "remove it after the module body finishes",
+    "guarantee it only during module-body execution"
+   ],
+   "default_guess": "Retain the entry through `run` and discard it only when the isolated execution ends.",
+   "witness": {
+    "initial": "An implementation module loads successfully and has a boolean output.",
+    "events": [
+     "Its module body defines `run`.",
+     "`run` returns whether `sys.modules.get(__name__)` is the executing module."
+    ],
+    "outcomes": [
+     "The execution succeeds and returns `true`.",
+     "The execution succeeds and returns `false`, or crashes because the entry was removed."
+    ],
+    "observer": "The caller reading the trial or run output sees the difference."
+   }
+  },
+  {
+   "unit": "A16",
+   "subject": "authorization and validation of `tools/list`",
+   "kind": "rule conflict",
+   "text": "Rule 13 requires “`tools/list` answers,” while rules 1, 3 and 4 say every request must name a known operation and pass an actor table that is “exactly” the State 0 primary actions; `tools/list` is in neither list.",
+   "question": "Is `tools/list` a surface operation governed by the ordinary token, schema and actor checks, an MCP protocol operation outside that table, or an unknown operation under the existing rules?",
+   "options": [
+    "allow it to owner and all agents after the normal token checks as inspection",
+    "allow it as an MCP protocol request outside the product-operation actor table",
+    "allow it without a token",
+    "refuse it as unknown or not permitted"
+   ],
+   "default_guess": "Treat it as authenticated inspection available to the owner and every agent, with the common size, token and depth checks applied.",
+   "witness": {
+    "initial": "The kernel is running with one valid agent token.",
+    "events": [
+     "The agent sends an otherwise valid `tools/list` request with that token."
+    ],
+    "outcomes": [
+     "Rule 13 returns the catalogue schemas and the kernel remains available.",
+     "The exact actor table or known-operation check refuses the request because no permission or operation entry exists."
+    ],
+    "observer": "The agent and its MCP client see discovery succeed or fail."
+   }
+  },
+  {
+   "unit": "A16",
+   "subject": "membership of the `tools/list` catalogue",
+   "kind": "undefined set",
+   "text": "“every catalogue operation” is not defined or mapped to the fixed surface operations.",
+   "question": "Which exact operations must appear in `tools/list`, including whether MCP protocol operations such as `tools/list` itself and every separately callable primary action are catalogue members?",
+   "options": [
+    "all callable Cabinet Kernel product operations only",
+    "all product operations plus `tools/list`",
+    "only the broad K-11 categories such as inspect, author, try and run",
+    "a separately enumerated subset"
+   ],
+   "default_guess": "List every separately callable product operation, excluding MCP protocol operations themselves.",
+   "witness": {
+    "initial": "The kernel implements a callable binding-accept action and the `tools/list` method.",
+    "events": [
+     "An authenticated client calls `tools/list`.",
+     "The client searches the returned catalogue for the binding-accept action and for `tools/list` itself."
+    ],
+    "outcomes": [
+     "Both, one, or neither is present depending on what “catalogue operation” means.",
+     "A different implementer returns a different membership while still claiming to list every catalogue operation."
+    ],
+    "observer": "An MCP client deciding which calls it can construct sees the difference."
+   }
+  },
+  {
+   "unit": "A16",
+   "subject": "meaning and encoding of an operation schema in `tools/list`",
+   "kind": "underspecified schema contract",
+   "text": "Rule 13 says `tools/list` answers each operation's “schema” and includes requests that hold a “discriminated union,” but names neither the schema dialect nor the required encoding of that union.",
+   "question": "What exact schema dialect and structure must `tools/list` emit for a discriminated-union request, including the discriminator property, required fields, variant closure and use of `oneOf`, `anyOf`, references or another representation?",
+   "options": [
+    "JSON Schema with `oneOf` branches and a required constant discriminator in each branch",
+    "JSON Schema with `anyOf` branches",
+    "a discriminator extension plus referenced variants",
+    "a flattened permissive object schema"
+   ],
+   "default_guess": "Emit self-contained JSON Schema using `oneOf`, with a required discriminator property constrained by `const` in each closed branch.",
+   "witness": {
+    "initial": "A catalogue operation accepts either a value reference or a spooled-files reference, selected by a discriminator, and each variant has different required fields.",
+    "events": [
+     "A client calls `tools/list`.",
+     "The client validates and generates a request for the spooled-files variant from the returned schema."
+    ],
+    "outcomes": [
+     "The returned branches preserve the discriminator and variant-specific required fields, so the client constructs a valid request.",
+     "A flattened or differently encoded schema permits or requires the wrong fields, so the generated request differs or is refused."
+    ],
+    "observer": "The schema-consuming MCP client sees different validation and code-generation behavior."
+   }
+  },
+  {
+   "unit": "A16",
+   "subject": "request versus response schemas in `tools/list`",
+   "kind": "ambiguous coverage",
+   "text": "“every catalogue operation's schema” is singular, while the added qualification mentions only operations “whose request holds a discriminated union.”",
+   "question": "Must discovery return only each operation's request/input schema, or also its response/output and error schemas?",
+   "options": [
+    "request schema only",
+    "request and successful-response schemas",
+    "request, response and refusal/error schemas"
+   ],
+   "default_guess": "Return the request schema only, because the new requirement specifically qualifies request unions.",
+   "witness": {
+    "initial": "A catalogue operation has a simple request and a typed response with multiple result variants.",
+    "events": [
+     "A client calls `tools/list`.",
+     "The client attempts to discover the response type before invoking the operation."
+    ],
+    "outcomes": [
+     "The response schema is present and the client can validate the result.",
+     "Only the request schema is present, so the client cannot derive the response type from discovery."
+    ],
+    "observer": "The MCP client sees different catalogue metadata."
+   }
+  },
+  {
+   "unit": "A16",
+   "subject": "ordering and paging of `tools/list`",
+   "kind": "unclear rule applicability",
+   "text": "Rule 13 says `tools/list` “answers every catalogue operation's schema,” while rule 6 says “Every list operation” is paged newest-first in reverse store order; catalogue operations have no store position and the text does not exclude `tools/list`.",
+   "question": "Does A16 rule 6 apply to `tools/list`; if not, in what order and in how many responses are catalogue entries returned?",
+   "options": [
+    "return the entire catalogue in one deterministic order",
+    "page it using MCP continuation tokens and a separately defined catalogue order",
+    "apply rule 6's page-size interface despite catalogue entries lacking store positions",
+    "treat entry order as unspecified"
+   ],
+   "default_guess": "Exclude protocol discovery from rule 6 and return the complete catalogue sorted by operation name in Unicode code-point order.",
+   "witness": {
+    "initial": "The fixed catalogue contains operations named `run`, `inspect` and `activate`.",
+    "events": [
+     "A client calls `tools/list` twice without changing the release."
+    ],
+    "outcomes": [
+     "Both calls return all entries in one fixed name order.",
+     "An implementation returns declaration order, an unspecified order, or applies list paging and returns only a page."
+    ],
+    "observer": "The MCP client sees different entry order, completeness and continuation behavior."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A03\",\"subject\":\"sandbox implementation module name\",\"kind\":\"unspecified identity\",\"text\":\"“entered in `sys.modules` under its own name” does not define that name or how it is derived.\",\"question\":\"What exact, deterministic module name is assigned to an implementation, and how are collisions with standard-library or runner modules prevented or handled?\",\"options\":[\"derive a reserved name from `implementation_id`\",\"use a fixed name for every implementation\",\"derive it from the slot or contract\",\"use a fresh name per execution\"],\"default_guess\":\"Use a reserved prefix followed by `implementation_id`, refusing no user code on account of a collision.\",\"witness\":{\"initial\":\"An admitted implementation has a value output accepting a string.\",\"events\":[\"The agent submits code whose `run` returns `__name__`.\",\"The kernel executes the same implementation on the same input.\"],\"outcomes\":[\"The output is a fixed implementation-derived module name.\",\"The output is a fixed generic name, a slot-derived name, or a fresh execution name.\"],\"observer\":\"The owner or agent reading the run output sees different values; a fresh name can also violate the required repeatable-output result.\"}},{\"unit\":\"A03\",\"subject\":\"lifetime of the implementation's `sys.modules` entry\",\"kind\":\"ambiguous import semantics\",\"text\":\"The module is “entered in `sys.modules` under its own name before its body runs,” but the text does not expressly say whether the entry remains while `run` executes.\",\"question\":\"Must the implementation remain at `sys.modules[__name__]` through the call to `run`, or may the runner remove it after module initialization?\",\"options\":[\"retain it through `run`, as an ordinary successful import would\",\"remove it after the module body finishes\",\"guarantee it only during module-body execution\"],\"default_guess\":\"Retain the entry through `run` and discard it only when the isolated execution ends.\",\"witness\":{\"initial\":\"An implementation module loads successfully and has a boolean output.\",\"events\":[\"Its module body defines `run`.\",\"`run` returns whether `sys.modules.get(__name__)` is the executing module.\"],\"outcomes\":[\"The execution succeeds and returns `true`.\",\"The execution succeeds and returns `false`, or crashes because the entry was removed.\"],\"observer\":\"The caller reading the trial or run output sees the difference.\"}},{\"unit\":\"A16\",\"subject\":\"authorization and validation of `tools/list`\",\"kind\":\"rule conflict\",\"text\":\"Rule 13 requires “`tools/list` answers,” while rules 1, 3 and 4 say every request must name a known operation and pass an actor table that is “exactly” the State 0 primary actions; `tools/list` is in neither list.\",\"question\":\"Is `tools/list` a surface operation governed by the ordinary token, schema and actor checks, an MCP protocol operation outside that table, or an unknown operation under the existing rules?\",\"options\":[\"allow it to owner and all agents after the normal token checks as inspection\",\"allow it as an MCP protocol request outside the product-operation actor table\",\"allow it without a token\",\"refuse it as unknown or not permitted\"],\"default_guess\":\"Treat it as authenticated inspection available to the owner and every agent, with the common size, token and depth checks applied.\",\"witness\":{\"initial\":\"The kernel is running with one valid agent token.\",\"events\":[\"The agent sends an otherwise valid `tools/list` request with that token.\"],\"outcomes\":[\"Rule 13 returns the catalogue schemas and the kernel remains available.\",\"The exact actor table or known-operation check refuses the request because no permission or operation entry exists.\"],\"observer\":\"The agent and its MCP client see discovery succeed or fail.\"}},{\"unit\":\"A16\",\"subject\":\"membership of the `tools/list` catalogue\",\"kind\":\"undefined set\",\"text\":\"“every catalogue operation” is not defined or mapped to the fixed surface operations.\",\"question\":\"Which exact operations must appear in `tools/list`, including whether MCP protocol operations such as `tools/list` itself and every separately callable primary action are catalogue members?\",\"options\":[\"all callable Cabinet Kernel product operations only\",\"all product operations plus `tools/list`\",\"only the broad K-11 categories such as inspect, author, try and run\",\"a separately enumerated subset\"],\"default_guess\":\"List every separately callable product operation, excluding MCP protocol operations themselves.\",\"witness\":{\"initial\":\"The kernel implements a callable binding-accept action and the `tools/list` method.\",\"events\":[\"An authenticated client calls `tools/list`.\",\"The client searches the returned catalogue for the binding-accept action and for `tools/list` itself.\"],\"outcomes\":[\"Both, one, or neither is present depending on what “catalogue operation” means.\",\"A different implementer returns a different membership while still claiming to list every catalogue operation.\"],\"observer\":\"An MCP client deciding which calls it can construct sees the difference.\"}},{\"unit\":\"A16\",\"subject\":\"meaning and encoding of an operation schema in `tools/list`\",\"kind\":\"underspecified schema contract\",\"text\":\"Rule 13 says `tools/list` answers each operation's “schema” and includes requests that hold a “discriminated union,” but names neither the schema dialect nor the required encoding of that union.\",\"question\":\"What exact schema dialect and structure must `tools/list` emit for a discriminated-union request, including the discriminator property, required fields, variant closure and use of `oneOf`, `anyOf`, references or another representation?\",\"options\":[\"JSON Schema with `oneOf` branches and a required constant discriminator in each branch\",\"JSON Schema with `anyOf` branches\",\"a discriminator extension plus referenced variants\",\"a flattened permissive object schema\"],\"default_guess\":\"Emit self-contained JSON Schema using `oneOf`, with a required discriminator property constrained by `const` in each closed branch.\",\"witness\":{\"initial\":\"A catalogue operation accepts either a value reference or a spooled-files reference, selected by a discriminator, and each variant has different required fields.\",\"events\":[\"A client calls `tools/list`.\",\"The client validates and generates a request for the spooled-files variant from the returned schema.\"],\"outcomes\":[\"The returned branches preserve the discriminator and variant-specific required fields, so the client constructs a valid request.\",\"A flattened or differently encoded schema permits or requires the wrong fields, so the generated request differs or is refused.\"],\"observer\":\"The schema-consuming MCP client sees different validation and code-generation behavior.\"}},{\"unit\":\"A16\",\"subject\":\"request versus response schemas in `tools/list`\",\"kind\":\"ambiguous coverage\",\"text\":\"“every catalogue operation's schema” is singular, while the added qualification mentions only operations “whose request holds a discriminated union.”\",\"question\":\"Must discovery return only each operation's request/input schema, or also its response/output and error schemas?\",\"options\":[\"request schema only\",\"request and successful-response schemas\",\"request, response and refusal/error schemas\"],\"default_guess\":\"Return the request schema only, because the new requirement specifically qualifies request unions.\",\"witness\":{\"initial\":\"A catalogue operation has a simple request and a typed response with multiple result variants.\",\"events\":[\"A client calls `tools/list`.\",\"The client attempts to discover the response type before invoking the operation.\"],\"outcomes\":[\"The response schema is present and the client can validate the result.\",\"Only the request schema is present, so the client cannot derive the response type from discovery.\"],\"observer\":\"The MCP client sees different catalogue metadata.\"}},{\"unit\":\"A16\",\"subject\":\"ordering and paging of `tools/list`\",\"kind\":\"unclear rule applicability\",\"text\":\"Rule 13 says `tools/list` “answers every catalogue operation's schema,” while rule 6 says “Every list operation” is paged newest-first in reverse store order; catalogue operations have no store position and the text does not exclude `tools/list`.\",\"question\":\"Does A16 rule 6 apply to `tools/list`; if not, in what order and in how many responses are catalogue entries returned?\",\"options\":[\"return the entire catalogue in one deterministic order\",\"page it using MCP continuation tokens and a separately defined catalogue order\",\"apply rule 6's page-size interface despite catalogue entries lacking store positions\",\"treat entry order as unspecified\"],\"default_guess\":\"Exclude protocol discovery from rule 6 and return the complete catalogue sorted by operation name in Unicode code-point order.\",\"witness\":{\"initial\":\"The fixed catalogue contains operations named `run`, `inspect` and `activate`.\",\"events\":[\"A client calls `tools/list` twice without changing the release.\"],\"outcomes\":[\"Both calls return all entries in one fixed name order.\",\"An implementation returns declaration order, an unspecified order, or applies list paging and returns only a page.\"],\"observer\":\"The MCP client sees different entry order, completeness and continuation behavior.\"}}]}",
+ "set_aside": []
+}
