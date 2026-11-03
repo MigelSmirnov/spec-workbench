@@ -1,0 +1,155 @@
+{
+ "open_points": [
+  {
+   "unit": "A03",
+   "subject": "sandbox module metadata and deterministic execution",
+   "kind": "underspecified observable metadata",
+   "text": "“It is loaded from its file in the exchange directory as `importlib` loads a source file, with the metadata `importlib` gives it” does not fix the loader API, source filename, in-sandbox path, or the values of observable fields such as `__file__`, `__cached__`, `__loader__` and `__spec__.origin`.",
+   "question": "What exact import mechanism and observable metadata values must every execution use, and must paths be stable across fresh execution environments so equal inputs retain equal output digests?",
+   "options": [
+    "Use one specified loader and fixed in-sandbox source path, producing stable metadata",
+    "Expose each execution’s unique exchange path through ordinary import metadata",
+    "Permit any importlib-compatible loader and metadata"
+   ],
+   "default_guess": "Use `importlib.util.spec_from_file_location` with a fixed in-sandbox source path and stable metadata.",
+   "witness": {
+    "initial": "An admitted implementation has a value output accepting an object.",
+    "events": [
+     "The implementation returns `{\"file\": __file__, \"origin\": __spec__.origin, \"cached\": __cached__}`.",
+     "The kernel executes it twice on equal inputs in two fresh exchange directories."
+    ],
+    "outcomes": [
+     "Both executions expose the same fixed in-sandbox paths and have the same output digest.",
+     "Each execution exposes its unique exchange-directory path and has a different output digest."
+    ],
+    "observer": "The owner or agent reading the trial executions or run outputs"
+   }
+  },
+  {
+   "unit": "A03",
+   "subject": "lifetime of the `sys.modules` entry",
+   "kind": "unverifiable or conflicting invariant",
+   "text": "“the module is entered in `sys.modules` under that name before its body runs and stays there until the execution ends” conflicts with giving ordinary Python code the mutable standard-library `sys.modules` mapping; the text does not say whether user code may delete or replace that entry or how the runner preserves it.",
+   "question": "Must the entry remain present and point to the original module despite mutations by implementation code, or does “stays there” mean only that the runner itself does not remove it?",
+   "options": [
+    "Prevent or undo deletion and replacement throughout execution",
+    "Allow ordinary mutation; the runner merely does not remove the entry",
+    "Treat mutation of this entry as a sandbox violation or crash"
+   ],
+   "default_guess": "Allow ordinary Python mutation and interpret the sentence as a promise only about the runner’s own behavior.",
+   "witness": {
+    "initial": "A function module is being loaded under `cabinet_sandbox_code`.",
+    "events": [
+     "Its module body executes `del sys.modules[__name__]`.",
+     "Its `run` function returns whether `cabinet_sandbox_code` is present in `sys.modules`."
+    ],
+    "outcomes": [
+     "The deletion works and the function returns `false`, despite the passage saying the entry stays until execution ends.",
+     "The runner prevents or reverses deletion and the function returns `true` or the deletion fails."
+    ],
+    "observer": "The caller reading the function output or execution outcome"
+   }
+  },
+  {
+   "unit": "A16",
+   "subject": "validation of MCP discovery requests",
+   "kind": "contradictory check order",
+   "text": "Rule 3 says `initialize`, `ping` and `tools/list` “get their answer after the size, token and depth checks of rule 1,” while rules 1 and 4 say a request must name a known operation and fit its schema, and that “Every request is validated against its schema” with an unknown field refused.",
+   "question": "After size, configuration/token and depth checks, must discovery requests also pass method-specific schema and unknown-field validation, or must every authenticated discovery request receive an answer regardless of its remaining shape?",
+   "options": [
+    "Discovery methods bypass operation/schema/actor checks and always answer after depth",
+    "Discovery methods bypass only the action-table authorization check but still undergo their own schema validation",
+    "All rule-1 checks apply exactly as for catalogue operations"
+   ],
+   "default_guess": "Validate each discovery method against its MCP request schema, while bypassing only catalogue-operation authorization.",
+   "witness": {
+    "initial": "A valid agent token is configured and the kernel is serving.",
+    "events": [
+     "The agent sends `tools/list` within the size and depth limits but includes an unknown parameter."
+    ],
+    "outcomes": [
+     "The kernel answers the catalogue because rule 3 says the answer follows the size, token and depth checks.",
+     "The kernel returns `invalid_request` because rules 1 and 4 require schema validation and refuse unknown fields."
+    ],
+    "observer": "The requesting agent"
+   }
+  },
+  {
+   "unit": "A16",
+   "subject": "`initialize` discovery compatibility and refusal conditions",
+   "kind": "missing protocol rule",
+   "text": "“The MCP discovery methods `initialize`, `ping` and `tools/list` … get their answer” does not state which `initialize` protocol versions or client capabilities are accepted, what answer is returned for an unsupported version, or whether initialization state affects later discovery and tool calls.",
+   "question": "What protocol-version negotiation and session-state rules apply to `initialize`, and may `ping`, `tools/list` or catalogue operations be called before a successful initialization?",
+   "options": [
+    "Apply the MCP protocol’s version negotiation and initialization-state requirements, with unsupported versions refused",
+    "Return one fixed kernel capability response for any schema-valid initialize request and keep no session state",
+    "Require initialization before catalogue calls but allow discovery calls before it"
+   ],
+   "default_guess": "Apply the pinned MCP dependency’s protocol negotiation and require successful initialization before catalogue operations.",
+   "witness": {
+    "initial": "The client has a valid token but has not initialized its connection.",
+    "events": [
+     "The client sends `initialize` naming a protocol version the kernel does not implement.",
+     "It then sends `tools/list`."
+    ],
+    "outcomes": [
+     "Initialization is refused for the unsupported version and `tools/list` is unavailable until compatible initialization.",
+     "The kernel returns its fixed initialization answer and then lists tools because every known token gets discovery answers."
+    ],
+    "observer": "The MCP client"
+   }
+  },
+  {
+   "unit": "A16",
+   "subject": "ordering and pagination of `tools/list`",
+   "kind": "ambiguous list semantics",
+   "text": "Rule 13 says “`tools/list` answers every catalogue operation's schema,” while rule 6 says “Every list operation returns `page_size_default` items unless the caller asks for another size”; neither passage says whether discovery `tools/list` is a list operation under rule 6 or fixes the catalogue order.",
+   "question": "Must one `tools/list` response contain the entire catalogue, or is it paged under rule 6; and in what deterministic order are tool schemas returned?",
+   "options": [
+    "Return the complete catalogue in a fixed specified order without record-list paging",
+    "Apply rule 6 paging and continuation tokens to `tools/list`",
+    "Use MCP cursor paging with a separately specified catalogue order"
+   ],
+   "default_guess": "Return the complete fixed catalogue ordered by operation name, without store-position paging.",
+   "witness": {
+    "initial": "A release exposes more catalogue operations than `page_size_default`.",
+    "events": [
+     "An authenticated agent calls `tools/list` without a page size or continuation token."
+    ],
+    "outcomes": [
+     "The response contains every operation schema as rule 13 says.",
+     "The response contains only `page_size_default` schemas and requires continuation under rule 6."
+    ],
+    "observer": "The agent constructing its available-tool catalogue"
+   }
+  },
+  {
+   "unit": "A19",
+   "subject": "function access to filesystem timestamps through import metadata",
+   "kind": "contradiction with no-clock rule",
+   "text": "A03 now guarantees import metadata for the implementation’s source file, while A03 permits reads inside the exchange directory; A19 says “Functions have no clock.” The texts do not say whether source-file timestamps are normalized, hidden or readable through `os.stat(__file__)`.",
+   "question": "May implementation code observe the source file’s filesystem timestamps, and if not, what rule prevents or normalizes that observation?",
+   "options": [
+    "Create the source with fixed timestamps or otherwise normalize stat results",
+    "Trap or refuse metadata/stat access to the implementation file",
+    "Allow source timestamps even though they provide execution-time information"
+   ],
+   "default_guess": "Give sandbox input files fixed timestamps so filesystem metadata cannot act as a clock.",
+   "witness": {
+    "initial": "The implementation is loaded from a newly prepared source file in the exchange directory.",
+    "events": [
+     "Its `run` calls `os.stat(__file__).st_mtime_ns` and returns the number.",
+     "The same implementation and inputs execute again later."
+    ],
+    "outcomes": [
+     "The source timestamps are normalized, so both executions return the same value and the function has no usable clock.",
+     "The source file carries its creation-time timestamp, so the executions return different wall-time-derived values."
+    ],
+    "observer": "The owner or agent reading the output digest or value"
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A03\",\"subject\":\"sandbox module metadata and deterministic execution\",\"kind\":\"underspecified observable metadata\",\"text\":\"“It is loaded from its file in the exchange directory as `importlib` loads a source file, with the metadata `importlib` gives it” does not fix the loader API, source filename, in-sandbox path, or the values of observable fields such as `__file__`, `__cached__`, `__loader__` and `__spec__.origin`.\",\"question\":\"What exact import mechanism and observable metadata values must every execution use, and must paths be stable across fresh execution environments so equal inputs retain equal output digests?\",\"options\":[\"Use one specified loader and fixed in-sandbox source path, producing stable metadata\",\"Expose each execution’s unique exchange path through ordinary import metadata\",\"Permit any importlib-compatible loader and metadata\"],\"default_guess\":\"Use `importlib.util.spec_from_file_location` with a fixed in-sandbox source path and stable metadata.\",\"witness\":{\"initial\":\"An admitted implementation has a value output accepting an object.\",\"events\":[\"The implementation returns `{\\\"file\\\": __file__, \\\"origin\\\": __spec__.origin, \\\"cached\\\": __cached__}`.\",\"The kernel executes it twice on equal inputs in two fresh exchange directories.\"],\"outcomes\":[\"Both executions expose the same fixed in-sandbox paths and have the same output digest.\",\"Each execution exposes its unique exchange-directory path and has a different output digest.\"],\"observer\":\"The owner or agent reading the trial executions or run outputs\"}},{\"unit\":\"A03\",\"subject\":\"lifetime of the `sys.modules` entry\",\"kind\":\"unverifiable or conflicting invariant\",\"text\":\"“the module is entered in `sys.modules` under that name before its body runs and stays there until the execution ends” conflicts with giving ordinary Python code the mutable standard-library `sys.modules` mapping; the text does not say whether user code may delete or replace that entry or how the runner preserves it.\",\"question\":\"Must the entry remain present and point to the original module despite mutations by implementation code, or does “stays there” mean only that the runner itself does not remove it?\",\"options\":[\"Prevent or undo deletion and replacement throughout execution\",\"Allow ordinary mutation; the runner merely does not remove the entry\",\"Treat mutation of this entry as a sandbox violation or crash\"],\"default_guess\":\"Allow ordinary Python mutation and interpret the sentence as a promise only about the runner’s own behavior.\",\"witness\":{\"initial\":\"A function module is being loaded under `cabinet_sandbox_code`.\",\"events\":[\"Its module body executes `del sys.modules[__name__]`.\",\"Its `run` function returns whether `cabinet_sandbox_code` is present in `sys.modules`.\"],\"outcomes\":[\"The deletion works and the function returns `false`, despite the passage saying the entry stays until execution ends.\",\"The runner prevents or reverses deletion and the function returns `true` or the deletion fails.\"],\"observer\":\"The caller reading the function output or execution outcome\"}},{\"unit\":\"A16\",\"subject\":\"validation of MCP discovery requests\",\"kind\":\"contradictory check order\",\"text\":\"Rule 3 says `initialize`, `ping` and `tools/list` “get their answer after the size, token and depth checks of rule 1,” while rules 1 and 4 say a request must name a known operation and fit its schema, and that “Every request is validated against its schema” with an unknown field refused.\",\"question\":\"After size, configuration/token and depth checks, must discovery requests also pass method-specific schema and unknown-field validation, or must every authenticated discovery request receive an answer regardless of its remaining shape?\",\"options\":[\"Discovery methods bypass operation/schema/actor checks and always answer after depth\",\"Discovery methods bypass only the action-table authorization check but still undergo their own schema validation\",\"All rule-1 checks apply exactly as for catalogue operations\"],\"default_guess\":\"Validate each discovery method against its MCP request schema, while bypassing only catalogue-operation authorization.\",\"witness\":{\"initial\":\"A valid agent token is configured and the kernel is serving.\",\"events\":[\"The agent sends `tools/list` within the size and depth limits but includes an unknown parameter.\"],\"outcomes\":[\"The kernel answers the catalogue because rule 3 says the answer follows the size, token and depth checks.\",\"The kernel returns `invalid_request` because rules 1 and 4 require schema validation and refuse unknown fields.\"],\"observer\":\"The requesting agent\"}},{\"unit\":\"A16\",\"subject\":\"`initialize` discovery compatibility and refusal conditions\",\"kind\":\"missing protocol rule\",\"text\":\"“The MCP discovery methods `initialize`, `ping` and `tools/list` … get their answer” does not state which `initialize` protocol versions or client capabilities are accepted, what answer is returned for an unsupported version, or whether initialization state affects later discovery and tool calls.\",\"question\":\"What protocol-version negotiation and session-state rules apply to `initialize`, and may `ping`, `tools/list` or catalogue operations be called before a successful initialization?\",\"options\":[\"Apply the MCP protocol’s version negotiation and initialization-state requirements, with unsupported versions refused\",\"Return one fixed kernel capability response for any schema-valid initialize request and keep no session state\",\"Require initialization before catalogue calls but allow discovery calls before it\"],\"default_guess\":\"Apply the pinned MCP dependency’s protocol negotiation and require successful initialization before catalogue operations.\",\"witness\":{\"initial\":\"The client has a valid token but has not initialized its connection.\",\"events\":[\"The client sends `initialize` naming a protocol version the kernel does not implement.\",\"It then sends `tools/list`.\"],\"outcomes\":[\"Initialization is refused for the unsupported version and `tools/list` is unavailable until compatible initialization.\",\"The kernel returns its fixed initialization answer and then lists tools because every known token gets discovery answers.\"],\"observer\":\"The MCP client\"}},{\"unit\":\"A16\",\"subject\":\"ordering and pagination of `tools/list`\",\"kind\":\"ambiguous list semantics\",\"text\":\"Rule 13 says “`tools/list` answers every catalogue operation's schema,” while rule 6 says “Every list operation returns `page_size_default` items unless the caller asks for another size”; neither passage says whether discovery `tools/list` is a list operation under rule 6 or fixes the catalogue order.\",\"question\":\"Must one `tools/list` response contain the entire catalogue, or is it paged under rule 6; and in what deterministic order are tool schemas returned?\",\"options\":[\"Return the complete catalogue in a fixed specified order without record-list paging\",\"Apply rule 6 paging and continuation tokens to `tools/list`\",\"Use MCP cursor paging with a separately specified catalogue order\"],\"default_guess\":\"Return the complete fixed catalogue ordered by operation name, without store-position paging.\",\"witness\":{\"initial\":\"A release exposes more catalogue operations than `page_size_default`.\",\"events\":[\"An authenticated agent calls `tools/list` without a page size or continuation token.\"],\"outcomes\":[\"The response contains every operation schema as rule 13 says.\",\"The response contains only `page_size_default` schemas and requires continuation under rule 6.\"],\"observer\":\"The agent constructing its available-tool catalogue\"}},{\"unit\":\"A19\",\"subject\":\"function access to filesystem timestamps through import metadata\",\"kind\":\"contradiction with no-clock rule\",\"text\":\"A03 now guarantees import metadata for the implementation’s source file, while A03 permits reads inside the exchange directory; A19 says “Functions have no clock.” The texts do not say whether source-file timestamps are normalized, hidden or readable through `os.stat(__file__)`.\",\"question\":\"May implementation code observe the source file’s filesystem timestamps, and if not, what rule prevents or normalizes that observation?\",\"options\":[\"Create the source with fixed timestamps or otherwise normalize stat results\",\"Trap or refuse metadata/stat access to the implementation file\",\"Allow source timestamps even though they provide execution-time information\"],\"default_guess\":\"Give sandbox input files fixed timestamps so filesystem metadata cannot act as a clock.\",\"witness\":{\"initial\":\"The implementation is loaded from a newly prepared source file in the exchange directory.\",\"events\":[\"Its `run` calls `os.stat(__file__).st_mtime_ns` and returns the number.\",\"The same implementation and inputs execute again later.\"],\"outcomes\":[\"The source timestamps are normalized, so both executions return the same value and the function has no usable clock.\",\"The source file carries its creation-time timestamp, so the executions return different wall-time-derived values.\"],\"observer\":\"The owner or agent reading the output digest or value\"}}]}",
+ "set_aside": []
+}
