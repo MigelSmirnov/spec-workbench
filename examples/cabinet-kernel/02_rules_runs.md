@@ -251,8 +251,8 @@ edge.undecided <-> NOT source_concluded_succeeded
 
 ### Consequence
 
-The same flow on the same inputs always executes in the same order, and bad data
-never travels one step further than the node that produced it.
+When its functions' outputs depend only on their inputs (K-02), the same flow on the
+same inputs always executes in the same order; and bad data never travels one step further than the node that produced it.
 
 ## Accepted decision A14 — waiting is truthful, and only people end it
 

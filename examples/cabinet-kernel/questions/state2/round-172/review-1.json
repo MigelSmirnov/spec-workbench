@@ -1,0 +1,109 @@
+{
+ "open_points": [
+  {
+   "unit": "A03",
+   "subject": "sandbox environment member own_proc",
+   "kind": "undefined environment capability",
+   "text": "The formal invariant adds `own_proc` to `environment = {python_stdlib_runtime, code, inputs, exchange_dir, own_proc}`, but no rule defines `own_proc`, while rule 1 says no host directory is mounted except the runtime and exchange directory and rule 4 traps every open outside them.",
+   "question": "What exactly is `own_proc`, how is it exposed to function code, and does access to paths such as `/proc/self/*` succeed or count as a sandbox trap?",
+   "options": [
+    "Mount a private procfs and allow access to the execution's namespace processes.",
+    "Do not expose procfs; `own_proc` merely denotes the processes inside the PID namespace.",
+    "Expose a defined synthetic subset of process facts."
+   ],
+   "default_guess": "Treat `own_proc` as the processes in the private PID namespace, without granting function code additional filesystem paths.",
+   "witness": {
+    "initial": "An admitted function has one string output and calls `open('/proc/self/stat').read()` before returning it.",
+    "events": [
+     "An agent starts a run containing the function.",
+     "The sandbox creates the environment described by A03 and loads the module."
+    ],
+    "outcomes": [
+     "If `own_proc` means an accessible private procfs, the function succeeds and returns process facts.",
+     "If `/proc` remains outside the runtime and exchange directory, the audit hook records a trap and the execution concludes `sandbox_violation`."
+    ],
+    "observer": "The run starter and trace readers see a value in one implementation and `sandbox_violation` in the other."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "conditional repeatability guarantee",
+   "kind": "undefined unverifiable predicate",
+   "text": "“Every promise in these documents that a function repeats itself ... is a promise about code whose outputs depend only on its inputs; the kernel neither checks that nor masks any other fact of the process.”",
+   "question": "What makes an implementation one “whose outputs depend only on its inputs,” especially when it reads a process fact that happens to be stable in some executions, and how can conformance tests determine whether the conditional guarantee applies?",
+   "options": [
+    "Use a semantic rule: reading any fact not supplied through an input makes the guarantee inapplicable.",
+    "Use an observational rule: the guarantee applies when repeated executions observed so far have equal outputs.",
+    "Define a closed set of permitted input-derived operations whose use establishes the condition.",
+    "Leave the condition as an unverifiable author assertion."
+   ],
+   "default_guess": "Use the semantic rule that any dependency on process or runtime state outside declared inputs makes the repeatability guarantee inapplicable.",
+   "witness": {
+    "initial": "A function returns its input together with `os.getpid()`, which is not trapped and may be stable inside a fresh PID namespace.",
+    "events": [
+     "The verifier executes it twice with equal inputs in one release.",
+     "The kernel is restarted or the sandbox process layout changes, and it is executed again with the same input."
+    ],
+    "outcomes": [
+     "Under an observational interpretation it qualifies as input-dependent after the first equal executions, so the later differing digest violates the promise.",
+     "Under a semantic interpretation it never qualifies because it reads a process fact, so the differing digest is permitted."
+    ],
+    "observer": "Release-test authors and users relying on repeatability disagree about whether the later result violates the design."
+   }
+  },
+  {
+   "unit": "A04",
+   "subject": "admission verdict and activation commit boundary",
+   "kind": "crash atomicity gap",
+   "text": "“An `admitted` verdict is followed at once, in the same request, by an Activation M09 by the kernel,” but the text does not say whether the verdict and activation are committed atomically or how startup repairs a committed admitted verdict whose activation was not recorded.",
+   "question": "If the kernel stops after recording the admitted verdict but before recording its activation, must restart activate it automatically, leave the previous implementation active until resubmission, or must the verdict and activation be one transaction so that state cannot exist?",
+   "options": [
+    "Record the verdict and activation atomically in one store transaction.",
+    "Permit separate commits and activate the admitted implementation during startup recovery.",
+    "Permit separate commits and leave the previous activation serving until the implementation is submitted again."
+   ],
+   "default_guess": "Commit the verdict and its resulting activation atomically in one store transaction.",
+   "witness": {
+    "initial": "Implementation i1 is active; submission of i2 finishes every trial successfully.",
+    "events": [
+     "The kernel records an `admitted` verdict for i2.",
+     "The process stops at the boundary before an Activation for i2 is durably recorded.",
+     "The kernel starts again and an agent inspects the slot without resubmitting i2."
+    ],
+    "outcomes": [
+     "With an atomic final commit or recovery completion, i2 is active after restart.",
+     "With separate commits and no admission recovery rule, the admitted verdict exists but i1 remains active."
+    ],
+    "observer": "The inspecting agent and every subsequent run of the slot see which implementation is active."
+   }
+  },
+  {
+   "unit": "A13",
+   "subject": "same-input execution order after determinism qualification",
+   "kind": "scope contradiction",
+   "text": "A13 concludes, “The same flow on the same inputs always executes in the same order,” while the changed State 0 context allows a function whose outputs use unmasked process facts to produce different results on equal inputs.",
+   "question": "Does A13 promise an identical sequence of executed nodes only when relevant function outputs depend solely on inputs, or does “same order” mean only that the kernel chooses the smallest ready `node_id` for whatever ready set arises?",
+   "options": [
+    "Qualify the identical execution-sequence promise by the new input-dependence condition.",
+    "Interpret “same order” only as deterministic selection among the ready nodes in each individual run.",
+    "Keep an unconditional identical-sequence promise, requiring process-dependent function results to be masked or refused."
+   ],
+   "default_guess": "Interpret the normative rule as deterministic selection within each run and qualify any identical cross-run sequence by input-dependent function outputs.",
+   "witness": {
+    "initial": "A function produces a guard value from an untrapped process fact; one guard value enables node `a` and the other enables node `b`. The flow inputs are otherwise identical.",
+    "events": [
+     "An agent starts the flow once and the function enables `a`.",
+     "The agent starts the same active flow again with equal inputs and the function enables `b`."
+    ],
+    "outcomes": [
+     "Under the changed conditional guarantee, the traces may contain different executed-node sequences while each run still chooses the smallest ready node.",
+     "Under A13's unconditional consequence, the second run must execute the same node sequence as the first."
+    ],
+    "observer": "The run starter and trace readers see whether node `a` or node `b` executed."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A03\",\"subject\":\"sandbox environment member own_proc\",\"kind\":\"undefined environment capability\",\"text\":\"The formal invariant adds `own_proc` to `environment = {python_stdlib_runtime, code, inputs, exchange_dir, own_proc}`, but no rule defines `own_proc`, while rule 1 says no host directory is mounted except the runtime and exchange directory and rule 4 traps every open outside them.\",\"question\":\"What exactly is `own_proc`, how is it exposed to function code, and does access to paths such as `/proc/self/*` succeed or count as a sandbox trap?\",\"options\":[\"Mount a private procfs and allow access to the execution's namespace processes.\",\"Do not expose procfs; `own_proc` merely denotes the processes inside the PID namespace.\",\"Expose a defined synthetic subset of process facts.\"],\"default_guess\":\"Treat `own_proc` as the processes in the private PID namespace, without granting function code additional filesystem paths.\",\"witness\":{\"initial\":\"An admitted function has one string output and calls `open('/proc/self/stat').read()` before returning it.\",\"events\":[\"An agent starts a run containing the function.\",\"The sandbox creates the environment described by A03 and loads the module.\"],\"outcomes\":[\"If `own_proc` means an accessible private procfs, the function succeeds and returns process facts.\",\"If `/proc` remains outside the runtime and exchange directory, the audit hook records a trap and the execution concludes `sandbox_violation`.\"],\"observer\":\"The run starter and trace readers see a value in one implementation and `sandbox_violation` in the other.\"}},{\"unit\":\"context\",\"subject\":\"conditional repeatability guarantee\",\"kind\":\"undefined unverifiable predicate\",\"text\":\"“Every promise in these documents that a function repeats itself ... is a promise about code whose outputs depend only on its inputs; the kernel neither checks that nor masks any other fact of the process.”\",\"question\":\"What makes an implementation one “whose outputs depend only on its inputs,” especially when it reads a process fact that happens to be stable in some executions, and how can conformance tests determine whether the conditional guarantee applies?\",\"options\":[\"Use a semantic rule: reading any fact not supplied through an input makes the guarantee inapplicable.\",\"Use an observational rule: the guarantee applies when repeated executions observed so far have equal outputs.\",\"Define a closed set of permitted input-derived operations whose use establishes the condition.\",\"Leave the condition as an unverifiable author assertion.\"],\"default_guess\":\"Use the semantic rule that any dependency on process or runtime state outside declared inputs makes the repeatability guarantee inapplicable.\",\"witness\":{\"initial\":\"A function returns its input together with `os.getpid()`, which is not trapped and may be stable inside a fresh PID namespace.\",\"events\":[\"The verifier executes it twice with equal inputs in one release.\",\"The kernel is restarted or the sandbox process layout changes, and it is executed again with the same input.\"],\"outcomes\":[\"Under an observational interpretation it qualifies as input-dependent after the first equal executions, so the later differing digest violates the promise.\",\"Under a semantic interpretation it never qualifies because it reads a process fact, so the differing digest is permitted.\"],\"observer\":\"Release-test authors and users relying on repeatability disagree about whether the later result violates the design.\"}},{\"unit\":\"A04\",\"subject\":\"admission verdict and activation commit boundary\",\"kind\":\"crash atomicity gap\",\"text\":\"“An `admitted` verdict is followed at once, in the same request, by an Activation M09 by the kernel,” but the text does not say whether the verdict and activation are committed atomically or how startup repairs a committed admitted verdict whose activation was not recorded.\",\"question\":\"If the kernel stops after recording the admitted verdict but before recording its activation, must restart activate it automatically, leave the previous implementation active until resubmission, or must the verdict and activation be one transaction so that state cannot exist?\",\"options\":[\"Record the verdict and activation atomically in one store transaction.\",\"Permit separate commits and activate the admitted implementation during startup recovery.\",\"Permit separate commits and leave the previous activation serving until the implementation is submitted again.\"],\"default_guess\":\"Commit the verdict and its resulting activation atomically in one store transaction.\",\"witness\":{\"initial\":\"Implementation i1 is active; submission of i2 finishes every trial successfully.\",\"events\":[\"The kernel records an `admitted` verdict for i2.\",\"The process stops at the boundary before an Activation for i2 is durably recorded.\",\"The kernel starts again and an agent inspects the slot without resubmitting i2.\"],\"outcomes\":[\"With an atomic final commit or recovery completion, i2 is active after restart.\",\"With separate commits and no admission recovery rule, the admitted verdict exists but i1 remains active.\"],\"observer\":\"The inspecting agent and every subsequent run of the slot see which implementation is active.\"}},{\"unit\":\"A13\",\"subject\":\"same-input execution order after determinism qualification\",\"kind\":\"scope contradiction\",\"text\":\"A13 concludes, “The same flow on the same inputs always executes in the same order,” while the changed State 0 context allows a function whose outputs use unmasked process facts to produce different results on equal inputs.\",\"question\":\"Does A13 promise an identical sequence of executed nodes only when relevant function outputs depend solely on inputs, or does “same order” mean only that the kernel chooses the smallest ready `node_id` for whatever ready set arises?\",\"options\":[\"Qualify the identical execution-sequence promise by the new input-dependence condition.\",\"Interpret “same order” only as deterministic selection among the ready nodes in each individual run.\",\"Keep an unconditional identical-sequence promise, requiring process-dependent function results to be masked or refused.\"],\"default_guess\":\"Interpret the normative rule as deterministic selection within each run and qualify any identical cross-run sequence by input-dependent function outputs.\",\"witness\":{\"initial\":\"A function produces a guard value from an untrapped process fact; one guard value enables node `a` and the other enables node `b`. The flow inputs are otherwise identical.\",\"events\":[\"An agent starts the flow once and the function enables `a`.\",\"The agent starts the same active flow again with equal inputs and the function enables `b`.\"],\"outcomes\":[\"Under the changed conditional guarantee, the traces may contain different executed-node sequences while each run still chooses the smallest ready node.\",\"Under A13's unconditional consequence, the second run must execute the same node sequence as the first.\"],\"observer\":\"The run starter and trace readers see whether node `a` or node `b` executed.\"}}]}",
+ "set_aside": []
+}
