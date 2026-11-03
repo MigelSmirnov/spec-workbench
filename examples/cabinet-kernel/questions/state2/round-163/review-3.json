@@ -1,0 +1,148 @@
+{
+ "open_points": [
+  {
+   "unit": "A03",
+   "subject": "sandbox module loading",
+   "kind": "underspecified module semantics",
+   "text": "It is loaded under the one fixed name `cabinet_sandbox_code` ... and the runner enters it in `sys.modules` under that name before its body runs",
+   "question": "Which ordinary import attributes and loader state must the module receive, including `__spec__`, `__loader__`, `__package__`, `__file__` and `__cached__`?",
+   "options": [
+    "Create a bare `ModuleType`, set the fixed `__name__`, insert it in `sys.modules`, and execute the code, leaving optional import attributes absent or `None`.",
+    "Create the module through an importlib loader and `ModuleSpec`, giving it the metadata of a normal imported source module."
+   ],
+   "default_guess": "Use an importlib `ModuleSpec` and loader so the stated import-like behaviour extends beyond the two named examples.",
+   "witness": {
+    "initial": "A contract has one boolean output and a trial expecting `true`.",
+    "events": [
+     "An author submits code whose `run` returns whether its own `__spec__` is non-null.",
+     "The kernel admits the implementation over that trial."
+    ],
+    "outcomes": [
+     "A bare-module loader returns `false`, so the trial is `output_mismatch` and admission is refused.",
+     "An importlib-style loader returns `true`, so the trial passes and the implementation is activated."
+    ],
+    "observer": "The submitting agent sees a different admission verdict."
+   }
+  },
+  {
+   "unit": "A16",
+   "subject": "checks for MCP discovery methods",
+   "kind": "contradictory check order",
+   "text": "The MCP discovery methods `initialize`, `ping` and `tools/list` ... get their answer after the size, token and depth checks of rule 1. Rule 4 says: Every request is validated against its schema ... an unknown field, or a field over its bound is refused. The formal invariant says `request -> schema_valid`.",
+   "question": "After size, token and depth checks, must a discovery request also pass a method schema and the per-field bounds, or must it be answered immediately?",
+   "options": [
+    "Discovery bypasses operation/schema, canonical-JSON-string, field-bound and actor checks and is answered after depth.",
+    "Discovery has its own request schema and field bounds, which are checked before answering."
+   ],
+   "default_guess": "Validate each discovery method against a fixed protocol schema and the common field bounds before answering.",
+   "witness": {
+    "initial": "The kernel is serving and the caller has a known agent token.",
+    "events": [
+     "The agent sends `tools/list` with an extra field not defined by the discovery method."
+    ],
+    "outcomes": [
+     "Under the new rule 3 passage, the kernel answers because size, token and depth pass.",
+     "Under rule 4 and the formal invariant, the kernel refuses the unknown field."
+    ],
+    "observer": "The agent receives either a tool catalogue or a refusal."
+   }
+  },
+  {
+   "unit": "A16",
+   "subject": "MCP initialization contract",
+   "kind": "missing protocol decision",
+   "text": "The MCP discovery methods `initialize`, `ping` and `tools/list` ... get their answer",
+   "question": "What request fields, supported protocol versions, response fields, capabilities and initialization-state rules define each of these methods?",
+   "options": [
+    "Use one pinned MCP protocol version, validate its standard request shapes, require initialization before later methods, and return that version's standard responses.",
+    "Treat the three names as stateless kernel methods and answer any structurally parseable request after the listed common checks."
+   ],
+   "default_guess": "Pin one MCP protocol version and follow its initialization lifecycle and request/response schemas.",
+   "witness": {
+    "initial": "A fresh connection is authenticated with a known token and has not sent `initialize`.",
+    "events": [
+     "The client calls `tools/list` directly."
+    ],
+    "outcomes": [
+     "A stateful MCP implementation refuses because initialization has not completed.",
+     "A stateless implementation returns the catalogue because the text says a known token gets the answer after the listed checks."
+    ],
+    "observer": "The MCP client either discovers tools or receives a protocol refusal."
+   }
+  },
+  {
+   "unit": "A16",
+   "subject": "contents of `tools/list`",
+   "kind": "undefined catalogue",
+   "text": "`tools/list` answers every catalogue operation's schema, those whose request holds a discriminated union included",
+   "question": "What exact operations constitute the catalogue, what are their tool names, and which actions are represented as separate tools versus one tool with a discriminated-union request?",
+   "options": [
+    "Expose broad tools such as `author`, `inspect` and `run`, using discriminated unions for their variants.",
+    "Expose a separate tool for each concrete action, such as authoring a contract, authoring an implementation, inspecting a run and inspecting a binding."
+   ],
+   "default_guess": "Expose separate concrete operations except where a later accepted operation contract explicitly defines a discriminated union.",
+   "witness": {
+    "initial": "The kernel implements all State 0 actions and is queried by an authenticated agent.",
+    "events": [
+     "The agent calls `tools/list` and searches for the way to author an implementation."
+    ],
+    "outcomes": [
+     "One implementation returns an `author` tool whose request discriminates contract from implementation.",
+     "Another returns separate `author_contract` and `author_implementation` tools."
+    ],
+    "observer": "The agent must construct different tool calls from the returned catalogue."
+   }
+  },
+  {
+   "unit": "A19",
+   "subject": "function access to wall and process clocks",
+   "kind": "contradiction",
+   "text": "A19 says `Functions have no clock (A03)`, while A03 says the replacement list is closed for release v1 and does not list standard-library entry points such as `time.clock_gettime`, `time.clock_gettime_ns`, `time.thread_time` or `time.thread_time_ns`.",
+   "question": "Must those unlisted clock entry points work because A03's release-v1 trap list is exact, or be trapped because functions have no clock?",
+   "options": [
+    "Obey the closed A03 list; unlisted standard-library clocks remain callable in release v1.",
+    "Enforce A19's no-clock rule by trapping every clock source, including the omitted entry points."
+   ],
+   "default_guess": "Trap the omitted clock entry points and amend the closed release list.",
+   "witness": {
+    "initial": "A contract has an integer output and a non-empty trial corpus.",
+    "events": [
+     "An author submits code that returns `time.clock_gettime_ns(time.CLOCK_REALTIME)`.",
+     "Admission executes it in the release-v1 sandbox."
+    ],
+    "outcomes": [
+     "Following A03's exact closed list, the call succeeds and produces a time-dependent value.",
+     "Following A19's no-clock rule, the execution is `sandbox_violation`."
+    ],
+    "observer": "The submitting agent sees different trial evidence and potentially a different admission verdict."
+   }
+  },
+  {
+   "unit": "A19",
+   "subject": "clock used by HTTPS certificate verification",
+   "kind": "unassigned clock source",
+   "text": "No other part of the kernel reads the wall clock. A09 also requires: `TLS is verified for https`.",
+   "question": "Which time source decides whether an HTTPS certificate is currently valid: A19's clock module or the host/system clock used by the TLS implementation?",
+   "options": [
+    "Certificate validity is checked against the injectable clock module, preserving A19's single-source rule.",
+    "The TLS library uses the host wall clock independently, treating A19 as applying only to timestamps and explicit application decisions."
+   ],
+   "default_guess": "Route certificate-validity decisions through the clock module or explicitly exempt the TLS verifier from A19.",
+   "witness": {
+    "initial": "The injected clock says a service certificate is valid, while the host wall clock says it is expired.",
+    "events": [
+     "A run reaches an HTTPS operation node.",
+     "The kernel performs TLS verification before sending the request."
+    ],
+    "outcomes": [
+     "Using the injected clock, TLS succeeds and the request may be sent.",
+     "Using the host clock, TLS fails before the first request byte and the element becomes `service_unreachable` or `not_sent` as applicable."
+    ],
+    "observer": "The run starter sees whether the service operation was reached and how the element concluded."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A03\",\"subject\":\"sandbox module loading\",\"kind\":\"underspecified module semantics\",\"text\":\"It is loaded under the one fixed name `cabinet_sandbox_code` ... and the runner enters it in `sys.modules` under that name before its body runs\",\"question\":\"Which ordinary import attributes and loader state must the module receive, including `__spec__`, `__loader__`, `__package__`, `__file__` and `__cached__`?\",\"options\":[\"Create a bare `ModuleType`, set the fixed `__name__`, insert it in `sys.modules`, and execute the code, leaving optional import attributes absent or `None`.\",\"Create the module through an importlib loader and `ModuleSpec`, giving it the metadata of a normal imported source module.\"],\"default_guess\":\"Use an importlib `ModuleSpec` and loader so the stated import-like behaviour extends beyond the two named examples.\",\"witness\":{\"initial\":\"A contract has one boolean output and a trial expecting `true`.\",\"events\":[\"An author submits code whose `run` returns whether its own `__spec__` is non-null.\",\"The kernel admits the implementation over that trial.\"],\"outcomes\":[\"A bare-module loader returns `false`, so the trial is `output_mismatch` and admission is refused.\",\"An importlib-style loader returns `true`, so the trial passes and the implementation is activated.\"],\"observer\":\"The submitting agent sees a different admission verdict.\"}},{\"unit\":\"A16\",\"subject\":\"checks for MCP discovery methods\",\"kind\":\"contradictory check order\",\"text\":\"The MCP discovery methods `initialize`, `ping` and `tools/list` ... get their answer after the size, token and depth checks of rule 1. Rule 4 says: Every request is validated against its schema ... an unknown field, or a field over its bound is refused. The formal invariant says `request -> schema_valid`.\",\"question\":\"After size, token and depth checks, must a discovery request also pass a method schema and the per-field bounds, or must it be answered immediately?\",\"options\":[\"Discovery bypasses operation/schema, canonical-JSON-string, field-bound and actor checks and is answered after depth.\",\"Discovery has its own request schema and field bounds, which are checked before answering.\"],\"default_guess\":\"Validate each discovery method against a fixed protocol schema and the common field bounds before answering.\",\"witness\":{\"initial\":\"The kernel is serving and the caller has a known agent token.\",\"events\":[\"The agent sends `tools/list` with an extra field not defined by the discovery method.\"],\"outcomes\":[\"Under the new rule 3 passage, the kernel answers because size, token and depth pass.\",\"Under rule 4 and the formal invariant, the kernel refuses the unknown field.\"],\"observer\":\"The agent receives either a tool catalogue or a refusal.\"}},{\"unit\":\"A16\",\"subject\":\"MCP initialization contract\",\"kind\":\"missing protocol decision\",\"text\":\"The MCP discovery methods `initialize`, `ping` and `tools/list` ... get their answer\",\"question\":\"What request fields, supported protocol versions, response fields, capabilities and initialization-state rules define each of these methods?\",\"options\":[\"Use one pinned MCP protocol version, validate its standard request shapes, require initialization before later methods, and return that version's standard responses.\",\"Treat the three names as stateless kernel methods and answer any structurally parseable request after the listed common checks.\"],\"default_guess\":\"Pin one MCP protocol version and follow its initialization lifecycle and request/response schemas.\",\"witness\":{\"initial\":\"A fresh connection is authenticated with a known token and has not sent `initialize`.\",\"events\":[\"The client calls `tools/list` directly.\"],\"outcomes\":[\"A stateful MCP implementation refuses because initialization has not completed.\",\"A stateless implementation returns the catalogue because the text says a known token gets the answer after the listed checks.\"],\"observer\":\"The MCP client either discovers tools or receives a protocol refusal.\"}},{\"unit\":\"A16\",\"subject\":\"contents of `tools/list`\",\"kind\":\"undefined catalogue\",\"text\":\"`tools/list` answers every catalogue operation's schema, those whose request holds a discriminated union included\",\"question\":\"What exact operations constitute the catalogue, what are their tool names, and which actions are represented as separate tools versus one tool with a discriminated-union request?\",\"options\":[\"Expose broad tools such as `author`, `inspect` and `run`, using discriminated unions for their variants.\",\"Expose a separate tool for each concrete action, such as authoring a contract, authoring an implementation, inspecting a run and inspecting a binding.\"],\"default_guess\":\"Expose separate concrete operations except where a later accepted operation contract explicitly defines a discriminated union.\",\"witness\":{\"initial\":\"The kernel implements all State 0 actions and is queried by an authenticated agent.\",\"events\":[\"The agent calls `tools/list` and searches for the way to author an implementation.\"],\"outcomes\":[\"One implementation returns an `author` tool whose request discriminates contract from implementation.\",\"Another returns separate `author_contract` and `author_implementation` tools.\"],\"observer\":\"The agent must construct different tool calls from the returned catalogue.\"}},{\"unit\":\"A19\",\"subject\":\"function access to wall and process clocks\",\"kind\":\"contradiction\",\"text\":\"A19 says `Functions have no clock (A03)`, while A03 says the replacement list is closed for release v1 and does not list standard-library entry points such as `time.clock_gettime`, `time.clock_gettime_ns`, `time.thread_time` or `time.thread_time_ns`.\",\"question\":\"Must those unlisted clock entry points work because A03's release-v1 trap list is exact, or be trapped because functions have no clock?\",\"options\":[\"Obey the closed A03 list; unlisted standard-library clocks remain callable in release v1.\",\"Enforce A19's no-clock rule by trapping every clock source, including the omitted entry points.\"],\"default_guess\":\"Trap the omitted clock entry points and amend the closed release list.\",\"witness\":{\"initial\":\"A contract has an integer output and a non-empty trial corpus.\",\"events\":[\"An author submits code that returns `time.clock_gettime_ns(time.CLOCK_REALTIME)`.\",\"Admission executes it in the release-v1 sandbox.\"],\"outcomes\":[\"Following A03's exact closed list, the call succeeds and produces a time-dependent value.\",\"Following A19's no-clock rule, the execution is `sandbox_violation`.\"],\"observer\":\"The submitting agent sees different trial evidence and potentially a different admission verdict.\"}},{\"unit\":\"A19\",\"subject\":\"clock used by HTTPS certificate verification\",\"kind\":\"unassigned clock source\",\"text\":\"No other part of the kernel reads the wall clock. A09 also requires: `TLS is verified for https`.\",\"question\":\"Which time source decides whether an HTTPS certificate is currently valid: A19's clock module or the host/system clock used by the TLS implementation?\",\"options\":[\"Certificate validity is checked against the injectable clock module, preserving A19's single-source rule.\",\"The TLS library uses the host wall clock independently, treating A19 as applying only to timestamps and explicit application decisions.\"],\"default_guess\":\"Route certificate-validity decisions through the clock module or explicitly exempt the TLS verifier from A19.\",\"witness\":{\"initial\":\"The injected clock says a service certificate is valid, while the host wall clock says it is expired.\",\"events\":[\"A run reaches an HTTPS operation node.\",\"The kernel performs TLS verification before sending the request.\"],\"outcomes\":[\"Using the injected clock, TLS succeeds and the request may be sent.\",\"Using the host clock, TLS fails before the first request byte and the element becomes `service_unreachable` or `not_sent` as applicable.\"],\"observer\":\"The run starter sees whether the service operation was reached and how the element concluded.\"}}]}",
+ "set_aside": []
+}
