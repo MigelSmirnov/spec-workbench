@@ -329,7 +329,7 @@ Reuses cabinet-flow decision 25, narrowed.
 3. A timestamp received from a service is a value like any other: it never becomes
    a kernel timestamp and orders nothing in the kernel. The kernel orders its
    records only by the store's order (K-17).
-4. Functions have no clock (A03).
+4. A function's clock entry points raise (A03 rule 4, K-02).
 
 ### Formal invariants
 

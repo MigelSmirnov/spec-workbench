@@ -139,7 +139,7 @@ admitted implementation; rollback is another activation. A run pins what it uses
 Every function execution, trial and real, runs in a disposable isolated
 environment with bounded time, memory, output and processes. Each contract
 version has a trial corpus; a failed real execution can be captured into it, so a
-repaired slot stays repaired. Admission is a deterministic verdict over the whole
+repaired slot stays repaired. Admission is one recorded verdict over the whole
 active corpus; an empty corpus refuses. Cases are not copied between contract
 versions and not withdrawn.
 

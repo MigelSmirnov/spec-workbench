@@ -280,7 +280,8 @@ cleanup_unconfirmed -> output_discarded AND kernel_process_stops
    [witness: verification:kernel_a03_unloadable_module_is_crashed]
 5. A returned dict with an extra key is `contract_violation`.
    [witness: verification:kernel_a03_extra_output_key_contract_violation]
-6. The same implementation on the same input yields the same output digest twice.
+6. An implementation that obtains no time and no chance yields the same output
+   digest twice on the same input.
 7. With `bubblewrap` absent the kernel does not start and names the missing
    sandbox.
    [witness: verification:kernel_a03_kernel_refuses_start_without_sandbox]

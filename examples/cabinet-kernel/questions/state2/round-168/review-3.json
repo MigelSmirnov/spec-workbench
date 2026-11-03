@@ -1,0 +1,149 @@
+{
+ "open_points": [
+  {
+   "unit": "A03",
+   "subject": "sandbox process filesystem",
+   "kind": "undefined invariant",
+   "text": "The formal environment changed to `environment = {python_stdlib_runtime, code, inputs, exchange_dir, own_proc}`, but `own_proc` is nowhere defined, while rule 1 still says the environment holds only the runtime and exchange directory and required test 10 describes only those mounts.",
+   "question": "What concrete resource does `own_proc` require—such as a procfs mounted for the new PID namespace—and what paths and information may function code observe through it?",
+   "options": [
+    "Mount a private procfs for the execution's PID namespace at `/proc`.",
+    "Create the PID namespace without mounting procfs.",
+    "Provide some other restricted process view."
+   ],
+   "default_guess": "Mount a private procfs at `/proc` for the execution's PID namespace, while retaining the audit trap for user opens outside the runtime and exchange directory.",
+   "witness": {
+    "initial": "A fresh sandbox has a new PID namespace and code that examines whether `/proc/self` exists.",
+    "events": [
+     "The kernel creates the bubblewrap environment.",
+     "The function or an external sandbox verifier examines the execution's process view."
+    ],
+    "outcomes": [
+     "A private `/proc` exists and exposes only processes in the execution's PID namespace.",
+     "No `/proc` is mounted, or the inherited process view has different contents."
+    ],
+    "observer": "The function through observable filesystem behavior, or the required isolation test inspecting the sandbox."
+   }
+  },
+  {
+   "unit": "A03",
+   "subject": "clock exclusion versus the closed trap list",
+   "kind": "contradiction",
+   "text": "The decision remains titled “every function execution runs ... without a clock” and its consequence says code “can compute and do nothing else”, but the changed K-02 says code that gets time “some other way is not detected and is judged by its outputs like any other”, while A03 declares its trap list closed.",
+   "question": "Must the sandbox prevent every standard-library route that reveals time, or must it trap only the closed list and permit unlisted routes such as `resource.getrusage(...).ru_utime`?",
+   "options": [
+    "Only the closed list is trapped; unlisted time sources may succeed.",
+    "Every route that reveals time must be trapped, including unlisted standard-library APIs."
+   ],
+   "default_guess": "Treat the closed list and the changed K-02 passage as controlling, so unlisted routes may succeed.",
+   "witness": {
+    "initial": "An admitted-shape function returns `resource.getrusage(resource.RUSAGE_SELF).ru_utime`, which is not in A03's closed list.",
+    "events": [
+     "An agent tries the implementation on a valid case."
+    ],
+    "outcomes": [
+     "The call succeeds and its time-derived value is judged as an ordinary output.",
+     "The call is trapped or otherwise prevented because executions are required to have no clock."
+    ],
+    "observer": "The agent sees a successful TrialExecution versus `sandbox_violation` or another refusal."
+   }
+  },
+  {
+   "unit": "A03",
+   "subject": "repeatability requirement",
+   "kind": "contradiction",
+   "text": "Required test 6 still requires: “The same implementation on the same input yields the same output digest twice.” The changed K-02 expressly permits undetected ways of obtaining time or chance and says their results are judged like any other output.",
+   "question": "Is equal-output repeatability still an invariant for all implementations, or only for implementations that do not use an untrapped source of time or chance?",
+   "options": [
+    "All executions must repeat, requiring additional prevention or determinisation beyond the closed trap list.",
+    "Repeatability is not guaranteed for code using an untrapped source; required test 6 needs a restricted premise."
+   ],
+   "default_guess": "Limit repeatability to implementations that use no untrapped nondeterministic source.",
+   "witness": {
+    "initial": "A function returns an untrapped changing quantity such as its `resource.getrusage` CPU time, under a schema accepting a number.",
+    "events": [
+     "An agent explicitly tries the same implementation and case.",
+     "The agent tries the same pair again later."
+    ],
+    "outcomes": [
+     "Both executions succeed with different output digests, as the changed K-02 permits.",
+     "The sandbox must trap or stabilise the source so the two digests are equal, as required test 6 demands."
+    ],
+    "observer": "The agent reading the two TrialExecutions."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "K-02 function purity",
+   "kind": "contradiction",
+   "text": "State 0 calls a function node “a pure function” and K-02 is titled “functions are pure”, but the changed K-02 allows code deliberately obtaining time or chance by an untrapped route and judges the resulting output normally.",
+   "question": "Does “pure” still include determinism with respect to declared inputs, or does it now mean only that effects, network, secrets and service handles are excluded?",
+   "options": [
+    "Purity includes determinism, so every source of time and chance must be prevented.",
+    "Purity is now effect isolation only; time- or chance-dependent outputs are allowed when obtained outside the trap list."
+   ],
+   "default_guess": "Read the new specific passage as narrowing purity to effect isolation and best-effort trapping of listed accidental sources.",
+   "witness": {
+    "initial": "A function has no declared inputs and returns an untrapped time-derived number.",
+    "events": [
+     "An agent runs the function twice."
+    ],
+    "outcomes": [
+     "Both changing outputs are valid because the code has no external effect and unlisted time access is judged normally.",
+     "The function violates the product's pure-function rule because equal declared inputs do not determine its output."
+    ],
+    "observer": "The agent comparing the executions and any later agent deciding whether this implementation is valid."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "K-05 deterministic admission",
+   "kind": "contradiction",
+   "text": "K-05 still says “Admission is a deterministic verdict over the whole active corpus”, while the changed K-02 permits an implementation to depend on untrapped time or chance, and M08 was changed from “The deterministic verdict” to “The one verdict ... recorded once and then reused”.",
+   "question": "Is admission required to be reproducible from implementation and corpus, or is the first possibly nondeterministic admission result authoritative solely because it is cached?",
+   "options": [
+    "Admission must remain reproducible, requiring the sandbox to exclude all nondeterministic inputs.",
+    "The first admission observation is authoritative and reused even though the same executions could have produced another verdict."
+   ],
+   "default_guess": "Use the changed M08 rule: record the first verdict and reuse it, without claiming the computation is deterministic.",
+   "witness": {
+    "initial": "A corpus expects a fixed value, and an implementation chooses that value or another from an untrapped changing time quantity.",
+    "events": [
+     "The implementation is submitted when the changing quantity selects the expected value.",
+     "In an otherwise equivalent fresh installation, the same implementation and corpus are submitted when it selects the other value."
+    ],
+    "outcomes": [
+     "The pair is admitted in the first installation and that verdict is reused.",
+     "The pair is refused in the second installation and that verdict is reused, contradicting a verdict determined solely by implementation and corpus."
+    ],
+    "observer": "Owners or agents comparing admission evidence from the two installations."
+   }
+  },
+  {
+   "unit": "A19",
+   "subject": "functions having no clock",
+   "kind": "contradiction",
+   "text": "A19 rule 4 states “Functions have no clock (A03).” The changed K-02 says code written to get time by a route other than the replaced entry points “is not detected and is judged by its outputs like any other”.",
+   "question": "Does A19 prohibit all function access to time, or only direct calls to A03's closed set of trapped entry points?",
+   "options": [
+    "All time sources are prohibited and must be blocked.",
+    "Only A03's enumerated entry points are blocked; other time-derived results are permitted."
+   ],
+   "default_guess": "Treat A19 rule 4 as referring only to A03's enumerated traps, because the new K-02 passage explicitly permits undetected alternatives.",
+   "witness": {
+    "initial": "A function returns `resource.getrusage(resource.RUSAGE_SELF).ru_utime`.",
+    "events": [
+     "The function executes in the sandbox."
+    ],
+    "outcomes": [
+     "It succeeds because the API is outside A03's closed trap list and its output is judged normally.",
+     "It is prevented because A19 says a function has no clock."
+    ],
+    "observer": "The caller sees a successful output versus a sandbox failure."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A03\",\"subject\":\"sandbox process filesystem\",\"kind\":\"undefined invariant\",\"text\":\"The formal environment changed to `environment = {python_stdlib_runtime, code, inputs, exchange_dir, own_proc}`, but `own_proc` is nowhere defined, while rule 1 still says the environment holds only the runtime and exchange directory and required test 10 describes only those mounts.\",\"question\":\"What concrete resource does `own_proc` require—such as a procfs mounted for the new PID namespace—and what paths and information may function code observe through it?\",\"options\":[\"Mount a private procfs for the execution's PID namespace at `/proc`.\",\"Create the PID namespace without mounting procfs.\",\"Provide some other restricted process view.\"],\"default_guess\":\"Mount a private procfs at `/proc` for the execution's PID namespace, while retaining the audit trap for user opens outside the runtime and exchange directory.\",\"witness\":{\"initial\":\"A fresh sandbox has a new PID namespace and code that examines whether `/proc/self` exists.\",\"events\":[\"The kernel creates the bubblewrap environment.\",\"The function or an external sandbox verifier examines the execution's process view.\"],\"outcomes\":[\"A private `/proc` exists and exposes only processes in the execution's PID namespace.\",\"No `/proc` is mounted, or the inherited process view has different contents.\"],\"observer\":\"The function through observable filesystem behavior, or the required isolation test inspecting the sandbox.\"}},{\"unit\":\"A03\",\"subject\":\"clock exclusion versus the closed trap list\",\"kind\":\"contradiction\",\"text\":\"The decision remains titled “every function execution runs ... without a clock” and its consequence says code “can compute and do nothing else”, but the changed K-02 says code that gets time “some other way is not detected and is judged by its outputs like any other”, while A03 declares its trap list closed.\",\"question\":\"Must the sandbox prevent every standard-library route that reveals time, or must it trap only the closed list and permit unlisted routes such as `resource.getrusage(...).ru_utime`?\",\"options\":[\"Only the closed list is trapped; unlisted time sources may succeed.\",\"Every route that reveals time must be trapped, including unlisted standard-library APIs.\"],\"default_guess\":\"Treat the closed list and the changed K-02 passage as controlling, so unlisted routes may succeed.\",\"witness\":{\"initial\":\"An admitted-shape function returns `resource.getrusage(resource.RUSAGE_SELF).ru_utime`, which is not in A03's closed list.\",\"events\":[\"An agent tries the implementation on a valid case.\"],\"outcomes\":[\"The call succeeds and its time-derived value is judged as an ordinary output.\",\"The call is trapped or otherwise prevented because executions are required to have no clock.\"],\"observer\":\"The agent sees a successful TrialExecution versus `sandbox_violation` or another refusal.\"}},{\"unit\":\"A03\",\"subject\":\"repeatability requirement\",\"kind\":\"contradiction\",\"text\":\"Required test 6 still requires: “The same implementation on the same input yields the same output digest twice.” The changed K-02 expressly permits undetected ways of obtaining time or chance and says their results are judged like any other output.\",\"question\":\"Is equal-output repeatability still an invariant for all implementations, or only for implementations that do not use an untrapped source of time or chance?\",\"options\":[\"All executions must repeat, requiring additional prevention or determinisation beyond the closed trap list.\",\"Repeatability is not guaranteed for code using an untrapped source; required test 6 needs a restricted premise.\"],\"default_guess\":\"Limit repeatability to implementations that use no untrapped nondeterministic source.\",\"witness\":{\"initial\":\"A function returns an untrapped changing quantity such as its `resource.getrusage` CPU time, under a schema accepting a number.\",\"events\":[\"An agent explicitly tries the same implementation and case.\",\"The agent tries the same pair again later.\"],\"outcomes\":[\"Both executions succeed with different output digests, as the changed K-02 permits.\",\"The sandbox must trap or stabilise the source so the two digests are equal, as required test 6 demands.\"],\"observer\":\"The agent reading the two TrialExecutions.\"}},{\"unit\":\"context\",\"subject\":\"K-02 function purity\",\"kind\":\"contradiction\",\"text\":\"State 0 calls a function node “a pure function” and K-02 is titled “functions are pure”, but the changed K-02 allows code deliberately obtaining time or chance by an untrapped route and judges the resulting output normally.\",\"question\":\"Does “pure” still include determinism with respect to declared inputs, or does it now mean only that effects, network, secrets and service handles are excluded?\",\"options\":[\"Purity includes determinism, so every source of time and chance must be prevented.\",\"Purity is now effect isolation only; time- or chance-dependent outputs are allowed when obtained outside the trap list.\"],\"default_guess\":\"Read the new specific passage as narrowing purity to effect isolation and best-effort trapping of listed accidental sources.\",\"witness\":{\"initial\":\"A function has no declared inputs and returns an untrapped time-derived number.\",\"events\":[\"An agent runs the function twice.\"],\"outcomes\":[\"Both changing outputs are valid because the code has no external effect and unlisted time access is judged normally.\",\"The function violates the product's pure-function rule because equal declared inputs do not determine its output.\"],\"observer\":\"The agent comparing the executions and any later agent deciding whether this implementation is valid.\"}},{\"unit\":\"context\",\"subject\":\"K-05 deterministic admission\",\"kind\":\"contradiction\",\"text\":\"K-05 still says “Admission is a deterministic verdict over the whole active corpus”, while the changed K-02 permits an implementation to depend on untrapped time or chance, and M08 was changed from “The deterministic verdict” to “The one verdict ... recorded once and then reused”.\",\"question\":\"Is admission required to be reproducible from implementation and corpus, or is the first possibly nondeterministic admission result authoritative solely because it is cached?\",\"options\":[\"Admission must remain reproducible, requiring the sandbox to exclude all nondeterministic inputs.\",\"The first admission observation is authoritative and reused even though the same executions could have produced another verdict.\"],\"default_guess\":\"Use the changed M08 rule: record the first verdict and reuse it, without claiming the computation is deterministic.\",\"witness\":{\"initial\":\"A corpus expects a fixed value, and an implementation chooses that value or another from an untrapped changing time quantity.\",\"events\":[\"The implementation is submitted when the changing quantity selects the expected value.\",\"In an otherwise equivalent fresh installation, the same implementation and corpus are submitted when it selects the other value.\"],\"outcomes\":[\"The pair is admitted in the first installation and that verdict is reused.\",\"The pair is refused in the second installation and that verdict is reused, contradicting a verdict determined solely by implementation and corpus.\"],\"observer\":\"Owners or agents comparing admission evidence from the two installations.\"}},{\"unit\":\"A19\",\"subject\":\"functions having no clock\",\"kind\":\"contradiction\",\"text\":\"A19 rule 4 states “Functions have no clock (A03).” The changed K-02 says code written to get time by a route other than the replaced entry points “is not detected and is judged by its outputs like any other”.\",\"question\":\"Does A19 prohibit all function access to time, or only direct calls to A03's closed set of trapped entry points?\",\"options\":[\"All time sources are prohibited and must be blocked.\",\"Only A03's enumerated entry points are blocked; other time-derived results are permitted.\"],\"default_guess\":\"Treat A19 rule 4 as referring only to A03's enumerated traps, because the new K-02 passage explicitly permits undetected alternatives.\",\"witness\":{\"initial\":\"A function returns `resource.getrusage(resource.RUSAGE_SELF).ru_utime`.\",\"events\":[\"The function executes in the sandbox.\"],\"outcomes\":[\"It succeeds because the API is outside A03's closed trap list and its output is judged normally.\",\"It is prevented because A19 says a function has no clock.\"],\"observer\":\"The caller sees a successful output versus a sandbox failure.\"}}]}",
+ "set_aside": []
+}

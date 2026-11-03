@@ -1,0 +1,107 @@
+{
+ "open_points": [
+  {
+   "unit": "A03",
+   "subject": "sandbox environment member own_proc",
+   "kind": "undefined environment boundary",
+   "text": "The formal invariant adds `own_proc` to `environment = {python_stdlib_runtime, code, inputs, exchange_dir, own_proc}`, but no rule defines what `own_proc` is, where or how it is mounted, what it exposes, or whether it is exempt from the audit hook that raises on opening any path outside the exchange directory and read-only runtime.",
+   "question": "What exactly is `own_proc`, and may function code or standard-library code read it despite the outside-path trap?",
+   "options": [
+    "Mount a private procfs at `/proc` and permit reads from it",
+    "Mount a private procfs but keep all access by function code trapped",
+    "Treat `own_proc` as process-namespace state rather than a mounted filesystem"
+   ],
+   "default_guess": "Mount a private procfs at `/proc` for the execution's PID namespace but do not exempt it from the audit restriction.",
+   "witness": {
+    "initial": "A fresh function execution in its new PID namespace.",
+    "events": [
+     "The function reads `/proc/self/status` and returns one field.",
+     "The sandbox audit hook and filesystem policy classify the access."
+    ],
+    "outcomes": [
+     "`own_proc` is an allowed private procfs, so the function reads it and may succeed.",
+     "`/proc` is absent or remains outside the permitted paths, so the access records a trap and the execution is `sandbox_violation`."
+    ],
+    "observer": "The agent inspecting the TrialExecution or NodeExecution."
+   }
+  },
+  {
+   "unit": "A03",
+   "subject": "new clock trap call semantics",
+   "kind": "refusal-condition ambiguity",
+   "text": "The new text says `time.clock_gettime`, `time.clock_gettime_ns`, `time.thread_time`, `time.thread_time_ns` and `os.times` are replaced with functions that raise, but it does not say whether the replacement preserves the original call signature and argument validation or records a trap on every attempted invocation.",
+   "question": "When one of the newly trapped entry points is called with missing, extra or otherwise invalid arguments, is the result a recorded trap and `sandbox_violation`, or an ordinary exception and `crashed`?",
+   "options": [
+    "Every attempted call records the trap before argument validation",
+    "The replacement preserves the original signature, so invalid calls raise normally without a trap",
+    "Arguments are validated first and only a call that the original function would execute records a trap"
+   ],
+   "default_guess": "Every invocation of the replaced attribute records a trap and concludes `sandbox_violation`.",
+   "witness": {
+    "initial": "An admitted candidate module has a numeric output port.",
+    "events": [
+     "Its `run` calls `time.clock_gettime()` without the required clock identifier.",
+     "It catches no exception."
+    ],
+    "outcomes": [
+     "A generic trapping replacement records a hit, so the execution is `sandbox_violation`.",
+     "A signature-preserving replacement raises `TypeError` before recording a hit, so the execution is `crashed`."
+    ],
+    "observer": "The submitter reading the admission evidence."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "scope of standard-library clock and randomness traps",
+   "kind": "contradictory trap scope",
+   "text": "K-02 says, `The standard library's own entry points for the clock and for randomness raise in a function`, while A03 says the replaced entry-point list is closed and the same K-02 paragraph says code that gets time or chance `some other way is not detected and is judged by its outputs like any other`.",
+   "question": "Do all standard-library APIs that expose time or chance have to raise, or only the closed A03 list?",
+   "options": [
+    "Only the entry points enumerated in A03 are trapped; other standard-library routes are ordinary output-producing code",
+    "Every standard-library route to time or chance must be trapped even when absent from A03's closed list",
+    "The phrase `some other way` excludes standard-library APIs and covers only non-standard mechanisms"
+   ],
+   "default_guess": "Only the closed A03 list is trapped, and the universal wording in K-02 should be narrowed to that list.",
+   "witness": {
+    "initial": "A function contract accepts no inputs and returns a number.",
+    "events": [
+     "The implementation calls `resource.getrusage(resource.RUSAGE_SELF).ru_utime`, which is a standard-library entry point absent from A03's closed list.",
+     "The implementation returns that value."
+    ],
+    "outcomes": [
+     "Under K-02's universal statement, the call raises and the execution is `sandbox_violation`.",
+     "Under A03's closed-list rule and K-02's alternative-route sentence, the call is not detected and its numeric output is judged normally."
+    ],
+    "observer": "The agent trying or submitting the implementation."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "function determinism and admission guarantees",
+   "kind": "contradictory invariant",
+   "text": "The changed K-02 permits code that obtains time or chance another way to be `judged by its outputs like any other`, but K-05 still calls admission `a deterministic verdict`, A03 still requires `The same implementation on the same input yields the same output digest twice`, and A19 still states `Functions have no clock (A03)`.",
+   "question": "Is equal-output determinism still guaranteed for every successful function execution, or may an untrapped source of time or chance produce different successful outputs and admission observations?",
+   "options": [
+    "Untrapped time or chance is allowed and successful executions may differ",
+    "All sources capable of changing equal-input outputs must be prevented so the determinism guarantees remain true",
+    "Such code may execute, but a detected difference between repeated observations becomes a sandbox or contract failure"
+   ],
+   "default_guess": "Treat only the listed traps as enforced and allow other successful outputs to differ, while removing the deterministic-output and no-clock guarantees.",
+   "witness": {
+    "initial": "A no-input contract has one numeric output and a trial case without expected outputs.",
+    "events": [
+     "The implementation returns `resource.getrusage(resource.RUSAGE_SELF).ru_utime`.",
+     "The agent tries the same implementation on the same case twice."
+    ],
+    "outcomes": [
+     "Both executions succeed but can have different output digests, as the changed K-02 permits for an untrapped route.",
+     "The executions must have the same digest, or the time access must fail, as A03, K-05 and A19 require."
+    ],
+    "observer": "The agent comparing the two TrialExecutions and any admission evidence derived from them."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A03\",\"subject\":\"sandbox environment member own_proc\",\"kind\":\"undefined environment boundary\",\"text\":\"The formal invariant adds `own_proc` to `environment = {python_stdlib_runtime, code, inputs, exchange_dir, own_proc}`, but no rule defines what `own_proc` is, where or how it is mounted, what it exposes, or whether it is exempt from the audit hook that raises on opening any path outside the exchange directory and read-only runtime.\",\"question\":\"What exactly is `own_proc`, and may function code or standard-library code read it despite the outside-path trap?\",\"options\":[\"Mount a private procfs at `/proc` and permit reads from it\",\"Mount a private procfs but keep all access by function code trapped\",\"Treat `own_proc` as process-namespace state rather than a mounted filesystem\"],\"default_guess\":\"Mount a private procfs at `/proc` for the execution's PID namespace but do not exempt it from the audit restriction.\",\"witness\":{\"initial\":\"A fresh function execution in its new PID namespace.\",\"events\":[\"The function reads `/proc/self/status` and returns one field.\",\"The sandbox audit hook and filesystem policy classify the access.\"],\"outcomes\":[\"`own_proc` is an allowed private procfs, so the function reads it and may succeed.\",\"`/proc` is absent or remains outside the permitted paths, so the access records a trap and the execution is `sandbox_violation`.\"],\"observer\":\"The agent inspecting the TrialExecution or NodeExecution.\"}},{\"unit\":\"A03\",\"subject\":\"new clock trap call semantics\",\"kind\":\"refusal-condition ambiguity\",\"text\":\"The new text says `time.clock_gettime`, `time.clock_gettime_ns`, `time.thread_time`, `time.thread_time_ns` and `os.times` are replaced with functions that raise, but it does not say whether the replacement preserves the original call signature and argument validation or records a trap on every attempted invocation.\",\"question\":\"When one of the newly trapped entry points is called with missing, extra or otherwise invalid arguments, is the result a recorded trap and `sandbox_violation`, or an ordinary exception and `crashed`?\",\"options\":[\"Every attempted call records the trap before argument validation\",\"The replacement preserves the original signature, so invalid calls raise normally without a trap\",\"Arguments are validated first and only a call that the original function would execute records a trap\"],\"default_guess\":\"Every invocation of the replaced attribute records a trap and concludes `sandbox_violation`.\",\"witness\":{\"initial\":\"An admitted candidate module has a numeric output port.\",\"events\":[\"Its `run` calls `time.clock_gettime()` without the required clock identifier.\",\"It catches no exception.\"],\"outcomes\":[\"A generic trapping replacement records a hit, so the execution is `sandbox_violation`.\",\"A signature-preserving replacement raises `TypeError` before recording a hit, so the execution is `crashed`.\"],\"observer\":\"The submitter reading the admission evidence.\"}},{\"unit\":\"context\",\"subject\":\"scope of standard-library clock and randomness traps\",\"kind\":\"contradictory trap scope\",\"text\":\"K-02 says, `The standard library's own entry points for the clock and for randomness raise in a function`, while A03 says the replaced entry-point list is closed and the same K-02 paragraph says code that gets time or chance `some other way is not detected and is judged by its outputs like any other`.\",\"question\":\"Do all standard-library APIs that expose time or chance have to raise, or only the closed A03 list?\",\"options\":[\"Only the entry points enumerated in A03 are trapped; other standard-library routes are ordinary output-producing code\",\"Every standard-library route to time or chance must be trapped even when absent from A03's closed list\",\"The phrase `some other way` excludes standard-library APIs and covers only non-standard mechanisms\"],\"default_guess\":\"Only the closed A03 list is trapped, and the universal wording in K-02 should be narrowed to that list.\",\"witness\":{\"initial\":\"A function contract accepts no inputs and returns a number.\",\"events\":[\"The implementation calls `resource.getrusage(resource.RUSAGE_SELF).ru_utime`, which is a standard-library entry point absent from A03's closed list.\",\"The implementation returns that value.\"],\"outcomes\":[\"Under K-02's universal statement, the call raises and the execution is `sandbox_violation`.\",\"Under A03's closed-list rule and K-02's alternative-route sentence, the call is not detected and its numeric output is judged normally.\"],\"observer\":\"The agent trying or submitting the implementation.\"}},{\"unit\":\"context\",\"subject\":\"function determinism and admission guarantees\",\"kind\":\"contradictory invariant\",\"text\":\"The changed K-02 permits code that obtains time or chance another way to be `judged by its outputs like any other`, but K-05 still calls admission `a deterministic verdict`, A03 still requires `The same implementation on the same input yields the same output digest twice`, and A19 still states `Functions have no clock (A03)`.\",\"question\":\"Is equal-output determinism still guaranteed for every successful function execution, or may an untrapped source of time or chance produce different successful outputs and admission observations?\",\"options\":[\"Untrapped time or chance is allowed and successful executions may differ\",\"All sources capable of changing equal-input outputs must be prevented so the determinism guarantees remain true\",\"Such code may execute, but a detected difference between repeated observations becomes a sandbox or contract failure\"],\"default_guess\":\"Treat only the listed traps as enforced and allow other successful outputs to differ, while removing the deterministic-output and no-clock guarantees.\",\"witness\":{\"initial\":\"A no-input contract has one numeric output and a trial case without expected outputs.\",\"events\":[\"The implementation returns `resource.getrusage(resource.RUSAGE_SELF).ru_utime`.\",\"The agent tries the same implementation on the same case twice.\"],\"outcomes\":[\"Both executions succeed but can have different output digests, as the changed K-02 permits for an untrapped route.\",\"The executions must have the same digest, or the time access must fail, as A03, K-05 and A19 require.\"],\"observer\":\"The agent comparing the two TrialExecutions and any admission evidence derived from them.\"}}]}",
+ "set_aside": []
+}
