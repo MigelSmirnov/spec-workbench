@@ -45,3 +45,14 @@ time by accident, not against code written to get around it (K-02). So
 stops taking `self`: `datetime.datetime.now` concluded `crashed` instead of
 `sandbox_violation`. `findings/20261103_clock/validated_runner_patch.diff` is the patch
 these witnesses were checked on.
+
+## 4. SPEC_STANDARD §7 and the slicer disagree
+
+§7: "the projector imports the types named in the signatures of the consumer's contracts
+and in the contracts of the provider functions declared in its `module_internal`". On
+code-factory `1cdcf9e9`, `build_local_spec.slice_module(<normalized spec>, "run_graph")`,
+with `strict_imports` either way, imports `read_value_bytes` and not `ByteSource`, the type
+of its signature. The State 7 reviewers found the resulting prompt contradictory
+(round 136). A document and a tool disagree, so per the Factory's rule this is reported,
+not decided here. `65_imports.json` lists such types itself, which §7 allows ("listing is
+no error"); they could leave it once the slicer does what §7 says.
