@@ -638,6 +638,7 @@ def test_clock_entry_points_trapped(semantic_runtime):
         "clock_gettime": "import time\nvalue = time.clock_gettime(0)",
         "thread_time": "import time\nvalue = time.thread_time()",
         "os_times": "import os\nvalue = os.times().elapsed",
+        "localtime_none": "import time\nvalue = time.localtime(None)",
     }
     for name, body in trapped.items():
         cv = _function(semantic_runtime, f"a03_clock_{name}")

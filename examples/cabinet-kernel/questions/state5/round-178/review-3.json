@@ -1,0 +1,80 @@
+{
+ "open_points": [
+  {
+   "subject": "A03 sandbox environment and filesystem trap",
+   "kind": "vague and contradictory boundary",
+   "text": "\"environment = {python_stdlib_runtime, code, inputs, exchange_dir, own_proc}\" versus \"installs an audit hook that raises ... on opening any path outside the exchange directory and the read-only runtime\"",
+   "question": "What is `own_proc`, is function code allowed to read it, and if so how is that reconciled with the rule trapping every path outside the exchange directory and runtime?",
+   "options": [
+    "`own_proc` is a mounted private `/proc` that function code may read",
+    "`own_proc` exists only for sandbox machinery and attempts by function code to read `/proc` are `sandbox_violation`",
+    "`own_proc` denotes the PID-namespace process view without mounting or exposing a filesystem"
+   ],
+   "default_guess": "Mount a private `/proc` for the PID namespace but keep it unavailable to function code under the audit-path rule.",
+   "witness": {
+    "initial": "A function contract has one value output accepting an object; the implementation returns selected data read from `/proc/self/status`.",
+    "events": [
+     "An agent submits the implementation.",
+     "The kernel runs admission in the fresh bubblewrap environment."
+    ],
+    "outcomes": [
+     "The private `own_proc` is readable, the function returns a conforming object, and the trial can pass.",
+     "Opening `/proc/self/status` is outside the exchange directory and runtime, so the trap is recorded and the trial concludes `sandbox_violation`."
+    ],
+    "observer": "The submitting agent sees different TrialExecution outcomes and admission verdicts."
+   },
+   "unit": "context"
+  },
+  {
+   "subject": "MCP discovery request validation",
+   "kind": "contradictory check sequence",
+   "text": "\"any known token ... gets their answer after the size, token and depth checks of rule 1\" versus \"Every request is validated against its schema ... an unknown operation, an unknown field, or a field over its bound is refused.\"",
+   "question": "After size, token and depth pass, are `initialize`, `ping` and `tools/list` also schema-validated, including rejection of unknown or over-bound fields, or must they answer immediately?",
+   "options": [
+    "Apply each discovery method's schema validation after depth and before answering",
+    "Answer discovery methods after only size, token and depth checks",
+    "Schema-check `initialize` and `ping` but make `tools/list` argument-free and unconditional after depth"
+   ],
+   "default_guess": "Apply method-specific schema validation after depth, while skipping only the actor-table check.",
+   "witness": {
+    "initial": "The kernel is serving and the caller has a known agent token.",
+    "events": [
+     "The agent calls `tools/list` with an extra unknown request field."
+    ],
+    "outcomes": [
+     "The kernel returns `invalid_request` because every request rejects an unknown field.",
+     "The kernel returns the complete tool catalogue because a known token gets the discovery answer after size, token and depth checks."
+    ],
+    "observer": "The MCP client sees either an error or the catalogue."
+   },
+   "unit": "context"
+  },
+  {
+   "subject": "MCP initialize lifecycle",
+   "kind": "unspecified operation effects",
+   "text": "\"The MCP discovery methods `initialize`, `ping` and `tools/list` are no action of this table: they name no operation and read no record\"",
+   "question": "Does `initialize` establish or negotiate any per-connection protocol state, and are `ping` and `tools/list` permitted before it or after repeated initialization?",
+   "options": [
+    "`initialize` negotiates connection state and later discovery calls require it",
+    "All three methods are stateless and callable in any order",
+    "`initialize` returns fixed release information but repeated or out-of-order calls have protocol errors"
+   ],
+   "default_guess": "Implement the three methods as stateless authenticated discovery calls with no ordering requirement.",
+   "witness": {
+    "initial": "A client has opened a new MCP connection and has a known token but has not called `initialize`.",
+    "events": [
+     "The client calls `tools/list` immediately."
+    ],
+    "outcomes": [
+     "The kernel returns every catalogue operation because discovery is stateless and reads no record.",
+     "The kernel returns a protocol-order error because `initialize` must establish the MCP session first."
+    ],
+    "observer": "The MCP client sees whether it can discover tools before initialization."
+   },
+   "unit": "context"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A03 sandbox environment and filesystem trap\",\"kind\":\"vague and contradictory boundary\",\"text\":\"\\\"environment = {python_stdlib_runtime, code, inputs, exchange_dir, own_proc}\\\" versus \\\"installs an audit hook that raises ... on opening any path outside the exchange directory and the read-only runtime\\\"\",\"question\":\"What is `own_proc`, is function code allowed to read it, and if so how is that reconciled with the rule trapping every path outside the exchange directory and runtime?\",\"options\":[\"`own_proc` is a mounted private `/proc` that function code may read\",\"`own_proc` exists only for sandbox machinery and attempts by function code to read `/proc` are `sandbox_violation`\",\"`own_proc` denotes the PID-namespace process view without mounting or exposing a filesystem\"],\"default_guess\":\"Mount a private `/proc` for the PID namespace but keep it unavailable to function code under the audit-path rule.\",\"witness\":{\"initial\":\"A function contract has one value output accepting an object; the implementation returns selected data read from `/proc/self/status`.\",\"events\":[\"An agent submits the implementation.\",\"The kernel runs admission in the fresh bubblewrap environment.\"],\"outcomes\":[\"The private `own_proc` is readable, the function returns a conforming object, and the trial can pass.\",\"Opening `/proc/self/status` is outside the exchange directory and runtime, so the trap is recorded and the trial concludes `sandbox_violation`.\"],\"observer\":\"The submitting agent sees different TrialExecution outcomes and admission verdicts.\"},\"unit\":\"context\"},{\"subject\":\"MCP discovery request validation\",\"kind\":\"contradictory check sequence\",\"text\":\"\\\"any known token ... gets their answer after the size, token and depth checks of rule 1\\\" versus \\\"Every request is validated against its schema ... an unknown operation, an unknown field, or a field over its bound is refused.\\\"\",\"question\":\"After size, token and depth pass, are `initialize`, `ping` and `tools/list` also schema-validated, including rejection of unknown or over-bound fields, or must they answer immediately?\",\"options\":[\"Apply each discovery method's schema validation after depth and before answering\",\"Answer discovery methods after only size, token and depth checks\",\"Schema-check `initialize` and `ping` but make `tools/list` argument-free and unconditional after depth\"],\"default_guess\":\"Apply method-specific schema validation after depth, while skipping only the actor-table check.\",\"witness\":{\"initial\":\"The kernel is serving and the caller has a known agent token.\",\"events\":[\"The agent calls `tools/list` with an extra unknown request field.\"],\"outcomes\":[\"The kernel returns `invalid_request` because every request rejects an unknown field.\",\"The kernel returns the complete tool catalogue because a known token gets the discovery answer after size, token and depth checks.\"],\"observer\":\"The MCP client sees either an error or the catalogue.\"},\"unit\":\"context\"},{\"subject\":\"MCP initialize lifecycle\",\"kind\":\"unspecified operation effects\",\"text\":\"\\\"The MCP discovery methods `initialize`, `ping` and `tools/list` are no action of this table: they name no operation and read no record\\\"\",\"question\":\"Does `initialize` establish or negotiate any per-connection protocol state, and are `ping` and `tools/list` permitted before it or after repeated initialization?\",\"options\":[\"`initialize` negotiates connection state and later discovery calls require it\",\"All three methods are stateless and callable in any order\",\"`initialize` returns fixed release information but repeated or out-of-order calls have protocol errors\"],\"default_guess\":\"Implement the three methods as stateless authenticated discovery calls with no ordering requirement.\",\"witness\":{\"initial\":\"A client has opened a new MCP connection and has a known token but has not called `initialize`.\",\"events\":[\"The client calls `tools/list` immediately.\"],\"outcomes\":[\"The kernel returns every catalogue operation because discovery is stateless and reads no record.\",\"The kernel returns a protocol-order error because `initialize` must establish the MCP session first.\"],\"observer\":\"The MCP client sees whether it can discover tools before initialization.\"},\"unit\":\"context\"}]}",
+ "set_aside": []
+}

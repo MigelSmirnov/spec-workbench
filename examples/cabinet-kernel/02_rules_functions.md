@@ -189,7 +189,7 @@ and no detection promises the runtime cannot keep.
    `time.monotonic`, `time.monotonic_ns`, `time.perf_counter`,
    `time.perf_counter_ns`, `time.process_time`, `time.process_time_ns`,
    `time.localtime`, `time.gmtime`, `time.ctime` and `time.asctime` when called
-   without an argument, `datetime.datetime.now`, `datetime.datetime.utcnow`,
+   without an argument or with `None`, `datetime.datetime.now`, `datetime.datetime.utcnow`,
    `datetime.datetime.today`, `datetime.date.today`, `os.urandom`,
    `os.getrandom`, `uuid.uuid1`, `uuid.uuid4`, every function of `secrets` (its
    `__all__` without the class `SystemRandom`, which is trapped as
