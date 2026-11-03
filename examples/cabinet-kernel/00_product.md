@@ -113,7 +113,9 @@ in, declared output out, no network, no filesystem beyond its input, no secret, 
 service handle. The standard library's own entry points for the clock and for
 randomness raise in a function, so it cannot depend on the time or on chance by
 accident; code written to get time or chance some other way is not detected and is
-judged by its outputs like any other. An operation node invokes one declared
+judged by its outputs like any other. Every promise in these documents that a function
+repeats itself — equal outputs on equal inputs, a repaired slot staying repaired, a
+verdict that holds — is a promise about code that obtains neither. An operation node invokes one declared
 operation of one microservice; only the kernel performs it. An effect is never
 hidden in code.
 
