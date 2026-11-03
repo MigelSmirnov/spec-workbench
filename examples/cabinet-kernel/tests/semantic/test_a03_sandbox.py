@@ -641,6 +641,7 @@ def test_no_clock_through_other_doors(semantic_runtime):
         "c_date": "import _datetime\nvalue = _datetime.date.today()",
         "sqlite": "import sqlite3\nvalue = sqlite3.connect(':memory:')",
         "reimport": "import sys\nsys.modules.pop('time')\nimport time\nvalue = time",
+        "reload": "import importlib, time\nvalue = importlib.reload(time)",
     }
     for name, body in trapped.items():
         cv = _function(semantic_runtime, f"a03_clock_{name}")

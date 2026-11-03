@@ -1,0 +1,107 @@
+{
+ "open_points": [
+  {
+   "unit": "A03",
+   "subject": "fresh imports of trapped modules",
+   "kind": "undefined reload boundary",
+   "text": "“The audit hook also raises on a fresh import of any module these paths name, so taking a trapped module out of `sys.modules` and importing it anew is a trap hit.”",
+   "question": "Does re-executing a trapped module through `importlib.reload`, or an equivalent loader call without first removing its `sys.modules` entry, count as a fresh import and record a trap hit?",
+   "options": [
+    "Every re-execution or reload of a trapped module records a trap hit and concludes `sandbox_violation`.",
+    "Only an import after the module is absent from `sys.modules` is trapped; reload is allowed and may restore the module's original clock or randomness entry points."
+   ],
+   "default_guess": "Treat every reload or equivalent re-execution of a trapped module as a trap hit.",
+   "witness": {
+    "initial": "A function starts after `time` has been patched and is present in `sys.modules`.",
+    "events": [
+     "The function imports `time` and `importlib`.",
+     "The function calls `importlib.reload(time)`.",
+     "It then calls `time.time()` and returns the result if permitted."
+    ],
+    "outcomes": [
+     "Reload itself records a trap hit, so the execution concludes `sandbox_violation`.",
+     "Reload is not a “fresh import”; it restores the original `time.time`, and the function can observe and return the clock."
+    ],
+    "observer": "The agent reading the TrialExecution or run trace, and any consumer of the function output."
+   }
+  },
+  {
+   "unit": "A03",
+   "subject": "stat timestamp masking across symlinks and relative paths",
+   "kind": "ambiguous path classification",
+   "text": "“A file's timestamps read through `os.stat`, `os.lstat`, `os.fstat`, `os.scandir` and their `posix` namesakes are zero for a descriptor and for every path outside the read-only runtime, whose files do not change.”",
+   "question": "For a path outside the runtime that resolves into the runtime, or a relative path interpreted through `dir_fd`, is ‘outside the read-only runtime’ determined from the supplied pathname, the directory descriptor, or the resolved object?",
+   "options": [
+    "Classify the pathname as supplied; a scratch-directory symlink path is outside and its reported timestamps are zero even when `os.stat` follows it into the runtime.",
+    "Classify the resolved object for following operations; `os.stat` through a scratch symlink to a runtime file exposes the runtime file's timestamps, while `os.lstat` reports zero for the symlink.",
+    "Refuse such ambiguous crossings instead of returning a stat result."
+   ],
+   "default_guess": "Classify the resolved object for `stat` and the link itself for `lstat`; descriptors are always masked as the text explicitly requires.",
+   "witness": {
+    "initial": "The sandbox contains immutable runtime file `/runtime/x` and a writable scratch directory.",
+    "events": [
+     "The function creates scratch symlink `scratch/link` pointing to `/runtime/x`.",
+     "It calls `os.stat('scratch/link')` and reads `st_mtime`."
+    ],
+    "outcomes": [
+     "Because the supplied path is outside the runtime, `st_mtime` is zero.",
+     "Because the resolved file belongs to the runtime, its retained runtime timestamp is returned."
+    ],
+    "observer": "The function and anyone receiving its output."
+   }
+  },
+  {
+   "unit": "A03",
+   "subject": "timestamps obtained from directory entries",
+   "kind": "undefined API semantics",
+   "text": "“A file's timestamps read through … `os.scandir` and [its] `posix` namesake[s] are zero …”",
+   "question": "Which `os.scandir`-derived observations must be masked: only a later `DirEntry.stat()` result, any stat result already cached in a `DirEntry`, and results reached through `DirEntry.is_file()`, `is_dir()` or `is_symlink()` when those methods populate the same cache?",
+   "options": [
+    "Wrap every `DirEntry` so every stat result it returns or caches has the required zero timestamp fields.",
+    "Mask only an explicit `DirEntry.stat()` result; the other `DirEntry` methods may populate or expose an unmasked cached stat result.",
+    "Treat `os.scandir` itself as forbidden and record a sandbox trap."
+   ],
+   "default_guess": "Wrap every directory entry and mask every stat result it can return or cache, while leaving non-timestamp type predicates usable.",
+   "witness": {
+    "initial": "A scratch directory contains a file whose host filesystem metadata has nonzero timestamps.",
+    "events": [
+     "The function obtains its `DirEntry` with `os.scandir`.",
+     "It calls `entry.is_file()` and then `entry.stat()` and returns the timestamp."
+    ],
+    "outcomes": [
+     "All directory-entry stat paths are wrapped, so the returned timestamp is zero.",
+     "Only direct stat calls are patched, or `is_file()` populated an unmasked cache, so `entry.stat()` returns a nonzero timestamp."
+    ],
+    "observer": "The function and anyone receiving its output."
+   }
+  },
+  {
+   "unit": "A03",
+   "subject": "read-only runtime file timestamps",
+   "kind": "cross-text contradiction",
+   "text": "A03 leaves timestamps unchanged for paths inside “the read-only runtime, whose files do not change”, while K-02 requires function code to have “no clock” and A19 rule 4 states “Functions have no clock (A03).”",
+   "question": "Are runtime-file timestamps intentionally observable time values, or must they also be zeroed to satisfy the unconditional no-clock rules? If they remain observable, must the release pin their exact values so equal code and inputs cannot vary by installation?",
+   "options": [
+    "Runtime paths retain their actual timestamps; those metadata values are an explicit exception to ‘no clock’.",
+    "Runtime timestamps are fixed, release-pinned constants and are observable only in that normalized form.",
+    "All runtime timestamps are zero, like timestamps outside the runtime."
+   ],
+   "default_guess": "Normalize runtime timestamps to release-pinned values; absent such values, zero them.",
+   "witness": {
+    "initial": "The same release runtime is installed with a standard-library file carrying a nonzero installation or build timestamp, and a function can locate that file through a standard-library module's `__file__`.",
+    "events": [
+     "The function calls `os.stat` on that runtime file.",
+     "It returns `st_mtime` on a value output."
+    ],
+    "outcomes": [
+     "Following A03's runtime exception, the function succeeds and exposes the runtime file's timestamp, potentially differing between installations.",
+     "Following K-02 and A19's unconditional no-clock rule, the timestamp is masked to zero or the access is trapped."
+    ],
+    "observer": "The agent or flow consumer receiving the function output."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A03\",\"subject\":\"fresh imports of trapped modules\",\"kind\":\"undefined reload boundary\",\"text\":\"“The audit hook also raises on a fresh import of any module these paths name, so taking a trapped module out of `sys.modules` and importing it anew is a trap hit.”\",\"question\":\"Does re-executing a trapped module through `importlib.reload`, or an equivalent loader call without first removing its `sys.modules` entry, count as a fresh import and record a trap hit?\",\"options\":[\"Every re-execution or reload of a trapped module records a trap hit and concludes `sandbox_violation`.\",\"Only an import after the module is absent from `sys.modules` is trapped; reload is allowed and may restore the module's original clock or randomness entry points.\"],\"default_guess\":\"Treat every reload or equivalent re-execution of a trapped module as a trap hit.\",\"witness\":{\"initial\":\"A function starts after `time` has been patched and is present in `sys.modules`.\",\"events\":[\"The function imports `time` and `importlib`.\",\"The function calls `importlib.reload(time)`.\",\"It then calls `time.time()` and returns the result if permitted.\"],\"outcomes\":[\"Reload itself records a trap hit, so the execution concludes `sandbox_violation`.\",\"Reload is not a “fresh import”; it restores the original `time.time`, and the function can observe and return the clock.\"],\"observer\":\"The agent reading the TrialExecution or run trace, and any consumer of the function output.\"}},{\"unit\":\"A03\",\"subject\":\"stat timestamp masking across symlinks and relative paths\",\"kind\":\"ambiguous path classification\",\"text\":\"“A file's timestamps read through `os.stat`, `os.lstat`, `os.fstat`, `os.scandir` and their `posix` namesakes are zero for a descriptor and for every path outside the read-only runtime, whose files do not change.”\",\"question\":\"For a path outside the runtime that resolves into the runtime, or a relative path interpreted through `dir_fd`, is ‘outside the read-only runtime’ determined from the supplied pathname, the directory descriptor, or the resolved object?\",\"options\":[\"Classify the pathname as supplied; a scratch-directory symlink path is outside and its reported timestamps are zero even when `os.stat` follows it into the runtime.\",\"Classify the resolved object for following operations; `os.stat` through a scratch symlink to a runtime file exposes the runtime file's timestamps, while `os.lstat` reports zero for the symlink.\",\"Refuse such ambiguous crossings instead of returning a stat result.\"],\"default_guess\":\"Classify the resolved object for `stat` and the link itself for `lstat`; descriptors are always masked as the text explicitly requires.\",\"witness\":{\"initial\":\"The sandbox contains immutable runtime file `/runtime/x` and a writable scratch directory.\",\"events\":[\"The function creates scratch symlink `scratch/link` pointing to `/runtime/x`.\",\"It calls `os.stat('scratch/link')` and reads `st_mtime`.\"],\"outcomes\":[\"Because the supplied path is outside the runtime, `st_mtime` is zero.\",\"Because the resolved file belongs to the runtime, its retained runtime timestamp is returned.\"],\"observer\":\"The function and anyone receiving its output.\"}},{\"unit\":\"A03\",\"subject\":\"timestamps obtained from directory entries\",\"kind\":\"undefined API semantics\",\"text\":\"“A file's timestamps read through … `os.scandir` and [its] `posix` namesake[s] are zero …”\",\"question\":\"Which `os.scandir`-derived observations must be masked: only a later `DirEntry.stat()` result, any stat result already cached in a `DirEntry`, and results reached through `DirEntry.is_file()`, `is_dir()` or `is_symlink()` when those methods populate the same cache?\",\"options\":[\"Wrap every `DirEntry` so every stat result it returns or caches has the required zero timestamp fields.\",\"Mask only an explicit `DirEntry.stat()` result; the other `DirEntry` methods may populate or expose an unmasked cached stat result.\",\"Treat `os.scandir` itself as forbidden and record a sandbox trap.\"],\"default_guess\":\"Wrap every directory entry and mask every stat result it can return or cache, while leaving non-timestamp type predicates usable.\",\"witness\":{\"initial\":\"A scratch directory contains a file whose host filesystem metadata has nonzero timestamps.\",\"events\":[\"The function obtains its `DirEntry` with `os.scandir`.\",\"It calls `entry.is_file()` and then `entry.stat()` and returns the timestamp.\"],\"outcomes\":[\"All directory-entry stat paths are wrapped, so the returned timestamp is zero.\",\"Only direct stat calls are patched, or `is_file()` populated an unmasked cache, so `entry.stat()` returns a nonzero timestamp.\"],\"observer\":\"The function and anyone receiving its output.\"}},{\"unit\":\"A03\",\"subject\":\"read-only runtime file timestamps\",\"kind\":\"cross-text contradiction\",\"text\":\"A03 leaves timestamps unchanged for paths inside “the read-only runtime, whose files do not change”, while K-02 requires function code to have “no clock” and A19 rule 4 states “Functions have no clock (A03).”\",\"question\":\"Are runtime-file timestamps intentionally observable time values, or must they also be zeroed to satisfy the unconditional no-clock rules? If they remain observable, must the release pin their exact values so equal code and inputs cannot vary by installation?\",\"options\":[\"Runtime paths retain their actual timestamps; those metadata values are an explicit exception to ‘no clock’.\",\"Runtime timestamps are fixed, release-pinned constants and are observable only in that normalized form.\",\"All runtime timestamps are zero, like timestamps outside the runtime.\"],\"default_guess\":\"Normalize runtime timestamps to release-pinned values; absent such values, zero them.\",\"witness\":{\"initial\":\"The same release runtime is installed with a standard-library file carrying a nonzero installation or build timestamp, and a function can locate that file through a standard-library module's `__file__`.\",\"events\":[\"The function calls `os.stat` on that runtime file.\",\"It returns `st_mtime` on a value output.\"],\"outcomes\":[\"Following A03's runtime exception, the function succeeds and exposes the runtime file's timestamp, potentially differing between installations.\",\"Following K-02 and A19's unconditional no-clock rule, the timestamp is masked to zero or the access is trapped.\"],\"observer\":\"The agent or flow consumer receiving the function output.\"}}]}",
+ "set_aside": []
+}
