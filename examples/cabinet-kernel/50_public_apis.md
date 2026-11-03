@@ -263,7 +263,7 @@ not a record: a digest no verdict covers answers none. "Runs by status" and
 | contract versions of a slot | `functions` | ContractVersions M03 |
 | implementations of a contract version | `functions` | Implementations M05 |
 | corpus of a contract version | `functions`, `surface` (repair view) | TrialCases M06 in corpus order |
-| trial executions of an implementation on its contract version's corpus | `surface` (repair view) | per case of the current corpus, in corpus order, the implementation's latest TrialExecution M07 in store order — from admission or a try alike, since an outcome depends only on implementation and case; a case never executed is omitted |
+| trial executions of an implementation on its contract version's corpus | `surface` (repair view) | per case of the current corpus, in corpus order, the implementation's latest TrialExecution M07 in store order — from admission or a try alike; a case never executed is omitted |
 | verdict of an implementation over a corpus digest | `functions` | the AdmissionVerdict M08, or none |
 | verdicts of an implementation | `functions` | AdmissionVerdicts M08 |
 | latest activation of a contract version | `functions` | the Activation M09, or none |
