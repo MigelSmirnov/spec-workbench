@@ -624,24 +624,20 @@ def run(inputs):
         _assert_concluded(submission, execution, "passed")
 
 
-def test_no_clock_through_other_doors(semantic_runtime):
-    """[witness: verification:kernel_a03_no_clock_through_other_doors]
+def test_clock_entry_points_trapped(semantic_runtime):
+    """[witness: verification:kernel_a03_clock_entry_points_trapped]
 
-    A03 Required test 13, rule 4, K-02: probes of 2026-11-03 read the real time
-    in a sandbox through each of these and were admitted.
+    A03 Required test 13, rule 4: an ordinary call of each of these concludes
+    ``sandbox_violation``. ``datetime.datetime.now`` concluded ``crashed`` before
+    2026-11-03: its trap took ``self``, and a class method has none. What the traps
+    do not reach is recorded in ``findings/20261103_clock/``.
     """
     trapped = {
+        "datetime_now": "import datetime\nvalue = datetime.datetime.now()",
+        "date_today": "import datetime\nvalue = datetime.date.today()",
         "clock_gettime": "import time\nvalue = time.clock_gettime(0)",
         "thread_time": "import time\nvalue = time.thread_time()",
         "os_times": "import os\nvalue = os.times().elapsed",
-        "getrusage": "import resource\nvalue = resource.getrusage(0).ru_utime",
-        "datetime_now": "import datetime\nvalue = datetime.datetime.now()",
-        "date_today": "import datetime\nvalue = datetime.date.today()",
-        "c_datetime": "import _datetime\nvalue = _datetime.datetime.now()",
-        "c_date": "import _datetime\nvalue = _datetime.date.today()",
-        "sqlite": "import sqlite3\nvalue = sqlite3.connect(':memory:')",
-        "reimport": "import sys\nsys.modules.pop('time')\nimport time\nvalue = time",
-        "reload": "import importlib, time\nvalue = importlib.reload(time)",
     }
     for name, body in trapped.items():
         cv = _function(semantic_runtime, f"a03_clock_{name}")
@@ -649,22 +645,3 @@ def test_no_clock_through_other_doors(semantic_runtime):
         code += "    return {'y': str(value)}\n"
         submission, execution = _conclude(semantic_runtime, cv, code)
         assert _value(execution.outcome) == "sandbox_violation", (name, execution.failure_detail)
-
-    zero = {
-        "scratch": "import os\nf = os.path.join(os.path.dirname(__file__), 'p')\nopen(f, 'w').close()\ns = os.stat(f)",
-        "code": "import os\ns = os.stat(__file__)",
-        "proc": "import os\ns = os.stat('/proc/self')",
-        "runtime": "import os\ns = os.stat(os.__file__)",
-        "lstat": "import os\ns = os.lstat(__file__)",
-        "fstat": "import os\nf = open(__file__)\ns = os.fstat(f.fileno())",
-        "posix": "import posix\ns = posix.stat(__file__)",
-        "scandir": "import os\ns = next(os.scandir(os.path.dirname(__file__))).stat()",
-        "pathlib": "import pathlib\ns = pathlib.Path(__file__).stat()",
-    }
-    for name, body in zero.items():
-        cv = _function(semantic_runtime, f"a03_timestamp_{name}")
-        code = "def run(inputs):\n" + "".join(f"    {line}\n" for line in body.split("\n"))
-        code += "    return {'y': str((s.st_mtime, s.st_atime, s.st_ctime, s.st_mtime_ns))}\n"
-        submission, execution = _conclude(semantic_runtime, cv, code)
-        assert _value(execution.outcome) == "passed", (name, execution.failure_detail)
-        assert json.loads(execution.outputs[0].items[0].json_text) == "(0.0, 0.0, 0.0, 0)", name

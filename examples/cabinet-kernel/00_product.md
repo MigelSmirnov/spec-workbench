@@ -110,7 +110,10 @@ first application, not kernel concepts.
 
 A function node runs one admitted implementation of one contract: declared input
 in, declared output out, no network, no filesystem beyond its input, no clock, no
-randomness, no secret, no service handle. An operation node invokes one declared
+randomness, no secret, no service handle. The clock and randomness are withheld
+from a function that calls the standard library's own entry points for them, which
+guards against depending on the time or on chance by accident; it is no guarantee
+against code written to get around it. An operation node invokes one declared
 operation of one microservice; only the kernel performs it. An effect is never
 hidden in code.
 

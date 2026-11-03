@@ -20,7 +20,7 @@ Add to `verification/configs/cabinet_kernel.yaml`, as its other witnesses:
 - `kernel_a16_tools_list_serves_every_operation` —
   `test_tools_list_serves_every_operation`.
 
-- `kernel_a03_no_clock_through_other_doors` — `test_no_clock_through_other_doors`.
+- `kernel_a03_clock_entry_points_trapped` — `test_clock_entry_points_trapped`.
 
 Then return here: A03 Required tests 12 and 13 and A16 Required test 13 take their
 `[witness: verification:<name>]` tags. They carry none until then, because
@@ -38,8 +38,10 @@ temporary copy of the code: both witnesses fail on the accepted code; they pass
 once the runner enters the module in `sys.modules` and `_annotation_schema` unwraps
 `typing.Annotated`. Those two patches were not kept: the code is generated.
 
-The owner's decision of 2026-11-03 keeps K-02 categorical: functions have no clock.
-`findings/20261103_clock/` holds what the probes found and the patch that turned
-`kernel_a03_no_clock_through_other_doors` from red to green with the whole semantic
-suite passing. `data_provider` gains `SANDBOX_TIMESTAMP_FUNCTIONS` and a longer
-`SANDBOX_TRAPPED_FUNCTIONS`, both from `70_data_provider_closure.json`.
+The owner's decision of 2026-11-03: the clock rule guards against depending on the
+time by accident, not against code written to get around it (K-02). So
+`SANDBOX_TRAPPED_FUNCTIONS` only gains `time.clock_gettime`, `time.clock_gettime_ns`,
+`time.thread_time`, `time.thread_time_ns` and `os.times`, and a trap on a class method
+stops taking `self`: `datetime.datetime.now` concluded `crashed` instead of
+`sandbox_violation`. `findings/20261103_clock/validated_runner_patch.diff` is the patch
+these witnesses were checked on.

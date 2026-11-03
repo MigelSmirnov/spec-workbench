@@ -15,14 +15,22 @@ promise functions no clock.
 | `datetime.datetime.now`, `datetime.date.today` | `crashed` (`TypeError`: the trap took `self`) | `sandbox_violation` |
 | `time.time`, `importlib.reload(time)`, open `/proc/uptime`, `subprocess` | `sandbox_violation` | the same |
 
-`validated_runner_patch.diff` is the temporary patch these results come from. It proves
-the rule can be implemented; it was discarded, because the code is generated.
+## What was decided (owner, 2026-11-03)
 
-## What remains
+The protection is against depending on the time by accident: functions are written by
+the owner's agents and work on invoices and estimates, and the clock gives a function
+nothing to leak. K-02 now says so. A stricter closure was built and checked on
+2026-11-03: every door above closed, all semantic witnesses passing (commits `6209a76d`
+to `1d3efc13`). It banned SQLite in functions and compiled the standard library from
+source in every execution, and the owner took it back.
 
-The traps are Python-level. The kernel cannot make `CLOCK_REALTIME` lie inside a
-bubblewrap namespace, so the guarantee is the closed list: an entry point found missing
-is a defect of the release (A03 rule 4). Known, not closed: a function can measure a
-duration by counting its own work, and `threading` holds a `time.monotonic` it took
-before the traps. Randomness has the same class of doors (`posix.urandom`,
-`_random.Random`) and was not measured here.
+| Kept | Known and left open |
+|---|---|
+| `time.clock_gettime`, `time.thread_time`, `os.times` trapped; `datetime.datetime.now` concludes `sandbox_violation` | `_datetime`, SQLite, a fresh import of `time`, `resource.getrusage`, file timestamps |
+
+The "after the change" column above is the stricter closure; only the kept row holds
+now. Should functions by outside authors appear, this is where to start: commit
+`1d3efc13` holds that closure's rule and its patch, and the kernel cannot make
+`CLOCK_REALTIME` lie inside bubblewrap, so a real guarantee needs a runtime that controls
+the clock, such as a WASI build. Randomness has the same class of doors and was not
+measured. `validated_runner_patch.diff` is the patch for what was kept.
