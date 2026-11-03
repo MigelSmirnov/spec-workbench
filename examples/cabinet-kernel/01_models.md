@@ -367,8 +367,9 @@ None.
 
 ### Meaning
 
-The deterministic verdict on one implementation over the whole active corpus of
-its contract version (K-05). Read by activation, which requires an `admitted`
+The one verdict on one implementation over the whole active corpus of its
+contract version (K-05): recorded once and then reused, never computed again
+(A04 rule 2). Read by activation, which requires an `admitted`
 verdict over the current corpus.
 
 Candidate fields:
@@ -388,8 +389,8 @@ value
 
 ### Identity evidence
 
-Substitution: a verdict for the same implementation and corpus is the same
-verdict. Continuity: none; a grown corpus needs a new verdict.
+Substitution: the verdict recorded for an implementation and a corpus digest is
+the verdict for that pair. Continuity: none; a grown corpus needs a new verdict.
 
 ### Source of truth
 
