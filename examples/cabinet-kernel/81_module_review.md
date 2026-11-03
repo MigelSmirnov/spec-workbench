@@ -930,3 +930,37 @@ returns and the `value_id` is computed in `send_under_authority` and never
 compared with it. Reviewed against A15 rule 4 and decision 23: no contract,
 model or caller responsibility changes; no other module's slice moved.
 State 7 rounds 134–135 are clear. `effects` remains PASS.
+
+## Requests of 2026-11-02 and 2026-11-03 (imports closure, Registry pilot findings)
+
+A delta review against the slices last reviewed (`8798b98f`), by comparing each packet with
+its previous form, as for decisions 47–48. No slice was read again as a whole. Checked by
+script over all 19 packets: `contracts` and `models` of `global_spec.json` are unchanged,
+every model both packets name is identical, and no module's owned contracts, symbols,
+persistence or routes moved. What moved:
+
+- `accepted_evidence`: the texts of K-02, K-05, A03, A13, A14, A16, A19 and M08, in every packet
+  that carries them. K-02 now says the clock and randomness entry points raise, which guards
+  against accident, and that a promise of repetition is about code whose outputs depend only
+  on its inputs (owner's decision). No module's behaviour rests on the wider wording.
+- `sandbox_runner`: `runner_source` enters the module in `sys.modules` under
+  `cabinet_sandbox_code`, and traps raise whatever arguments they get and on `None`.
+  `kernel_a03_module_loaded_as_by_import` and `kernel_a03_clock_entry_points_trapped` fail on
+  the accepted code and pass on a temporary copy with those changes; `tests/semantic` passes
+  there too (`findings/20261103_clock/`).
+- `run_graph`: six `plan_run` notes name what the generators reported having to choose
+  (`FACTORY_EXPERIMENT_REQUEST_20261102.md` items 2–4). Each was compared with the accepted
+  `plan_run`: the receiving port, the later of equal attempts, waiting points while running,
+  a waiting mapped node, an undelivered list, the record that concludes a mapped node. The
+  notes state what the code does; on the four adversarial questions they narrow readings and
+  add no behaviour.
+- `data_provider`: `EDGE_DELIVERY_RULES` joins its exports and `SANDBOX_TRAPPED_FUNCTIONS` gains
+  five clock entry points.
+- All others: `imports.module_internal` from `65_imports.json`, and the model context that
+  follows from it: transitive-context deltas, which gained no behaviour. `surface` loses 20
+  imports and 5 context models its code never names (`decide_effect_approval` among them, which
+  its own note forbids it to call).
+
+`kernel_a16_tools_list_serves_every_operation` covers a defect of the code, not of this
+review's packets: the `answer_request` note was already right. Structural review: 0 blocks in
+every module. All 19 modules remain PASS.
