@@ -209,7 +209,8 @@ and no detection promises the runtime cannot keep.
    hook also raises on a fresh import of any module these paths name, so taking a
    trapped module out of `sys.modules` and importing it anew is a trap hit. A file's
    timestamps read through `os.stat`, `os.lstat`, `os.fstat`, `os.scandir` and their
-   `posix` namesakes are zero, whatever the file. The runner writes no bytecode, so
+   `posix` namesakes are zero, whatever the file; the other fields of a stat result and
+   a directory's entries stay as the operating system gives them. The runner writes no bytecode, so
    a module of the standard library that its file's zero timestamp leaves without a
    valid cached form is compiled from its source. The list is closed for the release;
    an entry point found missing is a defect of that release, and a new release adds it. "Every function the
@@ -259,7 +260,7 @@ and no detection promises the runtime cannot keep.
 
 ```text
 function_executed -> inside(fresh_bubblewrap_environment)
-environment = {python_stdlib_runtime, code, inputs, exchange_dir}
+environment = {python_stdlib_runtime, code, inputs, exchange_dir, own_proc}
 network(environment) = own_loopback_only AND env_vars(environment) = {PYTHONHASHSEED=0}
 
 trap_raised -> outcome = sandbox_violation   (even if output conforms)

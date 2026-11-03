@@ -1,0 +1,82 @@
+{
+ "open_points": [
+  {
+   "unit": "A03",
+   "subject": "sandbox filesystem visibility",
+   "kind": "contradiction",
+   "text": "Rule 1 says the environment holds only the read-only runtime, code, inputs and exchange directory, and its formal invariant is `environment = {python_stdlib_runtime, code, inputs, exchange_dir}`; new required test 13 requires `os.stat` of `/proc` to succeed and return zero timestamps. K-02 also says a function has “no filesystem beyond its input.”",
+   "question": "Is `/proc` present and observable by function code, despite the closed environment and no-filesystem rules, or must access to it fail?",
+   "options": [
+    "Mount or otherwise expose `/proc` and return stat data with zero timestamps",
+    "Keep `/proc` outside the function environment, so statting it fails",
+    "Expose only a synthetic `/proc` object sufficient for the required stat"
+   ],
+   "default_guess": "Expose a minimal procfs because the new required test explicitly requires `/proc` to be statted.",
+   "witness": {
+    "initial": "An admitted function has no inputs and one numeric output.",
+    "events": [
+     "The sandbox runs the function in a fresh execution.",
+     "The function calls `os.stat('/proc')` and returns `st_mtime`."
+    ],
+    "outcomes": [
+     "Under required test 13, the call succeeds and the function returns zero.",
+     "Under rule 1’s closed environment, `/proc` is absent; the uncaught stat error makes the execution `crashed`."
+    ],
+    "observer": "The submitting agent sees whether admission passes or records a crashed trial execution."
+   }
+  },
+  {
+   "unit": "A03",
+   "subject": "fresh-import traps",
+   "kind": "ambiguous scope",
+   "text": "“The audit hook also raises on a fresh import of any module these paths name” does not identify whether “these paths” means every path in the complete replacement list or only the immediately preceding newly added paths.",
+   "question": "Exactly which module names cause a trap when freshly imported after removal from `sys.modules`?",
+   "options": [
+    "Every module named anywhere in rule 4, including `random`, `secrets`, `uuid`, `datetime`, `os` and the newly added modules",
+    "Only modules named by the newly added entry points",
+    "A separately enumerated closed set of module names"
+   ],
+   "default_guess": "Trap a fresh import of every module named anywhere in rule 4.",
+   "witness": {
+    "initial": "A function can access `sys.modules`; the runner has already installed all replacements and the audit hook.",
+    "events": [
+     "The function removes `uuid` from `sys.modules`.",
+     "It freshly imports `uuid` and then returns a conforming constant output without calling a UUID function."
+    ],
+    "outcomes": [
+     "If all rule-4 module paths are covered, the recorded import trap makes the execution `sandbox_violation`.",
+     "If only the newly added path list is covered, the import is allowed and the execution succeeds."
+    ],
+    "observer": "The agent sees a sandbox violation versus a passed execution."
+   }
+  },
+  {
+   "unit": "A03",
+   "subject": "stat-family timestamp masking",
+   "kind": "underspecified behavior",
+   "text": "“A file's timestamps read through `os.stat`, `os.lstat`, `os.fstat`, `os.scandir` and their `posix` namesakes are zero” does not define which `stat_result` attributes are timestamps, whether both second and nanosecond representations are masked, what numeric types they retain, or precisely how `os.scandir` and cached `DirEntry.stat()` results are covered.",
+   "question": "What exact observable stat-family result must the sandbox return, including the fields and representations changed and the behavior of `DirEntry.stat()` with either `follow_symlinks` value?",
+   "options": [
+    "Zero `st_atime`, `st_mtime`, `st_ctime` and all corresponding `_ns` or other timestamp fields, preserving their normal types, including every `DirEntry.stat()` result",
+    "Zero only the conventional second-resolution fields",
+    "Zero direct stat-family calls but leave cached or follow-symlink variants of `DirEntry.stat()` unchanged"
+   ],
+   "default_guess": "Zero every timestamp representation while preserving the normal `stat_result` API and types, including all `DirEntry.stat()` variants.",
+   "witness": {
+    "initial": "A function creates a scratch file and obtains its directory entry with `os.scandir`.",
+    "events": [
+     "The function calls `entry.stat(follow_symlinks=False)`.",
+     "It returns `st_mtime_ns` and whether `st_mtime` is a float."
+    ],
+    "outcomes": [
+     "A complete API-preserving mask returns zero nanoseconds and the normal timestamp type.",
+     "A mask of only direct or second-resolution stat fields exposes a real nanosecond timestamp or a different observable type."
+    ],
+    "observer": "The agent sees different output values or digests for the same function and inputs."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A03\",\"subject\":\"sandbox filesystem visibility\",\"kind\":\"contradiction\",\"text\":\"Rule 1 says the environment holds only the read-only runtime, code, inputs and exchange directory, and its formal invariant is `environment = {python_stdlib_runtime, code, inputs, exchange_dir}`; new required test 13 requires `os.stat` of `/proc` to succeed and return zero timestamps. K-02 also says a function has “no filesystem beyond its input.”\",\"question\":\"Is `/proc` present and observable by function code, despite the closed environment and no-filesystem rules, or must access to it fail?\",\"options\":[\"Mount or otherwise expose `/proc` and return stat data with zero timestamps\",\"Keep `/proc` outside the function environment, so statting it fails\",\"Expose only a synthetic `/proc` object sufficient for the required stat\"],\"default_guess\":\"Expose a minimal procfs because the new required test explicitly requires `/proc` to be statted.\",\"witness\":{\"initial\":\"An admitted function has no inputs and one numeric output.\",\"events\":[\"The sandbox runs the function in a fresh execution.\",\"The function calls `os.stat('/proc')` and returns `st_mtime`.\"],\"outcomes\":[\"Under required test 13, the call succeeds and the function returns zero.\",\"Under rule 1’s closed environment, `/proc` is absent; the uncaught stat error makes the execution `crashed`.\"],\"observer\":\"The submitting agent sees whether admission passes or records a crashed trial execution.\"}},{\"unit\":\"A03\",\"subject\":\"fresh-import traps\",\"kind\":\"ambiguous scope\",\"text\":\"“The audit hook also raises on a fresh import of any module these paths name” does not identify whether “these paths” means every path in the complete replacement list or only the immediately preceding newly added paths.\",\"question\":\"Exactly which module names cause a trap when freshly imported after removal from `sys.modules`?\",\"options\":[\"Every module named anywhere in rule 4, including `random`, `secrets`, `uuid`, `datetime`, `os` and the newly added modules\",\"Only modules named by the newly added entry points\",\"A separately enumerated closed set of module names\"],\"default_guess\":\"Trap a fresh import of every module named anywhere in rule 4.\",\"witness\":{\"initial\":\"A function can access `sys.modules`; the runner has already installed all replacements and the audit hook.\",\"events\":[\"The function removes `uuid` from `sys.modules`.\",\"It freshly imports `uuid` and then returns a conforming constant output without calling a UUID function.\"],\"outcomes\":[\"If all rule-4 module paths are covered, the recorded import trap makes the execution `sandbox_violation`.\",\"If only the newly added path list is covered, the import is allowed and the execution succeeds.\"],\"observer\":\"The agent sees a sandbox violation versus a passed execution.\"}},{\"unit\":\"A03\",\"subject\":\"stat-family timestamp masking\",\"kind\":\"underspecified behavior\",\"text\":\"“A file's timestamps read through `os.stat`, `os.lstat`, `os.fstat`, `os.scandir` and their `posix` namesakes are zero” does not define which `stat_result` attributes are timestamps, whether both second and nanosecond representations are masked, what numeric types they retain, or precisely how `os.scandir` and cached `DirEntry.stat()` results are covered.\",\"question\":\"What exact observable stat-family result must the sandbox return, including the fields and representations changed and the behavior of `DirEntry.stat()` with either `follow_symlinks` value?\",\"options\":[\"Zero `st_atime`, `st_mtime`, `st_ctime` and all corresponding `_ns` or other timestamp fields, preserving their normal types, including every `DirEntry.stat()` result\",\"Zero only the conventional second-resolution fields\",\"Zero direct stat-family calls but leave cached or follow-symlink variants of `DirEntry.stat()` unchanged\"],\"default_guess\":\"Zero every timestamp representation while preserving the normal `stat_result` API and types, including all `DirEntry.stat()` variants.\",\"witness\":{\"initial\":\"A function creates a scratch file and obtains its directory entry with `os.scandir`.\",\"events\":[\"The function calls `entry.stat(follow_symlinks=False)`.\",\"It returns `st_mtime_ns` and whether `st_mtime` is a float.\"],\"outcomes\":[\"A complete API-preserving mask returns zero nanoseconds and the normal timestamp type.\",\"A mask of only direct or second-resolution stat fields exposes a real nanosecond timestamp or a different observable type.\"],\"observer\":\"The agent sees different output values or digests for the same function and inputs.\"}}]}",
+ "set_aside": []
+}

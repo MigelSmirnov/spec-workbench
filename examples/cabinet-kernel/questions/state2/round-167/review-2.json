@@ -1,0 +1,82 @@
+{
+ "open_points": [
+  {
+   "unit": "A03",
+   "subject": "stat-family access outside the sandbox filesystem",
+   "kind": "contradiction",
+   "text": "Rule 4 says the audit hook “raises on … opening any path outside the exchange directory and the read-only runtime,” while the change says timestamps read through `os.scandir` are zero “whatever the file,” and required test 13 requires the stat family to read `/proc`. State 0 K-02 also says a function has “no filesystem beyond its input.”",
+   "question": "Must `os.scandir('/proc')` succeed and expose directory entries with zeroed timestamps, or must it be a `sandbox_violation` because it opens a path outside the exchange directory and runtime?",
+   "options": [
+    "Permit the `/proc` scan and zero timestamps",
+    "Trap the scan as forbidden filesystem access",
+    "Permit only selected metadata calls on `/proc`, with an explicitly defined exception to the path rule"
+   ],
+   "default_guess": "Trap access outside the exchange directory and runtime, because that is the stated isolation boundary.",
+   "witness": {
+    "initial": "An admitted function is executed in a sandbox; `/proc` is present and outside the exchange directory and read-only runtime.",
+    "events": [
+     "The function calls `list(os.scandir('/proc'))`, catches any exception, and returns whether the call succeeded."
+    ],
+    "outcomes": [
+     "The new stat-family requirement permits the call, and the function succeeds with an answer derived from `/proc`.",
+     "The outside-path audit rule records a trap hit, so the execution concludes `sandbox_violation` even if the function catches the exception."
+    ],
+    "observer": "The agent inspecting the TrialExecution or run trace sees success versus `sandbox_violation`."
+   }
+  },
+  {
+   "unit": "A03",
+   "subject": "determinism of permitted stat and scandir observations",
+   "kind": "contradictory invariant",
+   "text": "The change specifies only that file timestamps obtained through the stat family are zero, “whatever the file”; it does not hide any other stat fields or the names and attributes enumerated by `os.scandir`. A03 required test 6 says the same implementation on the same input yields the same output digest twice, and K-05 calls admission deterministic.",
+   "question": "If stat-family access to files such as `/proc` is permitted, what prevents non-timestamp metadata and directory membership from making equal inputs produce different outputs?",
+   "options": [
+    "Expose all non-timestamp metadata and directory entries, accepting that outputs can vary",
+    "Trap stat-family access to nondeterministic paths",
+    "Define additional normalization or a fixed virtual filesystem view beyond zeroing timestamps"
+   ],
+   "default_guess": "Disallow stat-family access outside the fixed runtime and the execution's private exchange directory.",
+   "witness": {
+    "initial": "The same implementation and empty input are executed twice, with a host process starting between executions.",
+    "events": [
+     "Execution 1 returns the sorted names obtained from `os.scandir('/proc')`.",
+     "A new host process appears.",
+     "Execution 2 returns the sorted names obtained from `os.scandir('/proc')`."
+    ],
+    "outcomes": [
+     "Under the literal timestamp-only normalization, both executions succeed but return different output digests.",
+     "Under the equal-input/equal-output invariant, the scan must be trapped or normalized so the output cannot change."
+    ],
+    "observer": "Admission and the agent reading the two TrialExecutions see different digests or a sandbox refusal."
+   }
+  },
+  {
+   "unit": "A03",
+   "subject": "normalization of stat-family timestamp results",
+   "kind": "underspecified behavior",
+   "text": "“A file's timestamps read through `os.stat`, `os.lstat`, `os.fstat`, `os.scandir` and their `posix` namesakes are zero” does not enumerate which returned timestamp representations are normalized or how `os.scandir`'s `DirEntry` cache is handled.",
+   "question": "Exactly which fields and representations must be zero—for example `st_atime`, `st_mtime`, `st_ctime`, their `_ns` forms, the corresponding tuple positions, platform-added timestamp fields, and every result of `DirEntry.stat()` and `DirEntry.stat(follow_symlinks=False)`—and must cached results obey the same rule?",
+   "options": [
+    "Zero every timestamp field and tuple representation exposed by the release interpreter, including cached `DirEntry.stat` results",
+    "Zero only the named POSIX atime/mtime/ctime second fields",
+    "Specify a closed release-v1 list of normalized fields and calls"
+   ],
+   "default_guess": "Zero every timestamp representation exposed by CPython 3.12 for these calls, including nanosecond fields, tuple positions, symlink variants, and cached `DirEntry.stat` results.",
+   "witness": {
+    "initial": "A scratch file has a nonzero modification time.",
+    "events": [
+     "The function calls `s = os.stat(path)` and returns `[s.st_mtime, s.st_mtime_ns, s[8]]`.",
+     "The function also obtains the file through `os.scandir` and returns `entry.stat().st_mtime_ns`."
+    ],
+    "outcomes": [
+     "An implementation normalizes all timestamp representations, returning only zeroes.",
+     "An implementation replaces only the conventional named second field or only direct `os.stat` results, exposing a nonzero nanosecond, tuple, or cached `DirEntry` value."
+    ],
+    "observer": "The function caller and the trial output digest see different returned values."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A03\",\"subject\":\"stat-family access outside the sandbox filesystem\",\"kind\":\"contradiction\",\"text\":\"Rule 4 says the audit hook “raises on … opening any path outside the exchange directory and the read-only runtime,” while the change says timestamps read through `os.scandir` are zero “whatever the file,” and required test 13 requires the stat family to read `/proc`. State 0 K-02 also says a function has “no filesystem beyond its input.”\",\"question\":\"Must `os.scandir('/proc')` succeed and expose directory entries with zeroed timestamps, or must it be a `sandbox_violation` because it opens a path outside the exchange directory and runtime?\",\"options\":[\"Permit the `/proc` scan and zero timestamps\",\"Trap the scan as forbidden filesystem access\",\"Permit only selected metadata calls on `/proc`, with an explicitly defined exception to the path rule\"],\"default_guess\":\"Trap access outside the exchange directory and runtime, because that is the stated isolation boundary.\",\"witness\":{\"initial\":\"An admitted function is executed in a sandbox; `/proc` is present and outside the exchange directory and read-only runtime.\",\"events\":[\"The function calls `list(os.scandir('/proc'))`, catches any exception, and returns whether the call succeeded.\"],\"outcomes\":[\"The new stat-family requirement permits the call, and the function succeeds with an answer derived from `/proc`.\",\"The outside-path audit rule records a trap hit, so the execution concludes `sandbox_violation` even if the function catches the exception.\"],\"observer\":\"The agent inspecting the TrialExecution or run trace sees success versus `sandbox_violation`.\"}},{\"unit\":\"A03\",\"subject\":\"determinism of permitted stat and scandir observations\",\"kind\":\"contradictory invariant\",\"text\":\"The change specifies only that file timestamps obtained through the stat family are zero, “whatever the file”; it does not hide any other stat fields or the names and attributes enumerated by `os.scandir`. A03 required test 6 says the same implementation on the same input yields the same output digest twice, and K-05 calls admission deterministic.\",\"question\":\"If stat-family access to files such as `/proc` is permitted, what prevents non-timestamp metadata and directory membership from making equal inputs produce different outputs?\",\"options\":[\"Expose all non-timestamp metadata and directory entries, accepting that outputs can vary\",\"Trap stat-family access to nondeterministic paths\",\"Define additional normalization or a fixed virtual filesystem view beyond zeroing timestamps\"],\"default_guess\":\"Disallow stat-family access outside the fixed runtime and the execution's private exchange directory.\",\"witness\":{\"initial\":\"The same implementation and empty input are executed twice, with a host process starting between executions.\",\"events\":[\"Execution 1 returns the sorted names obtained from `os.scandir('/proc')`.\",\"A new host process appears.\",\"Execution 2 returns the sorted names obtained from `os.scandir('/proc')`.\"],\"outcomes\":[\"Under the literal timestamp-only normalization, both executions succeed but return different output digests.\",\"Under the equal-input/equal-output invariant, the scan must be trapped or normalized so the output cannot change.\"],\"observer\":\"Admission and the agent reading the two TrialExecutions see different digests or a sandbox refusal.\"}},{\"unit\":\"A03\",\"subject\":\"normalization of stat-family timestamp results\",\"kind\":\"underspecified behavior\",\"text\":\"“A file's timestamps read through `os.stat`, `os.lstat`, `os.fstat`, `os.scandir` and their `posix` namesakes are zero” does not enumerate which returned timestamp representations are normalized or how `os.scandir`'s `DirEntry` cache is handled.\",\"question\":\"Exactly which fields and representations must be zero—for example `st_atime`, `st_mtime`, `st_ctime`, their `_ns` forms, the corresponding tuple positions, platform-added timestamp fields, and every result of `DirEntry.stat()` and `DirEntry.stat(follow_symlinks=False)`—and must cached results obey the same rule?\",\"options\":[\"Zero every timestamp field and tuple representation exposed by the release interpreter, including cached `DirEntry.stat` results\",\"Zero only the named POSIX atime/mtime/ctime second fields\",\"Specify a closed release-v1 list of normalized fields and calls\"],\"default_guess\":\"Zero every timestamp representation exposed by CPython 3.12 for these calls, including nanosecond fields, tuple positions, symlink variants, and cached `DirEntry.stat` results.\",\"witness\":{\"initial\":\"A scratch file has a nonzero modification time.\",\"events\":[\"The function calls `s = os.stat(path)` and returns `[s.st_mtime, s.st_mtime_ns, s[8]]`.\",\"The function also obtains the file through `os.scandir` and returns `entry.stat().st_mtime_ns`.\"],\"outcomes\":[\"An implementation normalizes all timestamp representations, returning only zeroes.\",\"An implementation replaces only the conventional named second field or only direct `os.stat` results, exposing a nonzero nanosecond, tuple, or cached `DirEntry` value.\"],\"observer\":\"The function caller and the trial output digest see different returned values.\"}}]}",
+ "set_aside": []
+}
