@@ -23,7 +23,8 @@ edges into one input, of flow outputs under guards, and of proving again later.
       fits that declared schema, composition refused it otherwise (rule 7), so
       it then fits the port;
    3. edges, by (`to_node`, `to_port`, `from_node`, `from_port`): both ports exist
-      with the right direction; both carry the same schema, the same carriage and,
+      with the right direction — the source an output of a node or an input of the
+      flow, the target an input of a node or an output of the flow; both carry the same schema, the same carriage and,
       for files, the same media type (K-06) — cardinality is phase 5's; a flow
       input or output is `value` carriage;
    4. guards, by the same edge order: the guard port is a `one` output of the
