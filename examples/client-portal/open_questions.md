@@ -58,3 +58,30 @@ Until this is decided, an operator must not blindly repeat principal or
 credential creation after an ambiguous or lost response. The incident must be
 reconciled and the orphaned credential revoked through an authorized
 administrative recovery procedure first.
+
+### Q11 — Accepted snapshot cannot reach human activation
+
+Observed on 2026-11-04 with the accepted PresuPro snapshot for `Proyecto Demo
+Facebook`:
+
+- `snapshot.publish` accepted and durably stored the immutable snapshot;
+- the accepted import deliberately does not create `PortalSection`,
+  `SectionPlan`, or `BudgetVersion` records;
+- `activate_budget_version` requires an already existing `version_id` and is
+  correctly restricted to a human staff capability;
+- no public operation materializes an accepted snapshot into an inactive
+  candidate BudgetVersion for that human to review and activate.
+
+Which boundary owns materialization?
+
+1. Does an accepted import atomically create an inactive snapshot-backed
+   BudgetVersion and its stable sections/plans, while leaving activation to a
+   human?
+2. Or must staff explicitly call a separate idempotent "prepare budget from
+   snapshot" operation before activation?
+3. What identity makes materialization replay-safe, and what happens when the
+   active manual budget already has progress, allocations, expenses, and
+   payments?
+
+Until this is decided, a kernel scenario may publish and report an accepted
+snapshot, but must not claim that the client-visible budget was updated.
