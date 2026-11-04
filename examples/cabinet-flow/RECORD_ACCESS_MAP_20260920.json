@@ -1,0 +1,4663 @@
+{
+ "schema_version": "cabinet_flow_record_access_map.v1",
+ "source_spec": "examples/cabinet-flow/global_spec.json at a3a0e76",
+ "method": "four read-only passes over notes, contracts, State 1 and State 5; every field name checked against models[].fields",
+ "functions": [
+  {
+   "function": "seed_vocabulary",
+   "module": "semantic_vocabulary",
+   "reads": [
+    {
+     "model": "SemanticAxis",
+     "lookup": "list_by",
+     "key_fields": [],
+     "why": "'only when the governed registry is empty' - emptiness probe over the whole kind (no filter)",
+     "order_by": null
+    },
+    {
+     "model": "SemanticTerm",
+     "lookup": "list_by",
+     "key_fields": [],
+     "why": "same emptiness probe",
+     "order_by": null
+    },
+    {
+     "model": "SemanticRelation",
+     "lookup": "list_by",
+     "key_fields": [],
+     "why": "same emptiness probe",
+     "order_by": null
+    }
+   ],
+   "writes": [
+    {
+     "model": "SemanticAxis",
+     "operation": "insert",
+     "append_only": false,
+     "compare_and_set_on": null,
+     "why": "atomically install the exact axis entries shipped in the release"
+    },
+    {
+     "model": "SemanticAxisRevision",
+     "operation": "insert",
+     "append_only": true,
+     "compare_and_set_on": null,
+     "why": "content-derived immutable revisions of the seed"
+    },
+    {
+     "model": "SemanticTerm",
+     "operation": "insert",
+     "append_only": false,
+     "compare_and_set_on": null,
+     "why": "install exact term entries"
+    },
+    {
+     "model": "SemanticTermRevision",
+     "operation": "insert",
+     "append_only": true,
+     "compare_and_set_on": null,
+     "why": "immutable seed term revisions"
+    },
+    {
+     "model": "SemanticRelation",
+     "operation": "insert",
+     "append_only": false,
+     "compare_and_set_on": null,
+     "why": "install exact relation entries"
+    },
+    {
+     "model": "SemanticRelationRevision",
+     "operation": "insert",
+     "append_only": true,
+     "compare_and_set_on": null,
+     "why": "immutable seed relation revisions"
+    }
+   ],
+   "delegates": [],
+   "unclear": [
+    "The port needs an 'is this kind empty' probe (exists-any / count); it is a list_by with no key fields. Texts do not say whether 'registry is empty' means all three entry kinds empty, or also the three revision kinds.",
+    "Revisions carry `issued_at` and `accepted_by: ActorRef`; State 1 says accepted_by is 'ActorRef of kind owner, or the installation seed' but the note names neither an ActorRef value for the seed nor that `issued_at` is a system_clock.now sample (the clock sentence exists for submit_proposal/retire_entry only).",
+    "Where the seed bundle lives (config/data provider) is not named; it is not a durable record, so not a port read."
+   ]
+  },
+  {
+   "function": "term_revision",
+   "module": "semantic_vocabulary",
+   "reads": [
+    {
+     "model": "SemanticTerm",
+     "lookup": "by_key",
+     "key_fields": [
+      "term_id"
+     ],
+     "why": "resolve one exact namespaced term; gives axis_id, status, current_revision_id"
+    },
+    {
+     "model": "SemanticTermRevision",
+     "lookup": "by_key",
+     "key_fields": [
+      "term_revision_id"
+     ],
+     "why": "explicitly named immutable revision or the term's current_revision_id; then check revision.term_id == term_id ('cross-term revision' is an explicit error)"
+    },
+    {
+     "model": "SemanticAxis",
+     "lookup": "by_key",
+     "key_fields": [
+      "axis_id"
+     ],
+     "why": "return owning axis identity and active/retired status"
+    }
+   ],
+   "writes": [],
+   "delegates": [],
+   "unclear": [
+    "Key of SemanticTermRevision: content-derived `term_revision_id` alone (assumed, since a cross-term revision must be detectable rather than simply absent) or the pair (term_id, term_revision_id). The texts do not state which.",
+    "'corrupt chain' is an explicit error but SemanticTermRevision has no revision_number/previous-revision field, so the only checkable chain is term.current_revision_id -> revision -> axis_revision_ref -> SemanticAxisRevision. Whether axis_revision_ref must be loaded (SemanticAxisRevision by revision_id) is not decided.",
+    "Callers holding only a SemanticPort.semantic_term_revision_ref (slot_registry, trial_corpus, flow_proof) have no term_id; the contract requires term_id. Either a by-revision-ref entry point is missing or ports must carry term_id."
+   ]
+  },
+  {
+   "function": "find_relation",
+   "module": "semantic_vocabulary",
+   "reads": [
+    {
+     "model": "SemanticTermRevision",
+     "lookup": "by_key",
+     "key_fields": [
+      "term_revision_id"
+     ],
+     "why": "resolve exact source and target term revisions; unknown/malformed is explicit (two loads)"
+    },
+    {
+     "model": "SemanticRelationRevision",
+     "lookup": "list_by",
+     "key_fields": [
+      "source_term_revision_ref",
+      "target_term_revision_ref"
+     ],
+     "why": "relation revisions whose endpoints match in direction",
+     "order_by": null
+    },
+    {
+     "model": "SemanticRelationRevision",
+     "lookup": "list_by",
+     "key_fields": [
+      "source_term_revision_ref",
+      "target_term_revision_ref",
+      "relation_kind"
+     ],
+     "why": "same, when the optional closed kind is given",
+     "order_by": null
+    },
+    {
+     "model": "SemanticRelation",
+     "lookup": "by_key",
+     "key_fields": [
+      "relation_id"
+     ],
+     "why": "only active (not retired) relation entities support new composition; status lives on the stable entry"
+    }
+   ],
+   "writes": [],
+   "delegates": [],
+   "unclear": [
+    "'stable-ordered' / 'deterministic ordered set' - no ordering field is named. Candidates present in the model: relation_id, relation_revision_id, issued_at.",
+    "Whether a non-current revision of an active relation counts as 'active'. If only current revisions count, the filter is revision.relation_revision_id == SemanticRelation.current_revision_id (needs the by_key load per hit, or a join).",
+    "Whether the endpoints' own term/axis retirement must be checked here (would add SemanticTerm by term_id and SemanticAxis by axis_id loads) - retire_entry's note says proofs cannot cite a retired term, but find_relation's note only filters on relation status."
+   ]
+  },
+  {
+   "function": "find_duplicate_revision",
+   "module": "semantic_vocabulary",
+   "reads": [
+    {
+     "model": "SemanticAxisRevision",
+     "lookup": "list_by",
+     "key_fields": [
+      "meaning",
+      "value_family",
+      "qualifier_contract_ref"
+     ],
+     "why": "axis candidate: 'search all seeded/owner-accepted immutable revisions for exact content equality'; ambiguous conflicting matches are refused, so more than one hit must be observable",
+     "order_by": null
+    },
+    {
+     "model": "SemanticTermRevision",
+     "lookup": "list_by",
+     "key_fields": [
+      "meaning",
+      "value_schema_ref",
+      "required_qualifier_kind",
+      "subject_kind",
+      "temporal_role"
+     ],
+     "why": "term candidate, same rule",
+     "order_by": null
+    },
+    {
+     "model": "SemanticRelationRevision",
+     "lookup": "list_by",
+     "key_fields": [
+      "source_term_revision_ref",
+      "target_term_revision_ref",
+      "source_schema_ref",
+      "target_schema_ref",
+      "relation_kind",
+      "loss_class",
+      "required_slot_ref"
+     ],
+     "why": "relation candidate, same rule",
+     "order_by": null
+    },
+    {
+     "model": "SemanticAxis",
+     "lookup": "by_key",
+     "key_fields": [
+      "axis_id"
+     ],
+     "why": "callers refuse only an *active* equal-content duplicate; status is on the stable entry"
+    },
+    {
+     "model": "SemanticTerm",
+     "lookup": "by_key",
+     "key_fields": [
+      "term_id"
+     ],
+     "why": "same for term"
+    },
+    {
+     "model": "SemanticRelation",
+     "lookup": "by_key",
+     "key_fields": [
+      "relation_id"
+     ],
+     "why": "same for relation"
+    }
+   ],
+   "writes": [],
+   "delegates": [],
+   "unclear": [
+    "If revision identity is content-derived ('using the same revision identity rules'), the lookup collapses to by_key on revision_id / term_revision_id / relation_revision_id and the list_by above is unnecessary. The texts never say which fields enter the revision identity - in particular whether the stable entry id (axis_id/term_id/relation_id, which may be None in the proposal content for a new entry) and the term's axis (TermProposalContent.axis_id vs SemanticTermRevision.axis_revision_ref) are part of it. No identify_*_revision function exists in module identity.",
+    "Term equality: proposal content carries `axis_id`, the revision carries `axis_revision_ref`; mapping needs SemanticAxis.current_revision_id (by_key axis_id). Not stated.",
+    "The note says 'search all ... revisions' and returns 'the one exact revision reference', while submit/decide refuse only an *active* duplicate; whether this function itself filters by entry status or returns retired matches too is undecided.",
+    "'deterministic order' of the search is named but no order field is."
+   ]
+  },
+  {
+   "function": "submit_proposal",
+   "module": "semantic_vocabulary",
+   "reads": [
+    {
+     "model": "SemanticAxis",
+     "lookup": "by_key",
+     "key_fields": [
+      "axis_id"
+     ],
+     "why": "validate referenced existing entities (term candidate names axis_id; axis candidate revising an existing axis)"
+    },
+    {
+     "model": "SemanticTerm",
+     "lookup": "by_key",
+     "key_fields": [
+      "term_id"
+     ],
+     "why": "term candidate revising an existing term"
+    },
+    {
+     "model": "SemanticRelation",
+     "lookup": "by_key",
+     "key_fields": [
+      "relation_id"
+     ],
+     "why": "relation candidate revising an existing relation"
+    },
+    {
+     "model": "SemanticTermRevision",
+     "lookup": "by_key",
+     "key_fields": [
+      "term_revision_id"
+     ],
+     "why": "relation candidate: source_term_revision_ref / target_term_revision_ref must be exact"
+    },
+    {
+     "model": "FlowProof",
+     "lookup": "by_key",
+     "key_fields": [
+      "proof_id"
+     ],
+     "why": "'exact motivating FlowProof/UncomposableOutput evidence'; unknown motivating evidence is refused (record owned by flow_proof)"
+    }
+   ],
+   "writes": [
+    {
+     "model": "VocabularyProposal",
+     "operation": "insert",
+     "append_only": false,
+     "compare_and_set_on": null,
+     "why": "atomically appends one `proposed` VocabularyProposal with proposed_at = one clock sample, agent_rationale apart from plain_statement"
+    }
+   ],
+   "delegates": [
+    {
+     "callee": "semantic_vocabulary.find_duplicate_revision",
+     "purpose": "refuse equality with an active accepted revision, returning that reference"
+    },
+    {
+     "callee": "owner_authority.owner_statement",
+     "purpose": "deterministic plain_statement (not listed in module_internal imports of semantic_vocabulary)"
+    },
+    {
+     "callee": "identity.mint_identity",
+     "purpose": "proposal_id (assumed; not stated, not in module_internal imports)"
+    }
+   ],
+   "unclear": [
+    "motivating_refs are opaque `str`. A FlowProof *finding* has no identity (FlowProof.findings is tuple[str]); UncomposableOutput has no identity field at all (run_id, node_id, output_schema_ref, content_digest, bounded_result_ref, reason) and no named durable home ('retained with run evidence when needed'). No lookup can validate an UncomposableOutput ref from the model as it stands.",
+    "FlowProof is owned by flow_proof; whether semantic_vocabulary reads it through the record port or through a flow_proof operation is not decided (no import declared).",
+    "How proposal_id is produced is not stated (entity, not content-derived).",
+    "VocabularyProposal.proposed_content is `str`: the canonical serialization of VocabularyProposalContent is implied but not named; decide_proposal must parse it back."
+   ]
+  },
+  {
+   "function": "decide_proposal",
+   "module": "semantic_vocabulary",
+   "reads": [
+    {
+     "model": "VocabularyProposal",
+     "lookup": "by_key",
+     "key_fields": [
+      "proposal_id"
+     ],
+     "why": "one exact `proposed` proposal; unchanged candidate content"
+    }
+   ],
+   "writes": [
+    {
+     "model": "VocabularyProposal",
+     "operation": "update_fields",
+     "append_only": false,
+     "compare_and_set_on": "status",
+     "why": "final `accepted`/`rejected`; acceptance links the resulting revision. Decided once, never reopened",
+     "fields_updated": [
+      "status",
+      "decided_by",
+      "decided_at",
+      "resulting_revision_ref"
+     ]
+    }
+   ],
+   "delegates": [
+    {
+     "callee": "semantic_vocabulary.find_duplicate_revision",
+     "purpose": "acceptance first rejects equal active accepted content"
+    },
+    {
+     "callee": "semantic_vocabulary.issue_accepted_revision",
+     "purpose": "atomic creation of entry/revision and pointer advance, same UnitOfWork"
+    },
+    {
+     "callee": "owner_authority (owner active check, owner statement digest)",
+     "purpose": "only the active owner; exact kernel-generated owner-statement digest (not in module_internal imports)"
+    }
+   ],
+   "unclear": [
+    "`decided_at` has no clock sentence in the note (submit_proposal and retire_entry have one); State 5 header implies system_clock.now.",
+    "The owner-statement digest is not stored on VocabularyProposal (only plain_statement). It must be recomputed from plain_statement/content; which function does it is not named.",
+    "'active owner' requires OwnerPrincipal status (by_key principal_id = owner.owner_principal_id); whether this module reads OwnerPrincipal directly or asks owner_authority is not decided.",
+    "issue_accepted_revision receives the proposal *value* and returns VocabularyDecisionResult containing the proposal; which of the two functions performs the proposal update is ambiguous ('links the resulting revision from the proposal' appears in both notes). Assigned here."
+   ]
+  },
+  {
+   "function": "issue_accepted_revision",
+   "module": "semantic_vocabulary",
+   "reads": [
+    {
+     "model": "SemanticAxis",
+     "lookup": "by_key",
+     "key_fields": [
+      "axis_id"
+     ],
+     "why": "existing entry to revise / owning axis of a term; must be active (never reactivates retired entries)"
+    },
+    {
+     "model": "SemanticTerm",
+     "lookup": "by_key",
+     "key_fields": [
+      "term_id"
+     ],
+     "why": "existing term to revise"
+    },
+    {
+     "model": "SemanticRelation",
+     "lookup": "by_key",
+     "key_fields": [
+      "relation_id"
+     ],
+     "why": "existing relation to revise"
+    },
+    {
+     "model": "SemanticTermRevision",
+     "lookup": "by_key",
+     "key_fields": [
+      "term_revision_id"
+     ],
+     "why": "relation content references exact source/target term revisions"
+    },
+    {
+     "model": "SemanticAxisRevision",
+     "lookup": "by_key",
+     "key_fields": [
+      "revision_id"
+     ],
+     "why": "term revision pins axis_revision_ref = axis.current_revision_id; existence check"
+    },
+    {
+     "model": "SemanticAxisRevision",
+     "lookup": "list_by",
+     "key_fields": [
+      "axis_id"
+     ],
+     "why": "revision_number of the new axis revision = previous + 1",
+     "order_by": "revision_number"
+    }
+   ],
+   "writes": [
+    {
+     "model": "SemanticAxis",
+     "operation": "insert",
+     "append_only": false,
+     "compare_and_set_on": null,
+     "why": "creates the stable namespaced entry only when the proposal defines a new one"
+    },
+    {
+     "model": "SemanticTerm",
+     "operation": "insert",
+     "append_only": false,
+     "compare_and_set_on": null,
+     "why": "same"
+    },
+    {
+     "model": "SemanticRelation",
+     "operation": "insert",
+     "append_only": false,
+     "compare_and_set_on": null,
+     "why": "same"
+    },
+    {
+     "model": "SemanticAxisRevision",
+     "operation": "insert",
+     "append_only": true,
+     "compare_and_set_on": null,
+     "why": "appends exactly one immutable revision"
+    },
+    {
+     "model": "SemanticTermRevision",
+     "operation": "insert",
+     "append_only": true,
+     "compare_and_set_on": null,
+     "why": "appends exactly one immutable revision"
+    },
+    {
+     "model": "SemanticRelationRevision",
+     "operation": "insert",
+     "append_only": true,
+     "compare_and_set_on": null,
+     "why": "appends exactly one immutable revision"
+    },
+    {
+     "model": "SemanticAxis",
+     "operation": "update_fields",
+     "append_only": false,
+     "compare_and_set_on": "current_revision_id",
+     "why": "advances only that entry's current-revision pointer; the entity also carries the current meaning/value_family/display_name copy",
+     "fields_updated": [
+      "current_revision_id",
+      "meaning",
+      "value_family",
+      "display_name"
+     ]
+    },
+    {
+     "model": "SemanticTerm",
+     "operation": "update_fields",
+     "append_only": false,
+     "compare_and_set_on": "current_revision_id",
+     "why": "advance pointer",
+     "fields_updated": [
+      "current_revision_id",
+      "display_name"
+     ]
+    },
+    {
+     "model": "SemanticRelation",
+     "operation": "update_fields",
+     "append_only": false,
+     "compare_and_set_on": "current_revision_id",
+     "why": "advance pointer",
+     "fields_updated": [
+      "current_revision_id"
+     ]
+    }
+   ],
+   "delegates": [
+    {
+     "callee": "semantic_vocabulary.find_duplicate_revision",
+     "purpose": "refuse an active equal-content duplicate"
+    }
+   ],
+   "unclear": [
+    "Compare-and-set on the pointer is my inference ('advances only that entry's current-revision pointer', atomic). No text names the expected value; concurrent acceptances of two proposals for one entry are not discussed.",
+    "SemanticAxis duplicates `meaning`/`value_family` of its current revision and all three entries carry `display_name`, which no revision holds. Whether the entry copy is rewritten on a new revision is not stated; display_name changes have no revision trail.",
+    "SemanticTermRevision and SemanticRelationRevision have no revision_number; only SemanticAxisRevision does. For axis, computing revision_number needs list_by axis_id (or max). Concurrency on (axis_id, revision_number) uniqueness is undecided.",
+    "New entry identity: content may carry a proposed namespaced id or None; when None the minting rule is not named.",
+    "SemanticRelation.source_term_id/target_term_id must be derived from the term revisions (SemanticTermRevision.term_id) - implied, not stated.",
+    "`issued_at` has no clock sentence in the note."
+   ]
+  },
+  {
+   "function": "retire_entry",
+   "module": "semantic_vocabulary",
+   "reads": [
+    {
+     "model": "SemanticAxis",
+     "lookup": "by_key",
+     "key_fields": [
+      "axis_id"
+     ],
+     "why": "entry_kind = axis: one exact active stable entry with the expected current revision"
+    },
+    {
+     "model": "SemanticTerm",
+     "lookup": "by_key",
+     "key_fields": [
+      "term_id"
+     ],
+     "why": "entry_kind = term"
+    },
+    {
+     "model": "SemanticRelation",
+     "lookup": "by_key",
+     "key_fields": [
+      "relation_id"
+     ],
+     "why": "entry_kind = relation"
+    }
+   ],
+   "writes": [
+    {
+     "model": "SemanticAxis",
+     "operation": "update_fields",
+     "append_only": false,
+     "compare_and_set_on": "status",
+     "why": "compare-and-set active -> final retired",
+     "fields_updated": [
+      "status"
+     ]
+    },
+    {
+     "model": "SemanticTerm",
+     "operation": "update_fields",
+     "append_only": false,
+     "compare_and_set_on": "status",
+     "why": "same",
+     "fields_updated": [
+      "status"
+     ]
+    },
+    {
+     "model": "SemanticRelation",
+     "operation": "update_fields",
+     "append_only": false,
+     "compare_and_set_on": "status",
+     "why": "same",
+     "fields_updated": [
+      "status"
+     ]
+    }
+   ],
+   "delegates": [],
+   "unclear": [
+    "MAJOR: the note requires sampling system_clock.now and 'preserving the bounded reason', and 'an exact replay returns the first retirement' while a 'conflicting repeat' is refused. SemanticAxis/SemanticTerm/SemanticRelation have no retired_at, retired_by or retirement_reason field (Slot and TrialCase do). The retirement time, actor and reason have no durable home, and replay vs. conflict cannot be told apart from `status` alone.",
+    "The compare-and-set is on two fields: `status` == expected_status AND `current_revision_id` == current_revision_ref. A single-field CAS primitive is not enough.",
+    "'active owner' check: same OwnerPrincipal question as decide_proposal."
+   ]
+  },
+  {
+   "function": "clamp_resource_bounds",
+   "module": "slot_registry",
+   "reads": [],
+   "writes": [],
+   "delegates": [],
+   "unclear": []
+  },
+  {
+   "function": "validate_contract_ports",
+   "module": "slot_registry",
+   "reads": [],
+   "writes": [],
+   "delegates": [
+    {
+     "callee": "semantic_vocabulary.term_revision",
+     "purpose": "every input requires an active accepted term revision on an active axis (issue_contract_version note: resolved only with term_revision)"
+    }
+   ],
+   "unclear": [
+    "No direct durable read. But SemanticPort carries only `semantic_term_revision_ref`; term_revision(term_id, term_revision_id=None) needs term_id, which the port does not hold. The vocabulary needs a by-revision-ref lookup (SemanticTermRevision by term_revision_id -> term_id -> SemanticTerm, SemanticAxis) or the port needs a term id.",
+    "'unknown schemas' - no durable schema registry model is named; assumed closed release data, not a record."
+   ]
+  },
+  {
+   "function": "create_slot",
+   "module": "slot_registry",
+   "reads": [],
+   "writes": [
+    {
+     "model": "Slot",
+     "operation": "insert",
+     "append_only": false,
+     "compare_and_set_on": null,
+     "why": "append one active continuing Slot with freshly minted identity and created_at = clock sample"
+    }
+   ],
+   "delegates": [
+    {
+     "callee": "identity.mint_identity",
+     "purpose": "fresh installation-namespaced slot_id (not in module_internal imports)"
+    }
+   ],
+   "unclear": [
+    "State 5 lists 'conflicting duplicate' as an error and 'the exact existing Slot for an explicitly idempotent request' as an output, but the contract has no idempotency key and the identity is minted, so no field supports finding the 'existing' Slot. If `name` is meant to be unique, a by_unique [name] lookup is needed; nothing declares it.",
+    "'identity reuse after retirement is refused' - with a minted id this is only a primary-key collision on insert."
+   ]
+  },
+  {
+   "function": "issue_contract_version",
+   "module": "slot_registry",
+   "reads": [
+    {
+     "model": "Slot",
+     "lookup": "by_key",
+     "key_fields": [
+      "slot_id"
+     ],
+     "why": "MUST require an active Slot"
+    },
+    {
+     "model": "SlotContractVersion",
+     "lookup": "by_key",
+     "key_fields": [
+      "contract_version_id"
+     ],
+     "why": "returning the existing equal version on replay (identity from identify_contract_version)"
+    },
+    {
+     "model": "SlotContractVersion",
+     "lookup": "list_by",
+     "key_fields": [
+      "slot_id"
+     ],
+     "why": "State 5: 'deterministic version ordinal' -> version_number = count/max over the slot's versions + 1",
+     "order_by": "version_number"
+    }
+   ],
+   "writes": [
+    {
+     "model": "SlotContractVersion",
+     "operation": "insert",
+     "append_only": true,
+     "compare_and_set_on": null,
+     "why": "appends one immutable version; issued_at = one clock sample"
+    }
+   ],
+   "delegates": [
+    {
+     "callee": "slot_registry.validate_contract_ports",
+     "purpose": "normalize ports"
+    },
+    {
+     "callee": "slot_registry.clamp_resource_bounds",
+     "purpose": "clamp to release ceilings"
+    },
+    {
+     "callee": "semantic_vocabulary.term_revision",
+     "purpose": "every authored term reference"
+    },
+    {
+     "callee": "identity.identify_contract_version",
+     "purpose": "content identity (not in module_internal imports)"
+    }
+   ],
+   "unclear": [
+    "version_number is not part of identity and is not returned by identify_contract_version; deriving it needs list_by slot_id / max(version_number), and uniqueness of (slot_id, version_number) under concurrent issuance is not decided.",
+    "'require an offered SandboxRuntimeRevision': the full value arrives as an argument from the caller. M22 is 'Durable', source of truth 'the kernel release'; whether slot_registry must re-load it (by runtime_revision_id) to check `status == offered` instead of trusting the argument is not decided, and no module is named as its owner.",
+    "SemanticPort.owner_ref must equal the new contract_version_id, which itself is computed from the ports - the canonicalization must exclude owner_ref; not stated."
+   ]
+  },
+  {
+   "function": "submit_implementation",
+   "module": "slot_registry",
+   "reads": [
+    {
+     "model": "SlotContractVersion",
+     "lookup": "by_key",
+     "key_fields": [
+      "contract_version_id"
+     ],
+     "why": "require an exact contract"
+    },
+    {
+     "model": "Slot",
+     "lookup": "by_key",
+     "key_fields": [
+      "slot_id"
+     ],
+     "why": "of an active Slot (slot_id taken from the contract version)"
+    },
+    {
+     "model": "Implementation",
+     "lookup": "by_key",
+     "key_fields": [
+      "implementation_id"
+     ],
+     "why": "equal defining content returns the existing record"
+    }
+   ],
+   "writes": [
+    {
+     "model": "Implementation",
+     "operation": "insert",
+     "append_only": true,
+     "compare_and_set_on": null,
+     "why": "appends one immutable Implementation; submitted_at = one clock sample; actor/time/rationale/trace refs are provenance"
+    }
+   ],
+   "delegates": [
+    {
+     "callee": "identity.identify_implementation",
+     "purpose": "identity over (contract_version_ref, entry_point, code_bytes)"
+    },
+    {
+     "callee": "identity.digest_canonical_bytes (assumed)",
+     "purpose": "code digest for code_ref"
+    }
+   ],
+   "unclear": [
+    "MAJOR: 'stores bytes once by digest' - the code object is a written durable record kind with no model. Implementation has only `code_ref: str`; there is no model with (digest, bytes). It is not a StoredValue (value_store is not named; A05.6 restricts readers). The record port needs an insert-if-absent of a content-addressed blob keyed by digest, atomic with the Implementation insert ('neither partial bytes nor metadata').",
+    "motivating_trace_refs are stored unvalidated? The note does not require resolving them."
+   ]
+  },
+  {
+   "function": "contract_version",
+   "module": "slot_registry",
+   "reads": [
+    {
+     "model": "SlotContractVersion",
+     "lookup": "by_key",
+     "key_fields": [
+      "contract_version_id"
+     ],
+     "why": "load the exact immutable SlotContractVersion by content identity"
+    },
+    {
+     "model": "Slot",
+     "lookup": "by_key",
+     "key_fields": [
+      "slot_id"
+     ],
+     "why": "return ... owning Slot lifecycle state"
+    }
+   ],
+   "writes": [],
+   "delegates": [
+    {
+     "callee": "identity.identify_contract_version (assumed)",
+     "purpose": "'integrity mismatch' is explicit - recompute identity from stored content"
+    }
+   ],
+   "unclear": [
+    "The return type is SlotContractVersion, which has no slot-status field, yet the note and State 5 promise the owning Slot's status. Callers (trial_corpus 'unknown or retired contracts', admission, slot_activation) cannot see retirement through this contract; they would have to load Slot by slot_id themselves, which State 5 forbids ('without reading its storage directly')."
+   ]
+  },
+  {
+   "function": "implementation_record",
+   "module": "slot_registry",
+   "reads": [
+    {
+     "model": "Implementation",
+     "lookup": "by_key",
+     "key_fields": [
+      "implementation_id"
+     ],
+     "why": "resolve exactly one immutable Implementation"
+    },
+    {
+     "model": "SlotContractVersion",
+     "lookup": "by_key",
+     "key_fields": [
+      "contract_version_id"
+     ],
+     "why": "verify its contract association (implementation.contract_version_ref exists)"
+    }
+   ],
+   "writes": [],
+   "delegates": [],
+   "unclear": [
+    "Code bytes are read by `code_ref` from the unmodelled content-addressed code store (see submit_implementation); digest verification needs bytes even for the metadata purposes ('verify its ... stored code digest'), or only existence - not decided.",
+    "'contract mismatch' - mismatch against what? The function receives only implementation_ref; no expected contract is passed."
+   ]
+  },
+  {
+   "function": "retire_slot",
+   "module": "slot_registry",
+   "reads": [
+    {
+     "model": "Slot",
+     "lookup": "by_key",
+     "key_fields": [
+      "slot_id"
+     ],
+     "why": "one active Slot; exact replay returns the first retirement (compare stored retirement_reason / retired_by)"
+    }
+   ],
+   "writes": [
+    {
+     "model": "Slot",
+     "operation": "update_fields",
+     "append_only": false,
+     "compare_and_set_on": "status",
+     "why": "compare-and-set active -> final retired; retired_by, retired_at, retirement_reason each exactly once",
+     "fields_updated": [
+      "status",
+      "retired_by",
+      "retired_at",
+      "retirement_reason"
+     ]
+    }
+   ],
+   "delegates": [],
+   "unclear": [
+    "'Exact replay' equality fields are not named (actor + reason assumed)."
+   ]
+  },
+  {
+   "function": "slot_authoring_view",
+   "module": "slot_registry",
+   "reads": [
+    {
+     "model": "Slot",
+     "lookup": "by_key",
+     "key_fields": [
+      "slot_id"
+     ],
+     "why": "the named Slot lifecycle"
+    },
+    {
+     "model": "SlotContractVersion",
+     "lookup": "list_by",
+     "key_fields": [
+      "slot_id"
+     ],
+     "why": "its immutable contract versions",
+     "order_by": "version_number"
+    },
+    {
+     "model": "Implementation",
+     "lookup": "list_by",
+     "key_fields": [
+      "contract_version_ref"
+     ],
+     "why": "submitted implementation metadata, per contract version of this slot",
+     "order_by": null
+    },
+    {
+     "model": "Implementation",
+     "lookup": "by_key",
+     "key_fields": [
+      "implementation_id"
+     ],
+     "why": "one explicitly requested exact body (implementation_body_ref), then check it belongs to this slot via its contract version"
+    }
+   ],
+   "writes": [],
+   "delegates": [],
+   "unclear": [
+    "Implementation has no slot_id: listing a slot's implementations is list_by contract_version_ref for each version (or an IN-list). A paged, stable cross-version order has no declared field (candidates: submitted_at, implementation_id).",
+    "What the page cursor pages over (versions, implementations, or both) and the cursor's field basis are not decided.",
+    "Code body read: same unmodelled code store as submit_implementation.",
+    "Authoring-scope (A22) check of the actor is delegated to access_control presumably; not named in the note or imports."
+   ]
+  },
+  {
+   "function": "active_corpus",
+   "module": "trial_corpus",
+   "reads": [
+    {
+     "model": "TrialCase",
+     "lookup": "list_by",
+     "key_fields": [
+      "contract_version_ref",
+      "status"
+     ],
+     "why": "stable ordered snapshot of every active TrialCase for the exact contract version",
+     "order_by": "trial_case_id"
+    },
+    {
+     "model": "TrialCase",
+     "lookup": "list_by",
+     "key_fields": [
+      "contract_version_ref",
+      "status"
+     ],
+     "why": "withdrawn cases listed separately as historical admission evidence (status = withdrawn)",
+     "order_by": "trial_case_id"
+    }
+   ],
+   "writes": [],
+   "delegates": [
+    {
+     "callee": "slot_registry.contract_version",
+     "purpose": "State 5 errors: unknown/retired contract (the note itself does not name the call)"
+    },
+    {
+     "callee": "value_store (read value bytes)",
+     "purpose": "full values for a surface reader within its ceiling; not in module_internal imports"
+    }
+   ],
+   "unclear": [
+    "Order field is not named; `trial_case_id` is my assumption (content-derived, stable). `added_at` is the other candidate. The corpus_digest depends on it.",
+    "The list must be complete (never partial) - the port's list_by must be unpaged or the function must drain it; State 5 mentions 'invalid cursor' but the contract has no cursor.",
+    "Which function computes corpus_digest (identity.digest_canonical_bytes?) is not named."
+   ]
+  },
+  {
+   "function": "add_trial_case",
+   "module": "trial_corpus",
+   "reads": [
+    {
+     "model": "TrialCase",
+     "lookup": "by_key",
+     "key_fields": [
+      "trial_case_id"
+     ],
+     "why": "identical content returns the existing case"
+    }
+   ],
+   "writes": [
+    {
+     "model": "TrialCase",
+     "operation": "insert",
+     "append_only": false,
+     "compare_and_set_on": null,
+     "why": "appends one active TrialCase, origin authored, added_at = one clock sample; inputs/expected_outputs embed StoredValue descriptors"
+    }
+   ],
+   "delegates": [
+    {
+     "callee": "slot_registry.contract_version",
+     "purpose": "the contract version MUST be resolved only with it"
+    },
+    {
+     "callee": "value_store (store value / fixture with retention trial_corpus)",
+     "purpose": "StoredValue bytes are not TrialCase's own record; not in module_internal imports"
+    },
+    {
+     "callee": "identity.identify_trial_case",
+     "purpose": "content identity; not in module_internal imports"
+    },
+    {
+     "callee": "semantic_vocabulary.term_revision (?)",
+     "purpose": "'validate each draft's term revision' - against the port only, or also against the vocabulary: not decided"
+    }
+   ],
+   "unclear": [
+    "'Unknown or retired contracts' are refused, and 'a contract version carries no status of its own' - retirement is the owning Slot's, but contract_version returns SlotContractVersion without slot status. trial_corpus would need Slot by slot_id, which is slot_registry's storage.",
+    "identify_trial_case takes `protected_classification`; no TrialCase field holds it and the note does not say how add_trial_case derives it (max disclosure_class of the values?).",
+    "'conflicting existing content' (State 5 error) under a content-derived key can only mean a digest collision or a withdrawn existing case; whether re-adding content equal to a *withdrawn* case returns the withdrawn case or is refused is not decided.",
+    "Atomicity of value_store writes with the TrialCase insert ('no partial values or case') spans two modules' records in one UnitOfWork."
+   ]
+  },
+  {
+   "function": "capture_trial_case",
+   "module": "trial_corpus",
+   "reads": [
+    {
+     "model": "NodeExecution",
+     "lookup": "by_key",
+     "key_fields": [
+      "node_execution_id"
+     ],
+     "why": "accept only a concluded function NodeExecution of the exact slot and contract (State 5: through trace_journal.slot_evidence, not a direct read)"
+    },
+    {
+     "model": "TrialCase",
+     "lookup": "by_key",
+     "key_fields": [
+      "trial_case_id"
+     ],
+     "why": "content-derived identity: an equal case may already exist (A05.3)"
+    }
+   ],
+   "writes": [
+    {
+     "model": "TrialCase",
+     "operation": "insert",
+     "append_only": false,
+     "compare_and_set_on": null,
+     "why": "append one active TrialCase with origin captured_from_run and origin_node_execution_ref; added_at = one clock sample"
+    }
+   ],
+   "delegates": [
+    {
+     "callee": "trace_journal.slot_evidence",
+     "purpose": "validate the execution and its input value refs/digests (not in module_internal imports)"
+    },
+    {
+     "callee": "run_spool.describe_file",
+     "purpose": "verify and copy a live spool file (not in module_internal imports)"
+    },
+    {
+     "callee": "value_store",
+     "purpose": "retain copied inputs with retention trial_corpus; copy spool bytes into a byte_stream StoredValue"
+    },
+    {
+     "callee": "slot_registry.contract_version",
+     "purpose": "exact slot/contract check (note does not name the call; slot_id must equal SlotContractVersion.slot_id)"
+    },
+    {
+     "callee": "owner_authority / ActorRef.actor_kind",
+     "purpose": "retaining a personal_data file requires the active owner"
+    }
+   ],
+   "unclear": [
+    "NodeExecution.executed_ref names what was executed (implementation? activation?) - linking it to (slot_id, contract_version_ref) needs Implementation.contract_version_ref or SlotActivation; the path is not stated.",
+    "`input_port_ids` selects inputs, but NodeExecution.input_value_refs is a tuple of value refs with no port ids; the port<->value correspondence is not in the model.",
+    "Identity excludes origin (identify_trial_case has no origin input): capturing content equal to an existing authored case returns that case and loses origin_node_execution_ref - undecided.",
+    "A partial input selection yields a case that lacks required inputs; add_trial_case requires 'one value for every required input'. Not reconciled."
+   ]
+  },
+  {
+   "function": "copy_cases_to_version",
+   "module": "trial_corpus",
+   "reads": [
+    {
+     "model": "TrialCase",
+     "lookup": "list_by",
+     "key_fields": [
+      "contract_version_ref"
+     ],
+     "why": "verify that the target corpus is empty",
+     "order_by": null
+    },
+    {
+     "model": "TrialCase",
+     "lookup": "list_by",
+     "key_fields": [
+      "contract_version_ref",
+      "status"
+     ],
+     "why": "complete active source corpus when source_trial_case_refs is None",
+     "order_by": "trial_case_id"
+    },
+    {
+     "model": "TrialCase",
+     "lookup": "by_key",
+     "key_fields": [
+      "trial_case_id"
+     ],
+     "why": "each selected source case; must belong to the source version and be active (withdrawn never copied)"
+    }
+   ],
+   "writes": [
+    {
+     "model": "TrialCase",
+     "operation": "insert",
+     "append_only": false,
+     "compare_and_set_on": null,
+     "why": "compatible cases receive new target-version identities; N inserts in one atomic unit"
+    }
+   ],
+   "delegates": [
+    {
+     "callee": "slot_registry.contract_version",
+     "purpose": "both versions resolved only with it; same slot_id"
+    },
+    {
+     "callee": "value_store (add retention reference by digest)",
+     "purpose": "equal StoredValue content may be reused by digest"
+    },
+    {
+     "callee": "identity.identify_trial_case",
+     "purpose": "target-version identities"
+    }
+   ],
+   "unclear": [
+    "'target corpus is empty': does a withdrawn target case count? (list_by contract_version_ref without status vs. with status=active).",
+    "No `added_at` clock sentence in the note for copied cases; `origin` of a copy is undefined (State 1 allows only `authored` | `captured_from_run`) and there is no source-case lineage field on TrialCase.",
+    "Order of the report / of copying is 'deterministic' without a named field.",
+    "Revalidating term revisions of copied values: against target ports only, or also vocabulary status via term_revision - not decided."
+   ]
+  },
+  {
+   "function": "withdraw_trial_case",
+   "module": "trial_corpus",
+   "reads": [
+    {
+     "model": "TrialCase",
+     "lookup": "by_key",
+     "key_fields": [
+      "trial_case_id"
+     ],
+     "why": "one active TrialCase; exact replay preserves the original withdrawal"
+    }
+   ],
+   "writes": [
+    {
+     "model": "TrialCase",
+     "operation": "update_fields",
+     "append_only": false,
+     "compare_and_set_on": "status",
+     "why": "compare-and-set active -> final withdrawn; case content never edited",
+     "fields_updated": [
+      "status",
+      "withdrawn_by",
+      "withdrawn_at",
+      "withdrawal_reason"
+     ]
+    }
+   ],
+   "delegates": [],
+   "unclear": [
+    "MAJOR: 'ever contributed to an admitted verdict' needs a cross-module lookup: TrialExecution list_by [trial_case_ref] -> AdmissionVerdict whose `considered_trial_executions` contains one of them and `verdict` == admitted. considered_trial_executions is a tuple field (not indexable as a column filter), both records belong to admission, no admission operation is named for it, and the contract has no evidence parameter although State 5 lists that evidence as an *input*.",
+    "'active owner' for a protected withdrawal: OwnerPrincipal status check - direct read or owner_authority, not decided.",
+    "'Exact replay' equality fields not named (actor + reason assumed)."
+   ]
+  },
+  {
+   "function": "current_admission",
+   "module": "admission",
+   "reads": [
+    {
+     "model": "AdmissionVerdict",
+     "lookup": "list_by",
+     "key_fields": [
+      "contract_version_ref",
+      "implementation_ref"
+     ],
+     "why": "note: 'read the latest immutable AdmissionVerdict for the exact contract-version and implementation pair ... or explicit absence'; trial refs come from the verdict's own considered_trial_executions, no TrialExecution load",
+     "certainty": "stated",
+     "order_by": "decided_at desc, take first"
+    }
+   ],
+   "writes": [],
+   "unclear": [
+    "'Latest' is ordered only by decided_at (KernelInstant.epoch_us); no sequence field breaks a tie between two verdicts for the same pair decided in the same microsecond.",
+    "State 5 lists 'unknown contract or implementation' and 'mismatched pair' as explicit errors, but the note names no slot_registry call for this function; whether it validates the refs (slot_registry.contract_version / implementation_record) or only reports absence is undecided.",
+    "The note says it 'MUST distinguish an earlier admitted verdict from admission over the presently active corpus', yet the function does not read the corpus (no trial_corpus call named) and the return type is a bare AdmissionVerdict | None; the freshness comparison (verdict.corpus_digest vs snapshot.corpus_digest) appears to be the caller's job."
+   ]
+  },
+  {
+   "function": "run_trial",
+   "module": "admission",
+   "reads": [],
+   "reads_via_calls": [
+    "module:slot_registry.contract_version",
+    "module:slot_registry.implementation_record",
+    "module:trial_corpus.active_corpus",
+    "module:sandbox_supervisor.execute_function",
+    "module:system_clock.now"
+   ],
+   "writes": [
+    {
+     "model": "TrialExecution",
+     "operation": "insert",
+     "append_only": true,
+     "compare_and_set_on": null,
+     "why": "note: 'Each attempted case appends one immutable TrialExecution'; State 5: 'Append-only TrialExecution records'",
+     "certainty": "stated"
+    },
+    {
+     "model": "AdmissionVerdict",
+     "operation": "insert",
+     "append_only": true,
+     "compare_and_set_on": null,
+     "why": "note: 'appends exactly one kernel-authored AdmissionVerdict' recording contract_version_ref, runtime_revision_ref, corpus_digest; considered_trial_executions holds the inserted trial_execution_id values in deterministic case order",
+     "certainty": "stated"
+    }
+   ],
+   "unclear": [
+    "Who mints trial_execution_id and admission_id is not named (identity.mint_identity exists but the note does not call it; no identify_* function exists for either kind). A08 test 5 ('same implementation and corpus yield the same verdict on repetition') does not say whether a repeat appends a second verdict or returns the first; with minted ids every run appends.",
+    "Transaction boundary: are the N TrialExecution inserts and the verdict one unit of work, or is each execution committed as it happens? 'infrastructure failure cannot fabricate a verdict' and the `missing_trial_execution` reason suggest executions persist individually and may exist without any verdict; the note names no operational_store call at all.",
+    "TrialExecution.executed_at source is not stated (the note samples system_clock.now only once, 'after the complete run', for the verdict).",
+    "TrialExecution has no contract_version_ref and no admission back-reference: executions are reachable only by trial_execution_id from a verdict's considered_trial_executions, or by [implementation_ref, trial_case_ref]. Executions of an interrupted run (no verdict) are reachable only by the latter."
+   ]
+  },
+  {
+   "function": "activate_implementation",
+   "module": "slot_activation",
+   "reads": [
+    {
+     "model": "SlotActivation",
+     "lookup": "list_by",
+     "key_fields": [
+      "contract_version_ref"
+     ],
+     "why": "note: 'compare-and-sets the expected current activation ... a losing writer receives the actual current activation' - needs the current (latest) activation of the contract version",
+     "certainty": "stated",
+     "order_by": "activated_at desc, take first (or chain tail by previous_activation_ref)"
+    }
+   ],
+   "reads_via_calls": [
+    "module:slot_registry.contract_version",
+    "module:slot_registry.implementation_record",
+    "module:trial_corpus.active_corpus",
+    "module:admission.current_admission (named in State 5 Inputs, NOT in the note)",
+    "module:system_clock.now"
+   ],
+   "writes": [
+    {
+     "model": "SlotActivation",
+     "operation": "insert",
+     "append_only": true,
+     "compare_and_set_on": "previous_activation_ref",
+     "why": "note: 'appends one immutable SlotActivation containing the admitted-verdict and previous-activation references'; A09.2: 'Activation is compare-and-set on previous_activation_ref'",
+     "certainty": "stated"
+    }
+   ],
+   "unclear": [
+    "'Latest SlotActivation for a contract version' has no head record: SlotActivation is an append-only value chained by previous_activation_ref, and A09.2 says compare-and-set is 'on previous_activation_ref'. operational_store's CompareAndSetExpectation(record_family, record_id, expected_version) addresses one versioned record, but no mutable record holds the current activation of a contract version. The port needs either a null-safe unique constraint on [contract_version_ref, previous_activation_ref] enforced at insert, or a head-pointer record kind that does not exist in the models.",
+    "'Latest' is not defined by a field: activated_at is KernelInstant(epoch_us) and may tie; the alternative is the chain tail (the activation no other record names as previous_activation_ref). Texts do not choose between order-by-time and chain walk.",
+    "The note requires 'its latest verdict is admitted' but names only slot_registry and trial_corpus calls; State 5 names module:admission.current_admission. If the note stays silent the function would read AdmissionVerdict directly (list_by [contract_version_ref, implementation_ref]) and cross admission's ownership of M26.",
+    "activation_id minting is not named (no identity call in the note).",
+    "'actor holds the implementation-activation permission' - no access_control.authorize_action call is named; State 5 says kernel_surface authorizes before the call, the note says this function verifies it."
+   ]
+  },
+  {
+   "function": "contract_health",
+   "module": "slot_activation",
+   "reads": [
+    {
+     "model": "SlotActivation",
+     "lookup": "list_by",
+     "key_fields": [
+      "contract_version_ref"
+     ],
+     "why": "note: 'recompute ... from the current serving activation'",
+     "certainty": "stated",
+     "order_by": "activated_at desc, take first"
+    }
+   ],
+   "reads_via_calls": [
+    "module:trial_corpus.active_corpus",
+    "module:trace_journal.slot_evidence"
+   ],
+   "writes": [],
+   "unclear": [
+    "'its admission' needs the AdmissionVerdict named by serving.admission_ref (load by admission_id). admission exposes only current_admission(contract_version_ref, implementation_ref) = latest for the pair, which may be a LATER verdict than the one the activation pinned; no by-id read of M26 exists and the note names no admission call. Which verdict defines admission_fresh (pinned vs latest) is undecided.",
+    "slot_evidence takes slot_id, but contract_health receives only contract_version_ref; slot_id must come from slot_registry.contract_version (SlotContractVersion.slot_id), which the note does not name.",
+    "SlotEvidencePage carries trial_execution_refs as bare ids; if a failing TrialExecution is to count as 'concrete execution evidence', the function needs TrialExecution by trial_execution_id (owned by admission, no accessor exists). The note restricts evidence to trace_journal.slot_evidence, so TrialExecution-based failure is either excluded or unreachable - not stated.",
+    "'Latest' is not defined by a field: activated_at is KernelInstant(epoch_us) and may tie; the alternative is the chain tail (the activation no other record names as previous_activation_ref). Texts do not choose between order-by-time and chain walk."
+   ]
+  },
+  {
+   "function": "rollback_activation",
+   "module": "slot_activation",
+   "reads": [
+    {
+     "model": "SlotActivation",
+     "lookup": "list_by",
+     "key_fields": [
+      "contract_version_ref"
+     ],
+     "why": "note: 'compare-and-sets the expected current activation and appends one immutable SlotActivation linked to the immediately previous record'",
+     "certainty": "stated",
+     "order_by": "activated_at desc, take first (or chain tail)"
+    },
+    {
+     "model": "SlotActivation",
+     "lookup": "list_by",
+     "key_fields": [
+      "contract_version_ref",
+      "implementation_ref"
+     ],
+     "why": "note: 'an earlier implementation of the exact contract' - if 'earlier' means previously activated, history must show an activation of earlier_implementation_ref",
+     "certainty": "implied"
+    }
+   ],
+   "reads_via_calls": [
+    "module:system_clock.now",
+    "(State 5: 'All normal activation rules' => slot_registry.contract_version, slot_registry.implementation_record, trial_corpus.active_corpus, admission.current_admission - none named in this note)"
+   ],
+   "writes": [
+    {
+     "model": "SlotActivation",
+     "operation": "insert",
+     "append_only": true,
+     "compare_and_set_on": "previous_activation_ref",
+     "why": "note: 'treat rollback as a new activation ... never edits or deletes activation history'; reason is written (required non-empty)",
+     "certainty": "stated"
+    }
+   ],
+   "unclear": [
+    "'Latest SlotActivation for a contract version' has no head record: SlotActivation is an append-only value chained by previous_activation_ref, and A09.2 says compare-and-set is 'on previous_activation_ref'. operational_store's CompareAndSetExpectation(record_family, record_id, expected_version) addresses one versioned record, but no mutable record holds the current activation of a contract version. The port needs either a null-safe unique constraint on [contract_version_ref, previous_activation_ref] enforced at insert, or a head-pointer record kind that does not exist in the models.",
+    "'earlier implementation': previously ACTIVATED for this contract version (needs SlotActivation list_by [contract_version_ref, implementation_ref]) or merely previously SUBMITTED (slot_registry.implementation_record)? State 5 says 'target never belonging to the contract' which points to the latter; the word 'earlier' points to the former.",
+    "'An earlier implementation that fails a newer active case' - the evidence source is not named: a fresh admitted verdict over the present corpus already implies no failing case, so either this is redundant with current_admission + corpus_digest equality or it needs slot_evidence; note names neither.",
+    "The note names no cross-module read at all (only system_clock.now); the reads of contract, implementation, corpus and admission are inherited from State 5 prose only."
+   ]
+  },
+  {
+   "function": "serving_activation",
+   "module": "slot_activation",
+   "reads": [
+    {
+     "model": "SlotActivation",
+     "lookup": "list_by",
+     "key_fields": [
+      "contract_version_ref"
+     ],
+     "why": "note: 'return the latest immutable SlotActivation for the exact contract version ... or explicit `unserved`'",
+     "certainty": "stated",
+     "order_by": "activated_at desc, take first (or chain tail)"
+    }
+   ],
+   "writes": [],
+   "unclear": [
+    "'Latest' is not defined by a field: activated_at is KernelInstant(epoch_us) and may tie; the alternative is the chain tail (the activation no other record names as previous_activation_ref). Texts do not choose between order-by-time and chain walk.",
+    "'Unknown or retired contracts ... are explicit failures' requires slot_registry.contract_version plus the owning Slot.status; neither call is named in the note, and slot_registry exposes no slot-status read other than slot_authoring_view.",
+    "'unauthorized inspection' - no access_control call named."
+   ]
+  },
+  {
+   "function": "activate_flow_version",
+   "module": "flow_registry",
+   "reads": [
+    {
+     "model": "Flow",
+     "lookup": "by_key",
+     "key_fields": [
+      "flow_id"
+     ],
+     "why": "note: 'the exact version belongs to the active Flow'; retirement refuses",
+     "certainty": "stated"
+    },
+    {
+     "model": "FlowVersion",
+     "lookup": "by_key",
+     "key_fields": [
+      "flow_version_id"
+     ],
+     "why": "note: 'exact version belongs to the active Flow' (check FlowVersion.flow_id == flow_id); nodes give the pinned binding versions and highest_effect_class",
+     "certainty": "stated"
+    },
+    {
+     "model": "FlowProof",
+     "lookup": "by_key",
+     "key_fields": [
+      "proof_id"
+     ],
+     "why": "note: 'has a matching `proven` FlowProof' - the proof arrives as an argument; trusting it requires comparing with the stored record",
+     "certainty": "implied"
+    },
+    {
+     "model": "FlowActivation",
+     "lookup": "list_by",
+     "key_fields": [
+      "flow_version_ref"
+     ],
+     "why": "note: 'compare-and-set the current selection'; current activation of the Flow = latest activation over all versions of the flow (flow_version_ref IN versions of flow_id)",
+     "certainty": "implied",
+     "order_by": "activated_at desc, take first (or chain tail by previous_flow_activation_ref)"
+    },
+    {
+     "model": "FlowVersion",
+     "lookup": "list_by",
+     "key_fields": [
+      "flow_id"
+     ],
+     "why": "needed only to enumerate the flow's versions so the current FlowActivation can be found (FlowActivation has no flow_id)",
+     "certainty": "implied"
+    }
+   ],
+   "reads_via_calls": [
+    "module:owner_authority.owner_statement",
+    "module:system_clock.now",
+    "(implied, not named) module:operation_bindings.binding_version per operation node, then derive_highest_effect_class"
+   ],
+   "writes": [
+    {
+     "model": "FlowActivation",
+     "operation": "insert",
+     "append_only": true,
+     "compare_and_set_on": "previous_flow_activation_ref",
+     "why": "note: 'append one immutable FlowActivation'; 'Selecting an earlier version appends new history'",
+     "certainty": "stated"
+    }
+   ],
+   "unclear": [
+    "FlowActivation has no flow_id field (fields: flow_activation_id, flow_version_ref, proof_ref, activated_by, owner_statement, previous_flow_activation_ref, activated_at). Finding the current activation of a Flow therefore needs a two-step lookup: FlowVersion list_by [flow_id] -> FlowActivation list_by flow_version_ref IN (...), then latest. No single-model lookup supports 'current activation of flow X'; the compare-and-set chain is per Flow but the chain key is not on the record.",
+    "Same head-record problem as SlotActivation: compare-and-set of an append-only chain has no versioned record to expect against; needs a null-safe unique constraint on the chain link scoped per Flow - and the scope field (flow_id) is absent from FlowActivation.",
+    "The proof is a caller-supplied FlowProof value; the note does not say the function re-reads the stored proof by proof_id. Without the re-read a fabricated `proven` value passes; with it, flow_registry needs FlowProof by_key [proof_id] (flow_registry writes M36 in record_flow_proof but 30_modules 'Knows' lists only M31, M32, M37).",
+    "'derives the highest effect from pinned accepted bindings' - FlowVersion already stores highest_effect_class; whether activation re-derives (needs operation_bindings.binding_version per node, not named) or reads the stored field is undecided.",
+    "'requires the active owner' / 'suspended owner' needs OwnerPrincipal.status by principal_id (= actor.owner_principal_id); no access_control/owner_authority call for it is named.",
+    "State 5 Outputs mention 'highest effect class ... and reason' on the activation; FlowActivation has neither field.",
+    "flow_activation_id minting is not named."
+   ]
+  },
+  {
+   "function": "composition_view",
+   "module": "flow_registry",
+   "reads": [
+    {
+     "model": "OperationBinding",
+     "lookup": "list_by",
+     "key_fields": [
+      "status"
+     ],
+     "why": "note: 'composable accepted ... operation-binding versions ... Retired or suspended facts are labelled rather than replaced'; filter.binding_refs narrows by binding_id",
+     "certainty": "implied",
+     "order_by": "binding_id asc (deterministic page; not stated)"
+    },
+    {
+     "model": "OperationBindingVersion",
+     "lookup": "by_key",
+     "key_fields": [
+      "binding_version_id"
+     ],
+     "why": "version of each listed binding via OperationBinding.current_version_id; filter.effect_classes applies to effect_class",
+     "certainty": "implied"
+    },
+    {
+     "model": "SlotContractVersion",
+     "lookup": "list_by",
+     "key_fields": [
+      "slot_id"
+     ],
+     "why": "note: 'composable accepted contract ... versions'; filter.slot_refs",
+     "certainty": "implied",
+     "order_by": "slot_id asc, version_number asc (not stated)"
+    },
+    {
+     "model": "Slot",
+     "lookup": "by_key",
+     "key_fields": [
+      "slot_id"
+     ],
+     "why": "retired slots must be labelled",
+     "certainty": "implied"
+    }
+   ],
+   "writes": [],
+   "unclear": [
+    "The note names NO module call. All three record families belong to other modules (M29/M30 operation_bindings, M19/M20 slot_registry, vocabulary revisions semantic_vocabulary), and none of those modules exposes a list operation (operation_bindings: only binding_version by id; slot_registry: contract_version by id and slot_authoring_view per slot; semantic_vocabulary: term_revision by id). Either flow_registry reads foreign records directly through the record port, or three list accessors are missing.",
+    "Page order and cursor encoding are not stated ('bounded, deterministic page'); the port needs a stable order key per family (binding_id / binding_version_id, slot_id+version_number).",
+    "'accepted' for a version = accepted_at present; 'suspended/retired' lives on OperationBinding.status, so the view needs both records joined by OperationBindingVersion.binding_id.",
+    "filter.semantic_term_revision_refs requires finding versions whose input_ports/output_ports (embedded tuple[SemanticPort]) name a term revision - not an indexable field; must be filtered in memory.",
+    "'vocabulary_revision_refs' source is not stated."
+   ]
+  },
+  {
+   "function": "create_flow",
+   "module": "flow_registry",
+   "reads": [
+    {
+     "model": "Flow",
+     "lookup": "by_unique",
+     "key_fields": [
+      "name"
+     ],
+     "why": "note: 'An explicitly idempotent replay returns the exact existing record; a conflicting duplicate ... leaves no partial lifecycle record' - the only caller-supplied candidates for a duplicate key are name/purpose",
+     "certainty": "implied"
+    }
+   ],
+   "reads_via_calls": [
+    "module:system_clock.now",
+    "(implied, not named) module:identity.mint_identity for flow_id; access_control.authorize_action for 'authorize authoring'"
+   ],
+   "writes": [
+    {
+     "model": "Flow",
+     "operation": "insert",
+     "append_only": false,
+     "compare_and_set_on": null,
+     "why": "note: 'atomically append one active Flow container without a graph, version or activation'; status=active, created_by, created_at, retirement fields absent",
+     "certainty": "stated"
+    }
+   ],
+   "unclear": [
+    "Idempotency key is undefined: the contract is (actor, name, purpose) with no request/idempotency identifier, flow_id is kernel-minted, and M31 does not declare name unique ('two flows are never interchangeable, even with identical current graphs'). 'explicitly idempotent replay' and 'conflicting duplicate' need either unique [name] or a deterministic flow_id derived from name; neither is decided.",
+    "flow_id minting is not named in the note (identity.mint_identity(entity_kind, installation_namespace) exists)."
+   ]
+  },
+  {
+   "function": "current_flow_activation",
+   "module": "flow_registry",
+   "reads": [
+    {
+     "model": "Flow",
+     "lookup": "by_key",
+     "key_fields": [
+      "flow_id"
+     ],
+     "why": "note: 'resolve one exact Flow ... expose retirement and reject an unknown Flow'",
+     "certainty": "stated"
+    },
+    {
+     "model": "FlowVersion",
+     "lookup": "list_by",
+     "key_fields": [
+      "flow_id"
+     ],
+     "why": "enumerate versions of the flow to find its activations (FlowActivation has no flow_id)",
+     "certainty": "implied"
+    },
+    {
+     "model": "FlowActivation",
+     "lookup": "list_by",
+     "key_fields": [
+      "flow_version_ref"
+     ],
+     "why": "note: 'return the latest successful immutable activation in its compare-and-set chain'",
+     "certainty": "implied",
+     "order_by": "activated_at desc, take first; chain verified through previous_flow_activation_ref"
+    },
+    {
+     "model": "FlowVersion",
+     "lookup": "by_key",
+     "key_fields": [
+      "flow_version_id"
+     ],
+     "why": "note: 'together with that activation's exact version'; 'flow/version identity match' (State 5)",
+     "certainty": "stated"
+    }
+   ],
+   "writes": [],
+   "unclear": [
+    "FlowActivation has no flow_id field (fields: flow_activation_id, flow_version_ref, proof_ref, activated_by, owner_statement, previous_flow_activation_ref, activated_at). Finding the current activation of a Flow therefore needs a two-step lookup: FlowVersion list_by [flow_id] -> FlowActivation list_by flow_version_ref IN (...), then latest. No single-model lookup supports 'current activation of flow X'; the compare-and-set chain is per Flow but the chain key is not on the record.",
+    "'corrupt chain' detection implies walking previous_flow_activation_ref from the tail to a record with None; that is FlowActivation by_key [flow_activation_id] repeated, or a full list of the flow's activations. Not stated which.",
+    "Return type is FlowActivation | None, yet the note says 'together with that activation's exact version' and 'MUST expose retirement' - neither fits the return type.",
+    "'never ... treats an unproven version as current' - would need FlowProof by_key [proof_id] via activation.proof_ref; not stated whether re-checked on read."
+   ]
+  },
+  {
+   "function": "derive_highest_effect_class",
+   "module": "flow_registry",
+   "reads": [],
+   "writes": [],
+   "unclear": [
+    "Pure over the supplied tuple. 'unaccepted' can be judged from accepted_at on the value, but 'unavailable' / suspended / retired lives on OperationBinding.status, which the function does not receive and must not read ('performs no mutation, authorization or service invocation'); whether 'unavailable' means only 'absent from the tuple' is undecided."
+   ]
+  },
+  {
+   "function": "register_flow_version",
+   "module": "flow_registry",
+   "reads": [
+    {
+     "model": "Flow",
+     "lookup": "by_key",
+     "key_fields": [
+      "flow_id"
+     ],
+     "why": "note: 'require an active exact Flow'; State 5: 'Unknown or retired Flow' refused",
+     "certainty": "stated"
+    },
+    {
+     "model": "FlowVersion",
+     "lookup": "by_key",
+     "key_fields": [
+      "flow_version_id"
+     ],
+     "why": "note: 'returning the existing equal version for identical content' - identity from module:identity (identify_flow_version)",
+     "certainty": "stated"
+    }
+   ],
+   "reads_via_calls": [
+    "validate_flow_registration (same module)",
+    "module:identity (identify_flow_version)",
+    "module:system_clock.now"
+   ],
+   "writes": [
+    {
+     "model": "FlowVersion",
+     "operation": "insert",
+     "append_only": true,
+     "compare_and_set_on": null,
+     "why": "note: 'atomically appends the immutable FlowVersion'",
+     "certainty": "stated"
+    }
+   ],
+   "unclear": [
+    "FlowVersion.highest_effect_class is a required stored field 'derived from the pinned binding versions, never authored', but the note names neither derive_highest_effect_class nor module:operation_bindings.binding_version; registration cannot fill the field without reading every pinned OperationBindingVersion.",
+    "Replay semantics with authored_by/authored_at: identity excludes author and time, so a second author registering the same graph gets the first author's record back - stated ('the same graph authored twice is the same version'); 'conflicting content' under an equal content identity can only be a digest collision.",
+    "'authorize authoring' - no access_control call named."
+   ]
+  },
+  {
+   "function": "retire_flow",
+   "module": "flow_registry",
+   "reads": [
+    {
+     "model": "Flow",
+     "lookup": "by_key",
+     "key_fields": [
+      "flow_id"
+     ],
+     "why": "note: 'compare-and-set the exact active Flow'; exact replay compares stored retired_by / retirement_reason",
+     "certainty": "stated"
+    },
+    {
+     "model": "FlowVersion",
+     "lookup": "list_by",
+     "key_fields": [
+      "flow_id"
+     ],
+     "why": "to find the flow's current activation for expected_current_activation_ref",
+     "certainty": "implied"
+    },
+    {
+     "model": "FlowActivation",
+     "lookup": "list_by",
+     "key_fields": [
+      "flow_version_ref"
+     ],
+     "why": "note: 'compare-and-set the exact active Flow and expected current activation'",
+     "certainty": "implied",
+     "order_by": "activated_at desc, take first"
+    }
+   ],
+   "reads_via_calls": [
+    "module:system_clock.now (only on the successful transition)"
+   ],
+   "writes": [
+    {
+     "model": "Flow",
+     "operation": "update_fields",
+     "append_only": false,
+     "compare_and_set_on": "status",
+     "why": "note: 'MUST write the retiring actor to `retired_by`, the sampled time to `retired_at` and the bounded reason to `retirement_reason`, each exactly once'; status -> retired",
+     "certainty": "stated",
+     "fields_updated": [
+      "status",
+      "retired_by",
+      "retired_at",
+      "retirement_reason"
+     ]
+    }
+   ],
+   "unclear": [
+    "FlowActivation has no flow_id field (fields: flow_activation_id, flow_version_ref, proof_ref, activated_by, owner_statement, previous_flow_activation_ref, activated_at). Finding the current activation of a Flow therefore needs a two-step lookup: FlowVersion list_by [flow_id] -> FlowActivation list_by flow_version_ref IN (...), then latest. No single-model lookup supports 'current activation of flow X'; the compare-and-set chain is per Flow but the chain key is not on the record.",
+    "The compare-and-set spans two things: Flow.status (a versioned master record - fits CompareAndSetExpectation) and 'expected current activation' (an append-only chain tail - does not). A concurrent activate_flow_version inserts a FlowActivation without touching the Flow record, so an expectation on Flow alone does not serialize retire against activate."
+   ]
+  },
+  {
+   "function": "validate_flow_registration",
+   "module": "flow_registry",
+   "reads": [],
+   "writes": [],
+   "unclear": [
+    "Pure structural check by the note ('neither proves semantic compatibility nor mutates state'). 'references to another Flow' is checked against the flow_id argument only; no record read."
+   ]
+  },
+  {
+   "function": "flow_version",
+   "module": "flow_registry",
+   "reads": [
+    {
+     "model": "FlowVersion",
+     "lookup": "by_key",
+     "key_fields": [
+      "flow_version_id"
+     ],
+     "why": "note: 'return the one immutable FlowVersion named by the exact content identity'",
+     "certainty": "stated"
+    }
+   ],
+   "writes": [],
+   "unclear": [
+    "'ambiguous reference' can only occur if flow_version_id is not the sole key; identify_flow_version includes flow_id in the digest, so [flow_version_id] alone is unique - then 'ambiguous' is unreachable."
+   ]
+  },
+  {
+   "function": "record_flow_proof",
+   "module": "flow_registry",
+   "reads": [
+    {
+     "model": "FlowProof",
+     "lookup": "by_key",
+     "key_fields": [
+      "proof_id"
+     ],
+     "why": "note: 'An exact replay returns the stored equivalent, while the same proof identity with different content is refused'",
+     "certainty": "stated"
+    }
+   ],
+   "reads_via_calls": [
+    "module:operational_store.begin_unit_of_work / commit_unit_of_work / rollback_unit_of_work"
+   ],
+   "writes": [
+    {
+     "model": "FlowProof",
+     "operation": "insert",
+     "append_only": true,
+     "compare_and_set_on": null,
+     "why": "note: 'append the complete immutable FlowProof' inside one unit of work",
+     "certainty": "stated"
+    }
+   ],
+   "unclear": [
+    "proof_id origin is undecided: prove_flow's note names no identity call and identity has no identify_flow_proof. If proof_id is content-derived INCLUDING decided_at, a second prove_flow of the same flow/basis at a later instant appends a second proof (contradicts 'returns the equivalent immutable proof'). If it EXCLUDES decided_at, the replay arrives with the same proof_id and a different decided_at = 'same proof identity with different content' = refused. Either way prove_flow's equivalence promise needs a lookup by [flow_version_ref, vocabulary_basis]; vocabulary_basis is tuple[str, ...], not an indexable scalar.",
+    "Does it validate that proof.flow_version_ref names a stored FlowVersion (FlowVersion by_key)? 'any validation ... failure' is not itemized.",
+    "This is the only function in the five modules whose note names the unit-of-work calls; how a record is staged into the UnitOfWorkHandle (payload: object) is not defined anywhere - the exact gap 81_module_review.md records.",
+    "No read accessor for FlowProof exists in any of the five modules (no flow_proof(proof_id) function), although FlowActivation.proof_ref and runs reference it."
+   ]
+  },
+  {
+   "function": "prove_flow",
+   "module": "flow_proof",
+   "reads": [],
+   "reads_via_calls": [
+    "module:flow_registry.flow_version",
+    "module:slot_registry.contract_version",
+    "module:operation_bindings.binding_version",
+    "module:semantic_vocabulary.term_revision",
+    "module:semantic_vocabulary.find_relation"
+   ],
+   "writes": [],
+   "writes_via_calls": [
+    "module:flow_registry.record_flow_proof (FlowProof insert, append-only)"
+   ],
+   "unclear": [
+    "'For the same flow and vocabulary basis it returns the equivalent immutable proof' - prove_flow has no read path to stored proofs (it may persist only via record_flow_proof and no FlowProof lookup is exposed); equivalence must be realized by proof_id derivation, whose recipe is not stated (see record_flow_proof).",
+    "State 5 requires 'every function node pins an existing contract version whose owning Slot is active at proof time' - slot status is not reachable through slot_registry.contract_version (SlotContractVersion has slot_id but no status) and no other call is named.",
+    "'every operation node pins an accepted binding version': accepted_at on the version is readable via binding_version, but the finding `binding_not_accepted` for a suspended/retired binding needs OperationBinding.status, which binding_version does not return.",
+    "Outputs in note/State 5 include 'derived disclosure class for every function output' and 'highest effect class'; FlowProof has no field for either."
+   ]
+  },
+  {
+   "function": "accept_binding_version",
+   "module": "operation_bindings",
+   "reads": [
+    {
+     "model": "OperationBinding",
+     "lookup": "by_key",
+     "key_fields": [
+      "binding_id"
+     ],
+     "why": "note: 'compare-and-set one exact proposed binding version to accepted' against expected_status",
+     "certainty": "stated"
+    },
+    {
+     "model": "OperationBindingVersion",
+     "lookup": "by_key",
+     "key_fields": [
+      "binding_version_id"
+     ],
+     "why": "note: 'one exact proposed binding version'; check version.binding_id == binding_id and accepted_at absent",
+     "certainty": "stated"
+    },
+    {
+     "model": "OperationBinding",
+     "lookup": "by_key",
+     "key_fields": [
+      "binding_id"
+     ],
+     "why": "validate 'effectful preview/outcome-read safety fields': the binding named by version.outcome_read_binding_ref must be accepted, same service_id",
+     "certainty": "implied"
+    },
+    {
+     "model": "OperationBindingVersion",
+     "lookup": "by_key",
+     "key_fields": [
+      "binding_version_id"
+     ],
+     "why": "effect_class == read of the outcome-read binding's current version (OperationBinding.current_version_id)",
+     "certainty": "implied"
+    }
+   ],
+   "reads_via_calls": [
+    "module:owner_authority.owner_statement",
+    "module:system_clock.now",
+    "(implied: 're-reading the same manifest operation') module:manifest_reader.manifest_operation - not named in this note"
+   ],
+   "writes": [
+    {
+     "model": "OperationBindingVersion",
+     "operation": "update_fields",
+     "append_only": false,
+     "compare_and_set_on": "accepted_at",
+     "why": "note: 'MUST write the owner to `accepted_by` and one sample of `module:system_clock.now` to `accepted_at`, each exactly once' - write-once fields on an otherwise immutable value",
+     "certainty": "stated",
+     "fields_updated": [
+      "accepted_by",
+      "accepted_at"
+     ]
+    },
+    {
+     "model": "OperationBinding",
+     "operation": "update_fields",
+     "append_only": false,
+     "compare_and_set_on": "status",
+     "why": "note: 'compare-and-set ... proposed ... to accepted'; State 5: 'The exact version becomes accepted atomically'; also lifts suspension when a new version is accepted (M29 lifecycle)",
+     "certainty": "stated",
+     "fields_updated": [
+      "status",
+      "current_version_id"
+     ]
+    },
+    {
+     "model": "<acceptance record - no model>",
+     "operation": "insert",
+     "append_only": true,
+     "compare_and_set_on": null,
+     "why": "note: 'Success appends one immutable acceptance for that version only'; BindingAcceptanceResult.acceptance_record_ref names it",
+     "certainty": "implied"
+    }
+   ],
+   "unclear": [
+    "An 'immutable acceptance record' is appended and referenced by BindingAcceptanceResult.acceptance_record_ref, but no model exists for it (no identity field, no fields). The only durable trace of acceptance in the models is accepted_by/accepted_at on M30.",
+    "M30 is declared immutable ('a version never changes') yet two of its fields are written after insert. The record port needs a 'write-once update' (set only while NULL) on an append-only kind, or acceptance must move to its own record.",
+    "expected_status compares OperationBinding.status, but for a suspended binding receiving a new version the expected status is `suspended`, while the note says 'exact proposed binding version'; whether 'proposed' is a status of the version (= accepted_at absent) or of the binding is not separated. M30 has no status field.",
+    "outcome_read_binding_ref: binding_id or binding_version_id? M30 says 'the `read` binding', propose's contract says 'outcome_read_binding_ref: str'; identify_binding_version hashes it verbatim. The lookup key depends on the answer.",
+    "'only the active owner' needs OwnerPrincipal.status by actor.owner_principal_id; no call named."
+   ]
+  },
+  {
+   "function": "binding_for_invocation",
+   "module": "operation_bindings",
+   "reads": [
+    {
+     "model": "OperationBinding",
+     "lookup": "by_key",
+     "key_fields": [
+      "binding_id"
+     ],
+     "why": "note: 'require accepted and non-retired status'",
+     "certainty": "stated"
+    },
+    {
+     "model": "OperationBindingVersion",
+     "lookup": "by_key",
+     "key_fields": [
+      "binding_version_id"
+     ],
+     "why": "note: 'resolve exactly the binding and version pinned by the FlowVersion'; version.binding_id must equal binding_id; accepted_at absent => refused",
+     "certainty": "stated"
+    }
+   ],
+   "reads_via_calls": [
+    "(implied: 'current exact manifest drift check') module:manifest_reader.manifest_operation / operation_facts_changed - not named in this note"
+   ],
+   "writes": [
+    {
+     "model": "OperationBinding",
+     "operation": "update_fields",
+     "append_only": false,
+     "compare_and_set_on": "status",
+     "why": "note: 'only deterministic drift-owned suspension ... may be appended'; State 5: 'Only drift-owned binding status/reissue records may change'",
+     "certainty": "implied",
+     "fields_updated": [
+      "status"
+     ]
+    },
+    {
+     "model": "OperationBindingVersion",
+     "operation": "insert",
+     "append_only": true,
+     "compare_and_set_on": null,
+     "why": "equivalent-facts reissue: identical-ports version tied to the new digest",
+     "certainty": "implied"
+    },
+    {
+     "model": "OperationBinding",
+     "operation": "update_fields",
+     "append_only": false,
+     "compare_and_set_on": "current_version_id",
+     "why": "reissue moves current_version_id to the new version",
+     "certainty": "implied",
+     "fields_updated": [
+      "current_version_id"
+     ]
+    }
+   ],
+   "unclear": [
+    "Suspension / reissue 'evidence may be appended' - no model for a suspension or reissue record (A10.6: 'recorded with the old and new digests'); BindingDriftItem is a report value with no identity field. Only OperationBinding.status and a new M30 row can carry it today.",
+    "After an immaterial reissue the FlowVersion still pins the OLD binding_version_id while OperationBinding.current_version_id points to the new one. 'never ... substitutes a reissued version' says the old one is returned, but its manifest digest no longer matches the current manifest; whether the pinned old version stays invocable is undecided, and if so nothing marks it as superseded.",
+    "Whether this read path writes in its own unit of work is not stated (a lookup called by run_executor and operation_invoker that may mutate)."
+   ]
+  },
+  {
+   "function": "propose_binding",
+   "module": "operation_bindings",
+   "reads": [
+    {
+     "model": "OperationBindingVersion",
+     "lookup": "by_key",
+     "key_fields": [
+      "binding_version_id"
+     ],
+     "why": "replay / duplicate: identity from module:identity (identify_binding_version) - an equal existing version",
+     "certainty": "implied"
+    },
+    {
+     "model": "OperationBinding",
+     "lookup": "by_key",
+     "key_fields": [
+      "binding_id"
+     ],
+     "why": "note: 'an accepted same-service `read` binding for outcome reconciliation' - status accepted, service_id equal",
+     "certainty": "implied"
+    },
+    {
+     "model": "OperationBindingVersion",
+     "lookup": "by_key",
+     "key_fields": [
+      "binding_version_id"
+     ],
+     "why": "outcome-read binding's current version (current_version_id): effect_class == read, accepted_at present",
+     "certainty": "implied"
+    },
+    {
+     "model": "OperationBinding",
+     "lookup": "list_by",
+     "key_fields": [
+      "service_id",
+      "capability_id",
+      "channel"
+     ],
+     "why": "find the existing binding for this manifest operation when the proposal is a NEW VERSION of an existing (e.g. suspended) binding - the contract has no binding_id parameter",
+     "certainty": "implied"
+    }
+   ],
+   "reads_via_calls": [
+    "module:manifest_reader.manifest_operation",
+    "module:semantic_vocabulary.term_revision",
+    "module:identity (identify_binding_version)"
+   ],
+   "writes": [
+    {
+     "model": "OperationBindingVersion",
+     "operation": "insert",
+     "append_only": true,
+     "compare_and_set_on": null,
+     "why": "note: 'one proposed version is appended'; accepted_by and accepted_at absent; preconditions/effect_class/replay/idempotency copied from the manifest",
+     "certainty": "stated"
+    },
+    {
+     "model": "OperationBinding",
+     "operation": "insert",
+     "append_only": false,
+     "compare_and_set_on": null,
+     "why": "first proposal for an operation must create the M29 entity (status proposed, proposed_by, service_id/capability_id/channel from operation_ref, purpose, current_version_id)",
+     "certainty": "implied"
+    }
+   ],
+   "unclear": [
+    "The contract has no binding_id: the texts do not say whether propose_binding always creates a new OperationBinding or adds a version to an existing one. A10/M29 need the second path ('only the owner's acceptance of a new version lifts the suspension'), which requires finding the binding by [service_id, capability_id, channel] - fields exist, but M29 says two bindings for the same operation may coexist, so that lookup is not unique.",
+    "State 5 State impact: 'Only immutable proposal/version records may be appended; binding status ... unchanged' - contradicts the need to insert an M29 row with status `proposed` on first proposal. OperationBinding.current_version_id is a non-nullable str: what it holds while only a proposed version exists is undecided.",
+    "identify_binding_version does NOT take binding_id: two bindings of the same operation with identical ports get the same binding_version_id, while M30 carries one binding_id. Primary key [binding_version_id] then collides; [binding_id, binding_version_id] does not, but binding_version(ref) and flow nodes address a version by binding_version_id alone.",
+    "binding_id minting ('stable namespaced identity') is not named in the note.",
+    "outcome_read_binding_ref: binding id or version id (see accept_binding_version)."
+   ]
+  },
+  {
+   "function": "retire_binding",
+   "module": "operation_bindings",
+   "reads": [
+    {
+     "model": "OperationBinding",
+     "lookup": "by_key",
+     "key_fields": [
+      "binding_id"
+     ],
+     "why": "note: 'compare-and-set the exact binding, expected current lifecycle status and version to final retired'",
+     "certainty": "stated"
+    }
+   ],
+   "reads_via_calls": [
+    "module:system_clock.now (only on success)"
+   ],
+   "writes": [
+    {
+     "model": "OperationBinding",
+     "operation": "update_fields",
+     "append_only": false,
+     "compare_and_set_on": "status",
+     "why": "note: status -> retired under compare-and-set on status and current_version_id (expected_version_ref)",
+     "certainty": "stated",
+     "fields_updated": [
+      "status"
+     ]
+    }
+   ],
+   "unclear": [
+    "The note requires 'sampling system_clock.now ... and preserving the bounded actor/reason evidence', State 5 names `retired_at`, and 'An exact replay returns the first retirement' - but OperationBinding has NO retired_by / retired_at / retirement_reason fields (Flow and Slot have them). The retirement evidence has nowhere to be stored and a replay cannot be compared.",
+    "Compare-and-set is on two fields (status AND current_version_id == expected_version_ref); the write shape allows one compare_and_set_on name - the port needs multi-field expectations or record-version CAS."
+   ]
+  },
+  {
+   "function": "sweep_manifest_drift",
+   "module": "operation_bindings",
+   "reads": [
+    {
+     "model": "OperationBinding",
+     "lookup": "list_by",
+     "key_fields": [
+      "status"
+     ],
+     "why": "note: 'reconcile either every accepted binding ...' (status = accepted)",
+     "certainty": "stated",
+     "order_by": "binding_id asc (note: stable-ordered report; key not stated)"
+    },
+    {
+     "model": "OperationBinding",
+     "lookup": "by_key",
+     "key_fields": [
+      "binding_id"
+     ],
+     "why": "note: '... or one exact binding/version'",
+     "certainty": "stated"
+    },
+    {
+     "model": "OperationBindingVersion",
+     "lookup": "by_key",
+     "key_fields": [
+      "binding_version_id"
+     ],
+     "why": "stored version facts (channel via manifest_operation_ref, effect_class, replay, idempotency_key_ports, preconditions) compared with the manifest projection; key = current_version_id or the supplied binding_version_ref",
+     "certainty": "stated"
+    }
+   ],
+   "reads_via_calls": [
+    "(implied, not named in this note) module:manifest_reader.manifest_operation / operation_facts_changed"
+   ],
+   "writes": [
+    {
+     "model": "OperationBinding",
+     "operation": "update_fields",
+     "append_only": false,
+     "compare_and_set_on": "status",
+     "why": "note: 'an absent or materially changed operation atomically appends suspension' -> status suspended",
+     "certainty": "stated",
+     "fields_updated": [
+      "status"
+     ]
+    },
+    {
+     "model": "OperationBindingVersion",
+     "operation": "insert",
+     "append_only": true,
+     "compare_and_set_on": null,
+     "why": "note: 'a digest-only change with equivalent invocation facts appends an identical-ports version tied to the new digest and keeps the binding accepted'",
+     "certainty": "stated"
+    },
+    {
+     "model": "OperationBinding",
+     "operation": "update_fields",
+     "append_only": false,
+     "compare_and_set_on": "current_version_id",
+     "why": "reissue: current_version_id -> new version",
+     "certainty": "implied",
+     "fields_updated": [
+      "current_version_id"
+     ]
+    },
+    {
+     "model": "<suspension / reissue record - no model>",
+     "operation": "insert",
+     "append_only": true,
+     "compare_and_set_on": null,
+     "why": "note: 'atomically appends suspension'; A10.6 'recorded with the old and new digests'; State 5 'Append-only suspension or automatic reissue records'",
+     "certainty": "implied"
+    }
+   ],
+   "unclear": [
+    "Append-only suspension / reissue records have no model and no identity field. BindingDriftItem (binding_id, binding_version_ref, status, prior/current digest, changed_fact_names, replacement_binding_version_ref) has the right content but is declared a report value.",
+    "A reissued version must be invocable ('keeps the binding accepted'), and binding_for_invocation refuses a version whose accepted_at is absent - but accepted_by/accepted_at 'exist only once accept_binding_version has written them', and this note samples no clock. What the reissued version carries in accepted_by / accepted_at is undecided (copy from the prior version?).",
+    "'Missing history' / 'unknown prior digest' imply a history lookup: versions of one binding = OperationBindingVersion list_by [binding_id] (field exists) - order key not stated (no issued_at / sequence field on M30; accepted_at is nullable).",
+    "In the all-bindings form flows pin historical versions, not only current_version_id; whether the sweep covers only OperationBinding.current_version_id or every accepted version of the binding is not stated.",
+    "Unit of work granularity: one per binding ('atomically' per binding) or one for the whole sweep - not stated; 'an incomplete all-binding startup sweep cannot report readiness' suggests per binding."
+   ]
+  },
+  {
+   "function": "binding_version",
+   "module": "operation_bindings",
+   "reads": [
+    {
+     "model": "OperationBindingVersion",
+     "lookup": "by_key",
+     "key_fields": [
+      "binding_version_id"
+     ],
+     "why": "note: 'return the one immutable OperationBindingVersion named by the exact reference, including a suspended historical version'",
+     "certainty": "stated"
+    }
+   ],
+   "writes": [],
+   "unclear": [
+    "'ambiguous reference' becomes reachable if two bindings share a binding_version_id (identify_binding_version excludes binding_id; see propose_binding). Then by_key [binding_version_id] is not unique and the function has no binding_id argument to disambiguate."
+   ]
+  },
+  {
+   "function": "create_run",
+   "module": "run_executor",
+   "reads": [],
+   "writes": [
+    {
+     "model": "FlowRun",
+     "operation": "insert",
+     "append_only": false,
+     "compare_and_set_on": null,
+     "why": "note: 'In one unit it samples the creation time and appends one distinct Run plus its input references'; State 5 State impact: 'Exactly one Run and its accepted input-value references may be appended atomically'. Input references are the embedded FlowRun.inputs tuple; pins are embedded pinned_slot_activations + service_target; status starts at 'created'. FlowRun is a mutable entity (lifecycle), so not append-only."
+    }
+   ],
+   "unclear": [
+    "All pin lookups go through other modules and read no record here: `module:slot_registry.contract_version`, `module:slot_activation.serving_activation`, `module:operation_bindings.binding_for_invocation`, `module:system_clock.now` are named in the note. NOT named in the note although required: resolving flow_ref to the active FlowActivation and FlowVersion (flow_registry.current_flow_activation / flow_registry.flow_version exist), checking Flow.status non-retired (no flow_registry read returns Flow by flow_id), resolving the ServiceTarget (installation.resolve_service_target exists) and storing inputs (State 5 says 'through module:value_store', i.e. put_value). If any of these is meant as a direct record read, the port needs Flow by_key [flow_id], FlowActivation by_key [flow_activation_id], FlowVersion by_key [flow_version_id].",
+    "The texts do not say who mints run_id (identity.mint_identity is the only minting function; the note does not name it).",
+    "Pinned operation bindings and function contract versions have no field on FlowRun (only pinned_slot_activations and service_target). They are pinned transitively through flow_activation_ref -> FlowVersion.nodes[*].binding_version_ref / contract_version_ref; the note says 'permanently pins ... every accepted non-suspended operation binding' but nothing is written for it. A later suspension therefore cannot be distinguished from the state at creation by records alone.",
+    "StoredValue retention for run inputs: put_value takes owner_context_ref (the run) but no retention-reference record kind exists (see put_value)."
+   ]
+  },
+  {
+   "function": "advance_run",
+   "module": "run_executor",
+   "reads": [
+    {
+     "model": "FlowRun",
+     "lookup": "by_key",
+     "key_fields": [
+      "run_id"
+     ],
+     "why": "note: 'derive readiness only from the Run's immutable pins and durable evidence'; State 5 Inputs: 'All executable facts are re-read from the Run's immutable pins and durable evidence' (status, waiting_on with retry_ordinal/retry_not_before, in_flight_effect_attempts, inputs, outputs)."
+    },
+    {
+     "model": "NodeExecution",
+     "lookup": "list_by",
+     "key_fields": [
+      "run_id"
+     ],
+     "why": "durable evidence of concluded attempts is what readiness, attempt numbering and failure propagation are derived from (A18.3, A19.7 'the trace is the only source the kernel uses to explain, reproduce or resume').",
+     "order_by": [
+      "node_id",
+      "map_index",
+      "attempt_number"
+     ]
+    },
+    {
+     "model": "OutcomeReconciliation",
+     "lookup": "list_by",
+     "key_fields": [
+      "node_execution_ref"
+     ],
+     "why": "a node resting in outcome_unknown may proceed only after a recorded determination (A15); reconcile_outcome takes `prior_reconciliations`, so the executor must load them for the unknown NodeExecution.",
+     "order_by": [
+      "determined_at"
+     ]
+    }
+   ],
+   "writes": [
+    {
+     "model": "FlowRun",
+     "operation": "update_fields",
+     "append_only": false,
+     "compare_and_set_on": "status",
+     "why": "State 5 State impact: 'Run state, waiting reasons, stored output references and execution bookkeeping may advance atomically'; 'A timed wait persists its A28 retry_ordinal and retry_not_before'; terminal transition sets ended_at. note: 'Each transition commits before further work'.",
+     "fields_updated": [
+      "status",
+      "waiting_on",
+      "in_flight_effect_attempts",
+      "outputs",
+      "ended_at"
+     ]
+    }
+   ],
+   "unclear": [
+    "NodeExecution is appended only through `module:trace_journal.record_node_execution`, values only through `module:value_store.put_value`/`read_value`, files through `module:run_spool`, functions through `module:sandbox_supervisor.execute_function`, operations through `operation_invoker.invoke_operation`/`reconcile_outcome` — advance_run writes none of those records itself. Only execute_function is named in the note; the others are named in State 5.",
+    "Compare-and-set for FlowRun transitions is stated only for cancel_run. For advance_run the texts say 'each transition commits before further work' but do not say what guards two concurrent passes (surface wake + kernel_process wake) or a concurrent cancel. CompareAndSetExpectation works on (record_family, record_id, expected_version), i.e. a record version, not the status field; FlowRun has no version field.",
+    "Who clears the in-flight entry: A14.2 says it is 'cleared only by writing the concluding NodeExecution', but record_node_execution's State impact says 'Runs ... are unchanged' and invoke_operation's says only in-flight bookkeeping changes there. The only consistent reading is that advance_run clears FlowRun.in_flight_effect_attempts in the same unit as the record_node_execution call — no text says so.",
+    "waiting_on and in_flight_effect_attempts are tuple[str, ...]; State 1 requires each waiting entry to carry node, reason, retry_ordinal and retry_not_before (KernelInstant) and each in-flight entry node, map index, attempt number and key digest. No model and no encoding is declared for these entries, so update_fields replaces the whole tuple and nothing can be looked up by node.",
+    "Pinned SlotActivation by id: FlowRun.pinned_slot_activations holds activation ids, but slot_activation exposes only serving_activation(contract_version_ref) = the CURRENT one. No function or lookup returns a SlotActivation by activation_id (needed: SlotActivation by_key [activation_id]), so the pinned implementation cannot be re-read after a later activation.",
+    "Effect authority: State 5 says the executor 'obtains current effect authority when needed' and invoke_operation also calls owner_authority.authorization_for_effect. Whether advance_run reads EffectApproval itself (by run_id+node_id) to decide awaiting_approval, or only calls owner_authority.request_approval/authorization_for_effect, is not stated in the note.",
+    "OutcomeReconciliation has no run_id; 'Durable evidence attached to the run' (M44 Persistence) is reachable only through node_execution_ref of each outcome_unknown NodeExecution."
+   ]
+  },
+  {
+   "function": "resume_runs",
+   "module": "run_executor",
+   "reads": [
+    {
+     "model": "FlowRun",
+     "lookup": "list_by",
+     "key_fields": [
+      "status"
+     ],
+     "why": "note: 'MUST enumerate every non-terminal Run from durable storage' — status IN (created, running, awaiting_approval, pending); the lookup is a multi-value filter on one field.",
+     "order_by": [
+      "created_at",
+      "run_id"
+     ]
+    },
+    {
+     "model": "NodeExecution",
+     "lookup": "list_by",
+     "key_fields": [
+      "run_id"
+     ],
+     "why": "note: 'reconstruct its exact pins, inputs, NodeExecutions ...'; 'impossible attempt numbering' is detected from (node_id, map_index, attempt_number).",
+     "order_by": [
+      "node_id",
+      "map_index",
+      "attempt_number"
+     ]
+    },
+    {
+     "model": "OutcomeReconciliation",
+     "lookup": "list_by",
+     "key_fields": [
+      "node_execution_ref"
+     ],
+     "why": "note: reconstruct 'reconciliations'; passed on as prior_reconciliations to `reconcile_outcome`.",
+     "order_by": [
+      "determined_at"
+     ]
+    },
+    {
+     "model": "EffectApproval",
+     "lookup": "list_by",
+     "key_fields": [
+      "run_id"
+     ],
+     "why": "note: reconstruct 'approvals'; State 5 Inputs: 'reads all non-terminal Runs and their durable pins, NodeExecutions, approvals, in-flight effect attempts, reconciliations, values and waiting reasons ... from the operational store'. EffectApproval is owned by owner_authority and the note names no function for it."
+    }
+   ],
+   "writes": [
+    {
+     "model": "FlowRun",
+     "operation": "update_fields",
+     "append_only": false,
+     "compare_and_set_on": "status",
+     "why": "State 5 State impact: 'Recovery may ... advance Run state under the normal rules'; a non-read in-flight attempt 'enters rules.retry_backoff.timed_wait_reasons[1]' (outcome_unknown) => waiting_on and status=pending are written; retry_ordinal/retry_not_before are preserved, never reset.",
+     "fields_updated": [
+      "status",
+      "waiting_on",
+      "in_flight_effect_attempts",
+      "outputs",
+      "ended_at"
+     ]
+    }
+   ],
+   "unclear": [
+    "order_by for the enumeration is my suggestion; the texts only require a bounded report for every non-terminal Run and give no order.",
+    "A18.4: an in-flight record without conclusion 'is concluded outcome_unknown' — i.e. a NodeExecution with status outcome_unknown must be appended (State 5: 'Recovery may append missing truthful NodeExecution/reconciliation evidence'). The note names only `reconcile_outcome`; the append would go through trace_journal.record_node_execution, whose draft needs started_at/ended_at and input refs that are not in the in-flight entry (it holds only node, map index, attempt number, key digest).",
+    "reconcile_outcome takes `unknown_attempt: OperationAttemptResult`, which is not a durable record. After restart it must be rebuilt from the in-flight entry + pins + upstream NodeExecution.output_value_refs; `transport` evidence is lost. Nothing says this reconstruction is the intended path.",
+    "'values' are reconstructed through value_store.read_value (not named in the note); if direct, StoredValue by_key [value_digest].",
+    "Pins: same gap as advance_run — no by-id read of SlotActivation exists.",
+    "EffectApproval by run_id is a non-key lookup on another module's record; owner_authority offers only waiting_for_owner(owner, filters) which needs an owner ActorRef that resume_runs (called by bootstrap, no actor) does not have."
+   ]
+  },
+  {
+   "function": "cancel_run",
+   "module": "run_executor",
+   "reads": [
+    {
+     "model": "FlowRun",
+     "lookup": "by_key",
+     "key_fields": [
+      "run_id"
+     ],
+     "why": "note: 'compare-and-set an exact non-terminal Run to final cancelled' against expected_status; unknown Run and already-terminal are explicit refusals."
+    }
+   ],
+   "writes": [
+    {
+     "model": "FlowRun",
+     "operation": "update_fields",
+     "append_only": false,
+     "compare_and_set_on": "status",
+     "why": "note: 'ended_at MUST be one sample of module:system_clock.now, and the bounded reason MUST be stored as cancellation_reason; created_at stays as stored'; status -> cancelled. A28.5: 'owner cancellation removes the timed wait entry'.",
+     "fields_updated": [
+      "status",
+      "ended_at",
+      "cancellation_reason",
+      "waiting_on"
+     ]
+    }
+   ],
+   "unclear": [
+    "Temporary files are released through `module:run_spool.release_run_files` (State 5; the note says 'release temporary Run files' without naming the function) — cancel_run deletes no SpooledBytes itself. release_run_files requires 'authoritative terminal Run state': whether it is called inside the same unit (where the cancelled status is not yet committed) or after commit is not decided.",
+    "Conflict: A28.5 says cancellation REMOVES the timed wait entry, while State 5 Outputs says the Run is returned 'with preserved waiting/unknown-outcome evidence' and the note says an undetermined effect is preserved 'as explicit history'. It is undecided whether waiting_on and in_flight_effect_attempts are cleared or kept on cancel; I listed waiting_on as updated per A28.5 and left in_flight_effect_attempts untouched.",
+    "'only the active owner': the note names no access_control/OwnerPrincipal lookup; State 5 says kernel_surface authorizes the sole owner before the call. If the executor must verify itself, it needs OwnerPrincipal by_key [principal_id] using ActorRef.owner_principal_id.",
+    "compare_and_set_on is the domain field `status` (expected_status argument); the store's mechanism is CompareAndSetExpectation(record_family, record_id, expected_version) and FlowRun has no version field — the mapping from expected_status to expected_version is not defined."
+   ]
+  },
+  {
+   "function": "run_status",
+   "module": "run_executor",
+   "reads": [
+    {
+     "model": "FlowRun",
+     "lookup": "by_key",
+     "key_fields": [
+      "run_id"
+     ],
+     "why": "note: 'return the exact persisted Run status, pinned flow identity, all waiting node/reason pairs, terminal times and bounded output references'. FlowRun.outputs embeds StoredValue metadata, so disclosure filtering of output references needs no StoredValue read."
+    }
+   ],
+   "writes": [],
+   "unclear": [
+    "'Unknown or invisible Runs': the visibility rule (which actor may see which run) is not reduced to a field; only FlowRun.initiated_by exists. No lookup by initiated_by is required here, but the predicate is undecided.",
+    "'unreadable required evidence' suggests the view may cross-check NodeExecutions, but State 5 says detailed attempt history comes from trace_journal; I record no NodeExecution read."
+   ]
+  },
+  {
+   "function": "invoke_operation",
+   "module": "operation_invoker",
+   "reads": [
+    {
+     "model": "FlowRun",
+     "lookup": "by_key",
+     "key_fields": [
+      "run_id"
+     ],
+     "why": "note: 'require the pinned ServiceTarget ... to match the node' (FlowRun.service_target) and read-modify-write of FlowRun.in_flight_effect_attempts; 30_modules Knows: 'the run's in-flight attempts'."
+    }
+   ],
+   "writes": [
+    {
+     "model": "FlowRun",
+     "operation": "update_fields",
+     "append_only": false,
+     "compare_and_set_on": null,
+     "why": "note: 'Before any non-read send it uses operational_store.begin_unit_of_work and operational_store.commit_unit_of_work to durably record the exact in-flight run/node/element/attempt and key ... without a confirmed commit it sends nothing'. The carrier is FlowRun.in_flight_effect_attempts (M40: 'for each non-read operation being invoked, the node, map index, attempt number and idempotency-key digest, recorded durably before the call'); A14.2: 'durably records an in-flight attempt on the run'. No separate model exists. A read operation writes nothing.",
+     "fields_updated": [
+      "in_flight_effect_attempts"
+     ]
+    }
+   ],
+   "unclear": [
+    "The in-flight effect attempt has NO model of its own: it is an element of FlowRun.in_flight_effect_attempts: tuple[str, ...]. The entry must carry node_id, map_index, attempt_number, idempotency_key_digest, but the string encoding is not declared anywhere, there is no identity field, and it cannot be inserted/looked up as a record — the port can only update the whole FlowRun field.",
+    "Because the entry lives on the FlowRun row, the invoker (in-flight write) and the executor (status/waiting_on transitions, cancel_run CAS) are two writers of one record. No text says which guard (record version CAS) the in-flight write uses, or whether it must refuse when the run was cancelled meanwhile.",
+    "Binding via `operation_bindings.binding_for_invocation`, authority via `owner_authority.authorization_for_effect`, send via `service_transport.send_request`, value outputs via `value_store.put_value` — no record access here. File outputs reach the spool through service_transport -> run_spool.receive_file (State 5 of run_spool), not named in this note.",
+    "'duplicates sends at most once per approval': deciding this needs earlier attempts of the same node/element under the same approval. Source undecided: EffectApproval.consumed_attempt_refs (owned by owner_authority, surfaced only indirectly through EffectAuthorization) or NodeExecution list_by [run_id, node_id, map_index]. EffectAuthorization has no field for already-consumed attempts.",
+    "'every validated value/file digest to match the node': the expected digests are not stored per node anywhere except upstream NodeExecution.output_value_refs; the note does not say the invoker reads them (inputs arrive as arguments).",
+    "Clearing of the in-flight entry is not done here (A14.2) — see advance_run."
+   ]
+  },
+  {
+   "function": "reconcile_outcome",
+   "module": "operation_invoker",
+   "reads": [
+    {
+     "model": "NodeExecution",
+     "lookup": "by_unique",
+     "key_fields": [
+      "run_id",
+      "node_id",
+      "map_index",
+      "attempt_number"
+     ],
+     "why": "OutcomeReconciliation.node_execution_ref must name 'the execution whose status is outcome_unknown' (M44), but the argument is an OperationAttemptResult that carries only the attempt identity, not node_execution_id."
+    }
+   ],
+   "writes": [
+    {
+     "model": "OutcomeReconciliation",
+     "operation": "insert",
+     "append_only": true,
+     "compare_and_set_on": null,
+     "why": "note: 'The immutable reconciliation records determined_at from exactly one call to the injected system_clock.now and is appended atomically through operational_store.begin_unit_of_work plus operational_store.commit_unit_of_work'; M44: 'a determination never changes; a later reading is another record'."
+    }
+   ],
+   "unclear": [
+    "read_node_execution_ref: M44 requires a reference to 'the execution of the binding's outcome-read operation', i.e. a NodeExecution for the read. The note names no `trace_journal.record_node_execution` call, the read is not a flow node (no node_id/attempt_number of its own), and State 5 says the immutable NodeExecution 'belongs to its owning module'. Which record this field points to is undecided.",
+    "The NodeExecution by_unique read above is inferred, not stated: the note says the function accepts the attempt and prior evidence as arguments. If the caller is supposed to supply node_execution_id, the signature has no place for it.",
+    "reconciliation_id: who mints it is not stated (identity.mint_identity is for entities; M44 identity is 'value').",
+    "Binding via `operation_bindings.binding_for_invocation`, read via `service_transport.send_request`, applied value outputs via `value_store.put_value` — no record access for those.",
+    "No uniqueness rule: several OutcomeReconciliations per node_execution_ref are allowed ('a later reading is another record'), so there is no natural unique key besides reconciliation_id."
+   ]
+  },
+  {
+   "function": "record_node_execution",
+   "module": "trace_journal",
+   "reads": [
+    {
+     "model": "NodeExecution",
+     "lookup": "by_unique",
+     "key_fields": [
+      "run_id",
+      "node_id",
+      "map_index",
+      "attempt_number"
+     ],
+     "why": "note: 'Exact replay is idempotent, but conflicting content for an attempt identity ... is refused'; State 5 Enforces: 'one record per attempt identity'. map_index is nullable, so the unique key must treat None as a value."
+    }
+   ],
+   "writes": [
+    {
+     "model": "NodeExecution",
+     "operation": "insert",
+     "append_only": true,
+     "compare_and_set_on": null,
+     "why": "note: 'MUST append exactly one immutable NodeExecution for a concluded attempt'; A19.1: 'The record is append-only: no operation edits or deletes one'. started_at/ended_at copied from the draft."
+    }
+   ],
+   "unclear": [
+    "node_execution_id: not in the draft; nothing says whether it is minted or derived from the attempt identity (identity has no identify_node_execution). If derived, the idempotency read becomes by_key [node_execution_id]; if minted, the unique index (run_id, node_id, map_index, attempt_number) is mandatory.",
+    "'using the Run's pinned implementation/runtime or binding/service identities' and 'missing pins ... is refused': 30_modules Knows lists M41/M18/M48 but not M40, and the note says the journal never 'looks up what is current'. Undecided whether this is a shape check on the draft or a read of FlowRun by_key [run_id] (+ pinned activation/flow node) to compare executed_ref with the pin.",
+    "NodeExecution has NO field for spooled-file descriptors, while NodeExecutionDraft carries input_file_refs/output_file_refs: tuple[SpooledBytes, ...] and M46 says 'What remains after release is that description in the node executions that named them'. The descriptor that must survive release has nowhere to be stored.",
+    "Draft-to-record shape drift the write must bridge: draft.service_instance_ref -> service_instance; input_validation/output_validation tuple[str, ...] -> str; denied_attempts tuple[DeniedAttemptEvidence, ...] -> tuple[str, ...]; resources_used SandboxResourceUsage | None -> str. The normalisation is not specified.",
+    "The in-flight entry on FlowRun is 'cleared only by writing the concluding NodeExecution' (A14.2), but this function must leave Runs unchanged — the clear belongs to the caller's unit (see advance_run)."
+   ]
+  },
+  {
+   "function": "run_trace",
+   "module": "trace_journal",
+   "reads": [
+    {
+     "model": "NodeExecution",
+     "lookup": "list_by",
+     "key_fields": [
+      "run_id"
+     ],
+     "why": "note: 'return only NodeExecutions belonging to the named Run in stable node, mapped-element, attempt and execution-time order with explicit bounded pagination' (keyset pagination via page_cursor/page_size).",
+     "order_by": [
+      "node_id",
+      "map_index",
+      "attempt_number",
+      "started_at"
+     ]
+    },
+    {
+     "model": "FlowRun",
+     "lookup": "by_key",
+     "key_fields": [
+      "run_id"
+     ],
+     "why": "note: 'Unknown or invisible Runs ... are explicit' — existence/visibility of the run must be established separately from an empty trace."
+    }
+   ],
+   "writes": [],
+   "unclear": [
+    "'stable node order': by node_id string or by the node order of the pinned FlowVersion is not said; the latter would need FlowRun -> FlowActivation -> FlowVersion reads (flow_registry.flow_version), which the note does not name.",
+    "'digest/term/schema/class evidence remain visible' and 'value content is included only within the ceiling': RunTracePage.executions is tuple[NodeExecution, ...] with digests only; term/schema/class live on StoredValue (by_key [value_digest]) and content in the value store, but the page type has no place for either and the note names no value_store.read_value call.",
+    "The list must support cursor + limit; map_index is nullable in the sort key.",
+    "The FlowRun read is inferred; 30_modules Knows for trace_journal does not list M40."
+   ]
+  },
+  {
+   "function": "slot_evidence",
+   "module": "trace_journal",
+   "reads": [
+    {
+     "model": "NodeExecution",
+     "lookup": "by_key",
+     "key_fields": [
+      "node_execution_id"
+     ],
+     "why": "note: 'An exact capture query succeeds only when the referenced immutable NodeExecution matches that slot and contract' (exact_node_execution_ref)."
+    },
+    {
+     "model": "NodeExecution",
+     "lookup": "list_by",
+     "key_fields": [
+      "executed_ref"
+     ],
+     "why": "note: 'return only concluded function attempts owned by the exact Slot and contract version'. NodeExecution has no slot or contract field; the only bridge is executed_ref = Implementation id, so the list is executed_ref IN (implementations of the contract version).",
+     "order_by": [
+      "ended_at",
+      "node_execution_id"
+     ]
+    },
+    {
+     "model": "Implementation",
+     "lookup": "list_by",
+     "key_fields": [
+      "contract_version_ref"
+     ],
+     "why": "needed to turn contract_version_ref into the set of executed_ref values; Implementation.contract_version_ref exists. Owned by slot_registry, which exposes no such listing in the note."
+    }
+   ],
+   "writes": [],
+   "unclear": [
+    "MAIN GAP: NodeExecution cannot be found by slot_id or contract_version_ref — neither field exists on M41. The two-step path Implementation[contract_version_ref] -> NodeExecution[executed_ref] is my inference; the alternative (FlowNode.contract_version_ref via run -> flow version -> node_id) is even further from a record lookup. A contract_version_ref field on NodeExecution would make this a plain list_by.",
+    "slot_id -> contract version ownership check needs SlotContractVersion (slot_id, contract_version_id), reachable through `slot_registry.contract_version`; the note names no function.",
+    "'health derivation receives only evidence for the named serving implementation' — the signature has no implementation parameter, so the list_by [executed_ref] for ONE implementation cannot be requested by the caller.",
+    "SlotEvidencePage.trial_execution_refs and State 5 'related trial-execution references for that slot': TrialExecution has implementation_ref and trial_case_ref but no contract/slot field; lookup would be TrialExecution list_by [implementation_ref]. The note does not mention trial executions at all, and TrialExecution belongs to trial_corpus/admission.",
+    "'deterministic bounded order' is not specified (State 5 mentions 'bounded recency'); order_by above is a guess."
+   ]
+  },
+  {
+   "function": "derive_output_class",
+   "module": "value_store",
+   "reads": [
+    {
+     "model": "StoredValue",
+     "lookup": "by_key",
+     "key_fields": [
+      "value_digest"
+     ],
+     "why": "note: 'maximum class of the exact StoredValues actually supplied to that execution' — METADATA record only (disclosure_class), one read per input_value_refs element; content bytes are not read; 'missing references ... fail closed'."
+    }
+   ],
+   "writes": [],
+   "unclear": [
+    "'inconsistent execution evidence' cannot be checked against a record: no run/node/execution identity is passed, only digests and the output port."
+   ]
+  },
+  {
+   "function": "put_value",
+   "module": "value_store",
+   "reads": [
+    {
+     "model": "StoredValue",
+     "lookup": "by_key",
+     "key_fields": [
+      "value_digest"
+     ],
+     "why": "note: 'store the object once under its digest with immutable metadata. Equal content reuses the object ...; different bytes or metadata can never overwrite an existing digest' — METADATA record read for dedupe/conflict detection after the digest is computed."
+    }
+   ],
+   "writes": [
+    {
+     "model": "StoredValue",
+     "operation": "insert",
+     "append_only": true,
+     "compare_and_set_on": null,
+     "why": "METADATA record (value_digest, term/schema refs, carriage, size, media_type, disclosure_class, retention_class, held_until): inserted once per digest, never rewritten (M38: 'a value never changes'; State 5: 'Existing StoredValue identity and content are never rewritten')."
+    }
+   ],
+   "unclear": [
+    "CONTENT BYTES are not a record: M38 Persistence says 'Content-addressed area of the kernel's operational store', keyed by value_digest, no model. Since expiry must be atomic 'through the operational store' and the store 'is backed up as one unit' (A20.8), the bytes need a store-owned blob kind (key value_digest; ops: insert-if-absent, load, delete) — sizes up to stored_value_bytes_max / trial_fixture_bytes_max. No text decides whether this is a table or files.",
+    "RETENTION REFERENCE has no model: the note says 'may append a longer-lived retention reference', State 5 'one retention reference may be added', A20.7 'retention is the longest required by any record that names it', and put_value takes owner_context_ref — but no record kind holds (value_digest, owner_context_ref, retention_class, ...). Needed lookups would be by value_digest and by owner context.",
+    "StoredValue.retention_class / held_until sit on the immutable metadata record, yet the same digest may be named by a run (run_evidence) and a trial case (trial_corpus) — A20 required test 4. Either metadata equality excludes these two fields (then a second put with another retention_class is a reference append, and held_until is derived), or the second put is a 'metadata conflict'. Undecided. Also held_until for run_evidence = run end + 30/90 days, unknown at put time while the run is live.",
+    "Validation of semantic_term_revision_ref and value_schema_ref: the note names no semantic_vocabulary function; if direct, it is a by_key read of the term revision record (outside my modules).",
+    "StoredValue is absent from global_spec.persistence and from 70_persistence_closure.json tables (as are NodeExecution, OutcomeReconciliation, SpooledBytes): no table/repository method exists for any evidence kind of this group; only FlowRun and EffectApproval have tables."
+   ]
+  },
+  {
+   "function": "read_value",
+   "module": "value_store",
+   "reads": [
+    {
+     "model": "StoredValue",
+     "lookup": "by_key",
+     "key_fields": [
+      "value_digest"
+     ],
+     "why": "note: 'MUST resolve the exact digest ...' — METADATA record always; CONTENT bytes (content-addressed area, same key) only when the ceiling permits and the bytes are still retained; 'integrity mismatch' = recomputed digest of the bytes."
+    }
+   ],
+   "writes": [],
+   "unclear": [
+    "'within the reader's declared run, trial or inspection purpose' / 'wrong scope': checking that a value belongs to a run or trial needs the retention-reference kind (value_digest + owner context), which has no model; the signature passes only purpose: str, no run or trial identity.",
+    "'its bytes have expired' has no record-level marker: metadata is immutable after removal (no content_removed_at), so expiry is observable only as absence of the blob — indistinguishable from storage loss unless held_until/retention history is consulted, and retention history has no model."
+   ]
+  },
+  {
+   "function": "expire_values",
+   "module": "value_store",
+   "reads": [
+    {
+     "model": "StoredValue",
+     "lookup": "list_by",
+     "key_fields": [
+      "retention_class"
+     ],
+     "why": "note: 'remove only eligible run_evidence bytes after 30 days for personal data or 90 days for other classes' — METADATA records with retention_class = run_evidence; disclosure_class decides 30 vs 90 days (rules.disclosure.classes[2] = personal_data).",
+     "order_by": [
+      "value_digest"
+     ]
+    },
+    {
+     "model": "FlowRun",
+     "lookup": "list_by",
+     "key_fields": [
+      "status"
+     ],
+     "why": "note: 'evaluate every live retention reference and terminal-run state ... Any non-terminal Run ... protects the content'; A20.4 counts the period from FlowRun.ended_at. Terminal runs are also the argument set for `release_run_files` (the closed flow plan requires this path to reach now, release_run_files, rollback_unit_of_work).",
+     "order_by": [
+      "run_id"
+     ]
+    }
+   ],
+   "writes": [
+    {
+     "model": "StoredValue",
+     "operation": "delete",
+     "append_only": false,
+     "compare_and_set_on": null,
+     "why": "CONTENT BYTES ONLY (blob under value_digest) — NOT the metadata record: 'Digest, semantic/schema/carriage/class metadata, retention history and all records naming the value remain immutable after bytes are removed'. Listed here because no separate content kind exists to attach the delete to."
+    }
+   ],
+   "unclear": [
+    "Which runs name a value: the only record-level links are FlowRun.inputs/outputs and NodeExecution.input_value_refs/output_value_refs (tuple fields, not lookup keys). 'every live retention reference' presupposes a reference kind (value_digest -> owner context + retention class) that has no model; without it the sweep must scan all runs and all node executions.",
+    "held_until as a range filter (held_until <= now) would be the natural sweep lookup, but it is on immutable metadata and cannot be known at insert for run_evidence; the port would also need a comparison filter, not only equality.",
+    "Atomic removal 'through the operational store' requires content bytes to live inside the store's transaction; see put_value.",
+    "The sweep calls release_run_files(run_id, terminal_status) for terminal runs, but nothing records that a run's spool was already released (SpooledBytes.released_at is never written, FlowRun has no flag), so every sweep enumerates ALL terminal runs forever.",
+    "No record write marks the removal ('retention history' remains immutable but has no model), so idempotence rests solely on blob absence."
+   ]
+  },
+  {
+   "function": "receive_file",
+   "module": "run_spool",
+   "reads": [
+    {
+     "model": "FlowRun",
+     "lookup": "by_key",
+     "key_fields": [
+      "run_id"
+     ],
+     "why": "note: 'MUST accept bytes only for a live Run' (non-terminal status); State 5 Errors: 'Unknown or terminal run'."
+    },
+    {
+     "model": "SpooledBytes",
+     "lookup": "list_by",
+     "key_fields": [
+      "run_id"
+     ],
+     "why": "note: 'the live Run's aggregate spool ceiling is enforced during streaming' — sum of size over the run's live objects vs run_spool_total_bytes_max."
+    },
+    {
+     "model": "SpooledBytes",
+     "lookup": "by_unique",
+     "key_fields": [
+      "run_id",
+      "content_digest"
+     ],
+     "why": "M46 Identity evidence: 'equal run and content digest are interchangeable; the same bytes received twice within a run are held once' — dedupe after the digest is known."
+    }
+   ],
+   "writes": [
+    {
+     "model": "SpooledBytes",
+     "operation": "insert",
+     "append_only": false,
+     "compare_and_set_on": null,
+     "why": "note: 'publish SpooledBytes only after the stream completes', 'with released_at absent'. DESCRIPTOR record + BYTES in the run-scoped spool of the kernel host (M46 Persistence: 'outside the operational store's content-addressed area'). A partial object is discarded, never published."
+    }
+   ],
+   "unclear": [
+    "Where the SpooledBytes DESCRIPTOR lives is undecided: A20.1 limits the operational store to M01–M45 records, M46 is outside it, yet the descriptor must survive restart (release_run_files 'enabling restart recovery', resume_runs). Either the record port covers a spool index outside the store's unit of work, or the descriptor is derived from the spool layout. The bytes themselves are host files keyed by (run_id, content_digest), not a record.",
+    "'its exact producing execution' / 'stale producer': a producing attempt has no record until it concludes (NodeExecution is written after), and the signature has no attempt_number. The only checkable fact is 'no concluded NodeExecution for (run_id, node_id, map_index) yet', which the note does not state.",
+    "SpooledBytes.produced_by: str is 'the node execution that received them', but node_execution_id does not exist at receive time, and describe_file must compare producing NODE and PORT — SpooledBytes has no node_id, map_index or port_id field; the encoding of produced_by is undeclared.",
+    "SpooledBytes.semantic_term_revision_ref must come from output_port (SemanticPort); fine — but if the same bytes arrive from two nodes of one run (dedupe 'held once'), produced_by of the second producer is lost."
+   ]
+  },
+  {
+   "function": "deliver_file",
+   "module": "run_spool",
+   "reads": [
+    {
+     "model": "SpooledBytes",
+     "lookup": "by_unique",
+     "key_fields": [
+      "run_id",
+      "content_digest"
+     ],
+     "why": "note: 'MUST resolve one live SpooledBytes object, verify its stored digest while streaming'; 'Missing or released content ... yields no substitute bytes'. Descriptor by (run_id, content_digest) + BYTES from the host spool."
+    }
+   ],
+   "writes": [],
+   "unclear": [
+    "'require the consuming node and mapped element to belong to the same Run': the signature carries consuming_node_id and map_index but no consumer run identity, so 'same Run' can only mean 'node_id is a node of the flow version pinned by spooled.run_id' — that needs FlowRun by_key [run_id] -> flow_registry.flow_version, which the note does not name. Otherwise the check is vacuous.",
+    "State 5 State impact: 'None beyond bounded delivery evidence local to the spool' — that delivery evidence has no model and no field; I record no write.",
+    "'trial fixtures and durable business files are not valid sources' is enforced by type (SpooledBytes argument), not by a record lookup."
+   ]
+  },
+  {
+   "function": "describe_file",
+   "module": "run_spool",
+   "reads": [
+    {
+     "model": "SpooledBytes",
+     "lookup": "by_unique",
+     "key_fields": [
+      "run_id",
+      "content_digest"
+     ],
+     "why": "note: 'MUST verify the exact live run, producing node and port before returning digest, size, observed media type, disclosure class and producer identity'."
+    },
+    {
+     "model": "FlowRun",
+     "lookup": "by_key",
+     "key_fields": [
+      "run_id"
+     ],
+     "why": "'exact live run' — expected_run_id must equal spooled.run_id and the run must be non-terminal (30_modules Knows: 'the run's state')."
+    }
+   ],
+   "writes": [],
+   "unclear": [
+    "Producer node and port cannot be verified from fields: SpooledBytes has only produced_by: str; RunFileDescriptor needs producer_node_id and producer_port_id, which no SpooledBytes field holds (see receive_file).",
+    "'full preview requires owner authority' and 'capture of personal-data bytes ... requires the owner decision' (A07): the record carrying that owner decision is not named, and the note names no owner_authority/access_control function; actor is an argument only.",
+    "The read lease is in-process state; nothing durable is written ('persistence occurs only if trial_corpus copies the stream into a StoredValue' via value_store.put_value)."
+   ]
+  },
+  {
+   "function": "release_run_files",
+   "module": "run_spool",
+   "reads": [
+    {
+     "model": "FlowRun",
+     "lookup": "by_key",
+     "key_fields": [
+      "run_id"
+     ],
+     "why": "note: 'MUST require authoritative terminal Run state' — terminal_status argument is checked against FlowRun.status; 'A non-terminal or unknown Run ... is explicit'."
+    },
+    {
+     "model": "SpooledBytes",
+     "lookup": "list_by",
+     "key_fields": [
+      "run_id"
+     ],
+     "why": "note: 'delete every remaining spool object owned by that Run as one bounded cleanup operation'; result counts files/bytes from size.",
+     "order_by": [
+      "content_digest"
+     ]
+    }
+   ],
+   "writes": [
+    {
+     "model": "SpooledBytes",
+     "operation": "delete",
+     "append_only": false,
+     "compare_and_set_on": null,
+     "why": "note: 'It deletes the objects and returns only counts: it writes no released_at and reads no clock'. Descriptor + host bytes removed for the whole run (delete by run_id); repetition after complete cleanup returns an empty result."
+    }
+   ],
+   "unclear": [
+    "SpooledBytes.released_at is a dead field: receive_file publishes it absent, release_run_files deletes the object and 'writes no released_at'; no function ever sets it. 'live' therefore means 'descriptor exists', and M46's 'release removes them and leaves their description' is satisfied only by NodeExecution — which has no file-descriptor field.",
+    "When called from cancel_run/advance_run inside the unit that makes the run terminal, the 'authoritative terminal state' read sees the old status unless the spool read shares that unit of work; host-file deletion cannot be rolled back with the unit. Ordering (commit first, then release) is not stated.",
+    "Deletion of host files is outside the operational store transaction; 'incomplete deletion is explicit' implies per-object delete with a partial result, not an atomic delete-by-run."
+   ]
+  },
+  {
+   "function": "resolve_actor",
+   "module": "access_control",
+   "reads": [
+    {
+     "model": "AuthenticationThrottleState",
+     "lookup": "by_key",
+     "key_fields": [
+      "credential_binding_ref",
+      "channel"
+     ],
+     "order_by": null,
+     "why": "A27 rule 1: one throttle state per (credential_binding_ref, channel); compared with one system_clock.now to allow/refuse before and after verification"
+    },
+    {
+     "model": "AgentDelegation",
+     "lookup": "list_by",
+     "key_fields": [
+      "credential_binding_ref",
+      "channel",
+      "status"
+     ],
+     "order_by": [
+      "delegation_id"
+     ],
+     "why": "'authenticate exactly one owner or active delegation for the supplied channel'; 'ambiguous' is a refusal, so the lookup must return all matches (status='active') and require exactly one",
+     "note": "not unique in the model: nothing forbids two active delegations on one credential binding"
+    },
+    {
+     "model": "OwnerPrincipal",
+     "lookup": "list_by",
+     "key_fields": [],
+     "order_by": [
+      "principal_id"
+     ],
+     "why": "ActorRef needs owner_principal_id for both owner and agent; the function receives no principal_id, so it must load 'the single record' (M16: 'Durable single record')",
+     "note": "singleton read; existing method load_owner_principal(principal_id) cannot serve it without a key source"
+    }
+   ],
+   "writes": [
+    {
+     "model": "AuthenticationThrottleState",
+     "operation": "upsert",
+     "fields_updated": [
+      "consecutive_failures",
+      "last_failure_at",
+      "blocked_until"
+     ],
+     "append_only": false,
+     "compare_and_set_on": "consecutive_failures",
+     "why": "A27: failed authentication 'atomically' increments the counter, sets last_failure_at and on the 10th failure blocked_until = now + 900 s; record is 'absent until the first failure' (insert) then updated; success after block expiry resets consecutive_failures=0 and clears blocked_until; blocked attempts write nothing"
+    }
+   ],
+   "unclear": [
+    "ChannelCredentialHandle is `payload: object` (60_contract_types: 'opaque listener-established credential material/binding handle'). No text says how a presented credential becomes a `credential_binding_ref`: AgentDelegation can only be looked up by (`credential_binding_ref`,`channel`,`status`), so something must map presented material -> binding ref. State 5/State 3 say access_control knows 'the credential references of installation', but the note names no call to `installation.resolve_credential`, and that function goes the other way (ref -> handle). 81_module_review records that generated code read kind/principal_id/delegation_id out of the payload, i.e. the caller named its own actor.",
+    "Owner authentication: OwnerPrincipal has only principal_id/display_name/status - no credential_binding_ref and no channel. Which credential binding is the owner's is nowhere recorded in the store; it must come from installation protected configuration, but installation exposes no operation returning the owner's binding ref or the owner's principal_id.",
+    "Throttle key on failure: the key is (credential_binding_ref, channel), but a missing/invalid credential resolves to no binding. The texts do not say which record advances when the presented material matches no known binding (no record? a per-channel record?).",
+    "Atomicity of the throttle increment: 'atomically advances' - no field is named as version; compare-and-set on `consecutive_failures` is my reading, alternatively an in-store increment. Whether resolve_actor opens its own unit of work is not stated (issue_delegation says 'in one unit of work', resolve_actor does not).",
+    "'may produce a bounded owner-visible security report' (State 5) - no model, no record family and no function for this report exists.",
+    "Uniqueness of active delegation per (credential_binding_ref, channel) is not declared; if it were, the lookup would be by_unique over a partial key (status='active')."
+   ]
+  },
+  {
+   "function": "authorize_action",
+   "module": "access_control",
+   "reads": [
+    {
+     "model": "OwnerPrincipal",
+     "lookup": "by_key",
+     "key_fields": [
+      "principal_id"
+     ],
+     "order_by": null,
+     "why": "State 5 Errors: 'suspended owner' is refused -> needs OwnerPrincipal.status",
+     "note": "key value comes from ActorRef.owner_principal_id; status must be `active`"
+    },
+    {
+     "model": "AgentDelegation",
+     "lookup": "by_key",
+     "key_fields": [
+      "delegation_id"
+     ],
+     "order_by": null,
+     "why": "needs `may_author` and `disclosure_ceiling` of the actor's delegation (ActorRef carries only delegation_id); returns 'the actor's effective disclosure ceiling'"
+    }
+   ],
+   "writes": [],
+   "unclear": [
+    "Whether authorize_action re-reads the delegation `status` (a delegation revoked between resolve_actor and authorize_action in the same request) is not stated; A21 rule 8 only says revocation takes effect 'before the next request'.",
+    "Whether a suspended owner also disables agent actions (agent ActorRef carries owner_principal_id) is not decided; State 5 lists 'suspended owner' as an error without saying for which actor kind."
+   ]
+  },
+  {
+   "function": "issue_delegation",
+   "module": "access_control",
+   "reads": [
+    {
+     "model": "OwnerPrincipal",
+     "lookup": "by_key",
+     "key_fields": [
+      "principal_id"
+     ],
+     "order_by": null,
+     "why": "'MUST require the sole active owner'; `expected_owner_principal_id` must equal the stored principal_id and owner.owner_principal_id",
+     "note": "key value comes from ActorRef.owner_principal_id; status must be `active`"
+    }
+   ],
+   "writes": [
+    {
+     "model": "AgentDelegation",
+     "operation": "insert",
+     "fields_updated": [
+      "delegation_id",
+      "owner_principal_id",
+      "agent_label",
+      "channel",
+      "credential_binding_ref",
+      "may_author",
+      "disclosure_ceiling",
+      "status",
+      "issued_at",
+      "revoked_at",
+      "revocation_reason"
+     ],
+     "append_only": false,
+     "compare_and_set_on": null,
+     "why": "'appends exactly one active delegation' in one unit of work; fresh minted delegation_id, issued_at = system_clock.now; must be a strict insert (never overwrite an existing delegation_id); the record is later mutated once by revoke, so the family is not append-only"
+    }
+   ],
+   "unclear": [
+    "'an installation-known credential binding whose channel matches the requested channel': existence/channel of a binding is an installation (protected configuration) fact, not a store record, and installation has no operation that checks a binding ref without resolving a credential handle (`resolve_credential` needs purpose + caller_component and returns material handle).",
+    "Whether issuing a second ACTIVE delegation on an already-used (credential_binding_ref, channel) must be refused. If not refused, resolve_actor becomes 'ambiguous' for both. If refused, issue_delegation needs list_by(credential_binding_ref, channel, status).",
+    "Whether the owner's own credential binding ref may be named in a delegation (it would give an agent the owner's credential) - nothing forbids it because the owner's binding ref is not visible to this module."
+   ]
+  },
+  {
+   "function": "revoke_delegation",
+   "module": "access_control",
+   "reads": [
+    {
+     "model": "OwnerPrincipal",
+     "lookup": "by_key",
+     "key_fields": [
+      "principal_id"
+     ],
+     "order_by": null,
+     "why": "'only the sole active owner'",
+     "note": "key value comes from ActorRef.owner_principal_id; status must be `active`"
+    },
+    {
+     "model": "AgentDelegation",
+     "lookup": "by_key",
+     "key_fields": [
+      "delegation_id"
+     ],
+     "order_by": null,
+     "why": "'compare-and-set the named delegation from active to permanently revoked'; replay detection compares stored `status`, `revocation_reason`; 'owner/delegation mismatch' compares `owner_principal_id`"
+    }
+   ],
+   "writes": [
+    {
+     "model": "AgentDelegation",
+     "operation": "update_fields",
+     "fields_updated": [
+      "status",
+      "revoked_at",
+      "revocation_reason"
+     ],
+     "append_only": false,
+     "compare_and_set_on": "status",
+     "why": "active -> revoked with immutable revoked_at (one clock sample) and revocation_reason; exact replay writes nothing"
+    }
+   ],
+   "unclear": [
+    "'Exact replay' is defined only loosely: the replayed call carries expected_status='active' again while the record is 'revoked'; equality of `reason` is presumably the replay test. Not stated."
+   ]
+  },
+  {
+   "function": "AuthenticationRequiredError",
+   "module": "access_control",
+   "reads": [],
+   "writes": [],
+   "unclear": [
+    "Listed in module_functions but has no contract and no note: it is an error type, not an operation. No record access."
+   ]
+  },
+  {
+   "function": "authorization_for_effect",
+   "module": "owner_authority",
+   "reads": [
+    {
+     "model": "EffectApproval",
+     "lookup": "by_key",
+     "key_fields": [
+      "approval_id"
+     ],
+     "order_by": null,
+     "why": "when `approval_ref` is given: 'one unconsumed matching approval' - compares run_id, node_id, binding_version_ref, service_instance, preview_digest, status='approved', consumed_attempt_refs"
+    },
+    {
+     "model": "StandingGrant",
+     "lookup": "list_by",
+     "key_fields": [
+      "flow_version_ref",
+      "node_id",
+      "binding_version_ref",
+      "status"
+     ],
+     "order_by": [
+      "grant_id"
+     ],
+     "why": "'one exact active covering grant' - there is no grant reference in the inputs, so the grant is found by the exact triple with status='active'",
+     "note": "would be by_unique if 'at most one active grant per triple' were declared; grant_standing_approval's 'conflicting active grant' refusal implies it"
+    },
+    {
+     "model": "OwnerPrincipal",
+     "lookup": "list_by",
+     "key_fields": [],
+     "order_by": [
+      "principal_id"
+     ],
+     "why": "'owner/binding state ... remain current' (A13 rule 5: nothing while the owner principal is suspended); no ActorRef or principal_id among the inputs -> singleton read"
+    },
+    {
+     "model": "OperationBindingVersion",
+     "lookup": "by_key",
+     "key_fields": [
+      "binding_version_id"
+     ],
+     "order_by": null,
+     "why": "effect_class ('destructive effects always need approval'), replay ('duplicates' retry rule) and binding_id of the pinned version",
+     "note": "durable per State 1 but NO TABLE; owned by operation_bindings - may be reached through that module's function instead of the record port"
+    },
+    {
+     "model": "OperationBinding",
+     "lookup": "by_key",
+     "key_fields": [
+      "binding_id"
+     ],
+     "order_by": null,
+     "why": "binding must remain accepted/not suspended (`status`)",
+     "note": "owned by operation_bindings"
+    },
+    {
+     "model": "NodeExecution",
+     "lookup": "list_by",
+     "key_fields": [
+      "run_id",
+      "node_id"
+     ],
+     "order_by": [
+      "map_index",
+      "attempt_number"
+     ],
+     "why": "'a duplicates retry after confirmed effect-not-applied needs fresh approval' - needs the prior attempt history of this node",
+     "note": "NO TABLE; owned by run_executor/trace_journal; consumed_attempt_refs may be enough instead"
+    }
+   ],
+   "writes": [
+    {
+     "model": "EffectApproval",
+     "operation": "update_fields",
+     "fields_updated": [
+      "consumed_attempt_refs",
+      "status"
+     ],
+     "append_only": false,
+     "compare_and_set_on": "status",
+     "why": "'Consumption is single-use' / 'concurrent consumption return[s] no authority': append the exact attempt identity to consumed_attempt_refs and move approved -> consumed when every covered element has taken its authority. For a mapped node status stays 'approved' while consumed_attempt_refs grows, so CAS on `status` alone does not serialize two element consumptions - the guard has to be on consumed_attempt_refs (or a record version)."
+    }
+   ],
+   "unclear": [
+    "What exactly is looked up: with `approval_ref=None` the texts allow only a grant? or must the function also search for an approved approval of this run/node (list_by run_id,node_id,status)? State 5 Inputs say 'optional decided approval reference', so by_key is my reading; nothing says a search is forbidden.",
+    "The consumed attempt identity: M42 says consumed_attempt_refs holds 'run/node/map-index/attempt identities', but the signature carries no map_index and no attempt number/node_execution_id. 'authorize exactly one node/element' cannot be recorded per element from these inputs.",
+    "EffectApproval has no `flow_version_ref` field, yet validity requires 'the pinned flow' to remain current and the approval must never be reused by another flow version. It can only be checked indirectly via run_id -> FlowRun.flow_activation_ref -> FlowActivation (no table).",
+    "Standing-grant lookup key: no uniqueness of active grant per (flow_version_ref,node_id,binding_version_ref) is declared in State 1; if two active grants match, which one is cited as authority_ref is undecided.",
+    "'Grant execution count evidence may be reserved/recorded with the later node result' (State 5): no field on StandingGrant holds a count; the count is only derivable from NodeExecution.grant_ref. Whether this function writes anything for a grant is undecided (my reading: no write).",
+    "Owner state read has no key: no principal_id input.",
+    "Binding status/effect class: read through the record port or through operation_bindings' public function? Not decided; State 3 Knows lists only M42, M43 for this module."
+   ]
+  },
+  {
+   "function": "compute_preview_digest",
+   "module": "owner_authority",
+   "reads": [],
+   "writes": [],
+   "unclear": [
+    "Pure. 'declared port and mapped-element order' and 'unknown or duplicate port positions' presuppose knowledge of the binding's ports, but the signature gives only `binding_version_ref` and a flat tuple of digests - either the order is the caller's responsibility, or the function must read OperationBindingVersion by binding_version_id (no table). Not decided."
+   ]
+  },
+  {
+   "function": "decide_approval",
+   "module": "owner_authority",
+   "reads": [
+    {
+     "model": "OwnerPrincipal",
+     "lookup": "by_key",
+     "key_fields": [
+      "principal_id"
+     ],
+     "order_by": null,
+     "why": "'only the active owner'; suspended owner refused",
+     "note": "key value comes from ActorRef.owner_principal_id; status must be `active`"
+    },
+    {
+     "model": "EffectApproval",
+     "lookup": "by_key",
+     "key_fields": [
+      "approval_id"
+     ],
+     "order_by": null,
+     "why": "'compare-and-set the exact pending approval'"
+    }
+   ],
+   "writes": [
+    {
+     "model": "EffectApproval",
+     "operation": "update_fields",
+     "fields_updated": [
+      "status",
+      "decided_by",
+      "decided_at"
+     ],
+     "append_only": false,
+     "compare_and_set_on": "status",
+     "why": "pending -> approved|denied, decided_at = one system_clock.now sample, decided_by = owner ActorRef; final"
+    }
+   ],
+   "unclear": [
+    "No replay rule is given (unlike revoke_*): a repeated identical decision is 'already-decided' -> refused. Fine, but stated only in Errors."
+   ]
+  },
+  {
+   "function": "grant_covers_effect",
+   "module": "owner_authority",
+   "reads": [],
+   "writes": [],
+   "unclear": [
+    "Pure predicate: the grant, owner_active and binding_accepted are arguments. 'A destructive binding is never covered' cannot be evaluated from the arguments (no effect_class passed; StandingGrant has no effect-class field) - relies on the grant never having been issued for a destructive binding."
+   ]
+  },
+  {
+   "function": "grant_standing_approval",
+   "module": "owner_authority",
+   "reads": [
+    {
+     "model": "OwnerPrincipal",
+     "lookup": "by_key",
+     "key_fields": [
+      "principal_id"
+     ],
+     "order_by": null,
+     "why": "'only the active owner'",
+     "note": "key value comes from ActorRef.owner_principal_id; status must be `active`"
+    },
+    {
+     "model": "StandingGrant",
+     "lookup": "list_by",
+     "key_fields": [
+      "flow_version_ref",
+      "node_id",
+      "binding_version_ref",
+      "status"
+     ],
+     "order_by": [
+      "grant_id"
+     ],
+     "why": "'validating ... expected current-grant state' / 'conflicting active grant' refused: the current active grant for the exact triple must equal `expected_current_grant_ref` (None = none exists)"
+    },
+    {
+     "model": "FlowVersion",
+     "lookup": "by_key",
+     "key_fields": [
+      "flow_version_id"
+     ],
+     "order_by": null,
+     "why": "'mismatched node/version': node_id must exist in the version's `nodes` and pin `binding_version_ref`",
+     "note": "NO TABLE; owned by flow_registry"
+    },
+    {
+     "model": "OperationBindingVersion",
+     "lookup": "by_key",
+     "key_fields": [
+      "binding_version_id"
+     ],
+     "order_by": null,
+     "why": "'accepted non-destructive binding': effect_class, accepted_at/accepted_by, binding_id",
+     "note": "NO TABLE; owned by operation_bindings"
+    },
+    {
+     "model": "OperationBinding",
+     "lookup": "by_key",
+     "key_fields": [
+      "binding_id"
+     ],
+     "order_by": null,
+     "why": "'unaccepted/suspended binding' refused -> `status`",
+     "note": "owned by operation_bindings"
+    }
+   ],
+   "writes": [
+    {
+     "model": "StandingGrant",
+     "operation": "insert",
+     "fields_updated": [
+      "grant_id",
+      "flow_version_ref",
+      "node_id",
+      "binding_version_ref",
+      "owner_statement",
+      "status",
+      "granted_by",
+      "granted_at",
+      "revoked_at",
+      "revocation_reason"
+     ],
+     "append_only": false,
+     "compare_and_set_on": null,
+     "why": "'append one StandingGrant'; status='active', granted_at = one system_clock.now sample, owner_statement = statement.text. The guard is not a field CAS but 'no other active grant for the triple' = expected_current_grant_ref (a uniqueness/absence expectation)."
+    }
+   ],
+   "unclear": [
+    "How the absence expectation is made atomic: CompareAndSetExpectation is (record_family, record_id, expected_version) - it cannot express 'no active StandingGrant exists for this triple'. Needs either a declared partial-unique constraint or a port operation 'insert if none matches'.",
+    "Who mints grant_id (identity module?) - not named in the note.",
+    "OwnerStatement.digest is validated but StandingGrant stores only `owner_statement` text; the digest is not retained.",
+    "If expected_current_grant_ref names an existing active grant, is the new grant refused, or does it replace it (and then who revokes the old one)? 'conflicting active grant are refused' suggests refusal only."
+   ]
+  },
+  {
+   "function": "owner_statement",
+   "module": "owner_authority",
+   "reads": [],
+   "writes": [],
+   "unclear": [
+    "Pure by signature ('without state change'). 'Missing or inconsistent evidence' / 'unaccepted evidence' (State 5) would need reads of the referenced targets (target_refs, service_operation_refs) but the request carries only refs and strings; my reading: callers supply accepted facts, no record access."
+   ]
+  },
+  {
+   "function": "request_approval",
+   "module": "owner_authority",
+   "reads": [
+    {
+     "model": "FlowRun",
+     "lookup": "by_key",
+     "key_fields": [
+      "run_id"
+     ],
+     "order_by": null,
+     "why": "'suspended/stale pins create no authority' - the run's `service_target`, `flow_activation_ref`, `status` must still match the pinned flow/instance",
+     "note": "owned by run_executor; may be the caller's responsibility"
+    },
+    {
+     "model": "OperationBinding",
+     "lookup": "by_key",
+     "key_fields": [
+      "binding_id"
+     ],
+     "order_by": null,
+     "why": "'suspended binding' refused -> `status` (binding_id comes from the passed OperationBindingVersion)",
+     "note": "owned by operation_bindings"
+    }
+   ],
+   "writes": [
+    {
+     "model": "EffectApproval",
+     "operation": "insert",
+     "fields_updated": [
+      "approval_id",
+      "run_id",
+      "node_id",
+      "binding_version_ref",
+      "service_instance",
+      "preview_value_refs",
+      "preview_digest",
+      "status",
+      "decided_by",
+      "decided_at",
+      "consumed_attempt_refs"
+     ],
+     "append_only": false,
+     "compare_and_set_on": null,
+     "why": "'It appends the request without calling the service': one pending EffectApproval, preview_digest from compute_preview_digest, preview_value_refs = value_digest of each preview StoredValue, consumed_attempt_refs empty"
+    }
+   ],
+   "unclear": [
+    "EffectApproval has no field for `flow_version_ref`, `map_indexes`, `file_previews` (RunFileDescriptor) or the OwnerStatement - four inputs of this function have nowhere to be stored, while decide_approval says the decision 'remains bound to its run, flow version, node, mapped collection' and waiting_for_owner must show the 'complete preview'.",
+    "Idempotency: if run_executor asks again for the same run/node (restart, recovery) is a second pending approval appended, or must an existing pending one be found (list_by run_id,node_id,status)? Texts only say 'appends'.",
+    "`service_instance` (str) must be derived from ServiceTarget.targets (tuple[str,...]) for the binding's service - the selection rule is not stated.",
+    "Whether the preview StoredValues must already be durable (value_store) before the approval references them - not stated; no read of StoredValue is named.",
+    "No `requested_at` field on EffectApproval although the module's A25 banner speaks of timestamps; ordering of pending approvals has no time field."
+   ]
+  },
+  {
+   "function": "revoke_standing_approval",
+   "module": "owner_authority",
+   "reads": [
+    {
+     "model": "OwnerPrincipal",
+     "lookup": "by_key",
+     "key_fields": [
+      "principal_id"
+     ],
+     "order_by": null,
+     "why": "'only the active owner'",
+     "note": "key value comes from ActorRef.owner_principal_id; status must be `active`"
+    },
+    {
+     "model": "StandingGrant",
+     "lookup": "by_key",
+     "key_fields": [
+      "grant_id"
+     ],
+     "order_by": null,
+     "why": "'compare-and-set one active grant to final revoked state'; replay compares stored status/revocation_reason"
+    }
+   ],
+   "writes": [
+    {
+     "model": "StandingGrant",
+     "operation": "update_fields",
+     "fields_updated": [
+      "status",
+      "revoked_at",
+      "revocation_reason"
+     ],
+     "append_only": false,
+     "compare_and_set_on": "status",
+     "why": "active -> revoked, revoked_at = one clock sample, bounded reason; exact replay writes nothing"
+    }
+   ],
+   "unclear": [
+    "'makes a waiting Run request approval' - this function writes no FlowRun (State 5: only the grant changes); the effect happens on run_executor's next authorization_for_effect call. Same loose 'exact replay' definition as revoke_delegation."
+   ]
+  },
+  {
+   "function": "waiting_for_owner",
+   "module": "owner_authority",
+   "reads": [
+    {
+     "model": "OwnerPrincipal",
+     "lookup": "by_key",
+     "key_fields": [
+      "principal_id"
+     ],
+     "order_by": null,
+     "why": "'return the active owner'; agents and suspended owners refused",
+     "note": "key value comes from ActorRef.owner_principal_id; status must be `active`"
+    },
+    {
+     "model": "EffectApproval",
+     "lookup": "list_by",
+     "key_fields": [
+      "status",
+      "run_id",
+      "service_instance"
+     ],
+     "order_by": [
+      "approval_id"
+     ],
+     "why": "'every current pending approval' with exact filters: status='pending', run_id IN filters.run_refs, service_instance IN filters.service_instance_refs",
+     "note": "IN-set filters and keyset pagination (cursor after approval_id, limit page_size) are needed"
+    },
+    {
+     "model": "StandingGrant",
+     "lookup": "list_by",
+     "key_fields": [
+      "status",
+      "flow_version_ref"
+     ],
+     "order_by": [
+      "grant_id"
+     ],
+     "why": "'every active grant': status='active', flow_version_ref IN filters.flow_version_refs"
+    },
+    {
+     "model": "NodeExecution",
+     "lookup": "list_by",
+     "key_fields": [
+      "grant_ref"
+     ],
+     "order_by": null,
+     "why": "'every active grant with execution count' (A13 rule 7) = count of NodeExecution whose grant_ref equals the grant",
+     "note": "aggregate COUNT grouped by grant_ref; NodeExecution has NO TABLE"
+    },
+    {
+     "model": "StoredValue",
+     "lookup": "by_key",
+     "key_fields": [
+      "value_digest"
+     ],
+     "order_by": null,
+     "why": "'complete preview' - EffectApproval holds only preview_value_refs; the values themselves live in the content-addressed value store",
+     "note": "owned by value_store; probably a call to that module, not the record port"
+    },
+    {
+     "model": "FlowRun",
+     "lookup": "by_key",
+     "key_fields": [
+      "run_id"
+     ],
+     "order_by": null,
+     "why": "needed only to apply `flow_version_refs` to approvals, since EffectApproval has no flow-version field (run_id -> flow_activation_ref -> FlowActivation)",
+     "note": "FlowActivation has NO TABLE"
+    }
+   ],
+   "writes": [],
+   "unclear": [
+    "Order is only 'deterministic': EffectApproval has no creation instant, so the only stable order is by approval_id (or run_id,node_id); StandingGrant could order by granted_at but it is a json_model column. The texts name no order key.",
+    "One page_cursor/page_size covers two lists (pending_approvals and active_grants) plus counts - how the cursor spans both lists is undecided.",
+    "`flow_version_refs` filter on approvals: no field to filter by (see request_approval). Whether the filter applies to approvals at all is undecided.",
+    "`run_refs` filter on grants: a grant has no run. Undecided whether it is ignored for grants.",
+    "Execution count source: NodeExecution (no table, owned elsewhere) - record port count, a trace_journal function, or a counter nobody maintains. 'unavailable evidence is explicit' suggests a cross-module call that may fail.",
+    "'complete preview' includes file previews and the owner statement that EffectApproval does not store; WaitingForOwnerPage returns bare EffectApproval records, so the preview values are not in the page at all."
+   ]
+  },
+  {
+   "function": "manifest_revision",
+   "module": "installation",
+   "reads": [],
+   "writes": [],
+   "unclear": [
+    "Reads operator-established protected host configuration / release metadata, not the operational store. State 5 'State impact: None'. No durable record."
+   ]
+  },
+  {
+   "function": "release_ceilings",
+   "module": "installation",
+   "reads": [],
+   "writes": [],
+   "unclear": [
+    "ReleaseCeilings M48 is 'Not domain persistence' - release metadata. No durable record."
+   ]
+  },
+  {
+   "function": "resolve_credential",
+   "module": "installation",
+   "reads": [],
+   "writes": [],
+   "unclear": [
+    "'protected-provider lookup writes no kernel record'. No durable record. The reverse mapping needed by resolve_actor (presented credential -> credential_binding_ref) and a side-effect-free 'is this binding ref known for this channel' check needed by issue_delegation are not offered by any installation operation."
+   ]
+  },
+  {
+   "function": "resolve_service_target",
+   "module": "installation",
+   "reads": [],
+   "writes": [],
+   "unclear": [
+    "No durable record ('resolution changes no installation state'). Reads host configuration plus manifest_reader projections."
+   ]
+  },
+  {
+   "function": "start_kernel",
+   "module": "bootstrap",
+   "reads": [],
+   "writes": [],
+   "unclear": [
+    "Facade ('Must not own: any rule, decision or state'): every record access happens inside the delegated operations (seed_vocabulary, sweep_manifest_drift, resume_runs, reconcile_outcome, advance_run, cancel_run) inside begin/commit_unit_of_work. No direct record read or write is named.",
+    "OwnerPrincipal provenance: M16 says 'There is no creation operation on the kernel surface; the record is part of installing the kernel', State 3 says installation owns 'the installation record and its one owner principal', yet (a) no installation function touches the store, (b) start_kernel 'may append only seed, binding-drift and recovery records and never creates business facts', (c) `upsert_owner_principal` exists in the repository but is reachable from no function. Nobody inserts OwnerPrincipal; a fresh store has no owner and every owner-only operation refuses. Either start_kernel seeds it from protected config (installation_id -> principal_id, display_name) or an operator tool outside the 28 modules does.",
+    "'the installation record' (State 3, installation Owns) has no model in global_spec.models and no table.",
+    "A21 rule 4 lists 'suspending the owner principal' as an owner-only action, but no function in any module writes OwnerPrincipal.status (active <-> suspended); no OwnerDecisionRequest handler for it in these modules.",
+    "start_kernel is where the record port/repository would have to be constructed and injected ('MUST open the durable store'); 81_module_review notes bootstrap never constructs SqliteOperationalStoreRepository."
+   ]
+  }
+ ],
+ "models_summary": {
+  "SemanticAxis": {
+   "durable": true,
+   "identity_fields": [
+    "axis_id"
+   ],
+   "append_only": false,
+   "needed_lookups": [
+    [
+     "axis_id"
+    ],
+    []
+   ]
+  },
+  "SemanticAxisRevision": {
+   "durable": true,
+   "identity_fields": [
+    "revision_id"
+   ],
+   "append_only": true,
+   "needed_lookups": [
+    [
+     "revision_id"
+    ],
+    [
+     "axis_id"
+    ],
+    [
+     "meaning",
+     "value_family",
+     "qualifier_contract_ref"
+    ]
+   ]
+  },
+  "SemanticTerm": {
+   "durable": true,
+   "identity_fields": [
+    "term_id"
+   ],
+   "append_only": false,
+   "needed_lookups": [
+    [
+     "term_id"
+    ],
+    []
+   ]
+  },
+  "SemanticTermRevision": {
+   "durable": true,
+   "identity_fields": [
+    "term_revision_id"
+   ],
+   "append_only": true,
+   "needed_lookups": [
+    [
+     "term_revision_id"
+    ],
+    [
+     "meaning",
+     "value_schema_ref",
+     "required_qualifier_kind",
+     "subject_kind",
+     "temporal_role"
+    ]
+   ]
+  },
+  "SemanticRelation": {
+   "durable": true,
+   "identity_fields": [
+    "relation_id"
+   ],
+   "append_only": false,
+   "needed_lookups": [
+    [
+     "relation_id"
+    ],
+    []
+   ]
+  },
+  "SemanticRelationRevision": {
+   "durable": true,
+   "identity_fields": [
+    "relation_revision_id"
+   ],
+   "append_only": true,
+   "needed_lookups": [
+    [
+     "relation_revision_id"
+    ],
+    [
+     "source_term_revision_ref",
+     "target_term_revision_ref"
+    ],
+    [
+     "source_term_revision_ref",
+     "target_term_revision_ref",
+     "relation_kind"
+    ],
+    [
+     "source_term_revision_ref",
+     "target_term_revision_ref",
+     "source_schema_ref",
+     "target_schema_ref",
+     "relation_kind",
+     "loss_class",
+     "required_slot_ref"
+    ]
+   ]
+  },
+  "VocabularyProposal": {
+   "durable": true,
+   "identity_fields": [
+    "proposal_id"
+   ],
+   "append_only": false,
+   "needed_lookups": [
+    [
+     "proposal_id"
+    ]
+   ]
+  },
+  "Slot": {
+   "durable": true,
+   "identity_fields": [
+    "slot_id"
+   ],
+   "append_only": false,
+   "needed_lookups": [
+    [
+     "slot_id"
+    ]
+   ]
+  },
+  "SlotContractVersion": {
+   "durable": true,
+   "identity_fields": [
+    "contract_version_id"
+   ],
+   "append_only": true,
+   "needed_lookups": [
+    [
+     "contract_version_id"
+    ],
+    [
+     "slot_id"
+    ]
+   ]
+  },
+  "Implementation": {
+   "durable": true,
+   "identity_fields": [
+    "implementation_id"
+   ],
+   "append_only": true,
+   "needed_lookups": [
+    [
+     "implementation_id"
+    ],
+    [
+     "contract_version_ref"
+    ]
+   ]
+  },
+  "TrialCase": {
+   "durable": true,
+   "identity_fields": [
+    "trial_case_id"
+   ],
+   "append_only": false,
+   "needed_lookups": [
+    [
+     "trial_case_id"
+    ],
+    [
+     "contract_version_ref",
+     "status"
+    ],
+    [
+     "contract_version_ref"
+    ]
+   ]
+  },
+  "FlowProof": {
+   "durable": true,
+   "identity_fields": [
+    "proof_id"
+   ],
+   "append_only": true,
+   "needed_lookups": [
+    [
+     "proof_id"
+    ]
+   ]
+  },
+  "NodeExecution": {
+   "durable": true,
+   "identity_fields": [
+    "node_execution_id"
+   ],
+   "append_only": true,
+   "needed_lookups": [
+    [
+     "node_execution_id"
+    ],
+    [
+     "run_id",
+     "node_id",
+     "map_index",
+     "attempt_number"
+    ],
+    [
+     "run_id"
+    ],
+    [
+     "executed_ref"
+    ],
+    [
+     "grant_ref"
+    ],
+    [
+     "run_id",
+     "node_id"
+    ]
+   ]
+  },
+  "SemanticPort": {
+   "durable": false,
+   "identity_fields": [
+    "owner_ref",
+    "port_id"
+   ],
+   "append_only": true,
+   "needed_lookups": []
+  },
+  "StoredValue": {
+   "durable": false,
+   "identity_fields": [
+    "value_digest"
+   ],
+   "append_only": true,
+   "needed_lookups": [
+    [
+     "value_digest"
+    ],
+    [
+     "retention_class"
+    ]
+   ]
+  },
+  "SandboxRuntimeRevision": {
+   "durable": true,
+   "identity_fields": [
+    "runtime_revision_id"
+   ],
+   "append_only": true,
+   "needed_lookups": [
+    [
+     "runtime_revision_id"
+    ]
+   ]
+  },
+  "UncomposableOutput": {
+   "durable": false,
+   "identity_fields": [],
+   "append_only": true,
+   "needed_lookups": []
+  },
+  "ImplementationCodeObject (NO MODEL)": {
+   "durable": true,
+   "identity_fields": [],
+   "append_only": true,
+   "needed_lookups": []
+  },
+  "TrialExecution": {
+   "durable": true,
+   "identity_fields": [
+    "trial_execution_id"
+   ],
+   "append_only": true,
+   "needed_lookups": []
+  },
+  "AdmissionVerdict": {
+   "durable": true,
+   "identity_fields": [
+    "admission_id"
+   ],
+   "append_only": true,
+   "needed_lookups": [
+    [
+     "contract_version_ref",
+     "implementation_ref"
+    ]
+   ]
+  },
+  "SlotActivation": {
+   "durable": true,
+   "identity_fields": [
+    "activation_id"
+   ],
+   "append_only": true,
+   "needed_lookups": [
+    [
+     "contract_version_ref"
+    ],
+    [
+     "contract_version_ref",
+     "implementation_ref"
+    ]
+   ]
+  },
+  "OperationBinding": {
+   "durable": true,
+   "identity_fields": [
+    "binding_id"
+   ],
+   "append_only": false,
+   "needed_lookups": [
+    [
+     "binding_id"
+    ],
+    [
+     "status"
+    ],
+    [
+     "service_id",
+     "capability_id",
+     "channel"
+    ]
+   ]
+  },
+  "OperationBindingVersion": {
+   "durable": true,
+   "identity_fields": [
+    "binding_version_id"
+   ],
+   "append_only": true,
+   "needed_lookups": [
+    [
+     "binding_version_id"
+    ],
+    [
+     "binding_id"
+    ]
+   ]
+  },
+  "Flow": {
+   "durable": true,
+   "identity_fields": [
+    "flow_id"
+   ],
+   "append_only": false,
+   "needed_lookups": [
+    [
+     "flow_id"
+    ],
+    [
+     "name"
+    ]
+   ]
+  },
+  "FlowVersion": {
+   "durable": true,
+   "identity_fields": [
+    "flow_version_id"
+   ],
+   "append_only": true,
+   "needed_lookups": [
+    [
+     "flow_version_id"
+    ],
+    [
+     "flow_id"
+    ]
+   ]
+  },
+  "FlowActivation": {
+   "durable": true,
+   "identity_fields": [
+    "flow_activation_id"
+   ],
+   "append_only": true,
+   "needed_lookups": [
+    [
+     "flow_version_ref"
+    ],
+    [
+     "flow_activation_id"
+    ]
+   ]
+  },
+  "OwnerPrincipal": {
+   "durable": true,
+   "identity_fields": [
+    "principal_id"
+   ],
+   "append_only": false,
+   "needed_lookups": [
+    [
+     "principal_id"
+    ],
+    []
+   ]
+  },
+  "<BindingAcceptance record>": {
+   "durable": true,
+   "identity_fields": [],
+   "append_only": true,
+   "needed_lookups": []
+  },
+  "<BindingSuspension / reissue record>": {
+   "durable": true,
+   "identity_fields": [],
+   "append_only": true,
+   "needed_lookups": []
+  },
+  "FlowRun": {
+   "durable": true,
+   "identity_fields": [
+    "run_id"
+   ],
+   "append_only": false,
+   "needed_lookups": [
+    [
+     "run_id"
+    ],
+    [
+     "status"
+    ]
+   ]
+  },
+  "OutcomeReconciliation": {
+   "durable": true,
+   "identity_fields": [
+    "reconciliation_id"
+   ],
+   "append_only": true,
+   "needed_lookups": [
+    [
+     "node_execution_ref"
+    ]
+   ]
+  },
+  "SpooledBytes": {
+   "durable": true,
+   "identity_fields": [
+    "run_id",
+    "content_digest"
+   ],
+   "append_only": false,
+   "needed_lookups": [
+    [
+     "run_id",
+     "content_digest"
+    ],
+    [
+     "run_id"
+    ]
+   ]
+  },
+  "EffectApproval": {
+   "durable": true,
+   "identity_fields": [
+    "approval_id"
+   ],
+   "append_only": false,
+   "needed_lookups": [
+    [
+     "run_id"
+    ],
+    [
+     "approval_id"
+    ],
+    [
+     "status",
+     "run_id",
+     "service_instance"
+    ]
+   ]
+  },
+  "InFlightEffectAttempt (no model)": {
+   "durable": true,
+   "identity_fields": [],
+   "append_only": false,
+   "needed_lookups": []
+  },
+  "RetentionReference (no model)": {
+   "durable": true,
+   "identity_fields": [],
+   "append_only": true,
+   "needed_lookups": []
+  },
+  "AgentDelegation": {
+   "durable": true,
+   "identity_fields": [
+    "delegation_id"
+   ],
+   "append_only": false,
+   "needed_lookups": [
+    [
+     "delegation_id"
+    ],
+    [
+     "credential_binding_ref",
+     "channel",
+     "status"
+    ]
+   ]
+  },
+  "AuthenticationThrottleState": {
+   "durable": true,
+   "identity_fields": [
+    "credential_binding_ref",
+    "channel"
+   ],
+   "append_only": false,
+   "needed_lookups": [
+    [
+     "credential_binding_ref",
+     "channel"
+    ]
+   ]
+  },
+  "StandingGrant": {
+   "durable": true,
+   "identity_fields": [
+    "grant_id"
+   ],
+   "append_only": false,
+   "needed_lookups": [
+    [
+     "grant_id"
+    ],
+    [
+     "flow_version_ref",
+     "node_id",
+     "binding_version_ref",
+     "status"
+    ],
+    [
+     "status",
+     "flow_version_ref"
+    ]
+   ]
+  }
+ },
+ "existing_tables": [
+  {
+   "table": "semantic_axis_records",
+   "model": "SemanticAxis",
+   "primary_key": [
+    "axis_id"
+   ],
+   "unique": [],
+   "non_scalar_columns": []
+  },
+  {
+   "table": "semantic_term_records",
+   "model": "SemanticTerm",
+   "primary_key": [
+    "term_id"
+   ],
+   "unique": [],
+   "non_scalar_columns": []
+  },
+  {
+   "table": "semantic_relation_records",
+   "model": "SemanticRelation",
+   "primary_key": [
+    "relation_id"
+   ],
+   "unique": [],
+   "non_scalar_columns": []
+  },
+  {
+   "table": "owner_principal_records",
+   "model": "OwnerPrincipal",
+   "primary_key": [
+    "principal_id"
+   ],
+   "unique": [],
+   "non_scalar_columns": []
+  },
+  {
+   "table": "agent_delegation_records",
+   "model": "AgentDelegation",
+   "primary_key": [
+    "delegation_id"
+   ],
+   "unique": [],
+   "non_scalar_columns": [
+    {
+     "column": "may_author",
+     "storage": "boolean",
+     "element_model": null,
+     "nullable": false
+    },
+    {
+     "column": "issued_at",
+     "storage": "json_model",
+     "element_model": "KernelInstant",
+     "nullable": false
+    },
+    {
+     "column": "revoked_at",
+     "storage": "json_model",
+     "element_model": "KernelInstant",
+     "nullable": true
+    }
+   ]
+  },
+  {
+   "table": "authentication_throttle_state_records",
+   "model": "AuthenticationThrottleState",
+   "primary_key": [
+    "credential_binding_ref",
+    "channel"
+   ],
+   "unique": [],
+   "non_scalar_columns": [
+    {
+     "column": "last_failure_at",
+     "storage": "json_model",
+     "element_model": "KernelInstant",
+     "nullable": true
+    },
+    {
+     "column": "blocked_until",
+     "storage": "json_model",
+     "element_model": "KernelInstant",
+     "nullable": true
+    }
+   ]
+  },
+  {
+   "table": "operation_binding_records",
+   "model": "OperationBinding",
+   "primary_key": [
+    "binding_id"
+   ],
+   "unique": [],
+   "non_scalar_columns": [
+    {
+     "column": "proposed_by",
+     "storage": "json_model",
+     "element_model": "ActorRef",
+     "nullable": false
+    }
+   ]
+  },
+  {
+   "table": "flow_records",
+   "model": "Flow",
+   "primary_key": [
+    "flow_id"
+   ],
+   "unique": [],
+   "non_scalar_columns": [
+    {
+     "column": "created_by",
+     "storage": "json_model",
+     "element_model": "ActorRef",
+     "nullable": false
+    },
+    {
+     "column": "created_at",
+     "storage": "json_model",
+     "element_model": "KernelInstant",
+     "nullable": false
+    },
+    {
+     "column": "retired_by",
+     "storage": "json_model",
+     "element_model": "ActorRef",
+     "nullable": true
+    },
+    {
+     "column": "retired_at",
+     "storage": "json_model",
+     "element_model": "KernelInstant",
+     "nullable": true
+    }
+   ]
+  },
+  {
+   "table": "flow_run_records",
+   "model": "FlowRun",
+   "primary_key": [
+    "run_id"
+   ],
+   "unique": [],
+   "non_scalar_columns": [
+    {
+     "column": "pinned_slot_activations",
+     "storage": "json_value",
+     "element_model": null,
+     "nullable": false
+    },
+    {
+     "column": "service_target",
+     "storage": "json_model",
+     "element_model": "ServiceTarget",
+     "nullable": false
+    },
+    {
+     "column": "inputs",
+     "storage": "json_value",
+     "element_model": null,
+     "nullable": false
+    },
+    {
+     "column": "initiated_by",
+     "storage": "json_model",
+     "element_model": "ActorRef",
+     "nullable": false
+    },
+    {
+     "column": "waiting_on",
+     "storage": "json_value",
+     "element_model": null,
+     "nullable": false
+    },
+    {
+     "column": "in_flight_effect_attempts",
+     "storage": "json_value",
+     "element_model": null,
+     "nullable": false
+    },
+    {
+     "column": "outputs",
+     "storage": "json_value",
+     "element_model": null,
+     "nullable": false
+    },
+    {
+     "column": "created_at",
+     "storage": "json_model",
+     "element_model": "KernelInstant",
+     "nullable": false
+    },
+    {
+     "column": "ended_at",
+     "storage": "json_model",
+     "element_model": "KernelInstant",
+     "nullable": true
+    }
+   ]
+  },
+  {
+   "table": "effect_approval_records",
+   "model": "EffectApproval",
+   "primary_key": [
+    "approval_id"
+   ],
+   "unique": [],
+   "non_scalar_columns": [
+    {
+     "column": "preview_value_refs",
+     "storage": "json_value",
+     "element_model": null,
+     "nullable": false
+    },
+    {
+     "column": "decided_by",
+     "storage": "json_model",
+     "element_model": "ActorRef",
+     "nullable": true
+    },
+    {
+     "column": "decided_at",
+     "storage": "json_model",
+     "element_model": "KernelInstant",
+     "nullable": true
+    },
+    {
+     "column": "consumed_attempt_refs",
+     "storage": "json_value",
+     "element_model": null,
+     "nullable": false
+    }
+   ]
+  },
+  {
+   "table": "standing_grant_records",
+   "model": "StandingGrant",
+   "primary_key": [
+    "grant_id"
+   ],
+   "unique": [],
+   "non_scalar_columns": [
+    {
+     "column": "granted_by",
+     "storage": "json_model",
+     "element_model": "ActorRef",
+     "nullable": false
+    },
+    {
+     "column": "granted_at",
+     "storage": "json_model",
+     "element_model": "KernelInstant",
+     "nullable": false
+    },
+    {
+     "column": "revoked_at",
+     "storage": "json_model",
+     "element_model": "KernelInstant",
+     "nullable": true
+    }
+   ]
+  },
+  {
+   "table": "vocabulary_proposal_records",
+   "model": "VocabularyProposal",
+   "primary_key": [
+    "proposal_id"
+   ],
+   "unique": [],
+   "non_scalar_columns": [
+    {
+     "column": "motivating_refs",
+     "storage": "json_value",
+     "element_model": null,
+     "nullable": false
+    },
+    {
+     "column": "proposed_by",
+     "storage": "json_model",
+     "element_model": "ActorRef",
+     "nullable": false
+    },
+    {
+     "column": "decided_by",
+     "storage": "json_model",
+     "element_model": "ActorRef",
+     "nullable": true
+    },
+    {
+     "column": "proposed_at",
+     "storage": "json_model",
+     "element_model": "KernelInstant",
+     "nullable": false
+    },
+    {
+     "column": "decided_at",
+     "storage": "json_model",
+     "element_model": "KernelInstant",
+     "nullable": true
+    }
+   ]
+  },
+  {
+   "table": "slot_records",
+   "model": "Slot",
+   "primary_key": [
+    "slot_id"
+   ],
+   "unique": [],
+   "non_scalar_columns": [
+    {
+     "column": "created_by",
+     "storage": "json_model",
+     "element_model": "ActorRef",
+     "nullable": false
+    },
+    {
+     "column": "created_at",
+     "storage": "json_model",
+     "element_model": "KernelInstant",
+     "nullable": false
+    },
+    {
+     "column": "retired_by",
+     "storage": "json_model",
+     "element_model": "ActorRef",
+     "nullable": true
+    },
+    {
+     "column": "retired_at",
+     "storage": "json_model",
+     "element_model": "KernelInstant",
+     "nullable": true
+    }
+   ]
+  },
+  {
+   "table": "trial_case_records",
+   "model": "TrialCase",
+   "primary_key": [
+    "trial_case_id"
+   ],
+   "unique": [],
+   "non_scalar_columns": [
+    {
+     "column": "inputs",
+     "storage": "json_value",
+     "element_model": null,
+     "nullable": false
+    },
+    {
+     "column": "expected_outputs",
+     "storage": "json_value",
+     "element_model": null,
+     "nullable": true
+    },
+    {
+     "column": "added_by",
+     "storage": "json_model",
+     "element_model": "ActorRef",
+     "nullable": false
+    },
+    {
+     "column": "added_at",
+     "storage": "json_model",
+     "element_model": "KernelInstant",
+     "nullable": false
+    },
+    {
+     "column": "withdrawn_by",
+     "storage": "json_model",
+     "element_model": "ActorRef",
+     "nullable": true
+    },
+    {
+     "column": "withdrawn_at",
+     "storage": "json_model",
+     "element_model": "KernelInstant",
+     "nullable": true
+    }
+   ]
+  }
+ ],
+ "existing_methods": [
+  {
+   "method": "load_semantic_axis",
+   "query": "get_by_key",
+   "table": "semantic_axis_records",
+   "key": [
+    "axis_id"
+   ]
+  },
+  {
+   "method": "upsert_semantic_axis",
+   "query": "upsert",
+   "table": "semantic_axis_records",
+   "key": [
+    "axis_id"
+   ]
+  },
+  {
+   "method": "load_semantic_term",
+   "query": "get_by_key",
+   "table": "semantic_term_records",
+   "key": [
+    "term_id"
+   ]
+  },
+  {
+   "method": "upsert_semantic_term",
+   "query": "upsert",
+   "table": "semantic_term_records",
+   "key": [
+    "term_id"
+   ]
+  },
+  {
+   "method": "load_semantic_relation",
+   "query": "get_by_key",
+   "table": "semantic_relation_records",
+   "key": [
+    "relation_id"
+   ]
+  },
+  {
+   "method": "upsert_semantic_relation",
+   "query": "upsert",
+   "table": "semantic_relation_records",
+   "key": [
+    "relation_id"
+   ]
+  },
+  {
+   "method": "load_owner_principal",
+   "query": "get_by_key",
+   "table": "owner_principal_records",
+   "key": [
+    "principal_id"
+   ]
+  },
+  {
+   "method": "upsert_owner_principal",
+   "query": "upsert",
+   "table": "owner_principal_records",
+   "key": [
+    "principal_id"
+   ]
+  },
+  {
+   "method": "load_agent_delegation",
+   "query": "get_by_key",
+   "table": "agent_delegation_records",
+   "key": [
+    "delegation_id"
+   ]
+  },
+  {
+   "method": "upsert_agent_delegation",
+   "query": "upsert",
+   "table": "agent_delegation_records",
+   "key": [
+    "delegation_id"
+   ]
+  },
+  {
+   "method": "load_authentication_throttle_state",
+   "query": "get_by_key",
+   "table": "authentication_throttle_state_records",
+   "key": [
+    "credential_binding_ref",
+    "channel"
+   ]
+  },
+  {
+   "method": "upsert_authentication_throttle_state",
+   "query": "upsert",
+   "table": "authentication_throttle_state_records",
+   "key": [
+    "credential_binding_ref",
+    "channel"
+   ]
+  },
+  {
+   "method": "load_operation_binding",
+   "query": "get_by_key",
+   "table": "operation_binding_records",
+   "key": [
+    "binding_id"
+   ]
+  },
+  {
+   "method": "upsert_operation_binding",
+   "query": "upsert",
+   "table": "operation_binding_records",
+   "key": [
+    "binding_id"
+   ]
+  },
+  {
+   "method": "load_flow",
+   "query": "get_by_key",
+   "table": "flow_records",
+   "key": [
+    "flow_id"
+   ]
+  },
+  {
+   "method": "upsert_flow",
+   "query": "upsert",
+   "table": "flow_records",
+   "key": [
+    "flow_id"
+   ]
+  },
+  {
+   "method": "load_flow_run",
+   "query": "get_by_key",
+   "table": "flow_run_records",
+   "key": [
+    "run_id"
+   ]
+  },
+  {
+   "method": "upsert_flow_run",
+   "query": "upsert",
+   "table": "flow_run_records",
+   "key": [
+    "run_id"
+   ]
+  },
+  {
+   "method": "load_effect_approval",
+   "query": "get_by_key",
+   "table": "effect_approval_records",
+   "key": [
+    "approval_id"
+   ]
+  },
+  {
+   "method": "upsert_effect_approval",
+   "query": "upsert",
+   "table": "effect_approval_records",
+   "key": [
+    "approval_id"
+   ]
+  },
+  {
+   "method": "load_standing_grant",
+   "query": "get_by_key",
+   "table": "standing_grant_records",
+   "key": [
+    "grant_id"
+   ]
+  },
+  {
+   "method": "upsert_standing_grant",
+   "query": "upsert",
+   "table": "standing_grant_records",
+   "key": [
+    "grant_id"
+   ]
+  },
+  {
+   "method": "load_vocabulary_proposal",
+   "query": "get_by_key",
+   "table": "vocabulary_proposal_records",
+   "key": [
+    "proposal_id"
+   ]
+  },
+  {
+   "method": "upsert_vocabulary_proposal",
+   "query": "upsert",
+   "table": "vocabulary_proposal_records",
+   "key": [
+    "proposal_id"
+   ]
+  },
+  {
+   "method": "load_slot",
+   "query": "get_by_key",
+   "table": "slot_records",
+   "key": [
+    "slot_id"
+   ]
+  },
+  {
+   "method": "upsert_slot",
+   "query": "upsert",
+   "table": "slot_records",
+   "key": [
+    "slot_id"
+   ]
+  },
+  {
+   "method": "load_trial_case",
+   "query": "get_by_key",
+   "table": "trial_case_records",
+   "key": [
+    "trial_case_id"
+   ]
+  },
+  {
+   "method": "upsert_trial_case",
+   "query": "upsert",
+   "table": "trial_case_records",
+   "key": [
+    "trial_case_id"
+   ]
+  }
+ ],
+ "durable_models_without_table": [
+  {
+   "model": "SemanticAxisRevision",
+   "id": "M02",
+   "identity": "value",
+   "source": "01_models.md",
+   "persistence_candidate": "Durable and embedded by reference wherever exact semantic meaning is pinned."
+  },
+  {
+   "model": "SemanticTermRevision",
+   "id": "M04",
+   "identity": "value",
+   "source": "01_models.md",
+   "persistence_candidate": "Durable and pinned by ports, relations, flow proofs and stored values."
+  },
+  {
+   "model": "SemanticRelationRevision",
+   "id": "M07",
+   "identity": "value",
+   "source": "01_models.md",
+   "persistence_candidate": "Durable and pinned by accepted flow definitions and run evidence."
+  },
+  {
+   "model": "OperationBindingVersion",
+   "id": "M30",
+   "identity": "value",
+   "source": "01_models_flows.md",
+   "persistence_candidate": "Durable, pinned by flow nodes, approvals, grants and node executions."
+  },
+  {
+   "model": "FlowVersion",
+   "id": "M32",
+   "identity": "value",
+   "source": "01_models_flows.md",
+   "persistence_candidate": "Durable, referenced by proofs, activations, grants and runs."
+  },
+  {
+   "model": "FlowProof",
+   "id": "M36",
+   "identity": "value",
+   "source": "01_models_flows.md",
+   "persistence_candidate": "Durable evidence, referenced by flow activations and runs."
+  },
+  {
+   "model": "FlowActivation",
+   "id": "M37",
+   "identity": "value",
+   "source": "01_models_flows.md",
+   "persistence_candidate": "Durable, referenced by runs."
+  },
+  {
+   "model": "NodeExecution",
+   "id": "M41",
+   "identity": "value",
+   "source": "01_models_runs.md",
+   "persistence_candidate": "Durable, append-only evidence of the kernel's operational store."
+  },
+  {
+   "model": "OutcomeReconciliation",
+   "id": "M44",
+   "identity": "value",
+   "source": "01_models_runs.md",
+   "persistence_candidate": "Durable evidence attached to the run."
+  },
+  {
+   "model": "SlotContractVersion",
+   "id": "M20",
+   "identity": "value",
+   "source": "01_models_slots.md",
+   "persistence_candidate": "Durable, referenced by implementations, trial cases, activations, flow nodes and trace records."
+  },
+  {
+   "model": "SandboxRuntimeRevision",
+   "id": "M22",
+   "identity": "value",
+   "source": "01_models_slots.md",
+   "persistence_candidate": "Durable, referenced by contract versions, trial executions and node executions."
+  },
+  {
+   "model": "Implementation",
+   "id": "M23",
+   "identity": "value",
+   "source": "01_models_slots.md",
+   "persistence_candidate": "Durable, referenced by trial executions, admission verdicts, activations and node executions."
+  },
+  {
+   "model": "TrialExecution",
+   "id": "M25",
+   "identity": "value",
+   "source": "01_models_slots.md",
+   "persistence_candidate": "Durable evidence, referenced by admission verdicts."
+  },
+  {
+   "model": "AdmissionVerdict",
+   "id": "M26",
+   "identity": "value",
+   "source": "01_models_slots.md",
+   "persistence_candidate": "Durable evidence, referenced by activations."
+  },
+  {
+   "model": "SlotActivation",
+   "id": "M27",
+   "identity": "value",
+   "source": "01_models_slots.md",
+   "persistence_candidate": "Durable, referenced by flow runs to pin what each function node executed."
+  }
+ ]
+}
