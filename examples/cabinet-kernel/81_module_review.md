@@ -999,3 +999,21 @@ copy with `run_graph` deployed. `tools/list` failed in 7 of 10 on "unsupported r
 tuple answer failed in 2 of 10; the sandbox-refusal test failed in 2 of 10 on an empty reason.
 These are measurements of the samples, not of code generated from these notes, which this review
 has not seen. Structural review: 0 blocks. All 19 modules remain PASS.
+
+## Request of 2026-11-04: decision 58, the `tools/list` schemas are constants
+
+A delta review against the previous stamp, by comparing each packet with its previous form. No
+slice was read again as a whole. Two packets moved.
+
+- `data_provider`: gains `MCP_CATALOGUE_OPERATIONS` and `MCP_TOOL_INPUT_SCHEMAS`, in its constants,
+  exports and owned symbols.
+- `surface`: its `data_provider` dependency gains those two. The `answer_request` note that held the
+  table of JSON forms now names the constants, and the note on the two union shapes from the
+  section above is removed, since no walk remains to describe. The two other notes of that section
+  stay.
+
+The published schemas do not change: the output of `build_tool_schemas.py` was compared with an
+independent derivation from the emitted `models.py`, and agrees on all 30 operations. That
+derivation is now part of `test_tools_list_serves_every_operation`. Code generated from this
+specification has not been seen by this review. Structural review: 0 blocks. All 19 modules remain
+PASS.
