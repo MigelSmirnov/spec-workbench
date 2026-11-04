@@ -1,6 +1,6 @@
 # Cabinet Kernel — what the Factory must add for the 2026-11-03 change
 
-Status: §1 and §2 done (code-factory #166, `fe43cf78`), §4 done (#165, `d5d49981`). §3 is open.
+Status: §1 and §2 done (code-factory #166, `fe43cf78`), §4 done (#165, `d5d49981`), §3 done (#174, `889e62ad`, Route B run `20261104_082526`). Nothing is open.
 
 Two defects found by the Registry pilot of 2026-10-31
 (`findings/20261031_registry_pilot/`) reached the case. The accepted code still
@@ -26,7 +26,7 @@ Add to `verification/configs/cabinet_kernel.yaml`, as its other witnesses:
 A03 Required tests 12 and 13 and A16 Required test 13 now carry their
 `[witness: verification:<name>]` tags.
 
-## 3. Regeneration — open
+## 3. Regeneration — done in #174
 
 Route B regenerates `sandbox_runner` and `surface` from the specification:
 `runner_source` (A03 rule 3) and `answer_request` `[FIELD_PROJECTION]`, whose rule
