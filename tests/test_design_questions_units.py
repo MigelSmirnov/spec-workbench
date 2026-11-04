@@ -147,6 +147,27 @@ def test_editing_one_decision_reopens_only_that_decision(tmp_path):
     assert summary["scope"] == ["A02"]
 
 
+def test_a_decision_edited_and_restored_to_its_closed_text_is_closed_again(tmp_path):
+    case = _case(tmp_path)
+    _close_all(case)
+    (case / "02_rules.md").write_text(RULES.replace("Rule two.", "Rule two, sharper."), encoding="utf-8")
+    _ask(case, [_point("second", "A02")], blocking={"second"})
+    assert service.status(case, 2)["open_units"] == ["A02"]
+    (case / "02_rules.md").write_text(RULES, encoding="utf-8")
+    assert service.status(case, 2)["closed"] is True
+    with pytest.raises(service.QuestionRoundError, match="nothing to ask"):
+        _ask(case)
+
+
+def test_a_restored_text_stays_open_when_a_later_review_of_it_was_blocked():
+    def review(digest, blocked=()):
+        return {"scope": ["A02"], "units": {"A02": digest}, "blocked_units": list(blocked)}
+    current = {"A02": {"digest": "x", "text": ""}}
+    history = [review("x"), review("x"), review("y", ["A02"])]
+    assert units.closed(history, current) == {"A02": True}
+    assert units.closed(history + [review("x", ["A02"])], current) == {"A02": False}
+
+
 def test_editing_an_earlier_state_reopens_only_the_context_unit(tmp_path):
     case = _case(tmp_path)
     _close_all(case)
