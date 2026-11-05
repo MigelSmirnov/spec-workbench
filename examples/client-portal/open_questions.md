@@ -85,3 +85,93 @@ Which boundary owns materialization?
 
 Until this is decided, a kernel scenario may publish and report an accepted
 snapshot, but must not claim that the client-visible budget was updated.
+
+### Q12 — The binary intake the design relies on was never built
+
+`spec/30_modules.md` (State 3, "Binary storage boundary") makes
+`binary_storage` an opaque read boundary: "OCR/Telegram intake remains
+responsible for placing the binary and supplying a stable reference; the
+portal does not become an upload or recognition system." No such intake
+exists.
+
+Observed on 2026-11-05 while giving the client of the Registry project
+`52b132d7-0a94-44e7-9aab-63a77ca770f2` (Ponent 13) access with three progress
+photos:
+
+- `photo.publish` correctly accepts only a `file_ref` and is replay-safe by
+  `intake_id`;
+- the bytes behind that `file_ref` were placed by an operator over SSH and
+  `docker cp` into the portal binary volume, outside every declared surface;
+- expense documents arrive the same way through `tools/portal_import` (an
+  operator package copied into the container);
+- the owner's workplace (cabinet_kernel on the owner's PC) reaches the portal
+  only over HTTPS and therefore cannot supply a photo at all.
+
+Owner decision 2026-11-06: **keep the State 3 decision.** The portal stays a
+read boundary for binaries; a separate intake service places binaries and
+supplies references. Uploading into the portal itself was considered and
+rejected as the larger architectural change.
+
+Questions this leaves to the portal contract:
+
+1. How does the intake service hand a placed binary to the portal: a shared
+   binary store the portal reads, or a portal-owned "accept reference"
+   operation that verifies existence, size and media type before any record
+   points at it?
+2. Who owns the `file_ref` namespace (`photos/<project_id>/…`,
+   `expenses/…`), and may two services write into it?
+3. Which principal calls `photo.publish` and expense intake for intake-placed
+   binaries: the staff member, or a `ServicePrincipal` with an intake-only
+   capability and project grants (as for snapshot producers)?
+4. What does the portal do with a `file_ref` whose bytes are absent, replaced,
+   or larger than `binary_max_read_bytes`?
+5. What is `intake_source` for the new path, and is it a closed vocabulary?
+
+Until this is decided, operator placement stays the declared temporary route,
+marked as outside the API in `platform/manifest/client_portal.json`.
+
+### Q13 — A viewer's access codes cannot be listed
+
+Observed on 2026-11-05 for viewer `9636b10b-f170-465d-8cf7-fd0c75bc2842`: the
+one-time access code was shown once and missed by the owner; a new code was
+issued. `viewer.issue_credential` leaves older codes valid until revoked, but
+the API exposes no list or read of a viewer's credentials, so the old
+`credential_id` could only be found by reading the portal database.
+
+1. Must the administrative API expose a read projection of a viewer's
+   credential metadata (id, created_at, revoked_at; never the secret)?
+2. Should issuing a code for a viewer optionally revoke that viewer's previous
+   active codes in the same transaction?
+3. Is this one decision with Q10 (service credentials), i.e. one recovery
+   model for every one-time secret?
+
+### Q14 — Onboarding a client is not replay-safe
+
+`viewer.create` has no key and no list route for a project's viewers;
+`budget.put_section` without a `section_id` creates a new section on every
+call; replay of `budget.open_manual` and `budget.activate` is unverified.
+On 2026-11-05 the operator tooling had to guard these by intent flags and by
+looking up its own section by display name.
+
+1. Must a project's viewers be listable (display name, status, grant), so a
+   tool can ask whether a client already has access?
+2. Does a manual budget section need a caller-supplied stable key, like
+   `source_key` for imported snapshots, instead of the display name?
+3. What is the intended replay behaviour of opening and activating a manual
+   budget version?
+
+### Q15 — Review of the case against the current Workbench standard
+
+Recorded 2026-11-06. The case predates the current authoring standard:
+
+- the Workbench gateway reports State 1 as "not indexed as canonical models"
+  and cannot read the case text (`design_context`, `find_absence` fail);
+- `90_factory_target.json` is absent, so the case names no Factory project,
+  and Factory `client_portal_sandbox` names no Workbench case;
+- the Factory spec was accepted on 2026-08-17 (32 inspector WARN, 456
+  partially parsed or unparsed notes, OTK verdict WARN);
+- this branch and `origin/product-decisions-and-reassembly` have diverged.
+
+Before Q11–Q14 or new functionality are designed, the case must be migrated to
+the current standard and linked to its Factory project, so that portal changes
+can follow the Workbench → Factory route.
