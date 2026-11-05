@@ -175,3 +175,58 @@ Recorded 2026-11-06. The case predates the current authoring standard:
 Before Q11–Q14 or new functionality are designed, the case must be migrated to
 the current standard and linked to its Factory project, so that portal changes
 can follow the Workbench → Factory route.
+
+### Q16 — Estimate capability box for the client's own chat agent
+
+Owner requirement 2026-11-06. For every accepted estimate version the client
+can download, from the cabinet, an **estimate box**: one self-describing
+package the client hands to their own chat agent (ChatGPT or similar) to get
+explanations and reports in the form they want. It is the counterpart of the
+Cabinet Estimator Box (`box_index`, `scope_manifest`, `agent_task_markdown`),
+which prepares an estimate; this box follows an accepted one and carries no
+open uncertainty.
+
+Intended content (to be closed in State 1):
+
+- the accepted estimate version: zones, lines, quantities, units, unit prices,
+  IVA rate and amounts, totals;
+- the owner's open-book model (owner, 2026-11-06): materials carry their
+  purchase price and a disclosed margin of 5–10 %, and every purchase invoice
+  of the object is listed with its amount and a reference the client can open
+  in the cabinet;
+- provenance: Registry project, PresuPro estimate id and revision, acceptance
+  date, the Holded invoice reference when one exists;
+- verification facts: what was checked and how (estimate accepted, totals
+  recomputed and equal, IVA rates supported, invoice issued from this
+  version, purchases reconciled against the plan by Cabinet: bought outside
+  the plan, planned but not bought, net variance), each as data, not prose;
+- an agent guide: what the box is, how to read it, what is verified, what is
+  not (no legal or tax advice, no recomputation under other rules), and the
+  contact for questions;
+- a content hash over everything above.
+
+It is produced by a cabinet_kernel scenario: read the accepted PresuPro
+estimate → a pure, admitted function builds the box → publish to the portal
+as a producer. The same input yields the same box and the same hash.
+
+Questions for the portal:
+
+1. Where does the box live: inside the immutable snapshot (Q11), as its own
+   versioned record next to it, or as an ExpenseDocument-like downloadable
+   document? A JSON record avoids the binary intake of Q12.
+2. Open book is the rule, so purchase prices, margins and invoices are in the
+   box. What still stays out, and who decides it per field: supplier account
+   or contact data on invoices, internal notes, labour cost breakdown, store
+   links? How is a purchase invoice referenced so that the box and the
+   cabinet's ExpenseDocument show the same document (same hash)?
+3. Visibility: a box becomes client-visible only after a staff decision, like
+   photos and documents, or on publication?
+4. Download contract for viewers: format (one Markdown file with an embedded
+   JSON block, or an archive), media type, file name, and whether earlier
+   versions stay downloadable after a later one is accepted.
+5. The guide is text the portal hands to a third-party agent. What keeps it
+   descriptive only — generated from data by the admitted function, never
+   free text from staff — so that the box cannot instruct the client's agent
+   beyond explaining the estimate?
+6. Personal data: the client's own name, NIF and address may be in the box;
+   nothing about other clients, staff accounts or internal notes may.
