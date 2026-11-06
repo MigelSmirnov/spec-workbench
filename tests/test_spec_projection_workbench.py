@@ -612,3 +612,32 @@ def test_without_the_table_projection_blocks_but_the_closure_can_still_read_the_
     with pytest.raises(service.SpecProjectionError, match="imports_table_missing"):
         service.projected_spec(project)
     assert service.projected_spec(project, imports=False)["contracts"]["new"] == "() -> str"
+
+
+# SPEC_STANDARD §10: several roots, a root-level module and a leaf that differs
+# from the module name are legal layouts (client-portal / 459ac96c uses all three).
+_MIXED_PATHS = {"models": "core/models", "api": "api/router", "api_irregular": "api_irregular",
+                "runtime_settings": "runtime/settings"}
+
+
+def test_existing_module_paths_are_taken_as_given() -> None:
+    order = list(_MIXED_PATHS)
+    contracts = {"f": {"module": "module:api"}, "g": {"module": "module:models"}}
+    result_order, result_paths = service._sync_module_topology(order, dict(_MIXED_PATHS), contracts)
+    assert result_order == order
+    assert result_paths == _MIXED_PATHS
+
+
+def test_new_module_still_needs_one_deterministic_root() -> None:
+    order = list(_MIXED_PATHS)
+    contracts = {"f": {"module": "module:fresh_module"}}
+    with pytest.raises(SpecProjectionError, match="fresh_module"):
+        service._sync_module_topology(order, dict(_MIXED_PATHS), contracts)
+
+
+def test_new_module_is_placed_under_the_shared_root() -> None:
+    paths = {"models": "app/models", "api": "app/api"}
+    contracts = {"f": {"module": "module:fresh_module"}}
+    order, result = service._sync_module_topology(list(paths), dict(paths), contracts)
+    assert order[-1] == "fresh_module"
+    assert result["fresh_module"] == "app/fresh_module"
