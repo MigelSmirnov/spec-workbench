@@ -1115,9 +1115,10 @@ session, credential or token is usable while `now < expires_at` and expired
 from `now = expires_at` on (Factory code `application/authorization_guard.py`,
 `application/service_identity.py`). Reading local time, an offset-aware
 persisted timestamp and a second clock read by the operation itself are
-forbidden. The one exception is the audit record's `occurred_at`: the audit
-writer takes it when it appends (Factory code `application/audit_writer.py`
-136). Normative value: `rules.clock_policy` (Factory `c92b6878`). This
+forbidden. The one exception is the `occurred_at` of an audit record appended
+through the audit writer: the writer takes it when it appends (Factory
+code `application/audit_writer.py` 136); the bootstrap, which builds its
+own audit, keeps its one instant. Normative value: `rules.clock_policy` (Factory `c92b6878`). This
 narrows the former convention "Timestamps are timezone-aware UTC" of State 1:
 the instants are UTC, their stored form is offset-naive.
 

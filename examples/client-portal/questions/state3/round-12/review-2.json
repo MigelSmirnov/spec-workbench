@@ -1,0 +1,108 @@
+{
+ "open_points": [
+  {
+   "unit": "30_modules.md:`authorization_guard`",
+   "subject": "revocation boundary for an in-flight authenticated request",
+   "kind": "contradictory temporal boundary",
+   "text": "“Immediate” revocation is defined as “every request authenticated after the revocation commits observes it”, while A4/INV-017 and M07 still say revocation “blocks the next project-scoped authorization check immediately.”",
+   "question": "If a request authenticates before revocation commits but performs its project-scope or capability check after the commit, must that request be rejected or may it continue using the pre-revocation authentication result?",
+   "options": [
+    "Reject it because the next authorization check must observe the committed revocation.",
+    "Allow it because only requests authenticated after the commit are required to observe the revocation."
+   ],
+   "default_guess": "Reject it at the post-commit authorization check.",
+   "witness": {
+    "initial": "An operator has a valid session and active assignment to project P; a request using that session has authenticated but has not yet checked project scope.",
+    "events": [
+     "An administrator revokes the operator's assignment to P and the revocation commits.",
+     "The already-authenticated request performs its project authorization check and attempts a mutation."
+    ],
+    "outcomes": [
+     "The request is rejected because its next authorization check observes the revoked assignment.",
+     "The request succeeds because it authenticated before the revocation committed."
+    ],
+    "observer": "The operator and anyone reading the mutated project records."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "owner of the archived-progress-read budget creation exception",
+   "kind": "missing owner",
+   "text": "A5 says “The one write an archived project admits” is performed by `project_tracking.list_project_progress`, but the State 3 decision table makes `authorization_guard` the primary owner of A5, does not list `project_tracking` or `budget_management` as A5 consumers, `authorization_guard` “must not own … domain mutation”, and `budget_management` owns the manual budget.",
+   "question": "Which module owns the decision and mechanism that a staff progress-list read creates an empty manual budget for an archived project?",
+   "options": [
+    "`project_tracking` owns the exceptional trigger and delegates budget creation.",
+    "`budget_management` owns both the trigger and creation.",
+    "`authorization_guard`, as A5 primary owner, performs or initiates the creation."
+   ],
+   "default_guess": "Treat `project_tracking` as owner of the named trigger and `budget_management` as owner of the budget creation mechanism.",
+   "witness": {
+    "initial": "Archived project P has no manual budget version and no progress records.",
+    "events": [
+     "A staff member requests a project overview whose progress component is authorized with `portal.progress.read`.",
+     "The staff member later reads P's budget history."
+    ],
+    "outcomes": [
+     "If the A5 primary owner applies the exception during authorization, the overview request creates the empty manual budget.",
+     "If the named `project_tracking.list_project_progress` operation owns the exception, the overview request does not create it because that operation was not called."
+    ],
+    "observer": "The staff member reading the later budget history and audit records."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "transaction boundary for progress-read creation of an empty manual budget",
+   "kind": "unclear dependency and atomicity",
+   "text": "The new exception requires `project_tracking.list_project_progress` to create a manual budget, while State 3 says each owning use case opens and closes its own transaction, `project_tracking` knows `budget_management`, and only `budget_management` owns manual-budget creation; no caller-owned transaction capability between them is described.",
+   "question": "Must creation of the empty manual budget and the progress read occur in one transaction, or may `project_tracking` call `budget_management.ensure_manual_budget` as a separately committed operation before performing its read?",
+   "options": [
+    "One transaction owned by the progress-list operation, with budget creation participating in that transaction.",
+    "Two operations and transactions: commit the budget creation first, then perform the progress read.",
+    "Let `project_tracking` write budget records directly in its transaction despite `budget_management` ownership."
+   ],
+   "default_guess": "Use one transaction for the whole progress-list operation, with the budget owner participating through a transaction-scoped internal capability.",
+   "witness": {
+    "initial": "Archived project P has no manual budget; its repositories are available when the request begins.",
+    "events": [
+     "A staff member calls `list_project_progress`.",
+     "The empty budget insert succeeds.",
+     "The subsequent progress read fails with a persistence error."
+    ],
+    "outcomes": [
+     "With separate transactions, the request fails but the empty budget and its audit remain committed.",
+     "With one transaction, the request fails and both the budget creation and audit roll back."
+    ],
+    "observer": "The staff member on retry and an administrator inspecting budget history or audit."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "timestamp owner for the bootstrap audit record",
+   "kind": "exception has no applicable owner",
+   "text": "A28 now says “the audit record's `occurred_at`: the audit writer takes it when it appends”, but State 3 says the bootstrap `staff.create` record is not written through `audit_writer`: `staff_bootstrap` builds it and `staff_bootstrap_store` inserts it.",
+   "question": "Who supplies `occurred_at` for the bootstrap audit record, and is it the bootstrap operation's single timestamp or a separate append-time clock reading?",
+   "options": [
+    "`staff_bootstrap` uses the operation's single timestamp for both the account and audit record.",
+    "`staff_bootstrap` takes a second clock reading when constructing the audit record.",
+    "`staff_bootstrap_store` supplies an append-time timestamp when inserting the record.",
+    "The bootstrap must use `audit_writer` despite the stated exception."
+   ],
+   "default_guess": "Use the bootstrap operation's single timestamp because no audit-writer append occurs.",
+   "witness": {
+    "initial": "The staff table is empty, and the clock advances between construction of the first account and insertion of its audit record.",
+    "events": [
+     "The operator successfully runs the bootstrap command.",
+     "The account and `staff.create` audit record are persisted."
+    ],
+    "outcomes": [
+     "The audit `occurred_at` equals the account's `created_at` because bootstrap uses its operation timestamp.",
+     "The audit `occurred_at` is later because the bootstrap path applies the new audit append-time exception itself."
+    ],
+    "observer": "An administrator or auditor comparing the first account and bootstrap audit timestamps."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"30_modules.md:`authorization_guard`\",\"subject\":\"revocation boundary for an in-flight authenticated request\",\"kind\":\"contradictory temporal boundary\",\"text\":\"“Immediate” revocation is defined as “every request authenticated after the revocation commits observes it”, while A4/INV-017 and M07 still say revocation “blocks the next project-scoped authorization check immediately.”\",\"question\":\"If a request authenticates before revocation commits but performs its project-scope or capability check after the commit, must that request be rejected or may it continue using the pre-revocation authentication result?\",\"options\":[\"Reject it because the next authorization check must observe the committed revocation.\",\"Allow it because only requests authenticated after the commit are required to observe the revocation.\"],\"default_guess\":\"Reject it at the post-commit authorization check.\",\"witness\":{\"initial\":\"An operator has a valid session and active assignment to project P; a request using that session has authenticated but has not yet checked project scope.\",\"events\":[\"An administrator revokes the operator's assignment to P and the revocation commits.\",\"The already-authenticated request performs its project authorization check and attempts a mutation.\"],\"outcomes\":[\"The request is rejected because its next authorization check observes the revoked assignment.\",\"The request succeeds because it authenticated before the revocation committed.\"],\"observer\":\"The operator and anyone reading the mutated project records.\"}},{\"unit\":\"context\",\"subject\":\"owner of the archived-progress-read budget creation exception\",\"kind\":\"missing owner\",\"text\":\"A5 says “The one write an archived project admits” is performed by `project_tracking.list_project_progress`, but the State 3 decision table makes `authorization_guard` the primary owner of A5, does not list `project_tracking` or `budget_management` as A5 consumers, `authorization_guard` “must not own … domain mutation”, and `budget_management` owns the manual budget.\",\"question\":\"Which module owns the decision and mechanism that a staff progress-list read creates an empty manual budget for an archived project?\",\"options\":[\"`project_tracking` owns the exceptional trigger and delegates budget creation.\",\"`budget_management` owns both the trigger and creation.\",\"`authorization_guard`, as A5 primary owner, performs or initiates the creation.\"],\"default_guess\":\"Treat `project_tracking` as owner of the named trigger and `budget_management` as owner of the budget creation mechanism.\",\"witness\":{\"initial\":\"Archived project P has no manual budget version and no progress records.\",\"events\":[\"A staff member requests a project overview whose progress component is authorized with `portal.progress.read`.\",\"The staff member later reads P's budget history.\"],\"outcomes\":[\"If the A5 primary owner applies the exception during authorization, the overview request creates the empty manual budget.\",\"If the named `project_tracking.list_project_progress` operation owns the exception, the overview request does not create it because that operation was not called.\"],\"observer\":\"The staff member reading the later budget history and audit records.\"}},{\"unit\":\"context\",\"subject\":\"transaction boundary for progress-read creation of an empty manual budget\",\"kind\":\"unclear dependency and atomicity\",\"text\":\"The new exception requires `project_tracking.list_project_progress` to create a manual budget, while State 3 says each owning use case opens and closes its own transaction, `project_tracking` knows `budget_management`, and only `budget_management` owns manual-budget creation; no caller-owned transaction capability between them is described.\",\"question\":\"Must creation of the empty manual budget and the progress read occur in one transaction, or may `project_tracking` call `budget_management.ensure_manual_budget` as a separately committed operation before performing its read?\",\"options\":[\"One transaction owned by the progress-list operation, with budget creation participating in that transaction.\",\"Two operations and transactions: commit the budget creation first, then perform the progress read.\",\"Let `project_tracking` write budget records directly in its transaction despite `budget_management` ownership.\"],\"default_guess\":\"Use one transaction for the whole progress-list operation, with the budget owner participating through a transaction-scoped internal capability.\",\"witness\":{\"initial\":\"Archived project P has no manual budget; its repositories are available when the request begins.\",\"events\":[\"A staff member calls `list_project_progress`.\",\"The empty budget insert succeeds.\",\"The subsequent progress read fails with a persistence error.\"],\"outcomes\":[\"With separate transactions, the request fails but the empty budget and its audit remain committed.\",\"With one transaction, the request fails and both the budget creation and audit roll back.\"],\"observer\":\"The staff member on retry and an administrator inspecting budget history or audit.\"}},{\"unit\":\"context\",\"subject\":\"timestamp owner for the bootstrap audit record\",\"kind\":\"exception has no applicable owner\",\"text\":\"A28 now says “the audit record's `occurred_at`: the audit writer takes it when it appends”, but State 3 says the bootstrap `staff.create` record is not written through `audit_writer`: `staff_bootstrap` builds it and `staff_bootstrap_store` inserts it.\",\"question\":\"Who supplies `occurred_at` for the bootstrap audit record, and is it the bootstrap operation's single timestamp or a separate append-time clock reading?\",\"options\":[\"`staff_bootstrap` uses the operation's single timestamp for both the account and audit record.\",\"`staff_bootstrap` takes a second clock reading when constructing the audit record.\",\"`staff_bootstrap_store` supplies an append-time timestamp when inserting the record.\",\"The bootstrap must use `audit_writer` despite the stated exception.\"],\"default_guess\":\"Use the bootstrap operation's single timestamp because no audit-writer append occurs.\",\"witness\":{\"initial\":\"The staff table is empty, and the clock advances between construction of the first account and insertion of its audit record.\",\"events\":[\"The operator successfully runs the bootstrap command.\",\"The account and `staff.create` audit record are persisted.\"],\"outcomes\":[\"The audit `occurred_at` equals the account's `created_at` because bootstrap uses its operation timestamp.\",\"The audit `occurred_at` is later because the bootstrap path applies the new audit append-time exception itself.\"],\"observer\":\"An administrator or auditor comparing the first account and bootstrap audit timestamps.\"}}]}",
+ "set_aside": []
+}

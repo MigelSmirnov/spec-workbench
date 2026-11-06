@@ -853,8 +853,9 @@ significant-mutation actions and the result and reason policy, and the append
 of exactly one AuditRecord per occurrence, including the rejected records
 A13 names and service key-version provenance. The one record not written
 through it is the bootstrap's `staff.create`: `staff_bootstrap` builds that
-record itself and `staff_bootstrap_store` inserts it (A29; Factory code
-`application/staff_bootstrap.py`).
+record itself, its `occurred_at` the bootstrap's one instant (A28), and
+`staff_bootstrap_store` inserts it (A29; Factory code
+`application/staff_bootstrap.py` 21, 39).
 
 ### Knows
 
