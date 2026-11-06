@@ -1,0 +1,328 @@
+{
+ "open_points": [
+  {
+   "unit": "00_product.md:Principals",
+   "subject": "Service-principal project scope",
+   "kind": "contradiction",
+   "text": "“allowed projects or administrative area; a global producer exists only through an explicitly granted capability” conflicts with R0-16 (“producer grants … belong to exactly one Registry project”) and invariant 2 (“Project-scoped access requires … project grant/assignment”).",
+   "question": "Can an administrative-area or global producer import for a project without a project-specific producer grant, and if so what record supplies the required project access?",
+   "options": [
+    "Administrative-area/global capability replaces project-specific grants for matching projects.",
+    "Every import still requires a project-specific producer grant; administrative-area/global scope only constrains which grants may be created.",
+    "Administrative-area/global producer scope is not supported."
+   ],
+   "default_guess": "Require a project-specific producer grant for every import.",
+   "witness": {
+    "initial": "An active service principal has the stated global-producer capability but no producer grant for project P.",
+    "events": [
+     "The service principal authenticates with its bearer credential.",
+     "It submits an otherwise valid snapshot for active project P."
+    ],
+    "outcomes": [
+     "The import is permitted because the global capability supplies project scope.",
+     "The import is denied because invariant 2 requires a project-specific grant."
+    ],
+    "observer": "The producer and the audit operator"
+   }
+  },
+  {
+   "unit": "00_product.md:Principals",
+   "subject": "Viewer access-link issuance and hand-off",
+   "kind": "unnamed output and trust boundary",
+   "text": "“authenticates through an unguessable capability link … issued and re-issuable by an administrator” does not say which response reveals the one-time link, who receives it, or how it reaches the client.",
+   "question": "What observable output does issuance/re-issuance produce, and which actor or external hand-off is responsible for delivering the capability link to the viewer?",
+   "options": [
+    "Return the link once to the administrator, who hands it to the client outside the portal.",
+    "Send the link through a named delivery boundary.",
+    "Return it directly through a client-facing enrollment operation."
+   ],
+   "default_guess": "Return the link once to the administrator and require an out-of-band hand-off.",
+   "witness": {
+    "initial": "An administrator has created a viewer with a project grant but the viewer has no access credential.",
+    "events": [
+     "The administrator invokes access-link issuance.",
+     "The client asks how to enter the portal."
+    ],
+    "outcomes": [
+     "The issuance response contains the link once, allowing the administrator to deliver it.",
+     "The response contains only metadata, leaving no specified actor able to obtain or deliver the secret."
+    ],
+    "observer": "The administrator and client"
+   }
+  },
+  {
+   "unit": "00_product.md:Principals",
+   "subject": "Viewer credential revocation and existing sessions",
+   "kind": "ambiguous revocation effect",
+   "text": "“revoking the viewer or its access credential closes all of that client's projects” and “a successful entry opens a managed ViewerSession” do not state whether credential revocation or re-issuance invalidates sessions previously created with the old credential.",
+   "question": "When a viewer credential is revoked, including revocation caused by re-issuance, are all sessions derived from that credential immediately invalidated?",
+   "options": [
+    "Invalidate all viewer sessions when the active credential is revoked or replaced.",
+    "Reject only future entries with the old credential; existing sessions remain valid until expiry.",
+    "Track credential-to-session provenance and invalidate only sessions derived from the revoked credential."
+   ],
+   "default_guess": "Invalidate all existing sessions for that viewer.",
+   "witness": {
+    "initial": "A viewer entered with credential C and has an active session S.",
+    "events": [
+     "An administrator re-issues the viewer access link, revoking C.",
+     "The viewer uses session S to read an assigned project."
+    ],
+    "outcomes": [
+     "The request is rejected because replacing C invalidated S.",
+     "The request succeeds because only future use of C was revoked."
+    ],
+    "observer": "The viewer and administrator"
+   }
+  },
+  {
+   "unit": "00_product.md:Principals",
+   "subject": "Viewer session restoration",
+   "kind": "undefined action",
+   "text": "“Viewers can restore and end their session explicitly.”",
+   "question": "What does restoring a viewer session mean, what input authorizes it, and what success and failure outputs are observable?",
+   "options": [
+    "Re-enter with the capability link to create a new session.",
+    "Recover an existing server-side session using a separate restoration credential.",
+    "Inspect or renew the cookie session without extending its fixed expiry."
+   ],
+   "default_guess": "Treat restoration as entering again with the current capability link and creating a new fixed-expiry session.",
+   "witness": {
+    "initial": "A viewer has a valid access link but no usable session cookie.",
+    "events": [
+     "The viewer invokes the promised restore action."
+    ],
+    "outcomes": [
+     "The access link is required and a new session is opened.",
+     "A separate restoration mechanism recovers the previous session without the link."
+    ],
+    "observer": "The viewer"
+   }
+  },
+  {
+   "unit": "00_product.md:Principals",
+   "subject": "Service-credential rotation overlap",
+   "kind": "undefined lifecycle action",
+   "text": "“rotatable with an overlap period” does not define who selects the overlap, when the old credential stops authenticating, or whether expiry is automatic or requires revocation.",
+   "question": "What is the observable lifecycle of the old credential after rotation, including the overlap duration and termination event?",
+   "options": [
+    "A fixed configured overlap expires automatically.",
+    "The administrator supplies an overlap deadline at rotation.",
+    "Both credentials remain valid until the old one is explicitly revoked."
+   ],
+   "default_guess": "Use a configured overlap deadline and automatically disable the old credential when it expires.",
+   "witness": {
+    "initial": "Service principal S authenticates with credential C1.",
+    "events": [
+     "An administrator rotates C1 and receives C2.",
+     "After the intended migration interval, the producer sends a request with C1."
+    ],
+    "outcomes": [
+     "C1 is rejected automatically because its overlap expired.",
+     "C1 remains valid because no explicit revocation occurred."
+    ],
+    "observer": "The producer and administrator"
+   }
+  },
+  {
+   "unit": "00_product.md:Unresolved decisions for later states",
+   "subject": "Bearer transport trust boundary",
+   "kind": "unnamed security boundary",
+   "text": "“Concrete transport between PresuPro and the portal — decided by R0-09: a bearer header only.”",
+   "question": "Does the portal itself require an authenticated TLS request, or is TLS termination an explicitly named trusted upstream boundary, before it accepts the bearer header?",
+   "options": [
+    "The portal accepts the bearer header only over HTTPS.",
+    "A named trusted reverse proxy terminates TLS and the portal accepts only authenticated proxy traffic.",
+    "Plain HTTP is allowed within a defined trusted network."
+   ],
+   "default_guess": "Require HTTPS, permitting trusted-proxy termination only when explicitly configured.",
+   "witness": {
+    "initial": "A valid producer credential exists and the portal endpoint is reachable over plain HTTP.",
+    "events": [
+     "The producer sends the bearer header over plain HTTP."
+    ],
+    "outcomes": [
+     "The portal rejects or redirects the request because the credential transport is not protected.",
+     "The portal accepts the request because only the presence of the bearer header is required."
+    ],
+    "observer": "The producer and anyone able to observe the network path"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "First-administrator command secret input",
+   "kind": "unnamed input channel",
+   "text": "R0-07 says the email and password are inputs “read neither from process arguments nor from the environment nor from a file” but does not name the channel from which the command reads them.",
+   "question": "How does the host operator supply the bootstrap email and password without using any of the prohibited channels?",
+   "options": [
+    "Interactive terminal prompts with hidden password entry.",
+    "A dedicated inherited file descriptor or standard input protocol.",
+    "An operating-system credential or secret-provider API."
+   ],
+   "default_guess": "Use interactive terminal prompts, hiding the password input.",
+   "witness": {
+    "initial": "A new deployment has no staff accounts and an automation or host operator must bootstrap it.",
+    "events": [
+     "The local bootstrap command starts.",
+     "It requests the required email and password."
+    ],
+    "outcomes": [
+     "The command uses an interactive TTY protocol.",
+     "The command consumes a structured value from standard input or another secret channel."
+    ],
+    "observer": "The host operator and deployment tooling"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "First-administrator command outcomes",
+   "kind": "unnamed failure contract",
+   "text": "R0-07 promises “a closed set of exit codes that deployment scripts may branch on” but does not enumerate the codes or the conditions mapped to them.",
+   "question": "What are the complete exit-code values and which observable condition does each represent?",
+   "options": [
+    "Separate codes for success, staff-already-exists, invalid input, invalid configuration, and storage failure.",
+    "Success plus one generic refusal/error code.",
+    "Success, already-initialized, and one generic operational-failure code."
+   ],
+   "default_guess": "Define success, already-initialized, invalid-input/configuration, and operational-failure codes separately.",
+   "witness": {
+    "initial": "A deployment script invokes the bootstrap command after a staff account may already have been created.",
+    "events": [
+     "The command detects that a staff account exists and refuses creation.",
+     "The script branches on the process exit code."
+    ],
+    "outcomes": [
+     "The script receives a distinct already-initialized code and continues safely.",
+     "The script receives the same generic failure code as database or configuration failure and cannot know whether deployment is healthy."
+    ],
+    "observer": "The deployment operator"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "Bootstrap audit provenance",
+   "kind": "contradiction",
+   "text": "R0-07 says creation of the first administrator is “never … audited,” while the Audit section and invariant 12 say “Every significant action” carries actor provenance to audit.",
+   "question": "Is first-administrator creation an explicit exception to the universal audit invariant, or must it create an audit record?",
+   "options": [
+    "Bootstrap is explicitly exempt from product audit.",
+    "Bootstrap creates an audit record using a defined host/bootstrap actor.",
+    "The universal audit wording is narrowed to authenticated product operations."
+   ],
+   "default_guess": "Make bootstrap an explicit documented exception to the product audit invariant.",
+   "witness": {
+    "initial": "The deployment contains no staff account.",
+    "events": [
+     "The host operator successfully runs the bootstrap command.",
+     "An auditor examines the portal's audit records."
+    ],
+    "outcomes": [
+     "No record exists, as R0-07 requires.",
+     "A bootstrap-administrator creation record exists, as the universal audit rule requires."
+    ],
+    "observer": "The auditor"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "Initial staff password change",
+   "kind": "unenforced product promise",
+   "text": "R0-19 says “the holder logs in with the initial password and changes it” but does not say whether changing it is mandatory before any other operation or merely expected behavior.",
+   "question": "After first login with the administrator-chosen password, may the staff member use ordinary capabilities before changing that password?",
+   "options": [
+    "Require a password change before any operation other than session termination and password change.",
+    "Allow normal use and treat password change as an operational instruction.",
+    "Require the administrator to mark whether a change is mandatory."
+   ],
+   "default_guess": "Require the holder to change the password before ordinary portal use.",
+   "witness": {
+    "initial": "An administrator activates a new operator account with an initial password and project assignment.",
+    "events": [
+     "The holder logs in with the initial password.",
+     "Before changing it, the holder attempts to create an expense."
+    ],
+    "outcomes": [
+     "The expense operation is refused until the password is changed.",
+     "The expense operation succeeds because the text does not define a forced-change state."
+    ],
+    "observer": "The staff holder and administrator"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "Archived-project snapshot import attempts",
+   "kind": "contradiction",
+   "text": "R0-24 says an archived project “refuses every mutation of its … snapshot import,” while R0-25 says the portal records every classified rejection “as a fresh immutable import result with a fresh import_id.”",
+   "question": "When an authenticated, scoped producer submits an import for an archived project, is a new rejection import result written, or is the request refused without creating any project record?",
+   "options": [
+    "Reject before import classification and create no import result.",
+    "Create a rejection import result despite archival because import-attempt records are exempt from the freeze.",
+    "Record a non-project-scoped security/transport event but no SnapshotImportRecord."
+   ],
+   "default_guess": "Reject before classification and create no import result for the archived project.",
+   "witness": {
+    "initial": "Project P is archived; producer S is active and retains its existing grant for P.",
+    "events": [
+     "S submits a validly formed new snapshot for P."
+    ],
+    "outcomes": [
+     "The portal creates a fresh rejection result and returns its import_id under R0-25.",
+     "The portal refuses the operation without writing anything under R0-24."
+    ],
+    "observer": "The producer and an auditor"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "Snapshot-import classification boundary",
+   "kind": "hidden open question",
+   "text": "R0-25 records “every import attempt it classifies” and names only failed bearer authentication as definitely unrecorded; “classifies” leaves authorization, malformed input, unsupported contracts, unknown projects, and Registry failures unassigned.",
+   "question": "At exactly which validation or authorization step does a request become a classified import attempt that must receive a persisted import result?",
+   "options": [
+    "Only after authentication, project authorization, Registry lifecycle validation, and request decoding succeed.",
+    "Immediately after bearer authentication, so authorization and contract failures become import results.",
+    "After request decoding but before project authorization and Registry validation."
+   ],
+   "default_guess": "Classify and persist only after authentication, project authorization, active-project validation, and successful decoding of enough identity fields.",
+   "witness": {
+    "initial": "An active producer has a valid bearer credential but no grant for project P.",
+    "events": [
+     "The producer submits a well-formed snapshot naming P."
+    ],
+    "outcomes": [
+     "The portal returns a concealed authorization failure and records no import result.",
+     "The portal classifies the request as rejected, persists a fresh import result, and returns its import_id."
+    ],
+    "observer": "The producer and auditor"
+   }
+  },
+  {
+   "unit": "00_product.md:Product invariants visible at State 0",
+   "subject": "Archived reads during Registry failure",
+   "kind": "missing external failure behavior",
+   "text": "Invariant 5 says archived project records “are readable,” while invariant 2 and the common authorization rule require Registry lifecycle policy on every project-scoped access; only revocation is explicitly said to work while Registry is unavailable.",
+   "question": "May an already-authorized user read an archived project's stored records while Registry is unavailable, and if so what trusted stored fact establishes the archived status?",
+   "options": [
+    "Fail the read whenever live Registry lifecycle validation is unavailable.",
+    "Permit the read from a persisted or cached archived status with defined freshness.",
+    "Permit reads based on existing grants without consulting Registry, while continuing to block all writes."
+   ],
+   "default_guess": "Fail closed unless a deliberately persisted Registry status and freshness rule is defined.",
+   "witness": {
+    "initial": "Project P was archived, its existing viewer grant remains active, and the viewer has a valid session.",
+    "events": [
+     "Registry becomes unavailable.",
+     "The viewer requests P's existing expense list."
+    ],
+    "outcomes": [
+     "The portal returns the archived records using stored authorization/lifecycle knowledge.",
+     "The portal returns a dependency failure because the required Registry lifecycle check cannot complete."
+    ],
+    "observer": "The viewer"
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"00_product.md:Principals\",\"subject\":\"Service-principal project scope\",\"kind\":\"contradiction\",\"text\":\"“allowed projects or administrative area; a global producer exists only through an explicitly granted capability” conflicts with R0-16 (“producer grants … belong to exactly one Registry project”) and invariant 2 (“Project-scoped access requires … project grant/assignment”).\",\"question\":\"Can an administrative-area or global producer import for a project without a project-specific producer grant, and if so what record supplies the required project access?\",\"options\":[\"Administrative-area/global capability replaces project-specific grants for matching projects.\",\"Every import still requires a project-specific producer grant; administrative-area/global scope only constrains which grants may be created.\",\"Administrative-area/global producer scope is not supported.\"],\"default_guess\":\"Require a project-specific producer grant for every import.\",\"witness\":{\"initial\":\"An active service principal has the stated global-producer capability but no producer grant for project P.\",\"events\":[\"The service principal authenticates with its bearer credential.\",\"It submits an otherwise valid snapshot for active project P.\"],\"outcomes\":[\"The import is permitted because the global capability supplies project scope.\",\"The import is denied because invariant 2 requires a project-specific grant.\"],\"observer\":\"The producer and the audit operator\"}},{\"unit\":\"00_product.md:Principals\",\"subject\":\"Viewer access-link issuance and hand-off\",\"kind\":\"unnamed output and trust boundary\",\"text\":\"“authenticates through an unguessable capability link … issued and re-issuable by an administrator” does not say which response reveals the one-time link, who receives it, or how it reaches the client.\",\"question\":\"What observable output does issuance/re-issuance produce, and which actor or external hand-off is responsible for delivering the capability link to the viewer?\",\"options\":[\"Return the link once to the administrator, who hands it to the client outside the portal.\",\"Send the link through a named delivery boundary.\",\"Return it directly through a client-facing enrollment operation.\"],\"default_guess\":\"Return the link once to the administrator and require an out-of-band hand-off.\",\"witness\":{\"initial\":\"An administrator has created a viewer with a project grant but the viewer has no access credential.\",\"events\":[\"The administrator invokes access-link issuance.\",\"The client asks how to enter the portal.\"],\"outcomes\":[\"The issuance response contains the link once, allowing the administrator to deliver it.\",\"The response contains only metadata, leaving no specified actor able to obtain or deliver the secret.\"],\"observer\":\"The administrator and client\"}},{\"unit\":\"00_product.md:Principals\",\"subject\":\"Viewer credential revocation and existing sessions\",\"kind\":\"ambiguous revocation effect\",\"text\":\"“revoking the viewer or its access credential closes all of that client's projects” and “a successful entry opens a managed ViewerSession” do not state whether credential revocation or re-issuance invalidates sessions previously created with the old credential.\",\"question\":\"When a viewer credential is revoked, including revocation caused by re-issuance, are all sessions derived from that credential immediately invalidated?\",\"options\":[\"Invalidate all viewer sessions when the active credential is revoked or replaced.\",\"Reject only future entries with the old credential; existing sessions remain valid until expiry.\",\"Track credential-to-session provenance and invalidate only sessions derived from the revoked credential.\"],\"default_guess\":\"Invalidate all existing sessions for that viewer.\",\"witness\":{\"initial\":\"A viewer entered with credential C and has an active session S.\",\"events\":[\"An administrator re-issues the viewer access link, revoking C.\",\"The viewer uses session S to read an assigned project.\"],\"outcomes\":[\"The request is rejected because replacing C invalidated S.\",\"The request succeeds because only future use of C was revoked.\"],\"observer\":\"The viewer and administrator\"}},{\"unit\":\"00_product.md:Principals\",\"subject\":\"Viewer session restoration\",\"kind\":\"undefined action\",\"text\":\"“Viewers can restore and end their session explicitly.”\",\"question\":\"What does restoring a viewer session mean, what input authorizes it, and what success and failure outputs are observable?\",\"options\":[\"Re-enter with the capability link to create a new session.\",\"Recover an existing server-side session using a separate restoration credential.\",\"Inspect or renew the cookie session without extending its fixed expiry.\"],\"default_guess\":\"Treat restoration as entering again with the current capability link and creating a new fixed-expiry session.\",\"witness\":{\"initial\":\"A viewer has a valid access link but no usable session cookie.\",\"events\":[\"The viewer invokes the promised restore action.\"],\"outcomes\":[\"The access link is required and a new session is opened.\",\"A separate restoration mechanism recovers the previous session without the link.\"],\"observer\":\"The viewer\"}},{\"unit\":\"00_product.md:Principals\",\"subject\":\"Service-credential rotation overlap\",\"kind\":\"undefined lifecycle action\",\"text\":\"“rotatable with an overlap period” does not define who selects the overlap, when the old credential stops authenticating, or whether expiry is automatic or requires revocation.\",\"question\":\"What is the observable lifecycle of the old credential after rotation, including the overlap duration and termination event?\",\"options\":[\"A fixed configured overlap expires automatically.\",\"The administrator supplies an overlap deadline at rotation.\",\"Both credentials remain valid until the old one is explicitly revoked.\"],\"default_guess\":\"Use a configured overlap deadline and automatically disable the old credential when it expires.\",\"witness\":{\"initial\":\"Service principal S authenticates with credential C1.\",\"events\":[\"An administrator rotates C1 and receives C2.\",\"After the intended migration interval, the producer sends a request with C1.\"],\"outcomes\":[\"C1 is rejected automatically because its overlap expired.\",\"C1 remains valid because no explicit revocation occurred.\"],\"observer\":\"The producer and administrator\"}},{\"unit\":\"00_product.md:Unresolved decisions for later states\",\"subject\":\"Bearer transport trust boundary\",\"kind\":\"unnamed security boundary\",\"text\":\"“Concrete transport between PresuPro and the portal — decided by R0-09: a bearer header only.”\",\"question\":\"Does the portal itself require an authenticated TLS request, or is TLS termination an explicitly named trusted upstream boundary, before it accepts the bearer header?\",\"options\":[\"The portal accepts the bearer header only over HTTPS.\",\"A named trusted reverse proxy terminates TLS and the portal accepts only authenticated proxy traffic.\",\"Plain HTTP is allowed within a defined trusted network.\"],\"default_guess\":\"Require HTTPS, permitting trusted-proxy termination only when explicitly configured.\",\"witness\":{\"initial\":\"A valid producer credential exists and the portal endpoint is reachable over plain HTTP.\",\"events\":[\"The producer sends the bearer header over plain HTTP.\"],\"outcomes\":[\"The portal rejects or redirects the request because the credential transport is not protected.\",\"The portal accepts the request because only the presence of the bearer header is required.\"],\"observer\":\"The producer and anyone able to observe the network path\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"First-administrator command secret input\",\"kind\":\"unnamed input channel\",\"text\":\"R0-07 says the email and password are inputs “read neither from process arguments nor from the environment nor from a file” but does not name the channel from which the command reads them.\",\"question\":\"How does the host operator supply the bootstrap email and password without using any of the prohibited channels?\",\"options\":[\"Interactive terminal prompts with hidden password entry.\",\"A dedicated inherited file descriptor or standard input protocol.\",\"An operating-system credential or secret-provider API.\"],\"default_guess\":\"Use interactive terminal prompts, hiding the password input.\",\"witness\":{\"initial\":\"A new deployment has no staff accounts and an automation or host operator must bootstrap it.\",\"events\":[\"The local bootstrap command starts.\",\"It requests the required email and password.\"],\"outcomes\":[\"The command uses an interactive TTY protocol.\",\"The command consumes a structured value from standard input or another secret channel.\"],\"observer\":\"The host operator and deployment tooling\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"First-administrator command outcomes\",\"kind\":\"unnamed failure contract\",\"text\":\"R0-07 promises “a closed set of exit codes that deployment scripts may branch on” but does not enumerate the codes or the conditions mapped to them.\",\"question\":\"What are the complete exit-code values and which observable condition does each represent?\",\"options\":[\"Separate codes for success, staff-already-exists, invalid input, invalid configuration, and storage failure.\",\"Success plus one generic refusal/error code.\",\"Success, already-initialized, and one generic operational-failure code.\"],\"default_guess\":\"Define success, already-initialized, invalid-input/configuration, and operational-failure codes separately.\",\"witness\":{\"initial\":\"A deployment script invokes the bootstrap command after a staff account may already have been created.\",\"events\":[\"The command detects that a staff account exists and refuses creation.\",\"The script branches on the process exit code.\"],\"outcomes\":[\"The script receives a distinct already-initialized code and continues safely.\",\"The script receives the same generic failure code as database or configuration failure and cannot know whether deployment is healthy.\"],\"observer\":\"The deployment operator\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"Bootstrap audit provenance\",\"kind\":\"contradiction\",\"text\":\"R0-07 says creation of the first administrator is “never … audited,” while the Audit section and invariant 12 say “Every significant action” carries actor provenance to audit.\",\"question\":\"Is first-administrator creation an explicit exception to the universal audit invariant, or must it create an audit record?\",\"options\":[\"Bootstrap is explicitly exempt from product audit.\",\"Bootstrap creates an audit record using a defined host/bootstrap actor.\",\"The universal audit wording is narrowed to authenticated product operations.\"],\"default_guess\":\"Make bootstrap an explicit documented exception to the product audit invariant.\",\"witness\":{\"initial\":\"The deployment contains no staff account.\",\"events\":[\"The host operator successfully runs the bootstrap command.\",\"An auditor examines the portal's audit records.\"],\"outcomes\":[\"No record exists, as R0-07 requires.\",\"A bootstrap-administrator creation record exists, as the universal audit rule requires.\"],\"observer\":\"The auditor\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"Initial staff password change\",\"kind\":\"unenforced product promise\",\"text\":\"R0-19 says “the holder logs in with the initial password and changes it” but does not say whether changing it is mandatory before any other operation or merely expected behavior.\",\"question\":\"After first login with the administrator-chosen password, may the staff member use ordinary capabilities before changing that password?\",\"options\":[\"Require a password change before any operation other than session termination and password change.\",\"Allow normal use and treat password change as an operational instruction.\",\"Require the administrator to mark whether a change is mandatory.\"],\"default_guess\":\"Require the holder to change the password before ordinary portal use.\",\"witness\":{\"initial\":\"An administrator activates a new operator account with an initial password and project assignment.\",\"events\":[\"The holder logs in with the initial password.\",\"Before changing it, the holder attempts to create an expense.\"],\"outcomes\":[\"The expense operation is refused until the password is changed.\",\"The expense operation succeeds because the text does not define a forced-change state.\"],\"observer\":\"The staff holder and administrator\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"Archived-project snapshot import attempts\",\"kind\":\"contradiction\",\"text\":\"R0-24 says an archived project “refuses every mutation of its … snapshot import,” while R0-25 says the portal records every classified rejection “as a fresh immutable import result with a fresh import_id.”\",\"question\":\"When an authenticated, scoped producer submits an import for an archived project, is a new rejection import result written, or is the request refused without creating any project record?\",\"options\":[\"Reject before import classification and create no import result.\",\"Create a rejection import result despite archival because import-attempt records are exempt from the freeze.\",\"Record a non-project-scoped security/transport event but no SnapshotImportRecord.\"],\"default_guess\":\"Reject before classification and create no import result for the archived project.\",\"witness\":{\"initial\":\"Project P is archived; producer S is active and retains its existing grant for P.\",\"events\":[\"S submits a validly formed new snapshot for P.\"],\"outcomes\":[\"The portal creates a fresh rejection result and returns its import_id under R0-25.\",\"The portal refuses the operation without writing anything under R0-24.\"],\"observer\":\"The producer and an auditor\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"Snapshot-import classification boundary\",\"kind\":\"hidden open question\",\"text\":\"R0-25 records “every import attempt it classifies” and names only failed bearer authentication as definitely unrecorded; “classifies” leaves authorization, malformed input, unsupported contracts, unknown projects, and Registry failures unassigned.\",\"question\":\"At exactly which validation or authorization step does a request become a classified import attempt that must receive a persisted import result?\",\"options\":[\"Only after authentication, project authorization, Registry lifecycle validation, and request decoding succeed.\",\"Immediately after bearer authentication, so authorization and contract failures become import results.\",\"After request decoding but before project authorization and Registry validation.\"],\"default_guess\":\"Classify and persist only after authentication, project authorization, active-project validation, and successful decoding of enough identity fields.\",\"witness\":{\"initial\":\"An active producer has a valid bearer credential but no grant for project P.\",\"events\":[\"The producer submits a well-formed snapshot naming P.\"],\"outcomes\":[\"The portal returns a concealed authorization failure and records no import result.\",\"The portal classifies the request as rejected, persists a fresh import result, and returns its import_id.\"],\"observer\":\"The producer and auditor\"}},{\"unit\":\"00_product.md:Product invariants visible at State 0\",\"subject\":\"Archived reads during Registry failure\",\"kind\":\"missing external failure behavior\",\"text\":\"Invariant 5 says archived project records “are readable,” while invariant 2 and the common authorization rule require Registry lifecycle policy on every project-scoped access; only revocation is explicitly said to work while Registry is unavailable.\",\"question\":\"May an already-authorized user read an archived project's stored records while Registry is unavailable, and if so what trusted stored fact establishes the archived status?\",\"options\":[\"Fail the read whenever live Registry lifecycle validation is unavailable.\",\"Permit the read from a persisted or cached archived status with defined freshness.\",\"Permit reads based on existing grants without consulting Registry, while continuing to block all writes.\"],\"default_guess\":\"Fail closed unless a deliberately persisted Registry status and freshness rule is defined.\",\"witness\":{\"initial\":\"Project P was archived, its existing viewer grant remains active, and the viewer has a valid session.\",\"events\":[\"Registry becomes unavailable.\",\"The viewer requests P's existing expense list.\"],\"outcomes\":[\"The portal returns the archived records using stored authorization/lifecycle knowledge.\",\"The portal returns a dependency failure because the required Registry lifecycle check cannot complete.\"],\"observer\":\"The viewer\"}}]}",
+ "set_aside": []
+}

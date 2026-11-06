@@ -1,0 +1,586 @@
+{
+ "open_points": [
+  {
+   "unit": "00_product.md:Principals",
+   "subject": "role capability sets",
+   "kind": "hidden authorization model",
+   "text": "Roles map to closed capability sets; a role or capability is never accepted as a trusted request field. Operators hold mutation capabilities for their assigned projects. Administrators additionally hold access-management capabilities",
+   "question": "What is the complete closed capability set for each staff role, and which capability guards each promised read, mutation, and administrative action?",
+   "options": [
+    "Define every capability and action mapping in State 0",
+    "State that administrators inherit all operator capabilities and defer only the capability identifiers",
+    "Let later implementations choose the capability decomposition"
+   ],
+   "default_guess": "Administrators inherit every operator capability; each distinct promised action receives an explicit server-side capability mapping.",
+   "witness": {
+    "initial": "An active administrator is assigned to an active project.",
+    "events": [
+     "The administrator attempts to activate an imported budget version.",
+     "The authorization layer evaluates the administrator role."
+    ],
+    "outcomes": [
+     "Activation succeeds because administrators inherit the operator activation capability.",
+     "Activation is denied because only operators were assigned that mutation capability."
+    ],
+    "observer": "The administrator"
+   }
+  },
+  {
+   "unit": "00_product.md:Principals",
+   "subject": "viewer access-link issuance",
+   "kind": "missing secret output",
+   "text": "authenticates through an unguessable capability link (`ViewerAccessCredential`) issued and re-issuable by an administrator",
+   "question": "Which product action creates or reissues the link, what secret-bearing output is shown, to whom and how many times, and how is it handed to the client?",
+   "options": [
+    "Return the complete link once in the authenticated administrator response",
+    "Deliver the link through a named external boundary",
+    "Have the administrator provide the credential secret"
+   ],
+   "default_guess": "Generate the credential and return the complete link once to the authenticated administrator, storing only its verification form.",
+   "witness": {
+    "initial": "A client viewer exists without a usable credential.",
+    "events": [
+     "An administrator invokes the unspecified issue or reissue action.",
+     "The administrator needs to give the client a working link."
+    ],
+    "outcomes": [
+     "The response reveals the link once, allowing out-of-band delivery.",
+     "No response may reveal it because only verification-form storage is specified, leaving no way for the client to receive it."
+    ],
+    "observer": "The administrator and client"
+   }
+  },
+  {
+   "unit": "00_product.md:Principals",
+   "subject": "viewer creation versus credential issuance",
+   "kind": "ambiguous action boundary",
+   "text": "created by an administrator ... authenticates through an unguessable capability link ... issued and re-issuable by an administrator",
+   "question": "Does creating a ClientViewer atomically issue its first access credential, or are viewer creation and credential issuance separate actions with a credential-less intermediate state?",
+   "options": [
+    "Creation atomically issues the first credential",
+    "Creation and issuance are separate actions",
+    "Creation may optionally issue a credential"
+   ],
+   "default_guess": "Use separate viewer-creation and credential-issuance actions so reissuance uses the same issuance contract.",
+   "witness": {
+    "initial": "No viewer exists for a client.",
+    "events": [
+     "An administrator creates the viewer but performs no other action.",
+     "The client attempts to enter the portal."
+    ],
+    "outcomes": [
+     "The creation response contained an initial link and entry can succeed.",
+     "The viewer has no credential until a separate issue action occurs, so entry cannot succeed."
+    ],
+    "observer": "The administrator and client"
+   }
+  },
+  {
+   "unit": "00_product.md:Principals",
+   "subject": "ClientViewer lifecycle",
+   "kind": "unnamed stored state",
+   "text": "revoking the viewer or its access credential closes all of that client's projects",
+   "question": "What stored lifecycle state represents viewer revocation, is it permanent or reversible, and may a revoked viewer receive a new credential or project grant?",
+   "options": [
+    "Revocation permanently disables the viewer identity",
+    "Revocation is a reversible active/disabled status",
+    "Revocation deletes or terminates the viewer and requires a new identity"
+   ],
+   "default_guess": "Model an active/disabled viewer state; disabling invalidates sessions and credentials, and only an explicit administrator reactivation permits new issuance.",
+   "witness": {
+    "initial": "A viewer with two grants and an active session is revoked.",
+    "events": [
+     "An administrator later issues a new access link for the same viewer.",
+     "The client uses the new link."
+    ],
+    "outcomes": [
+     "Entry succeeds because viewer revocation is reversible or link issuance reactivates it.",
+     "Entry is refused because viewer revocation permanently ended the identity."
+    ],
+    "observer": "The administrator and client"
+   }
+  },
+  {
+   "unit": "00_product.md:Principals",
+   "subject": "viewer grant cardinality and revocation",
+   "kind": "missing uniqueness rule",
+   "text": "ProjectViewerGrant records (one grant = one Registry `project_id`) ... revoking one project grant closes only that project",
+   "question": "May one viewer have more than one active grant for the same project, and if creation is repeated is it rejected, idempotent, or a second grant?",
+   "options": [
+    "Enforce one active grant per viewer-project pair",
+    "Treat repeated creation as an idempotent replay",
+    "Allow multiple grants and require all to be revoked"
+   ],
+   "default_guess": "Enforce one active grant per viewer-project pair and make an identical repeated grant request idempotent.",
+   "witness": {
+    "initial": "A viewer already has an active grant for project P.",
+    "events": [
+     "An administrator grants P to the same viewer again.",
+     "An administrator revokes one grant for P.",
+     "The viewer requests P."
+    ],
+    "outcomes": [
+     "P is closed because there can be only one effective grant.",
+     "P remains visible because a second active grant still exists."
+    ],
+    "observer": "The viewer and administrator"
+   }
+  },
+  {
+   "unit": "00_product.md:Principals",
+   "subject": "StaffAccount lifecycle",
+   "kind": "incomplete state machine",
+   "text": "the account is `pending_verification` ... (`pending_verification` → `active`) ... suspending or disabling an account invalidates its active sessions ... the staff account is reinstated",
+   "question": "What are the complete staff statuses and allowed transitions, how do suspension and disabling differ, and which transitions count as reinstatement?",
+   "options": [
+    "Use pending_verification, active, suspended and disabled with explicit transitions",
+    "Treat suspended and disabled as synonyms",
+    "Make disabled terminal while suspended is reversible"
+   ],
+   "default_guess": "Use four distinct statuses; suspension is reversible, disabling is administrative and reversible only through an explicit reinstatement action, and neither state can authenticate.",
+   "witness": {
+    "initial": "An active operator has an assignment and is then disabled.",
+    "events": [
+     "An administrator changes the account status back toward active.",
+     "The operator logs in and reads the assigned project."
+    ],
+    "outcomes": [
+     "The account can be reinstated and the existing assignment again grants read access.",
+     "Disabled is terminal, so the transition or login is refused."
+    ],
+    "observer": "The administrator and operator"
+   }
+  },
+  {
+   "unit": "00_product.md:Principals",
+   "subject": "initial-password use",
+   "kind": "missing enforcement rule",
+   "text": "the holder logs in with the initial password and changes it",
+   "question": "Is changing the administrator-chosen initial password mandatory before any other authenticated operation, or merely an expected user action?",
+   "options": [
+    "Require a password change before all other operations",
+    "Allow ordinary use immediately and merely recommend a change",
+    "Allow only a limited set of operations until the change"
+   ],
+   "default_guess": "Mark the account as requiring a password change and allow only session/security operations until it is changed.",
+   "witness": {
+    "initial": "An administrator has activated a new operator account whose initial password has not been changed.",
+    "events": [
+     "The operator logs in with the initial password.",
+     "The operator attempts to create an expense before changing it."
+    ],
+    "outcomes": [
+     "The expense is accepted because activation gives normal access immediately.",
+     "The expense is refused until the operator changes the initial password."
+    ],
+    "observer": "The operator"
+   }
+  },
+  {
+   "unit": "00_product.md:Principals",
+   "subject": "email normalization",
+   "kind": "undefined identity rule",
+   "text": "mandatory unique normalized email as login identifier",
+   "question": "What exact normalization algorithm is authoritative for uniqueness and login matching?",
+   "options": [
+    "Trim and lowercase the complete address only",
+    "Apply a specified standards-based domain and local-part normalization",
+    "Use database case-insensitive comparison without rewriting"
+   ],
+   "default_guess": "Trim surrounding whitespace and compare the complete address case-insensitively without provider-specific dot or plus handling.",
+   "witness": {
+    "initial": "An account exists with login `User@example.com`.",
+    "events": [
+     "An administrator attempts to create `user@example.com`.",
+     "A holder later attempts login using the differently cased spelling."
+    ],
+    "outcomes": [
+     "Creation is rejected as a duplicate and either spelling logs into the existing account.",
+     "Creation succeeds as a distinct account or the differently cased login fails."
+    ],
+    "observer": "The administrator and account holder"
+   }
+  },
+  {
+   "unit": "00_product.md:Principals",
+   "subject": "ServicePrincipal and credential revocation",
+   "kind": "ambiguous lifecycle",
+   "text": "active/disabled status, creation/rotation/revocation timestamps ... one or more independently revocable credentials",
+   "question": "Are disabling a service principal, revoking a service principal, and revoking one credential distinct actions and states; which are reversible and what happens to the remaining credentials?",
+   "options": [
+    "Principal disable is reversible, principal revocation is terminal, and credential revocation affects only one credential",
+    "There is only reversible principal disable plus per-credential revocation",
+    "Principal revocation and disable are synonyms"
+   ],
+   "default_guess": "Treat principal disable as reversible, principal revocation as terminal, and credential revocation as independently terminal for that credential.",
+   "witness": {
+    "initial": "An active producer has credentials A and B.",
+    "events": [
+     "An administrator performs the action described as revoking the service principal or one of its credentials.",
+     "The producer imports once with A and once with B."
+    ],
+    "outcomes": [
+     "Only A is refused while B remains valid because one credential was revoked.",
+     "Both are refused because the principal itself was revoked or disabled."
+    ],
+    "observer": "The producer and administrator"
+   }
+  },
+  {
+   "unit": "00_product.md:Principals",
+   "subject": "producer source-type scope",
+   "kind": "unnamed input vocabulary",
+   "text": "explicit project scope: allowed source types and allowed projects or administrative area",
+   "question": "What snapshot field carries the source type, what is its closed vocabulary, and how is it matched against a producer's allowed source types?",
+   "options": [
+    "Add a required enumerated `source_type` field",
+    "Derive the type from a structured source-provenance object",
+    "Remove source-type authorization and scope only by project"
+   ],
+   "default_guess": "Require an enumerated `source_type` in structured source provenance and match it exactly against the principal's stored allow-list.",
+   "witness": {
+    "initial": "A producer is allowed only the PresuPro source type for project P.",
+    "events": [
+     "It submits a snapshot for P whose free-form provenance names another system.",
+     "The portal evaluates the import."
+    ],
+    "outcomes": [
+     "The import is rejected because the source type is outside the producer scope.",
+     "The import is accepted because no specified field or vocabulary allows the source-type restriction to be evaluated."
+    ],
+    "observer": "The producer and auditor"
+   }
+  },
+  {
+   "unit": "00_product.md:Principals",
+   "subject": "global producer authorization",
+   "kind": "contradictory capability model",
+   "text": "a closed narrow capability set — import-side only (`portal.estimate_snapshot.import`, `portal.estimate_snapshot.read_import_result`) ... a global producer exists only through an explicitly granted capability; every import verifies the principal may publish for the given `project_id`",
+   "question": "What is the explicitly granted global capability, given that the supposedly closed capability set names no such capability, and does it replace per-project grants or merely broaden their scope?",
+   "options": [
+    "Add a named global-import capability that replaces per-project grants",
+    "Represent global scope as producer-scope data under the existing import capability",
+    "Require project grants even for a so-called global producer"
+   ],
+   "default_guess": "Represent global authorization as an explicit global scope record under `portal.estimate_snapshot.import`, while still evaluating the concrete project on every import.",
+   "witness": {
+    "initial": "A producer has `portal.estimate_snapshot.import` and a purported global grant but no grant naming project P.",
+    "events": [
+     "The producer imports a valid snapshot for active project P."
+    ],
+    "outcomes": [
+     "The import succeeds because the global grant authorizes every project.",
+     "The import is denied because every import still requires an explicit project grant and no additional global capability exists."
+    ],
+    "observer": "The producer"
+   }
+  },
+  {
+   "unit": "00_product.md:Principals",
+   "subject": "service credential rotation overlap",
+   "kind": "undefined validity window",
+   "text": "rotatable with an overlap period",
+   "question": "When does the old credential stop authenticating after rotation, how long is the overlap, and is the deadline fixed, configured, or chosen per rotation?",
+   "options": [
+    "Use a fixed product duration",
+    "Use a validated deployment setting",
+    "Require an administrator-supplied expiry on each rotation",
+    "End overlap only by explicit revocation"
+   ],
+   "default_guess": "Use a validated deployment setting and record an exact old-credential expiry at rotation time.",
+   "witness": {
+    "initial": "Credential A is valid and an administrator rotates it to credential B.",
+    "events": [
+     "The producer uses A shortly after rotation.",
+     "The producer uses A again after an implementation-chosen interval."
+    ],
+    "outcomes": [
+     "A remains valid until a deterministic recorded overlap deadline.",
+     "A may already be invalid or may remain valid indefinitely because no deadline rule is specified."
+    ],
+    "observer": "The producer and administrator"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "first-administrator audit",
+   "kind": "direct contradiction",
+   "text": "R0-07: `never printed, logged or audited` versus `Every significant action records actor provenance` and `Every significant action carries actor provenance to audit`",
+   "question": "Is creation of the first administrator an explicit exception to the audit invariants, or must the bootstrap create an audit record with a defined host actor?",
+   "options": [
+    "Make bootstrap creation an explicit unaudited exception",
+    "Audit bootstrap creation using a named host/bootstrap actor",
+    "Audit only success or only failure without recording secrets"
+   ],
+   "default_guess": "Audit the result under a synthetic bootstrap actor while excluding the email, password and secret material.",
+   "witness": {
+    "initial": "The deployment has no staff accounts.",
+    "events": [
+     "A host operator successfully runs the bootstrap command.",
+     "An auditor inspects the portal audit history."
+    ],
+    "outcomes": [
+     "No audit record exists, as R0-07 requires.",
+     "A first-administrator creation record exists, as the audit promise and invariant require."
+    ],
+    "observer": "The auditor"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "bootstrap credential input",
+   "kind": "unnamed input channel",
+   "text": "the email and password are its inputs, read neither from process arguments nor from the environment nor from a file",
+   "question": "Through what concrete channel does the local command receive email and password, and can it operate non-interactively?",
+   "options": [
+    "Read both through hidden interactive terminal prompts",
+    "Read a structured request from standard input",
+    "Read secrets from inherited file descriptors or an OS credential facility"
+   ],
+   "default_guess": "Prompt for email and a non-echoed password on a controlling terminal and refuse non-interactive execution.",
+   "witness": {
+    "initial": "An empty deployment is being provisioned by an unattended deployment script.",
+    "events": [
+     "The script invokes the bootstrap command without arguments, environment credentials or a credential file.",
+     "The command tries to acquire its required inputs."
+    ],
+    "outcomes": [
+     "Provisioning can supply the inputs through a defined non-interactive channel.",
+     "The command requires an interactive terminal and provisioning blocks or fails."
+    ],
+    "observer": "The host operator and deployment script"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "bootstrap command outcomes",
+   "kind": "unnamed failure contract",
+   "text": "Its outcome is a closed set of exit codes that deployment scripts may branch on",
+   "question": "What is the complete exit-code set, and which code covers success, existing staff, invalid input, configuration failure, storage failure and concurrent bootstrap attempts?",
+   "options": [
+    "Define a distinct stable code for each branchable outcome",
+    "Define success, already-initialized and generic failure only",
+    "Return structured standard output in addition to stable exit codes"
+   ],
+   "default_guess": "Define stable codes for success, already initialized, invalid input, invalid configuration and operational failure, with no secret-bearing output.",
+   "witness": {
+    "initial": "A deployment already contains one staff account.",
+    "events": [
+     "A deployment script runs the bootstrap command.",
+     "The command refuses to create another administrator."
+    ],
+    "outcomes": [
+     "The script receives a dedicated already-initialized code and continues safely.",
+     "The script receives an implementation-chosen generic failure code and cannot distinguish an expected refusal from a broken database."
+    ],
+    "observer": "The deployment script"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "readiness semantics",
+   "kind": "undefined observable result",
+   "text": "The service answers an unauthenticated liveness and readiness check",
+   "question": "What conditions make each check pass or fail, and what stable HTTP status and body are returned for pass and failure?",
+   "options": [
+    "Liveness reports process responsiveness; readiness additionally verifies database and binary-root usability",
+    "Both checks report only process responsiveness",
+    "Readiness verifies configuration and database but not binary storage"
+   ],
+   "default_guess": "Return a minimal fixed body; liveness passes while the process can serve requests, and readiness passes only after validated configuration plus usable database and binary root.",
+   "witness": {
+    "initial": "The HTTP process is running but its SQLite database cannot be opened.",
+    "events": [
+     "A load balancer calls liveness.",
+     "The load balancer calls readiness."
+    ],
+    "outcomes": [
+     "Liveness passes and readiness fails, removing the instance from service.",
+     "Both pass because their conditions were left equivalent."
+    ],
+    "observer": "The load balancer and operator"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "concealed binary-read failure",
+   "kind": "unnamed failure output",
+   "text": "An unknown, cross-project, hidden, oversize or unlisted read is answered the same way",
+   "question": "What single observable HTTP response is used for all of these cases, including status, JSON or empty body, headers and cache behavior?",
+   "options": [
+    "Return the same not-found JSON response for all cases",
+    "Return a fixed empty 404 response",
+    "Return the common concealed authorization rejection"
+   ],
+   "default_guess": "Return a fixed empty 404 response with identical headers and no object metadata.",
+   "witness": {
+    "initial": "A caller is authorized for project A but not project B.",
+    "events": [
+     "The caller requests an unknown document id.",
+     "The caller requests a known document in project B.",
+     "The caller compares the responses."
+    ],
+    "outcomes": [
+     "The responses are byte-for-byte equivalent fixed failures.",
+     "Different implementers choose 404 for unknown and concealed 403 or JSON rejection for cross-project access, revealing the case."
+    ],
+    "observer": "The caller"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "binary media allow-lists",
+   "kind": "unnamed validation policy",
+   "text": "Its media type is recognized from the content and must be on a closed list per object kind",
+   "question": "What exact media types are allowed for ExpenseDocument and ProgressPhoto, and what content-signature recognizer is authoritative when bytes are ambiguous or malformed?",
+   "options": [
+    "Specify separate exact MIME allow-lists and signature rules for each kind",
+    "Use one shared image/PDF allow-list",
+    "Delegate recognition and allow-lists to a named library and version"
+   ],
+   "default_guess": "Allow PDF and a small enumerated image set for expense documents, images only for progress photos, and recognize them by fixed byte signatures.",
+   "witness": {
+    "initial": "An authorized expense document contains valid TIFF bytes.",
+    "events": [
+     "The caller requests the document.",
+     "The portal recognizes the content as `image/tiff`."
+    ],
+    "outcomes": [
+     "The exact bytes are returned because TIFF is on the document allow-list.",
+     "The concealed failure is returned because TIFF is not on the implementation's chosen allow-list."
+    ],
+    "observer": "The caller"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "project ownership of import results",
+   "kind": "unclassified stored fact",
+   "text": "R0-16 lists records with and without a project but omits import results; R0-25 says the portal records every classified rejection as a fresh immutable import result",
+   "question": "Is a SnapshotImportResult project-scoped or non-project-scoped, especially when the submitted project id is absent, malformed or unknown to Registry?",
+   "options": [
+    "Every result is project-scoped using the submitted id, even when Registry does not know it",
+    "Only results for known projects are project-scoped; other rejection results are non-project records",
+    "Do not create an import result until a valid known project has been identified"
+   ],
+   "default_guess": "Treat the result as non-project-scoped until a Registry project is validated, while retaining the submitted project value only as rejected provenance.",
+   "witness": {
+    "initial": "An authenticated producer has import capability.",
+    "events": [
+     "It submits an otherwise classifiable snapshot naming an unknown project id.",
+     "R0-25 requires a fresh rejection result.",
+     "The result is later read by its import id."
+    ],
+    "outcomes": [
+     "The result belongs to the unknown id as though it were a Registry project, conflicting with the exactly-one-Registry-project invariant.",
+     "The result is a non-project record, although R0-16's purported classification does not name it."
+    ],
+    "observer": "The producer, authorization layer and auditor"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "progress-photo publication input",
+   "kind": "vague inherited action",
+   "text": "a progress photo is published the same way",
+   "question": "Which parts of the expense-submission rule are intended to apply to photo publication, and what exact prepared-photo input, provenance, section association, caption and visibility fields are required or optional?",
+   "options": [
+    "Require project, prepared binary reference, provenance reference, visibility and optional caption/section",
+    "Apply only authenticated staff and project authorization from the expense rule",
+    "Require a confirmed OCR-style result and allocation as the literal phrase could imply"
+   ],
+   "default_guess": "Apply the authenticated staff and project-authorization rule, but define a separate photo payload with prepared file reference, provenance, visibility and optional caption and section.",
+   "witness": {
+    "initial": "An assigned operator has a prepared photo reference but no OCR result or expense allocation.",
+    "events": [
+     "The operator submits the project, photo reference, caption and visibility.",
+     "The portal interprets `published the same way`."
+    ],
+    "outcomes": [
+     "The photo is accepted under a photo-specific payload.",
+     "The request is rejected because the implementation copied the expense rule's confirmed-result or allocation requirements."
+    ],
+    "observer": "The operator"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "classified snapshot-import attempts",
+   "kind": "circular persistence boundary",
+   "text": "The portal records every import attempt it classifies — accepted, idempotent replay, integrity conflict, or a rejection",
+   "question": "Which authenticated failures count as classified rejections that receive an `import_id`, and which remain ordinary HTTP parsing, validation, authorization, Registry or infrastructure failures with no result record?",
+   "options": [
+    "Record every authenticated request after JSON parsing",
+    "Record only requests that identify a valid project and snapshot identity",
+    "Enumerate recordable rejection classes and leave transport/infrastructure failures unrecorded"
+   ],
+   "default_guess": "Enumerate the classes: record all authenticated, parseable contract attempts, including authorization and Registry-policy rejection, but not malformed transport or infrastructure failures.",
+   "witness": {
+    "initial": "A valid producer credential is available.",
+    "events": [
+     "The producer sends JSON with an unsupported contract version.",
+     "The portal rejects it."
+    ],
+    "outcomes": [
+     "A fresh immutable rejection result and `import_id` are returned.",
+     "The portal returns an ordinary validation error and records no import result because the attempt was never considered classified."
+    ],
+    "observer": "The producer and auditor"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "snapshot content identity",
+   "kind": "undefined equality rule",
+   "text": "re-publishing the same `estimate_id + estimate_version` with identical content is answered ... idempotent replay; different content ... is rejected as an integrity conflict (content fingerprint recorded)",
+   "question": "What exact canonical content is fingerprinted, including JSON key order, decimal spelling, timestamps, omitted versus null fields and source-provenance ordering?",
+   "options": [
+    "Fingerprint a specified canonical serialization of all contract fields",
+    "Fingerprint the raw request bytes",
+    "Normalize into the domain model and fingerprint only business fields"
+   ],
+   "default_guess": "Validate and normalize the complete contract, serialize it using an explicitly specified canonical JSON form, and fingerprint that representation.",
+   "witness": {
+    "initial": "An accepted snapshot used `100.00` and one JSON key order.",
+    "events": [
+     "The producer republishes the same business data using `100.0` and a different key order.",
+     "The portal compares the new fingerprint with the stored one."
+    ],
+    "outcomes": [
+     "The request is an idempotent replay because canonicalized content is equal.",
+     "The request is an integrity conflict because raw bytes or implementation-specific serialization differ."
+    ],
+    "observer": "The producer and reviewing staff"
+   }
+  },
+  {
+   "unit": "00_product.md:Product invariants visible at State 0",
+   "subject": "archived-project effect of producer grants",
+   "kind": "contradictory access promise",
+   "text": "existing grants and assignments keep giving access ... versus a ServicePrincipal's capability set being import-side only and R0-21 reading import results without rechecking its project grant",
+   "question": "What access, if any, does an existing producer grant continue to confer after archival, given that imports are forbidden and import-result reads deliberately ignore the grant?",
+   "options": [
+    "It confers no usable archived-project operation; only prior result reads remain available independently",
+    "It permits a named archived-project read operation that must be added to the capability set",
+    "The invariant's continuing-access statement applies only to viewer grants and staff assignments"
+   ],
+   "default_guess": "Narrow the continuing-access statement to viewer grants and staff assignments; a producer grant authorizes imports only while the project is active, while prior result reads remain independently available.",
+   "witness": {
+    "initial": "A producer has a grant for project P and previously imported a snapshot; P is then archived.",
+    "events": [
+     "The producer attempts another import for P.",
+     "The producer reads the earlier result by `import_id`.",
+     "The producer attempts to read P's snapshot records."
+    ],
+    "outcomes": [
+     "The grant gives some archived read access, as the invariant says, requiring an otherwise unnamed producer read operation.",
+     "The new import and snapshot read are denied, while the result read succeeds independently of the grant, leaving the grant itself with no continuing access effect."
+    ],
+    "observer": "The producer and authorization implementer"
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"00_product.md:Principals\",\"subject\":\"role capability sets\",\"kind\":\"hidden authorization model\",\"text\":\"Roles map to closed capability sets; a role or capability is never accepted as a trusted request field. Operators hold mutation capabilities for their assigned projects. Administrators additionally hold access-management capabilities\",\"question\":\"What is the complete closed capability set for each staff role, and which capability guards each promised read, mutation, and administrative action?\",\"options\":[\"Define every capability and action mapping in State 0\",\"State that administrators inherit all operator capabilities and defer only the capability identifiers\",\"Let later implementations choose the capability decomposition\"],\"default_guess\":\"Administrators inherit every operator capability; each distinct promised action receives an explicit server-side capability mapping.\",\"witness\":{\"initial\":\"An active administrator is assigned to an active project.\",\"events\":[\"The administrator attempts to activate an imported budget version.\",\"The authorization layer evaluates the administrator role.\"],\"outcomes\":[\"Activation succeeds because administrators inherit the operator activation capability.\",\"Activation is denied because only operators were assigned that mutation capability.\"],\"observer\":\"The administrator\"}},{\"unit\":\"00_product.md:Principals\",\"subject\":\"viewer access-link issuance\",\"kind\":\"missing secret output\",\"text\":\"authenticates through an unguessable capability link (`ViewerAccessCredential`) issued and re-issuable by an administrator\",\"question\":\"Which product action creates or reissues the link, what secret-bearing output is shown, to whom and how many times, and how is it handed to the client?\",\"options\":[\"Return the complete link once in the authenticated administrator response\",\"Deliver the link through a named external boundary\",\"Have the administrator provide the credential secret\"],\"default_guess\":\"Generate the credential and return the complete link once to the authenticated administrator, storing only its verification form.\",\"witness\":{\"initial\":\"A client viewer exists without a usable credential.\",\"events\":[\"An administrator invokes the unspecified issue or reissue action.\",\"The administrator needs to give the client a working link.\"],\"outcomes\":[\"The response reveals the link once, allowing out-of-band delivery.\",\"No response may reveal it because only verification-form storage is specified, leaving no way for the client to receive it.\"],\"observer\":\"The administrator and client\"}},{\"unit\":\"00_product.md:Principals\",\"subject\":\"viewer creation versus credential issuance\",\"kind\":\"ambiguous action boundary\",\"text\":\"created by an administrator ... authenticates through an unguessable capability link ... issued and re-issuable by an administrator\",\"question\":\"Does creating a ClientViewer atomically issue its first access credential, or are viewer creation and credential issuance separate actions with a credential-less intermediate state?\",\"options\":[\"Creation atomically issues the first credential\",\"Creation and issuance are separate actions\",\"Creation may optionally issue a credential\"],\"default_guess\":\"Use separate viewer-creation and credential-issuance actions so reissuance uses the same issuance contract.\",\"witness\":{\"initial\":\"No viewer exists for a client.\",\"events\":[\"An administrator creates the viewer but performs no other action.\",\"The client attempts to enter the portal.\"],\"outcomes\":[\"The creation response contained an initial link and entry can succeed.\",\"The viewer has no credential until a separate issue action occurs, so entry cannot succeed.\"],\"observer\":\"The administrator and client\"}},{\"unit\":\"00_product.md:Principals\",\"subject\":\"ClientViewer lifecycle\",\"kind\":\"unnamed stored state\",\"text\":\"revoking the viewer or its access credential closes all of that client's projects\",\"question\":\"What stored lifecycle state represents viewer revocation, is it permanent or reversible, and may a revoked viewer receive a new credential or project grant?\",\"options\":[\"Revocation permanently disables the viewer identity\",\"Revocation is a reversible active/disabled status\",\"Revocation deletes or terminates the viewer and requires a new identity\"],\"default_guess\":\"Model an active/disabled viewer state; disabling invalidates sessions and credentials, and only an explicit administrator reactivation permits new issuance.\",\"witness\":{\"initial\":\"A viewer with two grants and an active session is revoked.\",\"events\":[\"An administrator later issues a new access link for the same viewer.\",\"The client uses the new link.\"],\"outcomes\":[\"Entry succeeds because viewer revocation is reversible or link issuance reactivates it.\",\"Entry is refused because viewer revocation permanently ended the identity.\"],\"observer\":\"The administrator and client\"}},{\"unit\":\"00_product.md:Principals\",\"subject\":\"viewer grant cardinality and revocation\",\"kind\":\"missing uniqueness rule\",\"text\":\"ProjectViewerGrant records (one grant = one Registry `project_id`) ... revoking one project grant closes only that project\",\"question\":\"May one viewer have more than one active grant for the same project, and if creation is repeated is it rejected, idempotent, or a second grant?\",\"options\":[\"Enforce one active grant per viewer-project pair\",\"Treat repeated creation as an idempotent replay\",\"Allow multiple grants and require all to be revoked\"],\"default_guess\":\"Enforce one active grant per viewer-project pair and make an identical repeated grant request idempotent.\",\"witness\":{\"initial\":\"A viewer already has an active grant for project P.\",\"events\":[\"An administrator grants P to the same viewer again.\",\"An administrator revokes one grant for P.\",\"The viewer requests P.\"],\"outcomes\":[\"P is closed because there can be only one effective grant.\",\"P remains visible because a second active grant still exists.\"],\"observer\":\"The viewer and administrator\"}},{\"unit\":\"00_product.md:Principals\",\"subject\":\"StaffAccount lifecycle\",\"kind\":\"incomplete state machine\",\"text\":\"the account is `pending_verification` ... (`pending_verification` → `active`) ... suspending or disabling an account invalidates its active sessions ... the staff account is reinstated\",\"question\":\"What are the complete staff statuses and allowed transitions, how do suspension and disabling differ, and which transitions count as reinstatement?\",\"options\":[\"Use pending_verification, active, suspended and disabled with explicit transitions\",\"Treat suspended and disabled as synonyms\",\"Make disabled terminal while suspended is reversible\"],\"default_guess\":\"Use four distinct statuses; suspension is reversible, disabling is administrative and reversible only through an explicit reinstatement action, and neither state can authenticate.\",\"witness\":{\"initial\":\"An active operator has an assignment and is then disabled.\",\"events\":[\"An administrator changes the account status back toward active.\",\"The operator logs in and reads the assigned project.\"],\"outcomes\":[\"The account can be reinstated and the existing assignment again grants read access.\",\"Disabled is terminal, so the transition or login is refused.\"],\"observer\":\"The administrator and operator\"}},{\"unit\":\"00_product.md:Principals\",\"subject\":\"initial-password use\",\"kind\":\"missing enforcement rule\",\"text\":\"the holder logs in with the initial password and changes it\",\"question\":\"Is changing the administrator-chosen initial password mandatory before any other authenticated operation, or merely an expected user action?\",\"options\":[\"Require a password change before all other operations\",\"Allow ordinary use immediately and merely recommend a change\",\"Allow only a limited set of operations until the change\"],\"default_guess\":\"Mark the account as requiring a password change and allow only session/security operations until it is changed.\",\"witness\":{\"initial\":\"An administrator has activated a new operator account whose initial password has not been changed.\",\"events\":[\"The operator logs in with the initial password.\",\"The operator attempts to create an expense before changing it.\"],\"outcomes\":[\"The expense is accepted because activation gives normal access immediately.\",\"The expense is refused until the operator changes the initial password.\"],\"observer\":\"The operator\"}},{\"unit\":\"00_product.md:Principals\",\"subject\":\"email normalization\",\"kind\":\"undefined identity rule\",\"text\":\"mandatory unique normalized email as login identifier\",\"question\":\"What exact normalization algorithm is authoritative for uniqueness and login matching?\",\"options\":[\"Trim and lowercase the complete address only\",\"Apply a specified standards-based domain and local-part normalization\",\"Use database case-insensitive comparison without rewriting\"],\"default_guess\":\"Trim surrounding whitespace and compare the complete address case-insensitively without provider-specific dot or plus handling.\",\"witness\":{\"initial\":\"An account exists with login `User@example.com`.\",\"events\":[\"An administrator attempts to create `user@example.com`.\",\"A holder later attempts login using the differently cased spelling.\"],\"outcomes\":[\"Creation is rejected as a duplicate and either spelling logs into the existing account.\",\"Creation succeeds as a distinct account or the differently cased login fails.\"],\"observer\":\"The administrator and account holder\"}},{\"unit\":\"00_product.md:Principals\",\"subject\":\"ServicePrincipal and credential revocation\",\"kind\":\"ambiguous lifecycle\",\"text\":\"active/disabled status, creation/rotation/revocation timestamps ... one or more independently revocable credentials\",\"question\":\"Are disabling a service principal, revoking a service principal, and revoking one credential distinct actions and states; which are reversible and what happens to the remaining credentials?\",\"options\":[\"Principal disable is reversible, principal revocation is terminal, and credential revocation affects only one credential\",\"There is only reversible principal disable plus per-credential revocation\",\"Principal revocation and disable are synonyms\"],\"default_guess\":\"Treat principal disable as reversible, principal revocation as terminal, and credential revocation as independently terminal for that credential.\",\"witness\":{\"initial\":\"An active producer has credentials A and B.\",\"events\":[\"An administrator performs the action described as revoking the service principal or one of its credentials.\",\"The producer imports once with A and once with B.\"],\"outcomes\":[\"Only A is refused while B remains valid because one credential was revoked.\",\"Both are refused because the principal itself was revoked or disabled.\"],\"observer\":\"The producer and administrator\"}},{\"unit\":\"00_product.md:Principals\",\"subject\":\"producer source-type scope\",\"kind\":\"unnamed input vocabulary\",\"text\":\"explicit project scope: allowed source types and allowed projects or administrative area\",\"question\":\"What snapshot field carries the source type, what is its closed vocabulary, and how is it matched against a producer's allowed source types?\",\"options\":[\"Add a required enumerated `source_type` field\",\"Derive the type from a structured source-provenance object\",\"Remove source-type authorization and scope only by project\"],\"default_guess\":\"Require an enumerated `source_type` in structured source provenance and match it exactly against the principal's stored allow-list.\",\"witness\":{\"initial\":\"A producer is allowed only the PresuPro source type for project P.\",\"events\":[\"It submits a snapshot for P whose free-form provenance names another system.\",\"The portal evaluates the import.\"],\"outcomes\":[\"The import is rejected because the source type is outside the producer scope.\",\"The import is accepted because no specified field or vocabulary allows the source-type restriction to be evaluated.\"],\"observer\":\"The producer and auditor\"}},{\"unit\":\"00_product.md:Principals\",\"subject\":\"global producer authorization\",\"kind\":\"contradictory capability model\",\"text\":\"a closed narrow capability set — import-side only (`portal.estimate_snapshot.import`, `portal.estimate_snapshot.read_import_result`) ... a global producer exists only through an explicitly granted capability; every import verifies the principal may publish for the given `project_id`\",\"question\":\"What is the explicitly granted global capability, given that the supposedly closed capability set names no such capability, and does it replace per-project grants or merely broaden their scope?\",\"options\":[\"Add a named global-import capability that replaces per-project grants\",\"Represent global scope as producer-scope data under the existing import capability\",\"Require project grants even for a so-called global producer\"],\"default_guess\":\"Represent global authorization as an explicit global scope record under `portal.estimate_snapshot.import`, while still evaluating the concrete project on every import.\",\"witness\":{\"initial\":\"A producer has `portal.estimate_snapshot.import` and a purported global grant but no grant naming project P.\",\"events\":[\"The producer imports a valid snapshot for active project P.\"],\"outcomes\":[\"The import succeeds because the global grant authorizes every project.\",\"The import is denied because every import still requires an explicit project grant and no additional global capability exists.\"],\"observer\":\"The producer\"}},{\"unit\":\"00_product.md:Principals\",\"subject\":\"service credential rotation overlap\",\"kind\":\"undefined validity window\",\"text\":\"rotatable with an overlap period\",\"question\":\"When does the old credential stop authenticating after rotation, how long is the overlap, and is the deadline fixed, configured, or chosen per rotation?\",\"options\":[\"Use a fixed product duration\",\"Use a validated deployment setting\",\"Require an administrator-supplied expiry on each rotation\",\"End overlap only by explicit revocation\"],\"default_guess\":\"Use a validated deployment setting and record an exact old-credential expiry at rotation time.\",\"witness\":{\"initial\":\"Credential A is valid and an administrator rotates it to credential B.\",\"events\":[\"The producer uses A shortly after rotation.\",\"The producer uses A again after an implementation-chosen interval.\"],\"outcomes\":[\"A remains valid until a deterministic recorded overlap deadline.\",\"A may already be invalid or may remain valid indefinitely because no deadline rule is specified.\"],\"observer\":\"The producer and administrator\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"first-administrator audit\",\"kind\":\"direct contradiction\",\"text\":\"R0-07: `never printed, logged or audited` versus `Every significant action records actor provenance` and `Every significant action carries actor provenance to audit`\",\"question\":\"Is creation of the first administrator an explicit exception to the audit invariants, or must the bootstrap create an audit record with a defined host actor?\",\"options\":[\"Make bootstrap creation an explicit unaudited exception\",\"Audit bootstrap creation using a named host/bootstrap actor\",\"Audit only success or only failure without recording secrets\"],\"default_guess\":\"Audit the result under a synthetic bootstrap actor while excluding the email, password and secret material.\",\"witness\":{\"initial\":\"The deployment has no staff accounts.\",\"events\":[\"A host operator successfully runs the bootstrap command.\",\"An auditor inspects the portal audit history.\"],\"outcomes\":[\"No audit record exists, as R0-07 requires.\",\"A first-administrator creation record exists, as the audit promise and invariant require.\"],\"observer\":\"The auditor\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"bootstrap credential input\",\"kind\":\"unnamed input channel\",\"text\":\"the email and password are its inputs, read neither from process arguments nor from the environment nor from a file\",\"question\":\"Through what concrete channel does the local command receive email and password, and can it operate non-interactively?\",\"options\":[\"Read both through hidden interactive terminal prompts\",\"Read a structured request from standard input\",\"Read secrets from inherited file descriptors or an OS credential facility\"],\"default_guess\":\"Prompt for email and a non-echoed password on a controlling terminal and refuse non-interactive execution.\",\"witness\":{\"initial\":\"An empty deployment is being provisioned by an unattended deployment script.\",\"events\":[\"The script invokes the bootstrap command without arguments, environment credentials or a credential file.\",\"The command tries to acquire its required inputs.\"],\"outcomes\":[\"Provisioning can supply the inputs through a defined non-interactive channel.\",\"The command requires an interactive terminal and provisioning blocks or fails.\"],\"observer\":\"The host operator and deployment script\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"bootstrap command outcomes\",\"kind\":\"unnamed failure contract\",\"text\":\"Its outcome is a closed set of exit codes that deployment scripts may branch on\",\"question\":\"What is the complete exit-code set, and which code covers success, existing staff, invalid input, configuration failure, storage failure and concurrent bootstrap attempts?\",\"options\":[\"Define a distinct stable code for each branchable outcome\",\"Define success, already-initialized and generic failure only\",\"Return structured standard output in addition to stable exit codes\"],\"default_guess\":\"Define stable codes for success, already initialized, invalid input, invalid configuration and operational failure, with no secret-bearing output.\",\"witness\":{\"initial\":\"A deployment already contains one staff account.\",\"events\":[\"A deployment script runs the bootstrap command.\",\"The command refuses to create another administrator.\"],\"outcomes\":[\"The script receives a dedicated already-initialized code and continues safely.\",\"The script receives an implementation-chosen generic failure code and cannot distinguish an expected refusal from a broken database.\"],\"observer\":\"The deployment script\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"readiness semantics\",\"kind\":\"undefined observable result\",\"text\":\"The service answers an unauthenticated liveness and readiness check\",\"question\":\"What conditions make each check pass or fail, and what stable HTTP status and body are returned for pass and failure?\",\"options\":[\"Liveness reports process responsiveness; readiness additionally verifies database and binary-root usability\",\"Both checks report only process responsiveness\",\"Readiness verifies configuration and database but not binary storage\"],\"default_guess\":\"Return a minimal fixed body; liveness passes while the process can serve requests, and readiness passes only after validated configuration plus usable database and binary root.\",\"witness\":{\"initial\":\"The HTTP process is running but its SQLite database cannot be opened.\",\"events\":[\"A load balancer calls liveness.\",\"The load balancer calls readiness.\"],\"outcomes\":[\"Liveness passes and readiness fails, removing the instance from service.\",\"Both pass because their conditions were left equivalent.\"],\"observer\":\"The load balancer and operator\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"concealed binary-read failure\",\"kind\":\"unnamed failure output\",\"text\":\"An unknown, cross-project, hidden, oversize or unlisted read is answered the same way\",\"question\":\"What single observable HTTP response is used for all of these cases, including status, JSON or empty body, headers and cache behavior?\",\"options\":[\"Return the same not-found JSON response for all cases\",\"Return a fixed empty 404 response\",\"Return the common concealed authorization rejection\"],\"default_guess\":\"Return a fixed empty 404 response with identical headers and no object metadata.\",\"witness\":{\"initial\":\"A caller is authorized for project A but not project B.\",\"events\":[\"The caller requests an unknown document id.\",\"The caller requests a known document in project B.\",\"The caller compares the responses.\"],\"outcomes\":[\"The responses are byte-for-byte equivalent fixed failures.\",\"Different implementers choose 404 for unknown and concealed 403 or JSON rejection for cross-project access, revealing the case.\"],\"observer\":\"The caller\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"binary media allow-lists\",\"kind\":\"unnamed validation policy\",\"text\":\"Its media type is recognized from the content and must be on a closed list per object kind\",\"question\":\"What exact media types are allowed for ExpenseDocument and ProgressPhoto, and what content-signature recognizer is authoritative when bytes are ambiguous or malformed?\",\"options\":[\"Specify separate exact MIME allow-lists and signature rules for each kind\",\"Use one shared image/PDF allow-list\",\"Delegate recognition and allow-lists to a named library and version\"],\"default_guess\":\"Allow PDF and a small enumerated image set for expense documents, images only for progress photos, and recognize them by fixed byte signatures.\",\"witness\":{\"initial\":\"An authorized expense document contains valid TIFF bytes.\",\"events\":[\"The caller requests the document.\",\"The portal recognizes the content as `image/tiff`.\"],\"outcomes\":[\"The exact bytes are returned because TIFF is on the document allow-list.\",\"The concealed failure is returned because TIFF is not on the implementation's chosen allow-list.\"],\"observer\":\"The caller\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"project ownership of import results\",\"kind\":\"unclassified stored fact\",\"text\":\"R0-16 lists records with and without a project but omits import results; R0-25 says the portal records every classified rejection as a fresh immutable import result\",\"question\":\"Is a SnapshotImportResult project-scoped or non-project-scoped, especially when the submitted project id is absent, malformed or unknown to Registry?\",\"options\":[\"Every result is project-scoped using the submitted id, even when Registry does not know it\",\"Only results for known projects are project-scoped; other rejection results are non-project records\",\"Do not create an import result until a valid known project has been identified\"],\"default_guess\":\"Treat the result as non-project-scoped until a Registry project is validated, while retaining the submitted project value only as rejected provenance.\",\"witness\":{\"initial\":\"An authenticated producer has import capability.\",\"events\":[\"It submits an otherwise classifiable snapshot naming an unknown project id.\",\"R0-25 requires a fresh rejection result.\",\"The result is later read by its import id.\"],\"outcomes\":[\"The result belongs to the unknown id as though it were a Registry project, conflicting with the exactly-one-Registry-project invariant.\",\"The result is a non-project record, although R0-16's purported classification does not name it.\"],\"observer\":\"The producer, authorization layer and auditor\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"progress-photo publication input\",\"kind\":\"vague inherited action\",\"text\":\"a progress photo is published the same way\",\"question\":\"Which parts of the expense-submission rule are intended to apply to photo publication, and what exact prepared-photo input, provenance, section association, caption and visibility fields are required or optional?\",\"options\":[\"Require project, prepared binary reference, provenance reference, visibility and optional caption/section\",\"Apply only authenticated staff and project authorization from the expense rule\",\"Require a confirmed OCR-style result and allocation as the literal phrase could imply\"],\"default_guess\":\"Apply the authenticated staff and project-authorization rule, but define a separate photo payload with prepared file reference, provenance, visibility and optional caption and section.\",\"witness\":{\"initial\":\"An assigned operator has a prepared photo reference but no OCR result or expense allocation.\",\"events\":[\"The operator submits the project, photo reference, caption and visibility.\",\"The portal interprets `published the same way`.\"],\"outcomes\":[\"The photo is accepted under a photo-specific payload.\",\"The request is rejected because the implementation copied the expense rule's confirmed-result or allocation requirements.\"],\"observer\":\"The operator\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"classified snapshot-import attempts\",\"kind\":\"circular persistence boundary\",\"text\":\"The portal records every import attempt it classifies — accepted, idempotent replay, integrity conflict, or a rejection\",\"question\":\"Which authenticated failures count as classified rejections that receive an `import_id`, and which remain ordinary HTTP parsing, validation, authorization, Registry or infrastructure failures with no result record?\",\"options\":[\"Record every authenticated request after JSON parsing\",\"Record only requests that identify a valid project and snapshot identity\",\"Enumerate recordable rejection classes and leave transport/infrastructure failures unrecorded\"],\"default_guess\":\"Enumerate the classes: record all authenticated, parseable contract attempts, including authorization and Registry-policy rejection, but not malformed transport or infrastructure failures.\",\"witness\":{\"initial\":\"A valid producer credential is available.\",\"events\":[\"The producer sends JSON with an unsupported contract version.\",\"The portal rejects it.\"],\"outcomes\":[\"A fresh immutable rejection result and `import_id` are returned.\",\"The portal returns an ordinary validation error and records no import result because the attempt was never considered classified.\"],\"observer\":\"The producer and auditor\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"snapshot content identity\",\"kind\":\"undefined equality rule\",\"text\":\"re-publishing the same `estimate_id + estimate_version` with identical content is answered ... idempotent replay; different content ... is rejected as an integrity conflict (content fingerprint recorded)\",\"question\":\"What exact canonical content is fingerprinted, including JSON key order, decimal spelling, timestamps, omitted versus null fields and source-provenance ordering?\",\"options\":[\"Fingerprint a specified canonical serialization of all contract fields\",\"Fingerprint the raw request bytes\",\"Normalize into the domain model and fingerprint only business fields\"],\"default_guess\":\"Validate and normalize the complete contract, serialize it using an explicitly specified canonical JSON form, and fingerprint that representation.\",\"witness\":{\"initial\":\"An accepted snapshot used `100.00` and one JSON key order.\",\"events\":[\"The producer republishes the same business data using `100.0` and a different key order.\",\"The portal compares the new fingerprint with the stored one.\"],\"outcomes\":[\"The request is an idempotent replay because canonicalized content is equal.\",\"The request is an integrity conflict because raw bytes or implementation-specific serialization differ.\"],\"observer\":\"The producer and reviewing staff\"}},{\"unit\":\"00_product.md:Product invariants visible at State 0\",\"subject\":\"archived-project effect of producer grants\",\"kind\":\"contradictory access promise\",\"text\":\"existing grants and assignments keep giving access ... versus a ServicePrincipal's capability set being import-side only and R0-21 reading import results without rechecking its project grant\",\"question\":\"What access, if any, does an existing producer grant continue to confer after archival, given that imports are forbidden and import-result reads deliberately ignore the grant?\",\"options\":[\"It confers no usable archived-project operation; only prior result reads remain available independently\",\"It permits a named archived-project read operation that must be added to the capability set\",\"The invariant's continuing-access statement applies only to viewer grants and staff assignments\"],\"default_guess\":\"Narrow the continuing-access statement to viewer grants and staff assignments; a producer grant authorizes imports only while the project is active, while prior result reads remain independently available.\",\"witness\":{\"initial\":\"A producer has a grant for project P and previously imported a snapshot; P is then archived.\",\"events\":[\"The producer attempts another import for P.\",\"The producer reads the earlier result by `import_id`.\",\"The producer attempts to read P's snapshot records.\"],\"outcomes\":[\"The grant gives some archived read access, as the invariant says, requiring an otherwise unnamed producer read operation.\",\"The new import and snapshot read are denied, while the result read succeeds independently of the grant, leaving the grant itself with no continuing access effect.\"],\"observer\":\"The producer and authorization implementer\"}}]}",
+ "set_aside": []
+}

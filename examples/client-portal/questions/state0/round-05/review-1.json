@@ -1,0 +1,331 @@
+{
+ "open_points": [
+  {
+   "unit": "00_product.md:Budget sources",
+   "subject": "idempotent snapshot replay response",
+   "kind": "contradiction",
+   "text": "“idempotently returns the existing snapshot” conflicts with R0-25: “answers the import request with that result” and creates a fresh import result and `import_id` for every replay",
+   "question": "Does an identical replay return the original snapshot, a newly created import-result resource, or an envelope containing both, and which identity/status is observable in the HTTP response?",
+   "options": [
+    "Return the existing snapshot only",
+    "Return the fresh idempotent-replay import result only",
+    "Return both snapshot and fresh import-result data"
+   ],
+   "default_guess": "Return the fresh import result containing the existing snapshot identity.",
+   "witness": {
+    "initial": "Snapshot E version 3 was previously accepted as snapshot S with import result I1.",
+    "events": [
+     "The same producer republishes byte-for-byte identical content.",
+     "The portal records fresh replay result I2 as required by R0-25."
+    ],
+    "outcomes": [
+     "The producer receives snapshot S as the response.",
+     "The producer receives import result I2, which refers to snapshot S."
+    ],
+    "observer": "The producer and any client persisting the response identity."
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "snapshot attempts classified as rejections",
+   "kind": "undefined boundary",
+   "text": "“every import attempt it classifies — accepted, idempotent replay, integrity conflict, or a rejection”",
+   "question": "At what point is a request an import attempt that must receive a fresh recorded `import_id`, and which failures occur before classification besides bearer-authentication failure?",
+   "options": [
+    "Every authenticated request reaching the import route is recorded, including malformed contracts",
+    "Only requests that deserialize into a snapshot are recorded",
+    "Only requests passing contract/schema validation are recorded"
+   ],
+   "default_guess": "Record every authenticated request whose body can be associated with a producer and import operation, including validation rejections.",
+   "witness": {
+    "initial": "An active producer has valid project scope and a valid bearer credential.",
+    "events": [
+     "The producer submits malformed snapshot JSON or omits `contract_version`.",
+     "Authentication succeeds, but contract validation fails."
+    ],
+    "outcomes": [
+     "The portal records a rejection with a fresh `import_id` retrievable by the producer.",
+     "The portal returns an ordinary validation failure and records no import result."
+    ],
+    "observer": "The producer retry logic and auditors."
+   }
+  },
+  {
+   "unit": "00_product.md:Product invariants visible at State 0",
+   "subject": "immutability of archived project records versus access revocation",
+   "kind": "contradiction",
+   "text": "Invariant 5 says “An archived project's records are readable and immutable,” while R0-16 makes grants and assignments project-scoped records and R0-24 says revoking those records “succeeds for an archived project”",
+   "question": "Are access grants and assignments exceptions to archived-record immutability, and if so, must the invariant explicitly limit immutability to business records or permit revocation mutations?",
+   "options": [
+    "Only budget, snapshot, expense, document, progress, payment and photo records are immutable",
+    "All project-scoped records are immutable, including access records",
+    "Access records may only transition to revoked while archived"
+   ],
+   "default_guess": "Treat access records as an explicit revocation-only exception to archived business-record immutability.",
+   "witness": {
+    "initial": "Project P is archived and has active viewer grant G.",
+    "events": [
+     "An administrator revokes G."
+    ],
+    "outcomes": [
+     "Revocation succeeds under R0-24 and G changes state.",
+     "Revocation is rejected because G is a project-scoped record and invariant 5 makes it immutable."
+    ],
+    "observer": "The administrator and the viewer whose access should close."
+   }
+  },
+  {
+   "unit": "00_product.md:Product invariants visible at State 0",
+   "subject": "restoring access to an archived project through principal or credential changes",
+   "kind": "ambiguous prohibition",
+   "text": "“no new access to it is granted” is paired only with prohibitions on creating a new viewer grant, staff assignment or producer grant; the text still permits credential re-issue, account activation and credential rotation",
+   "question": "Does the prohibition cover only new project-scope records, or also actions that restore effective access through an existing archived-project grant or assignment?",
+   "options": [
+    "Existing scope may be made usable again by reissuing credentials or activating principals",
+    "No action may restore effective access to an archived project",
+    "Viewer, staff and producer contours follow different restoration rules"
+   ],
+   "default_guess": "Permit existing grants and assignments to become usable again; prohibit only creation of new project-scope records, and state that meaning explicitly.",
+   "witness": {
+    "initial": "Viewer V has grant G to project P; P is archived; V's access credential has been revoked.",
+    "events": [
+     "An administrator re-issues V's access credential.",
+     "V enters through the new link and requests P."
+    ],
+    "outcomes": [
+     "V reads P because G already existed and credential re-issue is allowed.",
+     "Re-issue or access is refused because it would grant new effective access to archived P."
+    ],
+    "observer": "The administrator and viewer V."
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "discovering access records that must remain revocable after archival",
+   "kind": "missing action",
+   "text": "R0-24 promises that existing grants and assignments can be revoked after archival, but R0-08 specifies only discovery of active Registry projects for granting access",
+   "question": "What portal action lets an administrator find the existing viewer grant, staff assignment or producer grant for an archived project so it can be revoked?",
+   "options": [
+    "List access records by principal, including archived projects",
+    "List access records by stored project identity, including archived projects",
+    "Require the administrator already to know the access-record identifier"
+   ],
+   "default_guess": "Provide principal- and project-based access-record listings that include archived projects.",
+   "witness": {
+    "initial": "Project P has been archived; viewer grant G remains active; the administrator does not know G's internal identifier.",
+    "events": [
+     "The administrator uses the specified project-discovery operation, which lists only active Registry projects.",
+     "The administrator attempts to locate and revoke G."
+    ],
+    "outcomes": [
+     "A portal access-record listing exposes G and revocation succeeds.",
+     "No promised action exposes G, so revocation is possible only if an identifier was retained externally."
+    ],
+    "observer": "The administrator and the viewer retaining access."
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "bootstrap command exit contract",
+   "kind": "unnamed output",
+   "text": "“Its outcome is a closed set of exit codes that deployment scripts may branch on”",
+   "question": "What is the complete exit-code set, and which code represents success, existing staff, invalid input, invalid configuration, and persistence failure?",
+   "options": [
+    "A distinct code for every stated failure class",
+    "Success plus one generic refusal code and one operational-error code",
+    "Only conventional zero/nonzero status"
+   ],
+   "default_guess": "Define zero for creation and stable distinct nonzero codes for already initialized, invalid input/configuration, and storage failure.",
+   "witness": {
+    "initial": "A deployment invokes the bootstrap command against a database that already contains one staff account.",
+    "events": [
+     "The command refuses to create an administrator.",
+     "A deployment script branches on its exit status."
+    ],
+    "outcomes": [
+     "The command returns a dedicated already-initialized code that the script treats as an idempotent condition.",
+     "The command returns the same generic failure used for invalid configuration, causing the script to abort or misclassify the state."
+    ],
+    "observer": "The host operator and deployment automation."
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "bootstrap credential-input channel",
+   "kind": "unnamed trust boundary",
+   "text": "“the email and password are its inputs, read neither from process arguments nor from the environment nor from a file”",
+   "question": "Through which concrete channel does the local command receive the email and password, and is that channel required to be an interactive TTY or may automation supply standard input?",
+   "options": [
+    "Interactive terminal prompts only",
+    "Structured standard input through a pipe",
+    "Operating-system credential/secret descriptor"
+   ],
+   "default_guess": "Use interactive terminal prompts with echo disabled for the password and refuse non-TTY input.",
+   "witness": {
+    "initial": "An empty deployment is being provisioned by unattended automation.",
+    "events": [
+     "Automation starts the local bootstrap command.",
+     "It attempts to provide the initial email and password without arguments, environment variables or a file."
+    ],
+    "outcomes": [
+     "The command accepts structured standard input and creates the administrator.",
+     "The command requires an interactive TTY and provisioning cannot complete unattended."
+    ],
+    "observer": "The host operator and deployment automation."
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "audit of first-administrator creation",
+   "kind": "contradiction",
+   "text": "R0-07 says creation of the first active verified administrator is “never … audited,” while the Audit section and invariant 12 require every significant action to carry actor provenance to audit",
+   "question": "Is bootstrap creation an explicit exception to the universal audit promise, or must it create a host/bootstrap audit record despite lacking a portal principal?",
+   "options": [
+    "Create no audit record and narrow the universal audit rule",
+    "Create an audit record with a special host/bootstrap actor",
+    "Write a separate host audit outside the portal audit store"
+   ],
+   "default_guess": "Create a portal audit record with a special bootstrap actor and no project.",
+   "witness": {
+    "initial": "The deployment contains no staff accounts.",
+    "events": [
+     "A host operator successfully runs the bootstrap command.",
+     "An auditor later inspects portal audit history."
+    ],
+    "outcomes": [
+     "No record exists, as R0-07 requires.",
+     "A first-administrator creation record exists, as the universal audit invariant requires."
+    ],
+    "observer": "The security auditor."
+   }
+  },
+  {
+   "unit": "00_product.md:Principals",
+   "subject": "service-credential rotation overlap",
+   "kind": "undefined lifecycle",
+   "text": "Credentials are “rotatable with an overlap period” but no duration, start/end event, configuration source or revocation behavior for that period is stated",
+   "question": "When rotation occurs, exactly how long and under what conditions does the old credential remain valid, and can the administrator end the overlap early?",
+   "options": [
+    "Fixed product-defined overlap",
+    "Deployment-configured overlap",
+    "Administrator-selected overlap per rotation",
+    "Overlap lasts until explicit revocation"
+   ],
+   "default_guess": "Use a validated deployment-configured duration and permit explicit early revocation.",
+   "witness": {
+    "initial": "Producer A is using credential C1.",
+    "events": [
+     "An administrator rotates C1 and receives C2.",
+     "A continues sending requests with C1 after rotation."
+    ],
+    "outcomes": [
+     "C1 remains valid for a defined interval, then fails automatically.",
+     "C1 remains valid until explicitly revoked because no overlap endpoint was defined."
+    ],
+    "observer": "Producer A and the administrator."
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "confidential transport for bearer credentials and passwords",
+   "kind": "unnamed trust boundary",
+   "text": "R0-09 specifies “a bearer header only,” and the service is described as HTTP JSON, but no TLS termination, trusted-proxy boundary or requirement for encrypted transport is named",
+   "question": "Where is transport confidentiality enforced for service bearer credentials, staff passwords, viewer links and session cookies, and which forwarded transport headers or proxies, if any, are trusted?",
+   "options": [
+    "The portal serves TLS directly",
+    "A named trusted reverse proxy terminates TLS and the portal rejects untrusted forwarded headers",
+    "Plain HTTP is allowed only on a specified private/local boundary"
+   ],
+   "default_guess": "Require TLS at a configured trusted reverse proxy, enumerate trusted proxy addresses, and reject externally originated insecure requests.",
+   "witness": {
+    "initial": "The portal is reachable over plain HTTP through a network shared with another host.",
+    "events": [
+     "A producer sends its bearer credential in the required header.",
+     "The other host observes network traffic."
+    ],
+    "outcomes": [
+     "The request is refused because the transport is not authenticated as HTTPS.",
+     "The request succeeds and the reusable bearer credential is exposed in cleartext."
+    ],
+    "observer": "The producer, network observer and security operator."
+   }
+  },
+  {
+   "unit": "00_product.md:External systems",
+   "subject": "runtime obligation of the mandatory email gateway",
+   "kind": "ambiguous dependency",
+   "text": "R0-03 calls the Email Delivery Gateway “a mandatory external boundary,” while its section says it “is called by no operation of the running portal” because all mail is deferred",
+   "question": "Must the current deployment configure, connect to or include the gateway in readiness checks even though no current operation calls it?",
+   "options": [
+    "Gateway configuration and availability are required now",
+    "The boundary is mandatory architecturally but no runtime gateway is required until Q19 is implemented",
+    "Configuration is required, but gateway availability does not affect readiness"
+   ],
+   "default_guess": "Treat it as an architectural boundary only until Q19 is implemented; do not require runtime configuration or readiness.",
+   "witness": {
+    "initial": "A deployment has valid database and binary-root configuration but no email gateway configuration or reachable gateway.",
+    "events": [
+     "The operator starts the portal.",
+     "The readiness check is called."
+    ],
+    "outcomes": [
+     "Startup or readiness fails because the mandatory external boundary is absent.",
+     "The portal starts and is ready because no implemented operation uses the gateway."
+    ],
+    "observer": "The deployment operator and health-monitoring system."
+   }
+  },
+  {
+   "unit": "00_product.md:External systems",
+   "subject": "Registry failure translation and read behavior",
+   "kind": "hidden external failure policy",
+   "text": "The Registry boundary promises “typed failure translation” but does not name the Registry failures, their portal meanings, or whether existing portal reads may proceed when lifecycle/context validation is unavailable",
+   "question": "For not-found, archived, unauthorized, timeout, malformed response and Registry unavailability, what observable portal result is produced, and may any project read use previously stored context/status?",
+   "options": [
+    "Fail every project operation closed whenever Registry cannot be consulted",
+    "Allow reads from stored portal records while exposing Registry context as unavailable",
+    "Use a defined cache with explicit freshness and failure rules"
+   ],
+   "default_guess": "Fail mutations closed; allow authorized reads of portal-owned records with Registry context explicitly unavailable, using no fabricated context.",
+   "witness": {
+    "initial": "Viewer V has an active grant and session for active project P; portal-owned budget and expenses exist; Registry is unreachable.",
+    "events": [
+     "V opens P.",
+     "The portal attempts to obtain Registry lifecycle/context data."
+    ],
+    "outcomes": [
+     "The entire project request fails with a translated dependency error.",
+     "Portal-owned data is returned while Registry context is marked unavailable."
+    ],
+    "observer": "Viewer V and availability monitoring."
+   }
+  },
+  {
+   "unit": "00_product.md:External systems",
+   "subject": "confirmed OCR recognition input contract",
+   "kind": "unnamed input",
+   "text": "The portal accepts a “versioned confirmed normalized recognition contract” and “complete confirmed content,” but the required fields, confirmation marker, value constraints and rejection conditions are not named",
+   "question": "What exact normalized facts must an authenticated operator submit to create an Expense, and what makes the recognition result complete and confirmed?",
+   "options": [
+    "Define a portal-owned closed schema for normalized recognition facts",
+    "Accept an opaque versioned OCR payload and store only selected fields",
+    "Require only document identity and total, with remaining expense facts supplied separately by the operator"
+   ],
+   "default_guess": "Define a portal-owned closed, versioned schema containing the stable document identity, monetary facts, document facts, provenance reference and explicit confirmation state, with explicit validation failures.",
+   "witness": {
+    "initial": "An authenticated operator has a recognition result with `recognized_document_id` and total but no supplier or document date.",
+    "events": [
+     "The operator submits it with a valid project and balanced allocation."
+    ],
+    "outcomes": [
+     "The portal accepts it because those omitted facts are not required by the text.",
+     "The portal rejects it as incomplete because the implementation considers those facts mandatory."
+    ],
+    "observer": "The operator, OCR adapter and client viewing the resulting expense."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"00_product.md:Budget sources\",\"subject\":\"idempotent snapshot replay response\",\"kind\":\"contradiction\",\"text\":\"“idempotently returns the existing snapshot” conflicts with R0-25: “answers the import request with that result” and creates a fresh import result and `import_id` for every replay\",\"question\":\"Does an identical replay return the original snapshot, a newly created import-result resource, or an envelope containing both, and which identity/status is observable in the HTTP response?\",\"options\":[\"Return the existing snapshot only\",\"Return the fresh idempotent-replay import result only\",\"Return both snapshot and fresh import-result data\"],\"default_guess\":\"Return the fresh import result containing the existing snapshot identity.\",\"witness\":{\"initial\":\"Snapshot E version 3 was previously accepted as snapshot S with import result I1.\",\"events\":[\"The same producer republishes byte-for-byte identical content.\",\"The portal records fresh replay result I2 as required by R0-25.\"],\"outcomes\":[\"The producer receives snapshot S as the response.\",\"The producer receives import result I2, which refers to snapshot S.\"],\"observer\":\"The producer and any client persisting the response identity.\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"snapshot attempts classified as rejections\",\"kind\":\"undefined boundary\",\"text\":\"“every import attempt it classifies — accepted, idempotent replay, integrity conflict, or a rejection”\",\"question\":\"At what point is a request an import attempt that must receive a fresh recorded `import_id`, and which failures occur before classification besides bearer-authentication failure?\",\"options\":[\"Every authenticated request reaching the import route is recorded, including malformed contracts\",\"Only requests that deserialize into a snapshot are recorded\",\"Only requests passing contract/schema validation are recorded\"],\"default_guess\":\"Record every authenticated request whose body can be associated with a producer and import operation, including validation rejections.\",\"witness\":{\"initial\":\"An active producer has valid project scope and a valid bearer credential.\",\"events\":[\"The producer submits malformed snapshot JSON or omits `contract_version`.\",\"Authentication succeeds, but contract validation fails.\"],\"outcomes\":[\"The portal records a rejection with a fresh `import_id` retrievable by the producer.\",\"The portal returns an ordinary validation failure and records no import result.\"],\"observer\":\"The producer retry logic and auditors.\"}},{\"unit\":\"00_product.md:Product invariants visible at State 0\",\"subject\":\"immutability of archived project records versus access revocation\",\"kind\":\"contradiction\",\"text\":\"Invariant 5 says “An archived project's records are readable and immutable,” while R0-16 makes grants and assignments project-scoped records and R0-24 says revoking those records “succeeds for an archived project”\",\"question\":\"Are access grants and assignments exceptions to archived-record immutability, and if so, must the invariant explicitly limit immutability to business records or permit revocation mutations?\",\"options\":[\"Only budget, snapshot, expense, document, progress, payment and photo records are immutable\",\"All project-scoped records are immutable, including access records\",\"Access records may only transition to revoked while archived\"],\"default_guess\":\"Treat access records as an explicit revocation-only exception to archived business-record immutability.\",\"witness\":{\"initial\":\"Project P is archived and has active viewer grant G.\",\"events\":[\"An administrator revokes G.\"],\"outcomes\":[\"Revocation succeeds under R0-24 and G changes state.\",\"Revocation is rejected because G is a project-scoped record and invariant 5 makes it immutable.\"],\"observer\":\"The administrator and the viewer whose access should close.\"}},{\"unit\":\"00_product.md:Product invariants visible at State 0\",\"subject\":\"restoring access to an archived project through principal or credential changes\",\"kind\":\"ambiguous prohibition\",\"text\":\"“no new access to it is granted” is paired only with prohibitions on creating a new viewer grant, staff assignment or producer grant; the text still permits credential re-issue, account activation and credential rotation\",\"question\":\"Does the prohibition cover only new project-scope records, or also actions that restore effective access through an existing archived-project grant or assignment?\",\"options\":[\"Existing scope may be made usable again by reissuing credentials or activating principals\",\"No action may restore effective access to an archived project\",\"Viewer, staff and producer contours follow different restoration rules\"],\"default_guess\":\"Permit existing grants and assignments to become usable again; prohibit only creation of new project-scope records, and state that meaning explicitly.\",\"witness\":{\"initial\":\"Viewer V has grant G to project P; P is archived; V's access credential has been revoked.\",\"events\":[\"An administrator re-issues V's access credential.\",\"V enters through the new link and requests P.\"],\"outcomes\":[\"V reads P because G already existed and credential re-issue is allowed.\",\"Re-issue or access is refused because it would grant new effective access to archived P.\"],\"observer\":\"The administrator and viewer V.\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"discovering access records that must remain revocable after archival\",\"kind\":\"missing action\",\"text\":\"R0-24 promises that existing grants and assignments can be revoked after archival, but R0-08 specifies only discovery of active Registry projects for granting access\",\"question\":\"What portal action lets an administrator find the existing viewer grant, staff assignment or producer grant for an archived project so it can be revoked?\",\"options\":[\"List access records by principal, including archived projects\",\"List access records by stored project identity, including archived projects\",\"Require the administrator already to know the access-record identifier\"],\"default_guess\":\"Provide principal- and project-based access-record listings that include archived projects.\",\"witness\":{\"initial\":\"Project P has been archived; viewer grant G remains active; the administrator does not know G's internal identifier.\",\"events\":[\"The administrator uses the specified project-discovery operation, which lists only active Registry projects.\",\"The administrator attempts to locate and revoke G.\"],\"outcomes\":[\"A portal access-record listing exposes G and revocation succeeds.\",\"No promised action exposes G, so revocation is possible only if an identifier was retained externally.\"],\"observer\":\"The administrator and the viewer retaining access.\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"bootstrap command exit contract\",\"kind\":\"unnamed output\",\"text\":\"“Its outcome is a closed set of exit codes that deployment scripts may branch on”\",\"question\":\"What is the complete exit-code set, and which code represents success, existing staff, invalid input, invalid configuration, and persistence failure?\",\"options\":[\"A distinct code for every stated failure class\",\"Success plus one generic refusal code and one operational-error code\",\"Only conventional zero/nonzero status\"],\"default_guess\":\"Define zero for creation and stable distinct nonzero codes for already initialized, invalid input/configuration, and storage failure.\",\"witness\":{\"initial\":\"A deployment invokes the bootstrap command against a database that already contains one staff account.\",\"events\":[\"The command refuses to create an administrator.\",\"A deployment script branches on its exit status.\"],\"outcomes\":[\"The command returns a dedicated already-initialized code that the script treats as an idempotent condition.\",\"The command returns the same generic failure used for invalid configuration, causing the script to abort or misclassify the state.\"],\"observer\":\"The host operator and deployment automation.\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"bootstrap credential-input channel\",\"kind\":\"unnamed trust boundary\",\"text\":\"“the email and password are its inputs, read neither from process arguments nor from the environment nor from a file”\",\"question\":\"Through which concrete channel does the local command receive the email and password, and is that channel required to be an interactive TTY or may automation supply standard input?\",\"options\":[\"Interactive terminal prompts only\",\"Structured standard input through a pipe\",\"Operating-system credential/secret descriptor\"],\"default_guess\":\"Use interactive terminal prompts with echo disabled for the password and refuse non-TTY input.\",\"witness\":{\"initial\":\"An empty deployment is being provisioned by unattended automation.\",\"events\":[\"Automation starts the local bootstrap command.\",\"It attempts to provide the initial email and password without arguments, environment variables or a file.\"],\"outcomes\":[\"The command accepts structured standard input and creates the administrator.\",\"The command requires an interactive TTY and provisioning cannot complete unattended.\"],\"observer\":\"The host operator and deployment automation.\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"audit of first-administrator creation\",\"kind\":\"contradiction\",\"text\":\"R0-07 says creation of the first active verified administrator is “never … audited,” while the Audit section and invariant 12 require every significant action to carry actor provenance to audit\",\"question\":\"Is bootstrap creation an explicit exception to the universal audit promise, or must it create a host/bootstrap audit record despite lacking a portal principal?\",\"options\":[\"Create no audit record and narrow the universal audit rule\",\"Create an audit record with a special host/bootstrap actor\",\"Write a separate host audit outside the portal audit store\"],\"default_guess\":\"Create a portal audit record with a special bootstrap actor and no project.\",\"witness\":{\"initial\":\"The deployment contains no staff accounts.\",\"events\":[\"A host operator successfully runs the bootstrap command.\",\"An auditor later inspects portal audit history.\"],\"outcomes\":[\"No record exists, as R0-07 requires.\",\"A first-administrator creation record exists, as the universal audit invariant requires.\"],\"observer\":\"The security auditor.\"}},{\"unit\":\"00_product.md:Principals\",\"subject\":\"service-credential rotation overlap\",\"kind\":\"undefined lifecycle\",\"text\":\"Credentials are “rotatable with an overlap period” but no duration, start/end event, configuration source or revocation behavior for that period is stated\",\"question\":\"When rotation occurs, exactly how long and under what conditions does the old credential remain valid, and can the administrator end the overlap early?\",\"options\":[\"Fixed product-defined overlap\",\"Deployment-configured overlap\",\"Administrator-selected overlap per rotation\",\"Overlap lasts until explicit revocation\"],\"default_guess\":\"Use a validated deployment-configured duration and permit explicit early revocation.\",\"witness\":{\"initial\":\"Producer A is using credential C1.\",\"events\":[\"An administrator rotates C1 and receives C2.\",\"A continues sending requests with C1 after rotation.\"],\"outcomes\":[\"C1 remains valid for a defined interval, then fails automatically.\",\"C1 remains valid until explicitly revoked because no overlap endpoint was defined.\"],\"observer\":\"Producer A and the administrator.\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"confidential transport for bearer credentials and passwords\",\"kind\":\"unnamed trust boundary\",\"text\":\"R0-09 specifies “a bearer header only,” and the service is described as HTTP JSON, but no TLS termination, trusted-proxy boundary or requirement for encrypted transport is named\",\"question\":\"Where is transport confidentiality enforced for service bearer credentials, staff passwords, viewer links and session cookies, and which forwarded transport headers or proxies, if any, are trusted?\",\"options\":[\"The portal serves TLS directly\",\"A named trusted reverse proxy terminates TLS and the portal rejects untrusted forwarded headers\",\"Plain HTTP is allowed only on a specified private/local boundary\"],\"default_guess\":\"Require TLS at a configured trusted reverse proxy, enumerate trusted proxy addresses, and reject externally originated insecure requests.\",\"witness\":{\"initial\":\"The portal is reachable over plain HTTP through a network shared with another host.\",\"events\":[\"A producer sends its bearer credential in the required header.\",\"The other host observes network traffic.\"],\"outcomes\":[\"The request is refused because the transport is not authenticated as HTTPS.\",\"The request succeeds and the reusable bearer credential is exposed in cleartext.\"],\"observer\":\"The producer, network observer and security operator.\"}},{\"unit\":\"00_product.md:External systems\",\"subject\":\"runtime obligation of the mandatory email gateway\",\"kind\":\"ambiguous dependency\",\"text\":\"R0-03 calls the Email Delivery Gateway “a mandatory external boundary,” while its section says it “is called by no operation of the running portal” because all mail is deferred\",\"question\":\"Must the current deployment configure, connect to or include the gateway in readiness checks even though no current operation calls it?\",\"options\":[\"Gateway configuration and availability are required now\",\"The boundary is mandatory architecturally but no runtime gateway is required until Q19 is implemented\",\"Configuration is required, but gateway availability does not affect readiness\"],\"default_guess\":\"Treat it as an architectural boundary only until Q19 is implemented; do not require runtime configuration or readiness.\",\"witness\":{\"initial\":\"A deployment has valid database and binary-root configuration but no email gateway configuration or reachable gateway.\",\"events\":[\"The operator starts the portal.\",\"The readiness check is called.\"],\"outcomes\":[\"Startup or readiness fails because the mandatory external boundary is absent.\",\"The portal starts and is ready because no implemented operation uses the gateway.\"],\"observer\":\"The deployment operator and health-monitoring system.\"}},{\"unit\":\"00_product.md:External systems\",\"subject\":\"Registry failure translation and read behavior\",\"kind\":\"hidden external failure policy\",\"text\":\"The Registry boundary promises “typed failure translation” but does not name the Registry failures, their portal meanings, or whether existing portal reads may proceed when lifecycle/context validation is unavailable\",\"question\":\"For not-found, archived, unauthorized, timeout, malformed response and Registry unavailability, what observable portal result is produced, and may any project read use previously stored context/status?\",\"options\":[\"Fail every project operation closed whenever Registry cannot be consulted\",\"Allow reads from stored portal records while exposing Registry context as unavailable\",\"Use a defined cache with explicit freshness and failure rules\"],\"default_guess\":\"Fail mutations closed; allow authorized reads of portal-owned records with Registry context explicitly unavailable, using no fabricated context.\",\"witness\":{\"initial\":\"Viewer V has an active grant and session for active project P; portal-owned budget and expenses exist; Registry is unreachable.\",\"events\":[\"V opens P.\",\"The portal attempts to obtain Registry lifecycle/context data.\"],\"outcomes\":[\"The entire project request fails with a translated dependency error.\",\"Portal-owned data is returned while Registry context is marked unavailable.\"],\"observer\":\"Viewer V and availability monitoring.\"}},{\"unit\":\"00_product.md:External systems\",\"subject\":\"confirmed OCR recognition input contract\",\"kind\":\"unnamed input\",\"text\":\"The portal accepts a “versioned confirmed normalized recognition contract” and “complete confirmed content,” but the required fields, confirmation marker, value constraints and rejection conditions are not named\",\"question\":\"What exact normalized facts must an authenticated operator submit to create an Expense, and what makes the recognition result complete and confirmed?\",\"options\":[\"Define a portal-owned closed schema for normalized recognition facts\",\"Accept an opaque versioned OCR payload and store only selected fields\",\"Require only document identity and total, with remaining expense facts supplied separately by the operator\"],\"default_guess\":\"Define a portal-owned closed, versioned schema containing the stable document identity, monetary facts, document facts, provenance reference and explicit confirmation state, with explicit validation failures.\",\"witness\":{\"initial\":\"An authenticated operator has a recognition result with `recognized_document_id` and total but no supplier or document date.\",\"events\":[\"The operator submits it with a valid project and balanced allocation.\"],\"outcomes\":[\"The portal accepts it because those omitted facts are not required by the text.\",\"The portal rejects it as incomplete because the implementation considers those facts mandatory.\"],\"observer\":\"The operator, OCR adapter and client viewing the resulting expense.\"}}]}",
+ "set_aside": []
+}

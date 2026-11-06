@@ -26,7 +26,18 @@ topics blocking (repaired in R0-09, R0-14, R0-17, R0-20); round-03 judged 2:
 T11, whether a producer's bearer credential stands in for a session (the
 common authorization rule now says so, R0-09), and T23, how the initial staff
 password reaches its holder, which uncovered that the accepted service carries
-out no email challenge (R0-19, R0-23).
+out no email challenge (R0-19, R0-23). Round-04 judged 7 topics blocking,
+each a sentence that still stated the former behaviour next to R0-09, R0-14,
+R0-15, R0-19, R0-23, or a fact the text left unstated; the sentences are
+narrowed in place and R0-24, R0-25 carry the two unstated facts from the
+accepted Factory spec. Round-05 judged 4 topics blocking, all on that new
+text: what an identical re-publication answers, and how grants and
+assignments of an archived project relate to the common authorization rule
+and to invariant 5; R0-24, R0-25 and the rule are narrowed to the accepted
+spec. Round-06 judged 1: whether reading an import result rechecks the
+producer's grant (R0-21: it does not). Round-07 judged 1: the first
+administrator against "only administrators create staff accounts" (R0-14
+names the R0-07 exception).
 
 ## Product statement
 
@@ -62,10 +73,10 @@ merged into one account model.
 A permanent read-only viewer identity representing one client, who may have
 several simultaneous renovation projects:
 
-- created by an operator; the client does not register;
+- created by an administrator (R0-14); the client does not register;
 - no email login, no password, no password reset, no profile management;
 - authenticates through an unguessable capability link (`ViewerAccessCredential`)
-  issued and re-issuable by an operator; the credential is stored only in a
+  issued and re-issuable by an administrator (R0-14); the credential is stored only in a
   secure verification form and can be revoked;
 - a successful entry opens a managed `ViewerSession`;
 - project visibility is determined server-side from active
@@ -126,16 +137,23 @@ PresuPro snapshot producer):
   administrative area; a global producer exists only through an explicitly
   granted capability; every import verifies the principal may publish for the
   given `project_id`;
-- no shared secret across integrations; transport protection (bearer, signed
-  request, mTLS, gateway) is permitted but inside the domain every request
-  resolves to one concrete `ServicePrincipal`.
+- no shared secret across integrations; the credential travels only in a
+  bearer header (R0-09), and every request resolves to one concrete
+  `ServicePrincipal`.
 
 ### Common authorization rule
 
-Every project-scoped operation checks together: valid active session (for a
+Every operation on a project's records — budget, snapshot, expense, document,
+progress, payment and photo — checks together: valid active session (for a
 service principal, its authenticated bearer credential of R0-09, which needs
-no separate session), active principal, access to the concrete `project_id`, required capability, and
-Registry project lifecycle policy (R0-15). Knowing a `project_id` or URL grants nothing.
+no separate session), active principal, access to the concrete `project_id`,
+required capability, and Registry project lifecycle policy (R0-15). Creating
+and revoking grants and assignments are access management: they check the
+session, the active principal and the administrator's access-management
+capability (R0-14); creating one also requires the Registry project known and
+active, revoking one consults no Registry (R0-24). A producer's read of its
+own import result checks only its bearer credential and that it made the
+import (R0-21). Knowing a `project_id` or URL grants nothing.
 
 ## Budget sources
 
@@ -178,7 +196,9 @@ Import rules:
 - an accepted snapshot is immutable; a new version never overwrites, mutates,
   or deletes an older one;
 - re-publishing the same `estimate_id + estimate_version` with identical
-  content idempotently returns the existing result; different content for the
+  content is answered with a fresh import result of outcome idempotent
+  replay that names the existing snapshot, which stays unchanged (R0-25);
+  different content for the
   same identity is rejected as an integrity conflict (content fingerprint
   recorded);
 - import and activation are distinct actions: the producer imports, a human
@@ -366,9 +386,10 @@ Detailed ownership is deferred to later states.
 
 1. Every project-scoped portal record belongs to exactly one Registry
    `project_id`; the portal never creates project identity (R0-16).
-2. Access requires session + active principal + project grant/assignment +
-   capability + Registry lifecycle policy; a UUID or URL alone grants
-   nothing.
+2. Project-scoped access requires session (for a service principal, its
+   authenticated bearer credential, R0-09) + active principal + project
+   grant/assignment + capability + Registry lifecycle policy; a UUID or URL
+   alone grants nothing. The operations without a session are those of R0-15.
 3. Viewer capabilities are read-only; roles and capabilities are never
    trusted request fields; no shared secrets; credentials, session tokens,
    access tokens, challenge tokens, and passwords are stored only in
@@ -378,8 +399,11 @@ Detailed ownership is deferred to later states.
    account or principal blocks everything; auth failures reveal neither
    account existence nor project data; all project-scoped queries are bounded
    by the permitted `project_id`.
-5. An archived project is readable and immutable in the portal; archival
-   never deletes history and never substitutes for access revocation.
+5. An archived project's budget, snapshot, expense, document, progress,
+   payment and photo records are readable and immutable in the portal; no new
+   grant or assignment is created for it, while its existing grants and
+   assignments keep giving access and can be revoked (R0-24). Archival never
+   deletes history and never substitutes for access revocation.
 6. One `recognized_document_id` creates at most one Expense; one Document
    remains one document across allocations; unconfirmed OCR output never
    becomes an Expense.
@@ -429,9 +453,8 @@ Decisions of 2026-07-18 close `open_questions.md` Q1–Q9 as follows:
 - Session lifetime policy (staff and viewer TTLs, renewal). Decided by R0-06.
 - Boundaries of an administrative area when more than one administrator
   exists.
-- Concrete transport between PresuPro and the portal (bearer / signed
-  request / mTLS) — does not affect domain semantics. Decided by R0-09: a
-  bearer header.
+- Concrete transport between PresuPro and the portal — decided by R0-09: a
+  bearer header only.
 - External binary deletion/retention policy after source intake; portal reads
   authorized objects but never deletes them as a side effect of business
   visibility or archival.
@@ -448,7 +471,8 @@ Factory spec, numbered so that later states can cite them. R0-01 to R0-06
 restate decisions already written above or in the former `spec/HANDOFF.md`;
 R0-07 to R0-12 are carried from accepted Factory spec changes (`SOURCE.md`);
 R0-13 is the owner decision of 2026-11-06 on Q12; R0-14 to R0-22 resolve the
-State 0 question round under the owner decision of 2026-11-06.
+State 0 question rounds under the owner decision of 2026-11-06, and R0-24,
+R0-25 state facts of the accepted spec the text had left unstated.
 
 ### R0-01 — Sole-trader operating profile (owner, 2026-07-18)
 
@@ -561,10 +585,12 @@ stays the declared temporary route, outside the API.
 Creating, revoking and re-issuing client viewers, their access links and
 project grants, staff accounts and assignments, service principals, their
 credentials and producer grants all require the access-management capability,
-which only administrators hold (R2). Operators work on the projects assigned to
-them. This is the accepted spec's behaviour: every such route is
+which only administrators hold (R2). The one exception is the first
+administrator of R0-07: the local bootstrap command creates it outside every
+portal operation, needs no capability, and is refused once any staff account
+exists. Operators work on the projects assigned to them. This is the accepted spec's behaviour: every such route is
 `/admin/…` with `authorize_access_management` (`rules.http_router_backend`).
-Resolves round-01 T12.
+Resolves round-01 T12 and round-07 T9.
 
 ### R0-15 — Which operations need no session (owner 2026-11-06: current service behaviour accepted; technical decisions delegated)
 
@@ -572,9 +598,14 @@ The common authorization rule binds project-scoped operations. Without a
 session the portal answers only: staff login, email-verification and
 email-change confirmation, password-reset request and completion, viewer entry
 with an access link, and the liveness and readiness checks (R0-06, R0-11).
-Each of them proves its own authority (credentials, a single-use token, a
-capability secret) or discloses nothing. Producer operations authenticate with
-the bearer credential of R0-09. Resolves round-01 T7.
+Staff login proves the account's credentials and viewer entry proves the
+capability secret of the access link. While the email challenges are deferred
+(R0-23), the email-verification and email-change confirmations and
+password-reset completion accept no token as authority: each answers with the
+concealed authentication rejection; the password-reset request answers as
+usual and does nothing; the liveness and readiness checks disclose nothing.
+Producer operations authenticate with the bearer credential of R0-09.
+Resolves round-01 T7 and round-04 T3.
 
 ### R0-16 — Project-scoped records and records without a project (owner 2026-11-06: current service behaviour accepted; technical decisions delegated)
 
@@ -607,14 +638,16 @@ T10.
 ### R0-19 — Staff onboarding (owner 2026-11-06: current service behaviour accepted; technical decisions delegated)
 
 An administrator creates a staff account with its email, role and an initial
-password; the account is `pending_verification`. The administrator hands the
-initial password to the holder outside the portal: no portal operation,
-message or answer carries it. While the email challenges are deferred
+password the administrator chooses and submits in that creation request; the
+account is `pending_verification`, and the portal keeps only the password's
+hash. The administrator hands the initial password to the holder outside the
+portal: no portal answer or message carries it back, and nothing logs it.
+While the email challenges are deferred
 (R0-23), the administrator then activates the account
 (`pending_verification` → `active`), which marks its email verified; the
 holder logs in with the initial password and changes it (accepted contracts
 `create_staff_account`, `change_staff_status`, `change_staff_password`).
-Resolves round-01 T32 and round-03 T23; the text of round-02 had the holder
+Resolves round-01 T32, round-03 T23 and round-04 T31; the text of round-02 had the holder
 confirm the email through a challenge, which the accepted service does not
 carry out.
 
@@ -634,8 +667,12 @@ delegated). Resolves round-01 T34.
 
 A producer reads an earlier import result by its `import_id`; the result is
 returned only to the principal that made the import, and any other request is
-answered as not found (accepted contract `get_snapshot_import_result`).
-Resolves round-01 T41.
+answered as not found (accepted contract `get_snapshot_import_result`). The
+read needs only the authenticated bearer credential of that principal: it
+does not recheck the producer's project grant or the Registry lifecycle, so a
+result stays readable after the grant is revoked or the project archived
+(Factory code `application/snapshot_import.py`). Resolves round-01 T41 and
+round-06 T6; where the `import_id` comes from is R0-25.
 
 ### R0-22 — Planned amounts are gross; `tax_mode` is provenance (owner 2026-11-06: current service behaviour accepted; technical decisions delegated)
 
@@ -654,6 +691,40 @@ answers as usual and does nothing. No token-free notice is sent. Building
 them is a missing feature, outside the migration (`open_questions.md` Q19).
 The policy of State 2 A10 stays the design these operations follow once they
 are built.
+
+### R0-24 — Archival freezes a project's records, not the revocation of access to it (owner 2026-11-06: current service behaviour accepted; technical decisions delegated)
+
+An archived Registry project is readable and refuses every mutation of its
+budget, snapshot import and activation, expense, document, progress, payment
+and photo records (accepted `rules.registry_status_policy`: archived reads,
+never mutates). Grants and assignments belong to the project (R0-16) but are
+access management, not these records: no new viewer grant, staff assignment
+or producer grant is created for an archived project, because each creation
+validates that the Registry project is active (accepted notes
+`grant_viewer_project`, `assign_staff_project`, `grant_producer_project`).
+An existing grant or assignment is not new access: it keeps giving read
+access, also after the viewer receives a new access link or the staff
+account is reinstated, because neither operation consults the Registry
+(accepted notes `issue_viewer_access`, `change_staff_status`). Revoking an
+existing viewer grant, staff assignment or producer grant does not consult the
+Registry and succeeds for an archived project, also while the Registry is
+unavailable, so archival never stands in for revocation (accepted notes
+`revoke_viewer_project`, `revoke_staff_project_assignment`; Factory code
+`application/viewer_access.py`, `application/staff_identity.py`,
+`application/service_identity.py`). Resolves round-04 T33 and round-05 T12, T13, T26.
+
+### R0-25 — The portal assigns every `import_id` (owner 2026-11-06: current service behaviour accepted; technical decisions delegated)
+
+The producer never supplies an `import_id`. The portal records every import
+attempt it classifies — accepted, idempotent replay, integrity conflict, or a
+rejection — as a fresh immutable import result with a fresh `import_id`, and
+answers the import request with that result, never with the snapshot
+itself. An attempt whose bearer
+credential fails authentication is recorded nowhere. A producer that lost an
+answer re-publishes the same snapshot: identical content is answered as an
+idempotent replay with a new `import_id` naming the same accepted snapshot
+(accepted notes `_build_import_record`, `import_snapshot`; Factory code
+`application/snapshot_import.py`). Resolves round-04 T40 and round-05 T9.
 
 ## Open questions
 

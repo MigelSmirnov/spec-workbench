@@ -141,7 +141,7 @@ text of `65c7894013ca`): 38 topics, 2 blocking.
 | T23 how the initial staff password reaches its holder | consequential_gap | accepted `create_staff_account` (no delivery), `change_staff_status` (`pending_verification` → `active` sets `email_verified_at`), `staff_challenges` notes "remain inert while StaffChallengeRepository is deferred", Factory code `application/staff_challenges.py` | R0-19 rewritten (administrator hands the password over outside the portal and activates the account); R0-23 records the deferred challenges and notices; A10, A11 "Carried changes"; Q19 for the owner |
 
 Round-04 (`questions/state0/round-04/`, on the text of `41d0f523e8c6`): 45
-topics, 7 blocking, not yet repaired: T3 R0-15 gives the deferred operations
+topics, 7 blocking: T3 R0-15 gives the deferred operations
 token authority while R0-23 says they read nothing; T23 the ServicePrincipal
 passage still allows several transports against R0-09; T29 the ClientViewer
 passage still lets operators create viewers and links against R0-14; T31
@@ -149,7 +149,24 @@ passage still lets operators create viewers and links against R0-14; T31
 request; T33 archived-project immutability against grant and assignment
 changes; T40 who creates `import_id` and how the producer learns it; T44
 invariant 2 "access requires a session" without the service-principal
-exception.
+exception. Repaired on 2026-11-06 under the owner decision of that day
+(current service behaviour accepted; technical decisions delegated): the
+sentences are narrowed to R0-09, R0-14, R0-15, R0-19, R0-23, and two facts
+the text left unstated are carried from the accepted spec as R0-24 (archival
+freezes project records, not revocation; notes `grant_viewer_project`,
+`assign_staff_project`, `grant_producer_project`, `revoke_viewer_project`,
+`rules.registry_status_policy`) and R0-25 (the portal assigns a fresh
+`import_id` to every classified attempt and answers with the import result;
+notes `_build_import_record`, `import_snapshot`, Factory code
+`application/snapshot_import.py`).
+
+| round | blocking | topics and resolution |
+|---|---|---|
+| round-05 | 4 | T9 identical re-publication answers the import result, not the snapshot (R0-25, import rules); T12, T13, T26 grants and assignments of an archived project against the common rule and invariant 5 (common rule and invariant 5 narrowed; R0-24: existing access continues after a new viewer link or staff reinstatement, revocation consults no Registry) |
+| round-06 | 1 | T6 reading an import result does not recheck the producer grant or Registry (R0-21; Factory code `get_snapshot_import_result`) |
+| round-07 | 1 | T9 the first administrator against "only administrators create staff accounts" (R0-14 names the R0-07 exception) |
+| round-08 | 0 | clear; units changed by the round-07 repair still need a second clear review |
+| round-09 | 0 | clear on the unchanged text; `design_questions.py status --state 0`: closed, every unit closed by two clear rounds |
 
 ### Classification of what State 1 carries
 

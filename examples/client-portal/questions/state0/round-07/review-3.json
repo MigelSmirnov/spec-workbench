@@ -1,0 +1,352 @@
+{
+ "open_points": [
+  {
+   "subject": "Viewer access-link issuance",
+   "kind": "missing output",
+   "text": "“authenticates through an unguessable capability link (`ViewerAccessCredential`) issued and re-issuable by an administrator” does not say whether the issuance response contains the link or secret, nor how it reaches the client",
+   "question": "What observable output does initial issuance or re-issuance produce, and who is responsible for delivering the capability link to the viewer?",
+   "options": [
+    "Return the link once to the administrator for out-of-band delivery",
+    "Deliver the link through a named external system",
+    "Create the credential without returning its secret and provide another named retrieval action"
+   ],
+   "default_guess": "Return the link once to the administrator, who delivers it outside the portal.",
+   "witness": {
+    "initial": "An administrator has created a ClientViewer who has no access credential.",
+    "events": [
+     "The administrator issues the viewer's first access link.",
+     "The administrator attempts to give the client what is needed to enter."
+    ],
+    "outcomes": [
+     "The API returns the one-time capability link, so the administrator can deliver it.",
+     "The API returns only credential metadata, leaving no specified way for the client to obtain the secret."
+    ],
+    "observer": "The administrator and client"
+   },
+   "unit": "00_product.md:Principals"
+  },
+  {
+   "subject": "Service-credential rotation overlap",
+   "kind": "undefined lifecycle",
+   "text": "“rotatable with an overlap period” does not define what starts or ends the overlap, its duration, or whether the old credential may be revoked before it ends",
+   "question": "After rotation, exactly when does the previous service credential stop authenticating?",
+   "options": [
+    "After a fixed configured duration",
+    "Only when explicitly revoked",
+    "At the earlier of explicit revocation and a configured deadline",
+    "Immediately, despite the stated overlap"
+   ],
+   "default_guess": "Keep the old credential valid until the earlier of explicit revocation and a configured overlap deadline.",
+   "witness": {
+    "initial": "A service principal has one active credential used by a producer.",
+    "events": [
+     "An administrator rotates the credential.",
+     "The producer sends a request with the old credential during the purported overlap."
+    ],
+    "outcomes": [
+     "The old credential still authenticates until an overlap deadline.",
+     "The old credential was invalidated by rotation and the request is rejected."
+    ],
+    "observer": "The producer and administrator"
+   },
+   "unit": "00_product.md:Principals"
+  },
+  {
+   "subject": "Identical snapshot content",
+   "kind": "undefined equality",
+   "text": "“re-publishing the same `estimate_id + estimate_version` with identical content” does not define which fields participate in content equality or the recorded fingerprint",
+   "question": "Which submitted fields must be identical for an import to be an idempotent replay, particularly attempt-varying provenance such as `published_at`?",
+   "options": [
+    "Fingerprint every submitted snapshot field except transport metadata",
+    "Fingerprint only immutable business content and exclude `published_at` or other attempt metadata",
+    "Define an explicit canonical field set and normalization procedure"
+   ],
+   "default_guess": "Use an explicit canonical fingerprint over all contract fields that describe the snapshot, including `published_at`, unless the contract declares a field to be attempt metadata.",
+   "witness": {
+    "initial": "Snapshot `E1 + V1` was accepted with business amounts A and `published_at=T1`.",
+    "events": [
+     "The producer republishes the same business snapshot with `published_at=T2`."
+    ],
+    "outcomes": [
+     "The attempt is an idempotent replay with a fresh import result naming the existing snapshot.",
+     "The attempt is an integrity conflict because the fingerprint differs."
+    ],
+    "observer": "The producer and audit reader"
+   },
+   "unit": "00_product.md:Budget sources"
+  },
+  {
+   "subject": "Archived producer grants",
+   "kind": "contradiction",
+   "text": "Invariant 5 says an archived project's “existing grants and assignments keep giving access,” while R0-24 refuses snapshot imports on archived projects and R0-21 says import-result reads do not depend on the producer grant; the ServicePrincipal has no other read capability",
+   "question": "Does the statement that existing grants keep giving access include producer grants, and if so, what archived-project operation does such a grant authorize?",
+   "options": [
+    "Exclude producer grants from the keep-giving-access statement",
+    "Give producers a named read operation governed by the existing grant",
+    "Treat the producer grant as retained but authorizing no operation while archived"
+   ],
+   "default_guess": "Exclude producer grants from that access statement; retain them only so they can be revoked and audited.",
+   "witness": {
+    "initial": "A service principal has a producer grant for active project P and has never imported a snapshot.",
+    "events": [
+     "Registry archives P.",
+     "The producer presents a valid bearer credential and attempts every capability in its closed set."
+    ],
+    "outcomes": [
+     "The existing producer grant must still give some read access under invariant 5.",
+     "Import is refused, and reading an import result is impossible or independent of the grant, so the grant gives no access."
+    ],
+    "observer": "The producer and administrator"
+   },
+   "unit": "00_product.md:Product invariants visible at State 0"
+  },
+  {
+   "subject": "Bootstrap authorization exception",
+   "kind": "contradiction",
+   "text": "R0-14 says “Creating ... staff accounts ... all require the access-management capability,” while R0-07 says a host operator creates the first administrator when no staff account exists",
+   "question": "Is first-administrator bootstrap an explicit exception to R0-14's universal authorization rule?",
+   "options": [
+    "Yes, the local bootstrap command is the sole exception",
+    "No, bootstrap must authenticate an access-management principal",
+    "Bootstrap creates a different non-StaffAccount record later converted by an administrator"
+   ],
+   "default_guess": "Make the local bootstrap command the sole explicit exception.",
+   "witness": {
+    "initial": "The deployment contains no staff accounts and therefore no principal with access-management capability.",
+    "events": [
+     "The host operator invokes the R0-07 bootstrap command with valid inputs."
+    ],
+    "outcomes": [
+     "R0-07 creates the first active verified administrator.",
+     "R0-14 forbids creation because no authorized administrator exists."
+    ],
+    "observer": "The host operator"
+   },
+   "unit": "00_product.md:Decisions"
+  },
+  {
+   "subject": "Bootstrap audit record",
+   "kind": "contradiction",
+   "text": "R0-07 says creation of the first administrator is “never ... audited,” while the Audit section and invariant 12 say every significant action records actor provenance and result",
+   "question": "Is first-administrator creation an explicit exception to the universal audit invariant, or must it create an audit record?",
+   "options": [
+    "Explicitly exempt bootstrap from product audit",
+    "Audit bootstrap using a named host/bootstrap actor",
+    "Replace the universal audit wording with a defined list that excludes bootstrap"
+   ],
+   "default_guess": "Audit it with a distinguished bootstrap actor while ensuring no password or secret is recorded.",
+   "witness": {
+    "initial": "An empty deployment has no staff account or audit record.",
+    "events": [
+     "The host operator successfully creates the first administrator using the local command."
+    ],
+    "outcomes": [
+     "No audit record exists, as R0-07 requires.",
+     "A significant-action audit record exists, as the Audit section and invariant 12 require."
+    ],
+    "observer": "An administrator or auditor inspecting the database"
+   },
+   "unit": "00_product.md:Decisions"
+  },
+  {
+   "subject": "Bootstrap secret-input channel",
+   "kind": "unnamed input",
+   "text": "R0-07 says the email and password are read “neither from process arguments nor from the environment nor from a file” but does not name the channel from which they are read",
+   "question": "How does the local command receive the bootstrap email and password?",
+   "options": [
+    "Interactive controlling-terminal prompts",
+    "Standard input using a defined framing",
+    "Operating-system credential or secret-store API"
+   ],
+   "default_guess": "Prompt on a controlling terminal with hidden password entry.",
+   "witness": {
+    "initial": "A deployment has no staff accounts and an automation process must initialize it.",
+    "events": [
+     "The automation invokes the bootstrap command without arguments, environment credentials, or a credential file."
+    ],
+    "outcomes": [
+     "The command reads a defined record from standard input and can be automated.",
+     "The command requires an interactive terminal and refuses non-interactive input."
+    ],
+    "observer": "The host operator or deployment script"
+   },
+   "unit": "00_product.md:Decisions"
+  },
+  {
+   "subject": "Bootstrap result contract",
+   "kind": "missing failure set",
+   "text": "R0-07 promises “a closed set of exit codes that deployment scripts may branch on” but does not enumerate the codes or the conditions mapped to them",
+   "question": "What are the complete bootstrap exit codes and the observable condition represented by each one?",
+   "options": [
+    "Separate success, staff-already-exists, invalid-input, configuration, and persistence-failure codes",
+    "Use success plus one generic failure code",
+    "Return a documented machine-readable result in addition to a closed exit-code set"
+   ],
+   "default_guess": "Define distinct codes for success, already initialized, invalid input, invalid configuration, and persistence failure.",
+   "witness": {
+    "initial": "A deployment already contains one staff account.",
+    "events": [
+     "A deployment script invokes the bootstrap command again.",
+     "The script branches on the process exit code."
+    ],
+    "outcomes": [
+     "The command returns a dedicated already-initialized code, allowing the script to treat it as idempotent completion.",
+     "The command returns the same generic failure code used for malformed input or database failure."
+    ],
+    "observer": "The deployment script and host operator"
+   },
+   "unit": "00_product.md:Decisions"
+  },
+  {
+   "subject": "Runtime environment configuration",
+   "kind": "unnamed inputs",
+   "text": "R0-10 says the service is “configured only by environment variables, which it validates when it starts” without naming the required variables, defaults, validation rules, or startup failure output",
+   "question": "What is the complete environment-variable contract for the database file, binary root, read limit, trusted hosts/origins and other required runtime values, and how is invalid or missing configuration reported?",
+   "options": [
+    "Name every variable and require all security-sensitive values explicitly",
+    "Define documented safe defaults for selected values",
+    "Delegate names and defaults to later-state configuration design as an explicit open question"
+   ],
+   "default_guess": "Name all variables, require explicit paths and trusted hosts/origins, allow a documented default only for the read bound, and terminate startup with a non-secret diagnostic on validation failure.",
+   "witness": {
+    "initial": "The database path and binary root are set, but no trusted-host variable is present.",
+    "events": [
+     "The operator starts the service."
+    ],
+    "outcomes": [
+     "Startup fails because trusted hosts must be explicitly configured.",
+     "Startup succeeds with an implementation-chosen localhost or deployment default."
+    ],
+    "observer": "The deployment operator"
+   },
+   "unit": "00_product.md:Decisions"
+  },
+  {
+   "subject": "Liveness and readiness contract",
+   "kind": "missing observable behavior",
+   "text": "R0-11 says the service “answers an unauthenticated liveness and readiness check” but does not state their routes, response status/body, or the conditions that make readiness fail while liveness succeeds",
+   "question": "What are the observable liveness and readiness outputs, and which dependency or storage conditions determine each result?",
+   "options": [
+    "Define separate routes, fixed bodies and explicit health conditions",
+    "Use one route with distinct statuses",
+    "Leave dependency checks out and report process responsiveness only"
+   ],
+   "default_guess": "Use separate endpoints with fixed non-sensitive JSON bodies; liveness tests process responsiveness and readiness tests validated configuration plus usable database and binary root.",
+   "witness": {
+    "initial": "The HTTP process is running, but its SQLite file cannot be opened.",
+    "events": [
+     "A load balancer calls liveness.",
+     "The load balancer calls readiness."
+    ],
+    "outcomes": [
+     "Liveness succeeds and readiness fails.",
+     "Both checks succeed because only process responsiveness is tested."
+    ],
+    "observer": "The load balancer and deployment operator"
+   },
+   "unit": "00_product.md:Decisions"
+  },
+  {
+   "subject": "Protected-binary concealed failure",
+   "kind": "missing failure output",
+   "text": "R0-12 says an unknown, cross-project, hidden, oversize or unlisted binary read is “answered the same way” but never states what that common response is",
+   "question": "What exact HTTP status, body shape and headers are returned for every concealed binary-read failure?",
+   "options": [
+    "A uniform not-found response with no binary metadata",
+    "A uniform authorization failure",
+    "A uniform generic binary-unavailable response"
+   ],
+   "default_guess": "Return the same empty 404 response with fixed safe headers for every listed condition.",
+   "witness": {
+    "initial": "Viewer V may read project P1 but not P2; one visible document exists in each project.",
+    "events": [
+     "V requests a nonexistent document id.",
+     "V requests the known document id from P2."
+    ],
+    "outcomes": [
+     "Both requests return the same empty 404 response.",
+     "Both are concealed, but implementers choose different common statuses or bodies, allowing clients to observe inconsistent behavior."
+    ],
+    "observer": "The viewer client"
+   },
+   "unit": "00_product.md:Decisions"
+  },
+  {
+   "subject": "Initial staff password change",
+   "kind": "ambiguous requirement",
+   "text": "R0-19 says the holder “logs in with the initial password and changes it” but does not say whether changing it is mandatory before any other operation or merely the expected onboarding sequence",
+   "question": "After first login with the administrator-chosen password, may the staff account use its ordinary capabilities before changing that password?",
+   "options": [
+    "Require a password change before any other authenticated operation",
+    "Allow normal use and make the change voluntary",
+    "Expire the initial password after a defined time but permit use until then"
+   ],
+   "default_guess": "Require the holder to change the initial password before ordinary operations are permitted.",
+   "witness": {
+    "initial": "An administrator has activated a new operator account with an initial password.",
+    "events": [
+     "The operator logs in successfully.",
+     "Without changing the password, the operator attempts to edit an expense on an assigned active project."
+    ],
+    "outcomes": [
+     "The edit is refused until the initial password is changed.",
+     "The edit succeeds because the account is active and no forced-change state is specified."
+    ],
+    "observer": "The operator and administrator"
+   },
+   "unit": "00_product.md:Decisions"
+  },
+  {
+   "subject": "Import-attempt classification boundary",
+   "kind": "undefined failure recording",
+   "text": "R0-25 records “every import attempt it classifies — accepted, idempotent replay, integrity conflict, or a rejection,” but only unauthenticated attempts are explicitly excluded; it does not define which authenticated authorization, Registry, contract or parsing failures count as classified rejections",
+   "question": "Which failures create a fresh immutable import result and `import_id`, and which terminate as ordinary HTTP failures without an import result?",
+   "options": [
+    "Record every request after successful bearer authentication, including authorization and Registry failures",
+    "Record only requests that pass authorization and can be parsed as the snapshot contract",
+    "Define an explicit staged boundary with a closed rejection taxonomy"
+   ],
+   "default_guess": "After successful bearer authentication, record failures only once a syntactically valid snapshot identity and project can be extracted; define a closed rejection taxonomy for authorization, Registry and contract validation.",
+   "witness": {
+    "initial": "A valid active service principal lacks a producer grant for project P.",
+    "events": [
+     "The principal submits a structurally valid snapshot for P."
+    ],
+    "outcomes": [
+     "The portal creates a rejected import result with a fresh `import_id` and returns it.",
+     "Authorization stops the request before an import result is created, so the caller receives only a concealed HTTP failure."
+    ],
+    "observer": "The producer and audit reader"
+   },
+   "unit": "00_product.md:Decisions"
+  },
+  {
+   "subject": "Project ownership of import results",
+   "kind": "unclassified stored fact",
+   "text": "R0-16 classifies project-scoped records and records without a project but names neither snapshot import results nor their ownership, while R0-21 authorizes them by producing principal rather than project grant",
+   "question": "Does each import result belong to a Registry project, to the producing service principal, to both, or to neither for authorization, retention and query bounding?",
+   "options": [
+    "Project-scoped record with an additional immutable producer owner",
+    "Principal-owned record that merely contains attempted project provenance",
+    "Non-project integration record addressed only by `import_id` and producer ownership"
+   ],
+   "default_guess": "Store both the attempted `project_id` and immutable producing principal, but treat producer ownership—not a current project grant—as the read authorization rule.",
+   "witness": {
+    "initial": "Producer A imports a snapshot for P and receives import id I; its grant for P is later revoked.",
+    "events": [
+     "Producer A reads I.",
+     "An administrator queries or retains records associated with P."
+    ],
+    "outcomes": [
+     "I remains a project-scoped record associated with P even though its producer read bypasses the project grant.",
+     "I is principal-owned integration history and is excluded from project-scoped record handling."
+    ],
+    "observer": "The producer, administrator and retention implementation"
+   },
+   "unit": "00_product.md:Decisions"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"Viewer access-link issuance\",\"kind\":\"missing output\",\"text\":\"“authenticates through an unguessable capability link (`ViewerAccessCredential`) issued and re-issuable by an administrator” does not say whether the issuance response contains the link or secret, nor how it reaches the client\",\"question\":\"What observable output does initial issuance or re-issuance produce, and who is responsible for delivering the capability link to the viewer?\",\"options\":[\"Return the link once to the administrator for out-of-band delivery\",\"Deliver the link through a named external system\",\"Create the credential without returning its secret and provide another named retrieval action\"],\"default_guess\":\"Return the link once to the administrator, who delivers it outside the portal.\",\"witness\":{\"initial\":\"An administrator has created a ClientViewer who has no access credential.\",\"events\":[\"The administrator issues the viewer's first access link.\",\"The administrator attempts to give the client what is needed to enter.\"],\"outcomes\":[\"The API returns the one-time capability link, so the administrator can deliver it.\",\"The API returns only credential metadata, leaving no specified way for the client to obtain the secret.\"],\"observer\":\"The administrator and client\"},\"unit\":\"00_product.md:Principals\"},{\"subject\":\"Service-credential rotation overlap\",\"kind\":\"undefined lifecycle\",\"text\":\"“rotatable with an overlap period” does not define what starts or ends the overlap, its duration, or whether the old credential may be revoked before it ends\",\"question\":\"After rotation, exactly when does the previous service credential stop authenticating?\",\"options\":[\"After a fixed configured duration\",\"Only when explicitly revoked\",\"At the earlier of explicit revocation and a configured deadline\",\"Immediately, despite the stated overlap\"],\"default_guess\":\"Keep the old credential valid until the earlier of explicit revocation and a configured overlap deadline.\",\"witness\":{\"initial\":\"A service principal has one active credential used by a producer.\",\"events\":[\"An administrator rotates the credential.\",\"The producer sends a request with the old credential during the purported overlap.\"],\"outcomes\":[\"The old credential still authenticates until an overlap deadline.\",\"The old credential was invalidated by rotation and the request is rejected.\"],\"observer\":\"The producer and administrator\"},\"unit\":\"00_product.md:Principals\"},{\"subject\":\"Identical snapshot content\",\"kind\":\"undefined equality\",\"text\":\"“re-publishing the same `estimate_id + estimate_version` with identical content” does not define which fields participate in content equality or the recorded fingerprint\",\"question\":\"Which submitted fields must be identical for an import to be an idempotent replay, particularly attempt-varying provenance such as `published_at`?\",\"options\":[\"Fingerprint every submitted snapshot field except transport metadata\",\"Fingerprint only immutable business content and exclude `published_at` or other attempt metadata\",\"Define an explicit canonical field set and normalization procedure\"],\"default_guess\":\"Use an explicit canonical fingerprint over all contract fields that describe the snapshot, including `published_at`, unless the contract declares a field to be attempt metadata.\",\"witness\":{\"initial\":\"Snapshot `E1 + V1` was accepted with business amounts A and `published_at=T1`.\",\"events\":[\"The producer republishes the same business snapshot with `published_at=T2`.\"],\"outcomes\":[\"The attempt is an idempotent replay with a fresh import result naming the existing snapshot.\",\"The attempt is an integrity conflict because the fingerprint differs.\"],\"observer\":\"The producer and audit reader\"},\"unit\":\"00_product.md:Budget sources\"},{\"subject\":\"Archived producer grants\",\"kind\":\"contradiction\",\"text\":\"Invariant 5 says an archived project's “existing grants and assignments keep giving access,” while R0-24 refuses snapshot imports on archived projects and R0-21 says import-result reads do not depend on the producer grant; the ServicePrincipal has no other read capability\",\"question\":\"Does the statement that existing grants keep giving access include producer grants, and if so, what archived-project operation does such a grant authorize?\",\"options\":[\"Exclude producer grants from the keep-giving-access statement\",\"Give producers a named read operation governed by the existing grant\",\"Treat the producer grant as retained but authorizing no operation while archived\"],\"default_guess\":\"Exclude producer grants from that access statement; retain them only so they can be revoked and audited.\",\"witness\":{\"initial\":\"A service principal has a producer grant for active project P and has never imported a snapshot.\",\"events\":[\"Registry archives P.\",\"The producer presents a valid bearer credential and attempts every capability in its closed set.\"],\"outcomes\":[\"The existing producer grant must still give some read access under invariant 5.\",\"Import is refused, and reading an import result is impossible or independent of the grant, so the grant gives no access.\"],\"observer\":\"The producer and administrator\"},\"unit\":\"00_product.md:Product invariants visible at State 0\"},{\"subject\":\"Bootstrap authorization exception\",\"kind\":\"contradiction\",\"text\":\"R0-14 says “Creating ... staff accounts ... all require the access-management capability,” while R0-07 says a host operator creates the first administrator when no staff account exists\",\"question\":\"Is first-administrator bootstrap an explicit exception to R0-14's universal authorization rule?\",\"options\":[\"Yes, the local bootstrap command is the sole exception\",\"No, bootstrap must authenticate an access-management principal\",\"Bootstrap creates a different non-StaffAccount record later converted by an administrator\"],\"default_guess\":\"Make the local bootstrap command the sole explicit exception.\",\"witness\":{\"initial\":\"The deployment contains no staff accounts and therefore no principal with access-management capability.\",\"events\":[\"The host operator invokes the R0-07 bootstrap command with valid inputs.\"],\"outcomes\":[\"R0-07 creates the first active verified administrator.\",\"R0-14 forbids creation because no authorized administrator exists.\"],\"observer\":\"The host operator\"},\"unit\":\"00_product.md:Decisions\"},{\"subject\":\"Bootstrap audit record\",\"kind\":\"contradiction\",\"text\":\"R0-07 says creation of the first administrator is “never ... audited,” while the Audit section and invariant 12 say every significant action records actor provenance and result\",\"question\":\"Is first-administrator creation an explicit exception to the universal audit invariant, or must it create an audit record?\",\"options\":[\"Explicitly exempt bootstrap from product audit\",\"Audit bootstrap using a named host/bootstrap actor\",\"Replace the universal audit wording with a defined list that excludes bootstrap\"],\"default_guess\":\"Audit it with a distinguished bootstrap actor while ensuring no password or secret is recorded.\",\"witness\":{\"initial\":\"An empty deployment has no staff account or audit record.\",\"events\":[\"The host operator successfully creates the first administrator using the local command.\"],\"outcomes\":[\"No audit record exists, as R0-07 requires.\",\"A significant-action audit record exists, as the Audit section and invariant 12 require.\"],\"observer\":\"An administrator or auditor inspecting the database\"},\"unit\":\"00_product.md:Decisions\"},{\"subject\":\"Bootstrap secret-input channel\",\"kind\":\"unnamed input\",\"text\":\"R0-07 says the email and password are read “neither from process arguments nor from the environment nor from a file” but does not name the channel from which they are read\",\"question\":\"How does the local command receive the bootstrap email and password?\",\"options\":[\"Interactive controlling-terminal prompts\",\"Standard input using a defined framing\",\"Operating-system credential or secret-store API\"],\"default_guess\":\"Prompt on a controlling terminal with hidden password entry.\",\"witness\":{\"initial\":\"A deployment has no staff accounts and an automation process must initialize it.\",\"events\":[\"The automation invokes the bootstrap command without arguments, environment credentials, or a credential file.\"],\"outcomes\":[\"The command reads a defined record from standard input and can be automated.\",\"The command requires an interactive terminal and refuses non-interactive input.\"],\"observer\":\"The host operator or deployment script\"},\"unit\":\"00_product.md:Decisions\"},{\"subject\":\"Bootstrap result contract\",\"kind\":\"missing failure set\",\"text\":\"R0-07 promises “a closed set of exit codes that deployment scripts may branch on” but does not enumerate the codes or the conditions mapped to them\",\"question\":\"What are the complete bootstrap exit codes and the observable condition represented by each one?\",\"options\":[\"Separate success, staff-already-exists, invalid-input, configuration, and persistence-failure codes\",\"Use success plus one generic failure code\",\"Return a documented machine-readable result in addition to a closed exit-code set\"],\"default_guess\":\"Define distinct codes for success, already initialized, invalid input, invalid configuration, and persistence failure.\",\"witness\":{\"initial\":\"A deployment already contains one staff account.\",\"events\":[\"A deployment script invokes the bootstrap command again.\",\"The script branches on the process exit code.\"],\"outcomes\":[\"The command returns a dedicated already-initialized code, allowing the script to treat it as idempotent completion.\",\"The command returns the same generic failure code used for malformed input or database failure.\"],\"observer\":\"The deployment script and host operator\"},\"unit\":\"00_product.md:Decisions\"},{\"subject\":\"Runtime environment configuration\",\"kind\":\"unnamed inputs\",\"text\":\"R0-10 says the service is “configured only by environment variables, which it validates when it starts” without naming the required variables, defaults, validation rules, or startup failure output\",\"question\":\"What is the complete environment-variable contract for the database file, binary root, read limit, trusted hosts/origins and other required runtime values, and how is invalid or missing configuration reported?\",\"options\":[\"Name every variable and require all security-sensitive values explicitly\",\"Define documented safe defaults for selected values\",\"Delegate names and defaults to later-state configuration design as an explicit open question\"],\"default_guess\":\"Name all variables, require explicit paths and trusted hosts/origins, allow a documented default only for the read bound, and terminate startup with a non-secret diagnostic on validation failure.\",\"witness\":{\"initial\":\"The database path and binary root are set, but no trusted-host variable is present.\",\"events\":[\"The operator starts the service.\"],\"outcomes\":[\"Startup fails because trusted hosts must be explicitly configured.\",\"Startup succeeds with an implementation-chosen localhost or deployment default.\"],\"observer\":\"The deployment operator\"},\"unit\":\"00_product.md:Decisions\"},{\"subject\":\"Liveness and readiness contract\",\"kind\":\"missing observable behavior\",\"text\":\"R0-11 says the service “answers an unauthenticated liveness and readiness check” but does not state their routes, response status/body, or the conditions that make readiness fail while liveness succeeds\",\"question\":\"What are the observable liveness and readiness outputs, and which dependency or storage conditions determine each result?\",\"options\":[\"Define separate routes, fixed bodies and explicit health conditions\",\"Use one route with distinct statuses\",\"Leave dependency checks out and report process responsiveness only\"],\"default_guess\":\"Use separate endpoints with fixed non-sensitive JSON bodies; liveness tests process responsiveness and readiness tests validated configuration plus usable database and binary root.\",\"witness\":{\"initial\":\"The HTTP process is running, but its SQLite file cannot be opened.\",\"events\":[\"A load balancer calls liveness.\",\"The load balancer calls readiness.\"],\"outcomes\":[\"Liveness succeeds and readiness fails.\",\"Both checks succeed because only process responsiveness is tested.\"],\"observer\":\"The load balancer and deployment operator\"},\"unit\":\"00_product.md:Decisions\"},{\"subject\":\"Protected-binary concealed failure\",\"kind\":\"missing failure output\",\"text\":\"R0-12 says an unknown, cross-project, hidden, oversize or unlisted binary read is “answered the same way” but never states what that common response is\",\"question\":\"What exact HTTP status, body shape and headers are returned for every concealed binary-read failure?\",\"options\":[\"A uniform not-found response with no binary metadata\",\"A uniform authorization failure\",\"A uniform generic binary-unavailable response\"],\"default_guess\":\"Return the same empty 404 response with fixed safe headers for every listed condition.\",\"witness\":{\"initial\":\"Viewer V may read project P1 but not P2; one visible document exists in each project.\",\"events\":[\"V requests a nonexistent document id.\",\"V requests the known document id from P2.\"],\"outcomes\":[\"Both requests return the same empty 404 response.\",\"Both are concealed, but implementers choose different common statuses or bodies, allowing clients to observe inconsistent behavior.\"],\"observer\":\"The viewer client\"},\"unit\":\"00_product.md:Decisions\"},{\"subject\":\"Initial staff password change\",\"kind\":\"ambiguous requirement\",\"text\":\"R0-19 says the holder “logs in with the initial password and changes it” but does not say whether changing it is mandatory before any other operation or merely the expected onboarding sequence\",\"question\":\"After first login with the administrator-chosen password, may the staff account use its ordinary capabilities before changing that password?\",\"options\":[\"Require a password change before any other authenticated operation\",\"Allow normal use and make the change voluntary\",\"Expire the initial password after a defined time but permit use until then\"],\"default_guess\":\"Require the holder to change the initial password before ordinary operations are permitted.\",\"witness\":{\"initial\":\"An administrator has activated a new operator account with an initial password.\",\"events\":[\"The operator logs in successfully.\",\"Without changing the password, the operator attempts to edit an expense on an assigned active project.\"],\"outcomes\":[\"The edit is refused until the initial password is changed.\",\"The edit succeeds because the account is active and no forced-change state is specified.\"],\"observer\":\"The operator and administrator\"},\"unit\":\"00_product.md:Decisions\"},{\"subject\":\"Import-attempt classification boundary\",\"kind\":\"undefined failure recording\",\"text\":\"R0-25 records “every import attempt it classifies — accepted, idempotent replay, integrity conflict, or a rejection,” but only unauthenticated attempts are explicitly excluded; it does not define which authenticated authorization, Registry, contract or parsing failures count as classified rejections\",\"question\":\"Which failures create a fresh immutable import result and `import_id`, and which terminate as ordinary HTTP failures without an import result?\",\"options\":[\"Record every request after successful bearer authentication, including authorization and Registry failures\",\"Record only requests that pass authorization and can be parsed as the snapshot contract\",\"Define an explicit staged boundary with a closed rejection taxonomy\"],\"default_guess\":\"After successful bearer authentication, record failures only once a syntactically valid snapshot identity and project can be extracted; define a closed rejection taxonomy for authorization, Registry and contract validation.\",\"witness\":{\"initial\":\"A valid active service principal lacks a producer grant for project P.\",\"events\":[\"The principal submits a structurally valid snapshot for P.\"],\"outcomes\":[\"The portal creates a rejected import result with a fresh `import_id` and returns it.\",\"Authorization stops the request before an import result is created, so the caller receives only a concealed HTTP failure.\"],\"observer\":\"The producer and audit reader\"},\"unit\":\"00_product.md:Decisions\"},{\"subject\":\"Project ownership of import results\",\"kind\":\"unclassified stored fact\",\"text\":\"R0-16 classifies project-scoped records and records without a project but names neither snapshot import results nor their ownership, while R0-21 authorizes them by producing principal rather than project grant\",\"question\":\"Does each import result belong to a Registry project, to the producing service principal, to both, or to neither for authorization, retention and query bounding?\",\"options\":[\"Project-scoped record with an additional immutable producer owner\",\"Principal-owned record that merely contains attempted project provenance\",\"Non-project integration record addressed only by `import_id` and producer ownership\"],\"default_guess\":\"Store both the attempted `project_id` and immutable producing principal, but treat producer ownership—not a current project grant—as the read authorization rule.\",\"witness\":{\"initial\":\"Producer A imports a snapshot for P and receives import id I; its grant for P is later revoked.\",\"events\":[\"Producer A reads I.\",\"An administrator queries or retains records associated with P.\"],\"outcomes\":[\"I remains a project-scoped record associated with P even though its producer read bypasses the project grant.\",\"I is principal-owned integration history and is excluded from project-scoped record handling.\"],\"observer\":\"The producer, administrator and retention implementation\"},\"unit\":\"00_product.md:Decisions\"}]}",
+ "set_aside": []
+}
