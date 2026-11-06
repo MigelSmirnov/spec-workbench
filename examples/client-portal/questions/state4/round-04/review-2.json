@@ -1,0 +1,130 @@
+{
+ "open_points": [
+  {
+   "unit": "40_flows.md:Conventions every flow follows",
+   "subject": "HTTP route delegation for snapshot import",
+   "kind": "contradiction",
+   "text": "“A route handler ... calls exactly one owning use case” contradicts `flow:import_estimate_snapshot`, where “The route calls capability:service_identity.authorize_producer_scope”, then `capability:authorization_guard.authorize_snapshot_import`, and then `capability:snapshot_import.import_snapshot`.",
+   "question": "Does the import route orchestrate authentication, scope authorization, project authorization and import itself, or must one owning use case perform that orchestration behind the route?",
+   "options": [
+    "The route calls all named capabilities in the stated order",
+    "The route calls only `snapshot_import.import_snapshot`, which owns the orchestration",
+    "A separate orchestration use case is required"
+   ],
+   "default_guess": "Make `import_snapshot` the single route-level use case and have it orchestrate the checks.",
+   "witness": {
+    "initial": "An active producer presents a valid bearer credential and snapshot publication.",
+    "events": [
+     "The producer calls the snapshot-import route.",
+     "The route must authenticate, check producer scope, authorize the project and invoke the import."
+    ],
+    "outcomes": [
+     "One implementation makes four application calls from the handler, following the import flow but violating the one-use-case convention.",
+     "Another calls only `import_snapshot` and moves the preliminary checks into it, following the convention but changing the ownership and route-before-import sequence."
+    ],
+    "observer": "A producer sees different behavior when access or Registry availability changes between the checks."
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:administer_viewer_access`",
+   "subject": "Repeated viewer credential revocation",
+   "kind": "unstated failure",
+   "text": "`revoke_viewer_access` “revokes one credential” and the errors name an “unknown credential”, but no outcome is stated when the addressed credential exists and is already revoked.",
+   "question": "What does a second revocation of the same existing ViewerAccessCredential return, and does it append another `viewer.credential_revoke` audit record?",
+   "options": [
+    "Reject as not found with no audit",
+    "Reject as an invalid lifecycle transition with no audit",
+    "Succeed idempotently without another audit",
+    "Succeed and append another revocation audit"
+   ],
+   "default_guess": "Reject as not found with no audit.",
+   "witness": {
+    "initial": "A viewer credential exists with `revoked_at` already set and its sessions already revoked.",
+    "events": [
+     "An administrator submits `revoke_viewer_access` for that credential again."
+    ],
+    "outcomes": [
+     "The operation returns 404 because only an active credential is addressable.",
+     "The operation returns a lifecycle/input rejection because the record exists but `issued → revoked` cannot repeat."
+    ],
+    "observer": "The administrator sees a different HTTP status; audit readers may also see a different record count."
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:import_estimate_snapshot`",
+   "subject": "Import-result read branch",
+   "kind": "ambiguous flow branch",
+   "text": "The trigger combines publishing a snapshot “or” reading an earlier result, but steps 2–5 describe scope, Registry and import checks without explicitly limiting them to publication; step 6 only says `get_snapshot_import_result` returns a record to its producer.",
+   "question": "Which preceding steps apply to an import-result read, and does that read bypass producer scope, project grant and Registry checks as R0-21 requires?",
+   "options": [
+    "Only bearer authentication and ownership of the import record are checked",
+    "The scope and project authorization steps also run before reading the record"
+   ],
+   "default_guess": "Apply only bearer authentication and import-record ownership to the read.",
+   "witness": {
+    "initial": "A producer created an import record, then its project grant was revoked and the Registry project was archived.",
+    "events": [
+     "The same active producer authenticates with a valid credential.",
+     "It requests the earlier result by `import_id`."
+    ],
+    "outcomes": [
+     "The result is returned because the read checks only credential and record ownership, as R0-21 states.",
+     "The read is refused because the unbranched flow applies steps 2–3 and rechecks project access or Registry lifecycle."
+    ],
+    "observer": "The producer sees either the stored result or a 404/409 refusal."
+   }
+  },
+  {
+   "unit": "40_flows.md:Changes against the former text",
+   "subject": "Classification after route-level snapshot access succeeds",
+   "kind": "contradiction",
+   "text": "The change says “the route refuses an access failure before the import” and “every classified attempt gets a fresh `import_id`”; R0-25 says every attempt passing those route checks is classified, while the flow repeats `authorize_snapshot_import` before the import transaction and states that Registry or storage failures can propagate.",
+   "question": "After the route-level access check succeeds, what happens if the repeated authorization fails because the principal, grant, project lifecycle or Registry availability changed, especially when no ImportRejectReason represents that failure?",
+   "options": [
+    "Proceed using the successful route authorization and always classify the attempt",
+    "Classify every later access change into an import record with a defined reason",
+    "Raise the later access or Registry error and create no import record"
+   ],
+   "default_guess": "Remove the repeated authorization and classify every request that passed the route check.",
+   "witness": {
+    "initial": "An active producer is authorized for an active project and the route-level check succeeds.",
+    "events": [
+     "Before `import_snapshot` repeats authorization, Registry becomes unavailable.",
+     "`import_snapshot` performs its repeated authorization."
+    ],
+    "outcomes": [
+     "Treat the request as an attempt that passed the route checks, continue content classification and issue a fresh `import_id`, following R0-25.",
+     "Propagate a 502 Registry failure and record nothing, following the repeated-check step and failure policy."
+    ],
+    "observer": "The producer sees either a `SnapshotImportRecord` or a 502 response; audit readers see either one import audit or none."
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:expense_intake_and_management`",
+   "subject": "Missing or cross-project expense and document targets",
+   "kind": "unstated failure",
+   "text": "Steps 3–4 address existing expenses and documents, but the Errors section states no outcome when `correct_expense`, `set_expense_inclusion`, `replace_expense_allocations`, or `update_expense_document` receives an unknown identifier or one belonging to another project.",
+   "question": "How are unknown and cross-project expense/document identifiers reported, and must both cases be concealed as the same result?",
+   "options": [
+    "Return the same not-found response for unknown and cross-project targets",
+    "Return input rejection for either case",
+    "Return not found for unknown and input rejection for cross-project"
+   ],
+   "default_guess": "Return the same 404 not-found response for unknown and cross-project targets.",
+   "witness": {
+    "initial": "An operator is authorized to mutate project A; an expense and its document exist only in project B.",
+    "events": [
+     "The operator calls `update_expense_document` under project A using project B's document id."
+    ],
+    "outcomes": [
+     "The repository lookup is project-bounded and the route returns 404, indistinguishable from an unknown id.",
+     "The module detects the cross-project record and returns the flow's general invalid-project/input response, 422."
+    ],
+    "observer": "The operator sees a different status and may learn whether the identifier exists in another project."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"40_flows.md:Conventions every flow follows\",\"subject\":\"HTTP route delegation for snapshot import\",\"kind\":\"contradiction\",\"text\":\"“A route handler ... calls exactly one owning use case” contradicts `flow:import_estimate_snapshot`, where “The route calls capability:service_identity.authorize_producer_scope”, then `capability:authorization_guard.authorize_snapshot_import`, and then `capability:snapshot_import.import_snapshot`.\",\"question\":\"Does the import route orchestrate authentication, scope authorization, project authorization and import itself, or must one owning use case perform that orchestration behind the route?\",\"options\":[\"The route calls all named capabilities in the stated order\",\"The route calls only `snapshot_import.import_snapshot`, which owns the orchestration\",\"A separate orchestration use case is required\"],\"default_guess\":\"Make `import_snapshot` the single route-level use case and have it orchestrate the checks.\",\"witness\":{\"initial\":\"An active producer presents a valid bearer credential and snapshot publication.\",\"events\":[\"The producer calls the snapshot-import route.\",\"The route must authenticate, check producer scope, authorize the project and invoke the import.\"],\"outcomes\":[\"One implementation makes four application calls from the handler, following the import flow but violating the one-use-case convention.\",\"Another calls only `import_snapshot` and moves the preliminary checks into it, following the convention but changing the ownership and route-before-import sequence.\"],\"observer\":\"A producer sees different behavior when access or Registry availability changes between the checks.\"}},{\"unit\":\"40_flows.md:`flow:administer_viewer_access`\",\"subject\":\"Repeated viewer credential revocation\",\"kind\":\"unstated failure\",\"text\":\"`revoke_viewer_access` “revokes one credential” and the errors name an “unknown credential”, but no outcome is stated when the addressed credential exists and is already revoked.\",\"question\":\"What does a second revocation of the same existing ViewerAccessCredential return, and does it append another `viewer.credential_revoke` audit record?\",\"options\":[\"Reject as not found with no audit\",\"Reject as an invalid lifecycle transition with no audit\",\"Succeed idempotently without another audit\",\"Succeed and append another revocation audit\"],\"default_guess\":\"Reject as not found with no audit.\",\"witness\":{\"initial\":\"A viewer credential exists with `revoked_at` already set and its sessions already revoked.\",\"events\":[\"An administrator submits `revoke_viewer_access` for that credential again.\"],\"outcomes\":[\"The operation returns 404 because only an active credential is addressable.\",\"The operation returns a lifecycle/input rejection because the record exists but `issued → revoked` cannot repeat.\"],\"observer\":\"The administrator sees a different HTTP status; audit readers may also see a different record count.\"}},{\"unit\":\"40_flows.md:`flow:import_estimate_snapshot`\",\"subject\":\"Import-result read branch\",\"kind\":\"ambiguous flow branch\",\"text\":\"The trigger combines publishing a snapshot “or” reading an earlier result, but steps 2–5 describe scope, Registry and import checks without explicitly limiting them to publication; step 6 only says `get_snapshot_import_result` returns a record to its producer.\",\"question\":\"Which preceding steps apply to an import-result read, and does that read bypass producer scope, project grant and Registry checks as R0-21 requires?\",\"options\":[\"Only bearer authentication and ownership of the import record are checked\",\"The scope and project authorization steps also run before reading the record\"],\"default_guess\":\"Apply only bearer authentication and import-record ownership to the read.\",\"witness\":{\"initial\":\"A producer created an import record, then its project grant was revoked and the Registry project was archived.\",\"events\":[\"The same active producer authenticates with a valid credential.\",\"It requests the earlier result by `import_id`.\"],\"outcomes\":[\"The result is returned because the read checks only credential and record ownership, as R0-21 states.\",\"The read is refused because the unbranched flow applies steps 2–3 and rechecks project access or Registry lifecycle.\"],\"observer\":\"The producer sees either the stored result or a 404/409 refusal.\"}},{\"unit\":\"40_flows.md:Changes against the former text\",\"subject\":\"Classification after route-level snapshot access succeeds\",\"kind\":\"contradiction\",\"text\":\"The change says “the route refuses an access failure before the import” and “every classified attempt gets a fresh `import_id`”; R0-25 says every attempt passing those route checks is classified, while the flow repeats `authorize_snapshot_import` before the import transaction and states that Registry or storage failures can propagate.\",\"question\":\"After the route-level access check succeeds, what happens if the repeated authorization fails because the principal, grant, project lifecycle or Registry availability changed, especially when no ImportRejectReason represents that failure?\",\"options\":[\"Proceed using the successful route authorization and always classify the attempt\",\"Classify every later access change into an import record with a defined reason\",\"Raise the later access or Registry error and create no import record\"],\"default_guess\":\"Remove the repeated authorization and classify every request that passed the route check.\",\"witness\":{\"initial\":\"An active producer is authorized for an active project and the route-level check succeeds.\",\"events\":[\"Before `import_snapshot` repeats authorization, Registry becomes unavailable.\",\"`import_snapshot` performs its repeated authorization.\"],\"outcomes\":[\"Treat the request as an attempt that passed the route checks, continue content classification and issue a fresh `import_id`, following R0-25.\",\"Propagate a 502 Registry failure and record nothing, following the repeated-check step and failure policy.\"],\"observer\":\"The producer sees either a `SnapshotImportRecord` or a 502 response; audit readers see either one import audit or none.\"}},{\"unit\":\"40_flows.md:`flow:expense_intake_and_management`\",\"subject\":\"Missing or cross-project expense and document targets\",\"kind\":\"unstated failure\",\"text\":\"Steps 3–4 address existing expenses and documents, but the Errors section states no outcome when `correct_expense`, `set_expense_inclusion`, `replace_expense_allocations`, or `update_expense_document` receives an unknown identifier or one belonging to another project.\",\"question\":\"How are unknown and cross-project expense/document identifiers reported, and must both cases be concealed as the same result?\",\"options\":[\"Return the same not-found response for unknown and cross-project targets\",\"Return input rejection for either case\",\"Return not found for unknown and input rejection for cross-project\"],\"default_guess\":\"Return the same 404 not-found response for unknown and cross-project targets.\",\"witness\":{\"initial\":\"An operator is authorized to mutate project A; an expense and its document exist only in project B.\",\"events\":[\"The operator calls `update_expense_document` under project A using project B's document id.\"],\"outcomes\":[\"The repository lookup is project-bounded and the route returns 404, indistinguishable from an unknown id.\",\"The module detects the cross-project record and returns the flow's general invalid-project/input response, 422.\"],\"observer\":\"The operator sees a different status and may learn whether the identifier exists in another project.\"}}]}",
+ "set_aside": []
+}

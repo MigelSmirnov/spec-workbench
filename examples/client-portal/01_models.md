@@ -964,8 +964,10 @@ None.
   http_error | schema_mismatch | identity_mismatch`. Owned by the Registry
   gateway; State 2 lands the translation table in `rules`.
 
-Portal mutation policy uses only `is_active` for the grant and assignment
-operations of access management and only `status` (`active` or not) in the
+Portal mutation policy decides the grant and assignment operations of
+access management by `is_active` alone (`exists` only tells an unknown
+project from an inactive one in the refusal, State 2 A5) and uses only
+`status` (`active` or not) in the
 project guard of State 2 A4/A5; archived context remains readable.
 (Running service: Factory code `application/authorization_guard.py`,
 `application/staff_identity.py`; owner 2026-11-06: current service
