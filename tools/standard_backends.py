@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 
 @dataclass(frozen=True)
@@ -64,6 +64,40 @@ def _name(value: Any) -> bool:
     return isinstance(value, str) and bool(value)
 
 
+def unit_of_work_classes(backend: dict[str, Any]) -> dict[str, tuple[str, ...]] | None:
+    """``module -> owned classes`` of ``sqlite_unit_of_work_backend/v1`` (SPEC_STANDARD §6.12).
+
+    ``wiring.module`` owns exactly its error, store and transaction classes;
+    ``bootstrap_store.module``, when declared, owns exactly its one class. The
+    emitter writes every declared contract of those classes. Only what
+    ownership is computed from is checked here; the Factory generator
+    ``tools/generate_sqlite_unit_of_work_draft.py`` (run by its validator at
+    admission FA005) remains the judge of the rest of the closed form.
+    """
+    wiring = backend.get("wiring")
+    if not isinstance(wiring, dict):
+        return None
+    module = wiring.get("module")
+    classes = tuple(wiring.get(key) for key in ("error_class", "store_class", "transaction_class"))
+    if not _name(module) or not all(_name(item) for item in classes) or len(set(classes)) != 3:
+        return None
+    owned: dict[str, tuple[str, ...]] = {module: classes}
+    if "bootstrap_store" in backend:
+        bootstrap = backend["bootstrap_store"]
+        if not isinstance(bootstrap, dict):
+            return None
+        bootstrap_module, bootstrap_class = bootstrap.get("module"), bootstrap.get("class")
+        if (
+            not _name(bootstrap_module)
+            or not _name(bootstrap_class)
+            or bootstrap_module == module
+            or bootstrap_class in classes
+        ):
+            return None
+        owned[bootstrap_module] = (bootstrap_class,)
+    return owned
+
+
 def _declared_contracts(project: Path) -> set[str]:
     path = project / "60_contracts.json"
     try:
@@ -84,6 +118,12 @@ class StandardBackend:
     function_wiring_key: str | None = None
     function_wiring_keys: tuple[str, ...] = ()
     module_contracts: ModuleContracts | None = None
+    # module -> owned classes, computed from the IR; every declared contract of
+    # an owned class is emitted, so it is a deterministic method scope
+    class_ownership: Callable[[dict[str, Any]], dict[str, tuple[str, ...]] | None] | None = None
+
+    def _owned_classes(self, backend: dict[str, Any]) -> dict[str, tuple[str, ...]] | None:
+        return self.class_ownership(backend) if self.class_ownership is not None else None
 
     def _load(self, path: Path) -> Any:
         return json.loads(path.read_text(encoding="utf-8"))
@@ -109,6 +149,11 @@ class StandardBackend:
         if self.module_contracts is not None and (
             backend.get("kind") != self.rule_key
             or not self.module_contracts.well_formed(backend)
+        ):
+            return None
+        if self.class_ownership is not None and (
+            backend.get("kind") != self.rule_key
+            or self._owned_classes(backend) is None
         ):
             return None
         return backend
@@ -169,6 +214,13 @@ class StandardBackend:
             return set(mapping)
         if self.module_contracts is not None:
             return self.module_contracts.owned(backend, _declared_contracts(project))
+        owned_classes = self._owned_classes(backend)
+        if owned_classes is not None:
+            classes = {name for names in owned_classes.values() for name in names}
+            return {
+                name for name in _declared_contracts(project)
+                if "." in name and name.split(".", 1)[0] in classes
+            }
         wiring = backend.get("wiring")
         if self.function_wiring_keys and isinstance(wiring, dict):
             functions = {
@@ -194,9 +246,14 @@ class StandardBackend:
         backend = self.closed_backend(project)
         if backend is None:
             return None
-        wiring = backend.get("wiring")
-        if not isinstance(wiring, dict) or wiring.get("module") != module:
-            return None
+        owned_classes = self._owned_classes(backend)
+        if owned_classes is not None:
+            if module not in owned_classes:
+                return None
+        else:
+            wiring = backend.get("wiring")
+            if not isinstance(wiring, dict) or wiring.get("module") != module:
+                return None
         return {
             "enabled": True,
             "backend_ir": backend,
@@ -255,6 +312,15 @@ STANDARD_BACKENDS = (
             error_members=("refused", "internal"),
             factory_tool="tools/generate_keyed_file_spool_draft.py",
         ),
+    ),
+    # the unit of work over the persistence_backend repositories (§6.12): its
+    # classes and every contract they declare are emitted, in up to two modules
+    StandardBackend(
+        id="sqlite_unit_of_work",
+        closure_file="70_sqlite_unit_of_work_closure.json",
+        closure_schema="spec_workbench_sqlite_unit_of_work_backend_closure.v1",
+        rule_key="sqlite_unit_of_work_backend",
+        class_ownership=unit_of_work_classes,
     ),
 )
 
