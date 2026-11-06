@@ -223,6 +223,34 @@ timeouts, headers, fingerprint) into State 2 prose; the coordinator's note
 of 2026-11-06 stops that: such values are the accepted Factory ones, to be
 carried as State 6/7 texts so the rounds can judge them `answered_later`.
 
+### Implementation precision carried to States 6–7 (trim of 2026-11-06)
+
+States 1–2 state what a rule guarantees, not its mechanism (State 1 scope:
+no algorithms, orders, encodings, formats or error mappings; the closed
+reference case cabinet-kernel carries none in States 1–2). The values the
+rounds had written into `01_models.md` and `02_rules.md` were removed and are
+the accepted spec's (sha256 `459ac96c…`, Factory
+`projects/client_portal_sandbox/specs/base/global_spec.json`) and its code;
+State 6 contracts and State 7 notes carry them from these addresses
+unchanged (owner 2026-11-06: current service behaviour accepted; technical
+decisions delegated).
+
+| topic | removed from | accepted-spec address (459ac96c) | running code |
+|---|---|---|---|
+| snapshot `content_fingerprint`: covered fields, section ordering key and ties, JSON form, digest | A8, M18 | `rules.idempotency_identities.approved_snapshot`; note `_canonical_snapshot_fingerprint`, `_classify_snapshot_replay` | `application/snapshot_import.py` `_canonical_snapshot_fingerprint` |
+| expense `intake_fingerprint` canonicalisation | A8 (shared sentence) | note `_canonical_intake_fingerprint`, `_classify_expense_replay` | `application/expense_intake.py` |
+| Registry failure classification order, timeout classes, non-success body, endpoint usability | A6 | `rules.registry_failure_translation`; `config.registry_timeout_seconds`, `config.registry_request_paths`; notes `validate_project_reference`, `get_project_context`, `list_active_projects`, `_translate_registry_failure` | `adapters/registry_gateway.py` |
+| answer for an unknown Registry status on a read | A5 | note `_authorize_project_operation`; context model `AuthorizedProjectContext`; `rules.http_router_backend.error_policy.default_status` | `application/authorization_guard.py` |
+| snapshot content checks: decoding before authentication, which strings are accepted | A7 | note `_validate_snapshot_publication`, `import_snapshot` | `application/snapshot_import.py` |
+| overall progress rounding point | A9 | `rules.money_policy`; note `calculate_overall_progress` | `domain/financial_policy.py` |
+| staff email syntax set, whitespace set, casefolding, no IDNA | A16 | `rules.staff_identity_input_policy` (says `strip`; the code refuses, A16 kept the code); note `_normalize_staff_email` | `application/staff_identity.py` `_normalize_staff_email` |
+| password control-character set | A16 | `rules.staff_identity_input_policy.credential_allows_control_characters`; note `_validate_new_password` | `application/staff_identity.py` `_validate_new_password` |
+| viewer entry limiter: algorithm, window boundary, eviction, single worker, HTTP answer | A25 | `rules.http_transport_policy.limits.viewer_entry`; `config.runtime_environment_variables` (`VIEWER_ENTRY_RATE_LIMIT_*`); note `_record_viewer_entry_attempt` | `runtime/transport_guard.py`; `deploy/Dockerfile.api` |
+| security header list, `no-store` routes | A25 | `rules.http_transport_policy`; notes `_apply_security_headers`, `_requires_no_store`; `rules.binary_delivery_policy` | `runtime/transport_guard.py`, `api_irregular.py` `_binary_content_response` |
+| password hash profile and rehash behaviour | A30 | `rules.credential_security_backend.password` (`RFC_9106_LOW_MEMORY`); `config.credential_hash_scheme`; notes `hash_password`, `verify_password` | `security/credential_security.py` |
+| exact dependency pins | A32 | — (deployment file) | `deploy/requirements.txt` |
+| how the pre-deploy vulnerability check is run | A32 | — (no Factory tool; the trimmed text had prescribed `pip-audit`, which the service does not have) | — |
+
 ### Classification of what State 2 carries
 
 The former `spec/20_rules.md` moved into `02_rules.md` line for line (checked

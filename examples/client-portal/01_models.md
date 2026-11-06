@@ -1006,9 +1006,8 @@ None.
   `project_id: UUID`, `approved_at: datetime`, `approved_by: str` (source
   provenance, never a portal actor), `currency: str` (must be `EUR`),
   `tax_mode: str` (source provenance; planned amounts must already be
-  gross), `sections: list[SnapshotSectionData]` (the producer is
-  asked for a non-empty list with unique `source_section_id`; the portal
-  accepts any list, below), `source_system: str`, `published_at: datetime`,
+  gross), `sections: list[SnapshotSectionData]`, `source_system: str`,
+  `published_at: datetime`,
   `contract_version: int`.
 - `SnapshotSectionData` — `source_section_id: str`,
   `source_section_code: str`, `display_name: str`, `sort_order: int`,
@@ -1016,12 +1015,10 @@ None.
 - **Created by:** authenticated `ServicePrincipal`. Unsupported
   `contract_version`, non-EUR currency, incomplete content → typed
   rejection.
-- **In the running service:** a non-empty list with unique
-  `source_section_id` is the producer's obligation, not a portal check: an
-  empty section list and repeated `source_section_id` values are valid
-  publications for the portal, which refuses neither.
-  No accepted snapshot reaches a budget yet (Q11, deferred), so nothing
-  reads the sections; checking them is Q11's to decide.
+- **Sections:** the producer is asked for a non-empty list with unique
+  `source_section_id`; the portal refuses neither an empty list nor a
+  repeated id (State 2 A7). No snapshot reaches a budget yet (Q11,
+  deferred), so nothing reads the sections.
 
 ### Carried changes
 

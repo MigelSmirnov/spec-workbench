@@ -223,12 +223,10 @@ M16). The project guard of A4 reads the validation answer's `exists`
 access management read `exists` and `is_active` instead (A6); the
 active-project list keeps only references whose status is `active`; a
 status outside the two is never treated as active: a mutation is refused
-as `archived_project` by the guard, and a read, where such a status would
-enter a typed portal context (`AuthorizedProjectContext.registry_status`),
-is refused there as an invalid answer: building the context fails model
-validation, which is no `RegistryBoundaryError` and no catalog exception,
-so the API answers it as an unclassified failure (HTTP 500, empty body,
-`rules.http_router_backend.error_policy.default_status`). Mutation guards call `validate`
+as `archived_project` by the guard, and a read whose project context would
+carry such a status is refused as an invalid Registry answer (the error it
+answers is that of the accepted `_authorize_project_operation` and its
+context model, carried to States 5–6). Mutation guards call `validate`
 server-side before every linked write; archival never revokes grants.
 
 ### Carried changes
@@ -279,30 +277,18 @@ No silent fallback to client-supplied context, cache, or fabricated success.
 A malformed project identifier never reaches the gateway: request decoding
 refuses it (HTTP 422) before any Registry call or endpoint check, and the
 gateway takes only typed UUIDs, so the running service never produces
-`invalid_uuid` (Factory code: no caller raises it). A Registry call is
-classified by the first condition that holds, in this order: the portal's own Registry endpoint setting is missing or unusable →
-`transport_error`; the request times out → `timeout` (any socket timeout of the call —
-connecting, the TLS handshake or reading the answer — each bounded by
-`registry_timeout_seconds`; there is no separate whole-request timeout); the Registry answers
-HTTP 404 → `not_found`; any other non-success HTTP status → `http_error`
-(the body of a non-success answer is never decoded); any other connection
-failure → `transport_error`; the body is not JSON of the expected shape →
-`schema_mismatch`; the answer names another project UUID →
-`identity_mismatch`. Only then is a validation answer read by its caller,
-as A5 says: `exists = false` is not found; an existing project is archived
-for the project guard when its `status` is not `active`, and for the grant
-and assignment operations when `is_active = false`. The two readings agree, because the Registry's validation answer sets
-`is_active = true` exactly when its `status` is `active` (Registry v1
-`projects/registry_sandbox/services/registry/project_service.py`
-`validate_project_reference`); an answer in which they disagree is outside
-the Registry contract and is not something the portal decides. The gateway returns a
-decoded validation answer as it is and raises no failure for it; it does not
-check that `exists`, `is_active` and `status` agree, and each caller reads
-only the field A5 names for it. The Registry endpoint
-(`REGISTRY_BASE_URL`) is not one of the start-up variables of A30, whose
-closed table is what State 0's "validates when it starts" (R0-10) checks: the
-service starts without it, and each Registry call reads it, answering
-`transport_error` while it is missing or unusable (Factory code
+`invalid_uuid` (Factory code: no caller raises it). Every failed Registry
+call is answered with exactly one kind of the table and never with a
+fallback; which transport condition counts as which kind, and the order the
+gateway tests them in, are the accepted gateway's (notes of
+`validate_project_reference`, `get_project_context`,
+`list_active_projects`; `rules.registry_failure_translation`), carried to
+States 6–7. A decoded validation answer is returned as it is and read by
+its caller as A5 says; the two readings of A5 agree, because the Registry
+sets `is_active = true` exactly when `status` is `active` (Registry v1
+`validate_project_reference`). The Registry endpoint is not a start-up variable of
+A30: the service starts without it, and a Registry call made while it is
+missing or unusable fails as `transport_error` (Factory code
 `adapters/registry_gateway.py` `_registry_url`; owner 2026-11-06: current service behaviour accepted; technical decisions delegated).
 
 ### Carried changes
@@ -352,17 +338,14 @@ other than `EUR` → `currency_mismatch`, an empty `approved_by` →
 `incomplete_content`, then each section in publication order — an amount
 that is not a valid EUR amount → `invalid_sections`. A missing field never
 reaches these checks: request decoding refuses it first (below). One record carries that one reason (R0-25).
-A body that lacks a field the request model requires, or carries one of
-the wrong type (identity fields included), is refused by request decoding
-(HTTP 422) before the bearer credential is checked: it is
-not an import attempt, gets no `import_id` and writes no record;
-`incomplete_content` covers what decoding admits but the content check
-refuses; exactly one present value is incomplete: an empty `approved_by`;
-every other present string — empty or whitespace-only `source_system`,
-`tax_mode`, section ids, codes or names included — is accepted as
-supplied (Factory code `application/snapshot_import.py`
-`_validate_snapshot_publication`). An empty section list and
-repeated `source_section_id` values are not refused (State 1 M18).
+A body that lacks a required field or carries one of the wrong type is
+refused by request decoding before the bearer credential is checked: it is
+not an import attempt, gets no `import_id` and writes no record. Of the
+present values, only an empty `approved_by` is incomplete content; every
+other present string is accepted as supplied, and the section list is not
+refused for being empty or for repeating a `source_section_id` (State 1
+M18; Factory code `application/snapshot_import.py`
+`_validate_snapshot_publication`).
 
 An expense creation from a confirmed recognition is checked in this order:
 recognition status `confirmed`, a supported contract version, the
@@ -403,15 +386,13 @@ The table is rules data: `rules.supported_external_contract_versions` (SPEC_STAN
 | WorkPayment | `payment_id` (command-supplied UUID) | return existing payment |
 | ApprovedEstimateSnapshot | `(project_id, estimate_id, estimate_version)` + `content_fingerprint` | same fingerprint → existing snapshot (`idempotent_replay`); different → `integrity_conflict`, nothing stored |
 
-The snapshot `content_fingerprint` is the SHA-256 hex digest of the compact,
-key-sorted JSON of the publication's project, estimate and contract
-identity, `source_system`, `currency`, `tax_mode`, `published_at`,
-`approved_at`, `approved_by` and its sections. The sections enter as a list
-of every occurrence, duplicates included, each with all its fields, sorted
-by `(source_section_id, source_section_code, display_name, sort_order)`;
-their order in the publication therefore does not change the fingerprint,
-while changing, adding or removing any occurrence does (Factory code
-`application/snapshot_import.py` `_canonical_snapshot_fingerprint`; owner 2026-11-06: current service behaviour accepted; technical decisions delegated).
+A fingerprint is a deterministic digest of the content it covers, computed
+by the portal: a re-publication with an equal fingerprint is an idempotent
+replay and one with a different fingerprint an integrity conflict. How the
+content is canonicalised and digested is the owning function's
+(`_canonical_snapshot_fingerprint`, `_canonical_intake_fingerprint`),
+carried as it is in the accepted spec to States 6–7 (owner 2026-11-06:
+current service behaviour accepted; technical decisions delegated).
 
 ### Formal invariants
 
@@ -447,20 +428,17 @@ The table is rules data: `rules.idempotency_identities` (SPEC_STANDARD 15.3.1, a
 - Overall progress: `Σ(work_planned × percent) / Σ(work_planned)` over
   sections of the active version with `work_planned > 0` and a recorded
   progress (a section without a progress record is left out of both sums);
-  undefined (shown unavailable) when the denominator is 0. The quotient is
-  computed exactly in `Decimal` and rounded once, at the end, half-up to 2
-  fraction digits (a percentage such as `66.67`).
-
-### Carried changes
-
-Overall progress made exact from the running service (Factory code
-`domain/financial_policy.py` `calculate_overall_progress`: sections whose
-`completion_percent` is `None` are skipped, the result is quantized to
-`0.01` with `ROUND_HALF_UP`; owner 2026-11-06: current service behaviour
-accepted; technical decisions delegated).
+  undefined (shown unavailable) when the denominator is 0.
 - Work balance: `completed work value − payments total`; sign selects the
   presentation label (`Completed ahead of payments` / absolute value as
   `Unused advance payment`).
+
+### Carried changes
+
+A section without a recorded progress is left out of overall progress, as
+in the running service (Factory code `domain/financial_policy.py`
+`calculate_overall_progress`). Owner 2026-11-06: current service
+behaviour accepted; technical decisions delegated.
 
 ### Formal invariants
 
@@ -750,21 +728,15 @@ The table is rules data: `rules.project_list_ordering` (SPEC_STANDARD 15.3.1, a 
 
 - Staff login email is syntax-validated, Unicode-casefolded, and
   stored/compared in that normalized form. No provider-specific dot
-  removal, plus-tag removal, or domain rewriting occurs. The syntax check is
-  exactly: no whitespace character (Python `str.isspace()`, the Unicode
-  whitespace set, U+00A0 included) anywhere in the supplied value
-  (surrounding whitespace included, so a value with surrounding whitespace
-  is refused rather than stripped), exactly one `@`, a non-empty local
-  part, a domain that contains a `.` and has no empty label. Nothing else
-  is checked: quotes get no special meaning (an `@` inside a quoted local
-  part counts, so `"a@b"@example.com` is refused), and any other Unicode
-  character and non-ASCII domains are accepted as written, without IDNA conversion; casefolding is
-  Python's `str.casefold()`.
+  removal, plus-tag removal, or domain rewriting occurs. A supplied address
+  that contains whitespace, surrounding whitespace included, is refused,
+  never stripped. The exact syntax check and casefolding are those of the
+  accepted `_normalize_staff_email`, carried to States 6–7.
 - A new password is 12–128 Unicode code points, contains no NUL/control
   characters, and is hashed exactly as supplied. The portal never trims,
-  casefolds, or Unicode-normalizes password plaintext. "Control
-  characters" are exactly U+0000–U+001F and U+007F; every other code point,
-  including C1 controls and format characters such as U+200D, is accepted.
+  casefolds, or Unicode-normalizes password plaintext. The exact control
+  set is that of the accepted `_validate_new_password`, carried to
+  States 6–7.
 - No character-class composition ritual is required. A future breached-
   password service is a separate explicit boundary, not an implicit network
   call during hashing.
@@ -775,11 +747,9 @@ The table is rules data: `rules.project_list_ordering` (SPEC_STANDARD 15.3.1, a 
 
 ### Carried changes
 
-Syntax, the refusal of surrounding whitespace and the control set made
-exact from the running service (Factory code `application/staff_identity.py`
-`_normalize_staff_email`, `_validate_new_password`;
-`rules.staff_identity_input_policy`); the former "stripped of surrounding
-whitespace" is narrowed accordingly. Owner 2026-11-06: current service
+The former "stripped of surrounding whitespace" is narrowed to the running
+service, which refuses it (Factory code `application/staff_identity.py`
+`_normalize_staff_email`; `rules.staff_identity_input_policy`). Owner 2026-11-06: current service
 behaviour accepted; technical decisions delegated.
 
 ### Formal invariants
@@ -1005,41 +975,18 @@ service answers only on its trusted hosts (at least one, no wildcard at any
 position); CORS is off when its allowlist is empty, and an allowed origin is
 never a wildcard. Request bodies and binary responses are bounded by runtime
 settings before expensive work; viewer entry attempts are rate limited per
-client network address and route, with memory bounded by the rate-limit
-window (below) and a concealed answer,
+client network address and route, with bounded memory and a concealed answer,
 the address read only from the connection, never from a forwarded header,
-cookie or secret. The limiter is a sliding-window log per (client address,
-route) key: an entry attempt (`POST /auth/viewer/enter`) is refused with
-HTTP 429 and an empty body, before any code verification and without a
-session, when that key already has `RuntimeSettings.viewer_entry_rate_limit_attempts`
-attempts within the last `viewer_entry_rate_limit_window_seconds`; every admitted attempt counts while its age is at most the window (an
-attempt exactly `viewer_entry_rate_limit_window_seconds` old still counts;
-Factory code keeps entries with time ≥ now − window), valid or not, refused attempts are not counted, and
-on every attempt the entries older than the window are dropped across all
-keys and a key left without entries is removed, so the log never holds more
-than the attempts admitted within one window; that is the whole bound —
-there is no cap on distinct keys and no other eviction. The service runs one worker
-process (Factory `deploy/Dockerfile.api`, `--workers 1`) and the check and
-the recording of an attempt are one step with no suspension between them,
-so concurrent attempts are admitted one at a time; the log is in memory and
-starts empty when the service starts. The two values come from `VIEWER_ENTRY_RATE_LIMIT_ATTEMPTS` and
-`VIEWER_ENTRY_RATE_LIMIT_WINDOW_SECONDS` (A30; required in production, 10 and
-60 seconds in development and test; Factory code `runtime/transport_guard.py`
-`_record_viewer_entry_attempt`). Logs redact authorization, cookie and secret-like names.
-Fixed security headers are sent on every response the service answers —
-JSON, binary, health, error and cookie responses alike: `X-Content-Type-Options:
-nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`,
-`Permissions-Policy: geolocation=(), microphone=(), camera=()`, and an
-`X-Request-Id`. Credential and session answers are `no-store`: exactly the
-answers of `/auth/viewer/enter`, `/auth/viewer/session`,
-`/auth/viewer/logout`, `/auth/staff/login`, `/auth/staff/logout`,
-`/auth/credential/issue` and `/auth/credential/revoke` carry
-`Cache-Control: no-store` from the transport guard, and the binary answers
-of documents and photos carry `no-store` of their own (A14); no other answer
-sets `Cache-Control` (Factory code `api_irregular.py` `_binary_content_response`,
-`runtime/transport_guard.py` `_apply_security_headers`,
-`_requires_no_store`; owner 2026-11-06: current service behaviour accepted;
-technical decisions delegated). Liveness and readiness are public and change nothing (R0-11). The
+cookie or secret. An entry attempt over the limit is refused before any
+code verification and creates no session; the limiter's algorithm, its
+bound and its answer are those of the accepted transport guard
+(`rules.http_transport_policy.limits.viewer_entry`), with the values of
+A30, carried to States 6–7. Logs redact authorization, cookie and secret-like names.
+Fixed security headers are sent on every answer, and credential and
+session answers are not cached; the header list and the answers it covers
+are those of the accepted transport guard, carried to States 6–7 (owner
+2026-11-06: current service behaviour accepted; technical decisions
+delegated). Liveness and readiness are public and change nothing (R0-11). The
 viewer browser session is the host-only cookie of R0-09; mutating viewer
 requests must come from the canonical public origin, compared by scheme, host
 and effective port, with no pattern matching. Service principals use bearer
@@ -1215,16 +1162,10 @@ invariant, its value is config.
 
 ### Carried changes
 
-- `credential_hash_scheme = argon2id (library defaults)` is, in the running
-  service, the `RFC_9106_LOW_MEMORY` profile of the pinned `argon2-cffi`
-  25.1.0 (A32), its default profile: time cost 3, memory 65536 KiB,
-  parallelism 4, hash length 32 bytes, salt length 16 bytes. A stored hash
-  is never upgraded: a successful verification asks whether it needs a
-  rehash and ignores the answer, so a changed profile applies only to hashes
-  written afterwards (Factory code `security/credential_security.py`
-  `_password_hasher`, `verify_password`; owner 2026-11-06: current service
-  behaviour accepted; technical decisions delegated). A change of profile or
-  pin is a Factory route change (A32).
+- `credential_hash_scheme`: its parameters are those of the running
+  service's pinned hashing library (A32), carried to States 6–7; a change
+  of them is a Factory route change (A32). Owner 2026-11-06: current
+  service behaviour accepted; technical decisions delegated.
 - `binary_read_limit_env_name` now addresses its environment variable entry,
   `= config.runtime_environment_variables.variables.BINARY_MAX_READ_BYTES`
   (Factory `a6916180314d`).
@@ -1297,26 +1238,15 @@ Security review: PERFORMED
    exactly in the Factory deployment
    (`projects/client_portal_sandbox/deploy/requirements.txt`: fastapi,
    pydantic, argon2-cffi, uvicorn), each a direct import of the deployed
-   source. The accepted pins are `fastapi==0.135.1`, `pydantic==2.12.5`,
-   `argon2-cffi==25.1.0`, `uvicorn==0.42.0`.
+   source; the pinned versions are those of that file.
 2. A pin changes only through the Factory route, like any other deployed
    source change; nothing updates a dependency at run time or on the host.
 3. Before a deploy, the pinned versions are checked against a public
    known-vulnerability database; a pin with a known vulnerability that affects
    the portal is not deployed until it is updated through the Factory route.
-   The check is reproducible and is one command: `pip-audit --local`, run
-   inside the built image against what is installed there, querying the
-   PyPI advisory database (OSV) at the time of the deploy; its result alone
-   decides. Only the four
-   direct packages are pinned; pip resolves their own dependencies when the
-   image is built, so those versions may differ between deploys, and the
-   check audits the set resolved for the deploy at hand. A check that cannot
-   complete (resolution or advisory service unavailable) does not pass, and
-   the deploy waits. Because it audits the built image, the audited set is
-   the shipped set. Every advisory it
-   reports for any resolved package blocks the deploy; "affects the portal"
-   is not judged case by case, so an advisory for an unused optional feature
-   blocks too.
+   A check that cannot complete does not pass, and the deploy waits. How the
+   check is run (its tool, its database, the resolved set it covers) is a
+   deployment procedure, not a portal rule, carried to the deploy route.
 4. The portal adds no runtime feature for this: no update service, no
    network call at start, no dependency report on any API.
 
