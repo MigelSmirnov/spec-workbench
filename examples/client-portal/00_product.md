@@ -21,7 +21,12 @@ topics blocking, most of them about the text of 2026-07-18. The owner decided
 on 2026-11-06 that the current service behaviour is accepted and delegated
 technical decisions; R0-14 to R0-22 resolve the topics in favour of the
 accepted Factory spec and the running service, and the sentences they
-contradicted are narrowed in place with the decision cited.
+contradicted are narrowed in place with the decision cited. Round-02 judged 4
+topics blocking (repaired in R0-09, R0-14, R0-17, R0-20); round-03 judged 2:
+T11, whether a producer's bearer credential stands in for a session (the
+common authorization rule now says so, R0-09), and T23, how the initial staff
+password reaches its holder, which uncovered that the accepted service carries
+out no email challenge (R0-19, R0-23).
 
 ## Product statement
 
@@ -82,17 +87,17 @@ Revocation semantics:
 Operator and administrator accounts with full account-based authentication:
 
 - mandatory unique normalized email as login identifier plus password stored
-  only as a secure hash; the email is verified through a confirmation
-  challenge before the account can authenticate;
-- email change is completed only by confirming ownership of the new address;
-  the previous address is notified after the completed change; an
-  administrative recovery override exists only as an exceptional, heavily
-  audited process, never the primary mechanism;
+  only as a secure hash; an account authenticates only once its email is
+  verified, and an administrator's activation of a pending account marks it
+  verified (R0-19);
+- the email challenges — email verification by its holder, email change
+  confirmed at the new address, the password-reset token delivered by email —
+  and the token-free security notifications are designed (State 2 A10) but
+  deferred in the accepted service: their operations change nothing and send
+  nothing (R0-23, Q19);
+- an administrative recovery override exists only as an exceptional, heavily
+  audited process, never the primary mechanism (R0-20);
 - managed sessions with expiry, revocation, and sign-out-everywhere;
-- complete password-reset flow: single-use revocable reset token with limited
-  lifetime, delivered by email; a successful reset revokes existing sessions;
-- security notifications (password changed, email changed, account suspended
-  or disabled) are delivered through the email gateway;
 - suspending or disabling an account invalidates its active sessions;
 - login failures never reveal whether an email exists.
 
@@ -127,8 +132,9 @@ PresuPro snapshot producer):
 
 ### Common authorization rule
 
-Every project-scoped operation checks together: valid active session, active
-principal, access to the concrete `project_id`, required capability, and
+Every project-scoped operation checks together: valid active session (for a
+service principal, its authenticated bearer credential of R0-09, which needs
+no separate session), active principal, access to the concrete `project_id`, required capability, and
 Registry project lifecycle policy (R0-15). Knowing a `project_id` or URL grants nothing.
 
 ## Budget sources
@@ -325,7 +331,9 @@ lifecycle, and factura remain PresuPro/Holded concerns outside the portal.
 ### Email Delivery Gateway
 
 Delivery-only boundary for staff-account mail: email-verification,
-email-change, and password-reset challenges plus security notifications. The
+email-change, and password-reset challenges plus security notifications,
+all deferred in the accepted service (R0-23), so the gateway is called by no
+operation of the running portal. The
 portal owns challenge creation, purpose binding, expiry, single-use
 semantics, revocation, rate limits, verification-form token storage, message
 kind and addressing, and audit; the gateway only delivers messages. The
@@ -599,10 +607,16 @@ T10.
 ### R0-19 — Staff onboarding (owner 2026-11-06: current service behaviour accepted; technical decisions delegated)
 
 An administrator creates a staff account with its email, role and an initial
-password; the account waits in `pending_verification` until its holder
-confirms the email through the challenge an administrator issues; then it can
-log in and change its password (accepted contracts `create_staff_account`,
-`issue_email_verification`, `change_staff_password`). Resolves round-01 T32.
+password; the account is `pending_verification`. The administrator hands the
+initial password to the holder outside the portal: no portal operation,
+message or answer carries it. While the email challenges are deferred
+(R0-23), the administrator then activates the account
+(`pending_verification` → `active`), which marks its email verified; the
+holder logs in with the initial password and changes it (accepted contracts
+`create_staff_account`, `change_staff_status`, `change_staff_password`).
+Resolves round-01 T32 and round-03 T23; the text of round-02 had the holder
+confirm the email through a challenge, which the accepted service does not
+carry out.
 
 ### R0-20 — The recovery override replaces the login email (owner 2026-11-06: current service behaviour accepted; technical decisions delegated)
 
@@ -629,6 +643,18 @@ A snapshot's planned amounts are already gross (IVA included); its `tax_mode`
 is stored as provenance and never triggers recalculation (former State 1
 decision 3, State 2 R9). Resolves round-01 T1.
 
+### R0-23 — Email challenges and notices are deferred (owner 2026-11-06: current service behaviour accepted; technical decisions delegated)
+
+In the accepted spec (sha256 `459ac96c…`) the challenge operations "remain
+inert while StaffChallengeRepository is deferred": issuing an email
+verification, confirming it, requesting and confirming an email change, and
+completing a password reset each answer with the concealed authentication
+rejection and read, write, audit and deliver nothing; a password-reset request
+answers as usual and does nothing. No token-free notice is sent. Building
+them is a missing feature, outside the migration (`open_questions.md` Q19).
+The policy of State 2 A10 stays the design these operations follow once they
+are built.
+
 ## Open questions
 
 Recorded in `open_questions.md`; none is designed by this migration (owner,
@@ -643,6 +669,8 @@ Recorded in `open_questions.md`; none is designed by this migration (owner,
   code already revokes the earlier ones).
 - Q14 — replay-safe onboarding of a client.
 - Q16 — the estimate box for the client's own chat agent.
+- Q19 — the email challenges and security notices the accepted service does
+  not carry out (R0-23).
 - Still open from the authoring pass of 2026-07-19: staff MFA; administrative
   area boundaries beyond the single current area; pagination beyond the few-project profile (R0-01); expense
   correction history beyond audit; `SnapshotImportRecord` retention; external

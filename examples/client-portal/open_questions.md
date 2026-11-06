@@ -289,3 +289,26 @@ without the case text. Which order does the client see?
 Answered 2026-11-06 (owner: current service behaviour accepted; technical
 decisions delegated): the accepted `rules.derived_view_ordering` is adopted
 as it is (`02_rules.md` A27).
+
+### Q19 — Email challenges and security notices are not carried out
+
+Found 2026-11-06 by the State 0 round-03 (T23) and the State 3 migration. In
+the accepted Factory spec (sha256 `459ac96c…`) the challenge operations of
+`02_rules.md` A10 "remain inert while StaffChallengeRepository is deferred":
+`issue_email_verification`, `confirm_email_verification`,
+`request_email_change`, `confirm_email_change` and `complete_password_reset`
+answer with the concealed authentication rejection and change nothing, and
+`request_password_reset` returns without doing anything (Factory code
+`application/staff_challenges.py`). The three token-free notices of A10
+(`password_changed_notice`, `email_changed_notice`,
+`account_security_notice`; A11 "security notice sent") have no sending
+function at all; the former State 3 gave `staff_identity` a
+`send_staff_security_notice` capability. The running service sends no email.
+
+1. Should the portal carry out the email challenges and send these notices (a
+   missing feature, outside the migration)?
+
+Kept for now (owner 2026-11-06: current service behaviour accepted; technical
+decisions delegated): `00_product.md` R0-19 and R0-23; an administrator
+activates a new staff account, no State 3 module sends a notice, and A10
+stays the design the challenges follow once built. Open for the owner.

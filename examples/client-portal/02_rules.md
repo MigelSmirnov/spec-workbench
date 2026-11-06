@@ -349,6 +349,10 @@ Notification kinds sent without tokens: `password_changed_notice` (to the
 account email), `email_changed_notice` (to the previous email),
 `account_security_notice` (suspension/disabling).
 
+### Carried changes
+
+In the accepted Factory spec (sha256 `459ac96c…`) the challenge operations are deferred: they "remain inert while StaffChallengeRepository is deferred", answer with the concealed rejection (a password-reset request with nothing) and read, write, audit and deliver nothing; no function sends the three notification kinds. The running service is kept (owner 2026-11-06: current service behaviour accepted; technical decisions delegated; `00_product.md` R0-23); the policy above is the design the operations follow once built (`open_questions.md` Q19).
+
 ### Formal invariants
 
 - INV-010: challenge tokens are purpose-bound, single-use, time-limited, revocable; replay and cross-flow use are rejected
@@ -385,6 +389,10 @@ The table is rules data: `rules.email_challenge_policy` (SPEC_STANDARD 15.3.1, a
 
 "Immediate" means the next authorization check observes the revocation; no
 grace period.
+
+### Carried changes
+
+The accepted Factory spec revokes the sessions and outstanding challenges of a suspended or disabled staff account but sends no security notice (A10 "Carried changes", `00_product.md` R0-23, `open_questions.md` Q19).
 
 ### Formal invariants
 

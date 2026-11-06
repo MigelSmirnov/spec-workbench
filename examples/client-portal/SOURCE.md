@@ -131,6 +131,15 @@ T33 R0-09, T34 R0-20, T41 R0-21.
 | T34 recovery override operation | consequential_gap | accepted route `POST /admin/staff/{staff_id}/recovery-override` (`3080ef0d`) | pre-existing |
 | T41 read-import-result action | consequential_gap | accepted route `GET /integrations/snapshot-imports/{import_id}` | pre-existing |
 
+Round-02 (`questions/state0/round-02/`): 47 topics, 4 blocking, repaired in
+R0-09, R0-14, R0-17, R0-20. Round-03 (`questions/state0/round-03/`, on the
+text of `65c7894013ca`): 38 topics, 2 blocking.
+
+| topic | kind | evidence | resolution |
+|---|---|---|---|
+| T11 bearer-only producer against "valid active session" | contradiction | R0-09; accepted `authenticate_service_principal`, `authorize_snapshot_import` take a `ServiceActorContext`, no session | common authorization rule: a service principal's authenticated bearer credential stands in for the session |
+| T23 how the initial staff password reaches its holder | consequential_gap | accepted `create_staff_account` (no delivery), `change_staff_status` (`pending_verification` → `active` sets `email_verified_at`), `staff_challenges` notes "remain inert while StaffChallengeRepository is deferred", Factory code `application/staff_challenges.py` | R0-19 rewritten (administrator hands the password over outside the portal and activates the account); R0-23 records the deferred challenges and notices; A10, A11 "Carried changes"; Q19 for the owner |
+
 ### Classification of what State 1 carries
 
 The former `spec/10_models.md` moved into `01_models.md` line for line (every
@@ -164,3 +173,4 @@ decided in States 3–7.
 | Registry active list: `/projects/active` (State 0) against `projects` with decode-side filter | `300bd11d`, `config.registry_request_paths`; Registry v1 `api/runtime.py` serves both | accepted spec kept (owner 2026-11-06) | A30, State 6 |
 | dependency vulnerability policy | `deploy/requirements.txt` pins | was unresolved; decided under the owner decision of 2026-11-06 (technical decisions delegated) | A32, Q17 |
 | persistence, router and three backend IRs; `rules.role`, `rules.schema_version` | `8387e0a3`, `d1280708`, `300bd11d`…`a6916180314d` | later deterministic closures | "Carried to later closures" |
+

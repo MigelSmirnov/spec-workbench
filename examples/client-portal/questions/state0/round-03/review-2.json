@@ -1,0 +1,369 @@
+{
+ "open_points": [
+  {
+   "subject": "Common authorization rule for service principals",
+   "kind": "contradiction",
+   "text": "“Every project-scoped operation checks together: valid active session” conflicts with “Service principals authenticate only with a bearer header” and “Producer operations authenticate with the bearer credential of R0-09.”",
+   "question": "Does a snapshot producer need a separate active session in addition to its bearer credential, or does the bearer credential itself satisfy authentication for producer operations?",
+   "options": [
+    "Require both a service-principal session and bearer credential",
+    "Treat the bearer credential as sufficient and exempt producer operations from the session requirement"
+   ],
+   "default_guess": "Treat the bearer credential as sufficient for producer operations.",
+   "witness": {
+    "initial": "An active ServicePrincipal has import capability and scope for project P, but no session exists for it.",
+    "events": [
+     "The producer sends a valid bearer credential and imports a snapshot for P."
+    ],
+    "outcomes": [
+     "Reject the import because every project-scoped operation requires an active session.",
+     "Accept the import because producer operations authenticate only with the bearer credential."
+    ],
+    "observer": "The producer"
+   },
+   "unit": "00_product.md:Principals"
+  },
+  {
+   "subject": "Administrator access to project-scoped access management",
+   "kind": "contradiction",
+   "text": "“Every project-scoped operation checks together… access to the concrete project_id” and “Access requires… project grant/assignment” conflict with administrators managing grants and assignments “within their administrative area” and listing active Registry projects using only the access-management capability.",
+   "question": "Must an administrator have a personal project assignment before creating assignments or viewer grants for that project?",
+   "options": [
+    "Require the administrator's own project assignment",
+    "Allow administrative-area authority plus access-management capability without a project assignment"
+   ],
+   "default_guess": "Allow access-management operations within the administrator's area without a personal project assignment.",
+   "witness": {
+    "initial": "The bootstrap administrator exists, no project assignments exist, and Registry contains active project P.",
+    "events": [
+     "The administrator lists Registry projects.",
+     "The administrator attempts to create the first operator assignment or viewer grant for P."
+    ],
+    "outcomes": [
+     "Deny the write because the administrator lacks a grant or assignment for P, leaving no way to create the first assignment.",
+     "Allow the write because administrators manage access within their administrative area."
+    ],
+    "observer": "The administrator"
+   },
+   "unit": "00_product.md:Principals"
+  },
+  {
+   "subject": "Service-principal source-type scope",
+   "kind": "unnamed input",
+   "text": "“explicit project scope: allowed source types and allowed projects or administrative area” does not define the source-type vocabulary, where a snapshot supplies its source type, or how it is matched to the principal's allowed source types.",
+   "question": "What identifies a snapshot's source type, and what exact authorization comparison must an import perform?",
+   "options": [
+    "Bind a server-side source type to the ServicePrincipal or credential",
+    "Add a source-type value to the publication contract and validate it",
+    "Derive the type from source provenance"
+   ],
+   "default_guess": "Bind a closed source type to the ServicePrincipal and validate it server-side.",
+   "witness": {
+    "initial": "A principal is allowed to import for project P and is configured for source type PresuPro.",
+    "events": [
+     "It submits a structurally valid snapshot for P whose source provenance names a different producer type."
+    ],
+    "outcomes": [
+     "Accept it because project scope and import capability pass and source provenance is informational.",
+     "Reject it because the submitted or derived source type is outside the principal's allowed source types."
+    ],
+    "observer": "The producer and the audit reader"
+   },
+   "unit": "00_product.md:Principals"
+  },
+  {
+   "subject": "Service-credential rotation overlap",
+   "kind": "undefined lifecycle",
+   "text": "Credentials are “rotatable with an overlap period,” but no duration, start event, end event, configuration source, or behavior of the old credential during that period is given.",
+   "question": "When rotation occurs, exactly when does the old credential stop authenticating?",
+   "options": [
+    "After a fixed product-defined interval",
+    "After a deployment-configured interval",
+    "Only after an explicit revocation action"
+   ],
+   "default_guess": "Use a deployment-configured bounded overlap interval starting when the new credential is created.",
+   "witness": {
+    "initial": "Credential C1 is active for a producer.",
+    "events": [
+     "An administrator rotates C1 and receives C2.",
+     "The producer uses C1 twelve hours later."
+    ],
+    "outcomes": [
+     "C1 authenticates because the chosen overlap is at least twelve hours.",
+     "C1 is rejected because the chosen overlap is shorter than twelve hours."
+    ],
+    "observer": "The producer"
+   },
+   "unit": "00_product.md:Principals"
+  },
+  {
+   "subject": "Email delivery failure",
+   "kind": "missing failure semantics",
+   "text": "Security notifications and challenges “are delivered through the email gateway,” while “delivery success or failure never counts as address confirmation”; the text does not say whether the owning action commits, rolls back, retries, or exposes a delivery failure.",
+   "question": "What observable product result follows when the gateway fails to deliver a challenge or security notification?",
+   "options": [
+    "Commit the account action and record a failed delivery for later retry",
+    "Fail and roll back the account action",
+    "Commit the action but return an error to the caller",
+    "Retry according to a defined policy before deciding"
+   ],
+   "default_guess": "Commit security-sensitive state changes, record delivery failure, and expose a retryable delivery status without treating it as confirmation.",
+   "witness": {
+    "initial": "A verified staff account has an active session, and the email gateway is unavailable.",
+    "events": [
+     "The staff member successfully proves authority and changes their password.",
+     "The portal attempts to send the password-changed notification."
+    ],
+    "outcomes": [
+     "The password change commits and the failed notification is recorded.",
+     "The password change fails or rolls back because the promised notification could not be delivered."
+    ],
+    "observer": "The staff member and an auditor"
+   },
+   "unit": "00_product.md:External systems"
+  },
+  {
+   "subject": "Registry failure during client reads",
+   "kind": "missing failure semantics",
+   "text": "The portal consumes Registry context with “typed failure translation,” while the client view promises Registry context and says “Unavailable data is shown explicitly”; no behavior is stated when Registry is unavailable or cannot return context for an already-granted project.",
+   "question": "Does a Registry lookup failure fail the entire project read, or may the portal return its owned facts with Registry context explicitly unavailable?",
+   "options": [
+    "Fail the complete project response",
+    "Return portal-owned data with Registry context marked unavailable",
+    "Serve previously cached Registry context if one exists"
+   ],
+   "default_guess": "Return a typed service-unavailable failure for the complete project read unless a caching policy is explicitly designed.",
+   "witness": {
+    "initial": "Viewer V has an active grant and session for project P; portal-owned budget and expense data exist; Registry is temporarily unavailable.",
+    "events": [
+     "V opens P."
+    ],
+    "outcomes": [
+     "The whole project read fails with a translated Registry dependency error.",
+     "The project opens with budget and expenses while Registry context is explicitly unavailable."
+    ],
+    "observer": "The viewer"
+   },
+   "unit": "00_product.md:External systems"
+  },
+  {
+   "subject": "Rounding of derived monetary values",
+   "kind": "undefined calculation",
+   "text": "Money is “rounded half up to two places,” but the derived-value rules do not say whether intermediate per-section values are rounded before aggregation or only the final aggregate is rounded.",
+   "question": "At which stages must half-up two-place rounding occur for completed work value, totals, balances, and cost-weighted progress?",
+   "options": [
+    "Round each section's derived money before summing",
+    "Keep exact decimal intermediates and round only displayed or final totals",
+    "Define a separate rounding stage for every derived value"
+   ],
+   "default_guess": "Compute from exact decimal intermediates and round each published monetary result half up to two places.",
+   "witness": {
+    "initial": "Two sections each have EUR 0.05 planned work and 50% completion.",
+    "events": [
+     "The portal computes each section's completed work and the project completed-work total."
+    ],
+    "outcomes": [
+     "Round each section from EUR 0.025 to EUR 0.03 and show a total of EUR 0.06.",
+     "Sum exact intermediates to EUR 0.05 and round only the total, showing EUR 0.05."
+    ],
+    "observer": "The viewer and operator"
+   },
+   "unit": "00_product.md:Currency policy"
+  },
+  {
+   "subject": "Snapshot identity across projects",
+   "kind": "ambiguous identity scope",
+   "text": "“Snapshot identity is estimate_id + estimate_version for one project_id” and the invariant “same identity + different content is an integrity conflict” do not say whether project_id participates in uniqueness.",
+   "question": "May two projects contain snapshots with the same estimate_id and estimate_version, or is that pair globally unique across the portal?",
+   "options": [
+    "Use a global key of estimate_id plus estimate_version",
+    "Use a project-scoped key of project_id plus estimate_id plus estimate_version"
+   ],
+   "default_guess": "Use project_id plus estimate_id plus estimate_version as the unique identity.",
+   "witness": {
+    "initial": "Project P1 already contains estimate E version 1.",
+    "events": [
+     "An authorized producer imports estimate E version 1 with different project-appropriate content for P2."
+    ],
+    "outcomes": [
+     "Reject it as conflicting content for an existing snapshot identity.",
+     "Accept it as a separate snapshot because identity is scoped to one project."
+    ],
+    "observer": "The producer and operators of P2"
+   },
+   "unit": "00_product.md:Product invariants visible at State 0"
+  },
+  {
+   "subject": "Explicit versus automatic section mapping",
+   "kind": "contradiction",
+   "text": "The transition rules say existing allocations “require explicit mapping,” then say matching stable identifiers “may link automatically,” while invariant 10 says allocations survive version changes “through explicit mapping.”",
+   "question": "When old and new sections share a stable identifier, is a recorded human mapping decision required before activation, or may the portal create and apply the mapping automatically?",
+   "options": [
+    "Require human confirmation for every mapping",
+    "Automatically create mappings for identical stable identifiers and require humans only for unmatched sections"
+   ],
+   "default_guess": "Automatically create an explicit recorded mapping for identical stable identifiers and require manual decisions otherwise.",
+   "witness": {
+    "initial": "An active manual budget has section S, and an expense is allocated to S. An imported candidate contains the same stable section identifier S with a new display name.",
+    "events": [
+     "An operator attempts to activate the imported version without entering a mapping decision."
+    ],
+    "outcomes": [
+     "Activation succeeds because stable identifiers may link automatically.",
+     "Activation is blocked because every surviving allocation requires explicit mapping."
+    ],
+    "observer": "The activating operator and viewer"
+   },
+   "unit": "00_product.md:Product invariants visible at State 0"
+  },
+  {
+   "subject": "Audit coverage of rejected and read actions",
+   "kind": "vague abstraction",
+   "text": "“Every significant action” is audited, but “significant” is not closed and the enumerated examples do not establish whether logins, authorization denials, client reads, downloads, or failed commands are included.",
+   "question": "Which attempted actions, successful reads, authentication failures, and authorization failures must create audit records?",
+   "options": [
+    "Audit only successful listed mutations plus snapshot rejections",
+    "Audit all listed attempts including failures, but not ordinary reads",
+    "Also audit sensitive reads and binary downloads",
+    "Define a closed event catalogue"
+   ],
+   "default_guess": "Define a closed catalogue that includes all listed mutation attempts, authentication/security events, authorization denials, and protected binary downloads.",
+   "witness": {
+    "initial": "A viewer session is valid for P1 but has no grant for P2.",
+    "events": [
+     "The viewer requests a document belonging to P2."
+    ],
+    "outcomes": [
+     "Create an audit record for the denied cross-project read because it is a significant security action with a result.",
+     "Return the indistinguishable denial without an audit record because ordinary reads and denials are not in the listed audit actions."
+    ],
+    "observer": "A security auditor"
+   },
+   "unit": "00_product.md:Primary outcomes"
+  },
+  {
+   "subject": "Bootstrap audit exception",
+   "kind": "contradiction",
+   "text": "The audit promise says “Every significant action records actor provenance,” including staff-account management by implication, while R0-07 says creation of the first administrator is “never… audited.”",
+   "question": "Is first-administrator creation an explicit exception to the universal audit invariant, or must a host-actor audit record be created?",
+   "options": [
+    "Keep bootstrap entirely unaudited as R0-07 states",
+    "Audit bootstrap with host-operator provenance",
+    "Record a non-product deployment log while creating no portal audit record"
+   ],
+   "default_guess": "Treat R0-07 as an explicit exception to portal audit and require a separate protected host-operation log.",
+   "witness": {
+    "initial": "A deployment has no staff accounts.",
+    "events": [
+     "The host operator runs the bootstrap command and creates the first administrator."
+    ],
+    "outcomes": [
+     "No audit record exists, as R0-07 requires.",
+     "An audit record exists because creating an administrator is a significant access-management action and the invariant says every such action is audited."
+    ],
+    "observer": "A security auditor"
+   },
+   "unit": "00_product.md:Decisions"
+  },
+  {
+   "subject": "Bootstrap command exit contract",
+   "kind": "missing observable output",
+   "text": "R0-07 promises “a closed set of exit codes that deployment scripts may branch on” but does not name the codes or the conditions mapped to them.",
+   "question": "What is the complete exit-code set for success, pre-existing staff, invalid input, persistence failure, and configuration failure?",
+   "options": [
+    "Define distinct stable codes for each branchable result",
+    "Use success and one generic failure code",
+    "Use success, already-initialized, invalid-input, and internal-failure classes"
+   ],
+   "default_guess": "Define stable codes for success, already initialized, invalid input, and operational failure.",
+   "witness": {
+    "initial": "The database already contains a staff account.",
+    "events": [
+     "A deployment script invokes the bootstrap command."
+    ],
+    "outcomes": [
+     "The command returns a dedicated already-initialized code that the script treats as a safe no-op.",
+     "The command returns a generic failure code that the script treats as a deployment failure."
+    ],
+    "observer": "The deployment script and host operator"
+   },
+   "unit": "00_product.md:Decisions"
+  },
+  {
+   "subject": "Readiness semantics",
+   "kind": "missing observable output",
+   "text": "R0-11 says the service “answers an unauthenticated liveness and readiness check” but does not define readiness dependencies, response statuses, or the non-sensitive response body.",
+   "question": "What exact conditions make readiness succeed or fail, and what stable HTTP outputs represent each result?",
+   "options": [
+    "Readiness requires only usable local database and binary root",
+    "Readiness also requires Registry and email gateway reachability",
+    "Readiness means startup validation completed, with runtime dependencies excluded"
+   ],
+   "default_guess": "Liveness reports a running process; readiness requires valid configuration and usable local persistence, but not live external services.",
+   "witness": {
+    "initial": "The service has started, SQLite and the binary root are usable, but Registry is unreachable.",
+    "events": [
+     "The orchestrator calls liveness and readiness."
+    ],
+    "outcomes": [
+     "Liveness and readiness both succeed because local service dependencies are usable.",
+     "Liveness succeeds but readiness fails because Registry is required for normal operations."
+    ],
+    "observer": "The deployment orchestrator"
+   },
+   "unit": "00_product.md:Decisions"
+  },
+  {
+   "subject": "Indistinguishable protected-binary failures",
+   "kind": "missing failure output",
+   "text": "R0-12 says an “unknown, cross-project, hidden, oversize or unlisted read is answered the same way” without specifying that common status, headers, or body.",
+   "question": "What exact response must all protected-binary concealment cases return?",
+   "options": [
+    "Return a uniform not-found response",
+    "Return a uniform forbidden response",
+    "Return another fixed opaque error contract"
+   ],
+   "default_guess": "Return a uniform not-found response with no distinguishing metadata.",
+   "witness": {
+    "initial": "Document D exists but is hidden; identifier X does not exist.",
+    "events": [
+     "The same authenticated caller requests D and then X."
+    ],
+    "outcomes": [
+     "Both requests return an identical 404 response.",
+     "Both requests return an identical 403 response."
+    ],
+    "observer": "The caller and any client implementation branching on HTTP status"
+   },
+   "unit": "00_product.md:Decisions"
+  },
+  {
+   "subject": "Initial staff password hand-off",
+   "kind": "unnamed trust boundary",
+   "text": "R0-19 says an administrator creates a staff account with “an initial password,” after which the holder confirms email and can log in, but no action or trusted channel conveys that password to the holder; the Email Delivery Gateway's allowed message kinds do not include initial credentials.",
+   "question": "How does the staff-account holder obtain the administrator-chosen initial password, and is that hand-off inside or outside the product boundary?",
+   "options": [
+    "Administrator conveys it through a named out-of-band channel",
+    "The portal sends a separate one-time setup secret through email",
+    "Replace administrator-chosen passwords with a holder-completed password-setup action"
+   ],
+   "default_guess": "Treat secure out-of-band delivery by the administrator as an explicit operating boundary and never email the password.",
+   "witness": {
+    "initial": "An administrator creates a pending staff account for H with an initial password known only to the administrator.",
+    "events": [
+     "H receives and completes the email-verification challenge.",
+     "H attempts to log in."
+    ],
+    "outcomes": [
+     "H can log in because an assumed out-of-band process conveyed the initial password.",
+     "H cannot log in because the product sent only verification mail and no specified actor or system conveyed the password."
+    ],
+    "observer": "The new staff-account holder"
+   },
+   "unit": "00_product.md:Decisions"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"Common authorization rule for service principals\",\"kind\":\"contradiction\",\"text\":\"“Every project-scoped operation checks together: valid active session” conflicts with “Service principals authenticate only with a bearer header” and “Producer operations authenticate with the bearer credential of R0-09.”\",\"question\":\"Does a snapshot producer need a separate active session in addition to its bearer credential, or does the bearer credential itself satisfy authentication for producer operations?\",\"options\":[\"Require both a service-principal session and bearer credential\",\"Treat the bearer credential as sufficient and exempt producer operations from the session requirement\"],\"default_guess\":\"Treat the bearer credential as sufficient for producer operations.\",\"witness\":{\"initial\":\"An active ServicePrincipal has import capability and scope for project P, but no session exists for it.\",\"events\":[\"The producer sends a valid bearer credential and imports a snapshot for P.\"],\"outcomes\":[\"Reject the import because every project-scoped operation requires an active session.\",\"Accept the import because producer operations authenticate only with the bearer credential.\"],\"observer\":\"The producer\"},\"unit\":\"00_product.md:Principals\"},{\"subject\":\"Administrator access to project-scoped access management\",\"kind\":\"contradiction\",\"text\":\"“Every project-scoped operation checks together… access to the concrete project_id” and “Access requires… project grant/assignment” conflict with administrators managing grants and assignments “within their administrative area” and listing active Registry projects using only the access-management capability.\",\"question\":\"Must an administrator have a personal project assignment before creating assignments or viewer grants for that project?\",\"options\":[\"Require the administrator's own project assignment\",\"Allow administrative-area authority plus access-management capability without a project assignment\"],\"default_guess\":\"Allow access-management operations within the administrator's area without a personal project assignment.\",\"witness\":{\"initial\":\"The bootstrap administrator exists, no project assignments exist, and Registry contains active project P.\",\"events\":[\"The administrator lists Registry projects.\",\"The administrator attempts to create the first operator assignment or viewer grant for P.\"],\"outcomes\":[\"Deny the write because the administrator lacks a grant or assignment for P, leaving no way to create the first assignment.\",\"Allow the write because administrators manage access within their administrative area.\"],\"observer\":\"The administrator\"},\"unit\":\"00_product.md:Principals\"},{\"subject\":\"Service-principal source-type scope\",\"kind\":\"unnamed input\",\"text\":\"“explicit project scope: allowed source types and allowed projects or administrative area” does not define the source-type vocabulary, where a snapshot supplies its source type, or how it is matched to the principal's allowed source types.\",\"question\":\"What identifies a snapshot's source type, and what exact authorization comparison must an import perform?\",\"options\":[\"Bind a server-side source type to the ServicePrincipal or credential\",\"Add a source-type value to the publication contract and validate it\",\"Derive the type from source provenance\"],\"default_guess\":\"Bind a closed source type to the ServicePrincipal and validate it server-side.\",\"witness\":{\"initial\":\"A principal is allowed to import for project P and is configured for source type PresuPro.\",\"events\":[\"It submits a structurally valid snapshot for P whose source provenance names a different producer type.\"],\"outcomes\":[\"Accept it because project scope and import capability pass and source provenance is informational.\",\"Reject it because the submitted or derived source type is outside the principal's allowed source types.\"],\"observer\":\"The producer and the audit reader\"},\"unit\":\"00_product.md:Principals\"},{\"subject\":\"Service-credential rotation overlap\",\"kind\":\"undefined lifecycle\",\"text\":\"Credentials are “rotatable with an overlap period,” but no duration, start event, end event, configuration source, or behavior of the old credential during that period is given.\",\"question\":\"When rotation occurs, exactly when does the old credential stop authenticating?\",\"options\":[\"After a fixed product-defined interval\",\"After a deployment-configured interval\",\"Only after an explicit revocation action\"],\"default_guess\":\"Use a deployment-configured bounded overlap interval starting when the new credential is created.\",\"witness\":{\"initial\":\"Credential C1 is active for a producer.\",\"events\":[\"An administrator rotates C1 and receives C2.\",\"The producer uses C1 twelve hours later.\"],\"outcomes\":[\"C1 authenticates because the chosen overlap is at least twelve hours.\",\"C1 is rejected because the chosen overlap is shorter than twelve hours.\"],\"observer\":\"The producer\"},\"unit\":\"00_product.md:Principals\"},{\"subject\":\"Email delivery failure\",\"kind\":\"missing failure semantics\",\"text\":\"Security notifications and challenges “are delivered through the email gateway,” while “delivery success or failure never counts as address confirmation”; the text does not say whether the owning action commits, rolls back, retries, or exposes a delivery failure.\",\"question\":\"What observable product result follows when the gateway fails to deliver a challenge or security notification?\",\"options\":[\"Commit the account action and record a failed delivery for later retry\",\"Fail and roll back the account action\",\"Commit the action but return an error to the caller\",\"Retry according to a defined policy before deciding\"],\"default_guess\":\"Commit security-sensitive state changes, record delivery failure, and expose a retryable delivery status without treating it as confirmation.\",\"witness\":{\"initial\":\"A verified staff account has an active session, and the email gateway is unavailable.\",\"events\":[\"The staff member successfully proves authority and changes their password.\",\"The portal attempts to send the password-changed notification.\"],\"outcomes\":[\"The password change commits and the failed notification is recorded.\",\"The password change fails or rolls back because the promised notification could not be delivered.\"],\"observer\":\"The staff member and an auditor\"},\"unit\":\"00_product.md:External systems\"},{\"subject\":\"Registry failure during client reads\",\"kind\":\"missing failure semantics\",\"text\":\"The portal consumes Registry context with “typed failure translation,” while the client view promises Registry context and says “Unavailable data is shown explicitly”; no behavior is stated when Registry is unavailable or cannot return context for an already-granted project.\",\"question\":\"Does a Registry lookup failure fail the entire project read, or may the portal return its owned facts with Registry context explicitly unavailable?\",\"options\":[\"Fail the complete project response\",\"Return portal-owned data with Registry context marked unavailable\",\"Serve previously cached Registry context if one exists\"],\"default_guess\":\"Return a typed service-unavailable failure for the complete project read unless a caching policy is explicitly designed.\",\"witness\":{\"initial\":\"Viewer V has an active grant and session for project P; portal-owned budget and expense data exist; Registry is temporarily unavailable.\",\"events\":[\"V opens P.\"],\"outcomes\":[\"The whole project read fails with a translated Registry dependency error.\",\"The project opens with budget and expenses while Registry context is explicitly unavailable.\"],\"observer\":\"The viewer\"},\"unit\":\"00_product.md:External systems\"},{\"subject\":\"Rounding of derived monetary values\",\"kind\":\"undefined calculation\",\"text\":\"Money is “rounded half up to two places,” but the derived-value rules do not say whether intermediate per-section values are rounded before aggregation or only the final aggregate is rounded.\",\"question\":\"At which stages must half-up two-place rounding occur for completed work value, totals, balances, and cost-weighted progress?\",\"options\":[\"Round each section's derived money before summing\",\"Keep exact decimal intermediates and round only displayed or final totals\",\"Define a separate rounding stage for every derived value\"],\"default_guess\":\"Compute from exact decimal intermediates and round each published monetary result half up to two places.\",\"witness\":{\"initial\":\"Two sections each have EUR 0.05 planned work and 50% completion.\",\"events\":[\"The portal computes each section's completed work and the project completed-work total.\"],\"outcomes\":[\"Round each section from EUR 0.025 to EUR 0.03 and show a total of EUR 0.06.\",\"Sum exact intermediates to EUR 0.05 and round only the total, showing EUR 0.05.\"],\"observer\":\"The viewer and operator\"},\"unit\":\"00_product.md:Currency policy\"},{\"subject\":\"Snapshot identity across projects\",\"kind\":\"ambiguous identity scope\",\"text\":\"“Snapshot identity is estimate_id + estimate_version for one project_id” and the invariant “same identity + different content is an integrity conflict” do not say whether project_id participates in uniqueness.\",\"question\":\"May two projects contain snapshots with the same estimate_id and estimate_version, or is that pair globally unique across the portal?\",\"options\":[\"Use a global key of estimate_id plus estimate_version\",\"Use a project-scoped key of project_id plus estimate_id plus estimate_version\"],\"default_guess\":\"Use project_id plus estimate_id plus estimate_version as the unique identity.\",\"witness\":{\"initial\":\"Project P1 already contains estimate E version 1.\",\"events\":[\"An authorized producer imports estimate E version 1 with different project-appropriate content for P2.\"],\"outcomes\":[\"Reject it as conflicting content for an existing snapshot identity.\",\"Accept it as a separate snapshot because identity is scoped to one project.\"],\"observer\":\"The producer and operators of P2\"},\"unit\":\"00_product.md:Product invariants visible at State 0\"},{\"subject\":\"Explicit versus automatic section mapping\",\"kind\":\"contradiction\",\"text\":\"The transition rules say existing allocations “require explicit mapping,” then say matching stable identifiers “may link automatically,” while invariant 10 says allocations survive version changes “through explicit mapping.”\",\"question\":\"When old and new sections share a stable identifier, is a recorded human mapping decision required before activation, or may the portal create and apply the mapping automatically?\",\"options\":[\"Require human confirmation for every mapping\",\"Automatically create mappings for identical stable identifiers and require humans only for unmatched sections\"],\"default_guess\":\"Automatically create an explicit recorded mapping for identical stable identifiers and require manual decisions otherwise.\",\"witness\":{\"initial\":\"An active manual budget has section S, and an expense is allocated to S. An imported candidate contains the same stable section identifier S with a new display name.\",\"events\":[\"An operator attempts to activate the imported version without entering a mapping decision.\"],\"outcomes\":[\"Activation succeeds because stable identifiers may link automatically.\",\"Activation is blocked because every surviving allocation requires explicit mapping.\"],\"observer\":\"The activating operator and viewer\"},\"unit\":\"00_product.md:Product invariants visible at State 0\"},{\"subject\":\"Audit coverage of rejected and read actions\",\"kind\":\"vague abstraction\",\"text\":\"“Every significant action” is audited, but “significant” is not closed and the enumerated examples do not establish whether logins, authorization denials, client reads, downloads, or failed commands are included.\",\"question\":\"Which attempted actions, successful reads, authentication failures, and authorization failures must create audit records?\",\"options\":[\"Audit only successful listed mutations plus snapshot rejections\",\"Audit all listed attempts including failures, but not ordinary reads\",\"Also audit sensitive reads and binary downloads\",\"Define a closed event catalogue\"],\"default_guess\":\"Define a closed catalogue that includes all listed mutation attempts, authentication/security events, authorization denials, and protected binary downloads.\",\"witness\":{\"initial\":\"A viewer session is valid for P1 but has no grant for P2.\",\"events\":[\"The viewer requests a document belonging to P2.\"],\"outcomes\":[\"Create an audit record for the denied cross-project read because it is a significant security action with a result.\",\"Return the indistinguishable denial without an audit record because ordinary reads and denials are not in the listed audit actions.\"],\"observer\":\"A security auditor\"},\"unit\":\"00_product.md:Primary outcomes\"},{\"subject\":\"Bootstrap audit exception\",\"kind\":\"contradiction\",\"text\":\"The audit promise says “Every significant action records actor provenance,” including staff-account management by implication, while R0-07 says creation of the first administrator is “never… audited.”\",\"question\":\"Is first-administrator creation an explicit exception to the universal audit invariant, or must a host-actor audit record be created?\",\"options\":[\"Keep bootstrap entirely unaudited as R0-07 states\",\"Audit bootstrap with host-operator provenance\",\"Record a non-product deployment log while creating no portal audit record\"],\"default_guess\":\"Treat R0-07 as an explicit exception to portal audit and require a separate protected host-operation log.\",\"witness\":{\"initial\":\"A deployment has no staff accounts.\",\"events\":[\"The host operator runs the bootstrap command and creates the first administrator.\"],\"outcomes\":[\"No audit record exists, as R0-07 requires.\",\"An audit record exists because creating an administrator is a significant access-management action and the invariant says every such action is audited.\"],\"observer\":\"A security auditor\"},\"unit\":\"00_product.md:Decisions\"},{\"subject\":\"Bootstrap command exit contract\",\"kind\":\"missing observable output\",\"text\":\"R0-07 promises “a closed set of exit codes that deployment scripts may branch on” but does not name the codes or the conditions mapped to them.\",\"question\":\"What is the complete exit-code set for success, pre-existing staff, invalid input, persistence failure, and configuration failure?\",\"options\":[\"Define distinct stable codes for each branchable result\",\"Use success and one generic failure code\",\"Use success, already-initialized, invalid-input, and internal-failure classes\"],\"default_guess\":\"Define stable codes for success, already initialized, invalid input, and operational failure.\",\"witness\":{\"initial\":\"The database already contains a staff account.\",\"events\":[\"A deployment script invokes the bootstrap command.\"],\"outcomes\":[\"The command returns a dedicated already-initialized code that the script treats as a safe no-op.\",\"The command returns a generic failure code that the script treats as a deployment failure.\"],\"observer\":\"The deployment script and host operator\"},\"unit\":\"00_product.md:Decisions\"},{\"subject\":\"Readiness semantics\",\"kind\":\"missing observable output\",\"text\":\"R0-11 says the service “answers an unauthenticated liveness and readiness check” but does not define readiness dependencies, response statuses, or the non-sensitive response body.\",\"question\":\"What exact conditions make readiness succeed or fail, and what stable HTTP outputs represent each result?\",\"options\":[\"Readiness requires only usable local database and binary root\",\"Readiness also requires Registry and email gateway reachability\",\"Readiness means startup validation completed, with runtime dependencies excluded\"],\"default_guess\":\"Liveness reports a running process; readiness requires valid configuration and usable local persistence, but not live external services.\",\"witness\":{\"initial\":\"The service has started, SQLite and the binary root are usable, but Registry is unreachable.\",\"events\":[\"The orchestrator calls liveness and readiness.\"],\"outcomes\":[\"Liveness and readiness both succeed because local service dependencies are usable.\",\"Liveness succeeds but readiness fails because Registry is required for normal operations.\"],\"observer\":\"The deployment orchestrator\"},\"unit\":\"00_product.md:Decisions\"},{\"subject\":\"Indistinguishable protected-binary failures\",\"kind\":\"missing failure output\",\"text\":\"R0-12 says an “unknown, cross-project, hidden, oversize or unlisted read is answered the same way” without specifying that common status, headers, or body.\",\"question\":\"What exact response must all protected-binary concealment cases return?\",\"options\":[\"Return a uniform not-found response\",\"Return a uniform forbidden response\",\"Return another fixed opaque error contract\"],\"default_guess\":\"Return a uniform not-found response with no distinguishing metadata.\",\"witness\":{\"initial\":\"Document D exists but is hidden; identifier X does not exist.\",\"events\":[\"The same authenticated caller requests D and then X.\"],\"outcomes\":[\"Both requests return an identical 404 response.\",\"Both requests return an identical 403 response.\"],\"observer\":\"The caller and any client implementation branching on HTTP status\"},\"unit\":\"00_product.md:Decisions\"},{\"subject\":\"Initial staff password hand-off\",\"kind\":\"unnamed trust boundary\",\"text\":\"R0-19 says an administrator creates a staff account with “an initial password,” after which the holder confirms email and can log in, but no action or trusted channel conveys that password to the holder; the Email Delivery Gateway's allowed message kinds do not include initial credentials.\",\"question\":\"How does the staff-account holder obtain the administrator-chosen initial password, and is that hand-off inside or outside the product boundary?\",\"options\":[\"Administrator conveys it through a named out-of-band channel\",\"The portal sends a separate one-time setup secret through email\",\"Replace administrator-chosen passwords with a holder-completed password-setup action\"],\"default_guess\":\"Treat secure out-of-band delivery by the administrator as an explicit operating boundary and never email the password.\",\"witness\":{\"initial\":\"An administrator creates a pending staff account for H with an initial password known only to the administrator.\",\"events\":[\"H receives and completes the email-verification challenge.\",\"H attempts to log in.\"],\"outcomes\":[\"H can log in because an assumed out-of-band process conveyed the initial password.\",\"H cannot log in because the product sent only verification mail and no specified actor or system conveyed the password.\"],\"observer\":\"The new staff-account holder\"},\"unit\":\"00_product.md:Decisions\"}]}",
+ "set_aside": []
+}
