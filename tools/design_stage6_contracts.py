@@ -118,8 +118,17 @@ def _validate_plan(project: Path, plan: dict[str, Any]) -> tuple[list[dict[str, 
             findings.append({"severity":"error","code":"missing_function_purpose","message":function})
 
         if visibility == "public":
-            if router_op is not None:
+            # A public operation that is itself exposed may be its own route
+            # handler (an irregular companion endpoint the router only imports
+            # and registers). Any other router_operation on a public function
+            # would hand one operation's route to another's symbol.
+            if router_op is not None and (router_op != public_op or router_op not in external_ops):
                 findings.append({"severity":"error","code":"public_has_router_operation","message":function})
+            elif router_op is not None:
+                if router_op in seen_router_ops:
+                    findings.append({"severity":"error","code":"duplicate_router_handler","message":router_op})
+                else:
+                    seen_router_ops.add(router_op)
             if not isinstance(public_op, str) or public_op not in accepted_ops:
                 findings.append({"severity":"error","code":"invalid_public_operation","message":function})
             else:
