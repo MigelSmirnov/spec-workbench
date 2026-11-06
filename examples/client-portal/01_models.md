@@ -1124,9 +1124,20 @@ None.
   `content_fingerprint: str`,
   `snapshot_id: UUID | None` (set iff accepted/replay),
   `occurred_at`, `service_principal_id`, `key_version`.
-- **Created by:** snapshot import. Modified by: no one (append-only).
+- **Created by:** snapshot import, only for an attempt the import route's
+  access checks let through (R0-25). Modified by: no one (append-only).
+  `unknown_project`, `archived_project` and `scope_denied` stay in the
+  accepted catalog; the route refuses those cases before the import, so a
+  record carries one of them only when access changed between the route's
+  check and the import's own (Q20).
 
 ### Carried changes
+
+Narrowed to the running import route (R0-25): it refuses access before the
+import, so access refusals are not records (Factory code `api/router.py`
+`publish_snapshot_endpoint`, `application/snapshot_import.py`
+`import_snapshot`). Owner 2026-11-06: current service behaviour accepted;
+technical decisions delegated.
 
 The former "reason required iff outcome ∈ {integrity_conflict, rejected}"
 had no catalog value for a conflict. In the accepted spec an
@@ -1907,9 +1918,10 @@ None.
   the new `staff_id` as entity; the email and password it was given appear
   in no record. A password change is not a significant action and writes
   no record: the closed action catalog holds no action for it. A snapshot
-  import attempt whose bearer credential fails authentication writes no
-  record either (R0-25: it "is recorded nowhere"); every classified import
-  attempt writes exactly one.
+  import attempt the import route refuses on access — failed
+  authentication, an unknown, ungranted or archived project, a refused
+  capability — writes no record either (R0-25: it "is recorded nowhere");
+  every classified import attempt writes exactly one.
 - **Created by:** owning use cases. Modified by: no one.
 
 ### Carried changes

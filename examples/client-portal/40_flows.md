@@ -560,8 +560,9 @@ result of an earlier import by its `import_id` (R0-04, R0-21, R0-25).
 
 ### Boundary
 
-`module:api` extracts the bearer credential. `module:service_identity`
-authenticates the principal and decides producer scope (A12).
+`module:api` extracts the bearer credential and runs the route's checks in
+the order of `rules.http_router_backend`. `module:service_identity`
+authenticates the principal and answers its producer scope (A12).
 `module:authorization_guard` authorizes the import against the persisted
 principal, its grant and the Registry lifecycle. `module:snapshot_import` owns
 validation, fingerprint, replay classification, the import record and its
@@ -573,22 +574,28 @@ audit (A7, A8). `module:financial_policy` validates amounts.
    bearer secret before any transaction, verifies the secret part, expiry,
    revocation and the active principal, and returns `ServiceActorContext` with
    its key version.
-2. `capability:snapshot_import.import_snapshot` computes one fingerprint and
-   time per attempt, then calls
-   `capability:authorization_guard.authorize_snapshot_import`, which checks
-   producer scope (`capability:service_identity.authorize_producer_scope`) and
-   the active Registry project; archived, unknown and scope-denied are
-   classified as rejections, not raised.
-3. In one transaction it validates the contract version, EUR currency,
+2. The route calls `capability:service_identity.authorize_producer_scope`
+   (its answer is not used; a Registry or storage failure in it propagates),
+   then `capability:authorization_guard.authorize_snapshot_import`, which
+   checks the active principal, the producer's grant for a
+   `granted_projects` scope, the import capability and the active Registry
+   project. A refusal there is raised to the producer and records nothing
+   (R0-25, Q20).
+3. `capability:snapshot_import.import_snapshot` computes one fingerprint and
+   time per attempt and repeats
+   `capability:authorization_guard.authorize_snapshot_import` before its
+   transaction; only if access changed since step 2 does it classify an
+   archived, unknown or scope-denied rejection instead of raising.
+4. In one transaction it validates the contract version, EUR currency,
    complete content and section amounts
    (`capability:financial_policy.validate_eur_amount`), then classifies by the
    identity `project_id + estimate_id + estimate_version`: new — insert the
    snapshot, `accepted`; equal fingerprint — `idempotent_replay` naming the
    existing snapshot; different fingerprint — `integrity_conflict`, no
    snapshot written.
-4. Every classified attempt inserts one fresh import record with a fresh
+5. Every classified attempt inserts one fresh import record with a fresh
    `import_id` and one `snapshot.import` audit, committed together.
-5. `capability:snapshot_import.get_snapshot_import_result` returns a record
+6. `capability:snapshot_import.get_snapshot_import_result` returns a record
    only to the principal that made it.
 
 ### Outcomes
@@ -600,8 +607,11 @@ audit (A7, A8). `module:financial_policy` validates amounts.
 ### Errors
 
 - Authentication failure: 401, nothing recorded.
-- Rejections and conflicts are results with a reason, recorded and audited,
-  not errors.
+- Access refusals of step 2: unknown or ungranted project 404, refused
+  capability 403, archived project 409, Registry failure 502; nothing
+  recorded (Q20).
+- Content rejections, replays and conflicts are results with a reason,
+  recorded and audited, not errors.
 - A record of another principal or an unknown `import_id`: not found (404).
 - A storage failure rolls back snapshot, record and audit together (500).
 
@@ -856,9 +866,10 @@ delegated):
   obtained instead of failing the whole list (Factory `00ac72f18d9c`).
 - **Viewer session** travels in a host-only cookie read by `api_irregular`
   (R0-09); producers and staff use bearer headers read by `api`.
-- **Snapshot import (former F4)**: every classified rejection is recorded and
-  audited in the one import transaction, and every attempt gets a fresh
-  `import_id` (R0-25).
+- **Snapshot import (former F4)**: the route refuses an access failure before
+  the import and records nothing (Q20); every classified rejection is
+  recorded and audited in the one import transaction, and every classified
+  attempt gets a fresh `import_id` (R0-25).
 - **Activation (former F5)** refuses while any allocation would lose its
   section, instead of activating and reporting a count; no operation turns a
   snapshot into a candidate version (Q11, deferred).

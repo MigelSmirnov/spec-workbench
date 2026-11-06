@@ -324,15 +324,15 @@ snapshot_supported_contract_versions = {1}
 Closed sets; an unsupported version is a typed rejection, never a best-effort
 parse.
 
-An authenticated snapshot publication is rejected with the reason of the
-first check that fails, in this order: first the authorization of A4 and
-A12, in A4's order, whose one failure is recorded as `unknown_project`
-(no active grant of a `granted_projects` producer, A12, or a project the
-Registry does not know), `scope_denied` (capability refused) or
-`archived_project` (the Registry's status for the project is not `active`);
-a failure of the bearer credential or of the principal's status is no
-attempt and records nothing (R0-25); then its content, only when
-authorization passed:
+A snapshot publication is first authorized by the import route, in A4's
+order with A12's scope: a failure of the bearer credential or of the
+principal's status, a project the producer may not see (no active grant of
+a `granted_projects` producer, A12, or a project the Registry does not
+know), a refused capability, or a Registry status other than `active` is
+answered with that access error of A4 and is no import attempt: it gets no
+`import_id` and records nothing (R0-25; recording it is Q20). An attempt
+that passed is rejected with the reason of the first content check that
+fails, in this order:
 unsupported `contract_version` → `unsupported_contract_version`, currency
 other than `EUR` → `currency_mismatch`, an empty `approved_by` →
 `incomplete_content`, then each section in publication order — an amount
@@ -361,8 +361,13 @@ first is not observable to the caller.
 
 Order made exact from the running service (Factory code
 `application/snapshot_import.py` `import_snapshot`,
-`_validate_snapshot_publication`). Owner 2026-11-06: current service
-behaviour accepted; technical decisions delegated.
+`_validate_snapshot_publication`). The former "authorization failure is
+recorded as `unknown_project`, `scope_denied` or `archived_project`" is
+narrowed to the running route, which refuses access before the import
+(Factory code `api/router.py` `publish_snapshot_endpoint`; accepted
+`rules.http_router_backend`); the accepted notes of `import_snapshot` that
+record such refusals are Q20. Owner 2026-11-06: current service behaviour
+accepted; technical decisions delegated.
 
 ### Formal invariants
 
@@ -552,22 +557,24 @@ The table is rules data: `rules.revocation_cascades` (SPEC_STANDARD 15.3.1, a ru
 `scope_mode = all_projects` → import allowed for any existing active
 project. `scope_mode = granted_projects` → import allowed only with an
 active `ProducerProjectGrant` for the target project; otherwise the
-project is not visible to the producer: the guard answers the scoped
-not-found rejection and the import records `unknown_project`, exactly as
-for a project the Registry does not know, so a producer cannot tell an
-ungranted project from a missing one. `scope_denied` is recorded only when
-the capability check of A4 refuses (the producer's source type lacks
-`portal.estimate_snapshot.import`). Scope is checked before snapshot
-content validation.
+project is not visible to the producer: the import route answers the
+scoped not-found rejection, exactly as for a project the Registry does not
+know, so a producer cannot tell an ungranted project from a missing one.
+A refused capability (the producer's source type lacks
+`portal.estimate_snapshot.import`) is answered as A4's authorization
+rejection. Either refusal records nothing (A7, R0-25, Q20). Scope is
+checked before snapshot content validation.
 
 ### Carried changes
 
 The former "otherwise `scope_denied`" is narrowed to the accepted spec
 (note `_authorize_project_operation`: an absent or inactive grant raises
 "the scoped not-found rejection"; Factory code
-`application/authorization_guard.py`, `application/snapshot_import.py`,
-which records `ScopedNotFoundError` as `unknown_project` and
-`AuthorizationRejected` as `scope_denied`). Owner 2026-11-06: current service behaviour accepted; technical decisions delegated.
+`application/authorization_guard.py`). The import route runs this check
+before the import (`api/router.py` `publish_snapshot_endpoint`), so the
+classification of `ScopedNotFoundError` as `unknown_project` and
+`AuthorizationRejected` as `scope_denied` in `application/snapshot_import.py`
+is reached only if access changed in between (Q20). Owner 2026-11-06: current service behaviour accepted; technical decisions delegated.
 
 ### Formal invariants
 
@@ -632,7 +639,8 @@ photo.publish photo.update`; every other catalog action is non-significant.
 
 In the running service exactly two actions write a rejected record:
 `snapshot.import`, for every classified attempt that is not accepted or a
-replay (R0-25), with `reason_code` equal to its `ImportRejectReason` value
+replay (R0-25: an attempt the import route refuses on access is not
+classified and writes nothing, Q20), with `reason_code` equal to its `ImportRejectReason` value
 or, for an integrity conflict, `integrity_conflict`; and `staff.login_failed`,
 non-significant, with no `reason_code`. Every other refused operation
 rolls its transaction back and writes no record. The closed set of

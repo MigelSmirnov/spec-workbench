@@ -302,22 +302,36 @@ State 3 round-06) left these blocking topics:
   `domain/photo_management.py` `_classify_photo_replay`); to be re-asked.
 - viewer grant Registry outcome and the use-case context convention —
   repaired in `40_flows.md`; to be re-asked.
-- **Open, not repaired — needs the coordinator:** the running import route
-  (Factory code `api/router.py` `publish_snapshot_endpoint`) calls
+- Import route pre-checks — **decided by the coordinator 2026-11-06** (owner:
+  current service behaviour accepted; technical decisions delegated): the
+  running route (Factory code `api/router.py` `publish_snapshot_endpoint`,
+  lines 311–312; accepted `rules.http_router_backend`) calls
   `authorize_producer_scope` (answer unused) and `authorize_snapshot_import`
-  before `import_snapshot`; a scope, unknown or archived refusal there raises
-  and records nothing, while State 0 R0-25, State 2 A7/A12 and the accepted
-  notes of `import_snapshot` say such an attempt is recorded
-  (`unknown_project`, `scope_denied`, `archived_project`). The State 4 flow
-  `flow:import_estimate_snapshot` also has `authorization_guard` call
-  `service_identity.authorize_producer_scope`, which `authorization_guard`
-  does not import. Whether the route's pre-checks are a Factory defect or
-  the accepted behaviour is a meaning decision, not a wording repair.
+  before `import_snapshot`; a scope, unknown or archived refusal raises there
+  and records nothing. That is the norm: R0-25, M20, M36, A7, A12, A13,
+  `flow:import_estimate_snapshot` (the route, not `authorization_guard`,
+  calls `service_identity.authorize_producer_scope`) and
+  `public_op:snapshot_import.import_snapshot` are rewritten to it. Recording
+  access-refused attempts is the missing feature Q20.
 - **Open, not repaired:** `flow:expense_intake_and_management` names
   `budget_management.validate_project_section` for the allocation sections,
   which `expense_intake` does not import; the code reads the section
   repository (`application/expense_intake.py`). The fix needs the State 4
   plan and the State 5 flow evidence of that operation changed together.
+
+#### Factory-internal inconsistency of 459ac96c
+
+The accepted notes of `import_snapshot` ("archived, unknown/scoped … MUST each
+append exactly one fresh immutable SnapshotImportRecord"; `ArchivedProjectRejected`
+→ `ARCHIVED_PROJECT`, `ScopedNotFoundError` → `UNKNOWN_PROJECT`,
+`AuthorizationRejected` → `SCOPE_DENIED`; code
+`application/snapshot_import.py` lines 155–164) promise records that the
+accepted route table prevents: `rules.http_router_backend` route
+`publish_snapshot_endpoint` authorizes with `authorize_producer_scope` and
+`authorize_snapshot_import` before its delegate (`api/router.py` 311–312).
+Those notes are reachable only when access changes between the two checks.
+The case follows the route; the inconsistency is resolved when Q20 is
+designed, not in the migration.
 
 ### Classification of what State 3 carries
 
@@ -350,7 +364,8 @@ the accepted routes of `rules.http_router_backend`, the guard order
 | F1 login and guarded mutation, F3 viewer entry, F4 import, F6 expenses, F7 binaries, F8 overview, F9 audit | former text = accepted operations of the same modules | derivable (kept, reshaped into flows and conventions) | `40_flows.md` |
 | F2 email challenges | accepted `staff_challenges` notes "remain inert while StaffChallengeRepository is deferred"; Factory code `application/staff_challenges.py` | running service kept (R0-23); missing feature Q19 | `flow:deferred_staff_challenges` |
 | viewer list leaves out a project without context instead of failing | Factory `00ac72f18d9c`, note `list_viewer_projects` | accepted spec change | `flow:viewer_reads_projects` |
-| import rejections recorded in the one import transaction, fresh `import_id` per attempt | notes `import_snapshot`, `_build_import_record` | accepted spec change | `flow:import_estimate_snapshot`, R0-25 |
+| import rejections recorded in the one import transaction, fresh `import_id` per classified attempt | notes `import_snapshot`, `_build_import_record` | accepted spec change | `flow:import_estimate_snapshot`, R0-25 |
+| access refusals answered by the import route before the import, unrecorded | `rules.http_router_backend` route `publish_snapshot_endpoint`; Factory code `api/router.py` 311–312 | running service kept (coordinator 2026-11-06); recording them is missing feature Q20 | `flow:import_estimate_snapshot`, R0-25 |
 | activation refused while allocations would lose their section | note `activate_budget_version` (conflict before any update) | accepted spec change | `flow:maintain_and_activate_budget` |
 | no snapshot-to-candidate-version operation | Q11 | missing feature, deferred | `40_flows.md` "Deferred features" |
 | per-part availability of the overview | Factory `d2c4511ea119` | accepted spec change | `flow:build_project_overview` |

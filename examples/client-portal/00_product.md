@@ -721,12 +721,18 @@ unavailable, so archival never stands in for revocation (accepted notes
 
 ### R0-25 — The portal assigns every `import_id` (owner 2026-11-06: current service behaviour accepted; technical decisions delegated)
 
-The producer never supplies an `import_id`. The portal records every import
-attempt it classifies — accepted, idempotent replay, integrity conflict, or a
-rejection — as a fresh immutable import result with a fresh `import_id`, and
-answers the import request with that result, never with the snapshot
-itself. An attempt whose bearer
-credential fails authentication is recorded nowhere. A producer that lost an
+The producer never supplies an `import_id`. Before the import, the import
+route checks the producer's access: its authenticated bearer credential, its
+scope and grant for the project, its capability, and that the Registry knows
+the project as active. A refusal there — failed authentication, an unknown,
+ungranted or archived project, a refused capability — is answered with that
+access error and recorded nowhere (Factory code `api/router.py`
+`publish_snapshot_endpoint`; accepted `rules.http_router_backend`). Every
+attempt that passes these checks is classified — accepted, idempotent replay,
+integrity conflict, or a content rejection — and recorded as a fresh
+immutable import result with a fresh `import_id`; the import request is
+answered with that result, never with the snapshot itself. Recording
+access-refused attempts is a missing feature (Q20). A producer that lost an
 answer re-publishes the same snapshot: identical content is answered as an
 idempotent replay with a new `import_id` naming the same accepted snapshot
 (accepted notes `_build_import_record`, `import_snapshot`; Factory code
@@ -748,6 +754,8 @@ Recorded in `open_questions.md`; none is designed by this migration (owner,
 - Q16 — the estimate box for the client's own chat agent.
 - Q19 — the email challenges and security notices the accepted service does
   not carry out (R0-23).
+- Q20 — recording snapshot import attempts the import route refuses on
+  access (R0-25).
 - Still open from the authoring pass of 2026-07-19: staff MFA; administrative
   area boundaries beyond the single current area; pagination beyond the few-project profile (R0-01); expense
   correction history beyond audit; `SnapshotImportRecord` retention; external

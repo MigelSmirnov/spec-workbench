@@ -312,3 +312,25 @@ Kept for now (owner 2026-11-06: current service behaviour accepted; technical
 decisions delegated): `00_product.md` R0-19 and R0-23; an administrator
 activates a new staff account, no State 3 module sends a notice, and A10
 stays the design the challenges follow once built. Open for the owner.
+
+### Q20 — Access-refused snapshot imports are not recorded
+
+Found 2026-11-06 by the State 4 round-01 and the State 2 round-18 re-asks. The
+running import route (Factory code `api/router.py` `publish_snapshot_endpoint`,
+lines 311–312; accepted `rules.http_router_backend`, route
+`publish_snapshot_endpoint`, its `authorize` entries) calls
+`authorize_producer_scope` and `authorize_snapshot_import` before
+`import_snapshot`. An unknown, ungranted or archived project or a refused
+capability is answered there with the access error and records nothing.
+`import_snapshot` itself would record such an attempt as `unknown_project`,
+`archived_project` or `scope_denied` (`application/snapshot_import.py` lines
+155–164; accepted notes of `import_snapshot`), but only an attempt that passed
+the route reaches it. The accepted spec 459ac96c therefore promises in its
+notes what its route table prevents.
+
+1. Should a producer's access-refused import attempt be recorded as an import
+   result and audited (a missing feature, outside the migration)?
+
+Kept for now (owner 2026-11-06: current service behaviour accepted; technical
+decisions delegated): `00_product.md` R0-25, `02_rules.md` A7, A12, A13 and
+`flow:import_estimate_snapshot` follow the route. Deferred until designed.

@@ -2695,12 +2695,16 @@ deferred).
 
 ### Enforces
 
-R0-04 and R0-25: one fingerprint and one `occurred_at` per attempt; every
-classified attempt — archived, unknown or scope-denied project (classified
-from `authorize_snapshot_import`, called once before the transaction), a
+R0-04 and R0-25: it is reached only after the route's own
+`authorize_producer_scope` and `authorize_snapshot_import` passed, so an
+access refusal never reaches it and is recorded nowhere (Q20). One
+fingerprint and one `occurred_at` per attempt; every classified attempt — a
 content rejection (A7 contract version, A9 currency, completeness,
-sections), acceptance, equal replay, differing replay — appends exactly one
-fresh record and one `snapshot.import` audit in one transaction. A new
+sections), acceptance, equal replay, differing replay, or an archived,
+unknown or scope-denied project from its repeated `authorize_snapshot_import`
+(called once before the transaction; only if access changed after the
+route's check) — appends exactly one fresh record and one `snapshot.import`
+audit in one transaction. A new
 acceptance inserts one `ApprovedEstimateSnapshot` before its record; an equal
 replay references the existing snapshot (A8, A21). Rejection reasons come from
 the exception's field, never its message (A26).
@@ -4176,8 +4180,9 @@ delegated):
   revocation, `ExpenseOperationOutcome` and `PhotoMutationResult` for
   mutations (Factory `9eab4d948181`, `d1280708714f`).
 - **`authorize_producer_scope` is called by `api`**, not by
-  `snapshot_import`; `import_snapshot` calls `authorize_snapshot_import` once
-  and records every classified rejection (R0-25).
+  `snapshot_import`; the route then calls `authorize_snapshot_import`, whose
+  refusal is answered unrecorded, and `import_snapshot` repeats it once and
+  records every classified rejection (R0-25, Q20).
 - **Viewer reads**: `list_viewer_projects` omits a grant whose context fails
   (Factory `00ac72f18d9c`); the overview carries six availabilities (Factory
   `d2c4511ea119`).
