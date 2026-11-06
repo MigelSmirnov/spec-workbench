@@ -273,7 +273,8 @@ completed work value (`planned work cost × completion percent`),
 cost-weighted overall progress (arithmetic mean forbidden; unavailable when
 no planned work cost exists), payments total, and work balance
 (`completed work value − received payments`, shown as
-`Completed ahead of payments` or `Unused advance payment`) are always
+`Completed ahead of payments` or `Unused advance payment`, or as balanced
+when it is zero) are always
 recomputable from their owning records and are never primary editable state.
 
 ### Audit

@@ -431,9 +431,13 @@ The table is rules data: `rules.idempotency_identities` (SPEC_STANDARD 15.3.1, a
   undefined (shown unavailable) when the denominator is 0.
 - Work balance: `completed work value − payments total`; sign selects the
   presentation label (`Completed ahead of payments` / absolute value as
-  `Unused advance payment`).
+  `Unused advance payment`). A zero balance is `balanced`.
 
 ### Carried changes
+
+The zero balance's label is that of the running service (Factory code
+`domain/financial_policy.py` `calculate_work_balance`; State 1
+`WorkBalanceLabel`); State 0 "Derived values" names it too.
 
 A section without a recorded progress is left out of overall progress, as
 in the running service (Factory code `domain/financial_policy.py`
@@ -1244,7 +1248,11 @@ Security review: PERFORMED
 3. Before a deploy, the pinned versions are checked against a public
    known-vulnerability database; a pin with a known vulnerability that affects
    the portal is not deployed until it is updated through the Factory route.
-   A check that cannot complete does not pass, and the deploy waits. How the
+   A pin counts as affecting the portal when the database lists a known
+   vulnerability for its version; reachability inside the portal is not
+   judged case by case, so such a pin blocks the deploy whatever feature the
+   advisory concerns. A check that cannot complete does not pass, and the
+   deploy waits. How the
    check is run (its tool, its database, the resolved set it covers) is a
    deployment procedure, not a portal rule, carried to the deploy route.
 4. The portal adds no runtime feature for this: no update service, no

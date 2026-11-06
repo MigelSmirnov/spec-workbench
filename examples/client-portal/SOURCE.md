@@ -167,6 +167,7 @@ notes `_build_import_record`, `import_snapshot`, Factory code
 | round-07 | 1 | T9 the first administrator against "only administrators create staff accounts" (R0-14 names the R0-07 exception) |
 | round-08 | 0 | clear; units changed by the round-07 repair still need a second clear review |
 | round-09 | 0 | clear on the unchanged text; `design_questions.py status --state 0`: closed, every unit closed by two clear rounds |
+| round-10–11 | 0 | reopened (`--since 3a628953`) by "Derived values" naming the zero balance balanced (State 2 A9, running service); clear twice; closed |
 
 ### Classification of what State 1 carries
 
@@ -205,8 +206,9 @@ Nothing was designed; deferred features stay deferred.
 | round-08 | 0 | clear; M18 still needs a second clear round (State 1 open: M18 only) |
 | round-09 | 0 | clear on M18 after the trim of 2026-11-06 (M18 sentence on sections shortened, no meaning change) |
 | round-10 | 0 | clear (empty sections `answered_later`, repeated ids `answered`); `design_questions.py status --state 1`: closed |
+| round-11–12 | 0 | reopened (`context`) by the State 0 zero-balance sentence (below); clear twice; closed |
 
-### State 2 question rounds (in progress)
+### State 2 question rounds
 
 Rounds 01–09 (`questions/state2/`, Codex CLI provider) on `02_rules.md`,
 blocking 21, 10, 8, 8, 4, 1, 0, 3, 2. Each blocking topic was closed by
@@ -224,6 +226,19 @@ implementation precision (hash parameters, character sets, limiter,
 timeouts, headers, fingerprint) into State 2 prose; the coordinator's note
 of 2026-11-06 stops that: such values are the accepted Factory ones, to be
 carried as State 6/7 texts so the rounds can judge them `answered_later`.
+
+Rounds 10–14 on the trimmed text (commit `ac4bad5f`), blocking 2, 0, 1, 0, 0:
+round-10 A9 zero work balance had no label (repaired: `balanced`, Factory
+code `domain/financial_policy.py` `calculate_work_balance`, State 1
+`WorkBalanceLabel`) and A32 "affects the portal" had no criterion
+(repaired: a database-listed vulnerability for the pinned version blocks;
+no reachability judgement); round-12 A9 `balanced` against State 0 "shown
+as `Completed ahead of payments` or `Unused advance payment`" (State 0
+"Derived values" repaired to name balanced at zero; State 0 rounds 10–11
+`--since 3a628953` clear, closed). Round-14: `design_questions.py status
+--state 2` closed. No mechanism prose was re-expanded: the reviewers'
+fingerprint, rounding, hash-profile and Registry-timeout topics came back
+`later_state`, `answered_later` or `judged_before`.
 
 ### Implementation precision carried to States 6–7 (trim of 2026-11-06)
 
