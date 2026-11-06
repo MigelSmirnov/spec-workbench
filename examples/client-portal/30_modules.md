@@ -21,7 +21,8 @@ listed in "Changes against the former text" below.
 
 A module owns one hidden mechanism and has one reason to change; its public
 surface is smaller than what it hides. Each accepted decision has one primary
-owner, the module that holds the decision's central mechanism, and consumers.
+owner, the module that holds the decision's central mechanism, and consumers,
+except the three decisions recorded `cross_cutting` (A22, A26, A28, below).
 A consumer owns exactly the rules and parts of a decision its own section
 names; the primary owner owns every other rule of the decision. The table is
 the one mapping; `30_trace.json` records the same:
@@ -196,7 +197,8 @@ delegated):
 
 The State 1 records M01–M37, their projections and answers, the request
 models, the repository interfaces and the runtime models, as plain frozen typed
-data with their closed enumerations (A24). No behaviour.
+data with their closed enumerations (A24). No behaviour beyond the local
+validators of their closed choices (State 1 modeling conventions).
 
 ### Knows
 
@@ -298,7 +300,7 @@ calculate_work_balance
 
 ### Owns
 
-The `AuditRepository` port on the caller's SQLite connection: append and read
+The SQLite implementation of the `AuditRepository` port (the port itself is a `models` interface) on the caller's SQLite connection: append and read
 of AuditRecord rows, and the append-only part of A21 for audit rows. Like every
 repository it asserts open state and translates driver failures only through
 the caller's `AuditRepositoryContext`, which the connection owner implements
@@ -333,7 +335,7 @@ SqliteAuditRepository
 
 ### Owns
 
-The `ProjectTrackingRepository` port: SectionProgress and WorkPayment rows.
+The SQLite implementation of the `ProjectTrackingRepository` port (the port itself is a `models` interface): SectionProgress and WorkPayment rows.
 Factory `ac279dd8cdba`.
 
 ### Knows
@@ -364,7 +366,7 @@ SqliteProjectTrackingRepository
 
 ### Owns
 
-The `ProjectSectionRepository` port: PortalSection rows and their source-key
+The SQLite implementation of the `ProjectSectionRepository` port (the port itself is a `models` interface): PortalSection rows and their source-key
 lookup, and the A18 rule that a referenced section is never deleted at the
 storage level. Factory `a6d7b759519a`.
 
@@ -396,7 +398,7 @@ SqliteProjectSectionRepository
 
 ### Owns
 
-The `BudgetRepository` port: BudgetVersion and SectionPlan rows, and the
+The SQLite implementation of the `BudgetRepository` port (the port itself is a `models` interface): BudgetVersion and SectionPlan rows, and the
 storage form of A18's single-active and single-manual rules. Factory
 `37b1f529eb16`.
 
@@ -429,7 +431,7 @@ SqliteBudgetRepository
 
 ### Owns
 
-The `SnapshotImportRepository` port: ApprovedEstimateSnapshot and
+The SQLite implementation of the `SnapshotImportRepository` port (the port itself is a `models` interface): ApprovedEstimateSnapshot and
 SnapshotImportRecord rows, append-only (A18, A21). Factory `f8c5cb9a8142`.
 
 ### Knows
@@ -461,7 +463,7 @@ SqliteSnapshotImportRepository
 
 ### Owns
 
-The `ExpenseRepository` port: Expense, ExpenseAllocation and ExpenseDocument
+The SQLite implementation of the `ExpenseRepository` port (the port itself is a `models` interface): Expense, ExpenseAllocation and ExpenseDocument
 rows read and written as one aggregate. Factory `0baceacca950`.
 
 ### Knows
@@ -492,7 +494,7 @@ SqliteExpenseRepository
 
 ### Owns
 
-The `ProgressPhotoRepository` port: ProgressPhoto rows and the lookup by
+The SQLite implementation of the `ProgressPhotoRepository` port (the port itself is a `models` interface): ProgressPhoto rows and the lookup by
 `intake_id` that A8's photo row uses. Factory `7eb7ebccc53d`.
 
 ### Knows
@@ -523,7 +525,7 @@ SqliteProgressPhotoRepository
 
 ### Owns
 
-The `EmailDeliveryRepository` port: EmailDeliveryRecord rows, the delivery
+The SQLite implementation of the `EmailDeliveryRepository` port (the port itself is a `models` interface): EmailDeliveryRecord rows, the delivery
 telemetry of A10. Factory `e12ed74d6628`.
 
 ### Knows
@@ -554,7 +556,7 @@ SqliteEmailDeliveryRepository
 
 ### Owns
 
-The `StaffAccessRepository` port: staff accounts, staff sessions and
+The SQLite implementation of the `StaffAccessRepository` port (the port itself is a `models` interface): staff accounts, staff sessions and
 assignments, with the storage form of A16 (exact match on the normalized
 email) and of the assignment uniqueness of A3. Factory `fd7905625fe7`. The
 `StaffChallengeRepository` port of State 1 has no implementation in the
@@ -588,7 +590,7 @@ SqliteStaffAccessRepository
 
 ### Owns
 
-The `ViewerAccessRepository` port: client viewers, access credentials,
+The SQLite implementation of the `ViewerAccessRepository` port (the port itself is a `models` interface): client viewers, access credentials,
 viewer sessions and project grants, with grant uniqueness. Factory
 `62c73965adb8`.
 
@@ -621,7 +623,7 @@ SqliteViewerAccessRepository
 
 ### Owns
 
-The `ServiceIdentityRepository` port: service principals, service
+The SQLite implementation of the `ServiceIdentityRepository` port (the port itself is a `models` interface): service principals, service
 credentials with their key versions, and producer grants. Factory
 `88c1dbbcc3a6`.
 
@@ -840,8 +842,8 @@ read_binary
 
 A13 and A23: validation of an `AuditIntent` against the closed catalogue, the
 significant-mutation actions and the result and reason policy, and the append
-of exactly one AuditRecord per occurrence, including rejected significant
-mutations and service key-version provenance.
+of exactly one AuditRecord per occurrence, including the rejected records
+A13 names and service key-version provenance.
 
 ### Knows
 
@@ -1442,8 +1444,8 @@ viewer_read_progress_photo_endpoint
 ### Owns
 
 The staff, administrator and producer HTTP JSON routes of
-`rules.http_router_backend` (Factory `300bd11d2660`): request-body models,
-bearer extraction, one owning use case per route, safe projections, and the
+`rules.http_router_backend` (Factory `300bd11d2660`): request-body decoding
+into the request models of `models`, bearer extraction, one owning use case per route, safe projections, and the
 translation of declared failures by its `error_policy`. Routes for
 password change, recovery override, progress, payments, photos, budget
 version and the administrator project list are the accepted ones (Factory

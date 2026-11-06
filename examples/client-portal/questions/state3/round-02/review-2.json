@@ -1,0 +1,223 @@
+{
+ "open_points": [
+  {
+   "unit": "30_modules.md:`models`",
+   "subject": "repository-port ownership",
+   "kind": "double owner",
+   "text": "`models` owns “the repository interfaces”, while each repository section says it owns its corresponding “port” (for example, `audit_repository` owns “The `AuditRepository` port”).",
+   "question": "Does `models` own and define the repository port interfaces, with repository modules owning only SQLite implementations, or does each repository module own and define its port?",
+   "options": [
+    "Define all repository interfaces in `models`; repository modules own only implementations",
+    "Define each port in its repository module; `models` owns only shared record and DTO types"
+   ],
+   "default_guess": "Define the interfaces in `models` because every repository is declared to know `models` and to implement a State 1 port."
+  },
+  {
+   "unit": "30_modules.md:`api`",
+   "subject": "HTTP request-model ownership",
+   "kind": "double owner",
+   "text": "`models` owns “the request models”, while `api` owns “request-body models”.",
+   "question": "Which module defines and validates HTTP request-body model types, and which merely consumes them?",
+   "options": [
+    "`models` defines the request types and `api` performs transport decoding into them",
+    "`api` defines transport request types while `models` contains only transport-independent data"
+   ],
+   "default_guess": "Keep the types in `models` and make `api` only decode and use them.",
+   "witness": {
+    "initial": "A staff expense request contains a field with the wrong type.",
+    "events": [
+     "The HTTP framework asks the route layer for its request schema.",
+     "The route attempts to project the request into the shared model vocabulary."
+    ],
+    "outcomes": [
+     "One implementation validates once with the request type owned by `models`.",
+     "Another defines an API-owned request type and a second models-owned type; their validators or accepted shapes can diverge."
+    ],
+    "observer": "The HTTP caller sees different acceptance or error behavior."
+   }
+  },
+  {
+   "unit": "30_modules.md:`authorization_guard`",
+   "subject": "session and credential validity during project authorization",
+   "kind": "overlapping ownership",
+   "text": "`authorization_guard` owns “session validity” and “binds a session to its identity”, but `staff_identity`, `viewer_access`, and `service_identity` respectively own session resolution or bearer authentication and produce actor-context DTOs described as evidence of completed authentication.",
+   "question": "When a project guard receives an actor context, must it re-read and revalidate the underlying session or credential, or may it trust the context produced by the identity module?",
+   "options": [
+    "The identity module authenticates once and the guard trusts the resulting actor context",
+    "The guard re-reads the session or credential and principal lifecycle on every project authorization",
+    "The identity module supplies a transaction-bound resolver that the guard invokes"
+   ],
+   "default_guess": "Have the guard re-read the persisted session or credential and principal state, because it owns immediate revocation and the ordered A4 check.",
+   "witness": {
+    "initial": "A valid staff session has been resolved into a `StaffActorContext`.",
+    "events": [
+     "A request resolves the session through `staff_identity`.",
+     "An administrator revokes that session before the project authorization check.",
+     "The request calls a project-scoped read with the previously produced context."
+    ],
+    "outcomes": [
+     "The guard trusts the context and the read succeeds.",
+     "The guard re-reads the session and rejects the read."
+    ],
+    "observer": "The staff caller sees project data or an authentication rejection."
+   }
+  },
+  {
+   "unit": "30_modules.md:`service_identity`",
+   "subject": "producer project-scope authorization",
+   "kind": "double owner and unclear call direction",
+   "text": "`service_identity` owns A12 and exposes `authorize_producer_scope`, while `authorization_guard` owns “producer grant” project scope, exposes `authorize_snapshot_import`, and cannot know `service_identity` because `service_identity` is on a later dependency line.",
+   "question": "Which module performs the authoritative `scope_mode` and `ProducerProjectGrant` check for snapshot import, and how is that result conveyed without violating the dependency order?",
+   "options": [
+    "`authorization_guard` performs the producer-scope check directly and `authorize_producer_scope` is removed or limited to another purpose",
+    "`service_identity` performs the scope check before `authorization_guard`, which receives trusted scope evidence",
+    "The dependency direction is changed so the guard can call the scope owner"
+   ],
+   "default_guess": "Put the import-time scope check in `authorization_guard` and leave `service_identity` responsible only for scope data and grant lifecycle.",
+   "witness": {
+    "initial": "A `granted_projects` producer has a valid bearer credential and an active grant for an active project.",
+    "events": [
+     "The API authenticates the producer and performs any `service_identity` scope step.",
+     "An administrator revokes the producer grant.",
+     "The same request reaches `authorize_snapshot_import` and then `import_snapshot`."
+    ],
+    "outcomes": [
+     "The guard owns and repeats the scope check, so the import is rejected as an unknown project.",
+     "The guard treats producer scope as already decided by `service_identity`, so the import is accepted after revocation."
+    ],
+    "observer": "The producer sees a rejected import record or an accepted snapshot import."
+   }
+  },
+  {
+   "unit": "30_modules.md:`expense_management`",
+   "subject": "document-read authorization",
+   "kind": "missing dependency",
+   "text": "The shared-facts section says `expense_management` “re-check[s] access and visibility”, but its exact `Knows` list omits `authorization_guard`; accepting an existing `AuthorizedProjectContext` would reuse prior evidence rather than re-check access.",
+   "question": "How can `expense_management.read_expense_document` perform the required current project-access check without either importing `authorization_guard` or duplicating its policy?",
+   "options": [
+    "Add `authorization_guard` to `expense_management` dependencies",
+    "Pass an authorization capability that performs a fresh check",
+    "State that the API performs the only access check and narrow “re-check” to document visibility and project matching"
+   ],
+   "default_guess": "Add an authorization-guard dependency and make the document read invoke it before storage access.",
+   "witness": {
+    "initial": "A viewer has a valid session and a visible expense document in a granted project.",
+    "events": [
+     "The API resolves the viewer and obtains authorization evidence.",
+     "An administrator revokes the project grant.",
+     "The document-read use case runs before reading storage."
+    ],
+    "outcomes": [
+     "The module relies on the earlier context and returns the bytes.",
+     "The module performs the promised fresh access check and refuses the read."
+    ],
+    "observer": "The viewer receives either the protected document or a concealed rejection."
+   }
+  },
+  {
+   "unit": "30_modules.md:`photo_management`",
+   "subject": "photo-read authorization",
+   "kind": "missing dependency",
+   "text": "The shared-facts section says `photo_management` “re-check[s] access and visibility”, but its exact `Knows` list omits `authorization_guard`; accepting an existing `AuthorizedProjectContext` would reuse prior evidence rather than re-check access.",
+   "question": "How can `photo_management.read_progress_photo` perform the required current project-access check without either importing `authorization_guard` or duplicating its policy?",
+   "options": [
+    "Add `authorization_guard` to `photo_management` dependencies",
+    "Pass an authorization capability that performs a fresh check",
+    "State that the API performs the only access check and narrow “re-check” to photo visibility and project matching"
+   ],
+   "default_guess": "Add an authorization-guard dependency and make the photo read invoke it before storage access.",
+   "witness": {
+    "initial": "A viewer has a valid session and a visible photo in a granted project.",
+    "events": [
+     "The API obtains authorization evidence for the viewer.",
+     "An administrator revokes the project grant.",
+     "The photo-read use case runs before reading storage."
+    ],
+    "outcomes": [
+     "The module trusts the earlier evidence and returns the image.",
+     "The module rechecks current access and refuses the read."
+    ],
+    "observer": "The viewer receives either the protected photo or a concealed rejection."
+   }
+  },
+  {
+   "unit": "30_modules.md:`audit_writer`",
+   "subject": "single operation timestamp shared with audit",
+   "kind": "missing dependency contract",
+   "text": "State 1 says `audit_writer` supplies `AuditRecord.occurred_at` and callers cannot put it in `AuditIntent`, while A28 requires each operation to read the clock once and use that one instant for every timestamp it writes; `audit_writer` names no clock or operation-instant input.",
+   "question": "How does the use case's single A28 instant reach `audit_writer` so the audit timestamp equals the business-record timestamps without putting it in `AuditIntent`?",
+   "options": [
+    "`append_audit` accepts the operation instant as a separate argument",
+    "A caller-owned operation context exposes the one instant to `audit_writer`",
+    "`audit_writer` reads the clock and supplies the same instant back for all other records"
+   ],
+   "default_guess": "Pass the already-read operation instant as a separate `append_audit` argument.",
+   "witness": {
+    "initial": "An expense correction will write a new `Expense.updated_at` and one `AuditRecord.occurred_at`.",
+    "events": [
+     "The owning use case reads the clock and constructs the changed expense.",
+     "It calls `append_audit` with the specified `AuditIntent`, which contains no time."
+    ],
+    "outcomes": [
+     "`audit_writer` reads the clock again, producing a later audit timestamp and violating A28.",
+     "The caller passes the first instant through an unstated channel, and both timestamps are equal."
+    ],
+    "observer": "A repository reader or audit consumer sees equal or differing timestamps for one operation."
+   }
+  },
+  {
+   "unit": "30_modules.md:`staff_bootstrap`",
+   "subject": "bootstrap audit construction and validation",
+   "kind": "contradictory ownership",
+   "text": "`audit_writer` owns AuditRecord construction, catalogue validation and append, but `staff_bootstrap` hides “account and audit construction” and knows neither `audit_writer` nor `audit_repository`; `staff_bootstrap_store` directly inserts the supplied audit row.",
+   "question": "Is bootstrap an explicit exception to `audit_writer`'s ownership of audit construction and A13/A23 validation, or must bootstrap use the writer through a port that remains usable inside the exclusive bootstrap transaction?",
+   "options": [
+    "Declare bootstrap as a narrowly specified exception that constructs the validated record itself",
+    "Let bootstrap pass an `AuditIntent` and operation instant to the store, which invokes shared audit construction",
+    "Give `staff_bootstrap` access to an audit-construction capability that performs no independent transaction"
+   ],
+   "default_guess": "Extract or expose audit-record construction as a transaction-independent capability and use it before the bootstrap store's atomic insert."
+  },
+  {
+   "unit": "30_modules.md:`runtime_settings`",
+   "subject": "non-environment configuration ownership",
+   "kind": "missing owner",
+   "text": "The decision table makes `runtime_settings` the primary owner of A30, but its section owns only “A30's environment part”; meanwhile the shared-facts section refers to `config.*` constants such as `config.persistence`, and A30 also carries fixed Registry paths and other non-environment configuration.",
+   "question": "Which module owns the fixed, source-controlled parts of `config.*` that are not loaded into `RuntimeSettings` from the environment?",
+   "options": [
+    "`runtime_settings` owns both the environment schema and all fixed configuration constants",
+    "Each consuming module owns its fixed constants",
+    "A separate configuration module owns fixed configuration while `runtime_settings` owns environment values"
+   ],
+   "default_guess": "Make `runtime_settings` the explicit owner of the complete A30 configuration vocabulary, including fixed constants, while consumers only apply it."
+  },
+  {
+   "unit": "30_modules.md:`api`",
+   "subject": "staff binary-download routes",
+   "kind": "contradiction and unowned route behavior",
+   "text": "`api` says it owns the staff, administrator and producer “HTTP JSON routes”, but the product requires authenticated non-JSON binary downloads, A14 lists `api` as a consumer, and only `api_irregular` explicitly owns viewer binary answers.",
+   "question": "Does `api` own the staff-side document and photo binary endpoints and their exact-byte HTTP response construction, despite defining its owned routes as JSON-only?",
+   "options": [
+    "`api` owns staff binary endpoints as explicit non-JSON exceptions",
+    "`api_irregular` owns all binary endpoints, including staff endpoints",
+    "A separate binary transport module owns both staff and viewer binary responses"
+   ],
+   "default_guess": "Treat staff binary endpoints as explicit non-JSON routes owned by `api`, and amend its ownership statement accordingly.",
+   "witness": {
+    "initial": "An authenticated staff member is authorized to read an existing expense document.",
+    "events": [
+     "The staff client requests the document by `document_id`.",
+     "`expense_management` authorizes it and returns a `BinaryPayload`."
+    ],
+    "outcomes": [
+     "`api` has the unstated binary route and emits exact bytes with A14 headers.",
+     "No module owns a staff binary route, so the request is absent or is serialized through the JSON-route machinery."
+    ],
+    "observer": "The staff client receives a binary download or no conforming endpoint."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"30_modules.md:`models`\",\"subject\":\"repository-port ownership\",\"kind\":\"double owner\",\"text\":\"`models` owns “the repository interfaces”, while each repository section says it owns its corresponding “port” (for example, `audit_repository` owns “The `AuditRepository` port”).\",\"question\":\"Does `models` own and define the repository port interfaces, with repository modules owning only SQLite implementations, or does each repository module own and define its port?\",\"options\":[\"Define all repository interfaces in `models`; repository modules own only implementations\",\"Define each port in its repository module; `models` owns only shared record and DTO types\"],\"default_guess\":\"Define the interfaces in `models` because every repository is declared to know `models` and to implement a State 1 port.\"},{\"unit\":\"30_modules.md:`api`\",\"subject\":\"HTTP request-model ownership\",\"kind\":\"double owner\",\"text\":\"`models` owns “the request models”, while `api` owns “request-body models”.\",\"question\":\"Which module defines and validates HTTP request-body model types, and which merely consumes them?\",\"options\":[\"`models` defines the request types and `api` performs transport decoding into them\",\"`api` defines transport request types while `models` contains only transport-independent data\"],\"default_guess\":\"Keep the types in `models` and make `api` only decode and use them.\",\"witness\":{\"initial\":\"A staff expense request contains a field with the wrong type.\",\"events\":[\"The HTTP framework asks the route layer for its request schema.\",\"The route attempts to project the request into the shared model vocabulary.\"],\"outcomes\":[\"One implementation validates once with the request type owned by `models`.\",\"Another defines an API-owned request type and a second models-owned type; their validators or accepted shapes can diverge.\"],\"observer\":\"The HTTP caller sees different acceptance or error behavior.\"}},{\"unit\":\"30_modules.md:`authorization_guard`\",\"subject\":\"session and credential validity during project authorization\",\"kind\":\"overlapping ownership\",\"text\":\"`authorization_guard` owns “session validity” and “binds a session to its identity”, but `staff_identity`, `viewer_access`, and `service_identity` respectively own session resolution or bearer authentication and produce actor-context DTOs described as evidence of completed authentication.\",\"question\":\"When a project guard receives an actor context, must it re-read and revalidate the underlying session or credential, or may it trust the context produced by the identity module?\",\"options\":[\"The identity module authenticates once and the guard trusts the resulting actor context\",\"The guard re-reads the session or credential and principal lifecycle on every project authorization\",\"The identity module supplies a transaction-bound resolver that the guard invokes\"],\"default_guess\":\"Have the guard re-read the persisted session or credential and principal state, because it owns immediate revocation and the ordered A4 check.\",\"witness\":{\"initial\":\"A valid staff session has been resolved into a `StaffActorContext`.\",\"events\":[\"A request resolves the session through `staff_identity`.\",\"An administrator revokes that session before the project authorization check.\",\"The request calls a project-scoped read with the previously produced context.\"],\"outcomes\":[\"The guard trusts the context and the read succeeds.\",\"The guard re-reads the session and rejects the read.\"],\"observer\":\"The staff caller sees project data or an authentication rejection.\"}},{\"unit\":\"30_modules.md:`service_identity`\",\"subject\":\"producer project-scope authorization\",\"kind\":\"double owner and unclear call direction\",\"text\":\"`service_identity` owns A12 and exposes `authorize_producer_scope`, while `authorization_guard` owns “producer grant” project scope, exposes `authorize_snapshot_import`, and cannot know `service_identity` because `service_identity` is on a later dependency line.\",\"question\":\"Which module performs the authoritative `scope_mode` and `ProducerProjectGrant` check for snapshot import, and how is that result conveyed without violating the dependency order?\",\"options\":[\"`authorization_guard` performs the producer-scope check directly and `authorize_producer_scope` is removed or limited to another purpose\",\"`service_identity` performs the scope check before `authorization_guard`, which receives trusted scope evidence\",\"The dependency direction is changed so the guard can call the scope owner\"],\"default_guess\":\"Put the import-time scope check in `authorization_guard` and leave `service_identity` responsible only for scope data and grant lifecycle.\",\"witness\":{\"initial\":\"A `granted_projects` producer has a valid bearer credential and an active grant for an active project.\",\"events\":[\"The API authenticates the producer and performs any `service_identity` scope step.\",\"An administrator revokes the producer grant.\",\"The same request reaches `authorize_snapshot_import` and then `import_snapshot`.\"],\"outcomes\":[\"The guard owns and repeats the scope check, so the import is rejected as an unknown project.\",\"The guard treats producer scope as already decided by `service_identity`, so the import is accepted after revocation.\"],\"observer\":\"The producer sees a rejected import record or an accepted snapshot import.\"}},{\"unit\":\"30_modules.md:`expense_management`\",\"subject\":\"document-read authorization\",\"kind\":\"missing dependency\",\"text\":\"The shared-facts section says `expense_management` “re-check[s] access and visibility”, but its exact `Knows` list omits `authorization_guard`; accepting an existing `AuthorizedProjectContext` would reuse prior evidence rather than re-check access.\",\"question\":\"How can `expense_management.read_expense_document` perform the required current project-access check without either importing `authorization_guard` or duplicating its policy?\",\"options\":[\"Add `authorization_guard` to `expense_management` dependencies\",\"Pass an authorization capability that performs a fresh check\",\"State that the API performs the only access check and narrow “re-check” to document visibility and project matching\"],\"default_guess\":\"Add an authorization-guard dependency and make the document read invoke it before storage access.\",\"witness\":{\"initial\":\"A viewer has a valid session and a visible expense document in a granted project.\",\"events\":[\"The API resolves the viewer and obtains authorization evidence.\",\"An administrator revokes the project grant.\",\"The document-read use case runs before reading storage.\"],\"outcomes\":[\"The module relies on the earlier context and returns the bytes.\",\"The module performs the promised fresh access check and refuses the read.\"],\"observer\":\"The viewer receives either the protected document or a concealed rejection.\"}},{\"unit\":\"30_modules.md:`photo_management`\",\"subject\":\"photo-read authorization\",\"kind\":\"missing dependency\",\"text\":\"The shared-facts section says `photo_management` “re-check[s] access and visibility”, but its exact `Knows` list omits `authorization_guard`; accepting an existing `AuthorizedProjectContext` would reuse prior evidence rather than re-check access.\",\"question\":\"How can `photo_management.read_progress_photo` perform the required current project-access check without either importing `authorization_guard` or duplicating its policy?\",\"options\":[\"Add `authorization_guard` to `photo_management` dependencies\",\"Pass an authorization capability that performs a fresh check\",\"State that the API performs the only access check and narrow “re-check” to photo visibility and project matching\"],\"default_guess\":\"Add an authorization-guard dependency and make the photo read invoke it before storage access.\",\"witness\":{\"initial\":\"A viewer has a valid session and a visible photo in a granted project.\",\"events\":[\"The API obtains authorization evidence for the viewer.\",\"An administrator revokes the project grant.\",\"The photo-read use case runs before reading storage.\"],\"outcomes\":[\"The module trusts the earlier evidence and returns the image.\",\"The module rechecks current access and refuses the read.\"],\"observer\":\"The viewer receives either the protected photo or a concealed rejection.\"}},{\"unit\":\"30_modules.md:`audit_writer`\",\"subject\":\"single operation timestamp shared with audit\",\"kind\":\"missing dependency contract\",\"text\":\"State 1 says `audit_writer` supplies `AuditRecord.occurred_at` and callers cannot put it in `AuditIntent`, while A28 requires each operation to read the clock once and use that one instant for every timestamp it writes; `audit_writer` names no clock or operation-instant input.\",\"question\":\"How does the use case's single A28 instant reach `audit_writer` so the audit timestamp equals the business-record timestamps without putting it in `AuditIntent`?\",\"options\":[\"`append_audit` accepts the operation instant as a separate argument\",\"A caller-owned operation context exposes the one instant to `audit_writer`\",\"`audit_writer` reads the clock and supplies the same instant back for all other records\"],\"default_guess\":\"Pass the already-read operation instant as a separate `append_audit` argument.\",\"witness\":{\"initial\":\"An expense correction will write a new `Expense.updated_at` and one `AuditRecord.occurred_at`.\",\"events\":[\"The owning use case reads the clock and constructs the changed expense.\",\"It calls `append_audit` with the specified `AuditIntent`, which contains no time.\"],\"outcomes\":[\"`audit_writer` reads the clock again, producing a later audit timestamp and violating A28.\",\"The caller passes the first instant through an unstated channel, and both timestamps are equal.\"],\"observer\":\"A repository reader or audit consumer sees equal or differing timestamps for one operation.\"}},{\"unit\":\"30_modules.md:`staff_bootstrap`\",\"subject\":\"bootstrap audit construction and validation\",\"kind\":\"contradictory ownership\",\"text\":\"`audit_writer` owns AuditRecord construction, catalogue validation and append, but `staff_bootstrap` hides “account and audit construction” and knows neither `audit_writer` nor `audit_repository`; `staff_bootstrap_store` directly inserts the supplied audit row.\",\"question\":\"Is bootstrap an explicit exception to `audit_writer`'s ownership of audit construction and A13/A23 validation, or must bootstrap use the writer through a port that remains usable inside the exclusive bootstrap transaction?\",\"options\":[\"Declare bootstrap as a narrowly specified exception that constructs the validated record itself\",\"Let bootstrap pass an `AuditIntent` and operation instant to the store, which invokes shared audit construction\",\"Give `staff_bootstrap` access to an audit-construction capability that performs no independent transaction\"],\"default_guess\":\"Extract or expose audit-record construction as a transaction-independent capability and use it before the bootstrap store's atomic insert.\"},{\"unit\":\"30_modules.md:`runtime_settings`\",\"subject\":\"non-environment configuration ownership\",\"kind\":\"missing owner\",\"text\":\"The decision table makes `runtime_settings` the primary owner of A30, but its section owns only “A30's environment part”; meanwhile the shared-facts section refers to `config.*` constants such as `config.persistence`, and A30 also carries fixed Registry paths and other non-environment configuration.\",\"question\":\"Which module owns the fixed, source-controlled parts of `config.*` that are not loaded into `RuntimeSettings` from the environment?\",\"options\":[\"`runtime_settings` owns both the environment schema and all fixed configuration constants\",\"Each consuming module owns its fixed constants\",\"A separate configuration module owns fixed configuration while `runtime_settings` owns environment values\"],\"default_guess\":\"Make `runtime_settings` the explicit owner of the complete A30 configuration vocabulary, including fixed constants, while consumers only apply it.\"},{\"unit\":\"30_modules.md:`api`\",\"subject\":\"staff binary-download routes\",\"kind\":\"contradiction and unowned route behavior\",\"text\":\"`api` says it owns the staff, administrator and producer “HTTP JSON routes”, but the product requires authenticated non-JSON binary downloads, A14 lists `api` as a consumer, and only `api_irregular` explicitly owns viewer binary answers.\",\"question\":\"Does `api` own the staff-side document and photo binary endpoints and their exact-byte HTTP response construction, despite defining its owned routes as JSON-only?\",\"options\":[\"`api` owns staff binary endpoints as explicit non-JSON exceptions\",\"`api_irregular` owns all binary endpoints, including staff endpoints\",\"A separate binary transport module owns both staff and viewer binary responses\"],\"default_guess\":\"Treat staff binary endpoints as explicit non-JSON routes owned by `api`, and amend its ownership statement accordingly.\",\"witness\":{\"initial\":\"An authenticated staff member is authorized to read an existing expense document.\",\"events\":[\"The staff client requests the document by `document_id`.\",\"`expense_management` authorizes it and returns a `BinaryPayload`.\"],\"outcomes\":[\"`api` has the unstated binary route and emits exact bytes with A14 headers.\",\"No module owns a staff binary route, so the request is absent or is serialized through the JSON-route machinery.\"],\"observer\":\"The staff client receives a binary download or no conforming endpoint.\"}}]}",
+ "set_aside": []
+}

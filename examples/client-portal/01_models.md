@@ -2077,12 +2077,12 @@ HTTP responses.
 - `PhotoMutationResult` — `photo_id: UUID`, `replayed: bool`,
   `client_visible: bool`, `updated_at: datetime | None`.
 
-Projection from persisted entities to these DTOs is owned by `api` only as a
-security allow-list; it may not compute business totals or authorization. A
-safe view or result that an accepted use case returns itself (the views of
-"Projections and answers" and the mutation results above that a State 5
-operation names as its output) is built by that use case and passed through
-by the HTTP modules unchanged (running service, owner 2026-11-06).
+Projection from persisted entities to these DTOs is a security allow-list,
+built by whichever module returns the DTO: the HTTP modules for an answer no
+use case returns, the use case for a safe view or result a State 5
+operation names as its output (passed through by the HTTP modules
+unchanged; running service, owner 2026-11-06). No projection computes
+business totals or authorization.
 
 ### Budget results
 

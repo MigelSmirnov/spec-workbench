@@ -1,0 +1,158 @@
+{
+ "open_points": [
+  {
+   "unit": "30_modules.md:preamble",
+   "subject": "ownership rule for cross-cutting decisions A22, A26 and A28",
+   "kind": "ownership contradiction",
+   "text": "“Each accepted decision has one primary owner” conflicts with A22, A26 and A28 being assigned to “cross-cutting” and with “no module holds a mechanism the others call.”",
+   "question": "Are A22, A26 and A28 exceptions whose implementations are independently owned by every applying module, or must each have one owning module or shared mechanism?",
+   "options": [
+    "Each applying module owns its local implementation",
+    "Create one primary owning module for each decision",
+    "Name one existing module as owner and the others as consumers"
+   ],
+   "default_guess": "Treat the specific cross-cutting paragraph as an exception and make every applying module own its local implementation.",
+   "witness": {
+    "initial": "Two use-case modules must apply A22 when opening transactions.",
+    "events": [
+     "One implementer follows “Each accepted decision has one primary owner” and introduces a shared transaction-guard module.",
+     "Another implementer follows “no module holds a mechanism the others call” and duplicates the guard in both use-case modules."
+    ],
+    "outcomes": [
+     "The use cases acquire a new dependency on a shared owner.",
+     "The use cases contain independent guard implementations and no shared dependency."
+    ],
+    "observer": "A later module or code author sees different dependency graphs and extension points."
+   }
+  },
+  {
+   "unit": "30_modules.md:`models`",
+   "subject": "HTTP request-body model ownership",
+   "kind": "two owners",
+   "text": "`models` owns “the request models,” while `api` owns “request-body models.”",
+   "question": "Which module owns the definitions and validation of staff, administrator and producer HTTP request bodies?",
+   "options": [
+    "`models` defines them and `api` only decodes/uses them",
+    "`api` defines them as transport-specific models",
+    "Split request models by route family, with an explicit boundary"
+   ],
+   "default_guess": "Put the shared frozen request types in `models` and make `api` their consumer.",
+   "witness": {
+    "initial": "A malformed staff-account creation body reaches the HTTP boundary.",
+    "events": [
+     "One code author defines and validates `StaffAccountCreateRequest` in `models`, which `api` imports.",
+     "Another defines an API-local request class and maps it to a separate model value."
+    ],
+    "outcomes": [
+     "There is one shared request type and one validation location.",
+     "There are two shapes and a mapping boundary whose ownership and validation precedence were not specified."
+    ],
+    "observer": "API clients see potentially different validation errors and generated schemas; maintainers see different module dependencies."
+   }
+  },
+  {
+   "unit": "30_modules.md:`models`",
+   "subject": "repository port ownership",
+   "kind": "two owners",
+   "text": "`models` owns “the repository interfaces,” while each repository section says it “Owns” its named repository port, such as “The `AuditRepository` port” and “The `ExpenseRepository` port.”",
+   "question": "Do repository interface definitions belong to `models`, with repository modules owning only implementations, or does each repository module own both its port and implementation?",
+   "options": [
+    "`models` owns all port interfaces; repository modules own SQLite implementations",
+    "Each repository module owns its port and implementation; `models` owns only exchanged records",
+    "Split data-only protocol types from behavioral port interfaces explicitly"
+   ],
+   "default_guess": "Keep the interfaces in `models` because repository modules are declared to know `models` and `models` precedes them in the dependency order.",
+   "witness": {
+    "initial": "An application module needs the `ExpenseRepository` abstraction while `portal_store` must construct its SQLite implementation.",
+    "events": [
+     "One implementer places the interface in `models` and imports it from both modules.",
+     "Another places it in `expense_repository`, following that module's `Owns` statement."
+    ],
+    "outcomes": [
+     "Application-facing port types remain in the first dependency layer.",
+     "Callers must import the concrete repository module or duplicate/re-export the port, changing the declared dependency boundary."
+    ],
+    "observer": "Application and persistence implementers see different legal imports and interface locations."
+   }
+  },
+  {
+   "unit": "30_modules.md:`service_identity`",
+   "subject": "producer project-scope authorization",
+   "kind": "overlapping ownership",
+   "text": "`service_identity` owns “A12 … bearer authentication and producer scope” and exposes `authorize_producer_scope`, while `authorization_guard` owns “the guard part of … A12,” including “project scope … producer grant,” and exposes `authorize_snapshot_import`. The guard cannot import the later `service_identity` module.",
+   "question": "Which operation is authoritative for producer scope, and what distinct responsibility remains for the other authorization capability?",
+   "options": [
+    "`authorization_guard.authorize_snapshot_import` alone checks current scope",
+    "`service_identity.authorize_producer_scope` checks scope and the guard consumes trusted evidence of that decision",
+    "Both recheck scope, with the required order and transaction boundary stated"
+   ],
+   "default_guess": "Make `authorization_guard.authorize_snapshot_import` the sole operation-time scope check and limit `service_identity` to principal, credential and grant lifecycle.",
+   "witness": {
+    "initial": "An active granted producer has authenticated for project P.",
+    "events": [
+     "The producer request is authenticated.",
+     "An administrator revokes its grant for P.",
+     "The pending import proceeds to its scope check."
+    ],
+    "outcomes": [
+     "If the guard owns and re-reads scope, the import is classified as `unknown_project` and is not accepted.",
+     "If an earlier `service_identity` scope decision is trusted as sufficient, the import can still be accepted after revocation."
+    ],
+    "observer": "The producer sees rejection versus acceptance, and administrators see different snapshot and audit records."
+   }
+  },
+  {
+   "unit": "30_modules.md:`expense_intake`",
+   "subject": "expense validation versus project authorization ordering",
+   "kind": "missing dependency",
+   "text": "A7 requires recognition status and contract version to be checked before capability and active-project checks, but `expense_intake` does not know `authorization_guard`; `api` knows both yet “Must not own … a business rule.”",
+   "question": "Which module orchestrates the required interleaving of recognition validation and project authorization without violating the exhaustive `Knows` lists?",
+   "options": [
+    "Allow `expense_intake` to know and invoke `authorization_guard`",
+    "Split a public pre-validation capability from `expense_intake`, then let an orchestrator call the guard and completion step",
+    "Change the declared order so `api` may authorize before calling `expense_intake`"
+   ],
+   "default_guess": "Add `authorization_guard` to `expense_intake` and let the owning use case enforce A7's complete order.",
+   "witness": {
+    "initial": "A valid staff session and assignment exist, project P is archived in Registry, and the submitted recognition has an unsupported contract version.",
+    "events": [
+     "The staff member submits expense creation for P.",
+     "The request passes body-shape decoding."
+    ],
+    "outcomes": [
+     "If `expense_intake` applies A7 first, it rejects the unsupported version without asking Registry.",
+     "If `api` performs the available guard call first, Registry is queried and the archived-project failure occurs before contract-version validation."
+    ],
+    "observer": "The Registry operator can observe whether a validation call occurred, even though the HTTP error body is concealed."
+   }
+  },
+  {
+   "unit": "30_modules.md:`photo_management`",
+   "subject": "ordering of the staff progress-photo list",
+   "kind": "owner mapping contradiction",
+   "text": "A27 has primary owner `derived_views` and no consumers, but `photo_management` owns “the order of the staff photo list it returns”; `photo_management` may not know the later `derived_views` module.",
+   "question": "Who owns the staff-list application of A27, and is `photo_management` a consumer of A27 or the owner of a separate ordering decision?",
+   "options": [
+    "Add `photo_management` as an A27 consumer and require the same normative ordering",
+    "Move staff-list projection and ordering to `derived_views`",
+    "Declare and own a distinct staff-photo ordering policy"
+   ],
+   "default_guess": "Add `photo_management` as an A27 consumer and require its staff list to use the same A27 ordering.",
+   "witness": {
+    "initial": "Two photos have the same `photo_date`, but their `published_at` order is opposite their `photo_id` order.",
+    "events": [
+     "Staff requests the photo list through the `photo_management` path.",
+     "A viewer requests the overview gallery through `derived_views`."
+    ],
+    "outcomes": [
+     "If both consume A27, both lists break the tie by `published_at` and then id.",
+     "If the ownership table is treated as exhaustive, only the overview is governed by A27 and the staff list requires an independently guessed tie-break."
+    ],
+    "observer": "Staff and viewers can see the same photos in different orders."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"30_modules.md:preamble\",\"subject\":\"ownership rule for cross-cutting decisions A22, A26 and A28\",\"kind\":\"ownership contradiction\",\"text\":\"“Each accepted decision has one primary owner” conflicts with A22, A26 and A28 being assigned to “cross-cutting” and with “no module holds a mechanism the others call.”\",\"question\":\"Are A22, A26 and A28 exceptions whose implementations are independently owned by every applying module, or must each have one owning module or shared mechanism?\",\"options\":[\"Each applying module owns its local implementation\",\"Create one primary owning module for each decision\",\"Name one existing module as owner and the others as consumers\"],\"default_guess\":\"Treat the specific cross-cutting paragraph as an exception and make every applying module own its local implementation.\",\"witness\":{\"initial\":\"Two use-case modules must apply A22 when opening transactions.\",\"events\":[\"One implementer follows “Each accepted decision has one primary owner” and introduces a shared transaction-guard module.\",\"Another implementer follows “no module holds a mechanism the others call” and duplicates the guard in both use-case modules.\"],\"outcomes\":[\"The use cases acquire a new dependency on a shared owner.\",\"The use cases contain independent guard implementations and no shared dependency.\"],\"observer\":\"A later module or code author sees different dependency graphs and extension points.\"}},{\"unit\":\"30_modules.md:`models`\",\"subject\":\"HTTP request-body model ownership\",\"kind\":\"two owners\",\"text\":\"`models` owns “the request models,” while `api` owns “request-body models.”\",\"question\":\"Which module owns the definitions and validation of staff, administrator and producer HTTP request bodies?\",\"options\":[\"`models` defines them and `api` only decodes/uses them\",\"`api` defines them as transport-specific models\",\"Split request models by route family, with an explicit boundary\"],\"default_guess\":\"Put the shared frozen request types in `models` and make `api` their consumer.\",\"witness\":{\"initial\":\"A malformed staff-account creation body reaches the HTTP boundary.\",\"events\":[\"One code author defines and validates `StaffAccountCreateRequest` in `models`, which `api` imports.\",\"Another defines an API-local request class and maps it to a separate model value.\"],\"outcomes\":[\"There is one shared request type and one validation location.\",\"There are two shapes and a mapping boundary whose ownership and validation precedence were not specified.\"],\"observer\":\"API clients see potentially different validation errors and generated schemas; maintainers see different module dependencies.\"}},{\"unit\":\"30_modules.md:`models`\",\"subject\":\"repository port ownership\",\"kind\":\"two owners\",\"text\":\"`models` owns “the repository interfaces,” while each repository section says it “Owns” its named repository port, such as “The `AuditRepository` port” and “The `ExpenseRepository` port.”\",\"question\":\"Do repository interface definitions belong to `models`, with repository modules owning only implementations, or does each repository module own both its port and implementation?\",\"options\":[\"`models` owns all port interfaces; repository modules own SQLite implementations\",\"Each repository module owns its port and implementation; `models` owns only exchanged records\",\"Split data-only protocol types from behavioral port interfaces explicitly\"],\"default_guess\":\"Keep the interfaces in `models` because repository modules are declared to know `models` and `models` precedes them in the dependency order.\",\"witness\":{\"initial\":\"An application module needs the `ExpenseRepository` abstraction while `portal_store` must construct its SQLite implementation.\",\"events\":[\"One implementer places the interface in `models` and imports it from both modules.\",\"Another places it in `expense_repository`, following that module's `Owns` statement.\"],\"outcomes\":[\"Application-facing port types remain in the first dependency layer.\",\"Callers must import the concrete repository module or duplicate/re-export the port, changing the declared dependency boundary.\"],\"observer\":\"Application and persistence implementers see different legal imports and interface locations.\"}},{\"unit\":\"30_modules.md:`service_identity`\",\"subject\":\"producer project-scope authorization\",\"kind\":\"overlapping ownership\",\"text\":\"`service_identity` owns “A12 … bearer authentication and producer scope” and exposes `authorize_producer_scope`, while `authorization_guard` owns “the guard part of … A12,” including “project scope … producer grant,” and exposes `authorize_snapshot_import`. The guard cannot import the later `service_identity` module.\",\"question\":\"Which operation is authoritative for producer scope, and what distinct responsibility remains for the other authorization capability?\",\"options\":[\"`authorization_guard.authorize_snapshot_import` alone checks current scope\",\"`service_identity.authorize_producer_scope` checks scope and the guard consumes trusted evidence of that decision\",\"Both recheck scope, with the required order and transaction boundary stated\"],\"default_guess\":\"Make `authorization_guard.authorize_snapshot_import` the sole operation-time scope check and limit `service_identity` to principal, credential and grant lifecycle.\",\"witness\":{\"initial\":\"An active granted producer has authenticated for project P.\",\"events\":[\"The producer request is authenticated.\",\"An administrator revokes its grant for P.\",\"The pending import proceeds to its scope check.\"],\"outcomes\":[\"If the guard owns and re-reads scope, the import is classified as `unknown_project` and is not accepted.\",\"If an earlier `service_identity` scope decision is trusted as sufficient, the import can still be accepted after revocation.\"],\"observer\":\"The producer sees rejection versus acceptance, and administrators see different snapshot and audit records.\"}},{\"unit\":\"30_modules.md:`expense_intake`\",\"subject\":\"expense validation versus project authorization ordering\",\"kind\":\"missing dependency\",\"text\":\"A7 requires recognition status and contract version to be checked before capability and active-project checks, but `expense_intake` does not know `authorization_guard`; `api` knows both yet “Must not own … a business rule.”\",\"question\":\"Which module orchestrates the required interleaving of recognition validation and project authorization without violating the exhaustive `Knows` lists?\",\"options\":[\"Allow `expense_intake` to know and invoke `authorization_guard`\",\"Split a public pre-validation capability from `expense_intake`, then let an orchestrator call the guard and completion step\",\"Change the declared order so `api` may authorize before calling `expense_intake`\"],\"default_guess\":\"Add `authorization_guard` to `expense_intake` and let the owning use case enforce A7's complete order.\",\"witness\":{\"initial\":\"A valid staff session and assignment exist, project P is archived in Registry, and the submitted recognition has an unsupported contract version.\",\"events\":[\"The staff member submits expense creation for P.\",\"The request passes body-shape decoding.\"],\"outcomes\":[\"If `expense_intake` applies A7 first, it rejects the unsupported version without asking Registry.\",\"If `api` performs the available guard call first, Registry is queried and the archived-project failure occurs before contract-version validation.\"],\"observer\":\"The Registry operator can observe whether a validation call occurred, even though the HTTP error body is concealed.\"}},{\"unit\":\"30_modules.md:`photo_management`\",\"subject\":\"ordering of the staff progress-photo list\",\"kind\":\"owner mapping contradiction\",\"text\":\"A27 has primary owner `derived_views` and no consumers, but `photo_management` owns “the order of the staff photo list it returns”; `photo_management` may not know the later `derived_views` module.\",\"question\":\"Who owns the staff-list application of A27, and is `photo_management` a consumer of A27 or the owner of a separate ordering decision?\",\"options\":[\"Add `photo_management` as an A27 consumer and require the same normative ordering\",\"Move staff-list projection and ordering to `derived_views`\",\"Declare and own a distinct staff-photo ordering policy\"],\"default_guess\":\"Add `photo_management` as an A27 consumer and require its staff list to use the same A27 ordering.\",\"witness\":{\"initial\":\"Two photos have the same `photo_date`, but their `published_at` order is opposite their `photo_id` order.\",\"events\":[\"Staff requests the photo list through the `photo_management` path.\",\"A viewer requests the overview gallery through `derived_views`.\"],\"outcomes\":[\"If both consume A27, both lists break the tie by `published_at` and then id.\",\"If the ownership table is treated as exhaustive, only the overview is governed by A27 and the staff list requires an independently guessed tie-break.\"],\"observer\":\"Staff and viewers can see the same photos in different orders.\"}}]}",
+ "set_aside": []
+}

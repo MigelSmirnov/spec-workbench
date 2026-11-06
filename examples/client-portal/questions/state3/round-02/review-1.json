@@ -1,0 +1,185 @@
+{
+ "open_points": [
+  {
+   "subject": "model-local validation",
+   "kind": "contradiction",
+   "text": "State 3 says `models` owns \"plain frozen typed data with their closed enumerations (A24). No behaviour.\" State 1 requires \"a closed enum discriminant plus a conditionally-required field enforced by a local model validator\" and gives local validation rules for records such as `AuditIntent` and `ProjectOverview`.",
+   "question": "Does `models` own and execute the stated local validators, or must another module validate these cross-field conditions?",
+   "options": [
+    "`models` performs the local validation when values are constructed",
+    "`models` is passive data and each consuming module performs the validation"
+   ],
+   "default_guess": "Keep the State 1 local validators in `models` and interpret \"No behaviour\" as excluding business and I/O behaviour only.",
+   "witness": {
+    "initial": "An allocation input has `target = other_expenses` and a non-null `section_id`.",
+    "events": [
+     "The API decodes the request and constructs an `AllocationInstruction`.",
+     "The expense use case receives or attempts to receive that value."
+    ],
+    "outcomes": [
+     "The State 1 local validator rejects construction before the value crosses into the use case.",
+     "The State 3 passive-data reading permits construction and leaves a consuming use case to reject it later, or lets it reach persistence if that consumer omits the duplicate check."
+    ],
+    "observer": "The HTTP caller sees a different rejection stage and potentially a different error response; downstream modules also differ on whether they may trust model validity."
+   },
+   "unit": "30_modules.md:`models`"
+  },
+  {
+   "subject": "repository-port ownership",
+   "kind": "two owners",
+   "text": "`models` says it owns \"the repository interfaces\"; each repository section says it owns its corresponding port, for example `audit_repository` owns \"The `AuditRepository` port\" and the other repository sections use the same wording.",
+   "question": "Which module owns and defines each repository interface: `models`, or the corresponding repository module?",
+   "options": [
+    "Define all repository protocols and repository context interfaces in `models`; repository modules only implement them",
+    "Define each port in its repository module; `models` owns only record and DTO types"
+   ],
+   "default_guess": "Define the interfaces in `models`, because repository modules are described as implementations and every repository may know `models`.",
+   "witness": {
+    "initial": "No repository code exists yet.",
+    "events": [
+     "One implementer follows the `models` section and defines `ExpenseRepository` in `models`.",
+     "Another implementer follows the `expense_repository` section and defines it beside `SqliteExpenseRepository`.",
+     "Later use cases and `PortalTransaction` are written from the State 3 dependency declarations."
+    ],
+    "outcomes": [
+     "Use cases import the port from `models`, and the SQLite module structurally or nominally implements it.",
+     "Use cases import the port from `expense_repository`, adding a dependency on the concrete persistence-side module and producing a different import graph."
+    ],
+    "observer": "Later agents assembling module imports and dependency checks see incompatible public surfaces."
+   },
+   "unit": "30_modules.md:`models`"
+  },
+  {
+   "subject": "producer-scope authorization",
+   "kind": "two owners",
+   "text": "The decision table makes `service_identity` the primary owner of A12 and `authorization_guard` a consumer. The `service_identity` section says it owns \"A12 ... bearer authentication and producer scope\" and exports `authorize_producer_scope`; the `authorization_guard` section also says it owns \"the guard part of ... A12\" including \"producer grant\" scope and exports `authorize_snapshot_import`. `authorization_guard` is earlier in the dependency order and may not know `service_identity`.",
+   "question": "Which module makes the authoritative producer-scope decision during snapshot import, and what evidence crosses between the two modules?",
+   "options": [
+    "`authorization_guard.authorize_snapshot_import` reads scope mode and grants and is the sole scope evaluator; `service_identity` only manages and authenticates producer records",
+    "`service_identity.authorize_producer_scope` makes the scope decision and returns trusted evidence consumed by the guard",
+    "Both evaluate scope, with an explicit rule defining which result is authoritative and when each check occurs"
+   ],
+   "default_guess": "Make `authorization_guard` the sole per-operation scope evaluator and narrow `service_identity` to credential authentication plus principal/grant lifecycle.",
+   "witness": {
+    "initial": "A `granted_projects` producer has a valid bearer credential and an active grant for project P.",
+    "events": [
+     "The producer starts an import for P and is authenticated by `service_identity`.",
+     "A scope check succeeds in one of the two named modules.",
+     "An administrator revokes the producer grant.",
+     "The remaining import authorization step runs."
+    ],
+    "outcomes": [
+     "If `service_identity`'s earlier scope result is authoritative, the import proceeds despite the revocation.",
+     "If `authorization_guard` performs the authoritative current-state scope check, the import is rejected and recorded as `unknown_project`."
+    ],
+    "observer": "The producer sees an accepted import versus a scoped-not-found result, and audit/import records differ."
+   },
+   "unit": "30_modules.md:`service_identity`"
+  },
+  {
+   "subject": "expense-document access re-check",
+   "kind": "unclear dependency",
+   "text": "The shared-facts section says `expense_management` \"re-check[s] access and visibility\" before handing an `AuthorizedBinaryReference` to storage, and A14 says the owning domain module re-checks authenticated project access. But `expense_management` may know only `models`, `financial_policy`, `binary_storage`, `audit_writer`, and `portal_store`; it may not know the owning `authorization_guard`.",
+   "question": "Is `expense_management` required to rerun current authorization through `authorization_guard`, or does \"re-check access\" mean only matching the document against an already-issued `AuthorizedProjectContext` plus checking visibility?",
+   "options": [
+    "Allow `expense_management` to depend on and call `authorization_guard` for the binary read",
+    "Treat `AuthorizedProjectContext` as sufficient authorization evidence and have `expense_management` check only project ownership and document visibility",
+    "Move the complete binary-read authorization decision into `authorization_guard` and pass a stronger one-use result"
+   ],
+   "default_guess": "Treat a freshly produced `AuthorizedProjectContext` as the authorization evidence and make `expense_management` re-check document project ownership and visibility only.",
+   "witness": {
+    "initial": "A viewer has an active grant to project P, and P has a visible expense document D.",
+    "events": [
+     "The API obtains an `AuthorizedProjectContext` for the viewer and P.",
+     "An administrator revokes the viewer's grant.",
+     "The API calls `expense_management.read_expense_document` for D."
+    ],
+    "outcomes": [
+     "If the context is sufficient, `expense_management` returns D using the earlier authorization result.",
+     "If \"re-check\" requires current authorization, the revoked grant is observed and the read is concealed as refused."
+    ],
+    "observer": "The viewer either receives the document bytes or a concealed refusal."
+   },
+   "unit": "30_modules.md:`expense_management`"
+  },
+  {
+   "subject": "progress-photo access re-check",
+   "kind": "unclear dependency",
+   "text": "The shared-facts section says `photo_management` \"re-check[s] access and visibility\" before storage access, and A14 requires the owning domain module to re-check authenticated project access. `photo_management` may know only `models`, `binary_storage`, `audit_writer`, and `portal_store`, not `authorization_guard`.",
+   "question": "Is `photo_management` required to rerun current authorization, or does it only validate project ownership and visibility against an already-issued `AuthorizedProjectContext`?",
+   "options": [
+    "Allow `photo_management` to depend on and call `authorization_guard`",
+    "Treat `AuthorizedProjectContext` as sufficient authorization evidence and check only photo project ownership and visibility",
+    "Move complete photo-read authorization into `authorization_guard` and pass a stronger one-use result"
+   ],
+   "default_guess": "Use a freshly produced `AuthorizedProjectContext` as authorization evidence and have `photo_management` check photo ownership and visibility.",
+   "witness": {
+    "initial": "A viewer has an active grant to project P, and P has a visible progress photo F.",
+    "events": [
+     "The API obtains an `AuthorizedProjectContext` for the viewer and P.",
+     "An administrator revokes the grant.",
+     "The API calls `photo_management.read_progress_photo` for F."
+    ],
+    "outcomes": [
+     "If the context remains sufficient, the photo bytes are returned.",
+     "If the owning module must re-check current authorization, the read is refused after observing the revoked grant."
+    ],
+    "observer": "The viewer sees either the photo or the concealed validation refusal."
+   },
+   "unit": "30_modules.md:`photo_management`"
+  },
+  {
+   "subject": "audit of rejected significant mutations",
+   "kind": "contradiction",
+   "text": "The shared Audit text says \"The two rejected records of A13 (`snapshot.import`, `staff.login_failed`) are appended ...; every other refusal writes none.\" The `audit_writer` section says it owns \"the append of exactly one AuditRecord per occurrence, including rejected significant mutations.\"",
+   "question": "Does every rejected significant mutation produce an audit record, or do only rejected snapshot imports and failed staff logins do so?",
+   "options": [
+    "Only the two explicitly named rejected outcomes write audit records; `audit_writer` merely validates any rejected intent it is given",
+    "Every rejected action in `audit_significant_mutation_actions` writes exactly one rejected audit record"
+   ],
+   "default_guess": "Follow A13 and the shared Audit paragraph: only rejected snapshot imports and failed staff logins are recorded; all other refused operations roll back without audit.",
+   "witness": {
+    "initial": "An authenticated operator attempts to correct an expense on an archived project.",
+    "events": [
+     "Authorization or mutation validation rejects the correction.",
+     "The owning flow closes its transaction.",
+     "An administrator later reads the audit history."
+    ],
+    "outcomes": [
+     "Under the shared Audit paragraph and A13, no `expense.correct` rejection record exists.",
+     "Under the `audit_writer` ownership sentence, one rejected `expense.correct` record with a reason code exists."
+    ],
+    "observer": "The administrator or auditor sees different audit history."
+   },
+   "unit": "30_modules.md:`audit_writer`"
+  },
+  {
+   "subject": "composition of viewer HTTP routes",
+   "kind": "no composition owner",
+   "text": "`api_irregular` owns all viewer cookie, viewer read, and viewer binary endpoints. `api` owns only \"staff, administrator and producer HTTP JSON routes\" and its exact `Knows` list omits `api_irregular`. `runtime` composes \"the inner `api` application\" and its exact `Knows` list also omits `api_irregular`.",
+   "question": "Which module imports and registers the `api_irregular` viewer routes into the running application?",
+   "options": [
+    "`api` knows and mounts `api_irregular` when building `create_app`",
+    "`runtime` knows both HTTP modules and mounts them into one application",
+    "A new explicit router-composition module owns both route sets"
+   ],
+   "default_guess": "Let `runtime` know and compose both `api` and `api_irregular`, since it already owns application composition.",
+   "witness": {
+    "initial": "All modules are implemented exactly with the declared `Knows` imports.",
+    "events": [
+     "`runtime.create_runtime_app` creates the inner application through `api.create_app`.",
+     "A viewer sends a valid entry request to the documented viewer-entry path."
+    ],
+    "outcomes": [
+     "If an implementer silently lets `api` or `runtime` import and mount `api_irregular`, the viewer route exists and can issue the cookie.",
+     "If the exact `Knows` declarations are enforced, no reachable module registers the viewer route and the request returns route-not-found."
+    ],
+    "observer": "Every client viewer sees either a functioning portal entry endpoint or a missing route."
+   },
+   "unit": "30_modules.md:`api_irregular`"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"model-local validation\",\"kind\":\"contradiction\",\"text\":\"State 3 says `models` owns \\\"plain frozen typed data with their closed enumerations (A24). No behaviour.\\\" State 1 requires \\\"a closed enum discriminant plus a conditionally-required field enforced by a local model validator\\\" and gives local validation rules for records such as `AuditIntent` and `ProjectOverview`.\",\"question\":\"Does `models` own and execute the stated local validators, or must another module validate these cross-field conditions?\",\"options\":[\"`models` performs the local validation when values are constructed\",\"`models` is passive data and each consuming module performs the validation\"],\"default_guess\":\"Keep the State 1 local validators in `models` and interpret \\\"No behaviour\\\" as excluding business and I/O behaviour only.\",\"witness\":{\"initial\":\"An allocation input has `target = other_expenses` and a non-null `section_id`.\",\"events\":[\"The API decodes the request and constructs an `AllocationInstruction`.\",\"The expense use case receives or attempts to receive that value.\"],\"outcomes\":[\"The State 1 local validator rejects construction before the value crosses into the use case.\",\"The State 3 passive-data reading permits construction and leaves a consuming use case to reject it later, or lets it reach persistence if that consumer omits the duplicate check.\"],\"observer\":\"The HTTP caller sees a different rejection stage and potentially a different error response; downstream modules also differ on whether they may trust model validity.\"},\"unit\":\"30_modules.md:`models`\"},{\"subject\":\"repository-port ownership\",\"kind\":\"two owners\",\"text\":\"`models` says it owns \\\"the repository interfaces\\\"; each repository section says it owns its corresponding port, for example `audit_repository` owns \\\"The `AuditRepository` port\\\" and the other repository sections use the same wording.\",\"question\":\"Which module owns and defines each repository interface: `models`, or the corresponding repository module?\",\"options\":[\"Define all repository protocols and repository context interfaces in `models`; repository modules only implement them\",\"Define each port in its repository module; `models` owns only record and DTO types\"],\"default_guess\":\"Define the interfaces in `models`, because repository modules are described as implementations and every repository may know `models`.\",\"witness\":{\"initial\":\"No repository code exists yet.\",\"events\":[\"One implementer follows the `models` section and defines `ExpenseRepository` in `models`.\",\"Another implementer follows the `expense_repository` section and defines it beside `SqliteExpenseRepository`.\",\"Later use cases and `PortalTransaction` are written from the State 3 dependency declarations.\"],\"outcomes\":[\"Use cases import the port from `models`, and the SQLite module structurally or nominally implements it.\",\"Use cases import the port from `expense_repository`, adding a dependency on the concrete persistence-side module and producing a different import graph.\"],\"observer\":\"Later agents assembling module imports and dependency checks see incompatible public surfaces.\"},\"unit\":\"30_modules.md:`models`\"},{\"subject\":\"producer-scope authorization\",\"kind\":\"two owners\",\"text\":\"The decision table makes `service_identity` the primary owner of A12 and `authorization_guard` a consumer. The `service_identity` section says it owns \\\"A12 ... bearer authentication and producer scope\\\" and exports `authorize_producer_scope`; the `authorization_guard` section also says it owns \\\"the guard part of ... A12\\\" including \\\"producer grant\\\" scope and exports `authorize_snapshot_import`. `authorization_guard` is earlier in the dependency order and may not know `service_identity`.\",\"question\":\"Which module makes the authoritative producer-scope decision during snapshot import, and what evidence crosses between the two modules?\",\"options\":[\"`authorization_guard.authorize_snapshot_import` reads scope mode and grants and is the sole scope evaluator; `service_identity` only manages and authenticates producer records\",\"`service_identity.authorize_producer_scope` makes the scope decision and returns trusted evidence consumed by the guard\",\"Both evaluate scope, with an explicit rule defining which result is authoritative and when each check occurs\"],\"default_guess\":\"Make `authorization_guard` the sole per-operation scope evaluator and narrow `service_identity` to credential authentication plus principal/grant lifecycle.\",\"witness\":{\"initial\":\"A `granted_projects` producer has a valid bearer credential and an active grant for project P.\",\"events\":[\"The producer starts an import for P and is authenticated by `service_identity`.\",\"A scope check succeeds in one of the two named modules.\",\"An administrator revokes the producer grant.\",\"The remaining import authorization step runs.\"],\"outcomes\":[\"If `service_identity`'s earlier scope result is authoritative, the import proceeds despite the revocation.\",\"If `authorization_guard` performs the authoritative current-state scope check, the import is rejected and recorded as `unknown_project`.\"],\"observer\":\"The producer sees an accepted import versus a scoped-not-found result, and audit/import records differ.\"},\"unit\":\"30_modules.md:`service_identity`\"},{\"subject\":\"expense-document access re-check\",\"kind\":\"unclear dependency\",\"text\":\"The shared-facts section says `expense_management` \\\"re-check[s] access and visibility\\\" before handing an `AuthorizedBinaryReference` to storage, and A14 says the owning domain module re-checks authenticated project access. But `expense_management` may know only `models`, `financial_policy`, `binary_storage`, `audit_writer`, and `portal_store`; it may not know the owning `authorization_guard`.\",\"question\":\"Is `expense_management` required to rerun current authorization through `authorization_guard`, or does \\\"re-check access\\\" mean only matching the document against an already-issued `AuthorizedProjectContext` plus checking visibility?\",\"options\":[\"Allow `expense_management` to depend on and call `authorization_guard` for the binary read\",\"Treat `AuthorizedProjectContext` as sufficient authorization evidence and have `expense_management` check only project ownership and document visibility\",\"Move the complete binary-read authorization decision into `authorization_guard` and pass a stronger one-use result\"],\"default_guess\":\"Treat a freshly produced `AuthorizedProjectContext` as the authorization evidence and make `expense_management` re-check document project ownership and visibility only.\",\"witness\":{\"initial\":\"A viewer has an active grant to project P, and P has a visible expense document D.\",\"events\":[\"The API obtains an `AuthorizedProjectContext` for the viewer and P.\",\"An administrator revokes the viewer's grant.\",\"The API calls `expense_management.read_expense_document` for D.\"],\"outcomes\":[\"If the context is sufficient, `expense_management` returns D using the earlier authorization result.\",\"If \\\"re-check\\\" requires current authorization, the revoked grant is observed and the read is concealed as refused.\"],\"observer\":\"The viewer either receives the document bytes or a concealed refusal.\"},\"unit\":\"30_modules.md:`expense_management`\"},{\"subject\":\"progress-photo access re-check\",\"kind\":\"unclear dependency\",\"text\":\"The shared-facts section says `photo_management` \\\"re-check[s] access and visibility\\\" before storage access, and A14 requires the owning domain module to re-check authenticated project access. `photo_management` may know only `models`, `binary_storage`, `audit_writer`, and `portal_store`, not `authorization_guard`.\",\"question\":\"Is `photo_management` required to rerun current authorization, or does it only validate project ownership and visibility against an already-issued `AuthorizedProjectContext`?\",\"options\":[\"Allow `photo_management` to depend on and call `authorization_guard`\",\"Treat `AuthorizedProjectContext` as sufficient authorization evidence and check only photo project ownership and visibility\",\"Move complete photo-read authorization into `authorization_guard` and pass a stronger one-use result\"],\"default_guess\":\"Use a freshly produced `AuthorizedProjectContext` as authorization evidence and have `photo_management` check photo ownership and visibility.\",\"witness\":{\"initial\":\"A viewer has an active grant to project P, and P has a visible progress photo F.\",\"events\":[\"The API obtains an `AuthorizedProjectContext` for the viewer and P.\",\"An administrator revokes the grant.\",\"The API calls `photo_management.read_progress_photo` for F.\"],\"outcomes\":[\"If the context remains sufficient, the photo bytes are returned.\",\"If the owning module must re-check current authorization, the read is refused after observing the revoked grant.\"],\"observer\":\"The viewer sees either the photo or the concealed validation refusal.\"},\"unit\":\"30_modules.md:`photo_management`\"},{\"subject\":\"audit of rejected significant mutations\",\"kind\":\"contradiction\",\"text\":\"The shared Audit text says \\\"The two rejected records of A13 (`snapshot.import`, `staff.login_failed`) are appended ...; every other refusal writes none.\\\" The `audit_writer` section says it owns \\\"the append of exactly one AuditRecord per occurrence, including rejected significant mutations.\\\"\",\"question\":\"Does every rejected significant mutation produce an audit record, or do only rejected snapshot imports and failed staff logins do so?\",\"options\":[\"Only the two explicitly named rejected outcomes write audit records; `audit_writer` merely validates any rejected intent it is given\",\"Every rejected action in `audit_significant_mutation_actions` writes exactly one rejected audit record\"],\"default_guess\":\"Follow A13 and the shared Audit paragraph: only rejected snapshot imports and failed staff logins are recorded; all other refused operations roll back without audit.\",\"witness\":{\"initial\":\"An authenticated operator attempts to correct an expense on an archived project.\",\"events\":[\"Authorization or mutation validation rejects the correction.\",\"The owning flow closes its transaction.\",\"An administrator later reads the audit history.\"],\"outcomes\":[\"Under the shared Audit paragraph and A13, no `expense.correct` rejection record exists.\",\"Under the `audit_writer` ownership sentence, one rejected `expense.correct` record with a reason code exists.\"],\"observer\":\"The administrator or auditor sees different audit history.\"},\"unit\":\"30_modules.md:`audit_writer`\"},{\"subject\":\"composition of viewer HTTP routes\",\"kind\":\"no composition owner\",\"text\":\"`api_irregular` owns all viewer cookie, viewer read, and viewer binary endpoints. `api` owns only \\\"staff, administrator and producer HTTP JSON routes\\\" and its exact `Knows` list omits `api_irregular`. `runtime` composes \\\"the inner `api` application\\\" and its exact `Knows` list also omits `api_irregular`.\",\"question\":\"Which module imports and registers the `api_irregular` viewer routes into the running application?\",\"options\":[\"`api` knows and mounts `api_irregular` when building `create_app`\",\"`runtime` knows both HTTP modules and mounts them into one application\",\"A new explicit router-composition module owns both route sets\"],\"default_guess\":\"Let `runtime` know and compose both `api` and `api_irregular`, since it already owns application composition.\",\"witness\":{\"initial\":\"All modules are implemented exactly with the declared `Knows` imports.\",\"events\":[\"`runtime.create_runtime_app` creates the inner application through `api.create_app`.\",\"A viewer sends a valid entry request to the documented viewer-entry path.\"],\"outcomes\":[\"If an implementer silently lets `api` or `runtime` import and mount `api_irregular`, the viewer route exists and can issue the cookie.\",\"If the exact `Knows` declarations are enforced, no reachable module registers the viewer route and the request returns route-not-found.\"],\"observer\":\"Every client viewer sees either a functioning portal entry endpoint or a missing route.\"},\"unit\":\"30_modules.md:`api_irregular`\"}]}",
+ "set_aside": []
+}

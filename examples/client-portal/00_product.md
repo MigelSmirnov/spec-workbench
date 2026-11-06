@@ -572,7 +572,8 @@ derived from the object kind and id, never from a stored name or caption. An
 unknown, cross-project or hidden read is answered the same way, so the caller
 cannot tell them apart; a refused document read answers that way also when
 its stored content is missing, oversize or unlisted, while a photo whose
-stored content cannot be delivered fails as a storage error (Factory
+stored content cannot be delivered fails as an explicit storage-unavailable
+error (Factory
 `babd5e52`, `rules.binary_delivery_policy`; Factory code
 `domain/photo_management.py`; owner 2026-11-06: current service behaviour
 accepted; technical decisions delegated).
