@@ -1,0 +1,158 @@
+{
+ "open_points": [
+  {
+   "subject": "Archived progress read versus Registry mutation invariant",
+   "kind": "contradiction",
+   "unit": "A5",
+   "text": "“The one write an archived project admits: the staff progress read … creates the empty manual budget version” conflicts with A4’s PLAT-REG-003: “a linked mutation succeeds only after server-side typed validation reports the same UUID as active.”",
+   "question": "Is this archived-project write an explicit exception to PLAT-REG-003, or must the active-project invariant prevent it?",
+   "options": [
+    "Add this read-triggered creation as an exception to PLAT-REG-003",
+    "Apply PLAT-REG-003 and refuse or suppress the creation on archived projects"
+   ],
+   "default_guess": "Treat the specifically named A5 behavior as an exception to PLAT-REG-003.",
+   "witness": {
+    "initial": "An archived Registry project has an active staff assignment and no manual budget version.",
+    "events": [
+     "The assigned staff member lists the project's progress.",
+     "Registry validation reports the same project UUID with archived status."
+    ],
+    "outcomes": [
+     "A5 permits the read and persists an empty manual budget version.",
+     "PLAT-REG-003 prevents the linked write because Registry did not report the project active."
+    ],
+    "observer": "The staff caller and any later reader of the project's budget versions."
+   }
+  },
+  {
+   "subject": "Transaction classification of the side-effecting progress read",
+   "kind": "transaction ambiguity",
+   "unit": "A5",
+   "text": "A5 calls `project_tracking.list_project_progress` a “staff progress read” but requires it to create a budget version, while A22 says “A read path rolls back once right after its last read” and “a write path commits once on success.”",
+   "question": "Must this operation use the write-path commit protocol when it performs implicit creation, or must it still follow the read-path rollback protocol?",
+   "options": [
+    "Always treat `list_project_progress` as a write path capable of committing the implicit version",
+    "Use a read transaction and therefore do not persist the implicit version",
+    "Choose the transaction path conditionally after discovering whether creation is needed"
+   ],
+   "default_guess": "Treat it as a write path whenever the implicit version may be created.",
+   "witness": {
+    "initial": "An authorized staff member can read a project that has no manual budget version.",
+    "events": [
+     "The staff member invokes `list_project_progress`.",
+     "The operation constructs the required empty manual budget version."
+    ],
+    "outcomes": [
+     "The operation commits and the version remains persisted.",
+     "The operation follows A22's read-path rule, rolls back, and returns with no persisted version."
+    ],
+    "observer": "A subsequent budget or progress reader."
+   }
+  },
+  {
+   "subject": "Initial state and activation effect of the implicitly created manual budget",
+   "kind": "state unspecified",
+   "unit": "A5",
+   "text": "A5 says the read “creates the empty manual budget version” but does not say whether its `BudgetVersion.status` is `inactive` or `active`; M22 says activation is always an explicit staff action and activation deactivates the previous active version.",
+   "question": "What status does the implicit manual version receive, and what happens if another budget version is already active?",
+   "options": [
+    "Create it inactive and leave any active version unchanged",
+    "Create it active when no version is active",
+    "Activate it and atomically deactivate the previously active version",
+    "Refuse implicit creation when another version is active"
+   ],
+   "default_guess": "Create it inactive and leave any existing active version unchanged, because the read is not an explicit activation action.",
+   "witness": {
+    "initial": "An archived project has no manual budget version but has an active imported budget version.",
+    "events": [
+     "An authorized staff member lists project progress."
+    ],
+    "outcomes": [
+     "An inactive empty manual version is added and the imported version remains active.",
+     "The empty manual version becomes active and the imported version is deactivated or the single-active invariant is violated."
+    ],
+    "observer": "Staff or viewers reading the active budget and progress views."
+   }
+  },
+  {
+   "subject": "Concurrent first progress reads",
+   "kind": "race outcome unspecified",
+   "unit": "A5",
+   "text": "A5 requires the progress read to create the manual version “when the project has none,” while M22 permits at most one manual version per project, but no outcome is specified when concurrent reads both observe none.",
+   "question": "How must concurrent first progress reads resolve the creation race?",
+   "options": [
+    "Both reads succeed and converge on the one created version",
+    "One read succeeds and the other returns a persistence/conflict failure",
+    "Serialize the check-and-create so the second read observes and reuses the first version"
+   ],
+   "default_guess": "Serialize or retry so both reads succeed using one version.",
+   "witness": {
+    "initial": "An archived project has no manual budget version.",
+    "events": [
+     "Staff member A starts listing progress and observes no manual version.",
+     "Staff member B concurrently starts the same read and also observes no manual version.",
+     "Both attempt to create the version."
+    ],
+    "outcomes": [
+     "Exactly one version is stored and both reads succeed.",
+     "The uniqueness constraint rejects one read, exposing a persistence or conflict error."
+    ],
+    "observer": "The two staff callers."
+   }
+  },
+  {
+   "subject": "Supplied service-credential expiry versus generated-expiry invariant",
+   "kind": "contradiction",
+   "unit": "A28",
+   "text": "A28 newly classifies “a service credential's `expires_at`” as source-supplied and “kept as supplied,” but its formal invariant still says “an expiry it writes is that instant plus its TTL.”",
+   "question": "Does a service credential retain the supplied `expires_at`, or must its persisted expiry equal the operation clock plus a configured TTL?",
+   "options": [
+    "Treat supplied service-credential expiry as an exception to the TTL invariant",
+    "Ignore or reject the supplied value and calculate expiry from the operation instant plus TTL",
+    "Require the supplied value to equal the calculated TTL expiry"
+   ],
+   "default_guess": "Treat the supplied service-credential expiry as an explicit exception to the TTL clause.",
+   "witness": {
+    "initial": "At 10:00 UTC an administrator requests a service credential whose supplied `expires_at` is 18:00 UTC.",
+    "events": [
+     "The credential-issue operation reads its clock as 10:00 UTC.",
+     "It validates and persists the new credential."
+    ],
+    "outcomes": [
+     "The stored expiry is the supplied 18:00 UTC value.",
+     "The stored expiry is 10:00 UTC plus an implementation-selected TTL, or the request is rejected because the supplied value differs."
+    ],
+    "observer": "The administrator and the service principal when the credential becomes unusable."
+   }
+  },
+  {
+   "subject": "Validation of a supplied service-credential expiry",
+   "kind": "refusal conditions unspecified",
+   "unit": "A28",
+   "text": "A28 says a service credential's supplied `expires_at` is “validated and kept as supplied” but defines only the later usability test `now < expires_at`; it does not state which supplied expiry values issuance accepts.",
+   "question": "Must credential issuance reject an expiry equal to or before the operation instant, and what UTC representation is accepted before storing the required offset-naive value?",
+   "options": [
+    "Accept any valid offset-naive UTC datetime, including an already expired value",
+    "Require an offset-naive UTC value strictly after the operation instant",
+    "Accept an offset-aware UTC value and convert it to offset-naive UTC",
+    "Reject offset-aware values rather than converting them"
+   ],
+   "default_guess": "Require an offset-naive UTC value strictly after the operation instant.",
+   "witness": {
+    "initial": "An administrator is authorized to issue a credential at 10:00 UTC.",
+    "events": [
+     "The administrator supplies `expires_at` equal to 10:00 UTC, or supplies an offset-aware representation of that instant.",
+     "The issuance operation validates the request."
+    ],
+    "outcomes": [
+     "The credential is issued as supplied and is immediately unusable, or the aware value is normalized.",
+     "Issuance is refused because the expiry is not future or because its representation is offset-aware."
+    ],
+    "observer": "The administrator receiving the issuance result and the service attempting authentication."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"Archived progress read versus Registry mutation invariant\",\"kind\":\"contradiction\",\"unit\":\"A5\",\"text\":\"“The one write an archived project admits: the staff progress read … creates the empty manual budget version” conflicts with A4’s PLAT-REG-003: “a linked mutation succeeds only after server-side typed validation reports the same UUID as active.”\",\"question\":\"Is this archived-project write an explicit exception to PLAT-REG-003, or must the active-project invariant prevent it?\",\"options\":[\"Add this read-triggered creation as an exception to PLAT-REG-003\",\"Apply PLAT-REG-003 and refuse or suppress the creation on archived projects\"],\"default_guess\":\"Treat the specifically named A5 behavior as an exception to PLAT-REG-003.\",\"witness\":{\"initial\":\"An archived Registry project has an active staff assignment and no manual budget version.\",\"events\":[\"The assigned staff member lists the project's progress.\",\"Registry validation reports the same project UUID with archived status.\"],\"outcomes\":[\"A5 permits the read and persists an empty manual budget version.\",\"PLAT-REG-003 prevents the linked write because Registry did not report the project active.\"],\"observer\":\"The staff caller and any later reader of the project's budget versions.\"}},{\"subject\":\"Transaction classification of the side-effecting progress read\",\"kind\":\"transaction ambiguity\",\"unit\":\"A5\",\"text\":\"A5 calls `project_tracking.list_project_progress` a “staff progress read” but requires it to create a budget version, while A22 says “A read path rolls back once right after its last read” and “a write path commits once on success.”\",\"question\":\"Must this operation use the write-path commit protocol when it performs implicit creation, or must it still follow the read-path rollback protocol?\",\"options\":[\"Always treat `list_project_progress` as a write path capable of committing the implicit version\",\"Use a read transaction and therefore do not persist the implicit version\",\"Choose the transaction path conditionally after discovering whether creation is needed\"],\"default_guess\":\"Treat it as a write path whenever the implicit version may be created.\",\"witness\":{\"initial\":\"An authorized staff member can read a project that has no manual budget version.\",\"events\":[\"The staff member invokes `list_project_progress`.\",\"The operation constructs the required empty manual budget version.\"],\"outcomes\":[\"The operation commits and the version remains persisted.\",\"The operation follows A22's read-path rule, rolls back, and returns with no persisted version.\"],\"observer\":\"A subsequent budget or progress reader.\"}},{\"subject\":\"Initial state and activation effect of the implicitly created manual budget\",\"kind\":\"state unspecified\",\"unit\":\"A5\",\"text\":\"A5 says the read “creates the empty manual budget version” but does not say whether its `BudgetVersion.status` is `inactive` or `active`; M22 says activation is always an explicit staff action and activation deactivates the previous active version.\",\"question\":\"What status does the implicit manual version receive, and what happens if another budget version is already active?\",\"options\":[\"Create it inactive and leave any active version unchanged\",\"Create it active when no version is active\",\"Activate it and atomically deactivate the previously active version\",\"Refuse implicit creation when another version is active\"],\"default_guess\":\"Create it inactive and leave any existing active version unchanged, because the read is not an explicit activation action.\",\"witness\":{\"initial\":\"An archived project has no manual budget version but has an active imported budget version.\",\"events\":[\"An authorized staff member lists project progress.\"],\"outcomes\":[\"An inactive empty manual version is added and the imported version remains active.\",\"The empty manual version becomes active and the imported version is deactivated or the single-active invariant is violated.\"],\"observer\":\"Staff or viewers reading the active budget and progress views.\"}},{\"subject\":\"Concurrent first progress reads\",\"kind\":\"race outcome unspecified\",\"unit\":\"A5\",\"text\":\"A5 requires the progress read to create the manual version “when the project has none,” while M22 permits at most one manual version per project, but no outcome is specified when concurrent reads both observe none.\",\"question\":\"How must concurrent first progress reads resolve the creation race?\",\"options\":[\"Both reads succeed and converge on the one created version\",\"One read succeeds and the other returns a persistence/conflict failure\",\"Serialize the check-and-create so the second read observes and reuses the first version\"],\"default_guess\":\"Serialize or retry so both reads succeed using one version.\",\"witness\":{\"initial\":\"An archived project has no manual budget version.\",\"events\":[\"Staff member A starts listing progress and observes no manual version.\",\"Staff member B concurrently starts the same read and also observes no manual version.\",\"Both attempt to create the version.\"],\"outcomes\":[\"Exactly one version is stored and both reads succeed.\",\"The uniqueness constraint rejects one read, exposing a persistence or conflict error.\"],\"observer\":\"The two staff callers.\"}},{\"subject\":\"Supplied service-credential expiry versus generated-expiry invariant\",\"kind\":\"contradiction\",\"unit\":\"A28\",\"text\":\"A28 newly classifies “a service credential's `expires_at`” as source-supplied and “kept as supplied,” but its formal invariant still says “an expiry it writes is that instant plus its TTL.”\",\"question\":\"Does a service credential retain the supplied `expires_at`, or must its persisted expiry equal the operation clock plus a configured TTL?\",\"options\":[\"Treat supplied service-credential expiry as an exception to the TTL invariant\",\"Ignore or reject the supplied value and calculate expiry from the operation instant plus TTL\",\"Require the supplied value to equal the calculated TTL expiry\"],\"default_guess\":\"Treat the supplied service-credential expiry as an explicit exception to the TTL clause.\",\"witness\":{\"initial\":\"At 10:00 UTC an administrator requests a service credential whose supplied `expires_at` is 18:00 UTC.\",\"events\":[\"The credential-issue operation reads its clock as 10:00 UTC.\",\"It validates and persists the new credential.\"],\"outcomes\":[\"The stored expiry is the supplied 18:00 UTC value.\",\"The stored expiry is 10:00 UTC plus an implementation-selected TTL, or the request is rejected because the supplied value differs.\"],\"observer\":\"The administrator and the service principal when the credential becomes unusable.\"}},{\"subject\":\"Validation of a supplied service-credential expiry\",\"kind\":\"refusal conditions unspecified\",\"unit\":\"A28\",\"text\":\"A28 says a service credential's supplied `expires_at` is “validated and kept as supplied” but defines only the later usability test `now < expires_at`; it does not state which supplied expiry values issuance accepts.\",\"question\":\"Must credential issuance reject an expiry equal to or before the operation instant, and what UTC representation is accepted before storing the required offset-naive value?\",\"options\":[\"Accept any valid offset-naive UTC datetime, including an already expired value\",\"Require an offset-naive UTC value strictly after the operation instant\",\"Accept an offset-aware UTC value and convert it to offset-naive UTC\",\"Reject offset-aware values rather than converting them\"],\"default_guess\":\"Require an offset-naive UTC value strictly after the operation instant.\",\"witness\":{\"initial\":\"An administrator is authorized to issue a credential at 10:00 UTC.\",\"events\":[\"The administrator supplies `expires_at` equal to 10:00 UTC, or supplies an offset-aware representation of that instant.\",\"The issuance operation validates the request.\"],\"outcomes\":[\"The credential is issued as supplied and is immediately unusable, or the aware value is normalized.\",\"Issuance is refused because the expiry is not future or because its representation is offset-aware.\"],\"observer\":\"The administrator receiving the issuance result and the service attempting authentication.\"}}]}",
+ "set_aside": []
+}

@@ -1,0 +1,207 @@
+{
+ "open_points": [
+  {
+   "unit": "A5",
+   "subject": "Archived progress-read authorization",
+   "kind": "contradiction",
+   "text": "A5 says, “The one write an archived project admits is the empty manual budget version that a staff progress read creates,” while A4 retains PLAT-REG-003: “a linked mutation succeeds only after server-side typed validation reports the same UUID as active.”",
+   "question": "Must an archived-project progress read be authorized as a read and commit the exceptional write, or must the active-project requirement reject that write?",
+   "options": [
+    "Authorize it as a read and create the empty manual budget version on an archived project.",
+    "Treat its side effect as a linked mutation and reject it because the project is archived."
+   ],
+   "default_guess": "Apply A5's explicit exception and permit the write.",
+   "witness": {
+    "initial": "An archived project is accessible to an active staff member and has no manual BudgetVersion.",
+    "events": [
+     "The staff member requests the project's progress list.",
+     "Registry validation reports the same project UUID with archived status."
+    ],
+    "outcomes": [
+     "A5 permits the read and commits a new empty manual BudgetVersion.",
+     "PLAT-REG-003 treats the creation as a linked mutation and refuses it because validation did not report active."
+    ],
+    "observer": "The staff caller and anyone subsequently reading the project's budget records."
+   }
+  },
+  {
+   "unit": "A5",
+   "subject": "Transaction treatment of the side-effecting progress read",
+   "kind": "rule collision",
+   "text": "The new exception calls the operation “a staff progress read” that “creates” a record, while A22 requires, “A read path rolls back once right after its last read” and “a write path commits once on success.”",
+   "question": "Is this progress-list operation a read path that rolls back, or a write path that commits, when it implicitly creates the manual version?",
+   "options": [
+    "Classify it as a write path whenever creation is needed and commit the version.",
+    "Classify it as a read path because it is a progress read, causing the transaction to roll back and the version not to persist.",
+    "Use separate read and write transactions, a behavior not specified by A22."
+   ],
+   "default_guess": "Treat the operation as a write path when it creates the version.",
+   "witness": {
+    "initial": "An accessible project has no manual BudgetVersion.",
+    "events": [
+     "A staff member reads its progress list.",
+     "The operation constructs an empty manual BudgetVersion."
+    ],
+    "outcomes": [
+     "The transaction commits and later reads find the version.",
+     "The read-path rule rolls the transaction back and later reads find no version."
+    ],
+    "observer": "A later staff request and the persistence layer."
+   }
+  },
+  {
+   "unit": "A5",
+   "subject": "Initial state of the implicitly created manual BudgetVersion",
+   "kind": "missing state decision",
+   "text": "The change requires creation of “the empty manual budget version” but does not say whether its `BudgetVersion.status` is `active` or `inactive`, nor how its activation fields are populated.",
+   "question": "What lifecycle state and activation provenance must the implicitly created manual version have?",
+   "options": [
+    "Create it active, with the reading staff member as activator and the operation time as `activated_at`.",
+    "Create it inactive with no activation provenance.",
+    "Create it active without treating the implicit creation as an activation."
+   ],
+   "default_guess": "Create it active only when the project has no active budget version; otherwise create it inactive.",
+   "witness": {
+    "initial": "A project has no manual BudgetVersion and no active budget version.",
+    "events": [
+     "An authorized staff member reads its progress list.",
+     "The exceptional rule creates the empty manual version."
+    ],
+    "outcomes": [
+     "The new version is active, so the project now has an active empty budget.",
+     "The new version is inactive, so the project still has no active budget."
+    ],
+    "observer": "Staff or viewers reading budget/progress availability and later activation logic."
+   }
+  },
+  {
+   "unit": "A5",
+   "subject": "Concurrent implicit manual-version creation",
+   "kind": "concurrency gap",
+   "text": "A5 creates a manual version when none exists, while A18 requires at most one manual BudgetVersion per project, but no rule classifies the race between concurrent progress reads.",
+   "question": "When two staff progress reads concurrently observe no manual version, must both reads succeed by converging on one version, or may one fail on the uniqueness race?",
+   "options": [
+    "Serialize or retry so both reads succeed and observe the single created version.",
+    "Allow one read to create the version and the other to fail with a persistence/conflict error.",
+    "Make one read create and let the other return a result built from its earlier no-version observation."
+   ],
+   "default_guess": "Converge on one version and let both reads succeed.",
+   "witness": {
+    "initial": "An active or archived project has no manual BudgetVersion; two authorized staff sessions exist.",
+    "events": [
+     "Staff A and Staff B request the progress list concurrently.",
+     "Both transactions initially observe that no manual version exists.",
+     "Both attempt the exceptional creation."
+    ],
+    "outcomes": [
+     "One creation wins and both requests successfully use the same version.",
+     "One request succeeds and the other exposes a uniqueness or persistence failure."
+    ],
+    "observer": "Staff A or Staff B."
+   }
+  },
+  {
+   "unit": "A11",
+   "subject": "Revocation effect on requests authenticated before commit",
+   "kind": "contradictory boundary",
+   "text": "The changed definition guarantees only that “every request authenticated after the revocation commits observes it,” while A11's retained INV-005 says a revoked object “blocks the next authorization check immediately,” and M07 likewise says assignment revocation blocks the next project-scoped authorization check.",
+   "question": "May a request authenticated before revocation commit continue through a project authorization check or mutation performed after that commit?",
+   "options": [
+    "Yes; authentication before commit fixes the request's authority for its remaining lifetime.",
+    "No; every authorization check after commit must reread revocation state and refuse it.",
+    "Only requests that completed the entire authorization guard before commit may continue."
+   ],
+   "default_guess": "Only a request that completed the whole authorization guard before the revocation commit may continue.",
+   "witness": {
+    "initial": "A service credential or staff assignment is active, and a request has authenticated but has not yet performed its project authorization check.",
+    "events": [
+     "An administrator revokes the credential or assignment and that transaction commits.",
+     "The waiting request resumes and performs project authorization."
+    ],
+    "outcomes": [
+     "Because it authenticated before commit, it proceeds using its previously produced actor context.",
+     "Because this is the next authorization check after commit, it observes revocation and is refused."
+    ],
+    "observer": "The requester and any reader of state the request would mutate."
+   }
+  },
+  {
+   "unit": "A25",
+   "subject": "Cookie requirement for viewer sign-out",
+   "kind": "missing refusal condition",
+   "text": "A25 now says only that “a viewer sign-out must come from the canonical public origin” and its invariant requires a cookie only for “viewer project read,” while State 0 R0-09 says, “Viewer browser routes accept only that cookie.”",
+   "question": "Does same-origin viewer sign-out require a present, valid viewer session cookie, or is it an idempotent cookie-clearing operation when the cookie is missing, malformed, expired, or revoked?",
+   "options": [
+    "Require a valid cookie and refuse otherwise.",
+    "Accept same-origin sign-out without a valid session and clear any browser cookie idempotently.",
+    "Require the cookie to be present but permit it to name an expired or revoked session."
+   ],
+   "default_guess": "Require a valid viewer session cookie as R0-09 states.",
+   "witness": {
+    "initial": "A browser is on the canonical public origin but has no viewer session cookie.",
+    "events": [
+     "The browser sends the viewer sign-out request with the canonical Origin header."
+    ],
+    "outcomes": [
+     "The request is refused because no valid viewer session was authenticated.",
+     "The request succeeds idempotently and returns a cookie-clearing response."
+    ],
+    "observer": "The browser caller through the HTTP status and response headers."
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "Validation of caller-supplied ServiceCredential.expires_at",
+   "kind": "undefined validation",
+   "text": "A28 newly classifies “a service credential's `expires_at`” as source-supplied and says such times “are validated and kept as supplied,” but gives no validation rules beyond expiry comparison and offset-naive UTC persistence.",
+   "question": "Which supplied expiry values are accepted: must the value already be offset-naive UTC, may an offset-aware value be converted, and must it be strictly later than the operation time or credential creation time?",
+   "options": [
+    "Accept only offset-naive UTC values strictly later than the operation instant.",
+    "Normalize an offset-aware instant to offset-naive UTC and require it to be in the future.",
+    "Accept past or equal expiries, creating an immediately unusable credential.",
+    "Store the supplied representation unchanged, even if offset-aware, despite the persisted-timestamp rule."
+   ],
+   "default_guess": "Require an offset-naive UTC expiry strictly later than the operation instant.",
+   "witness": {
+    "initial": "An administrator is authorized to issue a service credential at instant T.",
+    "events": [
+     "The administrator supplies `expires_at = T`, or supplies a future timestamp with a `+01:00` offset.",
+     "The issuance operation validates the request."
+    ],
+    "outcomes": [
+     "The operation rejects the expiry as non-future or not already in the persisted representation.",
+     "The operation accepts it, either creating an immediately expired credential or converting/preserving the offset-aware value."
+    ],
+    "observer": "The administrator receiving the issuance result and later service authentication attempts."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "Audit actor for syntactically invalid staff login",
+   "kind": "exception boundary ambiguity",
+   "text": "M36 permits a null `actor_id` for “a `staff.login_failed` whose address matched no account,” while A16 refuses malformed or whitespace-containing email before normal lookup and A13 identifies `staff.login_failed` as a rejected audit writer.",
+   "question": "Does an email rejected during normalization or syntax validation count as an address that matched no account, and must it produce `staff.login_failed` with `actor_id = null`?",
+   "options": [
+    "Treat every syntactically invalid login identifier as unmatched and write `staff.login_failed` with no actor.",
+    "Refuse invalid identifiers before a login-failure action occurs and write no audit record.",
+    "Write `staff.login_failed`, but the new null-actor exception does not permit it because no valid address was matched."
+   ],
+   "default_guess": "Treat it as an unmatched login attempt and write `staff.login_failed` with `actor_id = null`.",
+   "witness": {
+    "initial": "No account has the supplied text as an email.",
+    "events": [
+     "A caller submits a login email containing surrounding whitespace or invalid syntax.",
+     "Email normalization rejects it before an account lookup can succeed."
+    ],
+    "outcomes": [
+     "A `staff.login_failed` audit record is appended with `actor_kind=staff` and `actor_id=null`.",
+     "The request is rejected before a login-failure audit action and no record is written."
+    ],
+    "observer": "An administrator or auditor inspecting the audit log."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A5\",\"subject\":\"Archived progress-read authorization\",\"kind\":\"contradiction\",\"text\":\"A5 says, “The one write an archived project admits is the empty manual budget version that a staff progress read creates,” while A4 retains PLAT-REG-003: “a linked mutation succeeds only after server-side typed validation reports the same UUID as active.”\",\"question\":\"Must an archived-project progress read be authorized as a read and commit the exceptional write, or must the active-project requirement reject that write?\",\"options\":[\"Authorize it as a read and create the empty manual budget version on an archived project.\",\"Treat its side effect as a linked mutation and reject it because the project is archived.\"],\"default_guess\":\"Apply A5's explicit exception and permit the write.\",\"witness\":{\"initial\":\"An archived project is accessible to an active staff member and has no manual BudgetVersion.\",\"events\":[\"The staff member requests the project's progress list.\",\"Registry validation reports the same project UUID with archived status.\"],\"outcomes\":[\"A5 permits the read and commits a new empty manual BudgetVersion.\",\"PLAT-REG-003 treats the creation as a linked mutation and refuses it because validation did not report active.\"],\"observer\":\"The staff caller and anyone subsequently reading the project's budget records.\"}},{\"unit\":\"A5\",\"subject\":\"Transaction treatment of the side-effecting progress read\",\"kind\":\"rule collision\",\"text\":\"The new exception calls the operation “a staff progress read” that “creates” a record, while A22 requires, “A read path rolls back once right after its last read” and “a write path commits once on success.”\",\"question\":\"Is this progress-list operation a read path that rolls back, or a write path that commits, when it implicitly creates the manual version?\",\"options\":[\"Classify it as a write path whenever creation is needed and commit the version.\",\"Classify it as a read path because it is a progress read, causing the transaction to roll back and the version not to persist.\",\"Use separate read and write transactions, a behavior not specified by A22.\"],\"default_guess\":\"Treat the operation as a write path when it creates the version.\",\"witness\":{\"initial\":\"An accessible project has no manual BudgetVersion.\",\"events\":[\"A staff member reads its progress list.\",\"The operation constructs an empty manual BudgetVersion.\"],\"outcomes\":[\"The transaction commits and later reads find the version.\",\"The read-path rule rolls the transaction back and later reads find no version.\"],\"observer\":\"A later staff request and the persistence layer.\"}},{\"unit\":\"A5\",\"subject\":\"Initial state of the implicitly created manual BudgetVersion\",\"kind\":\"missing state decision\",\"text\":\"The change requires creation of “the empty manual budget version” but does not say whether its `BudgetVersion.status` is `active` or `inactive`, nor how its activation fields are populated.\",\"question\":\"What lifecycle state and activation provenance must the implicitly created manual version have?\",\"options\":[\"Create it active, with the reading staff member as activator and the operation time as `activated_at`.\",\"Create it inactive with no activation provenance.\",\"Create it active without treating the implicit creation as an activation.\"],\"default_guess\":\"Create it active only when the project has no active budget version; otherwise create it inactive.\",\"witness\":{\"initial\":\"A project has no manual BudgetVersion and no active budget version.\",\"events\":[\"An authorized staff member reads its progress list.\",\"The exceptional rule creates the empty manual version.\"],\"outcomes\":[\"The new version is active, so the project now has an active empty budget.\",\"The new version is inactive, so the project still has no active budget.\"],\"observer\":\"Staff or viewers reading budget/progress availability and later activation logic.\"}},{\"unit\":\"A5\",\"subject\":\"Concurrent implicit manual-version creation\",\"kind\":\"concurrency gap\",\"text\":\"A5 creates a manual version when none exists, while A18 requires at most one manual BudgetVersion per project, but no rule classifies the race between concurrent progress reads.\",\"question\":\"When two staff progress reads concurrently observe no manual version, must both reads succeed by converging on one version, or may one fail on the uniqueness race?\",\"options\":[\"Serialize or retry so both reads succeed and observe the single created version.\",\"Allow one read to create the version and the other to fail with a persistence/conflict error.\",\"Make one read create and let the other return a result built from its earlier no-version observation.\"],\"default_guess\":\"Converge on one version and let both reads succeed.\",\"witness\":{\"initial\":\"An active or archived project has no manual BudgetVersion; two authorized staff sessions exist.\",\"events\":[\"Staff A and Staff B request the progress list concurrently.\",\"Both transactions initially observe that no manual version exists.\",\"Both attempt the exceptional creation.\"],\"outcomes\":[\"One creation wins and both requests successfully use the same version.\",\"One request succeeds and the other exposes a uniqueness or persistence failure.\"],\"observer\":\"Staff A or Staff B.\"}},{\"unit\":\"A11\",\"subject\":\"Revocation effect on requests authenticated before commit\",\"kind\":\"contradictory boundary\",\"text\":\"The changed definition guarantees only that “every request authenticated after the revocation commits observes it,” while A11's retained INV-005 says a revoked object “blocks the next authorization check immediately,” and M07 likewise says assignment revocation blocks the next project-scoped authorization check.\",\"question\":\"May a request authenticated before revocation commit continue through a project authorization check or mutation performed after that commit?\",\"options\":[\"Yes; authentication before commit fixes the request's authority for its remaining lifetime.\",\"No; every authorization check after commit must reread revocation state and refuse it.\",\"Only requests that completed the entire authorization guard before commit may continue.\"],\"default_guess\":\"Only a request that completed the whole authorization guard before the revocation commit may continue.\",\"witness\":{\"initial\":\"A service credential or staff assignment is active, and a request has authenticated but has not yet performed its project authorization check.\",\"events\":[\"An administrator revokes the credential or assignment and that transaction commits.\",\"The waiting request resumes and performs project authorization.\"],\"outcomes\":[\"Because it authenticated before commit, it proceeds using its previously produced actor context.\",\"Because this is the next authorization check after commit, it observes revocation and is refused.\"],\"observer\":\"The requester and any reader of state the request would mutate.\"}},{\"unit\":\"A25\",\"subject\":\"Cookie requirement for viewer sign-out\",\"kind\":\"missing refusal condition\",\"text\":\"A25 now says only that “a viewer sign-out must come from the canonical public origin” and its invariant requires a cookie only for “viewer project read,” while State 0 R0-09 says, “Viewer browser routes accept only that cookie.”\",\"question\":\"Does same-origin viewer sign-out require a present, valid viewer session cookie, or is it an idempotent cookie-clearing operation when the cookie is missing, malformed, expired, or revoked?\",\"options\":[\"Require a valid cookie and refuse otherwise.\",\"Accept same-origin sign-out without a valid session and clear any browser cookie idempotently.\",\"Require the cookie to be present but permit it to name an expired or revoked session.\"],\"default_guess\":\"Require a valid viewer session cookie as R0-09 states.\",\"witness\":{\"initial\":\"A browser is on the canonical public origin but has no viewer session cookie.\",\"events\":[\"The browser sends the viewer sign-out request with the canonical Origin header.\"],\"outcomes\":[\"The request is refused because no valid viewer session was authenticated.\",\"The request succeeds idempotently and returns a cookie-clearing response.\"],\"observer\":\"The browser caller through the HTTP status and response headers.\"}},{\"unit\":\"A28\",\"subject\":\"Validation of caller-supplied ServiceCredential.expires_at\",\"kind\":\"undefined validation\",\"text\":\"A28 newly classifies “a service credential's `expires_at`” as source-supplied and says such times “are validated and kept as supplied,” but gives no validation rules beyond expiry comparison and offset-naive UTC persistence.\",\"question\":\"Which supplied expiry values are accepted: must the value already be offset-naive UTC, may an offset-aware value be converted, and must it be strictly later than the operation time or credential creation time?\",\"options\":[\"Accept only offset-naive UTC values strictly later than the operation instant.\",\"Normalize an offset-aware instant to offset-naive UTC and require it to be in the future.\",\"Accept past or equal expiries, creating an immediately unusable credential.\",\"Store the supplied representation unchanged, even if offset-aware, despite the persisted-timestamp rule.\"],\"default_guess\":\"Require an offset-naive UTC expiry strictly later than the operation instant.\",\"witness\":{\"initial\":\"An administrator is authorized to issue a service credential at instant T.\",\"events\":[\"The administrator supplies `expires_at = T`, or supplies a future timestamp with a `+01:00` offset.\",\"The issuance operation validates the request.\"],\"outcomes\":[\"The operation rejects the expiry as non-future or not already in the persisted representation.\",\"The operation accepts it, either creating an immediately expired credential or converting/preserving the offset-aware value.\"],\"observer\":\"The administrator receiving the issuance result and later service authentication attempts.\"}},{\"unit\":\"context\",\"subject\":\"Audit actor for syntactically invalid staff login\",\"kind\":\"exception boundary ambiguity\",\"text\":\"M36 permits a null `actor_id` for “a `staff.login_failed` whose address matched no account,” while A16 refuses malformed or whitespace-containing email before normal lookup and A13 identifies `staff.login_failed` as a rejected audit writer.\",\"question\":\"Does an email rejected during normalization or syntax validation count as an address that matched no account, and must it produce `staff.login_failed` with `actor_id = null`?\",\"options\":[\"Treat every syntactically invalid login identifier as unmatched and write `staff.login_failed` with no actor.\",\"Refuse invalid identifiers before a login-failure action occurs and write no audit record.\",\"Write `staff.login_failed`, but the new null-actor exception does not permit it because no valid address was matched.\"],\"default_guess\":\"Treat it as an unmatched login attempt and write `staff.login_failed` with `actor_id = null`.\",\"witness\":{\"initial\":\"No account has the supplied text as an email.\",\"events\":[\"A caller submits a login email containing surrounding whitespace or invalid syntax.\",\"Email normalization rejects it before an account lookup can succeed.\"],\"outcomes\":[\"A `staff.login_failed` audit record is appended with `actor_kind=staff` and `actor_id=null`.\",\"The request is rejected before a login-failure audit action and no record is written.\"],\"observer\":\"An administrator or auditor inspecting the audit log.\"}}]}",
+ "set_aside": []
+}

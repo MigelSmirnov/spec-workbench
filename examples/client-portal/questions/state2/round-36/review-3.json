@@ -1,0 +1,58 @@
+{
+ "open_points": [
+  {
+   "unit": "A5",
+   "subject": "Archived-project progress read versus active-only linked mutations",
+   "kind": "contradiction",
+   "text": "A5 says, \"The one write an archived project admits: the staff progress read `project_tracking.list_project_progress` creates the empty manual budget version when the project has none,\" while A4's PLAT-REG-003 says, \"a linked mutation succeeds only after server-side typed validation reports the same UUID as active,\" and its required test says a violating input \"is refused and changes nothing.\"",
+   "question": "Is the manual-budget creation performed by an archived-project progress read an explicit exception to PLAT-REG-003, or must the read avoid or refuse that write because Registry did not report the project active?",
+   "options": [
+    "Treat this creation as a named exception to the active-only linked-mutation invariant",
+    "Allow the progress read but do not persist a manual budget version",
+    "Refuse the archived-project progress read because its required side effect is not allowed"
+   ],
+   "default_guess": "Treat the creation as a narrow explicit exception to PLAT-REG-003 while retaining all normal staff authorization checks.",
+   "witness": {
+    "initial": "Registry reports project P as archived; operator S has an active session, an active assignment to P, and progress.read capability; P has no manual BudgetVersion.",
+    "events": [
+     "S calls `project_tracking.list_project_progress` for P.",
+     "The guard receives a successful validation answer identifying P as archived."
+    ],
+    "outcomes": [
+     "Under A5, the read succeeds and atomically persists an empty manual BudgetVersion for P.",
+     "Under A4 PLAT-REG-003, persistence is forbidden because P was not reported active; the implementation either returns without creating the version or refuses the operation with no change."
+    ],
+    "observer": "S immediately, and any later staff or viewer budget/progress reader who can observe whether the manual version exists."
+   }
+  },
+  {
+   "unit": "A31",
+   "subject": "Concurrency review for progress-read manual-budget creation",
+   "kind": "unresolved concurrency",
+   "text": "A31 says, \"concurrency: APPLICABLE; references: A8, A18, A19, A22, A29; affected: replay identities, single active budget version, bootstrap\" and asserts, \"Every category resolves to an accepted decision or an open question.\" The changed A5 now lets `list_project_progress` perform a create-if-absent write, but none of those decisions specifies the observable result when concurrent reads both observe no manual version.",
+   "question": "When concurrent progress reads race to create the sole manual BudgetVersion, must every caller succeed by converging on the one version, or may a losing caller receive a uniqueness/persistence failure?",
+   "options": [
+    "Serialize or retry so both reads succeed and return progress based on the same single version, with one creation audit",
+    "Let one read succeed and let the competing read fail with the persistence/uniqueness error",
+    "Define a typed domain refusal for the losing read"
+   ],
+   "default_guess": "Enforce uniqueness and retry or re-read after the collision so both reads succeed, exactly one version is created, and exactly one `budget.manual_version_create` audit is written.",
+   "witness": {
+    "initial": "Active or archived project P has no manual BudgetVersion; authorized staff members S1 and S2 can read its progress.",
+    "events": [
+     "S1 starts `list_project_progress` and observes no manual version.",
+     "Before S1 commits, S2 starts the same operation and also observes no manual version.",
+     "Both attempt the A5-required creation."
+    ],
+    "outcomes": [
+     "The operations are serialized or the loser retries; both callers receive successful progress results referring to one manual version.",
+     "One creation commits and the other caller receives a persistence or uniqueness failure, although the final database still satisfies the at-most-one-manual-version invariant."
+    ],
+    "observer": "S1 or S2, and API clients deciding whether the read is safely retryable."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A5\",\"subject\":\"Archived-project progress read versus active-only linked mutations\",\"kind\":\"contradiction\",\"text\":\"A5 says, \\\"The one write an archived project admits: the staff progress read `project_tracking.list_project_progress` creates the empty manual budget version when the project has none,\\\" while A4's PLAT-REG-003 says, \\\"a linked mutation succeeds only after server-side typed validation reports the same UUID as active,\\\" and its required test says a violating input \\\"is refused and changes nothing.\\\"\",\"question\":\"Is the manual-budget creation performed by an archived-project progress read an explicit exception to PLAT-REG-003, or must the read avoid or refuse that write because Registry did not report the project active?\",\"options\":[\"Treat this creation as a named exception to the active-only linked-mutation invariant\",\"Allow the progress read but do not persist a manual budget version\",\"Refuse the archived-project progress read because its required side effect is not allowed\"],\"default_guess\":\"Treat the creation as a narrow explicit exception to PLAT-REG-003 while retaining all normal staff authorization checks.\",\"witness\":{\"initial\":\"Registry reports project P as archived; operator S has an active session, an active assignment to P, and progress.read capability; P has no manual BudgetVersion.\",\"events\":[\"S calls `project_tracking.list_project_progress` for P.\",\"The guard receives a successful validation answer identifying P as archived.\"],\"outcomes\":[\"Under A5, the read succeeds and atomically persists an empty manual BudgetVersion for P.\",\"Under A4 PLAT-REG-003, persistence is forbidden because P was not reported active; the implementation either returns without creating the version or refuses the operation with no change.\"],\"observer\":\"S immediately, and any later staff or viewer budget/progress reader who can observe whether the manual version exists.\"}},{\"unit\":\"A31\",\"subject\":\"Concurrency review for progress-read manual-budget creation\",\"kind\":\"unresolved concurrency\",\"text\":\"A31 says, \\\"concurrency: APPLICABLE; references: A8, A18, A19, A22, A29; affected: replay identities, single active budget version, bootstrap\\\" and asserts, \\\"Every category resolves to an accepted decision or an open question.\\\" The changed A5 now lets `list_project_progress` perform a create-if-absent write, but none of those decisions specifies the observable result when concurrent reads both observe no manual version.\",\"question\":\"When concurrent progress reads race to create the sole manual BudgetVersion, must every caller succeed by converging on the one version, or may a losing caller receive a uniqueness/persistence failure?\",\"options\":[\"Serialize or retry so both reads succeed and return progress based on the same single version, with one creation audit\",\"Let one read succeed and let the competing read fail with the persistence/uniqueness error\",\"Define a typed domain refusal for the losing read\"],\"default_guess\":\"Enforce uniqueness and retry or re-read after the collision so both reads succeed, exactly one version is created, and exactly one `budget.manual_version_create` audit is written.\",\"witness\":{\"initial\":\"Active or archived project P has no manual BudgetVersion; authorized staff members S1 and S2 can read its progress.\",\"events\":[\"S1 starts `list_project_progress` and observes no manual version.\",\"Before S1 commits, S2 starts the same operation and also observes no manual version.\",\"Both attempt the A5-required creation.\"],\"outcomes\":[\"The operations are serialized or the loser retries; both callers receive successful progress results referring to one manual version.\",\"One creation commits and the other caller receives a persistence or uniqueness failure, although the final database still satisfies the at-most-one-manual-version invariant.\"],\"observer\":\"S1 or S2, and API clients deciding whether the read is safely retryable.\"}}]}",
+ "set_aside": []
+}

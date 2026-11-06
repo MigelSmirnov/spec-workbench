@@ -1,0 +1,184 @@
+{
+ "open_points": [
+  {
+   "unit": "A11",
+   "subject": "Revocation visibility for in-flight requests",
+   "kind": "coverage gap and internal contradiction",
+   "text": "“Immediate” means every request authenticated after the revocation commits observes it” does not govern a request authenticated before the commit, while INV-005 says revocation “blocks the next authorization check immediately.”",
+   "question": "What must happen when a request authenticates before revocation commits but performs a later authorization check or protected write after the commit?",
+   "options": [
+    "The request may continue using the authentication and authorization state it already obtained.",
+    "Every authorization check after the commit must observe revocation and refuse the request.",
+    "A request authenticated before the commit may finish only if its complete project authorization also finished before the commit."
+   ],
+   "default_guess": "Recheck revocable state at each authorization guard reached after the commit and refuse if revoked.",
+   "witness": {
+    "initial": "A viewer has an active session and an active grant for project P.",
+    "events": [
+     "The viewer starts a project request and its session is authenticated.",
+     "An administrator revokes the viewer's grant for P and the revocation commits.",
+     "The viewer request reaches its project-scope authorization check or protected read after that commit."
+    ],
+    "outcomes": [
+     "The request succeeds because it was authenticated before the revocation committed.",
+     "The request is refused because the next authorization check after the commit observes the revoked grant."
+    ],
+    "observer": "The viewer, who either receives the project data or a refusal."
+   }
+  },
+  {
+   "unit": "A31",
+   "subject": "Security-review closure for revocation races",
+   "kind": "unsupported closure claim",
+   "text": "“Every category resolves to an accepted decision or an open question,” while authentication_credential_abuse and authorization cite A11, whose changed rule leaves requests authenticated before a revocation commit undecided.",
+   "question": "Is the in-flight revocation case intentionally accepted as permitted behavior, or must it remain unresolved until A11 defines it?",
+   "options": [
+    "Declare pre-commit-authenticated requests allowed to finish.",
+    "Require post-commit authorization checks to observe revocation.",
+    "Mark the category unresolved pending an explicit in-flight-request rule."
+   ],
+   "default_guess": "Mark the category unresolved until A11 explicitly defines the in-flight case.",
+   "witness": {
+    "initial": "The security review is used as the gate for starting State 3, and a viewer request has authenticated before a concurrent grant revocation.",
+    "events": [
+     "The grant revocation commits.",
+     "The request performs protected work afterward.",
+     "A reviewer applies A31 to decide whether authorization behavior is fully resolved."
+    ],
+    "outcomes": [
+     "A31 passes because A11 is cited, allowing State 3 to proceed with either implementation.",
+     "A31 remains unresolved because A11 does not determine the in-flight request's outcome."
+    ],
+    "observer": "Later design and implementation agents using A31 as the State 3 readiness gate."
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "ServiceCredential expires_at validation",
+   "kind": "missing refusal conditions",
+   "text": "“a service credential's expires_at” is source-supplied and is “validated and kept as supplied,” but no validation rule says whether an expiry at or before the operation's clock instant, or an excessively distant expiry, is accepted.",
+   "question": "Which temporal values of a caller-supplied ServiceCredential.expires_at must credential issuance refuse?",
+   "options": [
+    "Accept any representable instant, including an already expired credential.",
+    "Require expires_at to be strictly later than the operation's clock instant.",
+    "Require a future instant and enforce an additional maximum lifetime."
+   ],
+   "default_guess": "Require expires_at, when present, to be strictly later than the operation's single clock instant, with no unstated maximum lifetime.",
+   "witness": {
+    "initial": "An administrator is authorized to issue a service credential; the operation's clock instant is T.",
+    "events": [
+     "The administrator requests a credential with expires_at equal to T."
+    ],
+    "outcomes": [
+     "Issuance succeeds and returns a credential that is unusable immediately because validity requires now < expires_at.",
+     "Issuance is refused because a newly issued expiring credential must have a future expiry."
+    ],
+    "observer": "The administrator and any service attempting to use the returned credential."
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "Representation of source-supplied ServiceCredential expires_at",
+   "kind": "normalization ambiguity",
+   "text": "Persisted timestamps must be “UTC, stored as offset-naive datetimes,” while source-supplied times are “kept as supplied,” and an offset-aware persisted timestamp is forbidden.",
+   "question": "How is a source-supplied offset-aware expires_at handled before persistence?",
+   "options": [
+    "Refuse every offset-aware value and require an offset-naive UTC input.",
+    "Convert the represented instant to UTC and remove the offset before persistence.",
+    "Remove the offset without converting the wall-clock value."
+   ],
+   "default_guess": "Convert the instant to UTC and persist the corresponding offset-naive UTC datetime.",
+   "witness": {
+    "initial": "An administrator requests a service credential in Madrid winter time.",
+    "events": [
+     "The request supplies expires_at as 2026-12-01T12:00:00+01:00.",
+     "The issuance operation validates and persists the credential."
+    ],
+    "outcomes": [
+     "The stored UTC-naive expiry is 2026-12-01T11:00:00, preserving the instant.",
+     "The input is rejected because keeping an offset-aware supplied value would violate the persisted-timestamp rule."
+    ],
+    "observer": "The service principal, whose credential expires at a different observable time or is not issued."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "Archived-project progress read versus Registry mutation policy",
+   "kind": "contradiction",
+   "text": "R0-24 says a staff progress-list read “creates that empty manual budget version, also for an archived project,” while A5 says archived portal mutations are rejected and A4 applies the Registry lifecycle policy to every project-record operation.",
+   "question": "Does the named progress-read exception override A4/A5's archived-mutation refusal, and at what point in the guard is that exception applied?",
+   "options": [
+    "Allow the read and its empty-budget write as an explicit exception to A4/A5.",
+    "Allow the read but suppress the budget creation on archived projects.",
+    "Refuse the operation because satisfying the read would mutate an archived project."
+   ],
+   "default_guess": "Treat this one write as an explicit exception to A4/A5 and allow it only for the specified staff progress-list read.",
+   "witness": {
+    "initial": "Project P is archived, the requesting operator retains an active assignment, and P has no manual BudgetVersion.",
+    "events": [
+     "The operator requests P's progress list.",
+     "The project guard obtains archived status from Registry."
+    ],
+    "outcomes": [
+     "The read succeeds and commits a new empty manual BudgetVersion under the R0-24 exception.",
+     "The hidden write is refused or omitted because A5 permits archived reads but rejects every archived mutation."
+    ],
+    "observer": "Staff later reading the budget or inspecting whether a manual version exists."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "State of the manual BudgetVersion created by a progress read",
+   "kind": "missing created-state rule",
+   "text": "The change says the read “creates that empty manual budget version” but does not state whether the new BudgetVersion is active or inactive, or how its activation fields are populated.",
+   "question": "What status and activation metadata does the implicitly created empty manual BudgetVersion receive?",
+   "options": [
+    "Create it active, with activated_at and activated_by set by the reading staff actor.",
+    "Create it inactive with no activation metadata.",
+    "Create it inactive and perform a separate explicit activation in the same operation."
+   ],
+   "default_guess": "Create it active using the reading staff actor and the operation timestamp, because otherwise the progress read has created no active budget to read from.",
+   "witness": {
+    "initial": "An archived project has no manual or active budget version.",
+    "events": [
+     "An assigned staff member reads the project's progress list, causing the empty manual version to be created.",
+     "The same or another authorized staff member reads the project's budget overview."
+    ],
+    "outcomes": [
+     "The new version is active, so the budget is available as an empty manual budget with confirmed zero totals.",
+     "The new version is inactive, so there is still no active budget and the budget remains not_configured."
+    ],
+    "observer": "Staff or viewers reading the later budget overview."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "Concurrent progress reads that implicitly create the manual budget",
+   "kind": "concurrency outcome gap",
+   "text": "A staff progress-list read creates the manual version when none exists, while INV-024 permits at most one manual BudgetVersion per project; no rule defines the losing request when two reads race.",
+   "question": "When concurrent progress reads both observe no manual version, must both reads succeed by converging on one version, or may one fail after the uniqueness race?",
+   "options": [
+    "Create once and have both reads succeed using the same version.",
+    "Let one read succeed and return a persistence or conflict failure from the other.",
+    "Serialize the reads so the second observes the committed version before deciding whether to create."
+   ],
+   "default_guess": "Serialize or retry so exactly one version and one creation audit are committed while both read requests succeed.",
+   "witness": {
+    "initial": "Project P has no manual BudgetVersion and two authorized staff sessions can read its progress.",
+    "events": [
+     "Staff A and Staff B request P's progress list concurrently.",
+     "Both requests initially observe that no manual version exists.",
+     "Both attempt the implicit creation."
+    ],
+    "outcomes": [
+     "One version is created and both progress reads succeed using it.",
+     "One read succeeds while the other fails on the one-manual-version constraint."
+    ],
+    "observer": "Staff A or B, who sees either a normal progress response or a concurrency-related failure."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A11\",\"subject\":\"Revocation visibility for in-flight requests\",\"kind\":\"coverage gap and internal contradiction\",\"text\":\"“Immediate” means every request authenticated after the revocation commits observes it” does not govern a request authenticated before the commit, while INV-005 says revocation “blocks the next authorization check immediately.”\",\"question\":\"What must happen when a request authenticates before revocation commits but performs a later authorization check or protected write after the commit?\",\"options\":[\"The request may continue using the authentication and authorization state it already obtained.\",\"Every authorization check after the commit must observe revocation and refuse the request.\",\"A request authenticated before the commit may finish only if its complete project authorization also finished before the commit.\"],\"default_guess\":\"Recheck revocable state at each authorization guard reached after the commit and refuse if revoked.\",\"witness\":{\"initial\":\"A viewer has an active session and an active grant for project P.\",\"events\":[\"The viewer starts a project request and its session is authenticated.\",\"An administrator revokes the viewer's grant for P and the revocation commits.\",\"The viewer request reaches its project-scope authorization check or protected read after that commit.\"],\"outcomes\":[\"The request succeeds because it was authenticated before the revocation committed.\",\"The request is refused because the next authorization check after the commit observes the revoked grant.\"],\"observer\":\"The viewer, who either receives the project data or a refusal.\"}},{\"unit\":\"A31\",\"subject\":\"Security-review closure for revocation races\",\"kind\":\"unsupported closure claim\",\"text\":\"“Every category resolves to an accepted decision or an open question,” while authentication_credential_abuse and authorization cite A11, whose changed rule leaves requests authenticated before a revocation commit undecided.\",\"question\":\"Is the in-flight revocation case intentionally accepted as permitted behavior, or must it remain unresolved until A11 defines it?\",\"options\":[\"Declare pre-commit-authenticated requests allowed to finish.\",\"Require post-commit authorization checks to observe revocation.\",\"Mark the category unresolved pending an explicit in-flight-request rule.\"],\"default_guess\":\"Mark the category unresolved until A11 explicitly defines the in-flight case.\",\"witness\":{\"initial\":\"The security review is used as the gate for starting State 3, and a viewer request has authenticated before a concurrent grant revocation.\",\"events\":[\"The grant revocation commits.\",\"The request performs protected work afterward.\",\"A reviewer applies A31 to decide whether authorization behavior is fully resolved.\"],\"outcomes\":[\"A31 passes because A11 is cited, allowing State 3 to proceed with either implementation.\",\"A31 remains unresolved because A11 does not determine the in-flight request's outcome.\"],\"observer\":\"Later design and implementation agents using A31 as the State 3 readiness gate.\"}},{\"unit\":\"A28\",\"subject\":\"ServiceCredential expires_at validation\",\"kind\":\"missing refusal conditions\",\"text\":\"“a service credential's expires_at” is source-supplied and is “validated and kept as supplied,” but no validation rule says whether an expiry at or before the operation's clock instant, or an excessively distant expiry, is accepted.\",\"question\":\"Which temporal values of a caller-supplied ServiceCredential.expires_at must credential issuance refuse?\",\"options\":[\"Accept any representable instant, including an already expired credential.\",\"Require expires_at to be strictly later than the operation's clock instant.\",\"Require a future instant and enforce an additional maximum lifetime.\"],\"default_guess\":\"Require expires_at, when present, to be strictly later than the operation's single clock instant, with no unstated maximum lifetime.\",\"witness\":{\"initial\":\"An administrator is authorized to issue a service credential; the operation's clock instant is T.\",\"events\":[\"The administrator requests a credential with expires_at equal to T.\"],\"outcomes\":[\"Issuance succeeds and returns a credential that is unusable immediately because validity requires now < expires_at.\",\"Issuance is refused because a newly issued expiring credential must have a future expiry.\"],\"observer\":\"The administrator and any service attempting to use the returned credential.\"}},{\"unit\":\"A28\",\"subject\":\"Representation of source-supplied ServiceCredential expires_at\",\"kind\":\"normalization ambiguity\",\"text\":\"Persisted timestamps must be “UTC, stored as offset-naive datetimes,” while source-supplied times are “kept as supplied,” and an offset-aware persisted timestamp is forbidden.\",\"question\":\"How is a source-supplied offset-aware expires_at handled before persistence?\",\"options\":[\"Refuse every offset-aware value and require an offset-naive UTC input.\",\"Convert the represented instant to UTC and remove the offset before persistence.\",\"Remove the offset without converting the wall-clock value.\"],\"default_guess\":\"Convert the instant to UTC and persist the corresponding offset-naive UTC datetime.\",\"witness\":{\"initial\":\"An administrator requests a service credential in Madrid winter time.\",\"events\":[\"The request supplies expires_at as 2026-12-01T12:00:00+01:00.\",\"The issuance operation validates and persists the credential.\"],\"outcomes\":[\"The stored UTC-naive expiry is 2026-12-01T11:00:00, preserving the instant.\",\"The input is rejected because keeping an offset-aware supplied value would violate the persisted-timestamp rule.\"],\"observer\":\"The service principal, whose credential expires at a different observable time or is not issued.\"}},{\"unit\":\"context\",\"subject\":\"Archived-project progress read versus Registry mutation policy\",\"kind\":\"contradiction\",\"text\":\"R0-24 says a staff progress-list read “creates that empty manual budget version, also for an archived project,” while A5 says archived portal mutations are rejected and A4 applies the Registry lifecycle policy to every project-record operation.\",\"question\":\"Does the named progress-read exception override A4/A5's archived-mutation refusal, and at what point in the guard is that exception applied?\",\"options\":[\"Allow the read and its empty-budget write as an explicit exception to A4/A5.\",\"Allow the read but suppress the budget creation on archived projects.\",\"Refuse the operation because satisfying the read would mutate an archived project.\"],\"default_guess\":\"Treat this one write as an explicit exception to A4/A5 and allow it only for the specified staff progress-list read.\",\"witness\":{\"initial\":\"Project P is archived, the requesting operator retains an active assignment, and P has no manual BudgetVersion.\",\"events\":[\"The operator requests P's progress list.\",\"The project guard obtains archived status from Registry.\"],\"outcomes\":[\"The read succeeds and commits a new empty manual BudgetVersion under the R0-24 exception.\",\"The hidden write is refused or omitted because A5 permits archived reads but rejects every archived mutation.\"],\"observer\":\"Staff later reading the budget or inspecting whether a manual version exists.\"}},{\"unit\":\"context\",\"subject\":\"State of the manual BudgetVersion created by a progress read\",\"kind\":\"missing created-state rule\",\"text\":\"The change says the read “creates that empty manual budget version” but does not state whether the new BudgetVersion is active or inactive, or how its activation fields are populated.\",\"question\":\"What status and activation metadata does the implicitly created empty manual BudgetVersion receive?\",\"options\":[\"Create it active, with activated_at and activated_by set by the reading staff actor.\",\"Create it inactive with no activation metadata.\",\"Create it inactive and perform a separate explicit activation in the same operation.\"],\"default_guess\":\"Create it active using the reading staff actor and the operation timestamp, because otherwise the progress read has created no active budget to read from.\",\"witness\":{\"initial\":\"An archived project has no manual or active budget version.\",\"events\":[\"An assigned staff member reads the project's progress list, causing the empty manual version to be created.\",\"The same or another authorized staff member reads the project's budget overview.\"],\"outcomes\":[\"The new version is active, so the budget is available as an empty manual budget with confirmed zero totals.\",\"The new version is inactive, so there is still no active budget and the budget remains not_configured.\"],\"observer\":\"Staff or viewers reading the later budget overview.\"}},{\"unit\":\"context\",\"subject\":\"Concurrent progress reads that implicitly create the manual budget\",\"kind\":\"concurrency outcome gap\",\"text\":\"A staff progress-list read creates the manual version when none exists, while INV-024 permits at most one manual BudgetVersion per project; no rule defines the losing request when two reads race.\",\"question\":\"When concurrent progress reads both observe no manual version, must both reads succeed by converging on one version, or may one fail after the uniqueness race?\",\"options\":[\"Create once and have both reads succeed using the same version.\",\"Let one read succeed and return a persistence or conflict failure from the other.\",\"Serialize the reads so the second observes the committed version before deciding whether to create.\"],\"default_guess\":\"Serialize or retry so exactly one version and one creation audit are committed while both read requests succeed.\",\"witness\":{\"initial\":\"Project P has no manual BudgetVersion and two authorized staff sessions can read its progress.\",\"events\":[\"Staff A and Staff B request P's progress list concurrently.\",\"Both requests initially observe that no manual version exists.\",\"Both attempt the implicit creation.\"],\"outcomes\":[\"One version is created and both progress reads succeed using it.\",\"One read succeeds while the other fails on the one-manual-version constraint.\"],\"observer\":\"Staff A or B, who sees either a normal progress response or a concurrency-related failure.\"}}]}",
+ "set_aside": []
+}

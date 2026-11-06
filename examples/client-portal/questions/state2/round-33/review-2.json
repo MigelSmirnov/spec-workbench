@@ -1,0 +1,154 @@
+{
+ "open_points": [
+  {
+   "subject": "A11 revocation boundary for in-flight requests",
+   "kind": "contradictory timing",
+   "text": "“Immediate” means every request authenticated after the revocation commits observes it” conflicts with INV-005 and INV-017, which say revocation blocks “the next authorization check immediately.”",
+   "question": "Must a request authenticated before the revocation commit but reaching its project-scope or capability check afterward observe the revocation?",
+   "options": [
+    "It must observe the revocation at the next authorization check.",
+    "It may continue using the authentication and access state observed before the commit."
+   ],
+   "default_guess": "Recheck current revocation state at authorization and refuse the request.",
+   "witness": {
+    "initial": "An operator has an active session and active assignment to project P.",
+    "events": [
+     "The operator's request is authenticated and then pauses before its project-scope check.",
+     "An administrator revokes the assignment and the revocation commits.",
+     "The operator's request resumes and checks project scope."
+    ],
+    "outcomes": [
+     "The request is refused because the next authorization check observes the revoked assignment.",
+     "The request succeeds because it was authenticated before the revocation committed."
+    ],
+    "observer": "The operator and anyone observing whether the project operation commits."
+   },
+   "unit": "A11"
+  },
+  {
+   "subject": "A28 audit timestamp exception versus required tests",
+   "kind": "internal contradiction",
+   "text": "The normative rule and formal invariant exempt an audit record’s `occurred_at` from the operation’s single instant, but the required tests still demand that multi-write operations including bootstrap have “written timestamps [at] one instant.”",
+   "question": "Must an operation’s audit `occurred_at` equal its other timestamps, or may the audit writer’s later clock read differ?",
+   "options": [
+    "Audit `occurred_at` may differ because the audit writer takes its own instant.",
+    "Every timestamp, including audit `occurred_at`, must be equal in the named multi-write operations."
+   ],
+   "default_guess": "Allow the audit timestamp to differ and test the exception explicitly.",
+   "witness": {
+    "initial": "The staff table is empty and the clock can advance between use-case writes and audit append.",
+    "events": [
+     "The bootstrap operation reads time T and creates the administrator with `created_at=T`.",
+     "The audit writer appends `staff.create` at T+1 ms."
+    ],
+    "outcomes": [
+     "The bootstrap succeeds with two different timestamps, as the normative exception permits.",
+     "The bootstrap or its test fails because all written timestamps are required to be one instant."
+    ],
+    "observer": "The bootstrap test and an auditor reading both records."
+   },
+   "unit": "A28"
+  },
+  {
+   "subject": "A28 source-supplied service credential expiry",
+   "kind": "contradictory ownership",
+   "text": "A service credential’s `expires_at` is declared source-supplied and “kept as supplied,” while the formal invariant says “an expiry it writes is that instant plus its TTL”; no service-credential TTL is defined.",
+   "question": "Is `ServiceCredential.expires_at` preserved from the issuing request, or must it be derived from the operation clock and a TTL—and, if derived, which TTL?",
+   "options": [
+    "Persist the supplied expiry unchanged.",
+    "Derive the expiry from the operation instant and a service-credential TTL.",
+    "Permit only supplied values equal to an independently defined TTL-derived instant."
+   ],
+   "default_guess": "Persist the supplied expiry unchanged and exclude source-supplied expiries from the TTL clause.",
+   "witness": {
+    "initial": "At time T, an administrator issues a service credential and supplies `expires_at=T+7 days`.",
+    "events": [
+     "The issue operation validates the request and writes the credential."
+    ],
+    "outcomes": [
+     "The stored expiry is T+7 days because source-supplied times are preserved.",
+     "The stored expiry must be T plus a TTL, but the texts provide no service-credential TTL from which to calculate it."
+    ],
+    "observer": "The administrator and service principal when the credential becomes unusable."
+   },
+   "unit": "A28"
+  },
+  {
+   "subject": "A28 service credential expiry refusal conditions",
+   "kind": "missing validation rule",
+   "text": "The newly listed source time, “a service credential’s `expires_at`,” is said to be “validated and kept as supplied,” but the text does not define its temporal validity conditions.",
+   "question": "May a credential be issued with `expires_at <= now`, or must issuance reject an expiry that is not in the future?",
+   "options": [
+    "Accept it and create a credential that is immediately unusable.",
+    "Reject an expiry equal to or earlier than the operation instant."
+   ],
+   "default_guess": "Accept any validly represented UTC instant and let the strict expiry rule make the credential immediately unusable.",
+   "witness": {
+    "initial": "The operation clock reads T and the principal is active.",
+    "events": [
+     "An administrator requests a new service credential with `expires_at=T`.",
+     "The operation validates the supplied expiry."
+    ],
+    "outcomes": [
+     "The credential is persisted but is expired immediately because usability requires `now < expires_at`.",
+     "The request is refused because a newly issued credential must expire in the future."
+    ],
+    "observer": "The administrator receiving the issue result."
+   },
+   "unit": "A28"
+  },
+  {
+   "subject": "A28 representation of source-supplied credential expiry",
+   "kind": "missing normalization rule",
+   "text": "Persisted timestamps must be UTC offset-naive, while a service credential’s source-supplied `expires_at` is “kept as supplied”; the accepted input representation and treatment of an offset-aware value are not stated.",
+   "question": "What happens when the issuing request supplies an offset-aware or non-UTC `expires_at`?",
+   "options": [
+    "Reject it unless it is already an offset-naive UTC value.",
+    "Convert the represented instant to UTC and remove the offset before persistence.",
+    "Strip the offset without conversion."
+   ],
+   "default_guess": "Convert the instant to UTC and persist its offset-naive UTC representation.",
+   "witness": {
+    "initial": "A service principal is active and an administrator may issue a credential.",
+    "events": [
+     "The administrator supplies `expires_at=2026-11-07T12:00:00+02:00`.",
+     "The issue operation validates and persists the credential."
+    ],
+    "outcomes": [
+     "The request is refused because the supplied value is offset-aware.",
+     "The value is normalized and stored as offset-naive UTC `2026-11-07T10:00:00`."
+    ],
+    "observer": "The administrator and service principal at the expiry boundary."
+   },
+   "unit": "A28"
+  },
+  {
+   "subject": "Archived-project progress read creating a manual budget",
+   "kind": "policy contradiction",
+   "text": "The context says a staff progress-list read creates an empty manual budget version even for an archived project, while A5 says archived portal mutations are rejected and State 0 otherwise describes archived budget records as immutable.",
+   "question": "Does this read bypass the archived-mutation guard and commit the budget version, or must archived reads remain free of this write?",
+   "options": [
+    "The read succeeds and creates the empty manual budget as the named exception.",
+    "The read succeeds without creating a manual budget, preserving archived immutability.",
+    "The operation is treated as a mutation and refused for the archived project."
+   ],
+   "default_guess": "Apply the expressly named exception and create the empty manual budget version.",
+   "witness": {
+    "initial": "Project P is archived, has an active operator assignment, has no manual budget version, and its Registry validation succeeds as archived.",
+    "events": [
+     "The operator requests P’s progress list.",
+     "The operation reaches the logic that ensures a manual budget exists."
+    ],
+    "outcomes": [
+     "The read succeeds and commits a new empty manual BudgetVersion under the context exception.",
+     "The read returns without creating it, or is refused, because A5 forbids archived mutations."
+    ],
+    "observer": "The operator and staff later reading P’s budget-version history."
+   },
+   "unit": "context"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A11 revocation boundary for in-flight requests\",\"kind\":\"contradictory timing\",\"text\":\"“Immediate” means every request authenticated after the revocation commits observes it” conflicts with INV-005 and INV-017, which say revocation blocks “the next authorization check immediately.”\",\"question\":\"Must a request authenticated before the revocation commit but reaching its project-scope or capability check afterward observe the revocation?\",\"options\":[\"It must observe the revocation at the next authorization check.\",\"It may continue using the authentication and access state observed before the commit.\"],\"default_guess\":\"Recheck current revocation state at authorization and refuse the request.\",\"witness\":{\"initial\":\"An operator has an active session and active assignment to project P.\",\"events\":[\"The operator's request is authenticated and then pauses before its project-scope check.\",\"An administrator revokes the assignment and the revocation commits.\",\"The operator's request resumes and checks project scope.\"],\"outcomes\":[\"The request is refused because the next authorization check observes the revoked assignment.\",\"The request succeeds because it was authenticated before the revocation committed.\"],\"observer\":\"The operator and anyone observing whether the project operation commits.\"},\"unit\":\"A11\"},{\"subject\":\"A28 audit timestamp exception versus required tests\",\"kind\":\"internal contradiction\",\"text\":\"The normative rule and formal invariant exempt an audit record’s `occurred_at` from the operation’s single instant, but the required tests still demand that multi-write operations including bootstrap have “written timestamps [at] one instant.”\",\"question\":\"Must an operation’s audit `occurred_at` equal its other timestamps, or may the audit writer’s later clock read differ?\",\"options\":[\"Audit `occurred_at` may differ because the audit writer takes its own instant.\",\"Every timestamp, including audit `occurred_at`, must be equal in the named multi-write operations.\"],\"default_guess\":\"Allow the audit timestamp to differ and test the exception explicitly.\",\"witness\":{\"initial\":\"The staff table is empty and the clock can advance between use-case writes and audit append.\",\"events\":[\"The bootstrap operation reads time T and creates the administrator with `created_at=T`.\",\"The audit writer appends `staff.create` at T+1 ms.\"],\"outcomes\":[\"The bootstrap succeeds with two different timestamps, as the normative exception permits.\",\"The bootstrap or its test fails because all written timestamps are required to be one instant.\"],\"observer\":\"The bootstrap test and an auditor reading both records.\"},\"unit\":\"A28\"},{\"subject\":\"A28 source-supplied service credential expiry\",\"kind\":\"contradictory ownership\",\"text\":\"A service credential’s `expires_at` is declared source-supplied and “kept as supplied,” while the formal invariant says “an expiry it writes is that instant plus its TTL”; no service-credential TTL is defined.\",\"question\":\"Is `ServiceCredential.expires_at` preserved from the issuing request, or must it be derived from the operation clock and a TTL—and, if derived, which TTL?\",\"options\":[\"Persist the supplied expiry unchanged.\",\"Derive the expiry from the operation instant and a service-credential TTL.\",\"Permit only supplied values equal to an independently defined TTL-derived instant.\"],\"default_guess\":\"Persist the supplied expiry unchanged and exclude source-supplied expiries from the TTL clause.\",\"witness\":{\"initial\":\"At time T, an administrator issues a service credential and supplies `expires_at=T+7 days`.\",\"events\":[\"The issue operation validates the request and writes the credential.\"],\"outcomes\":[\"The stored expiry is T+7 days because source-supplied times are preserved.\",\"The stored expiry must be T plus a TTL, but the texts provide no service-credential TTL from which to calculate it.\"],\"observer\":\"The administrator and service principal when the credential becomes unusable.\"},\"unit\":\"A28\"},{\"subject\":\"A28 service credential expiry refusal conditions\",\"kind\":\"missing validation rule\",\"text\":\"The newly listed source time, “a service credential’s `expires_at`,” is said to be “validated and kept as supplied,” but the text does not define its temporal validity conditions.\",\"question\":\"May a credential be issued with `expires_at <= now`, or must issuance reject an expiry that is not in the future?\",\"options\":[\"Accept it and create a credential that is immediately unusable.\",\"Reject an expiry equal to or earlier than the operation instant.\"],\"default_guess\":\"Accept any validly represented UTC instant and let the strict expiry rule make the credential immediately unusable.\",\"witness\":{\"initial\":\"The operation clock reads T and the principal is active.\",\"events\":[\"An administrator requests a new service credential with `expires_at=T`.\",\"The operation validates the supplied expiry.\"],\"outcomes\":[\"The credential is persisted but is expired immediately because usability requires `now < expires_at`.\",\"The request is refused because a newly issued credential must expire in the future.\"],\"observer\":\"The administrator receiving the issue result.\"},\"unit\":\"A28\"},{\"subject\":\"A28 representation of source-supplied credential expiry\",\"kind\":\"missing normalization rule\",\"text\":\"Persisted timestamps must be UTC offset-naive, while a service credential’s source-supplied `expires_at` is “kept as supplied”; the accepted input representation and treatment of an offset-aware value are not stated.\",\"question\":\"What happens when the issuing request supplies an offset-aware or non-UTC `expires_at`?\",\"options\":[\"Reject it unless it is already an offset-naive UTC value.\",\"Convert the represented instant to UTC and remove the offset before persistence.\",\"Strip the offset without conversion.\"],\"default_guess\":\"Convert the instant to UTC and persist its offset-naive UTC representation.\",\"witness\":{\"initial\":\"A service principal is active and an administrator may issue a credential.\",\"events\":[\"The administrator supplies `expires_at=2026-11-07T12:00:00+02:00`.\",\"The issue operation validates and persists the credential.\"],\"outcomes\":[\"The request is refused because the supplied value is offset-aware.\",\"The value is normalized and stored as offset-naive UTC `2026-11-07T10:00:00`.\"],\"observer\":\"The administrator and service principal at the expiry boundary.\"},\"unit\":\"A28\"},{\"subject\":\"Archived-project progress read creating a manual budget\",\"kind\":\"policy contradiction\",\"text\":\"The context says a staff progress-list read creates an empty manual budget version even for an archived project, while A5 says archived portal mutations are rejected and State 0 otherwise describes archived budget records as immutable.\",\"question\":\"Does this read bypass the archived-mutation guard and commit the budget version, or must archived reads remain free of this write?\",\"options\":[\"The read succeeds and creates the empty manual budget as the named exception.\",\"The read succeeds without creating a manual budget, preserving archived immutability.\",\"The operation is treated as a mutation and refused for the archived project.\"],\"default_guess\":\"Apply the expressly named exception and create the empty manual budget version.\",\"witness\":{\"initial\":\"Project P is archived, has an active operator assignment, has no manual budget version, and its Registry validation succeeds as archived.\",\"events\":[\"The operator requests P’s progress list.\",\"The operation reaches the logic that ensures a manual budget exists.\"],\"outcomes\":[\"The read succeeds and commits a new empty manual BudgetVersion under the context exception.\",\"The read returns without creating it, or is refused, because A5 forbids archived mutations.\"],\"observer\":\"The operator and staff later reading P’s budget-version history.\"},\"unit\":\"context\"}]}",
+ "set_aside": []
+}

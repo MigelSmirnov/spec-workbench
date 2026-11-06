@@ -1,0 +1,133 @@
+{
+ "open_points": [
+  {
+   "unit": "A5",
+   "subject": "Implicit manual BudgetVersion created by an archived-project progress read",
+   "kind": "missing state transition",
+   "text": "“The one write an archived project admits is the empty manual budget version that a staff progress read creates” does not state the new BudgetVersion's `status`, while M22 requires `inactive | active` and says activation is always an explicit staff action.",
+   "question": "Is the implicitly created empty manual budget version inactive or active, and, if active, is this read a permitted exception to the rule that activation is explicit?",
+   "options": [
+    "Create it inactive, leaving the project without an active budget.",
+    "Create it active as part of the progress read.",
+    "Create it active only when the project has no other active budget version."
+   ],
+   "default_guess": "Create it inactive because the text names only creation, not activation.",
+   "witness": {
+    "initial": "An archived project has no manual BudgetVersion and no active budget version; an authorized staff member can read its progress.",
+    "events": [
+     "The staff member requests the project's progress list.",
+     "The progress read creates the required empty manual BudgetVersion."
+    ],
+    "outcomes": [
+     "The version is inactive, so subsequent budget reads remain not configured.",
+     "The version is active, so subsequent budget reads expose an available empty budget with zero totals."
+    ],
+    "observer": "The staff member and any viewer with an existing grant to the archived project."
+   }
+  },
+  {
+   "unit": "A11",
+   "subject": "Revocation racing with an already authenticated request",
+   "kind": "concurrency ambiguity",
+   "text": "A11 now says “every request authenticated after the revocation commits observes it,” while its unchanged invariant says a revoked object “blocks the next authorization check immediately.”",
+   "question": "If a request authenticates before revocation commits but performs its project authorization check or protected action afterward, must it observe the revocation?",
+   "options": [
+    "Allow the already authenticated request to finish.",
+    "Recheck revocation at project authorization and refuse it.",
+    "Permit reads already authenticated but refuse later mutations."
+   ],
+   "default_guess": "Refuse it at the first authorization check performed after the revocation commits.",
+   "witness": {
+    "initial": "A viewer has a valid session and an active project grant.",
+    "events": [
+     "The viewer's request authenticates and obtains a ViewerActorContext.",
+     "An administrator revokes the viewer's project grant and commits.",
+     "The viewer request then performs its project-scope authorization check and attempts the read."
+    ],
+    "outcomes": [
+     "The read succeeds because the request authenticated before the revocation committed.",
+     "The read is refused because the next authorization check occurs after the revocation committed."
+    ],
+    "observer": "The viewer making the concurrent request."
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "ServiceCredential expiry source versus generated-expiry invariant",
+   "kind": "contradictory timestamp ownership",
+   "text": "A28 classifies “a service credential's `expires_at`” as source-supplied and “kept as supplied,” but its formal invariant still says “an expiry it writes is that instant plus its TTL.”",
+   "question": "When issuing a service credential with a supplied `expires_at`, must the portal preserve that instant or replace it with the operation time plus a TTL?",
+   "options": [
+    "Preserve the supplied `expires_at`.",
+    "Compute `expires_at` from the operation clock and a TTL.",
+    "Treat supplied credential expiry as an explicit exception to the generated-expiry clause."
+   ],
+   "default_guess": "Preserve the supplied value and amend the generated-expiry invariant to exclude source-supplied expiries.",
+   "witness": {
+    "initial": "The operation clock reads 2026-11-06T10:00:00 and an administrator requests a service credential expiring at 2027-01-01T00:00:00.",
+    "events": [
+     "The credential-issuance operation validates the request.",
+     "It persists the ServiceCredential."
+    ],
+    "outcomes": [
+     "The stored expiry is 2027-01-01T00:00:00 because source-supplied times are preserved.",
+     "The stored expiry is the operation instant plus an implementation-selected TTL because every written expiry follows that formula."
+    ],
+    "observer": "The administrator and the service principal when the credential becomes unusable."
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "Validation and normalization of supplied ServiceCredential.expires_at",
+   "kind": "missing refusal conditions",
+   "text": "The supplied times, now including “a service credential's `expires_at`,” are said to be “validated and kept as supplied,” while persisted timestamps must be offset-naive UTC; no validation rules say which supplied expiry forms or values are accepted.",
+   "question": "Which `expires_at` inputs are valid, including offset-aware values, non-UTC offsets, and instants at or before the operation time, and are accepted values normalized before persistence or required to arrive already as offset-naive UTC?",
+   "options": [
+    "Require an offset-naive UTC value and allow even an already-expired credential.",
+    "Accept offset-aware values and convert them to offset-naive UTC.",
+    "Reject expiries that are not strictly in the future in addition to enforcing a timestamp representation."
+   ],
+   "default_guess": "Require a UTC instant, normalize it to offset-naive storage, and reject an expiry that is not strictly after the operation time.",
+   "witness": {
+    "initial": "An administrator issues a credential with `expires_at = 2026-11-06T12:00:00+02:00`.",
+    "events": [
+     "The request reaches service-credential issuance.",
+     "The operation validates and attempts to persist the supplied expiry."
+    ],
+    "outcomes": [
+     "The request is rejected because an offset-aware timestamp cannot be stored as supplied in the required offset-naive form.",
+     "The instant is converted to `2026-11-06T10:00:00` and persisted, despite the instruction to keep it as supplied."
+    ],
+    "observer": "The administrator issuing the credential."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "Unknown-account staff.login_failed actor exception",
+   "kind": "undefined matching case",
+   "text": "M36 permits `actor_id = None` for “a staff.login_failed whose address matched no account,” but the texts do not define whether an address rejected before account lookup, such as a malformed or whitespace-containing email, counts as having matched no account.",
+   "question": "For a failed login whose supplied email cannot be normalized or is rejected before lookup, is a `staff.login_failed` audit record written, and if so may it use `actor_kind = staff` with `actor_id = None`?",
+   "options": [
+    "Treat every failure with no resolved account as an unmatched-address login failure and audit it with no actor_id.",
+    "Reserve the exception for a completed lookup returning no account; pre-lookup input rejection writes no login-failure audit.",
+    "Audit pre-lookup rejection under a different actor kind or action."
+   ],
+   "default_guess": "Treat any authentication attempt that resolves no staff account, including normalization rejection, as `staff.login_failed` with `actor_id = None`.",
+   "witness": {
+    "initial": "No account corresponds to the supplied text ` user@example.com `, which R16 refuses because it contains surrounding whitespace.",
+    "events": [
+     "A caller submits that text and a password to staff login.",
+     "Email validation fails before an account lookup can match a StaffAccount."
+    ],
+    "outcomes": [
+     "A `staff.login_failed` record is appended with actor kind staff and no actor_id.",
+     "No audit record is appended because the stated actor-id exception applies only after an address lookup returns no account."
+    ],
+    "observer": "An administrator or auditor reviewing failed-login records."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A5\",\"subject\":\"Implicit manual BudgetVersion created by an archived-project progress read\",\"kind\":\"missing state transition\",\"text\":\"“The one write an archived project admits is the empty manual budget version that a staff progress read creates” does not state the new BudgetVersion's `status`, while M22 requires `inactive | active` and says activation is always an explicit staff action.\",\"question\":\"Is the implicitly created empty manual budget version inactive or active, and, if active, is this read a permitted exception to the rule that activation is explicit?\",\"options\":[\"Create it inactive, leaving the project without an active budget.\",\"Create it active as part of the progress read.\",\"Create it active only when the project has no other active budget version.\"],\"default_guess\":\"Create it inactive because the text names only creation, not activation.\",\"witness\":{\"initial\":\"An archived project has no manual BudgetVersion and no active budget version; an authorized staff member can read its progress.\",\"events\":[\"The staff member requests the project's progress list.\",\"The progress read creates the required empty manual BudgetVersion.\"],\"outcomes\":[\"The version is inactive, so subsequent budget reads remain not configured.\",\"The version is active, so subsequent budget reads expose an available empty budget with zero totals.\"],\"observer\":\"The staff member and any viewer with an existing grant to the archived project.\"}},{\"unit\":\"A11\",\"subject\":\"Revocation racing with an already authenticated request\",\"kind\":\"concurrency ambiguity\",\"text\":\"A11 now says “every request authenticated after the revocation commits observes it,” while its unchanged invariant says a revoked object “blocks the next authorization check immediately.”\",\"question\":\"If a request authenticates before revocation commits but performs its project authorization check or protected action afterward, must it observe the revocation?\",\"options\":[\"Allow the already authenticated request to finish.\",\"Recheck revocation at project authorization and refuse it.\",\"Permit reads already authenticated but refuse later mutations.\"],\"default_guess\":\"Refuse it at the first authorization check performed after the revocation commits.\",\"witness\":{\"initial\":\"A viewer has a valid session and an active project grant.\",\"events\":[\"The viewer's request authenticates and obtains a ViewerActorContext.\",\"An administrator revokes the viewer's project grant and commits.\",\"The viewer request then performs its project-scope authorization check and attempts the read.\"],\"outcomes\":[\"The read succeeds because the request authenticated before the revocation committed.\",\"The read is refused because the next authorization check occurs after the revocation committed.\"],\"observer\":\"The viewer making the concurrent request.\"}},{\"unit\":\"A28\",\"subject\":\"ServiceCredential expiry source versus generated-expiry invariant\",\"kind\":\"contradictory timestamp ownership\",\"text\":\"A28 classifies “a service credential's `expires_at`” as source-supplied and “kept as supplied,” but its formal invariant still says “an expiry it writes is that instant plus its TTL.”\",\"question\":\"When issuing a service credential with a supplied `expires_at`, must the portal preserve that instant or replace it with the operation time plus a TTL?\",\"options\":[\"Preserve the supplied `expires_at`.\",\"Compute `expires_at` from the operation clock and a TTL.\",\"Treat supplied credential expiry as an explicit exception to the generated-expiry clause.\"],\"default_guess\":\"Preserve the supplied value and amend the generated-expiry invariant to exclude source-supplied expiries.\",\"witness\":{\"initial\":\"The operation clock reads 2026-11-06T10:00:00 and an administrator requests a service credential expiring at 2027-01-01T00:00:00.\",\"events\":[\"The credential-issuance operation validates the request.\",\"It persists the ServiceCredential.\"],\"outcomes\":[\"The stored expiry is 2027-01-01T00:00:00 because source-supplied times are preserved.\",\"The stored expiry is the operation instant plus an implementation-selected TTL because every written expiry follows that formula.\"],\"observer\":\"The administrator and the service principal when the credential becomes unusable.\"}},{\"unit\":\"A28\",\"subject\":\"Validation and normalization of supplied ServiceCredential.expires_at\",\"kind\":\"missing refusal conditions\",\"text\":\"The supplied times, now including “a service credential's `expires_at`,” are said to be “validated and kept as supplied,” while persisted timestamps must be offset-naive UTC; no validation rules say which supplied expiry forms or values are accepted.\",\"question\":\"Which `expires_at` inputs are valid, including offset-aware values, non-UTC offsets, and instants at or before the operation time, and are accepted values normalized before persistence or required to arrive already as offset-naive UTC?\",\"options\":[\"Require an offset-naive UTC value and allow even an already-expired credential.\",\"Accept offset-aware values and convert them to offset-naive UTC.\",\"Reject expiries that are not strictly in the future in addition to enforcing a timestamp representation.\"],\"default_guess\":\"Require a UTC instant, normalize it to offset-naive storage, and reject an expiry that is not strictly after the operation time.\",\"witness\":{\"initial\":\"An administrator issues a credential with `expires_at = 2026-11-06T12:00:00+02:00`.\",\"events\":[\"The request reaches service-credential issuance.\",\"The operation validates and attempts to persist the supplied expiry.\"],\"outcomes\":[\"The request is rejected because an offset-aware timestamp cannot be stored as supplied in the required offset-naive form.\",\"The instant is converted to `2026-11-06T10:00:00` and persisted, despite the instruction to keep it as supplied.\"],\"observer\":\"The administrator issuing the credential.\"}},{\"unit\":\"context\",\"subject\":\"Unknown-account staff.login_failed actor exception\",\"kind\":\"undefined matching case\",\"text\":\"M36 permits `actor_id = None` for “a staff.login_failed whose address matched no account,” but the texts do not define whether an address rejected before account lookup, such as a malformed or whitespace-containing email, counts as having matched no account.\",\"question\":\"For a failed login whose supplied email cannot be normalized or is rejected before lookup, is a `staff.login_failed` audit record written, and if so may it use `actor_kind = staff` with `actor_id = None`?\",\"options\":[\"Treat every failure with no resolved account as an unmatched-address login failure and audit it with no actor_id.\",\"Reserve the exception for a completed lookup returning no account; pre-lookup input rejection writes no login-failure audit.\",\"Audit pre-lookup rejection under a different actor kind or action.\"],\"default_guess\":\"Treat any authentication attempt that resolves no staff account, including normalization rejection, as `staff.login_failed` with `actor_id = None`.\",\"witness\":{\"initial\":\"No account corresponds to the supplied text ` user@example.com `, which R16 refuses because it contains surrounding whitespace.\",\"events\":[\"A caller submits that text and a password to staff login.\",\"Email validation fails before an account lookup can match a StaffAccount.\"],\"outcomes\":[\"A `staff.login_failed` record is appended with actor kind staff and no actor_id.\",\"No audit record is appended because the stated actor-id exception applies only after an address lookup returns no account.\"],\"observer\":\"An administrator or auditor reviewing failed-login records.\"}}]}",
+ "set_aside": []
+}

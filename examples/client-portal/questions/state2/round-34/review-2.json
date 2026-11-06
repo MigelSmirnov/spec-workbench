@@ -1,0 +1,128 @@
+{
+ "open_points": [
+  {
+   "unit": "A5",
+   "subject": "empty manual budget creation trigger",
+   "kind": "operation boundary ambiguity",
+   "text": "“The one write an archived project admits is the empty manual budget version that a staff progress read creates” and R0-24’s narrower “a staff read of a project's progress list” do not say whether a composite staff project-overview read that builds its progress component is this read.",
+   "question": "Which staff read operations trigger creation of the missing manual budget version: only the dedicated progress-list operation, or every operation that reads/builds project progress, including ProjectOverview?",
+   "options": [
+    "Only the dedicated staff progress-list operation creates it.",
+    "Any staff read that builds project progress, including ProjectOverview, creates it."
+   ],
+   "default_guess": "Limit the side effect to the dedicated staff progress-list operation named by R0-24.",
+   "witness": {
+    "initial": "An authorized staff member can read an archived project; the project has no manual budget version.",
+    "events": [
+     "The staff member requests the project's composite overview, whose progress component must be built."
+    ],
+    "outcomes": [
+     "The overview build counts as a progress read, so it persists an empty manual budget version and its required audit record.",
+     "Only the dedicated progress-list operation has the side effect, so the overview returns without creating anything."
+    ],
+    "observer": "A later administrator or staff member inspecting the project's budget history and audit records."
+   }
+  },
+  {
+   "unit": "A5",
+   "subject": "concurrent implicit manual-budget creation",
+   "kind": "concurrency outcome unspecified",
+   "text": "“when the project has no manual budget version yet, creates that empty manual budget version” is combined with the invariant “at most one manual BudgetVersion per project,” but no outcome is defined when concurrent progress reads both observe that none exists.",
+   "question": "When concurrent qualifying progress reads race to create the one manual budget version, must all reads succeed using the single resulting version, or may a losing read fail with a persistence/conflict error?",
+   "options": [
+    "Serialize or retry the create-if-absent operation so both reads succeed and exactly one version is created.",
+    "Allow exactly one read to create the version and let another fail on the uniqueness conflict."
+   ],
+   "default_guess": "Treat creation as atomic create-if-absent and let all reads succeed against the single resulting version.",
+   "witness": {
+    "initial": "An active or archived project has no manual budget version, and two authorized staff sessions can read its progress.",
+    "events": [
+     "Staff A starts a progress-list read and observes no manual version.",
+     "Before A commits, Staff B starts the same read and also observes no manual version.",
+     "Both attempt the required implicit creation."
+    ],
+    "outcomes": [
+     "The operations serialize or retry; one version and one creation audit are stored, and both reads succeed.",
+     "One operation succeeds, while the other exposes a uniqueness or persistence failure even though a manual version now exists."
+    ],
+    "observer": "Staff B and any API client handling the second read."
+   }
+  },
+  {
+   "unit": "A11",
+   "subject": "revocation visibility for an already-authenticated request",
+   "kind": "direct contradiction",
+   "text": "The changed rule says “every request authenticated after the revocation commits observes it,” while A11 INV-005 says a revoked object “blocks the next authorization check immediately,” A4 evaluates project access after session authentication, and M07 says assignment revocation blocks “the next project-scoped authorization check immediately.”",
+   "question": "If a request authenticates before revocation commits but performs its project-access authorization check after the commit, must that request observe the revocation?",
+   "options": [
+    "Yes; every authorization/access check reads the committed revocation, including checks in previously authenticated requests.",
+    "No guarantee applies to a request authenticated before the commit, so it may complete using the pre-revocation state."
+   ],
+   "default_guess": "Apply the committed revocation at the next authorization/access check, including within an already-authenticated request.",
+   "witness": {
+    "initial": "An operator has an active session and active assignment to project P.",
+    "events": [
+     "The operator's request authenticates its session and pauses before the project-access step.",
+     "An administrator revokes the operator's assignment to P and commits.",
+     "The operator's request resumes and performs the project-access check."
+    ],
+    "outcomes": [
+     "Under INV-005, A4, and M07, the access check observes the revocation and refuses the request.",
+     "Under the changed definition, the request was authenticated before the commit and may continue with access to P."
+    ],
+    "observer": "The operator, and potentially viewers of any mutation the request performs."
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "ServiceCredential expires_at authority",
+   "kind": "contradictory timestamp derivation",
+   "text": "The changed rule classifies “a service credential's expires_at” among source-supplied times that are “kept as supplied,” while the formal invariant still says “an expiry it writes is that instant plus its TTL.” No service-credential TTL is defined in A30.",
+   "question": "Is ServiceCredential.expires_at stored exactly as supplied, or must the issuing operation derive it from its single clock instant plus a TTL?",
+   "options": [
+    "Store the optional supplied expires_at unchanged.",
+    "Derive expires_at from the operation instant and a specified service-credential TTL.",
+    "Accept a supplied expiry only if it equals a prescribed now-plus-TTL value."
+   ],
+   "default_guess": "Store the optional supplied expires_at unchanged, because the change explicitly classifies it as source-supplied.",
+   "witness": {
+    "initial": "An administrator issues a credential at 2026-11-06T10:00:00Z and supplies expires_at 2027-02-01T00:00:00Z; no service-credential TTL exists in configuration.",
+    "events": [
+     "The credential-issue operation validates and persists the credential."
+    ],
+    "outcomes": [
+     "The source-time rule preserves 2027-02-01T00:00:00Z.",
+     "The formal expiry invariant requires a value equal to the operation instant plus a TTL, so the supplied value must be replaced or refused."
+    ],
+    "observer": "The administrator reading ServiceCredentialIssueResponse and the service principal when the credential expires."
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "ServiceCredential expires_at validation",
+   "kind": "refusal conditions missing",
+   "text": "The changed rule says a service credential's source-supplied expires_at is “validated and kept as supplied,” but it defines only use-time expiry semantics and gives no acceptance rules for a supplied expiry.",
+   "question": "What supplied ServiceCredential.expires_at values must issuance refuse—for example an instant equal to or before the operation time, an offset-aware value, or an otherwise valid but already expired value?",
+   "options": [
+    "Accept any valid UTC datetime, including one already expired; usability is determined solely by now < expires_at.",
+    "Require expires_at to be strictly after the issuance operation's clock instant.",
+    "Apply additional bounds or representation rules that must be stated explicitly."
+   ],
+   "default_guess": "Require a supplied expiry to be a valid persisted UTC value strictly after the issuance instant.",
+   "witness": {
+    "initial": "An active administrator is issuing a credential for an active service principal.",
+    "events": [
+     "The administrator supplies expires_at equal to the issuance operation's clock instant."
+    ],
+    "outcomes": [
+     "Issuance succeeds and returns a credential that is immediately unusable because now < expires_at is false.",
+     "Issuance is refused because a new credential's supplied expiry must be in the future."
+    ],
+    "observer": "The administrator issuing the credential and the service principal attempting immediate authentication."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A5\",\"subject\":\"empty manual budget creation trigger\",\"kind\":\"operation boundary ambiguity\",\"text\":\"“The one write an archived project admits is the empty manual budget version that a staff progress read creates” and R0-24’s narrower “a staff read of a project's progress list” do not say whether a composite staff project-overview read that builds its progress component is this read.\",\"question\":\"Which staff read operations trigger creation of the missing manual budget version: only the dedicated progress-list operation, or every operation that reads/builds project progress, including ProjectOverview?\",\"options\":[\"Only the dedicated staff progress-list operation creates it.\",\"Any staff read that builds project progress, including ProjectOverview, creates it.\"],\"default_guess\":\"Limit the side effect to the dedicated staff progress-list operation named by R0-24.\",\"witness\":{\"initial\":\"An authorized staff member can read an archived project; the project has no manual budget version.\",\"events\":[\"The staff member requests the project's composite overview, whose progress component must be built.\"],\"outcomes\":[\"The overview build counts as a progress read, so it persists an empty manual budget version and its required audit record.\",\"Only the dedicated progress-list operation has the side effect, so the overview returns without creating anything.\"],\"observer\":\"A later administrator or staff member inspecting the project's budget history and audit records.\"}},{\"unit\":\"A5\",\"subject\":\"concurrent implicit manual-budget creation\",\"kind\":\"concurrency outcome unspecified\",\"text\":\"“when the project has no manual budget version yet, creates that empty manual budget version” is combined with the invariant “at most one manual BudgetVersion per project,” but no outcome is defined when concurrent progress reads both observe that none exists.\",\"question\":\"When concurrent qualifying progress reads race to create the one manual budget version, must all reads succeed using the single resulting version, or may a losing read fail with a persistence/conflict error?\",\"options\":[\"Serialize or retry the create-if-absent operation so both reads succeed and exactly one version is created.\",\"Allow exactly one read to create the version and let another fail on the uniqueness conflict.\"],\"default_guess\":\"Treat creation as atomic create-if-absent and let all reads succeed against the single resulting version.\",\"witness\":{\"initial\":\"An active or archived project has no manual budget version, and two authorized staff sessions can read its progress.\",\"events\":[\"Staff A starts a progress-list read and observes no manual version.\",\"Before A commits, Staff B starts the same read and also observes no manual version.\",\"Both attempt the required implicit creation.\"],\"outcomes\":[\"The operations serialize or retry; one version and one creation audit are stored, and both reads succeed.\",\"One operation succeeds, while the other exposes a uniqueness or persistence failure even though a manual version now exists.\"],\"observer\":\"Staff B and any API client handling the second read.\"}},{\"unit\":\"A11\",\"subject\":\"revocation visibility for an already-authenticated request\",\"kind\":\"direct contradiction\",\"text\":\"The changed rule says “every request authenticated after the revocation commits observes it,” while A11 INV-005 says a revoked object “blocks the next authorization check immediately,” A4 evaluates project access after session authentication, and M07 says assignment revocation blocks “the next project-scoped authorization check immediately.”\",\"question\":\"If a request authenticates before revocation commits but performs its project-access authorization check after the commit, must that request observe the revocation?\",\"options\":[\"Yes; every authorization/access check reads the committed revocation, including checks in previously authenticated requests.\",\"No guarantee applies to a request authenticated before the commit, so it may complete using the pre-revocation state.\"],\"default_guess\":\"Apply the committed revocation at the next authorization/access check, including within an already-authenticated request.\",\"witness\":{\"initial\":\"An operator has an active session and active assignment to project P.\",\"events\":[\"The operator's request authenticates its session and pauses before the project-access step.\",\"An administrator revokes the operator's assignment to P and commits.\",\"The operator's request resumes and performs the project-access check.\"],\"outcomes\":[\"Under INV-005, A4, and M07, the access check observes the revocation and refuses the request.\",\"Under the changed definition, the request was authenticated before the commit and may continue with access to P.\"],\"observer\":\"The operator, and potentially viewers of any mutation the request performs.\"}},{\"unit\":\"A28\",\"subject\":\"ServiceCredential expires_at authority\",\"kind\":\"contradictory timestamp derivation\",\"text\":\"The changed rule classifies “a service credential's expires_at” among source-supplied times that are “kept as supplied,” while the formal invariant still says “an expiry it writes is that instant plus its TTL.” No service-credential TTL is defined in A30.\",\"question\":\"Is ServiceCredential.expires_at stored exactly as supplied, or must the issuing operation derive it from its single clock instant plus a TTL?\",\"options\":[\"Store the optional supplied expires_at unchanged.\",\"Derive expires_at from the operation instant and a specified service-credential TTL.\",\"Accept a supplied expiry only if it equals a prescribed now-plus-TTL value.\"],\"default_guess\":\"Store the optional supplied expires_at unchanged, because the change explicitly classifies it as source-supplied.\",\"witness\":{\"initial\":\"An administrator issues a credential at 2026-11-06T10:00:00Z and supplies expires_at 2027-02-01T00:00:00Z; no service-credential TTL exists in configuration.\",\"events\":[\"The credential-issue operation validates and persists the credential.\"],\"outcomes\":[\"The source-time rule preserves 2027-02-01T00:00:00Z.\",\"The formal expiry invariant requires a value equal to the operation instant plus a TTL, so the supplied value must be replaced or refused.\"],\"observer\":\"The administrator reading ServiceCredentialIssueResponse and the service principal when the credential expires.\"}},{\"unit\":\"A28\",\"subject\":\"ServiceCredential expires_at validation\",\"kind\":\"refusal conditions missing\",\"text\":\"The changed rule says a service credential's source-supplied expires_at is “validated and kept as supplied,” but it defines only use-time expiry semantics and gives no acceptance rules for a supplied expiry.\",\"question\":\"What supplied ServiceCredential.expires_at values must issuance refuse—for example an instant equal to or before the operation time, an offset-aware value, or an otherwise valid but already expired value?\",\"options\":[\"Accept any valid UTC datetime, including one already expired; usability is determined solely by now < expires_at.\",\"Require expires_at to be strictly after the issuance operation's clock instant.\",\"Apply additional bounds or representation rules that must be stated explicitly.\"],\"default_guess\":\"Require a supplied expiry to be a valid persisted UTC value strictly after the issuance instant.\",\"witness\":{\"initial\":\"An active administrator is issuing a credential for an active service principal.\",\"events\":[\"The administrator supplies expires_at equal to the issuance operation's clock instant.\"],\"outcomes\":[\"Issuance succeeds and returns a credential that is immediately unusable because now < expires_at is false.\",\"Issuance is refused because a new credential's supplied expiry must be in the future.\"],\"observer\":\"The administrator issuing the credential and the service principal attempting immediate authentication.\"}}]}",
+ "set_aside": []
+}

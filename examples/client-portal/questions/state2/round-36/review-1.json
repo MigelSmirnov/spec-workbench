@@ -1,0 +1,84 @@
+{
+ "open_points": [
+  {
+   "unit": "A5",
+   "subject": "Archived progress read versus the project authorization guard",
+   "kind": "contradiction",
+   "text": "A5 says, “The one write an archived project admits: the staff progress read project_tracking.list_project_progress creates the empty manual budget version,” but A4 says “PLAT-REG-003: a linked mutation succeeds only after server-side typed validation reports the same UUID as active” and requires a violating input to be “refused and changes nothing.”",
+   "question": "Does list_project_progress bypass the active-project requirement when its read creates the first manual budget version for an archived project, or must the guard refuse that creation?",
+   "options": [
+    "Treat the named A5 case as an exception: authorize it as an archived read and commit the empty manual version.",
+    "Apply PLAT-REG-003 to every state change: reject the operation or leave the database unchanged."
+   ],
+   "default_guess": "Treat the explicit A5 case as a narrow exception to PLAT-REG-003.",
+   "witness": {
+    "initial": "Registry reports project P as archived; P has an active staff assignment and no manual BudgetVersion; an active assigned operator has portal.progress.read.",
+    "events": [
+     "The operator calls project_tracking.list_project_progress for P.",
+     "The authorization guard validates P and receives status archived.",
+     "The progress operation attempts to create the empty manual BudgetVersion."
+    ],
+    "outcomes": [
+     "A5 governs: the read succeeds and the empty manual BudgetVersion is persisted.",
+     "A4/PLAT-REG-003 governs: the archived linked mutation is refused and no BudgetVersion is persisted."
+    ],
+    "observer": "The operator sees success versus refusal, and later staff reads can observe whether the manual version exists."
+   }
+  },
+  {
+   "unit": "A6",
+   "subject": "Meaning of mutation in Registry failure translation",
+   "kind": "missing exception",
+   "text": "A6 says “for a mutation, its status (anything other than active → archived_project),” while A5 now defines list_project_progress as a read that performs the one permitted write on an archived project.",
+   "question": "For A6, is list_project_progress classified by its read API semantics or by the fact that it persists a BudgetVersion, and where is its exception to the archived_project translation applied?",
+   "options": [
+    "Classify it as a read for Registry policy even when it creates the empty version.",
+    "Classify it as a mutation but add an explicit exception before translating archived status.",
+    "Classify it as a mutation and return archived_project, contradicting A5."
+   ],
+   "default_guess": "Classify the operation as a read for the guard and permit only its specifically named creation side effect.",
+   "witness": {
+    "initial": "Project P is archived, accessible to an active operator, and has no manual BudgetVersion.",
+    "events": [
+     "The operator requests list_project_progress for P.",
+     "Registry validation returns exists=true, status=archived, is_active=false."
+    ],
+    "outcomes": [
+     "The caller treats the operation as a read, so A5 permits it and the empty manual version is created.",
+     "The caller treats the state-changing operation as a mutation, so A6 translates the status to archived_project and refuses it."
+    ],
+    "observer": "The requesting operator sees an empty progress result versus archived_project; persisted budget state also differs."
+   }
+  },
+  {
+   "unit": "A31",
+   "subject": "Concurrency review for archived progress reads that create a budget version",
+   "kind": "unresolved concurrency",
+   "text": "A31 says “concurrency: APPLICABLE; references: A8, A18, A19, A22, A29” and “Every category resolves to an accepted decision or an open question,” but none of those rules defines the observable outcome when concurrent list_project_progress reads both attempt A5’s newly named creation of the single manual BudgetVersion.",
+   "question": "When concurrent authorized reads of one archived project both observe that no manual version exists, must both reads succeed using one resulting version, or may one be refused by the uniqueness or persistence race?",
+   "options": [
+    "Creation is atomic and idempotent for this read; both calls succeed and observe the same single version.",
+    "Exactly one call succeeds; the competing call receives a persistence or conflict failure.",
+    "Calls are serialized before the absence check, so the second sees and uses the first call’s version."
+   ],
+   "default_guess": "Serialize or recover the uniqueness race so both reads succeed and exactly one manual version exists.",
+   "witness": {
+    "initial": "Archived project P has no manual BudgetVersion; two valid staff requests can read its progress; the one-manual-version invariant applies.",
+    "events": [
+     "Request A begins list_project_progress and observes no manual version.",
+     "Before A commits, request B begins and also observes no manual version.",
+     "A creates and commits the manual version.",
+     "B attempts to finish its creation path."
+    ],
+    "outcomes": [
+     "B re-reads or handles the race and succeeds using A’s version; both callers receive the progress result.",
+     "B surfaces a uniqueness, locking, persistence, or conflict failure even though the same request would succeed after A completes."
+    ],
+    "observer": "The caller of request B sees success versus failure; operators and monitoring observe different reliability for concurrent reads."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A5\",\"subject\":\"Archived progress read versus the project authorization guard\",\"kind\":\"contradiction\",\"text\":\"A5 says, “The one write an archived project admits: the staff progress read project_tracking.list_project_progress creates the empty manual budget version,” but A4 says “PLAT-REG-003: a linked mutation succeeds only after server-side typed validation reports the same UUID as active” and requires a violating input to be “refused and changes nothing.”\",\"question\":\"Does list_project_progress bypass the active-project requirement when its read creates the first manual budget version for an archived project, or must the guard refuse that creation?\",\"options\":[\"Treat the named A5 case as an exception: authorize it as an archived read and commit the empty manual version.\",\"Apply PLAT-REG-003 to every state change: reject the operation or leave the database unchanged.\"],\"default_guess\":\"Treat the explicit A5 case as a narrow exception to PLAT-REG-003.\",\"witness\":{\"initial\":\"Registry reports project P as archived; P has an active staff assignment and no manual BudgetVersion; an active assigned operator has portal.progress.read.\",\"events\":[\"The operator calls project_tracking.list_project_progress for P.\",\"The authorization guard validates P and receives status archived.\",\"The progress operation attempts to create the empty manual BudgetVersion.\"],\"outcomes\":[\"A5 governs: the read succeeds and the empty manual BudgetVersion is persisted.\",\"A4/PLAT-REG-003 governs: the archived linked mutation is refused and no BudgetVersion is persisted.\"],\"observer\":\"The operator sees success versus refusal, and later staff reads can observe whether the manual version exists.\"}},{\"unit\":\"A6\",\"subject\":\"Meaning of mutation in Registry failure translation\",\"kind\":\"missing exception\",\"text\":\"A6 says “for a mutation, its status (anything other than active → archived_project),” while A5 now defines list_project_progress as a read that performs the one permitted write on an archived project.\",\"question\":\"For A6, is list_project_progress classified by its read API semantics or by the fact that it persists a BudgetVersion, and where is its exception to the archived_project translation applied?\",\"options\":[\"Classify it as a read for Registry policy even when it creates the empty version.\",\"Classify it as a mutation but add an explicit exception before translating archived status.\",\"Classify it as a mutation and return archived_project, contradicting A5.\"],\"default_guess\":\"Classify the operation as a read for the guard and permit only its specifically named creation side effect.\",\"witness\":{\"initial\":\"Project P is archived, accessible to an active operator, and has no manual BudgetVersion.\",\"events\":[\"The operator requests list_project_progress for P.\",\"Registry validation returns exists=true, status=archived, is_active=false.\"],\"outcomes\":[\"The caller treats the operation as a read, so A5 permits it and the empty manual version is created.\",\"The caller treats the state-changing operation as a mutation, so A6 translates the status to archived_project and refuses it.\"],\"observer\":\"The requesting operator sees an empty progress result versus archived_project; persisted budget state also differs.\"}},{\"unit\":\"A31\",\"subject\":\"Concurrency review for archived progress reads that create a budget version\",\"kind\":\"unresolved concurrency\",\"text\":\"A31 says “concurrency: APPLICABLE; references: A8, A18, A19, A22, A29” and “Every category resolves to an accepted decision or an open question,” but none of those rules defines the observable outcome when concurrent list_project_progress reads both attempt A5’s newly named creation of the single manual BudgetVersion.\",\"question\":\"When concurrent authorized reads of one archived project both observe that no manual version exists, must both reads succeed using one resulting version, or may one be refused by the uniqueness or persistence race?\",\"options\":[\"Creation is atomic and idempotent for this read; both calls succeed and observe the same single version.\",\"Exactly one call succeeds; the competing call receives a persistence or conflict failure.\",\"Calls are serialized before the absence check, so the second sees and uses the first call’s version.\"],\"default_guess\":\"Serialize or recover the uniqueness race so both reads succeed and exactly one manual version exists.\",\"witness\":{\"initial\":\"Archived project P has no manual BudgetVersion; two valid staff requests can read its progress; the one-manual-version invariant applies.\",\"events\":[\"Request A begins list_project_progress and observes no manual version.\",\"Before A commits, request B begins and also observes no manual version.\",\"A creates and commits the manual version.\",\"B attempts to finish its creation path.\"],\"outcomes\":[\"B re-reads or handles the race and succeeds using A’s version; both callers receive the progress result.\",\"B surfaces a uniqueness, locking, persistence, or conflict failure even though the same request would succeed after A completes.\"],\"observer\":\"The caller of request B sees success versus failure; operators and monitoring observe different reliability for concurrent reads.\"}}]}",
+ "set_aside": []
+}

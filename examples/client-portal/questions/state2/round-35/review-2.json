@@ -1,0 +1,134 @@
+{
+ "open_points": [
+  {
+   "unit": "A5",
+   "subject": "project_tracking.list_project_progress transaction handling",
+   "kind": "rule conflict",
+   "text": "A5 says the staff progress read \"creates the empty manual budget version\", while A22 says \"A read path rolls back once right after its last read\" and \"a write path commits once on success.\"",
+   "question": "Is list_project_progress a write path that commits its lazy budget creation, or a read path whose transaction is rolled back?",
+   "options": [
+    "Treat it as a write path and commit the empty manual budget version.",
+    "Treat it as a read path and roll back, so no version persists.",
+    "Add a special transaction rule for this read-with-side-effect."
+   ],
+   "default_guess": "Treat it as a write path and commit because A5 says the version is created.",
+   "witness": {
+    "initial": "An archived project exists, an authorized staff member can read its progress, and it has no manual budget version.",
+    "events": [
+     "The staff member calls project_tracking.list_project_progress.",
+     "The operation constructs an empty manual budget version."
+    ],
+    "outcomes": [
+     "The operation commits as a write path, and the manual budget version remains after the response.",
+     "The operation follows A22's read-path rule and rolls back, so the version does not remain."
+    ],
+    "observer": "A later budget or progress read, and repository inspection, see whether the version exists."
+   }
+  },
+  {
+   "unit": "A5",
+   "subject": "archived-project lifecycle guard",
+   "kind": "invariant contradiction",
+   "text": "A5 permits creation of an empty manual budget version for an archived project, but A4's PLAT-REG-003 says \"a linked mutation succeeds only after server-side typed validation reports the same UUID as active.\"",
+   "question": "Does the A5 progress-read creation override PLAT-REG-003, or must the guard reject it because Registry reports the project as archived?",
+   "options": [
+    "A5 is an explicit exception to PLAT-REG-003 and the creation succeeds after archived validation.",
+    "PLAT-REG-003 remains absolute and the creation is rejected.",
+    "The read succeeds but omits the lazy creation for archived projects."
+   ],
+   "default_guess": "Treat A5 as an explicit exception to PLAT-REG-003.",
+   "witness": {
+    "initial": "Registry validates a project as archived; it has no manual budget version; an authorized staff member has progress-read access.",
+    "events": [
+     "The staff member requests the project's progress list.",
+     "The project guard receives the archived validation result."
+    ],
+    "outcomes": [
+     "A5 allows the read and persists the empty manual budget version.",
+     "PLAT-REG-003 prevents the linked mutation, causing either refusal or a read without creation."
+    ],
+    "observer": "The staff caller sees refusal versus success, and later reads see whether the version was created."
+   }
+  },
+  {
+   "unit": "A5",
+   "subject": "lazy manual BudgetVersion lifecycle",
+   "kind": "missing state decision",
+   "text": "The change says list_project_progress \"creates the empty manual budget version\" but does not state its BudgetVersion.status or activation fields; M22 separately says activation is always an explicit staff action.",
+   "question": "What lifecycle state and activation provenance must the lazily created manual budget version have?",
+   "options": [
+    "Create it inactive with no activated_at or activated_by.",
+    "Create it active and treat the progress read as its activation.",
+    "Create it active only when the project has no other active budget version; otherwise create it inactive."
+   ],
+   "default_guess": "Create it inactive, because the read is not an explicit activation action.",
+   "witness": {
+    "initial": "An archived project has no manual budget version and an authorized staff member may read progress.",
+    "events": [
+     "The staff member lists project progress, causing creation of the empty manual version.",
+     "A later authorized caller reads the project's budget state."
+    ],
+    "outcomes": [
+     "The new manual version is inactive and there is no active budget solely because of the progress read.",
+     "The new manual version is active, with activation fields populated or left inconsistently empty."
+    ],
+    "observer": "Staff and viewer budget/progress projections see whether the new version is the active budget."
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "service credential expiry provenance",
+   "kind": "formal contradiction",
+   "text": "The normative rule adds a service credential's expires_at to times that are \"validated and kept as supplied, never replaced by the clock,\" while the formal invariant says \"an expiry it writes is that instant plus its TTL.\"",
+   "question": "When an administrator supplies a service credential expires_at, must the stored value remain the supplied instant or be replaced by operation_now plus a TTL?",
+   "options": [
+    "Keep the supplied expires_at exactly, treating it as the source-supplied exception to the TTL clause.",
+    "Ignore or replace the supplied value with operation_now plus a configured TTL.",
+    "Apply the TTL clause only to portal-generated expiries and amend the invariant to say so."
+   ],
+   "default_guess": "Keep the supplied expires_at and treat the formal invariant's TTL clause as applying only to portal-generated expiries.",
+   "witness": {
+    "initial": "An active service principal exists and an administrator may issue it a credential.",
+    "events": [
+     "The administrator requests a credential with expires_at set to a specific instant that differs from operation_now plus any TTL.",
+     "The issuance operation persists the ServiceCredential."
+    ],
+    "outcomes": [
+     "The stored expires_at equals the administrator-supplied instant.",
+     "The stored expires_at equals operation_now plus a TTL, discarding the supplied instant."
+    ],
+    "observer": "The administrator sees the returned expiry, and authentication begins rejecting the credential at different times."
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "validation of source-supplied ServiceCredential.expires_at",
+   "kind": "undefined validation",
+   "text": "A28 says a service credential's expires_at is \"validated and kept as supplied\" but gives no acceptance rule for an expiry equal to now, earlier than now, or represented with an explicit offset despite persisted timestamps being offset-naive UTC.",
+   "question": "Which supplied service-credential expiry values are valid, and must an offset-bearing instant be rejected or normalized before persistence?",
+   "options": [
+    "Require a UTC offset-naive instant strictly later than the operation's single now value.",
+    "Accept past or equal expiries, creating an immediately unusable credential, but require offset-naive UTC.",
+    "Accept offset-aware values and normalize them to offset-naive UTC before storage.",
+    "Keep the supplied representation unchanged, even if offset-aware."
+   ],
+   "default_guess": "Normalize an offset-bearing instant to UTC offset-naive form and require it to be strictly later than operation_now.",
+   "witness": {
+    "initial": "An active service principal exists and an administrator may issue a credential.",
+    "events": [
+     "The administrator supplies expires_at equal to the operation instant, expressed with a UTC offset.",
+     "The issuance operation validates the request."
+    ],
+    "outcomes": [
+     "Issuance is rejected because the expiry is not future and/or is offset-aware.",
+     "Issuance succeeds after normalization, producing a credential that is immediately expired.",
+     "Issuance succeeds and persists an offset-aware datetime, contradicting the persisted timestamp representation rule."
+    ],
+    "observer": "The administrator sees success versus rejection; persistence and subsequent bearer authentication expose the stored representation and immediate usability."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A5\",\"subject\":\"project_tracking.list_project_progress transaction handling\",\"kind\":\"rule conflict\",\"text\":\"A5 says the staff progress read \\\"creates the empty manual budget version\\\", while A22 says \\\"A read path rolls back once right after its last read\\\" and \\\"a write path commits once on success.\\\"\",\"question\":\"Is list_project_progress a write path that commits its lazy budget creation, or a read path whose transaction is rolled back?\",\"options\":[\"Treat it as a write path and commit the empty manual budget version.\",\"Treat it as a read path and roll back, so no version persists.\",\"Add a special transaction rule for this read-with-side-effect.\"],\"default_guess\":\"Treat it as a write path and commit because A5 says the version is created.\",\"witness\":{\"initial\":\"An archived project exists, an authorized staff member can read its progress, and it has no manual budget version.\",\"events\":[\"The staff member calls project_tracking.list_project_progress.\",\"The operation constructs an empty manual budget version.\"],\"outcomes\":[\"The operation commits as a write path, and the manual budget version remains after the response.\",\"The operation follows A22's read-path rule and rolls back, so the version does not remain.\"],\"observer\":\"A later budget or progress read, and repository inspection, see whether the version exists.\"}},{\"unit\":\"A5\",\"subject\":\"archived-project lifecycle guard\",\"kind\":\"invariant contradiction\",\"text\":\"A5 permits creation of an empty manual budget version for an archived project, but A4's PLAT-REG-003 says \\\"a linked mutation succeeds only after server-side typed validation reports the same UUID as active.\\\"\",\"question\":\"Does the A5 progress-read creation override PLAT-REG-003, or must the guard reject it because Registry reports the project as archived?\",\"options\":[\"A5 is an explicit exception to PLAT-REG-003 and the creation succeeds after archived validation.\",\"PLAT-REG-003 remains absolute and the creation is rejected.\",\"The read succeeds but omits the lazy creation for archived projects.\"],\"default_guess\":\"Treat A5 as an explicit exception to PLAT-REG-003.\",\"witness\":{\"initial\":\"Registry validates a project as archived; it has no manual budget version; an authorized staff member has progress-read access.\",\"events\":[\"The staff member requests the project's progress list.\",\"The project guard receives the archived validation result.\"],\"outcomes\":[\"A5 allows the read and persists the empty manual budget version.\",\"PLAT-REG-003 prevents the linked mutation, causing either refusal or a read without creation.\"],\"observer\":\"The staff caller sees refusal versus success, and later reads see whether the version was created.\"}},{\"unit\":\"A5\",\"subject\":\"lazy manual BudgetVersion lifecycle\",\"kind\":\"missing state decision\",\"text\":\"The change says list_project_progress \\\"creates the empty manual budget version\\\" but does not state its BudgetVersion.status or activation fields; M22 separately says activation is always an explicit staff action.\",\"question\":\"What lifecycle state and activation provenance must the lazily created manual budget version have?\",\"options\":[\"Create it inactive with no activated_at or activated_by.\",\"Create it active and treat the progress read as its activation.\",\"Create it active only when the project has no other active budget version; otherwise create it inactive.\"],\"default_guess\":\"Create it inactive, because the read is not an explicit activation action.\",\"witness\":{\"initial\":\"An archived project has no manual budget version and an authorized staff member may read progress.\",\"events\":[\"The staff member lists project progress, causing creation of the empty manual version.\",\"A later authorized caller reads the project's budget state.\"],\"outcomes\":[\"The new manual version is inactive and there is no active budget solely because of the progress read.\",\"The new manual version is active, with activation fields populated or left inconsistently empty.\"],\"observer\":\"Staff and viewer budget/progress projections see whether the new version is the active budget.\"}},{\"unit\":\"A28\",\"subject\":\"service credential expiry provenance\",\"kind\":\"formal contradiction\",\"text\":\"The normative rule adds a service credential's expires_at to times that are \\\"validated and kept as supplied, never replaced by the clock,\\\" while the formal invariant says \\\"an expiry it writes is that instant plus its TTL.\\\"\",\"question\":\"When an administrator supplies a service credential expires_at, must the stored value remain the supplied instant or be replaced by operation_now plus a TTL?\",\"options\":[\"Keep the supplied expires_at exactly, treating it as the source-supplied exception to the TTL clause.\",\"Ignore or replace the supplied value with operation_now plus a configured TTL.\",\"Apply the TTL clause only to portal-generated expiries and amend the invariant to say so.\"],\"default_guess\":\"Keep the supplied expires_at and treat the formal invariant's TTL clause as applying only to portal-generated expiries.\",\"witness\":{\"initial\":\"An active service principal exists and an administrator may issue it a credential.\",\"events\":[\"The administrator requests a credential with expires_at set to a specific instant that differs from operation_now plus any TTL.\",\"The issuance operation persists the ServiceCredential.\"],\"outcomes\":[\"The stored expires_at equals the administrator-supplied instant.\",\"The stored expires_at equals operation_now plus a TTL, discarding the supplied instant.\"],\"observer\":\"The administrator sees the returned expiry, and authentication begins rejecting the credential at different times.\"}},{\"unit\":\"A28\",\"subject\":\"validation of source-supplied ServiceCredential.expires_at\",\"kind\":\"undefined validation\",\"text\":\"A28 says a service credential's expires_at is \\\"validated and kept as supplied\\\" but gives no acceptance rule for an expiry equal to now, earlier than now, or represented with an explicit offset despite persisted timestamps being offset-naive UTC.\",\"question\":\"Which supplied service-credential expiry values are valid, and must an offset-bearing instant be rejected or normalized before persistence?\",\"options\":[\"Require a UTC offset-naive instant strictly later than the operation's single now value.\",\"Accept past or equal expiries, creating an immediately unusable credential, but require offset-naive UTC.\",\"Accept offset-aware values and normalize them to offset-naive UTC before storage.\",\"Keep the supplied representation unchanged, even if offset-aware.\"],\"default_guess\":\"Normalize an offset-bearing instant to UTC offset-naive form and require it to be strictly later than operation_now.\",\"witness\":{\"initial\":\"An active service principal exists and an administrator may issue a credential.\",\"events\":[\"The administrator supplies expires_at equal to the operation instant, expressed with a UTC offset.\",\"The issuance operation validates the request.\"],\"outcomes\":[\"Issuance is rejected because the expiry is not future and/or is offset-aware.\",\"Issuance succeeds after normalization, producing a credential that is immediately expired.\",\"Issuance succeeds and persists an offset-aware datetime, contradicting the persisted timestamp representation rule.\"],\"observer\":\"The administrator sees success versus rejection; persistence and subsequent bearer authentication expose the stored representation and immediate usability.\"}}]}",
+ "set_aside": []
+}

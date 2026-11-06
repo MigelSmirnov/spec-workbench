@@ -1,0 +1,131 @@
+{
+ "open_points": [
+  {
+   "unit": "A5",
+   "subject": "project_tracking.list_project_progress transaction semantics",
+   "kind": "contradiction",
+   "text": "A5 says “the staff progress read project_tracking.list_project_progress creates the empty manual budget version when the project has none”, while A22 says “A read path rolls back once right after its last read” and “a write path commits once on success.”",
+   "question": "Is list_project_progress a committing write path despite being a read, or must the read-path rollback rule apply to it?",
+   "options": [
+    "Treat list_project_progress as a write path and commit the new manual budget version.",
+    "Treat it as a read path and roll back, so the claimed version creation does not persist.",
+    "Add a defined exception allowing this read path to commit."
+   ],
+   "default_guess": "Treat this operation as an explicit exception to A22 and commit the new version.",
+   "witness": {
+    "initial": "An archived project is accessible to a staff member and has no manual budget version.",
+    "events": [
+     "The staff member calls project_tracking.list_project_progress.",
+     "The operation creates an empty manual budget version in its transaction."
+    ],
+    "outcomes": [
+     "Applying A5, the transaction commits and the manual budget version remains persisted.",
+     "Applying A22's read-path rule, the transaction rolls back and no manual budget version remains."
+    ],
+    "observer": "A later budget or progress read, or any repository inspection, sees whether the version exists."
+   }
+  },
+  {
+   "unit": "A5",
+   "subject": "implicitly created manual BudgetVersion lifecycle",
+   "kind": "missing state rule",
+   "text": "A5 says only that the read “creates the empty manual budget version”; it does not state the new BudgetVersion.status or whether activated_at, activated_by and deactivated_at are populated. M22 separately says activation is always an explicit staff action.",
+   "question": "In which lifecycle state is the implicitly created manual budget version, and does its creation count as activation?",
+   "options": [
+    "Create it inactive with no activation provenance.",
+    "Create it active immediately, treating initial creation as distinct from activation.",
+    "Create and activate it in the same operation, including activation provenance and any required deactivation of a previous active version."
+   ],
+   "default_guess": "Create it inactive because the caller requested a progress read, not an explicit activation.",
+   "witness": {
+    "initial": "An archived project has no manual budget version and no active budget version.",
+    "events": [
+     "An authorized staff member lists project progress.",
+     "The operation creates the required empty manual BudgetVersion."
+    ],
+    "outcomes": [
+     "The version is inactive, so subsequent active-budget views remain not configured.",
+     "The version is active, so subsequent budget and progress views use an empty active manual budget."
+    ],
+    "observer": "Staff or viewers performing later budget and progress reads see different availability and active-version results."
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "ServiceCredential.expires_at acceptance",
+   "kind": "missing validation rule",
+   "text": "A28 adds a service credential's expires_at to times that “are validated and kept as supplied” but gives no validation conditions for that supplied expiry.",
+   "question": "Which supplied service-credential expiry values must be refused—for example an expiry equal to now, already in the past, or unreasonably far in the future?",
+   "options": [
+    "Accept any well-formed UTC expiry, including an already expired credential.",
+    "Require expires_at to satisfy now < expires_at when the credential is issued.",
+    "Apply an unstated minimum or maximum lifetime bound."
+   ],
+   "default_guess": "Accept any well-formed expiry and let the normal now < expires_at rule make a newly issued credential immediately unusable when appropriate.",
+   "witness": {
+    "initial": "An active service principal exists and an administrator is authorized to issue a credential.",
+    "events": [
+     "The administrator requests a credential with expires_at equal to the operation's current instant."
+    ],
+    "outcomes": [
+     "The request succeeds and creates a credential that is expired immediately.",
+     "The request is refused because a new credential's supplied expiry must be strictly in the future."
+    ],
+    "observer": "The administrator sees success with a one-time secret versus a validation refusal."
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "representation of source-supplied service credential expiry",
+   "kind": "contradictory representation",
+   "text": "A28 says “Persisted timestamps are UTC, stored as offset-naive datetimes” and also says a service credential's source-supplied expires_at is “kept as supplied, never replaced by the clock.”",
+   "question": "What happens when a caller supplies an offset-aware expiry or an expiry expressed with a non-UTC offset?",
+   "options": [
+    "Reject every offset-aware or non-UTC value so the supplied representation can be persisted unchanged.",
+    "Convert the same instant to offset-naive UTC before persistence, despite not keeping its representation as supplied.",
+    "Persist the supplied offset-aware value, violating the offset-naive persistence rule."
+   ],
+   "default_guess": "Normalize the instant to offset-naive UTC while preserving its temporal value.",
+   "witness": {
+    "initial": "An administrator may issue a service credential with an optional supplied expiry.",
+    "events": [
+     "The administrator supplies expires_at as 2026-11-07T12:00:00+02:00."
+    ],
+    "outcomes": [
+     "The request is rejected because persisted timestamps must already be offset-naive UTC.",
+     "The request succeeds and stores 2026-11-07T10:00:00 as offset-naive UTC.",
+     "The request succeeds and stores the original offset-aware value."
+    ],
+    "observer": "The administrator sees acceptance or refusal, and later credential authentication observes the stored expiry."
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "clock-policy formal invariant for supplied expiries",
+   "kind": "scope contradiction",
+   "text": "The normative rule classifies a service credential's expires_at as source-supplied and says it is “kept as supplied”, while the formal invariant says “an expiry it writes is that instant plus its TTL” without excluding source-supplied expiries.",
+   "question": "Does the instant-plus-TTL invariant exclude a supplied ServiceCredential.expires_at, or must credential issuance replace or constrain the supplied value to a TTL-derived value?",
+   "options": [
+    "Exclude all source-supplied expiries from the instant-plus-TTL clause.",
+    "Require the supplied expiry to equal operation_now plus a defined TTL.",
+    "Ignore the supplied expiry and replace it with operation_now plus a TTL."
+   ],
+   "default_guess": "Interpret the instant-plus-TTL clause as applying only to portal-derived expiries and preserve the supplied service-credential expiry.",
+   "witness": {
+    "initial": "An administrator is issuing a service credential, and no service-credential TTL is specified in A30.",
+    "events": [
+     "The operation reads now once.",
+     "The administrator supplies an expires_at value seven days after now."
+    ],
+    "outcomes": [
+     "Following the source-time rule, the credential stores the supplied seven-day expiry.",
+     "Following the unqualified formal invariant, the operation must derive an expiry from a TTL, reject the supplied value, or cannot implement the invariant because no such TTL is defined."
+    ],
+    "observer": "The administrator and subsequent bearer authentication see whether the supplied expiry governs the credential."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A5\",\"subject\":\"project_tracking.list_project_progress transaction semantics\",\"kind\":\"contradiction\",\"text\":\"A5 says “the staff progress read project_tracking.list_project_progress creates the empty manual budget version when the project has none”, while A22 says “A read path rolls back once right after its last read” and “a write path commits once on success.”\",\"question\":\"Is list_project_progress a committing write path despite being a read, or must the read-path rollback rule apply to it?\",\"options\":[\"Treat list_project_progress as a write path and commit the new manual budget version.\",\"Treat it as a read path and roll back, so the claimed version creation does not persist.\",\"Add a defined exception allowing this read path to commit.\"],\"default_guess\":\"Treat this operation as an explicit exception to A22 and commit the new version.\",\"witness\":{\"initial\":\"An archived project is accessible to a staff member and has no manual budget version.\",\"events\":[\"The staff member calls project_tracking.list_project_progress.\",\"The operation creates an empty manual budget version in its transaction.\"],\"outcomes\":[\"Applying A5, the transaction commits and the manual budget version remains persisted.\",\"Applying A22's read-path rule, the transaction rolls back and no manual budget version remains.\"],\"observer\":\"A later budget or progress read, or any repository inspection, sees whether the version exists.\"}},{\"unit\":\"A5\",\"subject\":\"implicitly created manual BudgetVersion lifecycle\",\"kind\":\"missing state rule\",\"text\":\"A5 says only that the read “creates the empty manual budget version”; it does not state the new BudgetVersion.status or whether activated_at, activated_by and deactivated_at are populated. M22 separately says activation is always an explicit staff action.\",\"question\":\"In which lifecycle state is the implicitly created manual budget version, and does its creation count as activation?\",\"options\":[\"Create it inactive with no activation provenance.\",\"Create it active immediately, treating initial creation as distinct from activation.\",\"Create and activate it in the same operation, including activation provenance and any required deactivation of a previous active version.\"],\"default_guess\":\"Create it inactive because the caller requested a progress read, not an explicit activation.\",\"witness\":{\"initial\":\"An archived project has no manual budget version and no active budget version.\",\"events\":[\"An authorized staff member lists project progress.\",\"The operation creates the required empty manual BudgetVersion.\"],\"outcomes\":[\"The version is inactive, so subsequent active-budget views remain not configured.\",\"The version is active, so subsequent budget and progress views use an empty active manual budget.\"],\"observer\":\"Staff or viewers performing later budget and progress reads see different availability and active-version results.\"}},{\"unit\":\"A28\",\"subject\":\"ServiceCredential.expires_at acceptance\",\"kind\":\"missing validation rule\",\"text\":\"A28 adds a service credential's expires_at to times that “are validated and kept as supplied” but gives no validation conditions for that supplied expiry.\",\"question\":\"Which supplied service-credential expiry values must be refused—for example an expiry equal to now, already in the past, or unreasonably far in the future?\",\"options\":[\"Accept any well-formed UTC expiry, including an already expired credential.\",\"Require expires_at to satisfy now < expires_at when the credential is issued.\",\"Apply an unstated minimum or maximum lifetime bound.\"],\"default_guess\":\"Accept any well-formed expiry and let the normal now < expires_at rule make a newly issued credential immediately unusable when appropriate.\",\"witness\":{\"initial\":\"An active service principal exists and an administrator is authorized to issue a credential.\",\"events\":[\"The administrator requests a credential with expires_at equal to the operation's current instant.\"],\"outcomes\":[\"The request succeeds and creates a credential that is expired immediately.\",\"The request is refused because a new credential's supplied expiry must be strictly in the future.\"],\"observer\":\"The administrator sees success with a one-time secret versus a validation refusal.\"}},{\"unit\":\"A28\",\"subject\":\"representation of source-supplied service credential expiry\",\"kind\":\"contradictory representation\",\"text\":\"A28 says “Persisted timestamps are UTC, stored as offset-naive datetimes” and also says a service credential's source-supplied expires_at is “kept as supplied, never replaced by the clock.”\",\"question\":\"What happens when a caller supplies an offset-aware expiry or an expiry expressed with a non-UTC offset?\",\"options\":[\"Reject every offset-aware or non-UTC value so the supplied representation can be persisted unchanged.\",\"Convert the same instant to offset-naive UTC before persistence, despite not keeping its representation as supplied.\",\"Persist the supplied offset-aware value, violating the offset-naive persistence rule.\"],\"default_guess\":\"Normalize the instant to offset-naive UTC while preserving its temporal value.\",\"witness\":{\"initial\":\"An administrator may issue a service credential with an optional supplied expiry.\",\"events\":[\"The administrator supplies expires_at as 2026-11-07T12:00:00+02:00.\"],\"outcomes\":[\"The request is rejected because persisted timestamps must already be offset-naive UTC.\",\"The request succeeds and stores 2026-11-07T10:00:00 as offset-naive UTC.\",\"The request succeeds and stores the original offset-aware value.\"],\"observer\":\"The administrator sees acceptance or refusal, and later credential authentication observes the stored expiry.\"}},{\"unit\":\"A28\",\"subject\":\"clock-policy formal invariant for supplied expiries\",\"kind\":\"scope contradiction\",\"text\":\"The normative rule classifies a service credential's expires_at as source-supplied and says it is “kept as supplied”, while the formal invariant says “an expiry it writes is that instant plus its TTL” without excluding source-supplied expiries.\",\"question\":\"Does the instant-plus-TTL invariant exclude a supplied ServiceCredential.expires_at, or must credential issuance replace or constrain the supplied value to a TTL-derived value?\",\"options\":[\"Exclude all source-supplied expiries from the instant-plus-TTL clause.\",\"Require the supplied expiry to equal operation_now plus a defined TTL.\",\"Ignore the supplied expiry and replace it with operation_now plus a TTL.\"],\"default_guess\":\"Interpret the instant-plus-TTL clause as applying only to portal-derived expiries and preserve the supplied service-credential expiry.\",\"witness\":{\"initial\":\"An administrator is issuing a service credential, and no service-credential TTL is specified in A30.\",\"events\":[\"The operation reads now once.\",\"The administrator supplies an expires_at value seven days after now.\"],\"outcomes\":[\"Following the source-time rule, the credential stores the supplied seven-day expiry.\",\"Following the unqualified formal invariant, the operation must derive an expiry from a TTL, reject the supplied value, or cannot implement the invariant because no such TTL is defined.\"],\"observer\":\"The administrator and subsequent bearer authentication see whether the supplied expiry governs the credential.\"}}]}",
+ "set_aside": []
+}

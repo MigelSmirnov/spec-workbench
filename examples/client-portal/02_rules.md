@@ -216,6 +216,11 @@ The table is rules data: `rules.project_guard_sequence` (SPEC_STANDARD 15.3.1, a
 | `archived` | allowed | rejected (`archived_project`) |
 | unknown project | rejected | rejected (`unknown_project`) |
 
+The one write an archived project admits: the staff progress read
+`project_tracking.list_project_progress` creates the empty manual budget
+version when the project has none (State 0 R0-24); no other read creates
+a budget version.
+
 Only `active` and `archived` are status literals the portal acts on (State 1
 M16). The project guard of A4 reads the validation answer's `exists`
 (false → not found) and, for a mutation, its `status` (anything other than
@@ -1124,7 +1129,8 @@ the instants are UTC, their stored form is offset-naive.
 ### Required tests
 
 - A test per multi-write operation (activation, revocation cascades,
-  bootstrap) that its written timestamps are one instant.
+  bootstrap) that its written timestamps, other than audit `occurred_at`,
+  are one instant.
 
 ### Consequence
 

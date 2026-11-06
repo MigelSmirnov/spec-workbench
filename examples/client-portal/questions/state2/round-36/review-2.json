@@ -1,0 +1,83 @@
+{
+ "open_points": [
+  {
+   "unit": "A5",
+   "subject": "project_tracking.list_project_progress transaction semantics",
+   "kind": "contradiction",
+   "text": "A5 says, \"The one write an archived project admits: the staff progress read project_tracking.list_project_progress creates the empty manual budget version when the project has none,\" while A22 says, \"A read path rolls back once right after its last read.\"",
+   "question": "Is list_project_progress a committing write path when it lazily creates the manual budget version, or must it follow the read-path rollback rule?",
+   "options": [
+    "Commit the newly created manual budget version and treat this operation as an exception to A22's read-path rule.",
+    "Roll back as a read path, so the promised manual budget version is not persisted.",
+    "Refuse the read because a read path cannot perform the required write."
+   ],
+   "default_guess": "Treat list_project_progress as a write transaction only when initialization is needed, commit once, and otherwise use the read-path rule.",
+   "witness": {
+    "initial": "An archived project is accessible to an operator through an existing assignment and has no manual budget version.",
+    "events": [
+     "The operator calls project_tracking.list_project_progress.",
+     "The operation observes that no manual budget version exists and constructs an empty one."
+    ],
+    "outcomes": [
+     "Following A5, the operation commits the empty manual budget version and returns the progress result.",
+     "Following A22, the operation rolls back after its reads, so no manual budget version persists."
+    ],
+    "observer": "The operator or a later reader, who can observe whether the manual budget version now exists."
+   }
+  },
+  {
+   "unit": "A5",
+   "subject": "active-project requirement for linked writes",
+   "kind": "contradiction",
+   "text": "A5 permits creation of an empty manual budget version for an archived project, but A4 formal invariant PLAT-REG-003 says, \"a linked mutation succeeds only after server-side typed validation reports the same UUID as active.\"",
+   "question": "Does the archived-project lazy manual-budget creation override PLAT-REG-003, or must the active-only linked-mutation invariant still reject it?",
+   "options": [
+    "Make this creation an explicit exception to PLAT-REG-003.",
+    "Apply PLAT-REG-003 and reject or suppress creation on an archived project.",
+    "Classify the side effect as something other than a linked mutation, despite persisting a project-scoped BudgetVersion."
+   ],
+   "default_guess": "Make the named lazy creation the sole explicit exception to the active-only linked-mutation invariant.",
+   "witness": {
+    "initial": "Registry validation reports the requested project UUID with archived status; the project has no manual budget version and the staff actor otherwise has read access.",
+    "events": [
+     "The staff actor requests the project progress list.",
+     "The guard receives the archived validation result."
+    ],
+    "outcomes": [
+     "A5 allows the read and persists an empty manual budget version.",
+     "PLAT-REG-003 refuses the persistence because Registry did not report the project active."
+    ],
+    "observer": "The staff caller sees success versus refusal, and subsequent readers see whether the budget version exists."
+   }
+  },
+  {
+   "unit": "A5",
+   "subject": "concurrent lazy creation of the singleton manual budget version",
+   "kind": "unspecified concurrency outcome",
+   "text": "A5 says list_project_progress \"creates the empty manual budget version when the project has none,\" while A18 requires \"at most one manual BudgetVersion per project,\" but no rule says how concurrent first reads are classified when both observe none.",
+   "question": "When concurrent staff progress reads race to create the project's sole manual budget version, must every read succeed using the one resulting version, or may a losing read fail with a persistence/conflict error?",
+   "options": [
+    "Create-or-get atomically so every concurrent read succeeds and all return progress based on the same version.",
+    "Allow one read to create the version and refuse another with a conflict or persistence error.",
+    "Serialize the entire absence check and creation so later reads observe the committed version before deciding."
+   ],
+   "default_guess": "Implement atomic create-or-get semantics so exactly one version is stored and all authorized reads succeed.",
+   "witness": {
+    "initial": "An archived project has no manual budget version; two authorized staff sessions can read its progress.",
+    "events": [
+     "Staff A and Staff B call list_project_progress concurrently.",
+     "Both calls observe, or can initially observe, that no manual budget version exists.",
+     "Both attempt the required lazy creation."
+    ],
+    "outcomes": [
+     "One insert wins and the other call re-reads the resulting version; both calls succeed and exactly one version exists.",
+     "One insert wins while the other call surfaces a uniqueness, persistence, or conflict refusal; exactly one version exists but only one read succeeds."
+    ],
+    "observer": "Staff A or Staff B sees success versus an error for the same otherwise valid read."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A5\",\"subject\":\"project_tracking.list_project_progress transaction semantics\",\"kind\":\"contradiction\",\"text\":\"A5 says, \\\"The one write an archived project admits: the staff progress read project_tracking.list_project_progress creates the empty manual budget version when the project has none,\\\" while A22 says, \\\"A read path rolls back once right after its last read.\\\"\",\"question\":\"Is list_project_progress a committing write path when it lazily creates the manual budget version, or must it follow the read-path rollback rule?\",\"options\":[\"Commit the newly created manual budget version and treat this operation as an exception to A22's read-path rule.\",\"Roll back as a read path, so the promised manual budget version is not persisted.\",\"Refuse the read because a read path cannot perform the required write.\"],\"default_guess\":\"Treat list_project_progress as a write transaction only when initialization is needed, commit once, and otherwise use the read-path rule.\",\"witness\":{\"initial\":\"An archived project is accessible to an operator through an existing assignment and has no manual budget version.\",\"events\":[\"The operator calls project_tracking.list_project_progress.\",\"The operation observes that no manual budget version exists and constructs an empty one.\"],\"outcomes\":[\"Following A5, the operation commits the empty manual budget version and returns the progress result.\",\"Following A22, the operation rolls back after its reads, so no manual budget version persists.\"],\"observer\":\"The operator or a later reader, who can observe whether the manual budget version now exists.\"}},{\"unit\":\"A5\",\"subject\":\"active-project requirement for linked writes\",\"kind\":\"contradiction\",\"text\":\"A5 permits creation of an empty manual budget version for an archived project, but A4 formal invariant PLAT-REG-003 says, \\\"a linked mutation succeeds only after server-side typed validation reports the same UUID as active.\\\"\",\"question\":\"Does the archived-project lazy manual-budget creation override PLAT-REG-003, or must the active-only linked-mutation invariant still reject it?\",\"options\":[\"Make this creation an explicit exception to PLAT-REG-003.\",\"Apply PLAT-REG-003 and reject or suppress creation on an archived project.\",\"Classify the side effect as something other than a linked mutation, despite persisting a project-scoped BudgetVersion.\"],\"default_guess\":\"Make the named lazy creation the sole explicit exception to the active-only linked-mutation invariant.\",\"witness\":{\"initial\":\"Registry validation reports the requested project UUID with archived status; the project has no manual budget version and the staff actor otherwise has read access.\",\"events\":[\"The staff actor requests the project progress list.\",\"The guard receives the archived validation result.\"],\"outcomes\":[\"A5 allows the read and persists an empty manual budget version.\",\"PLAT-REG-003 refuses the persistence because Registry did not report the project active.\"],\"observer\":\"The staff caller sees success versus refusal, and subsequent readers see whether the budget version exists.\"}},{\"unit\":\"A5\",\"subject\":\"concurrent lazy creation of the singleton manual budget version\",\"kind\":\"unspecified concurrency outcome\",\"text\":\"A5 says list_project_progress \\\"creates the empty manual budget version when the project has none,\\\" while A18 requires \\\"at most one manual BudgetVersion per project,\\\" but no rule says how concurrent first reads are classified when both observe none.\",\"question\":\"When concurrent staff progress reads race to create the project's sole manual budget version, must every read succeed using the one resulting version, or may a losing read fail with a persistence/conflict error?\",\"options\":[\"Create-or-get atomically so every concurrent read succeeds and all return progress based on the same version.\",\"Allow one read to create the version and refuse another with a conflict or persistence error.\",\"Serialize the entire absence check and creation so later reads observe the committed version before deciding.\"],\"default_guess\":\"Implement atomic create-or-get semantics so exactly one version is stored and all authorized reads succeed.\",\"witness\":{\"initial\":\"An archived project has no manual budget version; two authorized staff sessions can read its progress.\",\"events\":[\"Staff A and Staff B call list_project_progress concurrently.\",\"Both calls observe, or can initially observe, that no manual budget version exists.\",\"Both attempt the required lazy creation.\"],\"outcomes\":[\"One insert wins and the other call re-reads the resulting version; both calls succeed and exactly one version exists.\",\"One insert wins while the other call surfaces a uniqueness, persistence, or conflict refusal; exactly one version exists but only one read succeeds.\"],\"observer\":\"Staff A or Staff B sees success versus an error for the same otherwise valid read.\"}}]}",
+ "set_aside": []
+}

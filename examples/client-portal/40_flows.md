@@ -771,7 +771,8 @@ validates payment amounts.
 6. `capability:project_tracking.list_project_progress`,
    `capability:project_tracking.list_project_payments` and
    `capability:photo_management.list_progress_photos` read the project's
-   records.
+   records; the progress list first creates the empty manual budget version
+   when the project has none, an archived one included (R0-24).
 
 ### Outcomes
 

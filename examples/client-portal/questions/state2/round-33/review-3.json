@@ -1,0 +1,102 @@
+{
+ "open_points": [
+  {
+   "unit": "A11",
+   "subject": "revocation visibility for in-flight requests",
+   "kind": "contradictory concurrency boundary",
+   "text": "“Immediate” means every request authenticated after the revocation commits observes it; no grace period. This conflicts with M07/A4/INV-005, which say revocation blocks “the next project-scoped authorization check” or “the next authorization check” immediately.",
+   "question": "Must a request authenticated before the revocation commit but reaching its project-access check after the commit observe the revocation?",
+   "options": [
+    "It must observe the revocation because its authorization check occurs after commit.",
+    "It may continue under the pre-revocation access decision because it authenticated before commit."
+   ],
+   "default_guess": "Reject it if the project-access check occurs after the revocation commit.",
+   "witness": {
+    "initial": "An active operator assignment permits project P; a mutation request has authenticated but has not yet checked the assignment.",
+    "events": [
+     "The operator starts the request and completes session authentication.",
+     "An administrator revokes the operator's assignment to P and the revocation commits.",
+     "The operator's request resumes and performs its project-access check."
+    ],
+    "outcomes": [
+     "The request is rejected because the next authorization check must observe the revoked assignment.",
+     "The request succeeds because A11 guarantees observation only for requests authenticated after the commit."
+    ],
+    "observer": "The operator sees success versus rejection, and project records may be mutated only in the second outcome."
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "service credential expires_at timezone validation",
+   "kind": "unspecified normalization",
+   "text": "A service credential's `expires_at` is “validated and kept as supplied,” while persisted timestamps must be UTC offset-naive and “an offset-aware persisted timestamp” is forbidden.",
+   "question": "Which supplied timestamp forms are accepted for `ServiceCredential.expires_at`, and must an offset-aware value be rejected or converted to an equivalent UTC offset-naive value?",
+   "options": [
+    "Accept offset-aware timestamps and convert the instant to UTC offset-naive storage.",
+    "Accept only already offset-naive UTC timestamps and reject offset-aware input."
+   ],
+   "default_guess": "Accept a timestamp with an explicit offset, convert it to the equivalent UTC instant, and persist it offset-naive.",
+   "witness": {
+    "initial": "An administrator is issuing a credential for an active service principal.",
+    "events": [
+     "The administrator supplies `expires_at` as `2026-11-06T12:00:00+01:00`."
+    ],
+    "outcomes": [
+     "The credential is accepted and stores the equivalent UTC-naive value `2026-11-06 11:00:00`.",
+     "The request is rejected because the supplied value is offset-aware and values must be kept as supplied."
+    ],
+    "observer": "The administrator sees credential issuance versus an input rejection."
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "service credential expires_at validity",
+   "kind": "vague validation",
+   "text": "A service credential's `expires_at` is said to be “validated and kept as supplied,” but no validity conditions are stated beyond the rule for deciding when an existing credential is expired.",
+   "question": "May a newly issued service credential have `expires_at` equal to or earlier than the operation time, or must a non-null expiry be strictly in the future?",
+   "options": [
+    "Permit any representable UTC expiry, including one that makes the new credential immediately expired.",
+    "Reject issuance unless a non-null expiry satisfies `now < expires_at`."
+   ],
+   "default_guess": "Require a non-null expiry to be strictly later than the issuance operation's clock instant.",
+   "witness": {
+    "initial": "An administrator is issuing a credential at `2026-11-06 12:00:00` UTC.",
+    "events": [
+     "The administrator supplies `expires_at = 2026-11-06 11:00:00` UTC."
+    ],
+    "outcomes": [
+     "A credential record and one-time secret are issued, but the credential is unusable immediately.",
+     "Issuance is refused because the supplied expiry is not in the future."
+    ],
+    "observer": "The administrator sees successful issuance versus rejection."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "archived-project progress read side effect",
+   "kind": "missing exception in rule",
+   "text": "R0-24 says a staff progress-list read “creates that empty manual budget version, also for an archived project,” while A5 says archived projects allow reads but reject portal mutations and PLAT-REG-003 says a linked mutation succeeds only after validation reports the project active.",
+   "question": "Does the named progress-read side effect override A5 and PLAT-REG-003 for an archived project, or must the read return without creating the manual budget version?",
+   "options": [
+    "The progress read is a specific exception and creates the empty manual budget version despite archival.",
+    "The archived-project mutation rule prevails, so the read succeeds without creating anything or is refused when creation would be required."
+   ],
+   "default_guess": "Treat R0-24 as an explicit exception: authorize the read as a read and atomically create the empty manual budget version.",
+   "witness": {
+    "initial": "Registry reports project P as archived; P has an active staff access path and no manual budget version.",
+    "events": [
+     "Authorized staff requests P's progress list.",
+     "The project guard receives the archived Registry status."
+    ],
+    "outcomes": [
+     "The read succeeds and creates an empty manual BudgetVersion under the R0-24 exception.",
+     "The archived mutation rule prevents creation, so the read either returns progress without a manual version or is rejected."
+    ],
+    "observer": "Staff can later observe whether the manual budget exists; audit and persistence observers also see the side effect only in the first outcome."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A11\",\"subject\":\"revocation visibility for in-flight requests\",\"kind\":\"contradictory concurrency boundary\",\"text\":\"“Immediate” means every request authenticated after the revocation commits observes it; no grace period. This conflicts with M07/A4/INV-005, which say revocation blocks “the next project-scoped authorization check” or “the next authorization check” immediately.\",\"question\":\"Must a request authenticated before the revocation commit but reaching its project-access check after the commit observe the revocation?\",\"options\":[\"It must observe the revocation because its authorization check occurs after commit.\",\"It may continue under the pre-revocation access decision because it authenticated before commit.\"],\"default_guess\":\"Reject it if the project-access check occurs after the revocation commit.\",\"witness\":{\"initial\":\"An active operator assignment permits project P; a mutation request has authenticated but has not yet checked the assignment.\",\"events\":[\"The operator starts the request and completes session authentication.\",\"An administrator revokes the operator's assignment to P and the revocation commits.\",\"The operator's request resumes and performs its project-access check.\"],\"outcomes\":[\"The request is rejected because the next authorization check must observe the revoked assignment.\",\"The request succeeds because A11 guarantees observation only for requests authenticated after the commit.\"],\"observer\":\"The operator sees success versus rejection, and project records may be mutated only in the second outcome.\"}},{\"unit\":\"A28\",\"subject\":\"service credential expires_at timezone validation\",\"kind\":\"unspecified normalization\",\"text\":\"A service credential's `expires_at` is “validated and kept as supplied,” while persisted timestamps must be UTC offset-naive and “an offset-aware persisted timestamp” is forbidden.\",\"question\":\"Which supplied timestamp forms are accepted for `ServiceCredential.expires_at`, and must an offset-aware value be rejected or converted to an equivalent UTC offset-naive value?\",\"options\":[\"Accept offset-aware timestamps and convert the instant to UTC offset-naive storage.\",\"Accept only already offset-naive UTC timestamps and reject offset-aware input.\"],\"default_guess\":\"Accept a timestamp with an explicit offset, convert it to the equivalent UTC instant, and persist it offset-naive.\",\"witness\":{\"initial\":\"An administrator is issuing a credential for an active service principal.\",\"events\":[\"The administrator supplies `expires_at` as `2026-11-06T12:00:00+01:00`.\"],\"outcomes\":[\"The credential is accepted and stores the equivalent UTC-naive value `2026-11-06 11:00:00`.\",\"The request is rejected because the supplied value is offset-aware and values must be kept as supplied.\"],\"observer\":\"The administrator sees credential issuance versus an input rejection.\"}},{\"unit\":\"A28\",\"subject\":\"service credential expires_at validity\",\"kind\":\"vague validation\",\"text\":\"A service credential's `expires_at` is said to be “validated and kept as supplied,” but no validity conditions are stated beyond the rule for deciding when an existing credential is expired.\",\"question\":\"May a newly issued service credential have `expires_at` equal to or earlier than the operation time, or must a non-null expiry be strictly in the future?\",\"options\":[\"Permit any representable UTC expiry, including one that makes the new credential immediately expired.\",\"Reject issuance unless a non-null expiry satisfies `now < expires_at`.\"],\"default_guess\":\"Require a non-null expiry to be strictly later than the issuance operation's clock instant.\",\"witness\":{\"initial\":\"An administrator is issuing a credential at `2026-11-06 12:00:00` UTC.\",\"events\":[\"The administrator supplies `expires_at = 2026-11-06 11:00:00` UTC.\"],\"outcomes\":[\"A credential record and one-time secret are issued, but the credential is unusable immediately.\",\"Issuance is refused because the supplied expiry is not in the future.\"],\"observer\":\"The administrator sees successful issuance versus rejection.\"}},{\"unit\":\"context\",\"subject\":\"archived-project progress read side effect\",\"kind\":\"missing exception in rule\",\"text\":\"R0-24 says a staff progress-list read “creates that empty manual budget version, also for an archived project,” while A5 says archived projects allow reads but reject portal mutations and PLAT-REG-003 says a linked mutation succeeds only after validation reports the project active.\",\"question\":\"Does the named progress-read side effect override A5 and PLAT-REG-003 for an archived project, or must the read return without creating the manual budget version?\",\"options\":[\"The progress read is a specific exception and creates the empty manual budget version despite archival.\",\"The archived-project mutation rule prevails, so the read succeeds without creating anything or is refused when creation would be required.\"],\"default_guess\":\"Treat R0-24 as an explicit exception: authorize the read as a read and atomically create the empty manual budget version.\",\"witness\":{\"initial\":\"Registry reports project P as archived; P has an active staff access path and no manual budget version.\",\"events\":[\"Authorized staff requests P's progress list.\",\"The project guard receives the archived Registry status.\"],\"outcomes\":[\"The read succeeds and creates an empty manual BudgetVersion under the R0-24 exception.\",\"The archived mutation rule prevents creation, so the read either returns progress without a manual version or is rejected.\"],\"observer\":\"Staff can later observe whether the manual budget exists; audit and persistence observers also see the side effect only in the first outcome.\"}}]}",
+ "set_aside": []
+}
