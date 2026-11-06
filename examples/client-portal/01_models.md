@@ -73,7 +73,7 @@ The former status, kept:
   policy is a State 2 rule. Negative amounts never appear in stored records,
   with one named exception: an expense allocation amount (M26, M29);
   otherwise negative values exist only in derived values: balances, and
-  the exact sums over such allocations (never clamped).
+  the sums over such allocations (never clamped).
 - Timestamps are timezone-aware UTC. Portal-owned event times are distinct
   from source-system times (`captured_at` vs `registry_updated_at` pattern).
 - Secrets (viewer access tokens, session tokens, passwords, reset tokens,
@@ -1442,7 +1442,7 @@ None.
   fingerprinting, which use canonical `(target, section_id, amount)` order.
 - An expense's instruction list must be non-empty and sum to the expense
   total (at creation the total is positive, so an empty list never sums);
-  an individual amount is not otherwise constrained (zero and negative
+  an individual amount's sign is not constrained (zero and negative
   amounts are accepted and stored, M29).
 
 ### Identity
@@ -1457,10 +1457,11 @@ value
 ### Carried changes
 
 The former `amount (> 0)` is not a rule of the accepted spec 459ac96c or its
-code (`core/models.py` `AllocationInstruction`: unbounded `Decimal`;
+code (`core/models.py` `AllocationInstruction`: no sign bound;
 `domain/expense_management.py` `_validate_allocation_sum` and
-`application/expense_intake.py` `_validate_initial_allocations` check only
-the sum and, on correction and re-allocation, a non-empty list). Owner
+`application/expense_intake.py` `_validate_initial_allocations` check no
+amount's sign, only the sum and, on correction and re-allocation, a
+non-empty list). Owner
 2026-11-06: current service behaviour accepted; technical decisions
 delegated. Requiring a positive amount is a candidate Factory change
 (SOURCE.md "Accepted service quirks").
@@ -1494,8 +1495,8 @@ None.
   `provenance_ref: str` (portable OCR provenance),
   `project_id: UUID`, `confirmed_by: UUID` (staff),
   `allocations: list[AllocationInstruction]` (may target sections or
-  `other_expenses`; sum must equal `total_amount`; amounts otherwise
-  unconstrained, M26).
+  `other_expenses`; sum must equal `total_amount`; amounts of any
+  sign, M26).
 - `intake_fingerprint` is computed canonically by `expense_intake` over the
   accepted projected source facts, project, `file_ref`, and sorted initial
   allocation instructions; authenticated actor identity is provenance and is
@@ -1547,7 +1548,8 @@ None.
   conflict storing nothing. Corrections (supplier, date, amount, included) are staff
   actions on an active project; an amount correction and the matching
   allocation adjustment are one atomic operation (sum invariant holds at
-  every commit point); exclusion removes the expense from totals but never
+  every commit point); a corrected total may be zero, never negative;
+  exclusion removes the expense from totals but never
   hides it.
 
 ### Identity
@@ -1583,7 +1585,7 @@ None.
 - **Fields:** `allocation_id: UUID`, `expense_id: UUID`,
   `target: AllocationTargetKind (section | other_expenses)`,
   `section_id: UUID | None` `[closed-choice: required iff target =
-  section]`, `amount: Decimal` (as instructed, M26), `created_at`, `created_by`,
+  section]`, `amount: Decimal` (of any sign, M26), `created_at`, `created_by`,
   `updated_at | None`, `updated_by | None`.
 - **Rules:** the sum of an expense's allocations equals `total_amount`
   exactly; automatic proportional split is forbidden — every allocation is

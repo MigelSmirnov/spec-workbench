@@ -375,6 +375,13 @@ total, then each section belonging to the project), then replay by
 HTTP 422 with an empty body (`rules.http_router_backend.error_policy`), so
 which of them failed first is not observable to the caller; a replay with
 other content is the conflict of A8 (409).
+A correction body with a missing or wrongly typed field (an unknown
+allocation target included) is refused by request decoding before the
+guard. Once the route's project guard of A4 has passed, an expense
+correction checks its total first, then the expense, then the allocation instructions
+(non-empty, sum, then each section target) (Factory code `domain/expense_management.py`
+`correct_expense`); a refused total or allocation answers 422, an expense
+of no or another project 409.
 
 ### Carried changes
 
