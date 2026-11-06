@@ -1527,6 +1527,172 @@ backend-а.
   коду; такой лист либо читает детерминированный backend (§15.3.1), либо он
   недостижим и является ошибкой спеки (§15.3).
 
+### 6.12 `sqlite_unit_of_work_backend/v1`
+
+`rules.sqlite_unit_of_work_backend` — нормативный закрытый IR единицы работы
+SQLite над репозиториями `rules.persistence_backend` (§6.2, §6.3): стор, который
+на каждый `begin` открывает одно соединение, транзакция, которая строит на нём
+каждый репозиторий с собой в роли его контекста, и, по желанию, bootstrap-стор
+«создать, если пусто». Это отдельный модуль со своей разводкой, а не поле
+persistence IR: репозиторий v2 не владеет `begin`/`commit`/`rollback`/`close`
+(§6.2), их держит эта единица работы. Версия 1 поддерживает только emitter
+`python_sqlite_unit_of_work_v1`.
+
+Форма закрыта:
+
+```json
+{
+  "kind": "sqlite_unit_of_work_backend",
+  "schema_version": 1,
+  "backend": {"emitter": "python_sqlite_unit_of_work_v1"},
+  "wiring": {
+    "module": "<module>",
+    "models_module": "<package>.models",
+    "error_class": "<Error>",
+    "store_class": "<Store>",
+    "transaction_class": "<Transaction>",
+    "context_interface": "<ContextInterface>"
+  },
+  "accessors": [
+    {"accessor": "<name>", "repository": "<persistence_backend repository>"}
+  ],
+  "unbacked_methods": {"methods": ["<sorted names>"], "reason": "<recorded deferral>"},
+  "transaction": {
+    "connection": "one_per_begin",
+    "schema": "create_on_begin_in_accessor_order",
+    "close": "exactly_once",
+    "commit_failure": "rollback_then_close",
+    "use_after_close": "raise_error_class",
+    "error_translation": "every_exception_to_error_class"
+  },
+  "bootstrap_store": {
+    "module": "<module>",
+    "class": "<Class>",
+    "port": "<Port>",
+    "operation": "<operation>",
+    "guard_table": {"ref": "config", "path": ["<section>", "<table name key>"]},
+    "writes": [
+      {"parameter": "<parameter>", "repository": "<persistence_backend repository>", "method": "<insert method>"}
+    ],
+    "transaction": {
+      "begin": "exclusive",
+      "driver_autocommit": "disabled",
+      "schema": "create_for_written_repositories",
+      "when_not_empty": "rollback_and_return_false",
+      "close": "exactly_once",
+      "error_translation": "sqlite_database_error_to_error_class"
+    }
+  }
+}
+```
+
+`unbacked_methods` и `bootstrap_store` необязательны, остальные ключи
+обязательны; неизвестный ключ на любом уровне — DEFECT.
+
+**Разводка.** Имена в `wiring`, `bootstrap_store` (`module`, `class`, `port`,
+`operation`) и `accessor` — идентификаторы; `models_module` — dotted-путь.
+`error_class`, `store_class` и `transaction_class` различны; модуль
+`wiring.module` владеет ровно ими тремя (`module_functions`); модуль
+`bootstrap_store.module` отличается от него и владеет ровно
+`bootstrap_store.class`. У обоих модулей есть importable `module_paths`.
+`context_interface` — интерфейс `models` с ровно такими контрактами:
+
+```text
+<ContextInterface>.assert_open(self) -> None
+<ContextInterface>.translate_error(self, error: BaseException) -> BaseException
+```
+
+Фиксированные контракты версии:
+
+```text
+<Error>.__init__(self) -> None                                   единственный контракт класса
+<Store>.__init__(self, database_url: str) -> None                ровно эти два
+<Store>.begin(self) -> <Transaction>
+<Transaction>.__init__(self, connection: object) -> None
+<Transaction>.commit(self) -> None
+<Transaction>.rollback(self) -> None
+<Transaction>.assert_open(self) -> None
+<Transaction>.translate_error(self, error: BaseException) -> BaseException
+<Transaction>.<accessor>(self) -> <RepositoryInterface>          по одному на accessor
+<Repository>.__init__(self, connection: object, context: <ContextInterface>) -> None
+```
+
+Транзакция может объявить помощники `_assert_open(self) -> None` и
+`_translate_persistence_error(self, error: BaseException) -> <Error>` — только с
+этими сигнатурами; emitter определяет их всегда.
+
+**Accessors.** Список непуст; ни accessor, ни repository не повторяются; имя
+accessor-а не начинается с `_` и не совпадает с фиксированным методом
+транзакции. `repository` — строка `rules.persistence_backend.repositories`;
+модуль репозитория и его `schema_function` читаются оттуда и в этом IR не
+повторяются. Интерфейс accessor-а — тип возврата
+`contracts.<Transaction>.<accessor>`: контракт без параметров, возвращающий
+интерфейс `models`. Этот интерфейс объявляет хотя бы один метод, и репозиторий
+объявляет каждый его метод с той же сигнатурой. Схемы создаются, а репозитории
+строятся в порядке `accessors`.
+
+**Что выводится из contracts, а не перечисляется.** Каждый прочий контракт
+`<Transaction>.<method>` делегируется единственному accessor-у, чей интерфейс
+объявляет этот метод с той же сигнатурой. Ни одного или несколько — DEFECT,
+если метод не перечислен в `unbacked_methods`. `unbacked_methods.methods` —
+непустой отсортированный список без повторов; каждый элемент — объявленный
+делегируемый контракт транзакции, который не объявляет ни один интерфейс
+accessor-а (иначе DEFECT); `reason` — непустая запись отложенного решения.
+Такой метод проверяет, что транзакция открыта, и поднимает `<Error>`, никогда
+не возвращая молча `None` или пустой результат. Делегируемые и записывающие
+методы принимают только простые аннотированные позиционные параметры; имена в
+аннотациях — модели, builtins, локальные классы модуля или `UUID`, `date`,
+`datetime`, `Decimal`.
+
+**Семантика `transaction` фиксирована версией** (§6.0): блок — закрытые
+константы, иное значение — DEFECT. `begin` открывает одно соединение, создаёт
+схемы accessor-ов и возвращает транзакцию; любой сбой закрывает соединение и
+поднимает `<Error>`. Accessor проверяет открытость и возвращает свой
+репозиторий; делегированный метод переводит любое исключение в `<Error>`.
+`commit` и `rollback` закрывают ровно один раз, сбой `commit` сначала
+откатывает и закрывает; после закрытия любая операция поднимает `<Error>`;
+`translate_error` всегда возвращает `<Error>`. `<Error>.__init__` задаёт
+фиксированное сообщение без деталей драйвера.
+
+**`bootstrap_store`.** `port` — интерфейс `models`, отличный от
+`context_interface`, с ровно одним контрактом `<Port>.<operation>`;
+`<operation>` не начинается с `_` и не совпадает с фиксированным методом.
+Контракты `bootstrap_store.class` ровно:
+
+```text
+<Class>.__init__(self, database_url: str) -> None
+<Class>.assert_open(self) -> None
+<Class>.translate_error(self, error: BaseException) -> BaseException
+<Class>.<operation>(self, <parameter>: <Model>, ...) -> bool     та же сигнатура, что <Port>.<operation>
+```
+
+`writes` непуст и записывает каждый параметр операции ровно один раз, в
+порядке параметров: `repository` — репозиторий `persistence_backend`,
+`contracts.<Repository>.<method>` равен `(self, <name>: <Model параметра>) ->
+None`, имя модуля репозитория не совпадает с `connection`, `cursor`, `error`
+или параметром операции. `guard_table` — ровно
+`{"ref": "config", "path": [<section>, <key>]}`: `config.<section>.<key>` — имя
+таблицы `persistence_backend`, чей `table_name_ref` равен `<key>`, и модель этой
+таблицы записывается одним из `writes`. Семантика `bootstrap_store.transaction`
+фиксирована версией: одно соединение с выключенным autocommit драйвера, схемы
+записываемых репозиториев, `BEGIN EXCLUSIVE`, проверка строки в guard table;
+строка есть — откат и `False`; иначе запись через репозитории, commit и `True`;
+сбой — откат; закрытие ровно один раз; `translate_error` переводит в `<Error>`
+только `sqlite3.DatabaseError`.
+
+**Правила для автора спеки:**
+
+- Классы, реализующие `context_interface` и `port`, записываются в
+  `implementation_obligations` с disposition `local` (§5.1): интерфейс, который
+  получают репозитории, привязан к детерминированному backend-у, а не оставлен
+  генератору.
+- Note называет выпущенные символы — стор, транзакцию, класс ошибки,
+  bootstrap-стор — их именами; в редакции 3 адресов
+  `= rules.sqlite_unit_of_work_backend.*` в note нет (§15.3.1).
+- Любое неизвестное поле, другое значение `transaction`, отсутствующий или
+  несовпадающий контракт или неоднозначное делегирование останавливает
+  генерацию fail-closed; fallback к LLM запрещён.
+
 ---
 
 ## 7. imports

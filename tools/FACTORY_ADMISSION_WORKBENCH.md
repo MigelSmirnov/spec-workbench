@@ -48,7 +48,9 @@ nobody made.
 - `FA017` — runtime carriers: no model whose every field is `object` crosses a
   function signature, and every repository lowered from
   `rules.persistence_backend` is reachable — named as the `local`
-  implementation of an interface or mentioned by another contract.
+  implementation of an interface, mentioned by another contract, or constructed
+  by the declared unit of work (`rules.sqlite_unit_of_work_backend`, an accessor
+  or a bootstrap write, SPEC_STANDARD §6.12).
 
 - `FA018` — the Factory's own local specifications: `normalize_spec.py` and
   `build_local_spec.py` cut every module in a temporary directory, the
@@ -85,6 +87,11 @@ nobody made.
   Factory code, equal the Workbench mirror the notes gate exempts from notes.
   A missing emitter or a different table blocks; no such backend is not
   applicable.
+  `sqlite_unit_of_work_backend` (§6.12) is not in its scope: it owns classes,
+  not a function table. The notes gate exempts every declared contract of the
+  classes its IR wires, and the emitter writes each of them or refuses the IR
+  (exact module ownership, every transaction method delegated or listed
+  unbacked); the Factory validator runs that emitter at `FA005`.
 
 `FA019` exists because a late decision passed every other check. On
 2026-10-10 Cabinet Kernel decision 25 added a note allowing pydantic to a

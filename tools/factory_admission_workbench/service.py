@@ -327,6 +327,28 @@ def _runtime_persistence_check(source_spec: object, case_root: Path | None) -> A
     )
 
 
+def _unit_of_work_repositories(rules: object) -> set[str]:
+    """Repositories the declared unit of work constructs: its accessors and bootstrap writes.
+
+    The emitted transaction builds every accessor repository over its own
+    connection and hands it out through the accessor; the bootstrap store
+    builds every repository it writes through. Only the repository names are
+    read here; the closed form is judged by the Factory generator (FA005).
+    """
+    backend = rules.get("sqlite_unit_of_work_backend") if isinstance(rules, dict) else None
+    if not isinstance(backend, dict) or backend.get("kind") != "sqlite_unit_of_work_backend":
+        return set()
+    rows = list(backend.get("accessors") or []) if isinstance(backend.get("accessors"), list) else []
+    bootstrap = backend.get("bootstrap_store")
+    if isinstance(bootstrap, dict) and isinstance(bootstrap.get("writes"), list):
+        rows += bootstrap["writes"]
+    return {
+        row["repository"]
+        for row in rows
+        if isinstance(row, dict) and isinstance(row.get("repository"), str)
+    }
+
+
 def _runtime_carrier_check(source_spec: object) -> AdmissionCheck:
     """Refuse a runtime mechanism that no contract can carry.
 
@@ -339,8 +361,10 @@ def _runtime_carrier_check(source_spec: object) -> AdmissionCheck:
       signature: the generator receives a value with no operations and invents
       them (module-level dicts, method names probed in turn);
     - a repository class lowered from ``rules.persistence_backend`` that no
-      interface names as its local implementation and no other contract
-      mentions: the emitted storage exists and nothing can reach it.
+      interface names as its local implementation, no other contract mentions
+      and no ``rules.sqlite_unit_of_work_backend`` accessor or bootstrap write
+      constructs (SPEC_STANDARD §6.12): the emitted storage exists and nothing
+      can reach it.
     """
     spec = source_spec if isinstance(source_spec, dict) else {}
     contracts = spec.get("contracts", {})
@@ -395,8 +419,9 @@ def _runtime_carrier_check(source_spec: object) -> AdmissionCheck:
         for implementation in disposition.get("implementations") or []
         if isinstance(implementation, str)
     }
+    unit_of_work = _unit_of_work_repositories(rules)
     for repository in repositories:
-        if repository in local_implementations:
+        if repository in local_implementations or repository in unit_of_work:
             continue
         mentioned_by = sorted(
             owner
@@ -415,6 +440,7 @@ def _runtime_carrier_check(source_spec: object) -> AdmissionCheck:
         "opaque_models": opaque,
         "repositories_examined": repositories,
         "local_implementations": sorted(local_implementations),
+        "unit_of_work_repositories": sorted(unit_of_work),
     }
     if findings:
         return AdmissionCheck(

@@ -27,8 +27,16 @@ Workbench owners:
   - `rules.persistence_backend`
 - ready deterministic Router IR assembly:
   - `rules.http_router_backend`
+- every closed standard backend closure (`tools/standard_backends.py`), its
+  `backend_ir` verbatim:
+  - `rules.<rule_key>` from `70_<id>_closure.json`, for example
+    `rules.sqlite_unit_of_work_backend` from
+    `70_sqlite_unit_of_work_closure.json` (SPEC_STANDARD §6.12)
 
-All other `global_spec.json` sections are preserved.
+All other `global_spec.json` sections are preserved. `implementation_obligations`
+(SPEC_STANDARD §5.1) is one of them: no design artifact owns it, so a case
+writes its rows into `global_spec.json` as assembly and the projection carries
+them unchanged.
 
 An existing deterministic backend without its authoring owner is a BLOCK.
 An open/invalid enabled backend is also a BLOCK. The projector never deletes
