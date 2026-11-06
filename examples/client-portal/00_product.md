@@ -239,8 +239,10 @@ separate, client-visible documents, work progress and completed work value,
 payments and work balance, and the chronological photo gallery. Archived
 projects expose the same reads in read-only mode. Unavailable data is shown
 explicitly, never fabricated or replaced by silent zeros. The one exception
-is the project list: a granted project whose Registry context cannot be
-obtained is left out of it rather than listed without context (accepted
+is the project list: a granted project, archived or not, whose Registry
+context cannot be obtained at that moment is left out of it rather than
+listed without context; once its context is obtained again it is listed
+again, archived ones read-only (accepted
 Factory change `00ac72f18d9c`, note `list_viewer_projects`; owner
 2026-11-06: current service behaviour accepted).
 
@@ -731,18 +733,16 @@ scope and grant for the project, its capability, and that the Registry knows
 the project as active. A refusal there — failed authentication, an unknown,
 ungranted or archived project, a refused capability — is answered with that
 access error and recorded nowhere (Factory code `api/router.py`
-`publish_snapshot_endpoint`; accepted `rules.http_router_backend`). Every
-attempt that passes these checks is classified — accepted, idempotent replay,
-integrity conflict, or a content rejection — and recorded as a fresh
-immutable import result with a fresh `import_id`; the import request is
-answered with that result, never with the snapshot itself. A project that
-the Registry answers as not existing or not active, or that loses its
-grant, or a capability refused, between the route's check and the import
-is recorded as a rejection for that reason; a principal disabled in
-between, or a storage or Registry failure during the import (an HTTP 404
-from the Registry among them, R6), is answered as that failure and records
-nothing: neither an import result nor an audit record. Recording access-refused
-attempts is a missing feature (Q20). A producer that lost an
+`publish_snapshot_endpoint`; accepted `rules.http_router_backend`). An
+attempt the import classifies — accepted, idempotent replay, integrity
+conflict, or a rejection — is recorded as a fresh immutable import result
+with a fresh `import_id` and its `snapshot.import` audit; the import request
+is answered with that result, never with the snapshot itself. An import
+that fails before it classifies the attempt (a storage or Registry failure,
+R6) is answered as that failure and records nothing, like every operation
+that fails. How the import treats access that changes after the route's
+check is the import operation's (State 4 `flow:import_estimate_snapshot`).
+Recording access-refused attempts is a missing feature (Q20). A producer that lost an
 answer re-publishes the same snapshot: identical content is answered as an
 idempotent replay with a new `import_id` naming the same accepted snapshot
 (accepted notes `_build_import_record`, `import_snapshot`; Factory code

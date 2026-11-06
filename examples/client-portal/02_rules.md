@@ -219,8 +219,9 @@ The table is rules data: `rules.project_guard_sequence` (SPEC_STANDARD 15.3.1, a
 Only `active` and `archived` are status literals the portal acts on (State 1
 M16). The project guard of A4 reads the validation answer's `exists`
 (false → not found) and, for a mutation, its `status` (anything other than
-`active` → `archived_project`); the grant and assignment operations of
-access management read `exists` and `is_active` instead (A6, State 1 M17)
+`active` → `archived_project`); the grant and assignment creation
+operations of access management (revocation consults no Registry, R0-24)
+read `exists` and `is_active` instead (A6, State 1 M17)
 and proceed only when both are true: `exists` false is refused as an
 unknown project, otherwise `is_active` false as an archived one, each with
 its own operation's error (the

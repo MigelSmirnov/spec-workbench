@@ -1,0 +1,182 @@
+{
+ "open_points": [
+  {
+   "subject": "Viewer project discovery during Registry-context failure",
+   "kind": "contradiction",
+   "text": "“a granted project whose Registry context cannot be obtained is left out” conflicts with “archiving a Registry project keeps the grant and the project visible read-only” and “Archived projects expose the same reads in read-only mode.”",
+   "question": "When an archived, granted project’s Registry context cannot be obtained, is it omitted from the viewer’s project list or kept visible with read-only access?",
+   "options": [
+    "Omit it while context is unavailable",
+    "Keep it visible and expose its portal-owned records read-only",
+    "Omit it from discovery but permit direct read access"
+   ],
+   "default_guess": "Omit it from the list and fail direct project reads until Registry context is available.",
+   "witness": {
+    "initial": "A viewer has an active grant to an archived project and a valid session.",
+    "events": [
+     "Registry context for that project becomes unavailable.",
+     "The viewer requests their project list and then attempts to open the project."
+    ],
+    "outcomes": [
+     "The new exception omits the project, so the viewer cannot discover it.",
+     "The archival promises keep the project visible and its records readable."
+    ],
+    "observer": "The client viewer"
+   },
+   "unit": "00_product.md:Primary outcomes"
+  },
+  {
+   "subject": "Import-result outcome classification",
+   "kind": "contradictory closed set",
+   "text": "“Every attempt that passes these checks is classified — accepted, idempotent replay, integrity conflict, or a content rejection” is followed by access-state changes that are “recorded as a rejection for that reason.”",
+   "question": "What import-result outcome represents a project becoming nonexistent or inactive, loss of a grant, or refusal of a capability after the route check?",
+   "options": [
+    "Treat it as a content rejection",
+    "Add one or more access-rejection outcomes",
+    "Do not create an import result"
+   ],
+   "default_guess": "Add a distinct access-rejection outcome with a reason code.",
+   "witness": {
+    "initial": "A producer passes the route’s authentication, grant, capability, and active-project checks.",
+    "events": [
+     "An administrator revokes the producer’s project grant before the import completes.",
+     "The import detects the revoked grant."
+    ],
+    "outcomes": [
+     "The closed classification forces the result into one of the four named outcomes, most plausibly content rejection.",
+     "The later sentence creates a rejection for grant loss that is not one of the four named outcomes."
+    ],
+    "observer": "The producer reading the import response or later import result"
+   },
+   "unit": "00_product.md:Decisions"
+  },
+  {
+   "subject": "Post-check failure persistence",
+   "kind": "contradiction",
+   "text": "“Every attempt that passes these checks is classified … and recorded as a fresh immutable import result with a fresh `import_id`” conflicts with “a principal disabled in between, or a storage or Registry failure during the import … records nothing.”",
+   "question": "Does every attempt that passes the route checks receive a persisted import result and `import_id`, or are the named post-check failures exceptions?",
+   "options": [
+    "Always persist an import result",
+    "Persist only business classifications and access-state rejections",
+    "Persist nothing for every named post-check failure"
+   ],
+   "default_guess": "Treat the named post-check failures as explicit exceptions that receive no import result or `import_id`.",
+   "witness": {
+    "initial": "A producer passes all route checks.",
+    "events": [
+     "The producer’s principal is disabled before the import completes.",
+     "The import detects the disabled principal."
+    ],
+    "outcomes": [
+     "The universal rule records a fresh import result with a fresh `import_id`.",
+     "The later rule returns a failure and records no import result."
+    ],
+    "observer": "The producer and an administrator inspecting stored import results"
+   },
+   "unit": "00_product.md:Decisions"
+  },
+  {
+   "subject": "Registry HTTP 404 during snapshot import",
+   "kind": "overlapping outcomes",
+   "text": "A project that “the Registry answers as not existing” is recorded as a rejection, while “an HTTP 404 from the Registry” is a Registry failure that records nothing.",
+   "question": "How is a Registry response saying that the project does not exist distinguished from the explicitly named HTTP 404, and which persistence rule applies when not-existence is represented by HTTP 404?",
+   "options": [
+    "Every HTTP 404 is a no-record infrastructure failure",
+    "A project-not-found HTTP 404 creates a rejection result, while other 404s do not",
+    "Registry not-existence must arrive through a non-404 typed response"
+   ],
+   "default_guess": "Treat a typed project-not-found response as a recorded rejection and an untyped or unexpected HTTP 404 as an unrecorded Registry failure.",
+   "witness": {
+    "initial": "A producer passes the route check for a project that is then removed or becomes unknown to Registry.",
+    "events": [
+     "The import asks Registry about the project.",
+     "Registry responds HTTP 404 for that project."
+    ],
+    "outcomes": [
+     "Because Registry answered that the project does not exist, the portal records a rejection with an `import_id`.",
+     "Because the response is an HTTP 404 from Registry, the portal returns a failure and records nothing."
+    ],
+    "observer": "The producer and an operator inspecting import history"
+   },
+   "unit": "00_product.md:Decisions"
+  },
+  {
+   "subject": "Audit of failed snapshot imports",
+   "kind": "contradiction",
+   "text": "“records nothing: neither an import result nor an audit record” conflicts with “Every significant action records actor provenance” and the explicit inclusion of “snapshot import … rejection reasons.”",
+   "question": "Are principal-disablement, storage, and Registry failures after successful route checks audited as snapshot-import attempts?",
+   "options": [
+    "Create no audit record, as R0-25 says",
+    "Audit the failed attempt without creating an import result",
+    "Create both an audit record and an import result"
+   ],
+   "default_guess": "Create no audit record because the changed R0-25 text states that exception explicitly, and narrow the general audit promise accordingly.",
+   "witness": {
+    "initial": "An authenticated, authorized producer starts an import that passes route checks.",
+    "events": [
+     "Binary or database storage fails during the import.",
+     "The request returns a failure."
+    ],
+    "outcomes": [
+     "R0-25 leaves no audit record.",
+     "The Audit section and invariant 12 require actor provenance for the significant snapshot-import action."
+    ],
+    "observer": "An administrator or auditor"
+   },
+   "unit": "00_product.md:Decisions"
+  },
+  {
+   "subject": "Observable response for post-check import failures",
+   "kind": "vague failure",
+   "text": "“is answered as that failure” does not name the HTTP status, response outcome, concealment rule, or whether the failure is retryable, and covers principal disablement, storage failure, Registry failure, and Registry HTTP 404.",
+   "question": "What observable response does each named post-check failure produce, especially whether principal disablement is concealed and whether Registry HTTP 404 is exposed as not-found or dependency failure?",
+   "options": [
+    "One concealed generic failure for all cases",
+    "Authentication rejection for disablement and storage/dependency errors for infrastructure failures",
+    "Distinct public error for every underlying cause"
+   ],
+   "default_guess": "Use a concealed authentication rejection for a disabled principal and explicit retryable dependency/storage failures for infrastructure errors, without exposing internal details.",
+   "witness": {
+    "initial": "A producer passes route authorization and submits a valid snapshot.",
+    "events": [
+     "In one history the principal is disabled; in another Registry becomes unavailable.",
+     "The portal answers the import request without recording a result."
+    ],
+    "outcomes": [
+     "An implementation returns the same concealed authentication rejection in both histories.",
+     "An implementation returns a concealed authentication rejection for disablement but a distinct dependency-unavailable response for Registry failure."
+    ],
+    "observer": "The producer"
+   },
+   "unit": "00_product.md:Decisions"
+  },
+  {
+   "subject": "Precedence among simultaneous post-check changes and failures",
+   "kind": "missing precedence",
+   "text": "The text separately assigns a recorded rejection to loss of project status, grant, or capability and no record to principal disablement, storage failure, or Registry failure, but says nothing about an attempt in which more than one occurs before completion.",
+   "question": "Which condition determines the response and persistence result when a recorded-rejection condition and a no-record failure condition both occur during one import?",
+   "options": [
+    "Access-state rejection takes precedence",
+    "Principal-disablement or infrastructure failure takes precedence",
+    "Whichever condition is observed first determines the result"
+   ],
+   "default_guess": "Principal disablement takes precedence over other access changes, and infrastructure failure prevents persistence only when it makes the required checks or recording impossible.",
+   "witness": {
+    "initial": "A producer passes all route checks and the import begins.",
+    "events": [
+     "An administrator revokes the project grant and disables the principal before the import commits.",
+     "The import observes both changes."
+    ],
+    "outcomes": [
+     "Grant loss wins, producing a persisted rejection and `import_id`.",
+     "Principal disablement wins, returning a failure with no import result or audit record."
+    ],
+    "observer": "The producer and an administrator inspecting import history"
+   },
+   "unit": "00_product.md:Decisions"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"Viewer project discovery during Registry-context failure\",\"kind\":\"contradiction\",\"text\":\"“a granted project whose Registry context cannot be obtained is left out” conflicts with “archiving a Registry project keeps the grant and the project visible read-only” and “Archived projects expose the same reads in read-only mode.”\",\"question\":\"When an archived, granted project’s Registry context cannot be obtained, is it omitted from the viewer’s project list or kept visible with read-only access?\",\"options\":[\"Omit it while context is unavailable\",\"Keep it visible and expose its portal-owned records read-only\",\"Omit it from discovery but permit direct read access\"],\"default_guess\":\"Omit it from the list and fail direct project reads until Registry context is available.\",\"witness\":{\"initial\":\"A viewer has an active grant to an archived project and a valid session.\",\"events\":[\"Registry context for that project becomes unavailable.\",\"The viewer requests their project list and then attempts to open the project.\"],\"outcomes\":[\"The new exception omits the project, so the viewer cannot discover it.\",\"The archival promises keep the project visible and its records readable.\"],\"observer\":\"The client viewer\"},\"unit\":\"00_product.md:Primary outcomes\"},{\"subject\":\"Import-result outcome classification\",\"kind\":\"contradictory closed set\",\"text\":\"“Every attempt that passes these checks is classified — accepted, idempotent replay, integrity conflict, or a content rejection” is followed by access-state changes that are “recorded as a rejection for that reason.”\",\"question\":\"What import-result outcome represents a project becoming nonexistent or inactive, loss of a grant, or refusal of a capability after the route check?\",\"options\":[\"Treat it as a content rejection\",\"Add one or more access-rejection outcomes\",\"Do not create an import result\"],\"default_guess\":\"Add a distinct access-rejection outcome with a reason code.\",\"witness\":{\"initial\":\"A producer passes the route’s authentication, grant, capability, and active-project checks.\",\"events\":[\"An administrator revokes the producer’s project grant before the import completes.\",\"The import detects the revoked grant.\"],\"outcomes\":[\"The closed classification forces the result into one of the four named outcomes, most plausibly content rejection.\",\"The later sentence creates a rejection for grant loss that is not one of the four named outcomes.\"],\"observer\":\"The producer reading the import response or later import result\"},\"unit\":\"00_product.md:Decisions\"},{\"subject\":\"Post-check failure persistence\",\"kind\":\"contradiction\",\"text\":\"“Every attempt that passes these checks is classified … and recorded as a fresh immutable import result with a fresh `import_id`” conflicts with “a principal disabled in between, or a storage or Registry failure during the import … records nothing.”\",\"question\":\"Does every attempt that passes the route checks receive a persisted import result and `import_id`, or are the named post-check failures exceptions?\",\"options\":[\"Always persist an import result\",\"Persist only business classifications and access-state rejections\",\"Persist nothing for every named post-check failure\"],\"default_guess\":\"Treat the named post-check failures as explicit exceptions that receive no import result or `import_id`.\",\"witness\":{\"initial\":\"A producer passes all route checks.\",\"events\":[\"The producer’s principal is disabled before the import completes.\",\"The import detects the disabled principal.\"],\"outcomes\":[\"The universal rule records a fresh import result with a fresh `import_id`.\",\"The later rule returns a failure and records no import result.\"],\"observer\":\"The producer and an administrator inspecting stored import results\"},\"unit\":\"00_product.md:Decisions\"},{\"subject\":\"Registry HTTP 404 during snapshot import\",\"kind\":\"overlapping outcomes\",\"text\":\"A project that “the Registry answers as not existing” is recorded as a rejection, while “an HTTP 404 from the Registry” is a Registry failure that records nothing.\",\"question\":\"How is a Registry response saying that the project does not exist distinguished from the explicitly named HTTP 404, and which persistence rule applies when not-existence is represented by HTTP 404?\",\"options\":[\"Every HTTP 404 is a no-record infrastructure failure\",\"A project-not-found HTTP 404 creates a rejection result, while other 404s do not\",\"Registry not-existence must arrive through a non-404 typed response\"],\"default_guess\":\"Treat a typed project-not-found response as a recorded rejection and an untyped or unexpected HTTP 404 as an unrecorded Registry failure.\",\"witness\":{\"initial\":\"A producer passes the route check for a project that is then removed or becomes unknown to Registry.\",\"events\":[\"The import asks Registry about the project.\",\"Registry responds HTTP 404 for that project.\"],\"outcomes\":[\"Because Registry answered that the project does not exist, the portal records a rejection with an `import_id`.\",\"Because the response is an HTTP 404 from Registry, the portal returns a failure and records nothing.\"],\"observer\":\"The producer and an operator inspecting import history\"},\"unit\":\"00_product.md:Decisions\"},{\"subject\":\"Audit of failed snapshot imports\",\"kind\":\"contradiction\",\"text\":\"“records nothing: neither an import result nor an audit record” conflicts with “Every significant action records actor provenance” and the explicit inclusion of “snapshot import … rejection reasons.”\",\"question\":\"Are principal-disablement, storage, and Registry failures after successful route checks audited as snapshot-import attempts?\",\"options\":[\"Create no audit record, as R0-25 says\",\"Audit the failed attempt without creating an import result\",\"Create both an audit record and an import result\"],\"default_guess\":\"Create no audit record because the changed R0-25 text states that exception explicitly, and narrow the general audit promise accordingly.\",\"witness\":{\"initial\":\"An authenticated, authorized producer starts an import that passes route checks.\",\"events\":[\"Binary or database storage fails during the import.\",\"The request returns a failure.\"],\"outcomes\":[\"R0-25 leaves no audit record.\",\"The Audit section and invariant 12 require actor provenance for the significant snapshot-import action.\"],\"observer\":\"An administrator or auditor\"},\"unit\":\"00_product.md:Decisions\"},{\"subject\":\"Observable response for post-check import failures\",\"kind\":\"vague failure\",\"text\":\"“is answered as that failure” does not name the HTTP status, response outcome, concealment rule, or whether the failure is retryable, and covers principal disablement, storage failure, Registry failure, and Registry HTTP 404.\",\"question\":\"What observable response does each named post-check failure produce, especially whether principal disablement is concealed and whether Registry HTTP 404 is exposed as not-found or dependency failure?\",\"options\":[\"One concealed generic failure for all cases\",\"Authentication rejection for disablement and storage/dependency errors for infrastructure failures\",\"Distinct public error for every underlying cause\"],\"default_guess\":\"Use a concealed authentication rejection for a disabled principal and explicit retryable dependency/storage failures for infrastructure errors, without exposing internal details.\",\"witness\":{\"initial\":\"A producer passes route authorization and submits a valid snapshot.\",\"events\":[\"In one history the principal is disabled; in another Registry becomes unavailable.\",\"The portal answers the import request without recording a result.\"],\"outcomes\":[\"An implementation returns the same concealed authentication rejection in both histories.\",\"An implementation returns a concealed authentication rejection for disablement but a distinct dependency-unavailable response for Registry failure.\"],\"observer\":\"The producer\"},\"unit\":\"00_product.md:Decisions\"},{\"subject\":\"Precedence among simultaneous post-check changes and failures\",\"kind\":\"missing precedence\",\"text\":\"The text separately assigns a recorded rejection to loss of project status, grant, or capability and no record to principal disablement, storage failure, or Registry failure, but says nothing about an attempt in which more than one occurs before completion.\",\"question\":\"Which condition determines the response and persistence result when a recorded-rejection condition and a no-record failure condition both occur during one import?\",\"options\":[\"Access-state rejection takes precedence\",\"Principal-disablement or infrastructure failure takes precedence\",\"Whichever condition is observed first determines the result\"],\"default_guess\":\"Principal disablement takes precedence over other access changes, and infrastructure failure prevents persistence only when it makes the required checks or recording impossible.\",\"witness\":{\"initial\":\"A producer passes all route checks and the import begins.\",\"events\":[\"An administrator revokes the project grant and disables the principal before the import commits.\",\"The import observes both changes.\"],\"outcomes\":[\"Grant loss wins, producing a persisted rejection and `import_id`.\",\"Principal disablement wins, returning a failure with no import result or audit record.\"],\"observer\":\"The producer and an administrator inspecting import history\"},\"unit\":\"00_product.md:Decisions\"}]}",
+ "set_aside": []
+}
