@@ -83,8 +83,24 @@ creates every repository schema when a transaction begins. Crossing models:
    `capability:transport_guard.install_transport_guards` with the settings and
    mounts the inner application under `/api` and at the root.
 3. Liveness answers `ok` without reading anything. Readiness opens one
-   `module:portal_store` transaction — which creates any missing schema — and
-   rolls it back; it changes no product state.
+   `module:portal_store` transaction and rolls it back; it changes no product
+   state.
+4. Every `module:portal_store` transaction — readiness and every use case —
+   begins by creating any missing table on its new connection, one schema
+   function per repository: `capability:audit_repository.create_audit_schema`,
+   `capability:project_tracking_repository.create_project_tracking_schema`,
+   `capability:project_section_repository.create_project_section_schema`,
+   `capability:budget_repository.create_budget_schema`,
+   `capability:snapshot_import_repository.create_snapshot_import_schema`,
+   `capability:expense_repository.create_expense_schema`,
+   `capability:progress_photo_repository.create_progress_photo_schema`,
+   `capability:email_delivery_repository.create_email_delivery_schema`,
+   `capability:staff_access_repository.create_staff_access_schema`,
+   `capability:viewer_access_repository.create_client_access_schema` and
+   `capability:service_identity_repository.create_producer_identity_schema`
+   (accepted note `PortalStore.begin`). Each creation is idempotent and
+   commits nothing itself; a failure closes the new connection and is the
+   storage failure.
 
 ### Outcomes
 
@@ -132,8 +148,11 @@ No HTTP route reaches this flow.
    `capability:credential_security.hash_password`, and builds one active,
    verified administrator with no creator and its `staff.create` audit with
    the system actor.
-4. `module:staff_bootstrap_store` begins an immediate write transaction,
-   checks that the staff table is empty, inserts the account and the audit
+4. `module:staff_bootstrap_store` opens its own connection, ensures the staff
+   access and audit tables exist with
+   `capability:staff_access_repository.create_staff_access_schema` and
+   `capability:audit_repository.create_audit_schema`, begins an immediate
+   write transaction, checks that the staff table is empty, inserts the account and the audit
    and commits once; concurrent attempts create exactly one account.
 
 ### Outcomes
@@ -236,6 +255,11 @@ built.
 2. `capability:staff_challenges.request_password_reset` normalizes the
    address, answers identically for every value — malformed, unknown or known —
    and does nothing else.
+3. The delivery the A10 design hands a challenge to once it is built,
+   `capability:email_delivery_gateway.deliver_email_message`, exists in the
+   accepted service and is imported by `module:staff_challenges`, but no step
+   of this flow calls it: no challenge is issued, so nothing is delivered
+   (R0-23, Q19).
 
 ### Outcomes
 
@@ -815,6 +839,12 @@ delegated):
   administrator (R0-07), staff and service-principal administration and
   project discovery (R0-08, R0-14), progress, payments and photos, staff binary
   reads.
+- **Schema creation named in the flows that run it** (added with State 5 on
+  2026-11-06): every `portal_store` transaction and the bootstrap store create
+  any missing table through the repositories' schema functions (accepted notes
+  `PortalStore.begin`, `SqliteStaffBootstrapStore.create_if_empty`); the
+  email gateway exists uncalled while challenges are deferred. The behaviour
+  is unchanged; the flows now name the capabilities State 5 owns.
 
 ## Deferred features (not designed here)
 
