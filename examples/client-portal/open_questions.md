@@ -170,8 +170,8 @@ Recorded 2026-11-06. The case predates the current authoring standard:
   and Factory `client_portal_sandbox` names no Workbench case;
 - the Factory spec was accepted on 2026-08-17 (32 inspector WARN, 456
   partially parsed or unparsed notes, OTK verdict WARN);
-- the case branch `product-decisions-and-reassembly` carries no 90_factory_target
-  and is not the case's Workbench-standard canonical branch name (`agent/<case>`).
+- unlike every other case, the canonical ref `product-decisions-and-reassembly`
+  is not an `agent/…` branch.
 
 Before Q11–Q14 or new functionality are designed, the case must be migrated to
 the current standard and linked to its Factory project, so that portal changes
