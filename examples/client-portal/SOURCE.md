@@ -238,3 +238,28 @@ the accepted routes of `rules.http_router_backend`, the guard order
 | no snapshot-to-candidate-version operation | Q11 | missing feature, deferred | `40_flows.md` "Deferred features" |
 | per-part availability of the overview | Factory `d2c4511ea119` | accepted spec change | `flow:build_project_overview` |
 | service start and health, bootstrap, staff and principal administration, progress/payments/photos, staff binary reads | `38626cc7be12`, `21658368525f`, `6011ac93b143`, `3080ef0dbe73`, `fae77f993e03` | accepted spec change (flows added) | `40_flow_plan.json` |
+
+### Classification of what State 5 carries
+
+The former `spec/50_public_apis.md` (per-module operation tables, a route
+catalog and an `imports.internal` draft) is replaced by `50_public_apis.md`,
+`50_api_plan.json` and `50_exposure_plan.json`; the former file is deleted.
+One operation per State 3 capability (108). Each operation's callers are the
+modules importing it in the accepted `imports.module_internal` (checked
+mechanically on 2026-11-06), or a `boundary:` when none does; its outputs,
+effects and errors are the accepted contracts and notes. An operation is
+`external` exactly when a route of `rules.http_router_backend` reaches it:
+the delegate of each of the 49 table routes and the handler of each of the 7
+`api_irregular` routes (56); the other 52 are `internal-only`.
+
+| finding | evidence | classification | owner |
+|---|---|---|---|
+| former operations of the 20 original modules | former text = accepted `module_functions` of the same names | derivable (kept, reshaped into one section each) | `50_public_apis.md` |
+| eleven schema functions, bootstrap, transport, settings, runtime, viewer cookie endpoints | `af686d7364d2` … `6011ac93b143`, `35a0a09ccbb1`, `38626cc7be12` | accepted spec change (operations added) | `50_public_apis.md` |
+| schema creation and the uncalled email gateway were in no State 4 flow | notes `PortalStore.begin`, `SqliteStaffBootstrapStore.create_if_empty`; `staff_challenges` imports `deliver_email_message` | form only: the flows now name the capabilities (State 4 repaired, behaviour unchanged) | `40_flows.md` |
+| challenge operations inert; staff onboarding by activation | notes of `staff_challenges`, `change_staff_status` | running service kept (R0-19, R0-23); missing feature Q19 | `50_public_apis.md` |
+| safe views as outputs (`StaffAccountView`, `SessionRevocationResult`, `ExpenseOperationOutcome`, `PhotoMutationResult`) | `9eab4d948181`, `d1280708714f` | accepted spec change | `50_public_apis.md` |
+| a viewer grant for an unknown or inactive project answers `RegistryBoundaryError`; staff and producer grants answer `ScopedNotFoundError` or `ArchivedProjectRejected` | Factory code `application/viewer_access.py`, `application/service_identity.py`, `application/staff_identity.py`; notes of the three grant operations | running service kept (owner 2026-11-06) | `public_op:viewer_access.grant_viewer_project` |
+| a missing or invisible photo answers `PhotoValidationError` (422) and an unreadable one `BinaryStorageError`; a document folds all three into `BinaryAccessRejected` | notes `_authorize_photo_reference`, `read_expense_document`; Factory code `domain/photo_management.py` | running service kept (owner 2026-11-06) | `public_op:photo_management.read_progress_photo` |
+| a malformed login address answers `IdentityInputRejected` before any audit | Factory code `application/staff_identity.py` `authenticate_staff` | running service kept (owner 2026-11-06); discloses no account | `public_op:staff_identity.authenticate_staff` |
+| former error families `DomainValidationRejected`, `DomainConflict` | accepted `error_policy` | accepted spec change (closed exception set) | `50_public_apis.md` conventions |

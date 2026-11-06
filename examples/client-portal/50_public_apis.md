@@ -1979,8 +1979,9 @@ None.
 
 ### Enforces
 
-R0-14 (access management), M02: the display name is the portal's, independent
-of any Registry customer reference, and the viewer holds no contact data; A13
+R0-14 (access management), M01: the display name is the portal's, independent
+of any Registry customer reference, and the viewer holds no email, profile or
+Registry customer data; A13
 (`viewer.create` in the same transaction).
 
 ### Errors
@@ -3696,3 +3697,494 @@ A9, A21, A27.
 ### State impact
 
 Read-only.
+
+## `public_op:api_irregular.viewer_enter_endpoint`
+
+### Owner
+
+`module:api_irregular`. Answer `POST /auth/viewer/enter`: exchange a viewer access code for the viewer session cookie.
+
+### Callers
+
+`boundary:viewer_browser`.
+
+### Inputs
+
+The request and response, and the JSON body `ViewerEnterRequest` whose
+`capability_secret` is the only credential input, passed untrimmed.
+
+### Outputs
+
+`ViewerSessionView` (200); the session token travels only in the cookie.
+
+### Observable effect
+
+Sets the host-only cookie `__Host-portal_viewer_session` (Secure, HttpOnly,
+SameSite=strict, Path=/, no Domain) of `rules.viewer_cookie_transport_backend`.
+
+### Enforces
+
+R0-09 and A25 (`rules.http_transport_policy.browser_session`): the secret
+never appears in a URL, query, redirect, id, metric, trace or log; the
+transport guard has already applied the entry rate limit; delegates to
+`viewer_access.enter_viewer_access` with the one `PortalStore` of
+`app.state.portal_store`.
+
+### Errors
+
+`AuthenticationRejected` (401); unknown body fields are rejected by the
+request model (422).
+
+### State impact
+
+Through `viewer_access`: one `ViewerSession`.
+
+## `public_op:api_irregular.viewer_restore_session_endpoint`
+
+### Owner
+
+`module:api_irregular`. Answer `GET /auth/viewer/session`: describe the session the browser's cookie carries.
+
+### Callers
+
+`boundary:viewer_browser`.
+
+### Inputs
+
+The request, read only for the viewer cookie.
+
+### Outputs
+
+The secret-free `ViewerSessionView` of `viewer_access.describe_viewer_session`,
+unchanged.
+
+### Observable effect
+
+None; `no-store` is the transport guard's (A25).
+
+### Enforces
+
+R0-09: the cookie is the only viewer credential; a bearer header is not one.
+
+### Errors
+
+`AuthenticationRejected` (401).
+
+### State impact
+
+Read-only.
+
+## `public_op:api_irregular.viewer_logout_endpoint`
+
+### Owner
+
+`module:api_irregular`. Answer `POST /auth/viewer/logout`: end the cookie's session and clear the cookie.
+
+### Callers
+
+`boundary:viewer_browser`.
+
+### Inputs
+
+The request (viewer cookie) and the response.
+
+### Outputs
+
+None (204), only after the server-side revocation committed.
+
+### Observable effect
+
+Clears the viewer cookie with exactly the attributes it was issued with.
+
+### Enforces
+
+R0-09, A25 (the guard has checked the request origin against the public
+origin); delegates to `viewer_access.sign_out_viewer` before clearing.
+
+### Errors
+
+`AuthenticationRejected` (401); a failure never reports a successful logout.
+
+### State impact
+
+Through `viewer_access`: one revoked `ViewerSession`.
+
+## `public_op:api_irregular.list_viewer_projects_endpoint`
+
+### Owner
+
+`module:api_irregular`. Answer `GET /viewer/projects`: the projects the viewer can open.
+
+### Callers
+
+`boundary:viewer_browser`.
+
+### Inputs
+
+The request, read only for the viewer cookie.
+
+### Outputs
+
+The `ProjectListItem` list of `derived_views.list_viewer_projects`.
+
+### Observable effect
+
+None.
+
+### Enforces
+
+R0-09; no viewer id, grant, sort or Registry fact is taken from the request.
+
+### Errors
+
+`AuthenticationRejected` (401).
+
+### State impact
+
+Read-only.
+
+## `public_op:api_irregular.viewer_project_overview_endpoint`
+
+### Owner
+
+`module:api_irregular`. Answer `GET /viewer/projects/{project_id}`: the overview of one granted project.
+
+### Callers
+
+`boundary:viewer_browser`.
+
+### Inputs
+
+The request (viewer cookie) and the path `project_id`.
+
+### Outputs
+
+The `ProjectOverview` of `derived_views.build_project_overview`.
+
+### Observable effect
+
+None.
+
+### Enforces
+
+R0-09, A4: resolves the session, then
+`authorization_guard.authorize_viewer_project_read`; archived projects stay
+readable and visibility is unchanged.
+
+### Errors
+
+401, 403, 404 and 502 as the guard decides.
+
+### State impact
+
+Read-only.
+
+## `public_op:api_irregular.viewer_read_expense_document_endpoint`
+
+### Owner
+
+`module:api_irregular`. Answer `GET /viewer/projects/{project_id}/expense-documents/{document_id}/content`: a client-visible document's bytes.
+
+### Callers
+
+`boundary:viewer_browser`.
+
+### Inputs
+
+The request (viewer cookie), the path `project_id` and `document_id`.
+
+### Outputs
+
+The exact bytes of `expense_management.read_expense_document` with the
+attachment disposition `rules.binary_delivery_policy` assigns to a document;
+no JSON envelope, base64, redirect or storage location.
+
+### Observable effect
+
+None.
+
+### Enforces
+
+R0-09, R0-12, A14: viewer read authorization first; a failure is
+indistinguishable from an unknown, cross-project or invisible document.
+
+### Errors
+
+401 or the guard's answers; `BinaryAccessRejected` (404).
+
+### State impact
+
+Read-only.
+
+## `public_op:api_irregular.viewer_read_progress_photo_endpoint`
+
+### Owner
+
+`module:api_irregular`. Answer `GET /viewer/projects/{project_id}/photos/{photo_id}/content`: a client-visible photo's bytes.
+
+### Callers
+
+`boundary:viewer_browser`.
+
+### Inputs
+
+The request (viewer cookie), the path `project_id` and `photo_id`.
+
+### Outputs
+
+The exact bytes of `photo_management.read_progress_photo` with the inline
+disposition `rules.binary_delivery_policy` assigns to a photo.
+
+### Observable effect
+
+None.
+
+### Enforces
+
+R0-09, R0-12, A14: viewer read authorization first; no `file_ref` leaves.
+
+### Errors
+
+401 or the guard's answers; the photo read's own failures
+(`PhotoValidationError` 422, `BinaryStorageError` 500).
+
+### State impact
+
+Read-only.
+
+## `public_op:api.create_app`
+
+### Owner
+
+`module:api`. Build the inner HTTP application from the route table around one store.
+
+### Callers
+
+`module:runtime`.
+
+### Inputs
+
+The one `PortalStore`.
+
+### Outputs
+
+The FastAPI application, with the store only as `app.state.portal_store`.
+
+### Observable effect
+
+None: no transaction is opened.
+
+### Enforces
+
+`rules.http_router_backend`: every route row bound exactly once — staff,
+administrator and producer bearer routes by the table, the seven viewer-cookie
+routes by `api_irregular` — binary rows answered as plain responses, and one
+exception handler per `error_policy` mapping available to the module, any
+other failure the policy default (500). A route handler extracts the
+credential and the declared body, runs the route's `authorize` steps, calls
+exactly one owning operation and returns its result or a safe projection;
+it decides, retries and audits nothing.
+
+### Errors
+
+None at build time beyond a defect in the route table.
+
+### State impact
+
+None.
+
+## `public_op:transport_guard.install_transport_guards`
+
+### Owner
+
+`module:transport_guard`. Install the one HTTP middleware that applies the transport policy before any route.
+
+### Callers
+
+`module:runtime`.
+
+### Inputs
+
+The application and the `RuntimeSettings`.
+
+### Outputs
+
+None: the middleware is registered on the application.
+
+### Observable effect
+
+For every request, in order: a request id with no identity in it; 400 for an
+untrusted host; CORS preflight 204 for a listed origin and 403 for another;
+403 for a viewer logout from another origin than the public one; 413 for a
+body over `max_request_body_bytes`; 429 for viewer entries over the
+monotonic-clock rate limit, before any credential is parsed; then the route,
+called once. Every answer carries the security headers, `no-store` where the
+policy names it, CORS headers only for a listed origin, and in production one
+redacted log line.
+
+### Enforces
+
+A25 (`rules.http_transport_policy`), R0-09.
+
+### Errors
+
+Its refusals are the statuses above, each with an empty body.
+
+### State impact
+
+The in-memory viewer-entry attempt buckets only.
+
+## `public_op:runtime_settings.load_runtime_settings`
+
+### Owner
+
+`module:runtime_settings`. Read, normalize, default and validate the deployment environment once.
+
+### Callers
+
+`module:runtime`, `module:staff_bootstrap_cli`.
+
+### Inputs
+
+None: the process environment, by the closed table
+`config.runtime_environment_variables`.
+
+### Outputs
+
+The immutable `RuntimeSettings`.
+
+### Observable effect
+
+None; no raw environment value is logged.
+
+### Enforces
+
+A30 and R0-10; the viewer-entry rate limit comes only from its two variables;
+`rules.binary_delivery_policy.size_bounds.startup_consistency` is checked and
+neither bound is changed silently.
+
+### Errors
+
+A missing, malformed or inconsistent value (a wildcard host or origin, binary
+bounds out of order) stops the start.
+
+### State impact
+
+None.
+
+## `public_op:runtime.create_runtime_app`
+
+### Owner
+
+`module:runtime`. Compose the running service from its settings.
+
+### Callers
+
+`boundary:deployment_process`.
+
+### Inputs
+
+`RuntimeSettings` supplied by the caller.
+
+### Outputs
+
+The outer FastAPI application.
+
+### Observable effect
+
+None at import: construction happens only on this call.
+
+### Enforces
+
+R0-10 and R0-11: exactly one `PortalStore` from `settings.database_url`; one
+inner application from `api.create_app`; liveness at `/health/live` and
+readiness at `/health/ready`, each answering exactly `HealthStatus`; the
+transport guard installed before mounting; the inner application mounted at
+`/api` and then at `/`. It implements no transport policy itself.
+
+### Errors
+
+A store or application construction failure propagates; readiness answers
+the storage failure without disclosing internals.
+
+### State impact
+
+None until a request arrives; readiness opens and rolls back one transaction.
+
+## `public_op:staff_bootstrap_cli.run_bootstrap_cli`
+
+### Owner
+
+`module:staff_bootstrap_cli`. Run the local first-administrator command and return its exit code.
+
+### Callers
+
+`boundary:host_operator_cli`.
+
+### Inputs
+
+None: the email and the password, twice without echo, from the terminal.
+
+### Outputs
+
+The exit code `rules.staff_bootstrap_policy.command_outcomes` assigns: 0
+created, 1 confirmation mismatch, 2 rejected input, 3 already initialized.
+
+### Observable effect
+
+One message per outcome on the terminal; the password or its hash is never
+echoed, printed or logged.
+
+### Enforces
+
+R0-07 and A29: the mismatch is refused before any store exists; the database
+comes from `runtime_settings.load_runtime_settings`; the password never comes
+from arguments, environment or a file.
+
+### Errors
+
+Each refusal is its exit code; a storage failure propagates.
+
+### State impact
+
+Through `staff_bootstrap`: one administrator and its audit, or nothing.
+
+## Changes against the former text
+
+Each is the accepted Factory spec, kept under the owner decision of
+2026-11-06 (current service behaviour accepted; technical decisions
+delegated):
+
+- **One operation per State 3 capability** (108) instead of per-module
+  tables. Added: the eleven repository schema
+  functions, `staff_bootstrap`, `staff_bootstrap_cli`, the seven
+  `api_irregular` viewer endpoints, `transport_guard`, `runtime_settings`,
+  `runtime`, `describe_viewer_session`, `sign_out_viewer`,
+  `create_staff_account`, `resolve_staff_session`, `change_staff_password`
+  and `perform_recovery_override` as routed operations (Factory
+  `3080ef0dbe73`, `35a0a09ccbb1`, `38626cc7be12`, `6011ac93b143`).
+- **`staff_challenges` split from `staff_identity`** (Factory
+  `f12197b46a82`), and its operations inert (R0-23): the former outputs
+  `ChallengeIssueView` and `StaffAccount` are never produced; the email gateway
+  is uncalled. The former `create_staff_account` with a verification challenge
+  is the administrator activation of R0-19.
+- **Narrow ports** instead of the `PortalStore` facade surface (Factory
+  `af686d7364d2` … `88c1dbbcc3a6`); `PortalStore`, `PortalTransaction` and the
+  repository classes are exported classes, not operations.
+- **Identity outputs are safe views**: `StaffAccountView` without the hash for
+  every staff account change, `SessionRevocationResult` for session
+  revocation, `ExpenseOperationOutcome` and `PhotoMutationResult` for
+  mutations (Factory `9eab4d948181`, `d1280708714f`).
+- **`authorize_producer_scope` is called by `api`**, not by
+  `snapshot_import`; `import_snapshot` calls `authorize_snapshot_import` once
+  and records every classified rejection (R0-25).
+- **Viewer reads**: `list_viewer_projects` omits a grant whose context fails
+  (Factory `00ac72f18d9c`); the overview carries six availabilities (Factory
+  `d2c4511ea119`).
+- **Binary reads answer exact bytes** (Factory `babd5e5262d9`); a document's
+  failures are one `BinaryAccessRejected`, a photo's are not.
+- **Errors are the closed exception set of the route table** instead of the
+  former families `DomainValidationRejected` and `DomainConflict`.
+- **Route table** is `rules.http_router_backend` (56 routes, 49 table and 7
+  irregular) instead of the former `rules.http_route_catalog`; administrator
+  project discovery `GET /admin/projects` is added (R0-08).
