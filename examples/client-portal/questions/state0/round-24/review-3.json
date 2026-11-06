@@ -1,0 +1,256 @@
+{
+ "open_points": [
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "R0-24 empty-budget creation predicate",
+   "kind": "ambiguous precondition",
+   "text": "“reading the progress of a project that has no budget yet creates its empty manual budget version”",
+   "question": "What exactly counts as “has no budget yet”: no budget records of any kind, no manual budget, or no active budget version?",
+   "options": [
+    "Create only when the project has no manual or imported budget records",
+    "Create when the project has no active budget version, even if unactivated imported snapshots exist",
+    "Create whenever no manual budget exists"
+   ],
+   "default_guess": "Treat it as no budget records of any kind.",
+   "witness": {
+    "initial": "An archived project has an accepted imported snapshot, but no budget version has been activated.",
+    "events": [
+     "An authorized viewer reads the project's progress."
+    ],
+    "outcomes": [
+     "No manual budget is created because a snapshot budget record already exists.",
+     "An empty manual budget is created because the project has no active budget."
+    ],
+    "observer": "The viewer on a later budget read and staff reviewing available budget versions"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "R0-24 empty manual budget state",
+   "kind": "unnamed stored facts",
+   "text": "“creates its empty manual budget version”",
+   "question": "Is the created version active, and what source, lifecycle state, section set, and activation facts are stored for it?",
+   "options": [
+    "Create and activate an empty manual budget with no sections",
+    "Create an inactive draft manual budget",
+    "Create a manual budget record that is treated as active without an activation record"
+   ],
+   "default_guess": "Create one active manual budget with no sections and an explicit activation fact.",
+   "witness": {
+    "initial": "An archived project has no budget records.",
+    "events": [
+     "A viewer reads progress, causing the empty manual budget version to be created.",
+     "The viewer subsequently reads the budget summary."
+    ],
+    "outcomes": [
+     "The budget summary reports an active manual budget with no sections.",
+     "The budget remains unavailable because the created manual version is inactive."
+    ],
+    "observer": "The viewer"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "R0-24 repeated and concurrent progress reads",
+   "kind": "missing idempotency rule",
+   "text": "“reading the progress of a project that has no budget yet creates its empty manual budget version”",
+   "question": "Must repeated or concurrent qualifying reads converge on exactly one empty manual budget version, and how is that uniqueness identified?",
+   "options": [
+    "Exactly one system-created empty manual version per project",
+    "A new inactive empty version may be created by each racing read",
+    "Uniqueness is only required for the active version"
+   ],
+   "default_guess": "Enforce exactly one system-created empty manual version per project.",
+   "witness": {
+    "initial": "An archived project has no budget, and two authorized sessions can read it.",
+    "events": [
+     "Viewer A and staff member B issue progress reads concurrently.",
+     "Both requests observe the project before either creation commits."
+    ],
+    "outcomes": [
+     "Both requests return after one shared empty manual version is created.",
+     "Each request creates a distinct empty manual version."
+    ],
+    "observer": "Staff listing or activating budget versions"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "R0-24 progress-read failure semantics",
+   "kind": "missing failure contract",
+   "text": "“reading the progress … creates its empty manual budget version”",
+   "question": "If the required budget creation cannot be persisted, does the progress read fail, or may it return progress without creating the promised version?",
+   "options": [
+    "Fail the read atomically and create nothing",
+    "Return progress and leave the budget absent",
+    "Return progress with a warning or partial-failure indication"
+   ],
+   "default_guess": "Fail the read atomically.",
+   "witness": {
+    "initial": "An authorized viewer reads an archived project with no budget while the database cannot accept a write.",
+    "events": [
+     "The viewer requests progress.",
+     "The portal can read progress but cannot persist the empty manual budget."
+    ],
+    "outcomes": [
+     "The request fails and no budget is created.",
+     "The request succeeds with progress while the budget remains absent."
+    ],
+    "observer": "The viewer and an operator inspecting the project afterward"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "Viewer-triggered empty-budget creation",
+   "kind": "contradiction",
+   "text": "R0-24 says a progress read “creates its empty manual budget version,” while ClientViewer says “all viewer capabilities are read-only; a viewer can never mutate data.”",
+   "question": "Is system materialization triggered by a viewer read an explicit exception to the rule that a viewer can never cause portal data to mutate, or may only a staff progress read create the budget?",
+   "options": [
+    "Any authorized progress read may trigger a system-owned mutation",
+    "Only staff reads may create the budget; viewer reads remain side-effect free",
+    "Viewer reads may create it and the viewer is recorded as the actor"
+   ],
+   "default_guess": "Allow any authorized read to trigger a system-owned materialization and explicitly exempt it from viewer immutability.",
+   "witness": {
+    "initial": "An archived project visible to a viewer has progress data but no budget.",
+    "events": [
+     "The viewer reads progress."
+    ],
+    "outcomes": [
+     "The read creates a persistent manual budget, as R0-24 requires.",
+     "The read creates nothing because viewer actions can never mutate data."
+    ],
+    "observer": "The viewer on later reads, staff, and audit consumers"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "Empty budget versus unavailable-data promise",
+   "kind": "contradiction",
+   "text": "R0-24 creates an “empty manual budget” when no budget exists, while Client view says “Unavailable data is shown explicitly, never fabricated or replaced by silent zeros.”",
+   "question": "After read-side creation, must the client see an empty manual budget, or must the absence of real budget data still be represented as unavailable?",
+   "options": [
+    "Expose the generated empty manual budget as the project's budget",
+    "Keep reporting budget unavailable despite the internal record",
+    "Expose a distinct system-created-empty state, not ordinary manual budget or zero totals"
+   ],
+   "default_guess": "Expose a distinct system-created-empty state and keep monetary values unavailable.",
+   "witness": {
+    "initial": "An archived project has no budget data.",
+    "events": [
+     "The viewer reads progress, creating the empty manual budget.",
+     "The viewer opens the budget summary."
+    ],
+    "outcomes": [
+     "The viewer sees a manual budget with empty or zero totals.",
+     "The viewer sees budget data as unavailable."
+    ],
+    "observer": "The viewer"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "Viewer-entry rate limiting",
+   "kind": "underspecified product promise",
+   "text": "“entry is rate limited, not origin-checked”",
+   "question": "What event is limited, by which identity or network key, over what window and threshold, and what observable failure is returned when the limit is exceeded?",
+   "options": [
+    "Limit by source IP",
+    "Limit by access-link credential or viewer identity",
+    "Use combined per-IP and per-credential limits",
+    "Use one deployment-wide limit"
+   ],
+   "default_guess": "Use combined per-IP and per-credential limits with a concealed rate-limit failure.",
+   "witness": {
+    "initial": "A valid viewer and an attacker share a public NAT address.",
+    "events": [
+     "The attacker submits repeated invalid viewer-entry attempts.",
+     "The valid viewer then follows a valid access link."
+    ],
+    "outcomes": [
+     "The valid viewer is refused because entry is limited by IP.",
+     "The valid viewer succeeds because attempts are limited by credential or viewer."
+    ],
+    "observer": "The valid viewer"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "Viewer sign-out origin trust boundary",
+   "kind": "ambiguous trust decision",
+   "text": "“a viewer sign-out is refused unless it comes from the portal's own public origin”",
+   "question": "How is the single “own public origin” selected relative to the configured trusted-origin set, and what happens when the Origin header is absent?",
+   "options": [
+    "Accept only one configured canonical public origin and reject an absent Origin",
+    "Accept any configured trusted origin and reject an absent Origin",
+    "Accept an absent Origin for non-browser clients but reject a mismatching Origin"
+   ],
+   "default_guess": "Accept only the configured canonical public origin and reject missing or mismatching Origin.",
+   "witness": {
+    "initial": "A deployment has two non-wildcard trusted origins configured, and a viewer has an active session.",
+    "events": [
+     "The viewer sends sign-out from the secondary trusted origin."
+    ],
+    "outcomes": [
+     "Sign-out succeeds because every configured trusted origin counts as the portal's own origin.",
+     "Sign-out is refused because only the canonical public origin qualifies."
+    ],
+    "observer": "The viewer"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "R0-07 normalized email output",
+   "kind": "undefined observable value",
+   "text": "“the success message shows the normalized email”",
+   "question": "What exact normalization determines the email displayed by the command?",
+   "options": [
+    "Trim surrounding whitespace and lowercase the whole address",
+    "Trim and lowercase only the domain",
+    "Apply provider-specific canonicalization such as removing tags or dots"
+   ],
+   "default_guess": "Trim surrounding whitespace and lowercase the whole address, with no provider-specific rewriting.",
+   "witness": {
+    "initial": "No staff account exists.",
+    "events": [
+     "The host operator supplies “ User+Tag@Example.COM ” and a valid password to the bootstrap command.",
+     "The command succeeds."
+    ],
+    "outcomes": [
+     "The message displays “user+tag@example.com”.",
+     "The message displays “User+Tag@example.com” or another canonical form."
+    ],
+    "observer": "The host operator and any automation consuming the success message"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "R0-07 success-message delivery",
+   "kind": "unnamed output boundary",
+   "text": "“the success message shows the normalized email to the operator who supplied it”",
+   "question": "Through which output channel is the email shown, and is it allowed to enter captured stdout/stderr or deployment logs despite the promise that it is never logged?",
+   "options": [
+    "Write it to standard output, which callers may capture",
+    "Write it to standard error",
+    "Write directly to an interactive terminal and refuse or omit it without one",
+    "Return it through a separate structured command result"
+   ],
+   "default_guess": "Write it to standard output and define “never logged” as a prohibition on portal-created log records, not external shell capture.",
+   "witness": {
+    "initial": "No staff account exists, and the bootstrap command is launched from an operator console whose stdout is captured by deployment tooling.",
+    "events": [
+     "The operator enters the email and password interactively.",
+     "The command succeeds and emits its success message."
+    ],
+    "outcomes": [
+     "The normalized email appears in captured deployment output.",
+     "The normalized email is shown only on the operator's terminal and is absent from captured output."
+    ],
+    "observer": "The operator and anyone able to read deployment logs"
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"00_product.md:Decisions\",\"subject\":\"R0-24 empty-budget creation predicate\",\"kind\":\"ambiguous precondition\",\"text\":\"“reading the progress of a project that has no budget yet creates its empty manual budget version”\",\"question\":\"What exactly counts as “has no budget yet”: no budget records of any kind, no manual budget, or no active budget version?\",\"options\":[\"Create only when the project has no manual or imported budget records\",\"Create when the project has no active budget version, even if unactivated imported snapshots exist\",\"Create whenever no manual budget exists\"],\"default_guess\":\"Treat it as no budget records of any kind.\",\"witness\":{\"initial\":\"An archived project has an accepted imported snapshot, but no budget version has been activated.\",\"events\":[\"An authorized viewer reads the project's progress.\"],\"outcomes\":[\"No manual budget is created because a snapshot budget record already exists.\",\"An empty manual budget is created because the project has no active budget.\"],\"observer\":\"The viewer on a later budget read and staff reviewing available budget versions\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"R0-24 empty manual budget state\",\"kind\":\"unnamed stored facts\",\"text\":\"“creates its empty manual budget version”\",\"question\":\"Is the created version active, and what source, lifecycle state, section set, and activation facts are stored for it?\",\"options\":[\"Create and activate an empty manual budget with no sections\",\"Create an inactive draft manual budget\",\"Create a manual budget record that is treated as active without an activation record\"],\"default_guess\":\"Create one active manual budget with no sections and an explicit activation fact.\",\"witness\":{\"initial\":\"An archived project has no budget records.\",\"events\":[\"A viewer reads progress, causing the empty manual budget version to be created.\",\"The viewer subsequently reads the budget summary.\"],\"outcomes\":[\"The budget summary reports an active manual budget with no sections.\",\"The budget remains unavailable because the created manual version is inactive.\"],\"observer\":\"The viewer\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"R0-24 repeated and concurrent progress reads\",\"kind\":\"missing idempotency rule\",\"text\":\"“reading the progress of a project that has no budget yet creates its empty manual budget version”\",\"question\":\"Must repeated or concurrent qualifying reads converge on exactly one empty manual budget version, and how is that uniqueness identified?\",\"options\":[\"Exactly one system-created empty manual version per project\",\"A new inactive empty version may be created by each racing read\",\"Uniqueness is only required for the active version\"],\"default_guess\":\"Enforce exactly one system-created empty manual version per project.\",\"witness\":{\"initial\":\"An archived project has no budget, and two authorized sessions can read it.\",\"events\":[\"Viewer A and staff member B issue progress reads concurrently.\",\"Both requests observe the project before either creation commits.\"],\"outcomes\":[\"Both requests return after one shared empty manual version is created.\",\"Each request creates a distinct empty manual version.\"],\"observer\":\"Staff listing or activating budget versions\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"R0-24 progress-read failure semantics\",\"kind\":\"missing failure contract\",\"text\":\"“reading the progress … creates its empty manual budget version”\",\"question\":\"If the required budget creation cannot be persisted, does the progress read fail, or may it return progress without creating the promised version?\",\"options\":[\"Fail the read atomically and create nothing\",\"Return progress and leave the budget absent\",\"Return progress with a warning or partial-failure indication\"],\"default_guess\":\"Fail the read atomically.\",\"witness\":{\"initial\":\"An authorized viewer reads an archived project with no budget while the database cannot accept a write.\",\"events\":[\"The viewer requests progress.\",\"The portal can read progress but cannot persist the empty manual budget.\"],\"outcomes\":[\"The request fails and no budget is created.\",\"The request succeeds with progress while the budget remains absent.\"],\"observer\":\"The viewer and an operator inspecting the project afterward\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"Viewer-triggered empty-budget creation\",\"kind\":\"contradiction\",\"text\":\"R0-24 says a progress read “creates its empty manual budget version,” while ClientViewer says “all viewer capabilities are read-only; a viewer can never mutate data.”\",\"question\":\"Is system materialization triggered by a viewer read an explicit exception to the rule that a viewer can never cause portal data to mutate, or may only a staff progress read create the budget?\",\"options\":[\"Any authorized progress read may trigger a system-owned mutation\",\"Only staff reads may create the budget; viewer reads remain side-effect free\",\"Viewer reads may create it and the viewer is recorded as the actor\"],\"default_guess\":\"Allow any authorized read to trigger a system-owned materialization and explicitly exempt it from viewer immutability.\",\"witness\":{\"initial\":\"An archived project visible to a viewer has progress data but no budget.\",\"events\":[\"The viewer reads progress.\"],\"outcomes\":[\"The read creates a persistent manual budget, as R0-24 requires.\",\"The read creates nothing because viewer actions can never mutate data.\"],\"observer\":\"The viewer on later reads, staff, and audit consumers\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"Empty budget versus unavailable-data promise\",\"kind\":\"contradiction\",\"text\":\"R0-24 creates an “empty manual budget” when no budget exists, while Client view says “Unavailable data is shown explicitly, never fabricated or replaced by silent zeros.”\",\"question\":\"After read-side creation, must the client see an empty manual budget, or must the absence of real budget data still be represented as unavailable?\",\"options\":[\"Expose the generated empty manual budget as the project's budget\",\"Keep reporting budget unavailable despite the internal record\",\"Expose a distinct system-created-empty state, not ordinary manual budget or zero totals\"],\"default_guess\":\"Expose a distinct system-created-empty state and keep monetary values unavailable.\",\"witness\":{\"initial\":\"An archived project has no budget data.\",\"events\":[\"The viewer reads progress, creating the empty manual budget.\",\"The viewer opens the budget summary.\"],\"outcomes\":[\"The viewer sees a manual budget with empty or zero totals.\",\"The viewer sees budget data as unavailable.\"],\"observer\":\"The viewer\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"Viewer-entry rate limiting\",\"kind\":\"underspecified product promise\",\"text\":\"“entry is rate limited, not origin-checked”\",\"question\":\"What event is limited, by which identity or network key, over what window and threshold, and what observable failure is returned when the limit is exceeded?\",\"options\":[\"Limit by source IP\",\"Limit by access-link credential or viewer identity\",\"Use combined per-IP and per-credential limits\",\"Use one deployment-wide limit\"],\"default_guess\":\"Use combined per-IP and per-credential limits with a concealed rate-limit failure.\",\"witness\":{\"initial\":\"A valid viewer and an attacker share a public NAT address.\",\"events\":[\"The attacker submits repeated invalid viewer-entry attempts.\",\"The valid viewer then follows a valid access link.\"],\"outcomes\":[\"The valid viewer is refused because entry is limited by IP.\",\"The valid viewer succeeds because attempts are limited by credential or viewer.\"],\"observer\":\"The valid viewer\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"Viewer sign-out origin trust boundary\",\"kind\":\"ambiguous trust decision\",\"text\":\"“a viewer sign-out is refused unless it comes from the portal's own public origin”\",\"question\":\"How is the single “own public origin” selected relative to the configured trusted-origin set, and what happens when the Origin header is absent?\",\"options\":[\"Accept only one configured canonical public origin and reject an absent Origin\",\"Accept any configured trusted origin and reject an absent Origin\",\"Accept an absent Origin for non-browser clients but reject a mismatching Origin\"],\"default_guess\":\"Accept only the configured canonical public origin and reject missing or mismatching Origin.\",\"witness\":{\"initial\":\"A deployment has two non-wildcard trusted origins configured, and a viewer has an active session.\",\"events\":[\"The viewer sends sign-out from the secondary trusted origin.\"],\"outcomes\":[\"Sign-out succeeds because every configured trusted origin counts as the portal's own origin.\",\"Sign-out is refused because only the canonical public origin qualifies.\"],\"observer\":\"The viewer\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"R0-07 normalized email output\",\"kind\":\"undefined observable value\",\"text\":\"“the success message shows the normalized email”\",\"question\":\"What exact normalization determines the email displayed by the command?\",\"options\":[\"Trim surrounding whitespace and lowercase the whole address\",\"Trim and lowercase only the domain\",\"Apply provider-specific canonicalization such as removing tags or dots\"],\"default_guess\":\"Trim surrounding whitespace and lowercase the whole address, with no provider-specific rewriting.\",\"witness\":{\"initial\":\"No staff account exists.\",\"events\":[\"The host operator supplies “ User+Tag@Example.COM ” and a valid password to the bootstrap command.\",\"The command succeeds.\"],\"outcomes\":[\"The message displays “user+tag@example.com”.\",\"The message displays “User+Tag@example.com” or another canonical form.\"],\"observer\":\"The host operator and any automation consuming the success message\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"R0-07 success-message delivery\",\"kind\":\"unnamed output boundary\",\"text\":\"“the success message shows the normalized email to the operator who supplied it”\",\"question\":\"Through which output channel is the email shown, and is it allowed to enter captured stdout/stderr or deployment logs despite the promise that it is never logged?\",\"options\":[\"Write it to standard output, which callers may capture\",\"Write it to standard error\",\"Write directly to an interactive terminal and refuse or omit it without one\",\"Return it through a separate structured command result\"],\"default_guess\":\"Write it to standard output and define “never logged” as a prohibition on portal-created log records, not external shell capture.\",\"witness\":{\"initial\":\"No staff account exists, and the bootstrap command is launched from an operator console whose stdout is captured by deployment tooling.\",\"events\":[\"The operator enters the email and password interactively.\",\"The command succeeds and emits its success message.\"],\"outcomes\":[\"The normalized email appears in captured deployment output.\",\"The normalized email is shown only on the operator's terminal and is absent from captured output.\"],\"observer\":\"The operator and anyone able to read deployment logs\"}}]}",
+ "set_aside": []
+}

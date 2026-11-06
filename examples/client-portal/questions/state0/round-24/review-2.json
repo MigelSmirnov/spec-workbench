@@ -1,0 +1,207 @@
+{
+ "open_points": [
+  {
+   "unit": "00_product.md:Product invariants visible at State 0",
+   "subject": "viewer read-only authority versus lazy budget creation",
+   "kind": "contradiction",
+   "text": "“Viewer capabilities are read-only; a viewer can never mutate data” versus “reading the progress of a project that has no budget yet creates its empty manual budget version, also for an archived project”",
+   "question": "When a viewer reads progress for an archived project with no budget, does that read create persistent budget state despite the viewer’s read-only invariant, or is creation limited to another actor or system authority?",
+   "options": [
+    "Every authorized progress reader, including a viewer, causes creation",
+    "Only a staff reader causes creation",
+    "The system creates it independently of the reader’s authority",
+    "Viewer progress reads do not create it"
+   ],
+   "default_guess": "Treat creation as a system-owned side effect permitted for every authorized progress reader.",
+   "witness": {
+    "initial": "An archived project has a viewer grant, progress is readable, and no budget exists.",
+    "events": [
+     "The authenticated viewer requests the project’s progress."
+    ],
+    "outcomes": [
+     "The request persists an empty manual budget attributed to or triggered by the viewer.",
+     "The request remains strictly read-only and does not create a budget."
+    ],
+    "observer": "The viewer on a later budget read and an administrator inspecting stored budgets or audit records"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "meaning of no budget yet",
+   "kind": "ambiguous state predicate",
+   "text": "“a project that has no budget yet”",
+   "question": "Which stored state satisfies “no budget yet”: no budget versions of any kind, no manual version, no active version, or no client-visible budget?",
+   "options": [
+    "No manual or imported budget version exists",
+    "No manual budget exists, even if imported snapshots exist",
+    "No budget version is active",
+    "No budget is currently client-visible"
+   ],
+   "default_guess": "Require that no manual or imported budget version exists.",
+   "witness": {
+    "initial": "An archived project has an imported snapshot but no active budget version and no manual budget.",
+    "events": [
+     "An authorized actor reads progress."
+    ],
+    "outcomes": [
+     "An empty manual budget is created because there is no active budget.",
+     "No manual budget is created because a snapshot budget version already exists."
+    ],
+    "observer": "Staff reviewing the project’s budget versions"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "state of the created empty manual budget",
+   "kind": "unnamed stored facts",
+   "text": "“creates its empty manual budget version”",
+   "question": "What facts and lifecycle state does creation establish, especially whether the version is active, client-visible, and the project’s sole current budget?",
+   "options": [
+    "Create and automatically activate a client-visible empty manual version",
+    "Create an inactive manual version",
+    "Create a special initialization record that is not an ordinary budget version"
+   ],
+   "default_guess": "Create and atomically activate an ordinary empty manual budget version.",
+   "witness": {
+    "initial": "An archived project has no budget.",
+    "events": [
+     "An authorized actor reads progress, causing the stated creation.",
+     "The viewer subsequently requests the budget summary."
+    ],
+    "outcomes": [
+     "The viewer sees an active manual budget with no sections.",
+     "The viewer still sees budget data as unavailable because the created version is inactive or not an ordinary budget."
+    ],
+    "observer": "The viewer"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "concurrent lazy budget creation",
+   "kind": "unspecified idempotency",
+   "text": "“reading the progress … creates its empty manual budget version”",
+   "question": "If multiple progress reads concurrently observe no budget, must they converge on exactly one empty manual budget version, and what happens to losing attempts?",
+   "options": [
+    "Exactly one version is created and every read succeeds against it",
+    "Multiple inactive versions may be created but at most one becomes active",
+    "One read succeeds and competing reads fail or retry"
+   ],
+   "default_guess": "Enforce one version per project for this initialization and let all reads succeed against it.",
+   "witness": {
+    "initial": "An archived project has no budget and is visible to two authorized sessions.",
+    "events": [
+     "Viewer A requests progress.",
+     "Viewer B requests progress concurrently before A’s creation commits."
+    ],
+    "outcomes": [
+     "One empty manual budget version exists after both successful reads.",
+     "Two empty manual budget versions exist, or one request fails with a conflict."
+    ],
+    "observer": "The readers and staff inspecting budget-version history"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "failure of progress read during lazy budget creation",
+   "kind": "missing failure behavior",
+   "text": "“reading the progress … creates its empty manual budget version”",
+   "question": "If the progress data can be read but the empty budget cannot be persisted, does the read fail, return progress without creating the budget, or return another explicit unavailable result?",
+   "options": [
+    "Fail the entire progress read with a storage error",
+    "Return progress and leave the budget absent",
+    "Return an explicit progress-unavailable result"
+   ],
+   "default_guess": "Fail the entire read so the promised creation and response are atomic.",
+   "witness": {
+    "initial": "An archived project has readable progress and no budget; storage reads work but a budget write fails.",
+    "events": [
+     "An authorized viewer requests progress."
+    ],
+    "outcomes": [
+     "The viewer receives the progress while no budget is created.",
+     "The viewer receives a storage-unavailable failure and no progress."
+    ],
+    "observer": "The viewer"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "audit of read-triggered budget creation",
+   "kind": "audit ambiguity",
+   "text": "“reading the progress … creates its empty manual budget version” versus “Every significant action records actor provenance” and the inclusion of “budget changes” in audit",
+   "question": "Is this lazy creation audited as a budget change, and if so which principal and action are recorded when a read caused it?",
+   "options": [
+    "Audit a budget-creation action attributed to the reader",
+    "Audit a system action that references the triggering reader",
+    "Treat lazy initialization as non-significant and record no audit"
+   ],
+   "default_guess": "Audit the budget creation with the authenticated reader as actor and a distinct lazy-initialization action.",
+   "witness": {
+    "initial": "An archived project has no budget and an authorized viewer can read progress.",
+    "events": [
+     "The viewer reads progress and an empty manual budget is created.",
+     "An administrator reviews the audit trail."
+    ],
+    "outcomes": [
+     "The audit contains a budget-creation record with actor provenance.",
+     "No audit record exists because the operation was nominally a read."
+    ],
+    "observer": "The administrator or auditor"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "bootstrap success-message delivery boundary",
+   "kind": "unnamed output boundary",
+   "text": "“the success message shows the normalized email to the operator who supplied it” while the email is otherwise “never printed, logged or audited”",
+   "question": "Through which output channel is the normalized email shown, and is command output captured by a process supervisor or deployment log still permitted?",
+   "options": [
+    "Write it to standard output even if the host captures that stream",
+    "Write it only to an attached controlling terminal",
+    "Return it through another operator-only local channel"
+   ],
+   "default_guess": "Write it to the controlling terminal and avoid ordinary captured output streams.",
+   "witness": {
+    "initial": "The first administrator does not exist and the bootstrap command is run by a deployment supervisor that captures stdout and stderr.",
+    "events": [
+     "The host operator supplies an email and password.",
+     "The command succeeds and emits its success message."
+    ],
+    "outcomes": [
+     "The normalized email is written to stdout and becomes part of the deployment log.",
+     "The email is shown only on the operator’s terminal and is absent from captured logs."
+    ],
+    "observer": "The host operator and anyone with deployment-log access"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "viewer-entry rate limit",
+   "kind": "vague product promise",
+   "text": "“entry is rate limited, not origin-checked”",
+   "question": "What attempts share the viewer-entry limit, what threshold and time window apply, and what observable failure is returned when it is exceeded?",
+   "options": [
+    "Limit by source address",
+    "Limit by access-link credential or viewer",
+    "Limit by both source and credential",
+    "Apply one deployment-wide limit"
+   ],
+   "default_guess": "Limit by both source address and credential, with a concealed rate-limit failure.",
+   "witness": {
+    "initial": "A valid viewer access link exists and has not been revoked.",
+    "events": [
+     "An attacker makes repeated invalid entry attempts from one address.",
+     "The legitimate viewer then uses the valid link from another address."
+    ],
+    "outcomes": [
+     "The legitimate entry succeeds because limits are isolated by source.",
+     "The legitimate entry is refused because attempts against the credential or a global bucket exhausted its limit."
+    ],
+    "observer": "The legitimate viewer"
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"00_product.md:Product invariants visible at State 0\",\"subject\":\"viewer read-only authority versus lazy budget creation\",\"kind\":\"contradiction\",\"text\":\"“Viewer capabilities are read-only; a viewer can never mutate data” versus “reading the progress of a project that has no budget yet creates its empty manual budget version, also for an archived project”\",\"question\":\"When a viewer reads progress for an archived project with no budget, does that read create persistent budget state despite the viewer’s read-only invariant, or is creation limited to another actor or system authority?\",\"options\":[\"Every authorized progress reader, including a viewer, causes creation\",\"Only a staff reader causes creation\",\"The system creates it independently of the reader’s authority\",\"Viewer progress reads do not create it\"],\"default_guess\":\"Treat creation as a system-owned side effect permitted for every authorized progress reader.\",\"witness\":{\"initial\":\"An archived project has a viewer grant, progress is readable, and no budget exists.\",\"events\":[\"The authenticated viewer requests the project’s progress.\"],\"outcomes\":[\"The request persists an empty manual budget attributed to or triggered by the viewer.\",\"The request remains strictly read-only and does not create a budget.\"],\"observer\":\"The viewer on a later budget read and an administrator inspecting stored budgets or audit records\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"meaning of no budget yet\",\"kind\":\"ambiguous state predicate\",\"text\":\"“a project that has no budget yet”\",\"question\":\"Which stored state satisfies “no budget yet”: no budget versions of any kind, no manual version, no active version, or no client-visible budget?\",\"options\":[\"No manual or imported budget version exists\",\"No manual budget exists, even if imported snapshots exist\",\"No budget version is active\",\"No budget is currently client-visible\"],\"default_guess\":\"Require that no manual or imported budget version exists.\",\"witness\":{\"initial\":\"An archived project has an imported snapshot but no active budget version and no manual budget.\",\"events\":[\"An authorized actor reads progress.\"],\"outcomes\":[\"An empty manual budget is created because there is no active budget.\",\"No manual budget is created because a snapshot budget version already exists.\"],\"observer\":\"Staff reviewing the project’s budget versions\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"state of the created empty manual budget\",\"kind\":\"unnamed stored facts\",\"text\":\"“creates its empty manual budget version”\",\"question\":\"What facts and lifecycle state does creation establish, especially whether the version is active, client-visible, and the project’s sole current budget?\",\"options\":[\"Create and automatically activate a client-visible empty manual version\",\"Create an inactive manual version\",\"Create a special initialization record that is not an ordinary budget version\"],\"default_guess\":\"Create and atomically activate an ordinary empty manual budget version.\",\"witness\":{\"initial\":\"An archived project has no budget.\",\"events\":[\"An authorized actor reads progress, causing the stated creation.\",\"The viewer subsequently requests the budget summary.\"],\"outcomes\":[\"The viewer sees an active manual budget with no sections.\",\"The viewer still sees budget data as unavailable because the created version is inactive or not an ordinary budget.\"],\"observer\":\"The viewer\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"concurrent lazy budget creation\",\"kind\":\"unspecified idempotency\",\"text\":\"“reading the progress … creates its empty manual budget version”\",\"question\":\"If multiple progress reads concurrently observe no budget, must they converge on exactly one empty manual budget version, and what happens to losing attempts?\",\"options\":[\"Exactly one version is created and every read succeeds against it\",\"Multiple inactive versions may be created but at most one becomes active\",\"One read succeeds and competing reads fail or retry\"],\"default_guess\":\"Enforce one version per project for this initialization and let all reads succeed against it.\",\"witness\":{\"initial\":\"An archived project has no budget and is visible to two authorized sessions.\",\"events\":[\"Viewer A requests progress.\",\"Viewer B requests progress concurrently before A’s creation commits.\"],\"outcomes\":[\"One empty manual budget version exists after both successful reads.\",\"Two empty manual budget versions exist, or one request fails with a conflict.\"],\"observer\":\"The readers and staff inspecting budget-version history\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"failure of progress read during lazy budget creation\",\"kind\":\"missing failure behavior\",\"text\":\"“reading the progress … creates its empty manual budget version”\",\"question\":\"If the progress data can be read but the empty budget cannot be persisted, does the read fail, return progress without creating the budget, or return another explicit unavailable result?\",\"options\":[\"Fail the entire progress read with a storage error\",\"Return progress and leave the budget absent\",\"Return an explicit progress-unavailable result\"],\"default_guess\":\"Fail the entire read so the promised creation and response are atomic.\",\"witness\":{\"initial\":\"An archived project has readable progress and no budget; storage reads work but a budget write fails.\",\"events\":[\"An authorized viewer requests progress.\"],\"outcomes\":[\"The viewer receives the progress while no budget is created.\",\"The viewer receives a storage-unavailable failure and no progress.\"],\"observer\":\"The viewer\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"audit of read-triggered budget creation\",\"kind\":\"audit ambiguity\",\"text\":\"“reading the progress … creates its empty manual budget version” versus “Every significant action records actor provenance” and the inclusion of “budget changes” in audit\",\"question\":\"Is this lazy creation audited as a budget change, and if so which principal and action are recorded when a read caused it?\",\"options\":[\"Audit a budget-creation action attributed to the reader\",\"Audit a system action that references the triggering reader\",\"Treat lazy initialization as non-significant and record no audit\"],\"default_guess\":\"Audit the budget creation with the authenticated reader as actor and a distinct lazy-initialization action.\",\"witness\":{\"initial\":\"An archived project has no budget and an authorized viewer can read progress.\",\"events\":[\"The viewer reads progress and an empty manual budget is created.\",\"An administrator reviews the audit trail.\"],\"outcomes\":[\"The audit contains a budget-creation record with actor provenance.\",\"No audit record exists because the operation was nominally a read.\"],\"observer\":\"The administrator or auditor\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"bootstrap success-message delivery boundary\",\"kind\":\"unnamed output boundary\",\"text\":\"“the success message shows the normalized email to the operator who supplied it” while the email is otherwise “never printed, logged or audited”\",\"question\":\"Through which output channel is the normalized email shown, and is command output captured by a process supervisor or deployment log still permitted?\",\"options\":[\"Write it to standard output even if the host captures that stream\",\"Write it only to an attached controlling terminal\",\"Return it through another operator-only local channel\"],\"default_guess\":\"Write it to the controlling terminal and avoid ordinary captured output streams.\",\"witness\":{\"initial\":\"The first administrator does not exist and the bootstrap command is run by a deployment supervisor that captures stdout and stderr.\",\"events\":[\"The host operator supplies an email and password.\",\"The command succeeds and emits its success message.\"],\"outcomes\":[\"The normalized email is written to stdout and becomes part of the deployment log.\",\"The email is shown only on the operator’s terminal and is absent from captured logs.\"],\"observer\":\"The host operator and anyone with deployment-log access\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"viewer-entry rate limit\",\"kind\":\"vague product promise\",\"text\":\"“entry is rate limited, not origin-checked”\",\"question\":\"What attempts share the viewer-entry limit, what threshold and time window apply, and what observable failure is returned when it is exceeded?\",\"options\":[\"Limit by source address\",\"Limit by access-link credential or viewer\",\"Limit by both source and credential\",\"Apply one deployment-wide limit\"],\"default_guess\":\"Limit by both source address and credential, with a concealed rate-limit failure.\",\"witness\":{\"initial\":\"A valid viewer access link exists and has not been revoked.\",\"events\":[\"An attacker makes repeated invalid entry attempts from one address.\",\"The legitimate viewer then uses the valid link from another address.\"],\"outcomes\":[\"The legitimate entry succeeds because limits are isolated by source.\",\"The legitimate entry is refused because attempts against the credential or a global bucket exhausted its limit.\"],\"observer\":\"The legitimate viewer\"}}]}",
+ "set_aside": []
+}

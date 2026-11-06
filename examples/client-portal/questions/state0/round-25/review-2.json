@@ -1,0 +1,133 @@
+{
+ "open_points": [
+  {
+   "unit": "00_product.md:Product invariants visible at State 0",
+   "subject": "Read-only viewer and archived-project guarantees",
+   "kind": "contradiction",
+   "text": "“Viewer capabilities are read-only; a viewer can never mutate data” and “Archived projects expose the same reads in read-only mode” conflict with “reading the progress of a project that has no budget yet creates its empty manual budget version, also for an archived project.”",
+   "question": "Is the progress read allowed to persist a budget when performed by a viewer or against an archived project, despite the unconditional read-only guarantees?",
+   "options": [
+    "The named lazy-creation exception overrides both read-only guarantees.",
+    "Viewer and archived reads must not create the budget; creation requires a different authorized action.",
+    "The read may initialize internal state but that initialization is not considered a viewer mutation or a violation of read-only archival."
+   ],
+   "default_guess": "Treat R0-24 as an explicit exception and allow the authorized read to create the record.",
+   "witness": {
+    "initial": "An archived Registry project has an existing active viewer grant and no budget record.",
+    "events": [
+     "The viewer enters through a valid access link.",
+     "The viewer reads the project's progress."
+    ],
+    "outcomes": [
+     "R0-24 creates and persists an empty manual budget version.",
+     "The read-only viewer and archived-read guarantees forbid any persisted change, so progress is returned without creating a budget."
+    ],
+    "observer": "An administrator or any later caller reading the project's budget sees whether the manual version now exists."
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "Meaning of “has no budget yet”",
+   "kind": "undefined state predicate",
+   "text": "“reading the progress of a project that has no budget yet creates its empty manual budget version”",
+   "question": "Which stored states count as having no budget: no budget records at all, no active budget version, no manual budget, or no version usable for progress?",
+   "options": [
+    "Only a project with no manual or imported budget records qualifies.",
+    "Any project with no active budget version qualifies, even if it has imported snapshots or inactive versions.",
+    "Any project without a manual budget qualifies, even if an imported snapshot is active or awaiting activation.",
+    "Only a project for which progress currently has no section basis qualifies."
+   ],
+   "default_guess": "Qualify only a project with no manual or imported budget version at all.",
+   "witness": {
+    "initial": "An archived project has an accepted imported snapshot that has never been activated and has no manual budget.",
+    "events": [
+     "An authorized staff member reads progress."
+    ],
+    "outcomes": [
+     "Because no budget version is active, the read creates an empty manual budget version.",
+     "Because an imported budget record already exists, the project has a budget and the read creates nothing."
+    ],
+    "observer": "Staff reviewing the project's budget versions sees whether a new manual version was added."
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "Lifecycle and observable result of the lazily created budget",
+   "kind": "unnamed stored facts and output",
+   "text": "“creates its empty manual budget version”",
+   "question": "What lifecycle state and observable result does the created version have: is it active, what source/version identity and provenance does it receive, and what does the triggering progress read return?",
+   "options": [
+    "Create and activate a normal empty manual version, then return progress based on its empty section set.",
+    "Create an inactive manual version while the progress response remains explicitly unavailable.",
+    "Create an internal initialization record that is not exposed as a normal budget version.",
+    "Create the version and return a distinct initialized-but-no-progress result."
+   ],
+   "default_guess": "Create one active manual budget version with no sections and return an explicitly unavailable overall-progress value, not zero.",
+   "witness": {
+    "initial": "An archived project has no budget records and an authorized staff assignment.",
+    "events": [
+     "The staff member reads progress successfully.",
+     "The staff member subsequently reads the budget summary and budget-version list."
+    ],
+    "outcomes": [
+     "The new manual version is active and appears as the project's current empty manual budget.",
+     "The new manual version is inactive or internal, so the budget summary still reports unavailable data."
+    ],
+    "observer": "The staff member sees different budget source, version, and availability results."
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "Failure of progress-triggered budget creation",
+   "kind": "missing failure semantics",
+   "text": "“reading the progress of a project that has no budget yet creates its empty manual budget version”",
+   "question": "If the empty budget cannot be persisted, does the progress read fail, return progress as unavailable without creating anything, or succeed with a retryable/deferred initialization state?",
+   "options": [
+    "Fail the entire progress read with an explicit storage-unavailable error.",
+    "Return an unavailable progress result and leave the project without a budget.",
+    "Return progress successfully and retry budget creation on a later read."
+   ],
+   "default_guess": "Fail the entire read explicitly and leave no partial budget state.",
+   "witness": {
+    "initial": "An authorized caller reads an archived project with no budget while the database cannot commit a new budget version.",
+    "events": [
+     "The portal authorizes the progress read.",
+     "Persistence of the empty manual budget fails."
+    ],
+    "outcomes": [
+     "The progress read fails because its required side effect could not complete.",
+     "The progress read succeeds with unavailable or empty progress and no budget is created."
+    ],
+    "observer": "The caller sees success versus failure, and a later reader sees whether initialization must be retried."
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "Concurrent lazy creation of an empty manual budget",
+   "kind": "missing idempotency rule",
+   "text": "“reading the progress of a project that has no budget yet creates its empty manual budget version”",
+   "question": "What uniqueness or idempotency rule applies when multiple progress reads concurrently observe that the project has no budget?",
+   "options": [
+    "Exactly one empty manual version is created and every concurrent read uses it.",
+    "Each read may create a version, provided at most one becomes active.",
+    "One read succeeds and competing reads fail with a conflict or retry response."
+   ],
+   "default_guess": "Enforce one per-project lazy-created manual version and make concurrent reads converge on it.",
+   "witness": {
+    "initial": "An archived project has no budget, and two authorized sessions can read its progress.",
+    "events": [
+     "Viewer A and staff member B issue progress reads concurrently.",
+     "Both reads observe the pre-creation state before either transaction commits."
+    ],
+    "outcomes": [
+     "A uniqueness/idempotency rule produces one shared empty manual version and both reads succeed.",
+     "Both reads create distinct empty manual versions, with later logic choosing at most one as active."
+    ],
+    "observer": "An administrator listing budget versions sees one version or duplicates."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"00_product.md:Product invariants visible at State 0\",\"subject\":\"Read-only viewer and archived-project guarantees\",\"kind\":\"contradiction\",\"text\":\"“Viewer capabilities are read-only; a viewer can never mutate data” and “Archived projects expose the same reads in read-only mode” conflict with “reading the progress of a project that has no budget yet creates its empty manual budget version, also for an archived project.”\",\"question\":\"Is the progress read allowed to persist a budget when performed by a viewer or against an archived project, despite the unconditional read-only guarantees?\",\"options\":[\"The named lazy-creation exception overrides both read-only guarantees.\",\"Viewer and archived reads must not create the budget; creation requires a different authorized action.\",\"The read may initialize internal state but that initialization is not considered a viewer mutation or a violation of read-only archival.\"],\"default_guess\":\"Treat R0-24 as an explicit exception and allow the authorized read to create the record.\",\"witness\":{\"initial\":\"An archived Registry project has an existing active viewer grant and no budget record.\",\"events\":[\"The viewer enters through a valid access link.\",\"The viewer reads the project's progress.\"],\"outcomes\":[\"R0-24 creates and persists an empty manual budget version.\",\"The read-only viewer and archived-read guarantees forbid any persisted change, so progress is returned without creating a budget.\"],\"observer\":\"An administrator or any later caller reading the project's budget sees whether the manual version now exists.\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"Meaning of “has no budget yet”\",\"kind\":\"undefined state predicate\",\"text\":\"“reading the progress of a project that has no budget yet creates its empty manual budget version”\",\"question\":\"Which stored states count as having no budget: no budget records at all, no active budget version, no manual budget, or no version usable for progress?\",\"options\":[\"Only a project with no manual or imported budget records qualifies.\",\"Any project with no active budget version qualifies, even if it has imported snapshots or inactive versions.\",\"Any project without a manual budget qualifies, even if an imported snapshot is active or awaiting activation.\",\"Only a project for which progress currently has no section basis qualifies.\"],\"default_guess\":\"Qualify only a project with no manual or imported budget version at all.\",\"witness\":{\"initial\":\"An archived project has an accepted imported snapshot that has never been activated and has no manual budget.\",\"events\":[\"An authorized staff member reads progress.\"],\"outcomes\":[\"Because no budget version is active, the read creates an empty manual budget version.\",\"Because an imported budget record already exists, the project has a budget and the read creates nothing.\"],\"observer\":\"Staff reviewing the project's budget versions sees whether a new manual version was added.\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"Lifecycle and observable result of the lazily created budget\",\"kind\":\"unnamed stored facts and output\",\"text\":\"“creates its empty manual budget version”\",\"question\":\"What lifecycle state and observable result does the created version have: is it active, what source/version identity and provenance does it receive, and what does the triggering progress read return?\",\"options\":[\"Create and activate a normal empty manual version, then return progress based on its empty section set.\",\"Create an inactive manual version while the progress response remains explicitly unavailable.\",\"Create an internal initialization record that is not exposed as a normal budget version.\",\"Create the version and return a distinct initialized-but-no-progress result.\"],\"default_guess\":\"Create one active manual budget version with no sections and return an explicitly unavailable overall-progress value, not zero.\",\"witness\":{\"initial\":\"An archived project has no budget records and an authorized staff assignment.\",\"events\":[\"The staff member reads progress successfully.\",\"The staff member subsequently reads the budget summary and budget-version list.\"],\"outcomes\":[\"The new manual version is active and appears as the project's current empty manual budget.\",\"The new manual version is inactive or internal, so the budget summary still reports unavailable data.\"],\"observer\":\"The staff member sees different budget source, version, and availability results.\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"Failure of progress-triggered budget creation\",\"kind\":\"missing failure semantics\",\"text\":\"“reading the progress of a project that has no budget yet creates its empty manual budget version”\",\"question\":\"If the empty budget cannot be persisted, does the progress read fail, return progress as unavailable without creating anything, or succeed with a retryable/deferred initialization state?\",\"options\":[\"Fail the entire progress read with an explicit storage-unavailable error.\",\"Return an unavailable progress result and leave the project without a budget.\",\"Return progress successfully and retry budget creation on a later read.\"],\"default_guess\":\"Fail the entire read explicitly and leave no partial budget state.\",\"witness\":{\"initial\":\"An authorized caller reads an archived project with no budget while the database cannot commit a new budget version.\",\"events\":[\"The portal authorizes the progress read.\",\"Persistence of the empty manual budget fails.\"],\"outcomes\":[\"The progress read fails because its required side effect could not complete.\",\"The progress read succeeds with unavailable or empty progress and no budget is created.\"],\"observer\":\"The caller sees success versus failure, and a later reader sees whether initialization must be retried.\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"Concurrent lazy creation of an empty manual budget\",\"kind\":\"missing idempotency rule\",\"text\":\"“reading the progress of a project that has no budget yet creates its empty manual budget version”\",\"question\":\"What uniqueness or idempotency rule applies when multiple progress reads concurrently observe that the project has no budget?\",\"options\":[\"Exactly one empty manual version is created and every concurrent read uses it.\",\"Each read may create a version, provided at most one becomes active.\",\"One read succeeds and competing reads fail with a conflict or retry response.\"],\"default_guess\":\"Enforce one per-project lazy-created manual version and make concurrent reads converge on it.\",\"witness\":{\"initial\":\"An archived project has no budget, and two authorized sessions can read its progress.\",\"events\":[\"Viewer A and staff member B issue progress reads concurrently.\",\"Both reads observe the pre-creation state before either transaction commits.\"],\"outcomes\":[\"A uniqueness/idempotency rule produces one shared empty manual version and both reads succeed.\",\"Both reads create distinct empty manual versions, with later logic choosing at most one as active.\"],\"observer\":\"An administrator listing budget versions sees one version or duplicates.\"}}]}",
+ "set_aside": []
+}

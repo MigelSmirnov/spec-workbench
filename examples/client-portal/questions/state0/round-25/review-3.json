@@ -1,0 +1,180 @@
+{
+ "open_points": [
+  {
+   "subject": "Archived progress read versus viewer read-only authorization",
+   "kind": "contradiction",
+   "text": "“all viewer capabilities are read-only; a viewer can never mutate data” / “reading the progress of a project that has no budget yet creates its empty manual budget version, also for an archived project”",
+   "question": "May a viewer’s authorized progress read create the manual budget despite the viewer having no mutation capability, and if so, which authorization rule permits that write?",
+   "options": [
+    "The read creates the budget for viewers as an explicit system-side exception",
+    "Only staff with budget-mutation capability may cause creation",
+    "Viewer reads remain non-mutating and return unavailable progress"
+   ],
+   "default_guess": "Treat creation as an explicit system-side exception available to every principal authorized to read progress.",
+   "witness": {
+    "initial": "An archived project has a viewer grant and no budget.",
+    "events": [
+     "The ClientViewer enters through a valid access link.",
+     "The ClientViewer reads the project’s progress."
+    ],
+    "outcomes": [
+     "R0-24 creates an empty manual budget, so the viewer’s read changes stored project state.",
+     "The viewer-read-only rule prevents creation, so progress remains unavailable or the request is refused."
+    ],
+    "observer": "The viewer immediately, or staff later inspecting the project’s budget"
+   },
+   "unit": "00_product.md:Decisions"
+  },
+  {
+   "subject": "Meaning of “has no budget yet”",
+   "kind": "undefined predicate",
+   "text": "“a project that has no budget yet”",
+   "question": "Which stored states count as having no budget for purposes of the read-triggered creation: no budget records, no manual budget, no active budget version, or no activatable budget version?",
+   "options": [
+    "Only projects with no manual or imported budget records",
+    "Projects with no active budget version",
+    "Projects with no manual budget, even if imported snapshots exist",
+    "Projects with neither an active budget nor accepted snapshots"
+   ],
+   "default_guess": "Create the empty manual budget only when the project has no manual budget, no imported snapshot, and no active budget version.",
+   "witness": {
+    "initial": "An archived project has an accepted imported snapshot that has never been activated and has no manual budget.",
+    "events": [
+     "An authorized staff member reads progress."
+    ],
+    "outcomes": [
+     "The snapshot means the project already has a budget, so no manual budget is created.",
+     "The lack of an active budget means it has no budget yet, so an empty manual budget is created."
+    ],
+    "observer": "Staff reviewing available budget versions"
+   },
+   "unit": "00_product.md:Decisions"
+  },
+  {
+   "subject": "State of the read-created manual budget version",
+   "kind": "missing stored fact",
+   "text": "“creates its empty manual budget version”",
+   "question": "Is the created version active, inactive, or merely a placeholder, and does its creation select `manual` as the project’s current budget source?",
+   "options": [
+    "Create and activate it as the current manual budget",
+    "Create it inactive, leaving the project without an active budget",
+    "Create a placeholder that is not a normal budget version"
+   ],
+   "default_guess": "Create and activate one normal empty manual budget version because progress needs a current section set.",
+   "witness": {
+    "initial": "An archived project has no budget or active budget version.",
+    "events": [
+     "An authorized actor reads progress.",
+     "The actor subsequently reads the budget summary."
+    ],
+    "outcomes": [
+     "The new manual version is active, and the summary reports `manual` with no sections.",
+     "The new version is inactive, and the summary still reports budget data unavailable."
+    ],
+    "observer": "The viewer or staff member reading the budget summary"
+   },
+   "unit": "00_product.md:Decisions"
+  },
+  {
+   "subject": "Operations that trigger implicit budget creation",
+   "kind": "unnamed action boundary",
+   "text": "“reading the progress of a project”",
+   "question": "Does creation occur for every product operation whose response contains progress, including opening the aggregate client project view, or only for a dedicated progress-read operation?",
+   "options": [
+    "Every authorized response that reads or embeds progress",
+    "Only the dedicated progress endpoint/query",
+    "Only staff progress reads, not viewer aggregate reads"
+   ],
+   "default_guess": "Trigger creation in the shared progress-query operation, including callers that embed that query in an aggregate view.",
+   "witness": {
+    "initial": "An archived granted project has no budget, and the client project view includes progress.",
+    "events": [
+     "The ClientViewer opens the project without calling a separate progress endpoint."
+    ],
+    "outcomes": [
+     "Opening the aggregate view counts as reading progress and creates the empty manual budget.",
+     "Only a dedicated progress operation triggers creation, so opening the aggregate view leaves storage unchanged."
+    ],
+    "observer": "Staff later inspecting the project’s budget records"
+   },
+   "unit": "00_product.md:Decisions"
+  },
+  {
+   "subject": "Failure of the write performed by a progress read",
+   "kind": "missing failure semantics",
+   "text": "“reading the progress … creates its empty manual budget version”",
+   "question": "What observable result must the progress read return if the empty manual budget cannot be persisted?",
+   "options": [
+    "Fail the entire read with a storage-unavailable error",
+    "Return progress as unavailable and leave the budget absent",
+    "Return the read result while reporting the side-effect failure separately"
+   ],
+   "default_guess": "Fail the entire progress read so it cannot claim a state inconsistent with persisted records.",
+   "witness": {
+    "initial": "An archived project has no budget, and its records are readable, but the database cannot accept a new write.",
+    "events": [
+     "An authorized viewer reads progress.",
+     "Persistence of the implicit manual budget fails."
+    ],
+    "outcomes": [
+     "The progress read fails because its required creation could not complete.",
+     "The read succeeds with unavailable or empty progress while no budget is created."
+    ],
+    "observer": "The requesting viewer"
+   },
+   "unit": "00_product.md:Decisions"
+  },
+  {
+   "subject": "Observable meaning of the newly created empty budget",
+   "kind": "output ambiguity",
+   "text": "“Unavailable data is shown explicitly, never fabricated or replaced by silent zeros” / “reading the progress … creates its empty manual budget version”",
+   "question": "After creation, must the same response still show budget/progress as unavailable, or must it expose an empty manual budget and any zero-valued aggregates derived from it?",
+   "options": [
+    "Keep progress and derived values explicitly unavailable despite the stored empty budget",
+    "Expose an empty manual budget but keep aggregates requiring planned work unavailable",
+    "Expose zero sections and zero-valued budget/progress totals"
+   ],
+   "default_guess": "Expose the manual source with no sections while keeping overall progress and values requiring planned work explicitly unavailable.",
+   "witness": {
+    "initial": "An archived project has no budget, sections, or progress records.",
+    "events": [
+     "An authorized viewer reads progress, causing the empty manual budget to be created."
+    ],
+    "outcomes": [
+     "The response continues to mark progress and planned values unavailable.",
+     "The response presents an empty manual budget and zero-valued totals."
+    ],
+    "observer": "The requesting viewer"
+   },
+   "unit": "00_product.md:Product invariants visible at State 0"
+  },
+  {
+   "subject": "Cardinality and concurrency of implicit empty budgets",
+   "kind": "missing idempotency rule",
+   "text": "“creates its empty manual budget version”",
+   "question": "Must repeated or concurrent progress reads converge on exactly one empty manual budget version, and how is that distinguished from subsequently maintained manual-budget versions?",
+   "options": [
+    "Exactly one create-if-absent manual version per project",
+    "Each qualifying read may create a new version",
+    "One active version is guaranteed, but duplicate inactive empty versions are allowed"
+   ],
+   "default_guess": "Use atomic create-if-absent semantics so all reads converge on one manual budget version.",
+   "witness": {
+    "initial": "An archived project has no budget.",
+    "events": [
+     "Two authorized clients read progress concurrently.",
+     "Both reads observe the budget as absent before either creation commits."
+    ],
+    "outcomes": [
+     "One empty manual budget version is created and both reads use it.",
+     "Two empty manual budget versions are created, with either one or neither selected as active."
+    ],
+    "observer": "Staff listing or activating budget versions"
+   },
+   "unit": "00_product.md:Decisions"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"Archived progress read versus viewer read-only authorization\",\"kind\":\"contradiction\",\"text\":\"“all viewer capabilities are read-only; a viewer can never mutate data” / “reading the progress of a project that has no budget yet creates its empty manual budget version, also for an archived project”\",\"question\":\"May a viewer’s authorized progress read create the manual budget despite the viewer having no mutation capability, and if so, which authorization rule permits that write?\",\"options\":[\"The read creates the budget for viewers as an explicit system-side exception\",\"Only staff with budget-mutation capability may cause creation\",\"Viewer reads remain non-mutating and return unavailable progress\"],\"default_guess\":\"Treat creation as an explicit system-side exception available to every principal authorized to read progress.\",\"witness\":{\"initial\":\"An archived project has a viewer grant and no budget.\",\"events\":[\"The ClientViewer enters through a valid access link.\",\"The ClientViewer reads the project’s progress.\"],\"outcomes\":[\"R0-24 creates an empty manual budget, so the viewer’s read changes stored project state.\",\"The viewer-read-only rule prevents creation, so progress remains unavailable or the request is refused.\"],\"observer\":\"The viewer immediately, or staff later inspecting the project’s budget\"},\"unit\":\"00_product.md:Decisions\"},{\"subject\":\"Meaning of “has no budget yet”\",\"kind\":\"undefined predicate\",\"text\":\"“a project that has no budget yet”\",\"question\":\"Which stored states count as having no budget for purposes of the read-triggered creation: no budget records, no manual budget, no active budget version, or no activatable budget version?\",\"options\":[\"Only projects with no manual or imported budget records\",\"Projects with no active budget version\",\"Projects with no manual budget, even if imported snapshots exist\",\"Projects with neither an active budget nor accepted snapshots\"],\"default_guess\":\"Create the empty manual budget only when the project has no manual budget, no imported snapshot, and no active budget version.\",\"witness\":{\"initial\":\"An archived project has an accepted imported snapshot that has never been activated and has no manual budget.\",\"events\":[\"An authorized staff member reads progress.\"],\"outcomes\":[\"The snapshot means the project already has a budget, so no manual budget is created.\",\"The lack of an active budget means it has no budget yet, so an empty manual budget is created.\"],\"observer\":\"Staff reviewing available budget versions\"},\"unit\":\"00_product.md:Decisions\"},{\"subject\":\"State of the read-created manual budget version\",\"kind\":\"missing stored fact\",\"text\":\"“creates its empty manual budget version”\",\"question\":\"Is the created version active, inactive, or merely a placeholder, and does its creation select `manual` as the project’s current budget source?\",\"options\":[\"Create and activate it as the current manual budget\",\"Create it inactive, leaving the project without an active budget\",\"Create a placeholder that is not a normal budget version\"],\"default_guess\":\"Create and activate one normal empty manual budget version because progress needs a current section set.\",\"witness\":{\"initial\":\"An archived project has no budget or active budget version.\",\"events\":[\"An authorized actor reads progress.\",\"The actor subsequently reads the budget summary.\"],\"outcomes\":[\"The new manual version is active, and the summary reports `manual` with no sections.\",\"The new version is inactive, and the summary still reports budget data unavailable.\"],\"observer\":\"The viewer or staff member reading the budget summary\"},\"unit\":\"00_product.md:Decisions\"},{\"subject\":\"Operations that trigger implicit budget creation\",\"kind\":\"unnamed action boundary\",\"text\":\"“reading the progress of a project”\",\"question\":\"Does creation occur for every product operation whose response contains progress, including opening the aggregate client project view, or only for a dedicated progress-read operation?\",\"options\":[\"Every authorized response that reads or embeds progress\",\"Only the dedicated progress endpoint/query\",\"Only staff progress reads, not viewer aggregate reads\"],\"default_guess\":\"Trigger creation in the shared progress-query operation, including callers that embed that query in an aggregate view.\",\"witness\":{\"initial\":\"An archived granted project has no budget, and the client project view includes progress.\",\"events\":[\"The ClientViewer opens the project without calling a separate progress endpoint.\"],\"outcomes\":[\"Opening the aggregate view counts as reading progress and creates the empty manual budget.\",\"Only a dedicated progress operation triggers creation, so opening the aggregate view leaves storage unchanged.\"],\"observer\":\"Staff later inspecting the project’s budget records\"},\"unit\":\"00_product.md:Decisions\"},{\"subject\":\"Failure of the write performed by a progress read\",\"kind\":\"missing failure semantics\",\"text\":\"“reading the progress … creates its empty manual budget version”\",\"question\":\"What observable result must the progress read return if the empty manual budget cannot be persisted?\",\"options\":[\"Fail the entire read with a storage-unavailable error\",\"Return progress as unavailable and leave the budget absent\",\"Return the read result while reporting the side-effect failure separately\"],\"default_guess\":\"Fail the entire progress read so it cannot claim a state inconsistent with persisted records.\",\"witness\":{\"initial\":\"An archived project has no budget, and its records are readable, but the database cannot accept a new write.\",\"events\":[\"An authorized viewer reads progress.\",\"Persistence of the implicit manual budget fails.\"],\"outcomes\":[\"The progress read fails because its required creation could not complete.\",\"The read succeeds with unavailable or empty progress while no budget is created.\"],\"observer\":\"The requesting viewer\"},\"unit\":\"00_product.md:Decisions\"},{\"subject\":\"Observable meaning of the newly created empty budget\",\"kind\":\"output ambiguity\",\"text\":\"“Unavailable data is shown explicitly, never fabricated or replaced by silent zeros” / “reading the progress … creates its empty manual budget version”\",\"question\":\"After creation, must the same response still show budget/progress as unavailable, or must it expose an empty manual budget and any zero-valued aggregates derived from it?\",\"options\":[\"Keep progress and derived values explicitly unavailable despite the stored empty budget\",\"Expose an empty manual budget but keep aggregates requiring planned work unavailable\",\"Expose zero sections and zero-valued budget/progress totals\"],\"default_guess\":\"Expose the manual source with no sections while keeping overall progress and values requiring planned work explicitly unavailable.\",\"witness\":{\"initial\":\"An archived project has no budget, sections, or progress records.\",\"events\":[\"An authorized viewer reads progress, causing the empty manual budget to be created.\"],\"outcomes\":[\"The response continues to mark progress and planned values unavailable.\",\"The response presents an empty manual budget and zero-valued totals.\"],\"observer\":\"The requesting viewer\"},\"unit\":\"00_product.md:Product invariants visible at State 0\"},{\"subject\":\"Cardinality and concurrency of implicit empty budgets\",\"kind\":\"missing idempotency rule\",\"text\":\"“creates its empty manual budget version”\",\"question\":\"Must repeated or concurrent progress reads converge on exactly one empty manual budget version, and how is that distinguished from subsequently maintained manual-budget versions?\",\"options\":[\"Exactly one create-if-absent manual version per project\",\"Each qualifying read may create a new version\",\"One active version is guaranteed, but duplicate inactive empty versions are allowed\"],\"default_guess\":\"Use atomic create-if-absent semantics so all reads converge on one manual budget version.\",\"witness\":{\"initial\":\"An archived project has no budget.\",\"events\":[\"Two authorized clients read progress concurrently.\",\"Both reads observe the budget as absent before either creation commits.\"],\"outcomes\":[\"One empty manual budget version is created and both reads use it.\",\"Two empty manual budget versions are created, with either one or neither selected as active.\"],\"observer\":\"Staff listing or activating budget versions\"},\"unit\":\"00_product.md:Decisions\"}]}",
+ "set_aside": []
+}

@@ -715,10 +715,11 @@ are built.
 An archived Registry project is readable and refuses every mutation of its
 budget, snapshot import and activation, expense, document, progress, payment
 and photo records (accepted `rules.registry_status_policy`: archived reads,
-never mutates), with one named exception: reading the progress of a project
-that has no budget yet creates its empty manual budget version, also for an
-archived project (Factory code `domain/project_tracking.py` 50–60); no other
-budget change is made on an archived project. Grants and assignments belong to the project (R0-16) but are
+never mutates), with one named exception: a staff read of a project's
+progress list, when the project has no manual budget version yet, creates
+that empty manual budget version, also for an archived project (Factory code
+`domain/project_tracking.py` 50–60, `api/router.py` 434–438); no other
+operation changes the budget of an archived project. Grants and assignments belong to the project (R0-16) but are
 access management, not these records: no new viewer grant, staff assignment
 or producer grant is created for an archived project, because each creation
 validates that the Registry reports the project as existing and active (the
