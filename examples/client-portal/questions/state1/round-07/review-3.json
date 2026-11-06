@@ -1,0 +1,154 @@
+{
+ "open_points": [
+  {
+   "unit": "01_models.md:Model M17 — ProjectContext",
+   "subject": "Registry validation used by access-management creation",
+   "kind": "missing invariant",
+   "text": "\"Portal mutation policy uses only `is_active` for the grant and assignment operations of access management\" while `ProjectValidationResult` separately carries `status: str | None` and `is_active: bool`, without defining their required relationship; State 0 says no grant or assignment is created for an archived project.",
+   "question": "Must `is_active` agree with `status` and `exists`, and what must the portal do when those fields disagree?",
+   "options": [
+    "Trust `is_active`, even if `status` is `archived` or absent.",
+    "Derive the decision from `status` and ignore a conflicting `is_active`.",
+    "Reject an internally inconsistent Registry validation result without creating access."
+   ],
+   "default_guess": "Reject an inconsistent validation result and create access only when the result consistently identifies an existing active project.",
+   "witness": {
+    "initial": "Registry returns a validation result with `exists=true`, `status=\"archived\"`, `is_active=true`, and no failure for project P.",
+    "events": [
+     "An administrator attempts to grant viewer V access to P."
+    ],
+    "outcomes": [
+     "The portal trusts `is_active` and creates the grant.",
+     "The portal treats the archived status or inconsistent result as prohibiting creation and creates nothing."
+    ],
+    "observer": "The administrator and viewer V, who either can or cannot obtain new access to archived project P."
+   }
+  },
+  {
+   "unit": "01_models.md:Model M17 — ProjectContext",
+   "subject": "Registry checks for access revocation",
+   "kind": "contradictory action scope",
+   "text": "\"uses only `is_active` for the grant and assignment operations of access management\" does not say that it applies only to creation, while R0-24 says revoking an existing viewer grant, staff assignment or producer grant consults no Registry and succeeds even when Registry is unavailable.",
+   "question": "Does \"grant and assignment operations\" mean only creation, or does it also require `is_active` validation for revocation?",
+   "options": [
+    "Only creation reads `is_active`; revocation never consults Registry.",
+    "Both creation and revocation validate `is_active`.",
+    "The rule differs by viewer grant, staff assignment, and producer grant."
+   ],
+   "default_guess": "Apply `is_active` only to creation and let every listed revocation proceed without Registry.",
+   "witness": {
+    "initial": "Project P has an active staff assignment and Registry is unavailable.",
+    "events": [
+     "An administrator revokes the assignment."
+    ],
+    "outcomes": [
+     "Revocation succeeds without a Registry call, as R0-24 requires.",
+     "Revocation attempts to obtain `is_active` and fails because Registry is unavailable."
+    ],
+    "observer": "The administrator and the assigned staff member, whose next request is respectively denied or remains authorized."
+   }
+  },
+  {
+   "unit": "01_models.md:Model M18 — SnapshotPublication",
+   "subject": "Empty snapshot section lists",
+   "kind": "direct contradiction",
+   "text": "The field declaration says `sections: list[SnapshotSectionData]` is \"(non-empty, unique `source_section_id`)\" but the added running-service rule says \"the import refuses neither an empty section list nor repeated `source_section_id` values.\"",
+   "question": "Can an authenticated producer's otherwise complete publication with `sections=[]` be accepted and persisted as an ApprovedEstimateSnapshot?",
+   "options": [
+    "Accept it; non-emptiness is only a producer obligation and is not a portal validity rule.",
+    "Reject it during DTO/schema validation because the declared list is non-empty.",
+    "Classify it as `incomplete_content` or `invalid_sections` during import validation."
+   ],
+   "default_guess": "Accept it, following the explicit accepted running-service behavior.",
+   "witness": {
+    "initial": "Active project P and an authorized producer with a valid credential and scope for P exist.",
+    "events": [
+     "The producer publishes a supported EUR snapshot for P whose `sections` list is empty."
+    ],
+    "outcomes": [
+     "The portal records an accepted import and persists an immutable snapshot with no sections.",
+     "The publication is rejected before or during import because `SnapshotPublication.sections` is declared non-empty."
+    ],
+    "observer": "The producer reading the fresh SnapshotImportRecord."
+   }
+  },
+  {
+   "unit": "01_models.md:Model M18 — SnapshotPublication",
+   "subject": "Duplicate snapshot source-section identities",
+   "kind": "direct contradiction",
+   "text": "The field declaration requires \"unique `source_section_id`\" while the added running-service rule says the import does not refuse \"repeated `source_section_id` values.\"",
+   "question": "Can an otherwise valid publication containing two sections with the same `source_section_id` be accepted and persisted?",
+   "options": [
+    "Accept it; uniqueness is only a producer obligation.",
+    "Reject it during DTO/schema validation because the declared section identities must be unique.",
+    "Accept the DTO but reject the import as `invalid_sections` or `incomplete_content`."
+   ],
+   "default_guess": "Accept it, following the explicit accepted running-service behavior.",
+   "witness": {
+    "initial": "Active project P and an authorized producer with valid scope exist.",
+    "events": [
+     "The producer publishes a supported EUR snapshot containing two section entries whose `source_section_id` is `S1`."
+    ],
+    "outcomes": [
+     "The portal records an accepted import and stores both section entries in the snapshot.",
+     "The portal rejects the publication because `source_section_id` is declared unique within `SnapshotPublication`."
+    ],
+    "observer": "The producer reading the import result."
+   }
+  },
+  {
+   "unit": "01_models.md:Model M36 — AuditRecord",
+   "subject": "Actor provenance for failed login of an unknown email",
+   "kind": "missing actor identity",
+   "text": "The changed field rule explicitly refers to \"a staff.login_failed record\", but `actor_id` is required whenever `actor_kind` is not `system`; a failed login for an unknown email has no StaffAccount and therefore no `staff_id` to record.",
+   "question": "What `actor_kind` and `actor_id` must a `staff.login_failed` AuditRecord carry when the submitted email identifies no account?",
+   "options": [
+    "Use `actor_kind=system` and `actor_id=None`.",
+    "Allow `actor_kind=staff` with `actor_id=None` for this action.",
+    "Do not create an AuditRecord for an unknown-email failure.",
+    "Associate the failure with some non-account identifier or separate actor kind not currently modeled."
+   ],
+   "default_guess": "Use the system actor with no actor ID, while keeping the submitted email out of the generic audit fields.",
+   "witness": {
+    "initial": "No StaffAccount exists for `unknown@example.test`.",
+    "events": [
+     "A caller attempts staff login with that email and an arbitrary password.",
+     "Authentication fails and the owning flow tries to create the stated `staff.login_failed` record."
+    ],
+    "outcomes": [
+     "The flow records the failure as a system action with no actor ID.",
+     "The flow cannot construct the required staff actor provenance, or omits the audit record."
+    ],
+    "observer": "An administrator or auditor reviewing login-failure records."
+   }
+  },
+  {
+   "unit": "01_models.md:Projections and answers",
+   "subject": "ProjectOverview project availability pair",
+   "kind": "contradictory projection shape",
+   "text": "The declared `ProjectOverview` fields require `project: ProjectContext` and contain no `project_availability`, while the carried change says \"the project context is absent when its Registry read fails\" and \"a `project_availability` says so, like the other five pairs.\"",
+   "question": "What is the actual ProjectOverview model when the guard validation succeeds but the subsequent Registry context read fails?",
+   "options": [
+    "Add `project_availability: ViewAvailability` and make `project` optional under the same availability/value condition as the other components.",
+    "Keep `project` required and fail the whole overview operation.",
+    "Use a different partial-overview shape or sentinel ProjectContext."
+   ],
+   "default_guess": "Make `project` optional and add a required `project_availability` governed by the same pair invariant as the other components.",
+   "witness": {
+    "initial": "Viewer V has read access to active project P, and Registry validation for P succeeds.",
+    "events": [
+     "V requests ProjectOverview for P.",
+     "The subsequent Registry context read times out while the portal-owned overview components remain readable."
+    ],
+    "outcomes": [
+     "The portal returns a partial overview with no project context and an explicit project availability value.",
+     "The portal cannot construct the declared ProjectOverview because `project` is mandatory and therefore fails the whole request."
+    ],
+    "observer": "Viewer V consuming the ProjectOverview response."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"01_models.md:Model M17 — ProjectContext\",\"subject\":\"Registry validation used by access-management creation\",\"kind\":\"missing invariant\",\"text\":\"\\\"Portal mutation policy uses only `is_active` for the grant and assignment operations of access management\\\" while `ProjectValidationResult` separately carries `status: str | None` and `is_active: bool`, without defining their required relationship; State 0 says no grant or assignment is created for an archived project.\",\"question\":\"Must `is_active` agree with `status` and `exists`, and what must the portal do when those fields disagree?\",\"options\":[\"Trust `is_active`, even if `status` is `archived` or absent.\",\"Derive the decision from `status` and ignore a conflicting `is_active`.\",\"Reject an internally inconsistent Registry validation result without creating access.\"],\"default_guess\":\"Reject an inconsistent validation result and create access only when the result consistently identifies an existing active project.\",\"witness\":{\"initial\":\"Registry returns a validation result with `exists=true`, `status=\\\"archived\\\"`, `is_active=true`, and no failure for project P.\",\"events\":[\"An administrator attempts to grant viewer V access to P.\"],\"outcomes\":[\"The portal trusts `is_active` and creates the grant.\",\"The portal treats the archived status or inconsistent result as prohibiting creation and creates nothing.\"],\"observer\":\"The administrator and viewer V, who either can or cannot obtain new access to archived project P.\"}},{\"unit\":\"01_models.md:Model M17 — ProjectContext\",\"subject\":\"Registry checks for access revocation\",\"kind\":\"contradictory action scope\",\"text\":\"\\\"uses only `is_active` for the grant and assignment operations of access management\\\" does not say that it applies only to creation, while R0-24 says revoking an existing viewer grant, staff assignment or producer grant consults no Registry and succeeds even when Registry is unavailable.\",\"question\":\"Does \\\"grant and assignment operations\\\" mean only creation, or does it also require `is_active` validation for revocation?\",\"options\":[\"Only creation reads `is_active`; revocation never consults Registry.\",\"Both creation and revocation validate `is_active`.\",\"The rule differs by viewer grant, staff assignment, and producer grant.\"],\"default_guess\":\"Apply `is_active` only to creation and let every listed revocation proceed without Registry.\",\"witness\":{\"initial\":\"Project P has an active staff assignment and Registry is unavailable.\",\"events\":[\"An administrator revokes the assignment.\"],\"outcomes\":[\"Revocation succeeds without a Registry call, as R0-24 requires.\",\"Revocation attempts to obtain `is_active` and fails because Registry is unavailable.\"],\"observer\":\"The administrator and the assigned staff member, whose next request is respectively denied or remains authorized.\"}},{\"unit\":\"01_models.md:Model M18 — SnapshotPublication\",\"subject\":\"Empty snapshot section lists\",\"kind\":\"direct contradiction\",\"text\":\"The field declaration says `sections: list[SnapshotSectionData]` is \\\"(non-empty, unique `source_section_id`)\\\" but the added running-service rule says \\\"the import refuses neither an empty section list nor repeated `source_section_id` values.\\\"\",\"question\":\"Can an authenticated producer's otherwise complete publication with `sections=[]` be accepted and persisted as an ApprovedEstimateSnapshot?\",\"options\":[\"Accept it; non-emptiness is only a producer obligation and is not a portal validity rule.\",\"Reject it during DTO/schema validation because the declared list is non-empty.\",\"Classify it as `incomplete_content` or `invalid_sections` during import validation.\"],\"default_guess\":\"Accept it, following the explicit accepted running-service behavior.\",\"witness\":{\"initial\":\"Active project P and an authorized producer with a valid credential and scope for P exist.\",\"events\":[\"The producer publishes a supported EUR snapshot for P whose `sections` list is empty.\"],\"outcomes\":[\"The portal records an accepted import and persists an immutable snapshot with no sections.\",\"The publication is rejected before or during import because `SnapshotPublication.sections` is declared non-empty.\"],\"observer\":\"The producer reading the fresh SnapshotImportRecord.\"}},{\"unit\":\"01_models.md:Model M18 — SnapshotPublication\",\"subject\":\"Duplicate snapshot source-section identities\",\"kind\":\"direct contradiction\",\"text\":\"The field declaration requires \\\"unique `source_section_id`\\\" while the added running-service rule says the import does not refuse \\\"repeated `source_section_id` values.\\\"\",\"question\":\"Can an otherwise valid publication containing two sections with the same `source_section_id` be accepted and persisted?\",\"options\":[\"Accept it; uniqueness is only a producer obligation.\",\"Reject it during DTO/schema validation because the declared section identities must be unique.\",\"Accept the DTO but reject the import as `invalid_sections` or `incomplete_content`.\"],\"default_guess\":\"Accept it, following the explicit accepted running-service behavior.\",\"witness\":{\"initial\":\"Active project P and an authorized producer with valid scope exist.\",\"events\":[\"The producer publishes a supported EUR snapshot containing two section entries whose `source_section_id` is `S1`.\"],\"outcomes\":[\"The portal records an accepted import and stores both section entries in the snapshot.\",\"The portal rejects the publication because `source_section_id` is declared unique within `SnapshotPublication`.\"],\"observer\":\"The producer reading the import result.\"}},{\"unit\":\"01_models.md:Model M36 — AuditRecord\",\"subject\":\"Actor provenance for failed login of an unknown email\",\"kind\":\"missing actor identity\",\"text\":\"The changed field rule explicitly refers to \\\"a staff.login_failed record\\\", but `actor_id` is required whenever `actor_kind` is not `system`; a failed login for an unknown email has no StaffAccount and therefore no `staff_id` to record.\",\"question\":\"What `actor_kind` and `actor_id` must a `staff.login_failed` AuditRecord carry when the submitted email identifies no account?\",\"options\":[\"Use `actor_kind=system` and `actor_id=None`.\",\"Allow `actor_kind=staff` with `actor_id=None` for this action.\",\"Do not create an AuditRecord for an unknown-email failure.\",\"Associate the failure with some non-account identifier or separate actor kind not currently modeled.\"],\"default_guess\":\"Use the system actor with no actor ID, while keeping the submitted email out of the generic audit fields.\",\"witness\":{\"initial\":\"No StaffAccount exists for `unknown@example.test`.\",\"events\":[\"A caller attempts staff login with that email and an arbitrary password.\",\"Authentication fails and the owning flow tries to create the stated `staff.login_failed` record.\"],\"outcomes\":[\"The flow records the failure as a system action with no actor ID.\",\"The flow cannot construct the required staff actor provenance, or omits the audit record.\"],\"observer\":\"An administrator or auditor reviewing login-failure records.\"}},{\"unit\":\"01_models.md:Projections and answers\",\"subject\":\"ProjectOverview project availability pair\",\"kind\":\"contradictory projection shape\",\"text\":\"The declared `ProjectOverview` fields require `project: ProjectContext` and contain no `project_availability`, while the carried change says \\\"the project context is absent when its Registry read fails\\\" and \\\"a `project_availability` says so, like the other five pairs.\\\"\",\"question\":\"What is the actual ProjectOverview model when the guard validation succeeds but the subsequent Registry context read fails?\",\"options\":[\"Add `project_availability: ViewAvailability` and make `project` optional under the same availability/value condition as the other components.\",\"Keep `project` required and fail the whole overview operation.\",\"Use a different partial-overview shape or sentinel ProjectContext.\"],\"default_guess\":\"Make `project` optional and add a required `project_availability` governed by the same pair invariant as the other components.\",\"witness\":{\"initial\":\"Viewer V has read access to active project P, and Registry validation for P succeeds.\",\"events\":[\"V requests ProjectOverview for P.\",\"The subsequent Registry context read times out while the portal-owned overview components remain readable.\"],\"outcomes\":[\"The portal returns a partial overview with no project context and an explicit project availability value.\",\"The portal cannot construct the declared ProjectOverview because `project` is mandatory and therefore fails the whole request.\"],\"observer\":\"Viewer V consuming the ProjectOverview response.\"}}]}",
+ "set_aside": []
+}

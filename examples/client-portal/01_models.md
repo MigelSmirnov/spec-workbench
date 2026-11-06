@@ -964,8 +964,12 @@ None.
   http_error | schema_mismatch | identity_mismatch`. Owned by the Registry
   gateway; State 2 lands the translation table in `rules`.
 
-Portal mutation policy uses only `is_active`; archived context remains
-readable. Only `active` and `archived` are status values the portal acts on
+Portal mutation policy uses only `is_active` for the grant and assignment
+operations of access management and only `status` (`active` or not) in the
+project guard of State 2 A4/A5; archived context remains readable.
+(Running service: Factory code `application/authorization_guard.py`,
+`application/staff_identity.py`; owner 2026-11-06: current service
+behaviour accepted; technical decisions delegated.) Only `active` and `archived` are status values the portal acts on
 (M16).
 
 ### Identity
@@ -1002,8 +1006,9 @@ None.
   `project_id: UUID`, `approved_at: datetime`, `approved_by: str` (source
   provenance, never a portal actor), `currency: str` (must be `EUR`),
   `tax_mode: str` (source provenance; planned amounts must already be
-  gross), `sections: list[SnapshotSectionData]` (non-empty, unique
-  `source_section_id`), `source_system: str`, `published_at: datetime`,
+  gross), `sections: list[SnapshotSectionData]` (the producer is
+  asked for a non-empty list with unique `source_section_id`; the portal
+  accepts any list, below), `source_system: str`, `published_at: datetime`,
   `contract_version: int`.
 - `SnapshotSectionData` — `source_section_id: str`,
   `source_section_code: str`, `display_name: str`, `sort_order: int`,
@@ -1011,6 +1016,19 @@ None.
 - **Created by:** authenticated `ServicePrincipal`. Unsupported
   `contract_version`, non-EUR currency, incomplete content → typed
   rejection.
+- **In the running service:** a non-empty list with unique
+  `source_section_id` is the producer's obligation, not a portal check: an
+  empty section list and repeated `source_section_id` values are valid
+  publications for the portal, which refuses neither.
+  No accepted snapshot reaches a budget yet (Q11, deferred), so nothing
+  reads the sections; checking them is Q11's to decide.
+
+### Carried changes
+
+Recorded from the running service (accepted `_validate_snapshot_publication`
+names no emptiness or uniqueness check; Factory code
+`application/snapshot_import.py`). Owner 2026-11-06: current service
+behaviour accepted; technical decisions delegated.
 
 ### Identity
 
@@ -1873,7 +1891,9 @@ None.
   `project_id: UUID | None`,
   `entity_kind: AuditEntityKind | None`, `entity_id: str | None`,
   `result: AuditResult (success | rejected)`,
-  `reason_code: str | None` `[required iff rejected]`.
+  `reason_code: str | None` `[forbidden on success; required on a rejected
+  significant mutation; optional on a rejected non-significant action, so a
+  staff.login_failed record carries none — State 2 A13]`.
 - **Rules:** every significant action — an action of the closed audit
   action catalog (State 2) — writes exactly one record:
   viewer/grant/credential management, the staff account and session
@@ -2227,10 +2247,12 @@ persisted, and none contains `file_ref`.
 
 Each is a value; none adds a fact to a model above.
 
-- `ProjectOverview` — the project context is absent when Registry cannot be
-  read, and a `project_availability` says so, like the other five pairs; a
-  Registry outage no longer fails the whole overview (Factory `d2c4511e`,
-  2026-08-09).
+- `ProjectOverview` — the project context is absent when its Registry read
+  fails after the project guard's validation succeeded, and a
+  `project_availability` says so, like the other five pairs; such a failure
+  no longer fails the whole overview (Factory `d2c4511e`, 2026-08-09). A
+  Registry that cannot validate the project fails the operation in the guard
+  (State 2 A4), as for every project operation.
 - `BinaryPayload` — `download_name` is always present, derived from the object
   kind and id (R0-12; Factory `babd5e52`, 2026-08-01).
 - `ExpenseOperationOutcome` — the aggregate together with `replayed`, the

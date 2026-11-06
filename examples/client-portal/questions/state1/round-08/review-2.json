@@ -1,0 +1,104 @@
+{
+ "open_points": [
+  {
+   "unit": "01_models.md:Model M17 — ProjectContext",
+   "subject": "ProjectValidationResult status consistency",
+   "kind": "missing invariant",
+   "text": "`status: str | None`, `is_active: bool` ... Portal mutation policy uses only `is_active` for the grant and assignment operations of access management and only `status` (`active` or not) in the project guard",
+   "question": "What relationship must hold between `status` and `is_active`, and what is the authoritative lifecycle fact if they disagree?",
+   "options": [
+    "Require `is_active` to be true exactly when `status` is `active`.",
+    "Permit disagreement and let access-management creation use `is_active` while project operations use `status`.",
+    "Treat a disagreement as an invalid Registry result."
+   ],
+   "default_guess": "Require consistency: `is_active == (status == \"active\")`.",
+   "witness": {
+    "initial": "Registry returns a validation result for project P with `exists=true`, `status=\"archived\"`, `is_active=true`, and no failure.",
+    "events": [
+     "An administrator attempts to assign an operator to P.",
+     "The operator attempts a guarded project operation on P."
+    ],
+    "outcomes": [
+     "The assignment succeeds because it uses `is_active`, but the guarded operation treats P as archived.",
+     "The validation result is rejected or normalized, so the assignment does not succeed."
+    ],
+    "observer": "The administrator and operator see whether the assignment exists and whether it grants usable access."
+   }
+  },
+  {
+   "unit": "01_models.md:Model M17 — ProjectContext",
+   "subject": "Registry checks for grant and assignment revocation",
+   "kind": "scope contradiction",
+   "text": "M17 says, “Portal mutation policy uses only `is_active` for the grant and assignment operations of access management”; R0-24 says, “Revoking an existing viewer grant, staff assignment or producer grant does not consult the Registry and succeeds for an archived project, also while the Registry is unavailable.”",
+   "question": "Does “grant and assignment operations” mean only creation, or does M17 require an `is_active` check for revocation too?",
+   "options": [
+    "Only creation uses `is_active`; revocation never consults Registry.",
+    "Both creation and revocation use `is_active`, so revocation can be refused when inactive or unavailable."
+   ],
+   "default_guess": "Limit the M17 statement to creation; preserve R0-24 revocation behavior.",
+   "witness": {
+    "initial": "Project P is archived and has an active staff assignment.",
+    "events": [
+     "Registry becomes unavailable.",
+     "An administrator revokes the assignment."
+    ],
+    "outcomes": [
+     "R0-24: revocation succeeds without a Registry read.",
+     "The broad M17 wording: revocation requires `is_active`, so it cannot succeed without validation."
+    ],
+    "observer": "The administrator and the formerly assigned staff member see whether access was revoked."
+   }
+  },
+  {
+   "unit": "01_models.md:Model M36 — AuditRecord",
+   "subject": "Actor provenance for failed staff login",
+   "kind": "unrepresentable actor",
+   "text": "“a `staff.login_failed` record carries none” together with `actor_kind: ActorKind (staff | viewer | service | system)` and `actor_id: UUID | None` `[required unless system]`",
+   "question": "Who is the actor of `staff.login_failed` when the submitted email matches no StaffAccount, and must that failed attempt create an AuditRecord?",
+   "options": [
+    "Create a system-actor record with no actor ID for every failed login.",
+    "Create a staff-actor record only when an account can be resolved, and no record for an unknown email.",
+    "Represent every attempt with another identity or target-account convention that State 1 must define."
+   ],
+   "default_guess": "Record every failed login with `actor_kind=system`, no actor ID, and no reason code.",
+   "witness": {
+    "initial": "No StaffAccount exists for `unknown@example.test`.",
+    "events": [
+     "An unauthenticated caller attempts staff login with that email and an arbitrary password."
+    ],
+    "outcomes": [
+     "The portal creates one `staff.login_failed` AuditRecord using the system actor.",
+     "The portal creates no record because no required staff `actor_id` exists."
+    ],
+    "observer": "An administrator or audit reader sees a different failed-login history."
+   }
+  },
+  {
+   "unit": "01_models.md:Projections and answers",
+   "subject": "ProjectOverview project availability",
+   "kind": "shape contradiction",
+   "text": "The declared DTO requires `project: ProjectContext`, but the carried change says “the project context is absent ... and a `project_availability` says so, like the other five pairs.”",
+   "question": "Does ProjectOverview have a nullable `project` plus `project_availability`, or is `project` always required and a post-guard context-read failure still fails the overview?",
+   "options": [
+    "Add `project_availability: ViewAvailability` and make `project` present exactly when available.",
+    "Keep required `project: ProjectContext` and fail the overview when the context read fails."
+   ],
+   "default_guess": "Use the carried change: add the availability pair and allow project context to be absent.",
+   "witness": {
+    "initial": "The project guard has successfully validated active project P.",
+    "events": [
+     "The overview builder performs the later Registry context read.",
+     "That context read fails because Registry times out, while the portal-owned overview components remain readable."
+    ],
+    "outcomes": [
+     "The caller receives a partial ProjectOverview with absent `project` and `project_availability=temporarily_unavailable`.",
+     "The declared DTO cannot represent that result, so the whole overview fails or an invented ProjectContext must be supplied."
+    ],
+    "observer": "The overview caller sees either partial data or an operation failure."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"01_models.md:Model M17 — ProjectContext\",\"subject\":\"ProjectValidationResult status consistency\",\"kind\":\"missing invariant\",\"text\":\"`status: str | None`, `is_active: bool` ... Portal mutation policy uses only `is_active` for the grant and assignment operations of access management and only `status` (`active` or not) in the project guard\",\"question\":\"What relationship must hold between `status` and `is_active`, and what is the authoritative lifecycle fact if they disagree?\",\"options\":[\"Require `is_active` to be true exactly when `status` is `active`.\",\"Permit disagreement and let access-management creation use `is_active` while project operations use `status`.\",\"Treat a disagreement as an invalid Registry result.\"],\"default_guess\":\"Require consistency: `is_active == (status == \\\"active\\\")`.\",\"witness\":{\"initial\":\"Registry returns a validation result for project P with `exists=true`, `status=\\\"archived\\\"`, `is_active=true`, and no failure.\",\"events\":[\"An administrator attempts to assign an operator to P.\",\"The operator attempts a guarded project operation on P.\"],\"outcomes\":[\"The assignment succeeds because it uses `is_active`, but the guarded operation treats P as archived.\",\"The validation result is rejected or normalized, so the assignment does not succeed.\"],\"observer\":\"The administrator and operator see whether the assignment exists and whether it grants usable access.\"}},{\"unit\":\"01_models.md:Model M17 — ProjectContext\",\"subject\":\"Registry checks for grant and assignment revocation\",\"kind\":\"scope contradiction\",\"text\":\"M17 says, “Portal mutation policy uses only `is_active` for the grant and assignment operations of access management”; R0-24 says, “Revoking an existing viewer grant, staff assignment or producer grant does not consult the Registry and succeeds for an archived project, also while the Registry is unavailable.”\",\"question\":\"Does “grant and assignment operations” mean only creation, or does M17 require an `is_active` check for revocation too?\",\"options\":[\"Only creation uses `is_active`; revocation never consults Registry.\",\"Both creation and revocation use `is_active`, so revocation can be refused when inactive or unavailable.\"],\"default_guess\":\"Limit the M17 statement to creation; preserve R0-24 revocation behavior.\",\"witness\":{\"initial\":\"Project P is archived and has an active staff assignment.\",\"events\":[\"Registry becomes unavailable.\",\"An administrator revokes the assignment.\"],\"outcomes\":[\"R0-24: revocation succeeds without a Registry read.\",\"The broad M17 wording: revocation requires `is_active`, so it cannot succeed without validation.\"],\"observer\":\"The administrator and the formerly assigned staff member see whether access was revoked.\"}},{\"unit\":\"01_models.md:Model M36 — AuditRecord\",\"subject\":\"Actor provenance for failed staff login\",\"kind\":\"unrepresentable actor\",\"text\":\"“a `staff.login_failed` record carries none” together with `actor_kind: ActorKind (staff | viewer | service | system)` and `actor_id: UUID | None` `[required unless system]`\",\"question\":\"Who is the actor of `staff.login_failed` when the submitted email matches no StaffAccount, and must that failed attempt create an AuditRecord?\",\"options\":[\"Create a system-actor record with no actor ID for every failed login.\",\"Create a staff-actor record only when an account can be resolved, and no record for an unknown email.\",\"Represent every attempt with another identity or target-account convention that State 1 must define.\"],\"default_guess\":\"Record every failed login with `actor_kind=system`, no actor ID, and no reason code.\",\"witness\":{\"initial\":\"No StaffAccount exists for `unknown@example.test`.\",\"events\":[\"An unauthenticated caller attempts staff login with that email and an arbitrary password.\"],\"outcomes\":[\"The portal creates one `staff.login_failed` AuditRecord using the system actor.\",\"The portal creates no record because no required staff `actor_id` exists.\"],\"observer\":\"An administrator or audit reader sees a different failed-login history.\"}},{\"unit\":\"01_models.md:Projections and answers\",\"subject\":\"ProjectOverview project availability\",\"kind\":\"shape contradiction\",\"text\":\"The declared DTO requires `project: ProjectContext`, but the carried change says “the project context is absent ... and a `project_availability` says so, like the other five pairs.”\",\"question\":\"Does ProjectOverview have a nullable `project` plus `project_availability`, or is `project` always required and a post-guard context-read failure still fails the overview?\",\"options\":[\"Add `project_availability: ViewAvailability` and make `project` present exactly when available.\",\"Keep required `project: ProjectContext` and fail the overview when the context read fails.\"],\"default_guess\":\"Use the carried change: add the availability pair and allow project context to be absent.\",\"witness\":{\"initial\":\"The project guard has successfully validated active project P.\",\"events\":[\"The overview builder performs the later Registry context read.\",\"That context read fails because Registry times out, while the portal-owned overview components remain readable.\"],\"outcomes\":[\"The caller receives a partial ProjectOverview with absent `project` and `project_availability=temporarily_unavailable`.\",\"The declared DTO cannot represent that result, so the whole overview fails or an invented ProjectContext must be supplied.\"],\"observer\":\"The overview caller sees either partial data or an operation failure.\"}}]}",
+ "set_aside": []
+}

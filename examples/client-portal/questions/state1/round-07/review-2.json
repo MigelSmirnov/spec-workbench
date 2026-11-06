@@ -1,0 +1,125 @@
+{
+ "open_points": [
+  {
+   "unit": "01_models.md:Model M17 — ProjectContext",
+   "subject": "ProjectValidationResult consistency",
+   "kind": "missing invariant",
+   "text": "`status: str | None`, `is_active: bool` … Portal mutation policy uses only `is_active` for the grant and assignment operations of access management and only `status` (`active` or not) in the project guard",
+   "question": "Must `is_active` equal `(exists and status == active and failure is None)`, and what happens when `status` and `is_active` disagree?",
+   "options": [
+    "Require the fields to agree and reject an inconsistent Registry result as a boundary failure",
+    "Let access-management creation follow `is_active` while other project operations independently follow `status`",
+    "Give either `status` or `is_active` precedence for every lifecycle decision"
+   ],
+   "default_guess": "Require consistency and reject a disagreement as a Registry boundary failure.",
+   "witness": {
+    "initial": "Registry returns a ProjectValidationResult with `exists=true`, `status=archived`, `is_active=true`, and no failure.",
+    "events": [
+     "An administrator attempts to create a viewer grant for the project."
+    ],
+    "outcomes": [
+     "The operation succeeds because grant creation uses only `is_active`.",
+     "The operation is refused because the Registry status is `archived` and R0-24 permits creation only for an active project."
+    ],
+    "observer": "The administrator and the newly granted viewer."
+   }
+  },
+  {
+   "unit": "01_models.md:Model M17 — ProjectContext",
+   "subject": "Revocation of project grants and assignments",
+   "kind": "scope contradiction",
+   "text": "M17 says mutation policy uses `is_active` “for the grant and assignment operations of access management”; R0-24 says revoking an existing viewer grant, staff assignment or producer grant “does not consult the Registry and succeeds for an archived project, also while the Registry is unavailable.”",
+   "question": "Does “grant and assignment operations” mean only creation, or does it also subject revocation to Registry validation and `is_active`?",
+   "options": [
+    "Only creation uses `is_active`; revocation never reads Registry",
+    "Both creation and revocation use `is_active`"
+   ],
+   "default_guess": "Apply `is_active` only to creation and let revocation proceed without Registry access.",
+   "witness": {
+    "initial": "A viewer has an active grant to a project that Registry has archived; Registry is currently unavailable.",
+    "events": [
+     "An administrator revokes the viewer grant."
+    ],
+    "outcomes": [
+     "Revocation succeeds without contacting Registry, as R0-24 requires.",
+     "Revocation fails because M17 is read as requiring `is_active` for every grant operation."
+    ],
+    "observer": "The administrator and the viewer."
+   }
+  },
+  {
+   "unit": "01_models.md:Model M18 — SnapshotPublication",
+   "subject": "Empty snapshot section list",
+   "kind": "contradiction",
+   "text": "The field declaration requires `sections: list[SnapshotSectionData]` to be “non-empty”, while the carried change says “the import refuses neither an empty section list” and that non-emptiness is only the producer's obligation.",
+   "question": "Is an empty section list a valid publication that the portal accepts, or invalid content that the portal rejects?",
+   "options": [
+    "Accept and persist a snapshot with no sections",
+    "Reject it as incomplete content or invalid sections"
+   ],
+   "default_guess": "Accept it, following the explicitly accepted running-service behavior.",
+   "witness": {
+    "initial": "An active authorized producer and active project exist, and no snapshot with the submitted identity exists.",
+    "events": [
+     "The producer submits an otherwise complete EUR publication whose `sections` list is empty."
+    ],
+    "outcomes": [
+     "The import creates an accepted snapshot and an accepted import record.",
+     "The publication violates the declared DTO constraint and produces a rejected import record."
+    ],
+    "observer": "The producer reading the import result."
+   }
+  },
+  {
+   "unit": "01_models.md:Model M18 — SnapshotPublication",
+   "subject": "Repeated snapshot source_section_id",
+   "kind": "contradiction",
+   "text": "The field declaration requires “unique `source_section_id`”, while the carried change says “the import refuses neither … repeated `source_section_id` values” and that uniqueness is only the producer's obligation.",
+   "question": "May the portal accept and persist a publication containing two sections with the same `source_section_id`, or must it reject that publication?",
+   "options": [
+    "Accept and persist both repeated source-section identifiers",
+    "Reject the publication as invalid sections"
+   ],
+   "default_guess": "Accept it, following the explicitly accepted running-service behavior.",
+   "witness": {
+    "initial": "An active authorized producer and active project exist, and no snapshot with the submitted identity exists.",
+    "events": [
+     "The producer submits an otherwise valid publication containing two sections with the same `source_section_id`."
+    ],
+    "outcomes": [
+     "The import accepts the snapshot with both sections.",
+     "The declared uniqueness constraint causes a rejected import."
+    ],
+    "observer": "The producer reading the import result."
+   }
+  },
+  {
+   "unit": "01_models.md:Projections and answers",
+   "subject": "ProjectOverview project availability",
+   "kind": "shape contradiction",
+   "text": "The declared fields require `project: ProjectContext` and define availability pairs only for budget, expenses, progress, payments and photos; the carried change says “the project context is absent” and “a `project_availability` says so, like the other five pairs.”",
+   "question": "Does ProjectOverview contain an optional `project` paired with a required `project_availability`, and what local presence condition applies to that pair?",
+   "options": [
+    "Add `project_availability: ViewAvailability` and make `project` present exactly when it is `available`",
+    "Keep `project` required and fail the overview when the post-guard context read fails",
+    "Make `project` optional without adding a project availability field"
+   ],
+   "default_guess": "Add the sixth availability pair and require `project` exactly when `project_availability` is `available`.",
+   "witness": {
+    "initial": "The project guard successfully validates an accessible project.",
+    "events": [
+     "The overview operation begins.",
+     "The subsequent Registry context read fails while the five portal-owned components remain readable."
+    ],
+    "outcomes": [
+     "A successful partial ProjectOverview is returned with no project context and a project availability value.",
+     "No valid ProjectOverview can be returned because its declared `project` field is mandatory and no `project_availability` field exists."
+    ],
+    "observer": "The staff or viewer requesting the overview."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"01_models.md:Model M17 — ProjectContext\",\"subject\":\"ProjectValidationResult consistency\",\"kind\":\"missing invariant\",\"text\":\"`status: str | None`, `is_active: bool` … Portal mutation policy uses only `is_active` for the grant and assignment operations of access management and only `status` (`active` or not) in the project guard\",\"question\":\"Must `is_active` equal `(exists and status == active and failure is None)`, and what happens when `status` and `is_active` disagree?\",\"options\":[\"Require the fields to agree and reject an inconsistent Registry result as a boundary failure\",\"Let access-management creation follow `is_active` while other project operations independently follow `status`\",\"Give either `status` or `is_active` precedence for every lifecycle decision\"],\"default_guess\":\"Require consistency and reject a disagreement as a Registry boundary failure.\",\"witness\":{\"initial\":\"Registry returns a ProjectValidationResult with `exists=true`, `status=archived`, `is_active=true`, and no failure.\",\"events\":[\"An administrator attempts to create a viewer grant for the project.\"],\"outcomes\":[\"The operation succeeds because grant creation uses only `is_active`.\",\"The operation is refused because the Registry status is `archived` and R0-24 permits creation only for an active project.\"],\"observer\":\"The administrator and the newly granted viewer.\"}},{\"unit\":\"01_models.md:Model M17 — ProjectContext\",\"subject\":\"Revocation of project grants and assignments\",\"kind\":\"scope contradiction\",\"text\":\"M17 says mutation policy uses `is_active` “for the grant and assignment operations of access management”; R0-24 says revoking an existing viewer grant, staff assignment or producer grant “does not consult the Registry and succeeds for an archived project, also while the Registry is unavailable.”\",\"question\":\"Does “grant and assignment operations” mean only creation, or does it also subject revocation to Registry validation and `is_active`?\",\"options\":[\"Only creation uses `is_active`; revocation never reads Registry\",\"Both creation and revocation use `is_active`\"],\"default_guess\":\"Apply `is_active` only to creation and let revocation proceed without Registry access.\",\"witness\":{\"initial\":\"A viewer has an active grant to a project that Registry has archived; Registry is currently unavailable.\",\"events\":[\"An administrator revokes the viewer grant.\"],\"outcomes\":[\"Revocation succeeds without contacting Registry, as R0-24 requires.\",\"Revocation fails because M17 is read as requiring `is_active` for every grant operation.\"],\"observer\":\"The administrator and the viewer.\"}},{\"unit\":\"01_models.md:Model M18 — SnapshotPublication\",\"subject\":\"Empty snapshot section list\",\"kind\":\"contradiction\",\"text\":\"The field declaration requires `sections: list[SnapshotSectionData]` to be “non-empty”, while the carried change says “the import refuses neither an empty section list” and that non-emptiness is only the producer's obligation.\",\"question\":\"Is an empty section list a valid publication that the portal accepts, or invalid content that the portal rejects?\",\"options\":[\"Accept and persist a snapshot with no sections\",\"Reject it as incomplete content or invalid sections\"],\"default_guess\":\"Accept it, following the explicitly accepted running-service behavior.\",\"witness\":{\"initial\":\"An active authorized producer and active project exist, and no snapshot with the submitted identity exists.\",\"events\":[\"The producer submits an otherwise complete EUR publication whose `sections` list is empty.\"],\"outcomes\":[\"The import creates an accepted snapshot and an accepted import record.\",\"The publication violates the declared DTO constraint and produces a rejected import record.\"],\"observer\":\"The producer reading the import result.\"}},{\"unit\":\"01_models.md:Model M18 — SnapshotPublication\",\"subject\":\"Repeated snapshot source_section_id\",\"kind\":\"contradiction\",\"text\":\"The field declaration requires “unique `source_section_id`”, while the carried change says “the import refuses neither … repeated `source_section_id` values” and that uniqueness is only the producer's obligation.\",\"question\":\"May the portal accept and persist a publication containing two sections with the same `source_section_id`, or must it reject that publication?\",\"options\":[\"Accept and persist both repeated source-section identifiers\",\"Reject the publication as invalid sections\"],\"default_guess\":\"Accept it, following the explicitly accepted running-service behavior.\",\"witness\":{\"initial\":\"An active authorized producer and active project exist, and no snapshot with the submitted identity exists.\",\"events\":[\"The producer submits an otherwise valid publication containing two sections with the same `source_section_id`.\"],\"outcomes\":[\"The import accepts the snapshot with both sections.\",\"The declared uniqueness constraint causes a rejected import.\"],\"observer\":\"The producer reading the import result.\"}},{\"unit\":\"01_models.md:Projections and answers\",\"subject\":\"ProjectOverview project availability\",\"kind\":\"shape contradiction\",\"text\":\"The declared fields require `project: ProjectContext` and define availability pairs only for budget, expenses, progress, payments and photos; the carried change says “the project context is absent” and “a `project_availability` says so, like the other five pairs.”\",\"question\":\"Does ProjectOverview contain an optional `project` paired with a required `project_availability`, and what local presence condition applies to that pair?\",\"options\":[\"Add `project_availability: ViewAvailability` and make `project` present exactly when it is `available`\",\"Keep `project` required and fail the overview when the post-guard context read fails\",\"Make `project` optional without adding a project availability field\"],\"default_guess\":\"Add the sixth availability pair and require `project` exactly when `project_availability` is `available`.\",\"witness\":{\"initial\":\"The project guard successfully validates an accessible project.\",\"events\":[\"The overview operation begins.\",\"The subsequent Registry context read fails while the five portal-owned components remain readable.\"],\"outcomes\":[\"A successful partial ProjectOverview is returned with no project context and a project availability value.\",\"No valid ProjectOverview can be returned because its declared `project` field is mandatory and no `project_availability` field exists.\"],\"observer\":\"The staff or viewer requesting the overview.\"}}]}",
+ "set_aside": []
+}
