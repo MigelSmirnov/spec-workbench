@@ -1,0 +1,155 @@
+{
+ "open_points": [
+  {
+   "subject": "Archived-project reads creating a manual budget",
+   "kind": "contradiction",
+   "text": "“An archived project's budget ... records are readable and immutable in the portal” and R0-24 says an archived project “refuses every mutation of its budget”; State 5 instead says: “The one write that is not refused for an archived project is the empty manual budget version (with its audit) that `ensure_manual_budget` creates, also when `list_project_progress` reads a project that has none.”",
+   "question": "May `ensure_manual_budget`, when called from the read operation `list_project_progress`, create a budget version and audit record for an archived project, or must that read leave the archived project unchanged?",
+   "options": [
+    "Create the empty manual version and audit during the read, including for archived projects",
+    "Return the progress list without creating a manual version on an archived project",
+    "Refuse the read when ordering would require creation of the manual version"
+   ],
+   "default_guess": "Preserve the archived-project immutability rule: return the recorded progress without creating a budget or audit.",
+   "witness": {
+    "initial": "Registry reports project P archived; an operator retains an active assignment to P; P has recorded progress but no manual BudgetVersion.",
+    "events": [
+     "The operator performs the staff progress-list read for P.",
+     "The read authorization succeeds because archived projects remain readable.",
+     "`list_project_progress` needs the manual budget for ordering and invokes or emulates `ensure_manual_budget`."
+    ],
+    "outcomes": [
+     "Following State 5, the read creates an inactive manual BudgetVersion and `budget.manual_version_create` audit, then returns the list.",
+     "Following State 0/R0-24, the read returns the list without any write, or refuses rather than mutate the archived budget."
+    ],
+    "observer": "An administrator inspecting budgets or audit records sees the extra version and audit; concurrent callers can also observe the new manual version."
+   },
+   "unit": "50_public_apis.md:`public_op:budget_management.ensure_manual_budget`"
+  },
+  {
+   "subject": "Zero-total expense correction and allocation representation",
+   "kind": "contradiction",
+   "text": "`AllocationInstruction.amount` is defined as `Decimal (> 0)`, while `correct_expense` says: “The allocation list must hold at least one instruction, also for a zero total: a correction to zero carries allocations that sum to zero, and an empty list is refused.”",
+   "question": "What valid allocation instructions represent a corrected expense total of zero?",
+   "options": [
+    "Permit at least one zero-amount AllocationInstruction for this operation",
+    "Permit an empty allocation list when the corrected total is zero",
+    "Forbid correcting an expense total to zero"
+   ],
+   "default_guess": "Forbid a zero-total correction because no non-empty list of strictly positive AllocationInstruction amounts can sum to zero.",
+   "witness": {
+    "initial": "Project P is active and contains an expense E with total 100.00 and one valid allocation.",
+    "events": [
+     "Authorized staff submits a correction of E to total 0.00 with one allocation instruction of amount 0.00."
+    ],
+    "outcomes": [
+     "The AllocationInstruction validator applies `amount > 0`, so request decoding or the operation rejects the request with 422 and E remains unchanged.",
+     "The `correct_expense` passage admits the required zero allocation, atomically changes E to 0.00, and stores the zero-sum allocation set."
+    ],
+    "observer": "The staff caller sees rejection versus a successful correction, and later expense reads show different totals and allocations."
+   },
+   "unit": "50_public_apis.md:`public_op:expense_management.correct_expense`"
+  },
+  {
+   "subject": "Service-credential expiry authority",
+   "kind": "contradiction",
+   "text": "`issue_service_credential` says: “Any expiry is accepted and stored as given, a past one included; no expiry means the credential does not expire.” A28 instead says: “Each operation reads the clock once” and “an expiry it writes is that instant plus its TTL.”",
+   "question": "Is `ServiceCredential.expires_at` an arbitrary caller-supplied instant, including a past instant or no instant, or must it be derived from the operation's captured time plus a configured TTL?",
+   "options": [
+    "Store the administrator-supplied expiry exactly, including past or absent values",
+    "Derive expiry from the captured operation time and a service-credential TTL",
+    "Validate the supplied expiry against the captured time and reject past values"
+   ],
+   "default_guess": "Store the supplied expiry exactly and state that service-credential expiry is an exception to A28's derived-TTL sentence.",
+   "witness": {
+    "initial": "At time T an active service principal has no credential and the administrator is authorized to manage access.",
+    "events": [
+     "The administrator requests a credential with `expires_at = T - 1 hour`."
+    ],
+    "outcomes": [
+     "Following `issue_service_credential`, the operation succeeds, stores the past expiry, returns the secret once, and the credential can never authenticate.",
+     "Following A28, the operation cannot write that supplied expiry; it must instead derive a future expiry from T and a TTL or reject the request."
+    ],
+    "observer": "The administrator sees success versus rejection or a different expiry; the producer subsequently sees authentication fail versus succeed."
+   },
+   "unit": "50_public_apis.md:`public_op:service_identity.issue_service_credential`"
+  },
+  {
+   "subject": "Origin check for viewer entry",
+   "kind": "contradiction",
+   "text": "R0-09 says “mutating viewer requests are refused unless they come from the portal's own public origin.” `install_transport_guards` instead says: “The origin check covers the one viewer mutation ... the viewer logout” and “an entry from another origin reaches the route.” Viewer entry creates a persisted ViewerSession.",
+   "question": "Does the same-origin requirement cover `POST /auth/viewer/enter`, which creates a viewer session, or only cookie-authenticated logout?",
+   "options": [
+    "Reject cross-origin viewer entry before credential verification",
+    "Allow cross-origin viewer entry and apply the origin check only to logout"
+   ],
+   "default_guess": "Follow the operation-specific accepted behavior and allow cross-origin entry, while rate-limiting it; narrow R0-09 to cookie-authenticated mutations.",
+   "witness": {
+    "initial": "A viewer has an active access credential and no session; a page at a foreign origin knows the valid capability secret.",
+    "events": [
+     "The foreign page sends `POST /auth/viewer/enter` with its Origin header and the valid secret."
+    ],
+    "outcomes": [
+     "Applying R0-09 to every viewer mutation, the transport guard returns 403 and creates no session.",
+     "Applying State 5, the request reaches `viewer_access.enter_viewer_access`, creates a ViewerSession, and returns 200 with the cookie response."
+    ],
+    "observer": "The requesting browser and the session repository observe refusal versus session creation."
+   },
+   "unit": "50_public_apis.md:`public_op:transport_guard.install_transport_guards`"
+  },
+  {
+   "subject": "Bootstrap CLI exit-code contract for infrastructure failures",
+   "kind": "contradiction",
+   "text": "A29 says: “Exit codes are a closed external contract: 0 account created, 1 confirmation did not match, 2 identity input rejected, 3 bootstrap already completed.” `run_bootstrap_cli` says: “A configuration or storage failure is none of the four outcomes: the operation raises it and returns no exit code, and the failure status the host process then ends with is outside the closed contract of A29.”",
+   "question": "What process exit result is guaranteed when configuration loading or bootstrap storage fails?",
+   "options": [
+    "Add defined exit codes for configuration and storage failures",
+    "Map infrastructure failures onto one or more of the existing four codes",
+    "Declare that the four-code contract covers only business outcomes and leave infrastructure process status outside it"
+   ],
+   "default_guess": "Treat the four codes as business outcomes only and let infrastructure failures terminate with a conventional nonzero process status, after narrowing A29's claim that the external contract is closed.",
+   "witness": {
+    "initial": "No administrator exists, but the configured database cannot be opened.",
+    "events": [
+     "The host operator runs the bootstrap CLI and supplies matching, valid credentials.",
+     "The CLI loads settings and attempts to construct or use the bootstrap store."
+    ],
+    "outcomes": [
+     "Under A29's closed contract, the command must terminate with one of exit codes 0–3.",
+     "Under State 5, the storage exception escapes, `run_bootstrap_cli` returns no code, and the host runtime chooses an uncontracted failure status."
+    ],
+    "observer": "A deployment script branching on the documented exit codes sees a documented code versus an unspecified process failure."
+   },
+   "unit": "50_public_apis.md:`public_op:staff_bootstrap_cli.run_bootstrap_cli`"
+  },
+  {
+   "subject": "HTTP route catalog used by application construction",
+   "kind": "missing contract",
+   "text": "`create_app` requires “`rules.http_router_backend`: every route row bound exactly once,” but the texts provide only the count “56 routes, 49 table and 7 irregular” and do not state the 49 staff, administrator and producer route rows with their methods, paths, request models, authorization steps and response projections.",
+   "question": "What is the complete `rules.http_router_backend` table that `create_app` must bind?",
+   "options": [
+    "Supply the missing 49-row route catalog with method, path, request model, authorization sequence, operation, response and error mapping",
+    "Define routes by a deterministic naming convention derived from public operation names",
+    "Expose only the individually named routes present in the flow and operation prose"
+   ],
+   "default_guess": "Reconstruct conventional `/auth`, `/admin`, `/staff` and producer routes from the operation names and the paths explicitly mentioned elsewhere, although this remains guesswork.",
+   "witness": {
+    "initial": "The service is running and an authenticated administrator wants to create a viewer.",
+    "events": [
+     "One implementation binds `viewer_access.create_viewer` to `POST /admin/viewers`.",
+     "Another implementation binds the same operation to `POST /admin/client-viewers`; both otherwise apply the documented authorization and request fields.",
+     "The administrator's client sends `POST /admin/viewers`."
+    ],
+    "outcomes": [
+     "The first implementation creates the viewer and returns its safe view.",
+     "The second implementation returns route-not-found and creates nothing."
+    ],
+    "observer": "The administrator's HTTP client sees success versus 404 despite both implementations following every route detail actually present in the supplied texts."
+   },
+   "unit": "50_public_apis.md:`public_op:api.create_app`"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"Archived-project reads creating a manual budget\",\"kind\":\"contradiction\",\"text\":\"“An archived project's budget ... records are readable and immutable in the portal” and R0-24 says an archived project “refuses every mutation of its budget”; State 5 instead says: “The one write that is not refused for an archived project is the empty manual budget version (with its audit) that `ensure_manual_budget` creates, also when `list_project_progress` reads a project that has none.”\",\"question\":\"May `ensure_manual_budget`, when called from the read operation `list_project_progress`, create a budget version and audit record for an archived project, or must that read leave the archived project unchanged?\",\"options\":[\"Create the empty manual version and audit during the read, including for archived projects\",\"Return the progress list without creating a manual version on an archived project\",\"Refuse the read when ordering would require creation of the manual version\"],\"default_guess\":\"Preserve the archived-project immutability rule: return the recorded progress without creating a budget or audit.\",\"witness\":{\"initial\":\"Registry reports project P archived; an operator retains an active assignment to P; P has recorded progress but no manual BudgetVersion.\",\"events\":[\"The operator performs the staff progress-list read for P.\",\"The read authorization succeeds because archived projects remain readable.\",\"`list_project_progress` needs the manual budget for ordering and invokes or emulates `ensure_manual_budget`.\"],\"outcomes\":[\"Following State 5, the read creates an inactive manual BudgetVersion and `budget.manual_version_create` audit, then returns the list.\",\"Following State 0/R0-24, the read returns the list without any write, or refuses rather than mutate the archived budget.\"],\"observer\":\"An administrator inspecting budgets or audit records sees the extra version and audit; concurrent callers can also observe the new manual version.\"},\"unit\":\"50_public_apis.md:`public_op:budget_management.ensure_manual_budget`\"},{\"subject\":\"Zero-total expense correction and allocation representation\",\"kind\":\"contradiction\",\"text\":\"`AllocationInstruction.amount` is defined as `Decimal (> 0)`, while `correct_expense` says: “The allocation list must hold at least one instruction, also for a zero total: a correction to zero carries allocations that sum to zero, and an empty list is refused.”\",\"question\":\"What valid allocation instructions represent a corrected expense total of zero?\",\"options\":[\"Permit at least one zero-amount AllocationInstruction for this operation\",\"Permit an empty allocation list when the corrected total is zero\",\"Forbid correcting an expense total to zero\"],\"default_guess\":\"Forbid a zero-total correction because no non-empty list of strictly positive AllocationInstruction amounts can sum to zero.\",\"witness\":{\"initial\":\"Project P is active and contains an expense E with total 100.00 and one valid allocation.\",\"events\":[\"Authorized staff submits a correction of E to total 0.00 with one allocation instruction of amount 0.00.\"],\"outcomes\":[\"The AllocationInstruction validator applies `amount > 0`, so request decoding or the operation rejects the request with 422 and E remains unchanged.\",\"The `correct_expense` passage admits the required zero allocation, atomically changes E to 0.00, and stores the zero-sum allocation set.\"],\"observer\":\"The staff caller sees rejection versus a successful correction, and later expense reads show different totals and allocations.\"},\"unit\":\"50_public_apis.md:`public_op:expense_management.correct_expense`\"},{\"subject\":\"Service-credential expiry authority\",\"kind\":\"contradiction\",\"text\":\"`issue_service_credential` says: “Any expiry is accepted and stored as given, a past one included; no expiry means the credential does not expire.” A28 instead says: “Each operation reads the clock once” and “an expiry it writes is that instant plus its TTL.”\",\"question\":\"Is `ServiceCredential.expires_at` an arbitrary caller-supplied instant, including a past instant or no instant, or must it be derived from the operation's captured time plus a configured TTL?\",\"options\":[\"Store the administrator-supplied expiry exactly, including past or absent values\",\"Derive expiry from the captured operation time and a service-credential TTL\",\"Validate the supplied expiry against the captured time and reject past values\"],\"default_guess\":\"Store the supplied expiry exactly and state that service-credential expiry is an exception to A28's derived-TTL sentence.\",\"witness\":{\"initial\":\"At time T an active service principal has no credential and the administrator is authorized to manage access.\",\"events\":[\"The administrator requests a credential with `expires_at = T - 1 hour`.\"],\"outcomes\":[\"Following `issue_service_credential`, the operation succeeds, stores the past expiry, returns the secret once, and the credential can never authenticate.\",\"Following A28, the operation cannot write that supplied expiry; it must instead derive a future expiry from T and a TTL or reject the request.\"],\"observer\":\"The administrator sees success versus rejection or a different expiry; the producer subsequently sees authentication fail versus succeed.\"},\"unit\":\"50_public_apis.md:`public_op:service_identity.issue_service_credential`\"},{\"subject\":\"Origin check for viewer entry\",\"kind\":\"contradiction\",\"text\":\"R0-09 says “mutating viewer requests are refused unless they come from the portal's own public origin.” `install_transport_guards` instead says: “The origin check covers the one viewer mutation ... the viewer logout” and “an entry from another origin reaches the route.” Viewer entry creates a persisted ViewerSession.\",\"question\":\"Does the same-origin requirement cover `POST /auth/viewer/enter`, which creates a viewer session, or only cookie-authenticated logout?\",\"options\":[\"Reject cross-origin viewer entry before credential verification\",\"Allow cross-origin viewer entry and apply the origin check only to logout\"],\"default_guess\":\"Follow the operation-specific accepted behavior and allow cross-origin entry, while rate-limiting it; narrow R0-09 to cookie-authenticated mutations.\",\"witness\":{\"initial\":\"A viewer has an active access credential and no session; a page at a foreign origin knows the valid capability secret.\",\"events\":[\"The foreign page sends `POST /auth/viewer/enter` with its Origin header and the valid secret.\"],\"outcomes\":[\"Applying R0-09 to every viewer mutation, the transport guard returns 403 and creates no session.\",\"Applying State 5, the request reaches `viewer_access.enter_viewer_access`, creates a ViewerSession, and returns 200 with the cookie response.\"],\"observer\":\"The requesting browser and the session repository observe refusal versus session creation.\"},\"unit\":\"50_public_apis.md:`public_op:transport_guard.install_transport_guards`\"},{\"subject\":\"Bootstrap CLI exit-code contract for infrastructure failures\",\"kind\":\"contradiction\",\"text\":\"A29 says: “Exit codes are a closed external contract: 0 account created, 1 confirmation did not match, 2 identity input rejected, 3 bootstrap already completed.” `run_bootstrap_cli` says: “A configuration or storage failure is none of the four outcomes: the operation raises it and returns no exit code, and the failure status the host process then ends with is outside the closed contract of A29.”\",\"question\":\"What process exit result is guaranteed when configuration loading or bootstrap storage fails?\",\"options\":[\"Add defined exit codes for configuration and storage failures\",\"Map infrastructure failures onto one or more of the existing four codes\",\"Declare that the four-code contract covers only business outcomes and leave infrastructure process status outside it\"],\"default_guess\":\"Treat the four codes as business outcomes only and let infrastructure failures terminate with a conventional nonzero process status, after narrowing A29's claim that the external contract is closed.\",\"witness\":{\"initial\":\"No administrator exists, but the configured database cannot be opened.\",\"events\":[\"The host operator runs the bootstrap CLI and supplies matching, valid credentials.\",\"The CLI loads settings and attempts to construct or use the bootstrap store.\"],\"outcomes\":[\"Under A29's closed contract, the command must terminate with one of exit codes 0–3.\",\"Under State 5, the storage exception escapes, `run_bootstrap_cli` returns no code, and the host runtime chooses an uncontracted failure status.\"],\"observer\":\"A deployment script branching on the documented exit codes sees a documented code versus an unspecified process failure.\"},\"unit\":\"50_public_apis.md:`public_op:staff_bootstrap_cli.run_bootstrap_cli`\"},{\"subject\":\"HTTP route catalog used by application construction\",\"kind\":\"missing contract\",\"text\":\"`create_app` requires “`rules.http_router_backend`: every route row bound exactly once,” but the texts provide only the count “56 routes, 49 table and 7 irregular” and do not state the 49 staff, administrator and producer route rows with their methods, paths, request models, authorization steps and response projections.\",\"question\":\"What is the complete `rules.http_router_backend` table that `create_app` must bind?\",\"options\":[\"Supply the missing 49-row route catalog with method, path, request model, authorization sequence, operation, response and error mapping\",\"Define routes by a deterministic naming convention derived from public operation names\",\"Expose only the individually named routes present in the flow and operation prose\"],\"default_guess\":\"Reconstruct conventional `/auth`, `/admin`, `/staff` and producer routes from the operation names and the paths explicitly mentioned elsewhere, although this remains guesswork.\",\"witness\":{\"initial\":\"The service is running and an authenticated administrator wants to create a viewer.\",\"events\":[\"One implementation binds `viewer_access.create_viewer` to `POST /admin/viewers`.\",\"Another implementation binds the same operation to `POST /admin/client-viewers`; both otherwise apply the documented authorization and request fields.\",\"The administrator's client sends `POST /admin/viewers`.\"],\"outcomes\":[\"The first implementation creates the viewer and returns its safe view.\",\"The second implementation returns route-not-found and creates nothing.\"],\"observer\":\"The administrator's HTTP client sees success versus 404 despite both implementations following every route detail actually present in the supplied texts.\"},\"unit\":\"50_public_apis.md:`public_op:api.create_app`\"}]}",
+ "set_aside": []
+}

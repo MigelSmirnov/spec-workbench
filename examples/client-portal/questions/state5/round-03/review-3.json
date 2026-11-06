@@ -1,0 +1,157 @@
+{
+ "open_points": [
+  {
+   "unit": "50_public_apis.md:`public_op:audit_writer.append_audit`",
+   "subject": "audit timestamp source",
+   "kind": "missing input / clock contradiction",
+   "text": "“`audit_writer` supplies `audit_id` and `occurred_at`; callers cannot supply either” and “Each operation reads the clock once … that one instant supplies every portal-owned timestamp it writes,” while `append_audit` receives only an `AuditRepository` and `AuditIntent`.",
+   "question": "How does `append_audit` obtain the owning operation’s single captured instant without taking a second clock reading or accepting `occurred_at`?",
+   "options": [
+    "`append_audit` reads its own clock, so the audit time may differ from the business-record time",
+    "The owning operation conveys its captured instant through an unstated context or parameter",
+    "The repository or transaction supplies a shared operation instant"
+   ],
+   "default_guess": "Use a shared operation instant supplied through the transaction context.",
+   "witness": {
+    "initial": "An expense exists and a correction operation will update it and append its audit atomically.",
+    "events": [
+     "The correction operation captures t1 and writes the expense's `updated_at = t1`.",
+     "It calls `append_audit` with only the repository and an `AuditIntent`.",
+     "The clock advances before `append_audit` constructs the record."
+    ],
+    "outcomes": [
+     "`append_audit` reads the clock and writes `occurred_at = t2`, so the two timestamps differ.",
+     "`append_audit` obtains t1 through an unstated mechanism and writes `occurred_at = t1`, satisfying A28's single-instant rule."
+    ],
+    "observer": "A staff member or test reading the expense and its audit record"
+   }
+  },
+  {
+   "unit": "50_public_apis.md:`public_op:audit_writer.append_audit`",
+   "subject": "invalid AuditIntent refusal",
+   "kind": "undeclared error",
+   "text": "“A closed-choice violation of the intent is rejected” does not name the exception or other rejection result.",
+   "question": "What exact error does `append_audit` raise when an `AuditIntent` violates the actor, result/reason, action-catalog, key-version, or entity-id rules?",
+   "options": [
+    "Raise a built-in validation exception",
+    "Raise a dedicated audit-validation exception",
+    "Raise `PersistenceError`",
+    "Treat the violation as an assertion/programming failure"
+   ],
+   "default_guess": "Raise a built-in value-validation exception before inserting anything.",
+   "witness": {
+    "initial": "A caller has an open transaction and constructs a success `AuditIntent` with a non-null `reason_code`.",
+    "events": [
+     "The caller invokes `append_audit`.",
+     "The caller's transaction guard re-raises the returned exception unchanged."
+    ],
+    "outcomes": [
+     "The caller receives a validation exception it can distinguish from storage failure.",
+     "The caller receives `PersistenceError` or an assertion/programming failure instead."
+    ],
+    "observer": "The owning module, its tests, and any route receiving the propagated exception"
+   }
+  },
+  {
+   "unit": "50_public_apis.md:`public_op:authorization_guard.authorize_snapshot_import`",
+   "subject": "credential revocation during an import request",
+   "kind": "revocation contradiction",
+   "text": "A11 says “the next authorization check observes the revocation,” but this operation says credential revocation is observed at authentication on “the next request” and that “Within one request this guard re-reads the principal and the grant, not the credential.”",
+   "question": "If the bearer credential is revoked after `authenticate_service_principal` returns but before `authorize_snapshot_import` runs, must this authorization check reject the request?",
+   "options": [
+    "Reject because it is the next authorization check after revocation",
+    "Continue because credential validity is fixed for the duration of the already-authenticated request"
+   ],
+   "default_guess": "Continue the already-authenticated request, following the operation-specific State 5 text.",
+   "witness": {
+    "initial": "An active producer has a valid credential, an active project grant, and import capability.",
+    "events": [
+     "The producer request authenticates the credential and obtains `ServiceActorContext`.",
+     "An administrator concurrently revokes that credential and commits.",
+     "The producer request calls `authorize_snapshot_import` with the previously created context."
+    ],
+    "outcomes": [
+     "A11's immediate-revocation rule makes the guard return `AuthenticationRejected`; no import is recorded.",
+     "The State 5 guard rechecks only principal and grant, authorizes the request, and the import may be recorded."
+    ],
+    "observer": "The producer, the administrator, and readers of snapshot import records"
+   }
+  },
+  {
+   "unit": "50_public_apis.md:`public_op:staff_identity.authenticate_staff`",
+   "subject": "audit of malformed login email",
+   "kind": "cross-state contradiction",
+   "text": "State 4 says “On every rejection it appends `staff.login_failed`,” while State 5 says an address that does not normalize raises `IdentityInputRejected` “before any read or audit.”",
+   "question": "Does a login attempt with an email rejected by A16 create a `staff.login_failed` audit record?",
+   "options": [
+    "Audit every rejected login attempt, including malformed email",
+    "Reject malformed email before audit; audit only failures after normalization"
+   ],
+   "default_guess": "Reject malformed email before audit, following the operation-specific State 5 contract.",
+   "witness": {
+    "initial": "No staff account matches the presented malformed address.",
+    "events": [
+     "A caller submits a login email containing forbidden surrounding whitespace and any password.",
+     "`authenticate_staff` applies A16 normalization."
+    ],
+    "outcomes": [
+     "The operation appends `staff.login_failed` and then rejects the login, as State 4's “every rejection” requires.",
+     "The operation raises `IdentityInputRejected` without an audit record, as State 5 requires."
+    ],
+    "observer": "An administrator or test reading the audit log"
+   }
+  },
+  {
+   "unit": "50_public_apis.md:`public_op:budget_management.ensure_manual_budget`",
+   "subject": "manual-budget creation for archived projects",
+   "kind": "lifecycle contradiction",
+   "text": "State 0 R0-24 says an archived project “refuses every mutation of its budget,” while State 5 says the exception is an empty manual budget version that `ensure_manual_budget` creates for an archived project, including when called by `list_project_progress`.",
+   "question": "May `ensure_manual_budget` create and audit a manual budget version when its `AuthorizedProjectContext` is for an archived project?",
+   "options": [
+    "Refuse or remain read-only because archival freezes budget records",
+    "Create the empty inactive manual version and its audit despite archival"
+   ],
+   "default_guess": "Create it, following the explicit State 5 exception.",
+   "witness": {
+    "initial": "An archived project is readable through an existing staff assignment and has progress records but no manual budget version.",
+    "events": [
+     "Staff performs the allowed archived-project progress-list read.",
+     "`list_project_progress` calls `ensure_manual_budget` to determine ordering."
+    ],
+    "outcomes": [
+     "The read leaves storage unchanged because archived budget records are immutable.",
+     "The read creates an inactive manual `BudgetVersion` and a `budget.manual_version_create` audit record."
+    ],
+    "observer": "Staff later reading budget history or the audit log"
+   }
+  },
+  {
+   "unit": "50_public_apis.md:`public_op:staff_bootstrap_cli.run_bootstrap_cli`",
+   "subject": "CLI outcome for configuration or storage failure",
+   "kind": "closed-outcome contradiction",
+   "text": "R0-07 and A29 call the exit codes a “closed external contract” of 0, 1, 2, or 3, while State 5 says a configuration or storage failure “raises it and returns no exit code” and the host's failure status is “outside the closed contract.”",
+   "question": "Must every invocation terminate with one of the four specified exit codes, or may infrastructure failures escape and produce another process status?",
+   "options": [
+    "Map every configuration and storage failure into one of the four closed exit codes",
+    "Let infrastructure failures escape, allowing an implementation- or host-defined process status",
+    "Extend the closed contract with separately specified infrastructure exit codes"
+   ],
+   "default_guess": "Let infrastructure failures escape, following the operation-specific State 5 text.",
+   "witness": {
+    "initial": "The host invokes the bootstrap command, but a required runtime setting is malformed or the database cannot be opened.",
+    "events": [
+     "The CLI reads matching credentials.",
+     "`load_runtime_settings` or the bootstrap store raises an infrastructure failure."
+    ],
+    "outcomes": [
+     "The command still returns one of the closed exit codes 0–3, as the earlier closed-contract passages require.",
+     "The operation returns no code; the host process exits with an unspecified status outside 0–3, as State 5 permits."
+    ],
+    "observer": "The host operator and deployment script branching on the command's exit status"
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"50_public_apis.md:`public_op:audit_writer.append_audit`\",\"subject\":\"audit timestamp source\",\"kind\":\"missing input / clock contradiction\",\"text\":\"“`audit_writer` supplies `audit_id` and `occurred_at`; callers cannot supply either” and “Each operation reads the clock once … that one instant supplies every portal-owned timestamp it writes,” while `append_audit` receives only an `AuditRepository` and `AuditIntent`.\",\"question\":\"How does `append_audit` obtain the owning operation’s single captured instant without taking a second clock reading or accepting `occurred_at`?\",\"options\":[\"`append_audit` reads its own clock, so the audit time may differ from the business-record time\",\"The owning operation conveys its captured instant through an unstated context or parameter\",\"The repository or transaction supplies a shared operation instant\"],\"default_guess\":\"Use a shared operation instant supplied through the transaction context.\",\"witness\":{\"initial\":\"An expense exists and a correction operation will update it and append its audit atomically.\",\"events\":[\"The correction operation captures t1 and writes the expense's `updated_at = t1`.\",\"It calls `append_audit` with only the repository and an `AuditIntent`.\",\"The clock advances before `append_audit` constructs the record.\"],\"outcomes\":[\"`append_audit` reads the clock and writes `occurred_at = t2`, so the two timestamps differ.\",\"`append_audit` obtains t1 through an unstated mechanism and writes `occurred_at = t1`, satisfying A28's single-instant rule.\"],\"observer\":\"A staff member or test reading the expense and its audit record\"}},{\"unit\":\"50_public_apis.md:`public_op:audit_writer.append_audit`\",\"subject\":\"invalid AuditIntent refusal\",\"kind\":\"undeclared error\",\"text\":\"“A closed-choice violation of the intent is rejected” does not name the exception or other rejection result.\",\"question\":\"What exact error does `append_audit` raise when an `AuditIntent` violates the actor, result/reason, action-catalog, key-version, or entity-id rules?\",\"options\":[\"Raise a built-in validation exception\",\"Raise a dedicated audit-validation exception\",\"Raise `PersistenceError`\",\"Treat the violation as an assertion/programming failure\"],\"default_guess\":\"Raise a built-in value-validation exception before inserting anything.\",\"witness\":{\"initial\":\"A caller has an open transaction and constructs a success `AuditIntent` with a non-null `reason_code`.\",\"events\":[\"The caller invokes `append_audit`.\",\"The caller's transaction guard re-raises the returned exception unchanged.\"],\"outcomes\":[\"The caller receives a validation exception it can distinguish from storage failure.\",\"The caller receives `PersistenceError` or an assertion/programming failure instead.\"],\"observer\":\"The owning module, its tests, and any route receiving the propagated exception\"}},{\"unit\":\"50_public_apis.md:`public_op:authorization_guard.authorize_snapshot_import`\",\"subject\":\"credential revocation during an import request\",\"kind\":\"revocation contradiction\",\"text\":\"A11 says “the next authorization check observes the revocation,” but this operation says credential revocation is observed at authentication on “the next request” and that “Within one request this guard re-reads the principal and the grant, not the credential.”\",\"question\":\"If the bearer credential is revoked after `authenticate_service_principal` returns but before `authorize_snapshot_import` runs, must this authorization check reject the request?\",\"options\":[\"Reject because it is the next authorization check after revocation\",\"Continue because credential validity is fixed for the duration of the already-authenticated request\"],\"default_guess\":\"Continue the already-authenticated request, following the operation-specific State 5 text.\",\"witness\":{\"initial\":\"An active producer has a valid credential, an active project grant, and import capability.\",\"events\":[\"The producer request authenticates the credential and obtains `ServiceActorContext`.\",\"An administrator concurrently revokes that credential and commits.\",\"The producer request calls `authorize_snapshot_import` with the previously created context.\"],\"outcomes\":[\"A11's immediate-revocation rule makes the guard return `AuthenticationRejected`; no import is recorded.\",\"The State 5 guard rechecks only principal and grant, authorizes the request, and the import may be recorded.\"],\"observer\":\"The producer, the administrator, and readers of snapshot import records\"}},{\"unit\":\"50_public_apis.md:`public_op:staff_identity.authenticate_staff`\",\"subject\":\"audit of malformed login email\",\"kind\":\"cross-state contradiction\",\"text\":\"State 4 says “On every rejection it appends `staff.login_failed`,” while State 5 says an address that does not normalize raises `IdentityInputRejected` “before any read or audit.”\",\"question\":\"Does a login attempt with an email rejected by A16 create a `staff.login_failed` audit record?\",\"options\":[\"Audit every rejected login attempt, including malformed email\",\"Reject malformed email before audit; audit only failures after normalization\"],\"default_guess\":\"Reject malformed email before audit, following the operation-specific State 5 contract.\",\"witness\":{\"initial\":\"No staff account matches the presented malformed address.\",\"events\":[\"A caller submits a login email containing forbidden surrounding whitespace and any password.\",\"`authenticate_staff` applies A16 normalization.\"],\"outcomes\":[\"The operation appends `staff.login_failed` and then rejects the login, as State 4's “every rejection” requires.\",\"The operation raises `IdentityInputRejected` without an audit record, as State 5 requires.\"],\"observer\":\"An administrator or test reading the audit log\"}},{\"unit\":\"50_public_apis.md:`public_op:budget_management.ensure_manual_budget`\",\"subject\":\"manual-budget creation for archived projects\",\"kind\":\"lifecycle contradiction\",\"text\":\"State 0 R0-24 says an archived project “refuses every mutation of its budget,” while State 5 says the exception is an empty manual budget version that `ensure_manual_budget` creates for an archived project, including when called by `list_project_progress`.\",\"question\":\"May `ensure_manual_budget` create and audit a manual budget version when its `AuthorizedProjectContext` is for an archived project?\",\"options\":[\"Refuse or remain read-only because archival freezes budget records\",\"Create the empty inactive manual version and its audit despite archival\"],\"default_guess\":\"Create it, following the explicit State 5 exception.\",\"witness\":{\"initial\":\"An archived project is readable through an existing staff assignment and has progress records but no manual budget version.\",\"events\":[\"Staff performs the allowed archived-project progress-list read.\",\"`list_project_progress` calls `ensure_manual_budget` to determine ordering.\"],\"outcomes\":[\"The read leaves storage unchanged because archived budget records are immutable.\",\"The read creates an inactive manual `BudgetVersion` and a `budget.manual_version_create` audit record.\"],\"observer\":\"Staff later reading budget history or the audit log\"}},{\"unit\":\"50_public_apis.md:`public_op:staff_bootstrap_cli.run_bootstrap_cli`\",\"subject\":\"CLI outcome for configuration or storage failure\",\"kind\":\"closed-outcome contradiction\",\"text\":\"R0-07 and A29 call the exit codes a “closed external contract” of 0, 1, 2, or 3, while State 5 says a configuration or storage failure “raises it and returns no exit code” and the host's failure status is “outside the closed contract.”\",\"question\":\"Must every invocation terminate with one of the four specified exit codes, or may infrastructure failures escape and produce another process status?\",\"options\":[\"Map every configuration and storage failure into one of the four closed exit codes\",\"Let infrastructure failures escape, allowing an implementation- or host-defined process status\",\"Extend the closed contract with separately specified infrastructure exit codes\"],\"default_guess\":\"Let infrastructure failures escape, following the operation-specific State 5 text.\",\"witness\":{\"initial\":\"The host invokes the bootstrap command, but a required runtime setting is malformed or the database cannot be opened.\",\"events\":[\"The CLI reads matching credentials.\",\"`load_runtime_settings` or the bootstrap store raises an infrastructure failure.\"],\"outcomes\":[\"The command still returns one of the closed exit codes 0–3, as the earlier closed-contract passages require.\",\"The operation returns no code; the host process exits with an unspecified status outside 0–3, as State 5 permits.\"],\"observer\":\"The host operator and deployment script branching on the command's exit status\"}}]}",
+ "set_aside": []
+}

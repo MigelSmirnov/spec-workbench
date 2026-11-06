@@ -1,0 +1,179 @@
+{
+ "open_points": [
+  {
+   "unit": "50_public_apis.md:`public_op:audit_writer.append_audit`",
+   "subject": "AuditRecord occurred_at source",
+   "kind": "contradiction",
+   "text": "`audit_writer` supplies `audit_id` and `occurred_at`; callers cannot supply either` (M37), while A28 requires that one instant read by the owning operation supply every timestamp it writes; `append_audit` receives only an `AuditRepository` and `AuditIntent`.",
+   "question": "How does append_audit obtain the owning use case's already-captured instant so that the business record and audit record have the same timestamp without a second clock read?",
+   "options": [
+    "Add the owning operation's captured instant to the append call or transaction context",
+    "Let append_audit read the clock independently, allowing its occurred_at to differ",
+    "Let append_audit recover the instant from an undocumented ambient clock/context"
+   ],
+   "default_guess": "Pass the owning operation's captured instant explicitly.",
+   "witness": {
+    "initial": "An active project has an expense whose inclusion flag can be changed.",
+    "events": [
+     "A staff caller requests an inclusion change.",
+     "expense_management captures T1 and writes the expense's updated_at.",
+     "expense_management calls append_audit with only the repository and AuditIntent."
+    ],
+    "outcomes": [
+     "append_audit reads the clock at T2, so AuditRecord.occurred_at differs from updated_at and the operation uses two clock reads.",
+     "append_audit obtains T1 through an unstated argument or ambient context, so both timestamps are equal as A28 requires."
+    ],
+    "observer": "A repository reader or test comparing the committed expense and audit timestamps."
+   }
+  },
+  {
+   "unit": "50_public_apis.md:`public_op:staff_identity.authenticate_staff`",
+   "subject": "Malformed-email login audit",
+   "kind": "contradiction",
+   "text": "State 4 says `On every rejection it appends staff.login_failed`, but State 5 says `IdentityInputRejected for an address that does not normalize under A16, before any read or audit`.",
+   "question": "Does a login attempt whose email fails normalization append a staff.login_failed audit record?",
+   "options": [
+    "Reject with IdentityInputRejected and write no audit",
+    "Append staff.login_failed and then reject"
+   ],
+   "default_guess": "Reject before audit, following the operation-specific State 5 text.",
+   "witness": {
+    "initial": "The staff table may contain any accounts; none is relevant to the malformed address.",
+    "events": [
+     "A caller submits a login email containing forbidden surrounding whitespace."
+    ],
+    "outcomes": [
+     "The operation returns the input rejection and commits no audit record.",
+     "The operation commits one staff.login_failed record before returning the rejection."
+    ],
+    "observer": "An administrator or test reading the audit table."
+   }
+  },
+  {
+   "unit": "50_public_apis.md:`public_op:staff_identity.authenticate_staff`",
+   "subject": "Audit actor for an unknown normalized email",
+   "kind": "model-contract contradiction",
+   "text": "The operation says `actor and entity are empty only when no account matched`, while AuditRecord requires `actor_id` unless `actor_kind = system`.",
+   "question": "What actor_kind and actor_id must be recorded for staff.login_failed when a syntactically valid normalized email matches no account?",
+   "options": [
+    "Use actor_kind=system with no actor_id",
+    "Change the audit model to permit actor_kind=staff with no actor_id for anonymous login attempts",
+    "Do not write the audit because no valid AuditRecord can represent it"
+   ],
+   "default_guess": "Permit an anonymous staff-login actor explicitly rather than attributing the attempt to the system.",
+   "witness": {
+    "initial": "No staff account has the normalized email `absent@example.com`.",
+    "events": [
+     "A caller submits `absent@example.com` with a password.",
+     "authenticate_staff must commit staff.login_failed with empty actor and entity before raising AuthenticationRejected."
+    ],
+    "outcomes": [
+     "The implementation records actor_kind=system and actor_id=None to satisfy AuditRecord validation.",
+     "The implementation treats the event as a staff attempt with actor_id=None, which the stated AuditRecord validator rejects, so login ends as a persistence/validation failure or no audit is committed."
+    ],
+    "observer": "The login caller and an audit reader."
+   }
+  },
+  {
+   "unit": "50_public_apis.md:Conventions every operation follows",
+   "subject": "Archived-project read that creates a manual budget",
+   "kind": "contradiction",
+   "text": "State 5 says `The one write that is not refused for an archived project is the empty manual budget version ... that ensure_manual_budget creates, also when list_project_progress reads a project that has none`, while R0-24 says an archived project `refuses every mutation of its budget` and State 4 says `every mutation of its records ... is refused`.",
+   "question": "When list_project_progress reads an archived project with no manual budget, may it create the empty manual budget and its audit?",
+   "options": [
+    "Create the manual budget and audit despite archival",
+    "Return the progress list without creating anything",
+    "Reject because creating the budget is a forbidden archived-project mutation"
+   ],
+   "default_guess": "Keep the read successful but do not create any budget or audit for an archived project.",
+   "witness": {
+    "initial": "A Registry project is archived, has an existing staff assignment, has no manual BudgetVersion, and has no SectionProgress records.",
+    "events": [
+     "The assigned staff member performs the authorized list_project_progress read.",
+     "The list operation reaches ensure_manual_budget to determine ordering."
+    ],
+    "outcomes": [
+     "An empty manual BudgetVersion and budget.manual_version_create audit are committed, and the caller receives an empty list.",
+     "No portal record is written because archival freezes budget records; the caller either receives the empty list without ordering data or the attempted creation is rejected."
+    ],
+    "observer": "The staff caller and anyone reading budget or audit records."
+   }
+  },
+  {
+   "unit": "50_public_apis.md:`public_op:service_identity.issue_service_credential`",
+   "subject": "Representation of caller-supplied credential expiry",
+   "kind": "contradiction",
+   "text": "The operation says `Any expiry is accepted and stored as given`, while A28 says `Persisted timestamps are UTC, stored as offset-naive datetimes` and forbids an offset-aware persisted timestamp.",
+   "question": "If expires_at is supplied with a non-UTC offset or as an offset-aware datetime, is it stored exactly as supplied or normalized to offset-naive UTC?",
+   "options": [
+    "Store the caller value exactly, including its offset",
+    "Convert the instant to UTC and remove the offset before persistence",
+    "Reject any value that is not already offset-naive UTC"
+   ],
+   "default_guess": "Normalize the instant to offset-naive UTC before persistence.",
+   "witness": {
+    "initial": "An active service principal exists and an administrator is authorized to issue a credential.",
+    "events": [
+     "The administrator supplies expires_at as `2030-01-01T12:00:00+02:00`.",
+     "issue_service_credential persists and returns the new credential."
+    ],
+    "outcomes": [
+     "The stored and returned expiry remains `2030-01-01T12:00:00+02:00`, following `stored as given`.",
+     "The stored and returned expiry is the offset-naive UTC instant `2030-01-01T10:00:00`, following A28."
+    ],
+    "observer": "The administrator receiving the issue response, the repository reader, and later authentication code comparing expiry with the offset-naive clock."
+   }
+  },
+  {
+   "unit": "50_public_apis.md:`public_op:transport_guard.install_transport_guards`",
+   "subject": "Origin check for viewer entry",
+   "kind": "contradiction",
+   "text": "R0-09 and A25 require mutating viewer requests to come from the portal's public origin, but State 5 says `The origin check covers the one viewer mutation ... the viewer logout` and `an entry from another origin reaches the route`. Viewer entry writes a ViewerSession.",
+   "question": "Must POST /auth/viewer/enter from a foreign Origin be refused before the route, or may it exchange a valid access code for a session?",
+   "options": [
+    "Apply the canonical-origin check to viewer entry and refuse a foreign origin",
+    "Apply the origin check only to cookie-authenticated logout and allow cross-origin entry"
+   ],
+   "default_guess": "Apply the origin check to viewer entry because it is a state-changing viewer request.",
+   "witness": {
+    "initial": "A viewer has an active access credential, and an attacker-controlled origin possesses its valid capability secret.",
+    "events": [
+     "The foreign origin sends POST /auth/viewer/enter with the valid secret and an otherwise acceptable host and body."
+    ],
+    "outcomes": [
+     "The transport guard returns 403 and no ViewerSession is created under the general mutating-viewer-origin rule.",
+     "The request reaches viewer_access, creates a ViewerSession, and returns 200 with a session cookie under the State 5 entry exception."
+    ],
+    "observer": "The browser caller and an administrator inspecting viewer sessions."
+   }
+  },
+  {
+   "unit": "50_public_apis.md:`public_op:staff_bootstrap_cli.run_bootstrap_cli`",
+   "subject": "Bootstrap terminal messages",
+   "kind": "unspecified observable effect",
+   "text": "The operation promises `One message per outcome on the terminal` but fixes neither the message for each outcome nor whether it is written to standard output or standard error.",
+   "question": "What exact terminal output and stream belong to exit outcomes 0, 1, 2 and 3?",
+   "options": [
+    "Define one fixed message and stream for each exit code",
+    "Allow implementation-selected messages and streams",
+    "Produce no message and let the exit code be the sole interface"
+   ],
+   "default_guess": "Define a stable, non-sensitive message for each outcome, using stdout for success and stderr for refusals.",
+   "witness": {
+    "initial": "The deployment already contains a staff account.",
+    "events": [
+     "The host operator runs the bootstrap command and supplies matching, valid credentials.",
+     "The command receives BootstrapAlreadyCompleted and exits with code 3."
+    ],
+    "outcomes": [
+     "The command writes `Bootstrap already completed` to stderr.",
+     "The command writes a differently worded message to stdout; both satisfy `one message per outcome`."
+    ],
+    "observer": "The host operator or deployment script capturing terminal output."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"50_public_apis.md:`public_op:audit_writer.append_audit`\",\"subject\":\"AuditRecord occurred_at source\",\"kind\":\"contradiction\",\"text\":\"`audit_writer` supplies `audit_id` and `occurred_at`; callers cannot supply either` (M37), while A28 requires that one instant read by the owning operation supply every timestamp it writes; `append_audit` receives only an `AuditRepository` and `AuditIntent`.\",\"question\":\"How does append_audit obtain the owning use case's already-captured instant so that the business record and audit record have the same timestamp without a second clock read?\",\"options\":[\"Add the owning operation's captured instant to the append call or transaction context\",\"Let append_audit read the clock independently, allowing its occurred_at to differ\",\"Let append_audit recover the instant from an undocumented ambient clock/context\"],\"default_guess\":\"Pass the owning operation's captured instant explicitly.\",\"witness\":{\"initial\":\"An active project has an expense whose inclusion flag can be changed.\",\"events\":[\"A staff caller requests an inclusion change.\",\"expense_management captures T1 and writes the expense's updated_at.\",\"expense_management calls append_audit with only the repository and AuditIntent.\"],\"outcomes\":[\"append_audit reads the clock at T2, so AuditRecord.occurred_at differs from updated_at and the operation uses two clock reads.\",\"append_audit obtains T1 through an unstated argument or ambient context, so both timestamps are equal as A28 requires.\"],\"observer\":\"A repository reader or test comparing the committed expense and audit timestamps.\"}},{\"unit\":\"50_public_apis.md:`public_op:staff_identity.authenticate_staff`\",\"subject\":\"Malformed-email login audit\",\"kind\":\"contradiction\",\"text\":\"State 4 says `On every rejection it appends staff.login_failed`, but State 5 says `IdentityInputRejected for an address that does not normalize under A16, before any read or audit`.\",\"question\":\"Does a login attempt whose email fails normalization append a staff.login_failed audit record?\",\"options\":[\"Reject with IdentityInputRejected and write no audit\",\"Append staff.login_failed and then reject\"],\"default_guess\":\"Reject before audit, following the operation-specific State 5 text.\",\"witness\":{\"initial\":\"The staff table may contain any accounts; none is relevant to the malformed address.\",\"events\":[\"A caller submits a login email containing forbidden surrounding whitespace.\"],\"outcomes\":[\"The operation returns the input rejection and commits no audit record.\",\"The operation commits one staff.login_failed record before returning the rejection.\"],\"observer\":\"An administrator or test reading the audit table.\"}},{\"unit\":\"50_public_apis.md:`public_op:staff_identity.authenticate_staff`\",\"subject\":\"Audit actor for an unknown normalized email\",\"kind\":\"model-contract contradiction\",\"text\":\"The operation says `actor and entity are empty only when no account matched`, while AuditRecord requires `actor_id` unless `actor_kind = system`.\",\"question\":\"What actor_kind and actor_id must be recorded for staff.login_failed when a syntactically valid normalized email matches no account?\",\"options\":[\"Use actor_kind=system with no actor_id\",\"Change the audit model to permit actor_kind=staff with no actor_id for anonymous login attempts\",\"Do not write the audit because no valid AuditRecord can represent it\"],\"default_guess\":\"Permit an anonymous staff-login actor explicitly rather than attributing the attempt to the system.\",\"witness\":{\"initial\":\"No staff account has the normalized email `absent@example.com`.\",\"events\":[\"A caller submits `absent@example.com` with a password.\",\"authenticate_staff must commit staff.login_failed with empty actor and entity before raising AuthenticationRejected.\"],\"outcomes\":[\"The implementation records actor_kind=system and actor_id=None to satisfy AuditRecord validation.\",\"The implementation treats the event as a staff attempt with actor_id=None, which the stated AuditRecord validator rejects, so login ends as a persistence/validation failure or no audit is committed.\"],\"observer\":\"The login caller and an audit reader.\"}},{\"unit\":\"50_public_apis.md:Conventions every operation follows\",\"subject\":\"Archived-project read that creates a manual budget\",\"kind\":\"contradiction\",\"text\":\"State 5 says `The one write that is not refused for an archived project is the empty manual budget version ... that ensure_manual_budget creates, also when list_project_progress reads a project that has none`, while R0-24 says an archived project `refuses every mutation of its budget` and State 4 says `every mutation of its records ... is refused`.\",\"question\":\"When list_project_progress reads an archived project with no manual budget, may it create the empty manual budget and its audit?\",\"options\":[\"Create the manual budget and audit despite archival\",\"Return the progress list without creating anything\",\"Reject because creating the budget is a forbidden archived-project mutation\"],\"default_guess\":\"Keep the read successful but do not create any budget or audit for an archived project.\",\"witness\":{\"initial\":\"A Registry project is archived, has an existing staff assignment, has no manual BudgetVersion, and has no SectionProgress records.\",\"events\":[\"The assigned staff member performs the authorized list_project_progress read.\",\"The list operation reaches ensure_manual_budget to determine ordering.\"],\"outcomes\":[\"An empty manual BudgetVersion and budget.manual_version_create audit are committed, and the caller receives an empty list.\",\"No portal record is written because archival freezes budget records; the caller either receives the empty list without ordering data or the attempted creation is rejected.\"],\"observer\":\"The staff caller and anyone reading budget or audit records.\"}},{\"unit\":\"50_public_apis.md:`public_op:service_identity.issue_service_credential`\",\"subject\":\"Representation of caller-supplied credential expiry\",\"kind\":\"contradiction\",\"text\":\"The operation says `Any expiry is accepted and stored as given`, while A28 says `Persisted timestamps are UTC, stored as offset-naive datetimes` and forbids an offset-aware persisted timestamp.\",\"question\":\"If expires_at is supplied with a non-UTC offset or as an offset-aware datetime, is it stored exactly as supplied or normalized to offset-naive UTC?\",\"options\":[\"Store the caller value exactly, including its offset\",\"Convert the instant to UTC and remove the offset before persistence\",\"Reject any value that is not already offset-naive UTC\"],\"default_guess\":\"Normalize the instant to offset-naive UTC before persistence.\",\"witness\":{\"initial\":\"An active service principal exists and an administrator is authorized to issue a credential.\",\"events\":[\"The administrator supplies expires_at as `2030-01-01T12:00:00+02:00`.\",\"issue_service_credential persists and returns the new credential.\"],\"outcomes\":[\"The stored and returned expiry remains `2030-01-01T12:00:00+02:00`, following `stored as given`.\",\"The stored and returned expiry is the offset-naive UTC instant `2030-01-01T10:00:00`, following A28.\"],\"observer\":\"The administrator receiving the issue response, the repository reader, and later authentication code comparing expiry with the offset-naive clock.\"}},{\"unit\":\"50_public_apis.md:`public_op:transport_guard.install_transport_guards`\",\"subject\":\"Origin check for viewer entry\",\"kind\":\"contradiction\",\"text\":\"R0-09 and A25 require mutating viewer requests to come from the portal's public origin, but State 5 says `The origin check covers the one viewer mutation ... the viewer logout` and `an entry from another origin reaches the route`. Viewer entry writes a ViewerSession.\",\"question\":\"Must POST /auth/viewer/enter from a foreign Origin be refused before the route, or may it exchange a valid access code for a session?\",\"options\":[\"Apply the canonical-origin check to viewer entry and refuse a foreign origin\",\"Apply the origin check only to cookie-authenticated logout and allow cross-origin entry\"],\"default_guess\":\"Apply the origin check to viewer entry because it is a state-changing viewer request.\",\"witness\":{\"initial\":\"A viewer has an active access credential, and an attacker-controlled origin possesses its valid capability secret.\",\"events\":[\"The foreign origin sends POST /auth/viewer/enter with the valid secret and an otherwise acceptable host and body.\"],\"outcomes\":[\"The transport guard returns 403 and no ViewerSession is created under the general mutating-viewer-origin rule.\",\"The request reaches viewer_access, creates a ViewerSession, and returns 200 with a session cookie under the State 5 entry exception.\"],\"observer\":\"The browser caller and an administrator inspecting viewer sessions.\"}},{\"unit\":\"50_public_apis.md:`public_op:staff_bootstrap_cli.run_bootstrap_cli`\",\"subject\":\"Bootstrap terminal messages\",\"kind\":\"unspecified observable effect\",\"text\":\"The operation promises `One message per outcome on the terminal` but fixes neither the message for each outcome nor whether it is written to standard output or standard error.\",\"question\":\"What exact terminal output and stream belong to exit outcomes 0, 1, 2 and 3?\",\"options\":[\"Define one fixed message and stream for each exit code\",\"Allow implementation-selected messages and streams\",\"Produce no message and let the exit code be the sole interface\"],\"default_guess\":\"Define a stable, non-sensitive message for each outcome, using stdout for success and stderr for refusals.\",\"witness\":{\"initial\":\"The deployment already contains a staff account.\",\"events\":[\"The host operator runs the bootstrap command and supplies matching, valid credentials.\",\"The command receives BootstrapAlreadyCompleted and exits with code 3.\"],\"outcomes\":[\"The command writes `Bootstrap already completed` to stderr.\",\"The command writes a differently worded message to stdout; both satisfy `one message per outcome`.\"],\"observer\":\"The host operator or deployment script capturing terminal output.\"}}]}",
+ "set_aside": []
+}

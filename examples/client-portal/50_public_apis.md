@@ -91,7 +91,9 @@ text" at the end.
   is the empty manual budget version (with its audit) that
   `ensure_manual_budget` creates, also when `list_project_progress` reads a
   project that has none.
-- **Order.** Every list in an output is in the order A15 or A27 names for it.
+- **Order.** Every list A15 or A27 names (the project lists and the derived
+  views) is in the order they give; any other list is in the order its
+  operation's Outputs state.
 
 ## `public_op:credential_security.hash_password`
 
@@ -1322,10 +1324,12 @@ One Registry validation, after its own transaction closed.
 A12 producer scope before any content validation, then the A4 sequence with
 the service principal's bearer credential standing in for a session: the
 stored principal must be active and, for a granted-projects scope, hold an
-active grant for the project. The credential itself is checked only by the
-authentication that produced the `ServiceActorContext`; this guard re-reads
-the principal and the grant, not the credential, so a credential revoked or
-expired after that authentication is not noticed here.
+active grant for the project. The authorization check of an import request
+starts with the authentication of its bearer credential
+(`service_identity.authenticate_service_principal`) and ends with this
+guard; the credential's revocation and expiry are observed in that first
+step (A11), so any request after a revocation is refused. This guard then
+re-reads the principal and the grant.
 
 ### Errors
 
@@ -2488,8 +2492,8 @@ per change.
 ### Inputs
 
 The `PortalStore`, the administrator's `StaffActorContext`, the principal id
-and an optional `expires_at`. Any expiry is accepted and stored as given, a
-past one included; no expiry means the credential does not expire. A
+and an optional `expires_at`. Any expiry is accepted and stored, a past
+one included; no expiry means the credential does not expire. A
 credential is usable only before its expiry, so one issued with an expiry
 already reached is stored but never authenticates.
 
@@ -3070,9 +3074,8 @@ None.
 
 A9 (the total in EUR, non-negative), A19 (every section target of this
 project, exact sum), A24, A13 (`expense.correct`); no intermediate state
-commits. The allocation list must hold at least one instruction, also for a
-zero total: a correction to zero carries allocations that sum to zero, and
-an empty list is refused.
+commits. The allocation list must hold at least one instruction whatever
+the total; an empty list is refused, a zero total included.
 
 ### Errors
 
@@ -4181,7 +4184,14 @@ R0-10 and R0-11: exactly one `PortalStore` from `settings.database_url`; one
 inner application from `api.create_app`; liveness at `/health/live` and
 readiness at `/health/ready`, each answering exactly `HealthStatus`; the
 transport guard installed before mounting; the inner application mounted at
-`/api` and then at `/`. It implements no transport policy itself.
+`/api` and then at `/`. It implements no transport policy itself. The
+settings handed here reach only the store and the transport guard: the
+inner application and the use cases receive no `RuntimeSettings` and use
+the `config.*` constants (the staff session lifetime among them). The
+inner application answers at both prefixes, so a route is reached whether
+or not the proxy has stripped `/api`; behind the stripping proxy a path that
+repeats the prefix (`/api/api/…`) reaches the same route, and no route
+exists only under one prefix.
 
 ### Errors
 

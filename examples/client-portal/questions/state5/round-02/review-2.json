@@ -1,0 +1,183 @@
+{
+ "open_points": [
+  {
+   "subject": "Archived-project read that creates a manual budget",
+   "kind": "contradiction",
+   "text": "State 5 says, “The one write that is not refused for an archived project is the empty manual budget version (with its audit) that ensure_manual_budget creates, also when list_project_progress reads a project that has none.” State 0 R0-24 instead says an archived project “refuses every mutation of its budget” and invariant 5 says its budget records are “readable and immutable.”",
+   "question": "When list_project_progress reads an archived project with no manual budget, must it create and audit an empty manual version, or must the read leave the archived project unchanged?",
+   "options": [
+    "Create the empty manual version and audit despite archival",
+    "Return the progress list without creating a budget",
+    "Reject the read because its ordering dependency is absent"
+   ],
+   "default_guess": "Return the recorded progress without creating a manual budget.",
+   "witness": {
+    "initial": "Registry reports project P archived; operator O retains an active assignment to P; P has recorded section progress but no manual BudgetVersion.",
+    "events": [
+     "O requests the staff progress list for P.",
+     "The read guard authorizes archived reads.",
+     "list_project_progress needs the manual-plan order and calls ensure_manual_budget."
+    ],
+    "outcomes": [
+     "Following State 5's exception, the read creates an inactive manual BudgetVersion and a budget.manual_version_create audit, then returns the list.",
+     "Following State 0 R0-24 and invariant 5, the read creates nothing because archived budget records are immutable; it returns the list using a non-mutating order or refuses if that order cannot be produced."
+    ],
+    "observer": "O sees success or refusal, and an administrator or audit reader sees whether the budget and audit records appeared."
+   },
+   "unit": "50_public_apis.md:Conventions every operation follows"
+  },
+  {
+   "subject": "Audit timestamp construction",
+   "kind": "contradictory inputs",
+   "text": "append_audit accepts only “The caller's AuditRepository port and one AuditIntent,” while AuditIntent has no occurred_at; append_audit “supplies audit_id and occurred_at.” A28 requires each operation to read the clock once and use that same instant for every portal-owned timestamp it writes.",
+   "question": "How does append_audit obtain the owning operation's already-captured instant so that the business records and AuditRecord have the same timestamp?",
+   "options": [
+    "Add the owning operation's captured instant to the append_audit input",
+    "Let append_audit read the clock independently",
+    "Carry the captured instant implicitly through the repository or transaction context"
+   ],
+   "default_guess": "Pass the owning operation's captured instant explicitly to append_audit.",
+   "witness": {
+    "initial": "Staff account S is active and has two live sessions.",
+    "events": [
+     "An administrator suspends S.",
+     "change_staff_status captures time T, updates S and revokes both sessions at T.",
+     "The operation calls append_audit with the repository and an AuditIntent that contains no time."
+    ],
+    "outcomes": [
+     "append_audit reads the clock itself at T2, so the staff.suspend audit occurred_at differs from the account and session timestamps, violating A28.",
+     "The caller somehow supplies or exposes T, so all written timestamps equal T, but that requires an input or implicit channel absent from the public contract."
+    ],
+    "observer": "A test or audit reader comparing the account, session and audit timestamps sees the difference."
+   },
+   "unit": "50_public_apis.md:`public_op:audit_writer.append_audit`"
+  },
+  {
+   "subject": "Zero-total expense correction allocations",
+   "kind": "impossible contract",
+   "text": "correct_expense says, “The allocation list must hold at least one instruction, also for a zero total: a correction to zero carries allocations that sum to zero,” while Model M26 requires every AllocationInstruction amount to be “Decimal (> 0).”",
+   "question": "What allocation representation is valid when correcting an expense total to zero?",
+   "options": [
+    "Permit an empty allocation list only for a zero total",
+    "Permit a zero-valued allocation instruction",
+    "Forbid correcting an expense total to zero"
+   ],
+   "default_guess": "Permit an empty allocation list when and only when the corrected total is zero.",
+   "witness": {
+    "initial": "Expense E has total EUR 10.00 and one EUR 10.00 allocation.",
+    "events": [
+     "An authorized operator corrects E's total to EUR 0.00 and submits allocations intended to preserve the sum invariant."
+    ],
+    "outcomes": [
+     "Enforcing M26 and the non-empty-list rule, no possible allocation list sums to zero, so every zero-total correction is refused.",
+     "Treating the zero-total sentence as authoritative, the implementation accepts either an empty list or a zero-valued instruction, violating one of the stated allocation constraints."
+    ],
+    "observer": "The operator sees whether the zero-total correction can succeed and which request shape is accepted."
+   },
+   "unit": "50_public_apis.md:`public_op:expense_management.correct_expense`"
+  },
+  {
+   "subject": "Service credential expiry timestamp",
+   "kind": "contradiction",
+   "text": "issue_service_credential says, “Any expiry is accepted and stored as given,” while A28 requires persisted timestamps to be UTC and offset-naive and forbids an offset-aware persisted timestamp.",
+   "question": "Must a supplied expires_at be normalized and validated as UTC offset-naive, or stored literally even when it has an offset or is not UTC?",
+   "options": [
+    "Normalize an offset-aware instant to UTC offset-naive before storing",
+    "Reject any expires_at that is not already UTC offset-naive",
+    "Store every supplied datetime literally as State 5 says"
+   ],
+   "default_guess": "Normalize a timezone-aware value to the equivalent UTC offset-naive instant and reject a datetime whose instant cannot be determined.",
+   "witness": {
+    "initial": "Active service principal P has no credentials.",
+    "events": [
+     "An administrator issues a credential with expires_at 2026-11-07T12:00:00+02:00.",
+     "The producer presents the credential at 2026-11-07T09:30:00Z."
+    ],
+    "outcomes": [
+     "Storing the supplied value literally leaves an offset-aware persisted timestamp and may make comparison with A28's offset-naive clock fail or be implemented inconsistently.",
+     "Normalizing under A28 stores 2026-11-07T10:00:00 as UTC offset-naive and the credential authenticates until that instant."
+    ],
+    "observer": "The producer sees successful authentication or an authentication/internal failure; persistence inspection also reveals the stored form."
+   },
+   "unit": "50_public_apis.md:`public_op:service_identity.issue_service_credential`"
+  },
+  {
+   "subject": "Binding api_irregular viewer endpoints into the application",
+   "kind": "module contradiction",
+   "text": "create_app must bind “the seven viewer-cookie routes by api_irregular,” but State 3 says api's Knows list does not include api_irregular and that each Knows section names exactly the modules it imports. runtime also knows api but not api_irregular.",
+   "question": "Which module is allowed and required to import or otherwise receive the api_irregular endpoint operations so the seven viewer routes can be registered?",
+   "options": [
+    "api imports api_irregular despite its State 3 Knows list",
+    "runtime imports api_irregular and registers the routes separately",
+    "api_irregular returns a router or registration object passed into api.create_app"
+   ],
+   "default_guess": "Add api_irregular to api's declared dependencies and let create_app register its routes.",
+   "witness": {
+    "initial": "The service is constructed with a valid PortalStore and settings.",
+    "events": [
+     "runtime calls api.create_app(store).",
+     "A viewer sends POST /auth/viewer/enter."
+    ],
+    "outcomes": [
+     "Following create_app's State 5 contract, api imports and registers api_irregular, so the request reaches viewer_enter_endpoint, but api violates its closed State 3 dependency list.",
+     "Following the State 3 dependency list, neither api nor runtime may know api_irregular, so the endpoint cannot be registered and the request is not routed."
+    ],
+    "observer": "The viewer sees the session-entry response or a missing-route response; dependency checks also see the forbidden import."
+   },
+   "unit": "50_public_apis.md:`public_op:api.create_app`"
+  },
+  {
+   "subject": "Public API mount paths",
+   "kind": "contradiction",
+   "text": "create_runtime_app requires “the inner application mounted at /api and then at /,” while A25 says “The public API lives under /api, stripped by the deployment proxy.”",
+   "question": "After the proxy strips the one public /api prefix, should the service expose the inner routes only at root, or at both root and /api?",
+   "options": [
+    "Mount only at root because the proxy has stripped /api",
+    "Mount at both root and /api, exposing a second effective public prefix",
+    "Mount only at /api and configure the proxy not to strip the prefix"
+   ],
+   "default_guess": "Mount the inner application only at root behind a proxy that strips the sole public /api prefix.",
+   "witness": {
+    "initial": "The deployment proxy forwards trusted-host requests and strips the first /api path prefix.",
+    "events": [
+     "A client requests the normal public route /api/auth/staff/login.",
+     "Another client requests /api/api/auth/staff/login."
+    ],
+    "outcomes": [
+     "With the State 5 dual mount, both requests can reach the same inner login route after proxy stripping.",
+     "With A25's single public /api namespace implemented as a root mount behind the stripping proxy, the normal request reaches login and the doubled-prefix request is not routed."
+    ],
+    "observer": "An HTTP client sees whether the doubled-prefix route is an additional live API surface."
+   },
+   "unit": "50_public_apis.md:`public_op:runtime.create_runtime_app`"
+  },
+  {
+   "subject": "CLI result on configuration or storage failure",
+   "kind": "output contradiction",
+   "text": "run_bootstrap_cli says a configuration or storage failure “raises it and returns no exit code, and the failure status the host process then ends with is outside the closed contract of A29,” while A29 says exit codes are a “closed external contract” and lists only 0, 1, 2 and 3.",
+   "question": "What process exit behavior is part of the contract when bootstrap cannot load configuration or access storage?",
+   "options": [
+    "Add explicit closed exit codes for configuration and storage failures",
+    "Map those failures onto one of 1, 2 or 3",
+    "Allow an implementation-dependent uncaught-exception exit status outside the supposedly closed contract"
+   ],
+   "default_guess": "Add distinct documented nonzero exit codes for configuration and storage failures.",
+   "witness": {
+    "initial": "No staff account exists, but the configured SQLite database cannot be opened.",
+    "events": [
+     "The host operator runs the bootstrap command and supplies matching valid credentials.",
+     "run_bootstrap_cli loads settings and attempts to construct or use the bootstrap store."
+    ],
+    "outcomes": [
+     "Following State 5, the storage exception escapes and the process exits with a runtime-dependent status outside 0–3.",
+     "Following A29's closed external contract, the command must return one of the declared codes, although none of their declared meanings covers a storage failure."
+    ],
+    "observer": "The host operator and deployment script observe and branch on the process exit status."
+   },
+   "unit": "50_public_apis.md:`public_op:staff_bootstrap_cli.run_bootstrap_cli`"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"Archived-project read that creates a manual budget\",\"kind\":\"contradiction\",\"text\":\"State 5 says, “The one write that is not refused for an archived project is the empty manual budget version (with its audit) that ensure_manual_budget creates, also when list_project_progress reads a project that has none.” State 0 R0-24 instead says an archived project “refuses every mutation of its budget” and invariant 5 says its budget records are “readable and immutable.”\",\"question\":\"When list_project_progress reads an archived project with no manual budget, must it create and audit an empty manual version, or must the read leave the archived project unchanged?\",\"options\":[\"Create the empty manual version and audit despite archival\",\"Return the progress list without creating a budget\",\"Reject the read because its ordering dependency is absent\"],\"default_guess\":\"Return the recorded progress without creating a manual budget.\",\"witness\":{\"initial\":\"Registry reports project P archived; operator O retains an active assignment to P; P has recorded section progress but no manual BudgetVersion.\",\"events\":[\"O requests the staff progress list for P.\",\"The read guard authorizes archived reads.\",\"list_project_progress needs the manual-plan order and calls ensure_manual_budget.\"],\"outcomes\":[\"Following State 5's exception, the read creates an inactive manual BudgetVersion and a budget.manual_version_create audit, then returns the list.\",\"Following State 0 R0-24 and invariant 5, the read creates nothing because archived budget records are immutable; it returns the list using a non-mutating order or refuses if that order cannot be produced.\"],\"observer\":\"O sees success or refusal, and an administrator or audit reader sees whether the budget and audit records appeared.\"},\"unit\":\"50_public_apis.md:Conventions every operation follows\"},{\"subject\":\"Audit timestamp construction\",\"kind\":\"contradictory inputs\",\"text\":\"append_audit accepts only “The caller's AuditRepository port and one AuditIntent,” while AuditIntent has no occurred_at; append_audit “supplies audit_id and occurred_at.” A28 requires each operation to read the clock once and use that same instant for every portal-owned timestamp it writes.\",\"question\":\"How does append_audit obtain the owning operation's already-captured instant so that the business records and AuditRecord have the same timestamp?\",\"options\":[\"Add the owning operation's captured instant to the append_audit input\",\"Let append_audit read the clock independently\",\"Carry the captured instant implicitly through the repository or transaction context\"],\"default_guess\":\"Pass the owning operation's captured instant explicitly to append_audit.\",\"witness\":{\"initial\":\"Staff account S is active and has two live sessions.\",\"events\":[\"An administrator suspends S.\",\"change_staff_status captures time T, updates S and revokes both sessions at T.\",\"The operation calls append_audit with the repository and an AuditIntent that contains no time.\"],\"outcomes\":[\"append_audit reads the clock itself at T2, so the staff.suspend audit occurred_at differs from the account and session timestamps, violating A28.\",\"The caller somehow supplies or exposes T, so all written timestamps equal T, but that requires an input or implicit channel absent from the public contract.\"],\"observer\":\"A test or audit reader comparing the account, session and audit timestamps sees the difference.\"},\"unit\":\"50_public_apis.md:`public_op:audit_writer.append_audit`\"},{\"subject\":\"Zero-total expense correction allocations\",\"kind\":\"impossible contract\",\"text\":\"correct_expense says, “The allocation list must hold at least one instruction, also for a zero total: a correction to zero carries allocations that sum to zero,” while Model M26 requires every AllocationInstruction amount to be “Decimal (> 0).”\",\"question\":\"What allocation representation is valid when correcting an expense total to zero?\",\"options\":[\"Permit an empty allocation list only for a zero total\",\"Permit a zero-valued allocation instruction\",\"Forbid correcting an expense total to zero\"],\"default_guess\":\"Permit an empty allocation list when and only when the corrected total is zero.\",\"witness\":{\"initial\":\"Expense E has total EUR 10.00 and one EUR 10.00 allocation.\",\"events\":[\"An authorized operator corrects E's total to EUR 0.00 and submits allocations intended to preserve the sum invariant.\"],\"outcomes\":[\"Enforcing M26 and the non-empty-list rule, no possible allocation list sums to zero, so every zero-total correction is refused.\",\"Treating the zero-total sentence as authoritative, the implementation accepts either an empty list or a zero-valued instruction, violating one of the stated allocation constraints.\"],\"observer\":\"The operator sees whether the zero-total correction can succeed and which request shape is accepted.\"},\"unit\":\"50_public_apis.md:`public_op:expense_management.correct_expense`\"},{\"subject\":\"Service credential expiry timestamp\",\"kind\":\"contradiction\",\"text\":\"issue_service_credential says, “Any expiry is accepted and stored as given,” while A28 requires persisted timestamps to be UTC and offset-naive and forbids an offset-aware persisted timestamp.\",\"question\":\"Must a supplied expires_at be normalized and validated as UTC offset-naive, or stored literally even when it has an offset or is not UTC?\",\"options\":[\"Normalize an offset-aware instant to UTC offset-naive before storing\",\"Reject any expires_at that is not already UTC offset-naive\",\"Store every supplied datetime literally as State 5 says\"],\"default_guess\":\"Normalize a timezone-aware value to the equivalent UTC offset-naive instant and reject a datetime whose instant cannot be determined.\",\"witness\":{\"initial\":\"Active service principal P has no credentials.\",\"events\":[\"An administrator issues a credential with expires_at 2026-11-07T12:00:00+02:00.\",\"The producer presents the credential at 2026-11-07T09:30:00Z.\"],\"outcomes\":[\"Storing the supplied value literally leaves an offset-aware persisted timestamp and may make comparison with A28's offset-naive clock fail or be implemented inconsistently.\",\"Normalizing under A28 stores 2026-11-07T10:00:00 as UTC offset-naive and the credential authenticates until that instant.\"],\"observer\":\"The producer sees successful authentication or an authentication/internal failure; persistence inspection also reveals the stored form.\"},\"unit\":\"50_public_apis.md:`public_op:service_identity.issue_service_credential`\"},{\"subject\":\"Binding api_irregular viewer endpoints into the application\",\"kind\":\"module contradiction\",\"text\":\"create_app must bind “the seven viewer-cookie routes by api_irregular,” but State 3 says api's Knows list does not include api_irregular and that each Knows section names exactly the modules it imports. runtime also knows api but not api_irregular.\",\"question\":\"Which module is allowed and required to import or otherwise receive the api_irregular endpoint operations so the seven viewer routes can be registered?\",\"options\":[\"api imports api_irregular despite its State 3 Knows list\",\"runtime imports api_irregular and registers the routes separately\",\"api_irregular returns a router or registration object passed into api.create_app\"],\"default_guess\":\"Add api_irregular to api's declared dependencies and let create_app register its routes.\",\"witness\":{\"initial\":\"The service is constructed with a valid PortalStore and settings.\",\"events\":[\"runtime calls api.create_app(store).\",\"A viewer sends POST /auth/viewer/enter.\"],\"outcomes\":[\"Following create_app's State 5 contract, api imports and registers api_irregular, so the request reaches viewer_enter_endpoint, but api violates its closed State 3 dependency list.\",\"Following the State 3 dependency list, neither api nor runtime may know api_irregular, so the endpoint cannot be registered and the request is not routed.\"],\"observer\":\"The viewer sees the session-entry response or a missing-route response; dependency checks also see the forbidden import.\"},\"unit\":\"50_public_apis.md:`public_op:api.create_app`\"},{\"subject\":\"Public API mount paths\",\"kind\":\"contradiction\",\"text\":\"create_runtime_app requires “the inner application mounted at /api and then at /,” while A25 says “The public API lives under /api, stripped by the deployment proxy.”\",\"question\":\"After the proxy strips the one public /api prefix, should the service expose the inner routes only at root, or at both root and /api?\",\"options\":[\"Mount only at root because the proxy has stripped /api\",\"Mount at both root and /api, exposing a second effective public prefix\",\"Mount only at /api and configure the proxy not to strip the prefix\"],\"default_guess\":\"Mount the inner application only at root behind a proxy that strips the sole public /api prefix.\",\"witness\":{\"initial\":\"The deployment proxy forwards trusted-host requests and strips the first /api path prefix.\",\"events\":[\"A client requests the normal public route /api/auth/staff/login.\",\"Another client requests /api/api/auth/staff/login.\"],\"outcomes\":[\"With the State 5 dual mount, both requests can reach the same inner login route after proxy stripping.\",\"With A25's single public /api namespace implemented as a root mount behind the stripping proxy, the normal request reaches login and the doubled-prefix request is not routed.\"],\"observer\":\"An HTTP client sees whether the doubled-prefix route is an additional live API surface.\"},\"unit\":\"50_public_apis.md:`public_op:runtime.create_runtime_app`\"},{\"subject\":\"CLI result on configuration or storage failure\",\"kind\":\"output contradiction\",\"text\":\"run_bootstrap_cli says a configuration or storage failure “raises it and returns no exit code, and the failure status the host process then ends with is outside the closed contract of A29,” while A29 says exit codes are a “closed external contract” and lists only 0, 1, 2 and 3.\",\"question\":\"What process exit behavior is part of the contract when bootstrap cannot load configuration or access storage?\",\"options\":[\"Add explicit closed exit codes for configuration and storage failures\",\"Map those failures onto one of 1, 2 or 3\",\"Allow an implementation-dependent uncaught-exception exit status outside the supposedly closed contract\"],\"default_guess\":\"Add distinct documented nonzero exit codes for configuration and storage failures.\",\"witness\":{\"initial\":\"No staff account exists, but the configured SQLite database cannot be opened.\",\"events\":[\"The host operator runs the bootstrap command and supplies matching valid credentials.\",\"run_bootstrap_cli loads settings and attempts to construct or use the bootstrap store.\"],\"outcomes\":[\"Following State 5, the storage exception escapes and the process exits with a runtime-dependent status outside 0–3.\",\"Following A29's closed external contract, the command must return one of the declared codes, although none of their declared meanings covers a storage failure.\"],\"observer\":\"The host operator and deployment script observe and branch on the process exit status.\"},\"unit\":\"50_public_apis.md:`public_op:staff_bootstrap_cli.run_bootstrap_cli`\"}]}",
+ "set_aside": []
+}

@@ -1,0 +1,171 @@
+{
+ "open_points": [
+  {
+   "unit": "50_public_apis.md:`public_op:audit_writer.append_audit`",
+   "subject": "audit timestamp source",
+   "kind": "contradiction",
+   "text": "“audit_writer supplies audit_id and occurred_at; callers cannot supply either” conflicts with A28: “Each operation reads the clock once … and that one instant supplies every portal-owned timestamp it writes.”",
+   "question": "How does append_audit use the owning operation’s single captured instant when that instant is not an input and append_audit supplies occurred_at itself?",
+   "options": [
+    "append_audit reads the clock independently",
+    "the caller passes its captured instant through an added input or repository context",
+    "audit timestamps may differ from the business records written by the owning operation"
+   ],
+   "default_guess": "Add the owning operation’s captured instant to the audit-writing contract.",
+   "witness": {
+    "initial": "An expense exists and an operator starts an inclusion change immediately before a clock tick.",
+    "events": [
+     "expense_management captures time T and writes Expense.updated_at=T",
+     "expense_management calls audit_writer.append_audit",
+     "the clock advances before append_audit constructs the AuditRecord"
+    ],
+    "outcomes": [
+     "AuditRecord.occurred_at is T, satisfying the one-clock rule",
+     "AuditRecord.occurred_at is T+Δ because append_audit reads its own clock"
+    ],
+    "observer": "An administrator or test reading the expense and its audit record"
+   }
+  },
+  {
+   "unit": "50_public_apis.md:`public_op:staff_bootstrap.bootstrap_first_administrator`",
+   "subject": "bootstrap use of staff identity input policy",
+   "kind": "module-boundary contradiction",
+   "text": "The operation must apply “the A16 input rules through the staff identity input boundary,” but State 5 exposes no staff_identity operation for email normalization or new-password validation and says everything other than public operations is hidden.",
+   "question": "Which callable public operation lets staff_bootstrap apply the staff_identity-owned normalization and password policy?",
+   "options": [
+    "Expose a staff_identity validation/normalization operation",
+    "Let staff_bootstrap call a hidden staff_identity function",
+    "Duplicate the A16 rules inside staff_bootstrap"
+   ],
+   "default_guess": "Expose a narrow staff-identity input-validation operation."
+  },
+  {
+   "unit": "50_public_apis.md:`public_op:service_identity.issue_service_credential`",
+   "subject": "service credential expiry representation",
+   "kind": "contradiction",
+   "text": "“Any expiry is accepted and stored as given” conflicts with A28: “Persisted timestamps are UTC, stored as offset-naive datetimes.”",
+   "question": "When expires_at is supplied with an offset, is it preserved as supplied or converted to offset-naive UTC before persistence and return?",
+   "options": [
+    "Preserve the offset-aware value exactly as supplied",
+    "Convert the instant to UTC and remove its offset",
+    "Reject offset-aware expiry values"
+   ],
+   "default_guess": "Convert to offset-naive UTC before persistence and return.",
+   "witness": {
+    "initial": "An active service principal exists and the administrator has access-management authority.",
+    "events": [
+     "The administrator issues a credential with expires_at 2027-01-01T12:00:00+02:00"
+    ],
+    "outcomes": [
+     "The stored and returned expiry is 2027-01-01T12:00:00+02:00 because it is stored as given",
+     "The stored and returned expiry is 2027-01-01T10:00:00 with no offset because persisted timestamps are offset-naive UTC"
+    ],
+    "observer": "The administrator receiving ServiceCredentialIssue and any repository reader"
+   }
+  },
+  {
+   "unit": "50_public_apis.md:`public_op:budget_management.ensure_manual_budget`",
+   "subject": "manual-budget creation on archived projects",
+   "kind": "contradiction",
+   "text": "State 5 says: “The one write that is not refused for an archived project is the empty manual budget version … that ensure_manual_budget creates.” State 0 R0-24 says an archived project “refuses every mutation of its budget,” and State 4 says “every mutation of its records … is refused.”",
+   "question": "May ensure_manual_budget create a BudgetVersion and audit record while the Registry project is archived?",
+   "options": [
+    "Create the empty manual version and audit during the read",
+    "Leave the archived project unchanged and return no manual version",
+    "Refuse the read because satisfying it would require a mutation"
+   ],
+   "default_guess": "Do not mutate an archived project; return the recorded progress without creating a manual version.",
+   "witness": {
+    "initial": "A Registry project is archived, an operator retains its assignment, progress records exist, and no manual BudgetVersion exists.",
+    "events": [
+     "The operator performs the allowed archived-project progress read",
+     "list_project_progress calls ensure_manual_budget to establish ordering"
+    ],
+    "outcomes": [
+     "An inactive manual BudgetVersion and budget.manual_version_create audit are committed",
+     "No budget or audit record is written because archival freezes budget records"
+    ],
+    "observer": "The operator on later budget reads and an administrator reading audit history"
+   }
+  },
+  {
+   "unit": "50_public_apis.md:`public_op:api.create_app`",
+   "subject": "registration of irregular viewer routes",
+   "kind": "dependency contradiction",
+   "text": "create_app must bind “the seven viewer-cookie routes by api_irregular,” but State 3 says a module may know exactly the modules in its Knows section, and api’s Knows section does not include api_irregular.",
+   "question": "Which module imports and registers the seven api_irregular endpoint operations on the application?",
+   "options": [
+    "api imports api_irregular and registers them",
+    "runtime registers api_irregular routes separately",
+    "api_irregular installs its routes through an unlisted registration mechanism"
+   ],
+   "default_guess": "Add api_irregular to api’s declared dependencies and register its routes in create_app.",
+   "witness": {
+    "initial": "The service has started successfully and a valid viewer access credential exists.",
+    "events": [
+     "A browser sends POST /auth/viewer/enter"
+    ],
+    "outcomes": [
+     "create_app registered api_irregular.viewer_enter_endpoint and the request reaches viewer authentication",
+     "api obeys its declared dependency list, cannot register api_irregular, and the route answers 404"
+    ],
+    "observer": "The viewer’s browser"
+   }
+  },
+  {
+   "unit": "50_public_apis.md:`public_op:runtime.create_runtime_app`",
+   "subject": "runtime-setting delivery to identity operations",
+   "kind": "missing dependency",
+   "text": "runtime receives RuntimeSettings but constructs “one PortalStore from settings.database_url” and calls api.create_app with only that store, while authenticate_staff must use config.staff_session_ttl_hours and other identity operations require deployment-overridable settings. State 3 says modules read settings they are handed, never the environment.",
+   "question": "How do authenticate_staff and the other use cases receive the validated deployment settings when neither their operations nor api.create_app accept RuntimeSettings and PortalStore owns persistence only?",
+   "options": [
+    "api.create_app and affected operations receive RuntimeSettings explicitly",
+    "runtime stores settings in application state for handlers to pass to use cases",
+    "use cases read process environment or module globals",
+    "PortalStore carries non-persistence runtime settings"
+   ],
+   "default_guess": "Pass RuntimeSettings explicitly through application composition to affected operations.",
+   "witness": {
+    "initial": "The deployment configures a one-hour staff-session TTL instead of the twelve-hour default.",
+    "events": [
+     "runtime_settings loads and returns the one-hour value",
+     "runtime creates PortalStore and calls api.create_app with only the store",
+     "A staff member logs in"
+    ],
+    "outcomes": [
+     "The issued session expires after one hour because the configured setting reaches authenticate_staff",
+     "The issued session expires after twelve hours because authenticate_staff has only the documented default available"
+    ],
+    "observer": "The staff member and subsequent session authorization checks"
+   }
+  },
+  {
+   "unit": "50_public_apis.md:`public_op:staff_bootstrap_cli.run_bootstrap_cli`",
+   "subject": "CLI outcome on configuration or storage failure",
+   "kind": "contradiction",
+   "text": "R0-07 and A29 call the exit codes a “closed external contract,” limited to 0, 1, 2 and 3, but State 5 says a configuration or storage failure “raises it and returns no exit code” and the host’s resulting status is outside that closed contract.",
+   "question": "What process outcome is required when configuration loading or bootstrap storage fails?",
+   "options": [
+    "Map the failure to one of the four declared exit codes",
+    "Add a declared exit code for operational failure",
+    "Raise and allow an unspecified host-process exit status"
+   ],
+   "default_guess": "Add a distinct declared operational-failure exit code.",
+   "witness": {
+    "initial": "The operator supplies matching, policy-valid credentials, but the configured SQLite database cannot be opened.",
+    "events": [
+     "run_bootstrap_cli loads configuration and constructs the bootstrap store",
+     "The store fails before creating an account"
+    ],
+    "outcomes": [
+     "The command terminates with one of the closed 0–3 exit codes",
+     "The operation raises and the host chooses an exit status outside the closed contract"
+    ],
+    "observer": "A deployment script branching on the command’s exit status"
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"50_public_apis.md:`public_op:audit_writer.append_audit`\",\"subject\":\"audit timestamp source\",\"kind\":\"contradiction\",\"text\":\"“audit_writer supplies audit_id and occurred_at; callers cannot supply either” conflicts with A28: “Each operation reads the clock once … and that one instant supplies every portal-owned timestamp it writes.”\",\"question\":\"How does append_audit use the owning operation’s single captured instant when that instant is not an input and append_audit supplies occurred_at itself?\",\"options\":[\"append_audit reads the clock independently\",\"the caller passes its captured instant through an added input or repository context\",\"audit timestamps may differ from the business records written by the owning operation\"],\"default_guess\":\"Add the owning operation’s captured instant to the audit-writing contract.\",\"witness\":{\"initial\":\"An expense exists and an operator starts an inclusion change immediately before a clock tick.\",\"events\":[\"expense_management captures time T and writes Expense.updated_at=T\",\"expense_management calls audit_writer.append_audit\",\"the clock advances before append_audit constructs the AuditRecord\"],\"outcomes\":[\"AuditRecord.occurred_at is T, satisfying the one-clock rule\",\"AuditRecord.occurred_at is T+Δ because append_audit reads its own clock\"],\"observer\":\"An administrator or test reading the expense and its audit record\"}},{\"unit\":\"50_public_apis.md:`public_op:staff_bootstrap.bootstrap_first_administrator`\",\"subject\":\"bootstrap use of staff identity input policy\",\"kind\":\"module-boundary contradiction\",\"text\":\"The operation must apply “the A16 input rules through the staff identity input boundary,” but State 5 exposes no staff_identity operation for email normalization or new-password validation and says everything other than public operations is hidden.\",\"question\":\"Which callable public operation lets staff_bootstrap apply the staff_identity-owned normalization and password policy?\",\"options\":[\"Expose a staff_identity validation/normalization operation\",\"Let staff_bootstrap call a hidden staff_identity function\",\"Duplicate the A16 rules inside staff_bootstrap\"],\"default_guess\":\"Expose a narrow staff-identity input-validation operation.\"},{\"unit\":\"50_public_apis.md:`public_op:service_identity.issue_service_credential`\",\"subject\":\"service credential expiry representation\",\"kind\":\"contradiction\",\"text\":\"“Any expiry is accepted and stored as given” conflicts with A28: “Persisted timestamps are UTC, stored as offset-naive datetimes.”\",\"question\":\"When expires_at is supplied with an offset, is it preserved as supplied or converted to offset-naive UTC before persistence and return?\",\"options\":[\"Preserve the offset-aware value exactly as supplied\",\"Convert the instant to UTC and remove its offset\",\"Reject offset-aware expiry values\"],\"default_guess\":\"Convert to offset-naive UTC before persistence and return.\",\"witness\":{\"initial\":\"An active service principal exists and the administrator has access-management authority.\",\"events\":[\"The administrator issues a credential with expires_at 2027-01-01T12:00:00+02:00\"],\"outcomes\":[\"The stored and returned expiry is 2027-01-01T12:00:00+02:00 because it is stored as given\",\"The stored and returned expiry is 2027-01-01T10:00:00 with no offset because persisted timestamps are offset-naive UTC\"],\"observer\":\"The administrator receiving ServiceCredentialIssue and any repository reader\"}},{\"unit\":\"50_public_apis.md:`public_op:budget_management.ensure_manual_budget`\",\"subject\":\"manual-budget creation on archived projects\",\"kind\":\"contradiction\",\"text\":\"State 5 says: “The one write that is not refused for an archived project is the empty manual budget version … that ensure_manual_budget creates.” State 0 R0-24 says an archived project “refuses every mutation of its budget,” and State 4 says “every mutation of its records … is refused.”\",\"question\":\"May ensure_manual_budget create a BudgetVersion and audit record while the Registry project is archived?\",\"options\":[\"Create the empty manual version and audit during the read\",\"Leave the archived project unchanged and return no manual version\",\"Refuse the read because satisfying it would require a mutation\"],\"default_guess\":\"Do not mutate an archived project; return the recorded progress without creating a manual version.\",\"witness\":{\"initial\":\"A Registry project is archived, an operator retains its assignment, progress records exist, and no manual BudgetVersion exists.\",\"events\":[\"The operator performs the allowed archived-project progress read\",\"list_project_progress calls ensure_manual_budget to establish ordering\"],\"outcomes\":[\"An inactive manual BudgetVersion and budget.manual_version_create audit are committed\",\"No budget or audit record is written because archival freezes budget records\"],\"observer\":\"The operator on later budget reads and an administrator reading audit history\"}},{\"unit\":\"50_public_apis.md:`public_op:api.create_app`\",\"subject\":\"registration of irregular viewer routes\",\"kind\":\"dependency contradiction\",\"text\":\"create_app must bind “the seven viewer-cookie routes by api_irregular,” but State 3 says a module may know exactly the modules in its Knows section, and api’s Knows section does not include api_irregular.\",\"question\":\"Which module imports and registers the seven api_irregular endpoint operations on the application?\",\"options\":[\"api imports api_irregular and registers them\",\"runtime registers api_irregular routes separately\",\"api_irregular installs its routes through an unlisted registration mechanism\"],\"default_guess\":\"Add api_irregular to api’s declared dependencies and register its routes in create_app.\",\"witness\":{\"initial\":\"The service has started successfully and a valid viewer access credential exists.\",\"events\":[\"A browser sends POST /auth/viewer/enter\"],\"outcomes\":[\"create_app registered api_irregular.viewer_enter_endpoint and the request reaches viewer authentication\",\"api obeys its declared dependency list, cannot register api_irregular, and the route answers 404\"],\"observer\":\"The viewer’s browser\"}},{\"unit\":\"50_public_apis.md:`public_op:runtime.create_runtime_app`\",\"subject\":\"runtime-setting delivery to identity operations\",\"kind\":\"missing dependency\",\"text\":\"runtime receives RuntimeSettings but constructs “one PortalStore from settings.database_url” and calls api.create_app with only that store, while authenticate_staff must use config.staff_session_ttl_hours and other identity operations require deployment-overridable settings. State 3 says modules read settings they are handed, never the environment.\",\"question\":\"How do authenticate_staff and the other use cases receive the validated deployment settings when neither their operations nor api.create_app accept RuntimeSettings and PortalStore owns persistence only?\",\"options\":[\"api.create_app and affected operations receive RuntimeSettings explicitly\",\"runtime stores settings in application state for handlers to pass to use cases\",\"use cases read process environment or module globals\",\"PortalStore carries non-persistence runtime settings\"],\"default_guess\":\"Pass RuntimeSettings explicitly through application composition to affected operations.\",\"witness\":{\"initial\":\"The deployment configures a one-hour staff-session TTL instead of the twelve-hour default.\",\"events\":[\"runtime_settings loads and returns the one-hour value\",\"runtime creates PortalStore and calls api.create_app with only the store\",\"A staff member logs in\"],\"outcomes\":[\"The issued session expires after one hour because the configured setting reaches authenticate_staff\",\"The issued session expires after twelve hours because authenticate_staff has only the documented default available\"],\"observer\":\"The staff member and subsequent session authorization checks\"}},{\"unit\":\"50_public_apis.md:`public_op:staff_bootstrap_cli.run_bootstrap_cli`\",\"subject\":\"CLI outcome on configuration or storage failure\",\"kind\":\"contradiction\",\"text\":\"R0-07 and A29 call the exit codes a “closed external contract,” limited to 0, 1, 2 and 3, but State 5 says a configuration or storage failure “raises it and returns no exit code” and the host’s resulting status is outside that closed contract.\",\"question\":\"What process outcome is required when configuration loading or bootstrap storage fails?\",\"options\":[\"Map the failure to one of the four declared exit codes\",\"Add a declared exit code for operational failure\",\"Raise and allow an unspecified host-process exit status\"],\"default_guess\":\"Add a distinct declared operational-failure exit code.\",\"witness\":{\"initial\":\"The operator supplies matching, policy-valid credentials, but the configured SQLite database cannot be opened.\",\"events\":[\"run_bootstrap_cli loads configuration and constructs the bootstrap store\",\"The store fails before creating an account\"],\"outcomes\":[\"The command terminates with one of the closed 0–3 exit codes\",\"The operation raises and the host chooses an exit status outside the closed contract\"],\"observer\":\"A deployment script branching on the command’s exit status\"}}]}",
+ "set_aside": []
+}

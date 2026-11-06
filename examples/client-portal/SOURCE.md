@@ -308,7 +308,30 @@ by the operation; route guard checks the activation capability; per-call
 environment reads of `registry_gateway` and `binary_storage`; expense
 replay conflict 409; overview per-part availability) and kept the trimming
 rule: race and failure details of the import stay in the State 4 flow, not
-in R0-25. State 5 round-01 (blocking 32) is open and not yet repaired.
+in R0-25. State 5 rounds 01–03 (blocking 32, 8, 6): the operation texts were
+repaired from the running code; State 5 stays open on topics where the
+running code contradicts a closed earlier state and only an owner decision
+can choose (code defect for the Factory, or an earlier-state change):
+
+- archived project: `project_tracking.list_project_progress` (a read) creates
+  the empty manual budget version and its audit through
+  `ensure_manual_budget`, also for an archived project
+  (`domain/project_tracking.py` 50–58, `domain/budget_management.py`
+  170–217), against R0-24 "refuses every mutation of its budget";
+- audit time: `audit_writer.append_audit` reads its own clock for
+  `occurred_at` (`application/audit_writer.py` 136), against A28 "each
+  operation reads the clock once";
+- malformed login email: `IdentityInputRejected` before any audit
+  (`application/staff_identity.py` 108), against `flow:staff_session_lifecycle`
+  "on every rejection it appends `staff.login_failed`";
+- `api` imports the seven viewer endpoints of `api_irregular`
+  (`api/router.py` 22), which the accepted `imports.module_internal` and
+  State 3 `api` Knows do not list;
+- viewer entry has no origin check (`runtime/transport_guard.py` 136–146),
+  against R0-09/A25 "mutating viewer requests … public origin";
+- the bootstrap command prints and returns the normalized email
+  (`cli/staff_bootstrap.py` 33, `application/staff_bootstrap.py` 88–96),
+  against A29 "never written to output … return values".
 
 History of the in-progress pass:
 

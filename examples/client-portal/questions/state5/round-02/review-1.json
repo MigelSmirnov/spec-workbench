@@ -1,0 +1,235 @@
+{
+ "open_points": [
+  {
+   "unit": "50_public_apis.md:Conventions every operation follows",
+   "subject": "manual-budget creation during a read of an archived project",
+   "kind": "contradiction",
+   "text": "“every mutation of its records … is refused” (R0-24) conflicts with “The one write that is not refused for an archived project is the empty manual budget version (with its audit) that ensure_manual_budget creates, also when list_project_progress reads a project that has none.”",
+   "question": "When list_project_progress reads an archived project with no manual budget, must it remain read-only or create and audit an empty manual budget?",
+   "options": [
+    "Return the progress list without creating a budget",
+    "Create and audit the empty manual budget despite archival",
+    "Reject the read because its implicit write is forbidden"
+   ],
+   "default_guess": "Keep the read read-only and create nothing on an archived project.",
+   "witness": {
+    "initial": "An archived Registry project has an existing staff assignment, no manual BudgetVersion and no SectionProgress rows.",
+    "events": [
+     "Assigned staff requests list_project_progress with a read-authorized context."
+    ],
+    "outcomes": [
+     "The operation returns an empty list and leaves the archived project's budget and audit records unchanged.",
+     "The operation creates an inactive manual BudgetVersion plus budget.manual_version_create audit, then returns an empty list."
+    ],
+    "observer": "The staff caller and an administrator inspecting budget history or audit records"
+   }
+  },
+  {
+   "unit": "50_public_apis.md:`public_op:authorization_guard.authorize_snapshot_import`",
+   "subject": "credential revocation between authentication and import authorization",
+   "kind": "contradiction",
+   "text": "“The credential itself is checked only by the authentication that produced the ServiceActorContext; this guard re-reads the principal and the grant, not the credential, so a credential revoked or expired after that authentication is not noticed here.” This conflicts with A11: “Immediate means the next authorization check observes the revocation” and the common rule requiring a valid bearer credential for every project operation.",
+   "question": "Must authorize_snapshot_import recheck the credential identified by the ServiceActorContext, including its revocation and expiry, or may it authorize using a context produced before revocation?",
+   "options": [
+    "Recheck the credential and reject after revocation or expiry",
+    "Trust the previously produced ServiceActorContext until the request finishes"
+   ],
+   "default_guess": "Recheck the credential so the next authorization check observes revocation.",
+   "witness": {
+    "initial": "An active producer has a valid credential and an active grant for an active project.",
+    "events": [
+     "The producer credential is authenticated and a ServiceActorContext is produced.",
+     "An administrator revokes that credential before authorize_snapshot_import runs.",
+     "The import authorization runs with the earlier context."
+    ],
+    "outcomes": [
+     "Authorization raises AuthenticationRejected and no import occurs.",
+     "Authorization succeeds because only the principal and grant are reread, allowing the import to continue."
+    ],
+    "observer": "The producer and the administrator expecting immediate revocation"
+   }
+  },
+  {
+   "unit": "50_public_apis.md:`public_op:expense_management.correct_expense`",
+   "subject": "correction of an expense total to zero",
+   "kind": "contradiction",
+   "text": "“A correction to zero carries allocations that sum to zero, and an empty list is refused.” But AllocationInstruction requires “amount: Decimal (> 0)”, so no non-empty valid allocation list can sum to zero.",
+   "question": "How can an expense be corrected to a zero total while allocations must be non-empty and every allocation amount must be strictly positive?",
+   "options": [
+    "Forbid correction to a zero total",
+    "Allow one or more zero-valued allocations for this operation",
+    "Allow an empty allocation set when the corrected total is zero"
+   ],
+   "default_guess": "Forbid correction to zero until the allocation model defines a valid zero-total representation.",
+   "witness": {
+    "initial": "An active project contains a €10 expense with one €10 allocation.",
+    "events": [
+     "Authorized staff corrects the expense total to €0 and supplies the complete replacement allocation set."
+    ],
+    "outcomes": [
+     "The correction is accepted using a zero allocation or an empty set, violating one of the stated allocation constraints.",
+     "The correction is rejected because no non-empty list of positive allocations can sum to zero."
+    ],
+    "observer": "The staff caller and readers of the corrected expense"
+   }
+  },
+  {
+   "unit": "50_public_apis.md:Conventions every operation follows",
+   "subject": "ordering of staff payment and photo lists",
+   "kind": "contradictory ordering",
+   "text": "“Every list in an output is in the order A15 or A27 names for it.” But list_project_payments says it orders by payment_date then payment_id and “does not use the recording time,” while A27 orders by payment_date, recording time, then id. list_progress_photos likewise omits A27's publication-time key.",
+   "question": "Do the operation-specific staff-list orderings override A27, or must all payment and photo lists use every A27 key?",
+   "options": [
+    "Use A27 for both staff lists and derived views",
+    "Use the shorter operation-specific order for staff lists and A27 only for derived views"
+   ],
+   "default_guess": "Use the operation-specific staff-list orders and reserve A27 for derived views.",
+   "witness": {
+    "initial": "One project has two payments with the same payment_date; the earlier-recorded payment has the larger payment_id.",
+    "events": [
+     "Authorized staff calls list_project_payments."
+    ],
+    "outcomes": [
+     "A27 places the later-recorded payment first.",
+     "The operation-specific order places the larger payment_id first, regardless of recorded_at."
+    ],
+    "observer": "The staff caller"
+   }
+  },
+  {
+   "unit": "50_public_apis.md:`public_op:transport_guard.install_transport_guards`",
+   "subject": "origin enforcement for viewer entry",
+   "kind": "contradiction",
+   "text": "“The origin check covers the one viewer mutation … the viewer logout. Viewer entry … is limited by the entry rate limit, not by origin, so an entry from another origin reaches the route.” This conflicts with R0-09/A25: “mutating viewer requests must come from the portal's own public origin.” Viewer entry writes a ViewerSession.",
+   "question": "Must a cross-origin viewer-entry POST be rejected by the origin check, or may it create a viewer session?",
+   "options": [
+    "Apply the canonical-origin check to viewer entry because it mutates session state",
+    "Apply the origin check only to cookie-authenticated logout and allow cross-origin entry"
+   ],
+   "default_guess": "Follow the operation-specific current-service text and apply the origin check only to logout.",
+   "witness": {
+    "initial": "A valid viewer access code exists and a browser page is loaded from a foreign origin.",
+    "events": [
+     "The foreign-origin page submits POST /auth/viewer/enter with the valid code."
+    ],
+    "outcomes": [
+     "The transport guard returns 403 before the credential is parsed and no session is created.",
+     "The request reaches viewer_access and creates a ViewerSession, subject only to rate limiting."
+    ],
+    "observer": "The browser user, the foreign-origin page and the session store"
+   }
+  },
+  {
+   "unit": "50_public_apis.md:`public_op:staff_bootstrap_cli.run_bootstrap_cli`",
+   "subject": "CLI outcome for configuration or storage failure",
+   "kind": "contradiction",
+   "text": "A29 says “Exit codes are a closed external contract: 0 … 1 … 2 … 3,” while this operation says “A configuration or storage failure is none of the four outcomes: the operation raises it and returns no exit code, and the failure status the host process then ends with is outside the closed contract.”",
+   "question": "What closed CLI outcome and exit code applies when configuration loading or bootstrap storage fails?",
+   "options": [
+    "Add specified exit codes for configuration and storage failures",
+    "Map those failures to one of the existing four codes",
+    "Allow an unspecified process failure outside the claimed closed contract"
+   ],
+   "default_guess": "Propagate the failure and let the host produce a generic nonzero status, matching the operation-specific text.",
+   "witness": {
+    "initial": "No staff account exists, but the configured database cannot be opened.",
+    "events": [
+     "The host operator enters matching valid bootstrap credentials.",
+     "run_bootstrap_cli loads settings and attempts to construct or use the bootstrap store."
+    ],
+    "outcomes": [
+     "The command must return one of the four closed exit codes, although no passage selects which one.",
+     "The operation raises and the process exits with an implementation-dependent status outside 0–3."
+    ],
+    "observer": "The host operator and deployment script branching on the exit code"
+   }
+  },
+  {
+   "unit": "50_public_apis.md:`public_op:service_identity.issue_service_credential`",
+   "subject": "normalization of credential expiry timestamps",
+   "kind": "contradiction",
+   "text": "“Any expiry is accepted and stored as given” conflicts with A28: “Persisted timestamps are UTC, stored as offset-naive datetimes.”",
+   "question": "If expires_at carries a non-UTC offset or an offset-aware datetime, is it preserved exactly or converted to an offset-naive UTC value before persistence and output?",
+   "options": [
+    "Preserve the supplied datetime representation exactly",
+    "Convert the instant to UTC and remove its offset before persistence",
+    "Reject offset-aware or non-UTC expiry inputs"
+   ],
+   "default_guess": "Convert to offset-naive UTC before persistence.",
+   "witness": {
+    "initial": "An active service principal exists.",
+    "events": [
+     "An administrator issues a credential with expires_at set to 2030-01-01T12:00:00+02:00."
+    ],
+    "outcomes": [
+     "The stored credential retains 12:00:00+02:00 exactly as supplied.",
+     "The stored credential contains the equivalent offset-naive UTC value 10:00:00."
+    ],
+    "observer": "The administrator reading the credential response and repository consumers"
+   }
+  },
+  {
+   "unit": "50_public_apis.md:`public_op:credential_security.verify_password`",
+   "subject": "viewer_access listed as a password-verification caller",
+   "kind": "caller contradiction",
+   "text": "The Callers list includes “module:viewer_access”, but viewer identities have no password and viewer entry is specified to call credential_security.verify_secret against a ViewerAccessCredential verification hash.",
+   "question": "Is viewer_access genuinely required to call verify_password, and if so for which operation and password hash, or is it only a caller of verify_secret?",
+   "options": [
+    "Remove viewer_access from verify_password callers",
+    "Define a viewer_access path that uses password verification"
+   ],
+   "default_guess": "Remove viewer_access from verify_password callers."
+  },
+  {
+   "unit": "50_public_apis.md:`public_op:photo_management.list_progress_photos`",
+   "subject": "ProgressPhotoView output shape",
+   "kind": "underspecified output",
+   "text": "“ProgressPhotoView list … for a viewer only client-visible photos; never file_ref or intake_id.” Neither this operation nor the earlier ProgressPhotoView addition fixes the fields that are present.",
+   "question": "Which exact photo fields does each ProgressPhotoView return, and is its shape identical for staff and viewers apart from row filtering?",
+   "options": [
+    "Return the PhotoView fields only",
+    "Also return staff metadata such as client_visible and updated_at",
+    "Define distinct staff and viewer projection shapes"
+   ],
+   "default_guess": "Use one safe shape containing photo_id, photo_date, section_id, caption, client_visible and updated_at, without file_ref or intake_id.",
+   "witness": {
+    "initial": "A visible progress photo has a caption, section, publication time, visibility flag and later update time.",
+    "events": [
+     "Authorized staff calls list_progress_photos."
+    ],
+    "outcomes": [
+     "The list contains only gallery fields such as id, date, section and caption.",
+     "The list additionally exposes management fields such as client_visible and updated_at."
+    ],
+    "observer": "The staff API caller"
+   }
+  },
+  {
+   "unit": "50_public_apis.md:`public_op:runtime.create_runtime_app`",
+   "subject": "HealthStatus response shape",
+   "kind": "underspecified output",
+   "text": "“liveness at /health/live and readiness at /health/ready, each answering exactly HealthStatus” and earlier text only call HealthStatus “the liveness and readiness answer”; no fields or JSON encoding are fixed.",
+   "question": "What exact status code and JSON body represent a successful HealthStatus response?",
+   "options": [
+    "A status field such as {\"status\":\"ok\"}",
+    "A boolean field such as {\"ok\":true}",
+    "A string or empty success body"
+   ],
+   "default_guess": "Return HTTP 200 with {\"status\":\"ok\"}.",
+   "witness": {
+    "initial": "The service is running and its database is available.",
+    "events": [
+     "A monitor requests /health/live and /health/ready."
+    ],
+    "outcomes": [
+     "Both endpoints return HTTP 200 with {\"status\":\"ok\"}.",
+     "Both endpoints return HTTP 200 with another valid interpretation such as {\"ok\":true}."
+    ],
+    "observer": "The deployment monitor parsing the health response"
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"50_public_apis.md:Conventions every operation follows\",\"subject\":\"manual-budget creation during a read of an archived project\",\"kind\":\"contradiction\",\"text\":\"“every mutation of its records … is refused” (R0-24) conflicts with “The one write that is not refused for an archived project is the empty manual budget version (with its audit) that ensure_manual_budget creates, also when list_project_progress reads a project that has none.”\",\"question\":\"When list_project_progress reads an archived project with no manual budget, must it remain read-only or create and audit an empty manual budget?\",\"options\":[\"Return the progress list without creating a budget\",\"Create and audit the empty manual budget despite archival\",\"Reject the read because its implicit write is forbidden\"],\"default_guess\":\"Keep the read read-only and create nothing on an archived project.\",\"witness\":{\"initial\":\"An archived Registry project has an existing staff assignment, no manual BudgetVersion and no SectionProgress rows.\",\"events\":[\"Assigned staff requests list_project_progress with a read-authorized context.\"],\"outcomes\":[\"The operation returns an empty list and leaves the archived project's budget and audit records unchanged.\",\"The operation creates an inactive manual BudgetVersion plus budget.manual_version_create audit, then returns an empty list.\"],\"observer\":\"The staff caller and an administrator inspecting budget history or audit records\"}},{\"unit\":\"50_public_apis.md:`public_op:authorization_guard.authorize_snapshot_import`\",\"subject\":\"credential revocation between authentication and import authorization\",\"kind\":\"contradiction\",\"text\":\"“The credential itself is checked only by the authentication that produced the ServiceActorContext; this guard re-reads the principal and the grant, not the credential, so a credential revoked or expired after that authentication is not noticed here.” This conflicts with A11: “Immediate means the next authorization check observes the revocation” and the common rule requiring a valid bearer credential for every project operation.\",\"question\":\"Must authorize_snapshot_import recheck the credential identified by the ServiceActorContext, including its revocation and expiry, or may it authorize using a context produced before revocation?\",\"options\":[\"Recheck the credential and reject after revocation or expiry\",\"Trust the previously produced ServiceActorContext until the request finishes\"],\"default_guess\":\"Recheck the credential so the next authorization check observes revocation.\",\"witness\":{\"initial\":\"An active producer has a valid credential and an active grant for an active project.\",\"events\":[\"The producer credential is authenticated and a ServiceActorContext is produced.\",\"An administrator revokes that credential before authorize_snapshot_import runs.\",\"The import authorization runs with the earlier context.\"],\"outcomes\":[\"Authorization raises AuthenticationRejected and no import occurs.\",\"Authorization succeeds because only the principal and grant are reread, allowing the import to continue.\"],\"observer\":\"The producer and the administrator expecting immediate revocation\"}},{\"unit\":\"50_public_apis.md:`public_op:expense_management.correct_expense`\",\"subject\":\"correction of an expense total to zero\",\"kind\":\"contradiction\",\"text\":\"“A correction to zero carries allocations that sum to zero, and an empty list is refused.” But AllocationInstruction requires “amount: Decimal (> 0)”, so no non-empty valid allocation list can sum to zero.\",\"question\":\"How can an expense be corrected to a zero total while allocations must be non-empty and every allocation amount must be strictly positive?\",\"options\":[\"Forbid correction to a zero total\",\"Allow one or more zero-valued allocations for this operation\",\"Allow an empty allocation set when the corrected total is zero\"],\"default_guess\":\"Forbid correction to zero until the allocation model defines a valid zero-total representation.\",\"witness\":{\"initial\":\"An active project contains a €10 expense with one €10 allocation.\",\"events\":[\"Authorized staff corrects the expense total to €0 and supplies the complete replacement allocation set.\"],\"outcomes\":[\"The correction is accepted using a zero allocation or an empty set, violating one of the stated allocation constraints.\",\"The correction is rejected because no non-empty list of positive allocations can sum to zero.\"],\"observer\":\"The staff caller and readers of the corrected expense\"}},{\"unit\":\"50_public_apis.md:Conventions every operation follows\",\"subject\":\"ordering of staff payment and photo lists\",\"kind\":\"contradictory ordering\",\"text\":\"“Every list in an output is in the order A15 or A27 names for it.” But list_project_payments says it orders by payment_date then payment_id and “does not use the recording time,” while A27 orders by payment_date, recording time, then id. list_progress_photos likewise omits A27's publication-time key.\",\"question\":\"Do the operation-specific staff-list orderings override A27, or must all payment and photo lists use every A27 key?\",\"options\":[\"Use A27 for both staff lists and derived views\",\"Use the shorter operation-specific order for staff lists and A27 only for derived views\"],\"default_guess\":\"Use the operation-specific staff-list orders and reserve A27 for derived views.\",\"witness\":{\"initial\":\"One project has two payments with the same payment_date; the earlier-recorded payment has the larger payment_id.\",\"events\":[\"Authorized staff calls list_project_payments.\"],\"outcomes\":[\"A27 places the later-recorded payment first.\",\"The operation-specific order places the larger payment_id first, regardless of recorded_at.\"],\"observer\":\"The staff caller\"}},{\"unit\":\"50_public_apis.md:`public_op:transport_guard.install_transport_guards`\",\"subject\":\"origin enforcement for viewer entry\",\"kind\":\"contradiction\",\"text\":\"“The origin check covers the one viewer mutation … the viewer logout. Viewer entry … is limited by the entry rate limit, not by origin, so an entry from another origin reaches the route.” This conflicts with R0-09/A25: “mutating viewer requests must come from the portal's own public origin.” Viewer entry writes a ViewerSession.\",\"question\":\"Must a cross-origin viewer-entry POST be rejected by the origin check, or may it create a viewer session?\",\"options\":[\"Apply the canonical-origin check to viewer entry because it mutates session state\",\"Apply the origin check only to cookie-authenticated logout and allow cross-origin entry\"],\"default_guess\":\"Follow the operation-specific current-service text and apply the origin check only to logout.\",\"witness\":{\"initial\":\"A valid viewer access code exists and a browser page is loaded from a foreign origin.\",\"events\":[\"The foreign-origin page submits POST /auth/viewer/enter with the valid code.\"],\"outcomes\":[\"The transport guard returns 403 before the credential is parsed and no session is created.\",\"The request reaches viewer_access and creates a ViewerSession, subject only to rate limiting.\"],\"observer\":\"The browser user, the foreign-origin page and the session store\"}},{\"unit\":\"50_public_apis.md:`public_op:staff_bootstrap_cli.run_bootstrap_cli`\",\"subject\":\"CLI outcome for configuration or storage failure\",\"kind\":\"contradiction\",\"text\":\"A29 says “Exit codes are a closed external contract: 0 … 1 … 2 … 3,” while this operation says “A configuration or storage failure is none of the four outcomes: the operation raises it and returns no exit code, and the failure status the host process then ends with is outside the closed contract.”\",\"question\":\"What closed CLI outcome and exit code applies when configuration loading or bootstrap storage fails?\",\"options\":[\"Add specified exit codes for configuration and storage failures\",\"Map those failures to one of the existing four codes\",\"Allow an unspecified process failure outside the claimed closed contract\"],\"default_guess\":\"Propagate the failure and let the host produce a generic nonzero status, matching the operation-specific text.\",\"witness\":{\"initial\":\"No staff account exists, but the configured database cannot be opened.\",\"events\":[\"The host operator enters matching valid bootstrap credentials.\",\"run_bootstrap_cli loads settings and attempts to construct or use the bootstrap store.\"],\"outcomes\":[\"The command must return one of the four closed exit codes, although no passage selects which one.\",\"The operation raises and the process exits with an implementation-dependent status outside 0–3.\"],\"observer\":\"The host operator and deployment script branching on the exit code\"}},{\"unit\":\"50_public_apis.md:`public_op:service_identity.issue_service_credential`\",\"subject\":\"normalization of credential expiry timestamps\",\"kind\":\"contradiction\",\"text\":\"“Any expiry is accepted and stored as given” conflicts with A28: “Persisted timestamps are UTC, stored as offset-naive datetimes.”\",\"question\":\"If expires_at carries a non-UTC offset or an offset-aware datetime, is it preserved exactly or converted to an offset-naive UTC value before persistence and output?\",\"options\":[\"Preserve the supplied datetime representation exactly\",\"Convert the instant to UTC and remove its offset before persistence\",\"Reject offset-aware or non-UTC expiry inputs\"],\"default_guess\":\"Convert to offset-naive UTC before persistence.\",\"witness\":{\"initial\":\"An active service principal exists.\",\"events\":[\"An administrator issues a credential with expires_at set to 2030-01-01T12:00:00+02:00.\"],\"outcomes\":[\"The stored credential retains 12:00:00+02:00 exactly as supplied.\",\"The stored credential contains the equivalent offset-naive UTC value 10:00:00.\"],\"observer\":\"The administrator reading the credential response and repository consumers\"}},{\"unit\":\"50_public_apis.md:`public_op:credential_security.verify_password`\",\"subject\":\"viewer_access listed as a password-verification caller\",\"kind\":\"caller contradiction\",\"text\":\"The Callers list includes “module:viewer_access”, but viewer identities have no password and viewer entry is specified to call credential_security.verify_secret against a ViewerAccessCredential verification hash.\",\"question\":\"Is viewer_access genuinely required to call verify_password, and if so for which operation and password hash, or is it only a caller of verify_secret?\",\"options\":[\"Remove viewer_access from verify_password callers\",\"Define a viewer_access path that uses password verification\"],\"default_guess\":\"Remove viewer_access from verify_password callers.\"},{\"unit\":\"50_public_apis.md:`public_op:photo_management.list_progress_photos`\",\"subject\":\"ProgressPhotoView output shape\",\"kind\":\"underspecified output\",\"text\":\"“ProgressPhotoView list … for a viewer only client-visible photos; never file_ref or intake_id.” Neither this operation nor the earlier ProgressPhotoView addition fixes the fields that are present.\",\"question\":\"Which exact photo fields does each ProgressPhotoView return, and is its shape identical for staff and viewers apart from row filtering?\",\"options\":[\"Return the PhotoView fields only\",\"Also return staff metadata such as client_visible and updated_at\",\"Define distinct staff and viewer projection shapes\"],\"default_guess\":\"Use one safe shape containing photo_id, photo_date, section_id, caption, client_visible and updated_at, without file_ref or intake_id.\",\"witness\":{\"initial\":\"A visible progress photo has a caption, section, publication time, visibility flag and later update time.\",\"events\":[\"Authorized staff calls list_progress_photos.\"],\"outcomes\":[\"The list contains only gallery fields such as id, date, section and caption.\",\"The list additionally exposes management fields such as client_visible and updated_at.\"],\"observer\":\"The staff API caller\"}},{\"unit\":\"50_public_apis.md:`public_op:runtime.create_runtime_app`\",\"subject\":\"HealthStatus response shape\",\"kind\":\"underspecified output\",\"text\":\"“liveness at /health/live and readiness at /health/ready, each answering exactly HealthStatus” and earlier text only call HealthStatus “the liveness and readiness answer”; no fields or JSON encoding are fixed.\",\"question\":\"What exact status code and JSON body represent a successful HealthStatus response?\",\"options\":[\"A status field such as {\\\"status\\\":\\\"ok\\\"}\",\"A boolean field such as {\\\"ok\\\":true}\",\"A string or empty success body\"],\"default_guess\":\"Return HTTP 200 with {\\\"status\\\":\\\"ok\\\"}.\",\"witness\":{\"initial\":\"The service is running and its database is available.\",\"events\":[\"A monitor requests /health/live and /health/ready.\"],\"outcomes\":[\"Both endpoints return HTTP 200 with {\\\"status\\\":\\\"ok\\\"}.\",\"Both endpoints return HTTP 200 with another valid interpretation such as {\\\"ok\\\":true}.\"],\"observer\":\"The deployment monitor parsing the health response\"}}]}",
+ "set_aside": []
+}
