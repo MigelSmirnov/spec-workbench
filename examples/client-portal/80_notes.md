@@ -802,7 +802,7 @@ revoke_viewer: [BEHAVIOR] MUST revoke the viewer together with its credential an
 issue_viewer_access: [ORCHESTRATION] MUST revoke every non-revoked prior credential, persist exactly one new verification_hash, revoke active sessions, append AuditAction.VIEWER_CREDENTIAL_ISSUE, and return plaintext only in ViewerCredentialIssue.
 revoke_viewer_access: [ORCHESTRATION] MUST revoke the addressed credential and all viewer sessions atomically and append AuditAction.VIEWER_CREDENTIAL_REVOKE.
 enter_viewer_access: [SECURITY_BOUNDARY] MUST parse and verify the selected active credential plus viewer status, create a fixed-expiry hashed session, and conceal unknown selector, wrong secret, and revoked state.
-resolve_viewer_session: [SECURITY_BOUNDARY] MUST verify token hash, expiry, revocation, viewer status, and credential usability before returning ViewerActorContext; any failure raises AuthenticationRejected.
+resolve_viewer_session: [SECURITY_BOUNDARY] MUST verify token hash, expiry, revocation, viewer status, and credential usability before returning ViewerActorContext; any failure of those checks raises AuthenticationRejected.
 resolve_viewer_session: [RETURN_SHAPE] MUST return exactly one ViewerActorContext from the selected persisted session/viewer or raise AuthenticationRejected; it MUST never return None.
 grant_viewer_project: [ORCHESTRATION] MUST authorize access management, validate the same active Registry UUID before the transaction, reject an existing active pair, and append AuditAction.GRANT_CREATE atomically.
 revoke_viewer_project: [ORCHESTRATION] MUST revoke only the addressed active grant and append AuditAction.GRANT_REVOKE atomically so the next guard observes it.

@@ -1,0 +1,125 @@
+Module: email_delivery_gateway
+Target path: adapters/email_delivery_gateway.py
+Target file: email_delivery_gateway.py
+
+IMPORTS (every listed symbol is available; import the ones the module uses):
+from __future__ import annotations
+from datetime import datetime
+from uuid import UUID
+
+from adapters.portal_store import PersistenceError, PortalStore, PortalTransaction
+from core.models import DeliveryOutcome, EmailDeliveryRecord, EmailDeliveryRequest, EmailMessageKind
+
+CONTRACTS (function signatures — follow exactly):
+def _record_delivery_failure(store: PortalStore, delivery_id: UUID) -> EmailDeliveryRecord
+def _send_delivery_request(request: EmailDeliveryRequest) -> str
+def deliver_email_message(store: PortalStore, request: EmailDeliveryRequest) -> EmailDeliveryRecord
+# EmailDeliveryError
+def __init__(self) -> None
+# PersistenceError
+def __init__(self) -> None
+# PortalStore
+def __init__(self, database_url: str) -> None
+# PortalStore
+def begin(self) -> PortalTransaction
+# PortalTransaction
+def __init__(self, connection: object) -> None
+# PortalTransaction
+def commit(self) -> None
+# PortalTransaction
+def email_deliveries(self) -> EmailDeliveryRepository
+# PortalTransaction
+def rollback(self) -> None
+
+OWNED FUNCTIONS REQUIRED (must be defined as top-level functions):
+- _record_delivery_failure: (store: PortalStore, delivery_id: UUID) -> EmailDeliveryRecord
+- _send_delivery_request: (request: EmailDeliveryRequest) -> str
+- deliver_email_message: (store: PortalStore, request: EmailDeliveryRequest) -> EmailDeliveryRecord
+
+STATIC GATE CONTRACT (deterministic checks; a violating candidate is rejected without repair):
+- Reflective attribute access is rejected: never call getattr, hasattr,
+  setattr, delattr, or vars; every declared field and operation is
+  addressed directly by name, including in try/finally cleanup.
+- A definition whose parameter list differs from its declared contract
+  signature is rejected; keep names and order exactly.
+- A constructed record accepted by a declared insert_*/upsert_*/append_*
+  operation must reach a call or return; a built-and-dropped record is
+  rejected.
+- Instantiating a spec-declared interface is rejected; construct the
+  module-owned concrete class instead.
+- A stub, placeholder, or fail-closed body for a contracted callable is
+  rejected; implement the complete specified behavior.
+- A top-level import of a package outside the Python standard library and
+  this project's own modules is rejected unless IMPORTS lists it; a note
+  never adds a package to IMPORTS.
+- A model is constructed with values of its declared field types; a field
+  typed tuple[...] receives a tuple, built with tuple(...) where the items
+  were collected in a list, never the list itself.
+- A value passed to a model field is narrowed at the call itself: a name
+  seeded with None, set on some branches and passed later under a test of
+  another name is rejected; build the value where it is obtained and pass
+  it there, or test that same name for None at the call.
+
+OWNED CLASSES REQUIRED (must be defined locally, not merely referenced):
+- EmailDeliveryError: define locally with methods __init__
+
+CONCRETE IMPLEMENTATION OBLIGATIONS:
+No local concrete-to-interface obligations.
+
+REQUIREMENTS (notes — implement these):
+- _record_delivery_failure: [BEHAVIOR] MUST persist failed outcome for delivery_id in a new store transaction and return that EmailDeliveryRecord without changing its challenge.
+- _record_delivery_failure: [DEPENDENCY_BOUNDARY] MUST open one new transaction, read the delivery_id and write the failed outcome only through tx.email_deliveries(), and commit exactly once, returning that record; its guard MUST close its transaction exactly once, roll back on failure only while the transaction is still open, and re-raise the original failure unchanged, and it MUST NOT use a legacy transaction-level delivery method, call the provider, or change the challenge the record references.
+- _record_delivery_failure: [VALIDATION_ERROR] When no delivery row matches delivery_id, MUST surface the translated persistence error and MUST NOT raise EmailDeliveryError, which this module reserves for translating a provider failure; an absent row is storage inconsistency rather than a delivery outcome, and no row may be inserted to compensate.
+- _record_delivery_failure: [FIELD_ASSIGNMENT] MUST write a non-blank failure_reason together with the failed outcome, so a failed delivery always records why; carrying the previous record's failure_reason forward, and leaving it None or blank, are both forbidden. It MUST NOT change gateway_ref, and it MUST refresh updated_at to the time the failure was recorded.
+- _send_delivery_request: [SECURITY_BOUNDARY] No email provider is integrated in the accepted service (open_questions Q19): MUST call no external service and return the provider message id formed as the text provider- followed by request.delivery_id, without logging token or inferring address ownership.
+- deliver_email_message: [ORCHESTRATION] MUST persist the delivery attempt/outcome around the provider call, translate provider failure to EmailDeliveryError, and MUST NOT mark any challenge valid, consumed, or verified.
+- deliver_email_message: [DEPENDENCY_BOUNDARY] MUST open one transaction with store.begin(), which returns a PortalTransaction, insert the pending record only through tx.email_deliveries(), and commit it before the provider is called; it MUST then call the provider with no transaction open, and afterwards open one further transaction to read that delivery_id and write the accepted outcome only through tx.email_deliveries(), committing exactly once. Holding any transaction open across the provider call, and using a legacy transaction-level delivery method, are forbidden.
+- deliver_email_message: [VALIDATION_ERROR] Each transaction guard MUST track open state in a caller-local boolean flag, catch BaseException, rollback only while that flag still marks the transaction open, and re-raise the original failure unchanged. Substituting a translated persistence error for the original failure is forbidden, and a provider failure MUST record the failed outcome and then raise EmailDeliveryError rather than a persistence error; when recording that failed outcome itself fails, that recording failure is re-raised unchanged.
+- deliver_email_message: [FIELD_ASSIGNMENT] The pending record it inserts and the accepted record it writes after the provider call MUST both carry failure_reason None, because neither is a failure; only the accepted record carries the provider reference, and both MUST set updated_at to the time that state was written.
+- EmailDeliveryError.__init__: [SECURITY_BOUNDARY] MUST carry no token plaintext or address-ownership evidence.
+
+MODEL DATA DEFINITIONS (READ-ONLY SPEC DATA, NOT CODE):
+No = models.* spec data addresses referenced by notes.
+
+MODEL DATA ADDRESSES (SPEC DATA, NOT IMPORT PATHS):
+No = models.* spec data addresses referenced by notes.
+
+IMPORTED MODEL OWNERSHIP (DO NOT REDEFINE):
+Imported runtime model symbols are owned by their source modules listed in IMPORTS; use them as imported and do not redefine them here.
+
+RUNTIME MODEL SURFACE (CORE.MODELS IMPORTS):
+These are imported runtime symbols from core.models. Use the listed enum member names and model fields exactly.
+- DeliveryOutcome enum members: ACCEPTED='accepted', FAILED='failed', PENDING='pending'
+- EmailDeliveryRecord fields (exact, no others exist): challenge_ref: UUID | None, delivery_id: UUID, failure_reason: str | None, gateway_ref: str | None, message_kind: EmailMessageKind, outcome: DeliveryOutcome, recipient_email: str, requested_at: datetime, updated_at: datetime
+- EmailDeliveryRequest fields (exact, no others exist): challenge_ref: UUID | None, delivery_id: UUID, message_kind: EmailMessageKind, recipient_email: str, token: str | None
+- EmailMessageKind enum members: ACCOUNT_SECURITY_NOTICE='account_security_notice', EMAIL_CHANGED_NOTICE='email_changed_notice', EMAIL_CHANGE_CONFIRMATION='email_change_confirmation', EMAIL_VERIFICATION='email_verification', PASSWORD_CHANGED_NOTICE='password_changed_notice', PASSWORD_RESET='password_reset'
+
+MODULE-LOCAL EXCEPTION EXPORTS:
+If any exception class is listed here, define it in this file at top level.
+Do not import these classes from core.errors or any other module.
+- class EmailDeliveryError(Exception): pass
+
+FUNCTION ORDER (define in this order):
+_record_delivery_failure, _send_delivery_request, deliver_email_message
+
+MODELS CONTEXT:
+Runtime models live in core.models. Use IMPORTS and IMPORTED MODEL
+OWNERSHIP for runtime model symbols; do not reproduce model schemas
+or import from a top-level models module.
+
+Generate the complete email_delivery_gateway.py file.
+Every owned function listed above must be implemented exactly once at module top level.
+Define every class and method listed in OWNED CLASSES REQUIRED in this file.
+For every local binding in CONCRETE IMPLEMENTATION OBLIGATIONS, inherit the declared interface and implement its complete method surface with non-placeholder bodies.
+If this is the models module, emit every enum/model in MODEL DEFINITIONS exactly once.
+If this is not the models module, do not emit Pydantic model classes, enums, create_model calls, or local model schema shadows.
+Do not invent model fields or enum values not present in the imported runtime models.
+Use only the IMPORTS listed above plus required standard library imports.
+Import from IMPORTS every symbol the module uses, including symbols used only in annotations, and annotate each parameter with the type its CONTRACTS signature declares, never object or nothing.
+Never import from a top-level models module or models.*; runtime models live in core.models only when listed in IMPORTS.
+`models.<name>` in notes is a canonical spec data address, not an importable Python module.
+When one owner module provides a function and core.models provides a DTO with a similar name, split the imports by source exactly as listed in IMPORTS.
+Construct imported runtime models only with the fields listed in IMPORTED MODEL SURFACE; models are frozen and forbid extra fields, so an invented keyword argument fails at runtime.
+Read from a model value only the fields listed for its type; never use getattr(value, name, default) to probe for a field that is not declared.
+Never assign to an attribute of a model value (models are frozen): derive a changed value with value.model_copy(update={...}) or construct a new instance.
+Define every class listed in MODULE-LOCAL EXCEPTION EXPORTS in this file.
