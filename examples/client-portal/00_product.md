@@ -292,7 +292,9 @@ grant management, access revocation, expense changes, progress updates,
 payment registration, photo publication/visibility changes, budget changes,
 snapshot import (with `estimate_id`, `estimate_version`, `contract_version`,
 content fingerprint, rejection reasons), and version activation (with the
-human staff actor).
+human staff actor). An action is recorded when it completes or, for a
+snapshot import, when the attempt is classified; an operation that fails
+on storage or the Registry before that is not recorded (R0-25).
 
 ## Currency policy
 
@@ -712,7 +714,9 @@ and photo records (accepted `rules.registry_status_policy`: archived reads,
 never mutates). Grants and assignments belong to the project (R0-16) but are
 access management, not these records: no new viewer grant, staff assignment
 or producer grant is created for an archived project, because each creation
-validates that the Registry project is active (accepted notes
+validates that the Registry reports the project as existing and active (the
+answer's `exists` and `is_active` flags, which the Registry keeps in step
+with its status; accepted notes
 `grant_viewer_project`, `assign_staff_project`, `grant_producer_project`).
 An existing grant or assignment is not new access: it keeps giving read
 access, also after the viewer receives a new access link or the staff
@@ -739,8 +743,8 @@ conflict, or a rejection — is recorded as a fresh immutable import result
 with a fresh `import_id` and its `snapshot.import` audit; the import request
 is answered with that result, never with the snapshot itself. An import
 that fails before it classifies the attempt (a storage or Registry failure,
-R6) is answered as that failure and records nothing, like every operation
-that fails. How the import treats access that changes after the route's
+R6) is answered as that failure and records nothing, neither an import
+result nor an audit record. How the import treats access that changes after the route's
 check is the import operation's (State 4 `flow:import_estimate_snapshot`).
 Recording access-refused attempts is a missing feature (Q20). A producer that lost an
 answer re-publishes the same snapshot: identical content is answered as an

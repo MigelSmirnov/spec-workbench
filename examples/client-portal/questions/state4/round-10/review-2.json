@@ -1,0 +1,82 @@
+{
+ "open_points": [
+  {
+   "unit": "context",
+   "subject": "change_service_principal_status repeated or invalid transition",
+   "kind": "unstated failure outcome",
+   "text": "`change_service_principal_status` disables or enables it; ... Errors: Not an administrator: 403. Unknown principal, credential or grant: 404.",
+   "question": "What result is returned when the requested status is already the principal's current status, a transition outside A3's `active ↔ disabled` table?",
+   "options": [
+    "Reject as input with 422",
+    "Reject as a state conflict with 409",
+    "Treat the request as an idempotent success"
+   ],
+   "default_guess": "Reject as input with 422, matching the staff-status flow's treatment of transitions outside the table.",
+   "witness": {
+    "initial": "An active service principal exists and the administrator has a valid session.",
+    "events": [
+     "The administrator requests that the already-active principal be enabled.",
+     "`service_identity.change_service_principal_status` evaluates a transition outside A3's table."
+    ],
+    "outcomes": [
+     "The route rejects the request with 422 and changes nothing.",
+     "The route rejects it with 409, or treats it as an idempotent success, and changes nothing."
+    ],
+    "observer": "The administrator calling the HTTP route"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "grant_producer_project duplicate active grant",
+   "kind": "unstated failure classification",
+   "text": "`grant_producer_project` requires the project known and active ... Errors: Not an administrator: 403. Unknown principal, credential or grant: 404. Archived project for a new grant: 409. Registry failure: 502.",
+   "question": "Which declared failure and HTTP outcome apply when an active `ProducerProjectGrant` already exists for the same principal and project?",
+   "options": [
+    "Authorization rejection, 403, matching active duplicate viewer and staff grants",
+    "Conflict, 409",
+    "Input rejection, 422"
+   ],
+   "default_guess": "Authorization rejection with 403, matching the other active duplicate grant and assignment flows.",
+   "witness": {
+    "initial": "A `granted_projects` service principal already has an active grant for project P.",
+    "events": [
+     "An administrator submits another grant request for the same principal and P.",
+     "The operation detects the active record before attempting the unique insert, as M15 requires."
+    ],
+    "outcomes": [
+     "The administrator receives 403, following the viewer/staff duplicate-grant precedent.",
+     "The administrator receives 409 or 422 because the service-principal flow names no duplicate-grant failure."
+    ],
+    "observer": "The administrator calling the producer-grant route"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "import authorization changing after the route check",
+   "kind": "incomplete race outcome",
+   "text": "`import_snapshot` ... repeats `authorize_snapshot_import` ... only if access changed since step 2 does it classify an archived, unknown or scope-denied rejection instead of raising.",
+   "question": "What happens if the service principal becomes disabled after step 2 but before the repeated authorization in step 3?",
+   "options": [
+    "Raise a concealed authentication/access failure and record no import attempt",
+    "Record a fresh rejected import result using `scope_denied`",
+    "Continue using the actor context authenticated before the disablement"
+   ],
+   "default_guess": "Raise the concealed authentication failure and record nothing, because `ImportRejectReason` has no inactive-principal value and the common guard requires an active principal.",
+   "witness": {
+    "initial": "An active producer with a valid credential and project grant begins an import for an active project and passes step 2.",
+    "events": [
+     "An administrator disables the service principal, revoking its credentials, before step 3.",
+     "`snapshot_import` repeats `authorize_snapshot_import`."
+    ],
+    "outcomes": [
+     "The import raises an authentication/access failure and creates neither `SnapshotImportRecord` nor audit.",
+     "The access change is classified as `scope_denied`, producing a rejected import record and audit."
+    ],
+    "observer": "The producer sees a transport error response versus a recorded result with an `import_id`; an auditor sees whether a record was written"
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"context\",\"subject\":\"change_service_principal_status repeated or invalid transition\",\"kind\":\"unstated failure outcome\",\"text\":\"`change_service_principal_status` disables or enables it; ... Errors: Not an administrator: 403. Unknown principal, credential or grant: 404.\",\"question\":\"What result is returned when the requested status is already the principal's current status, a transition outside A3's `active ↔ disabled` table?\",\"options\":[\"Reject as input with 422\",\"Reject as a state conflict with 409\",\"Treat the request as an idempotent success\"],\"default_guess\":\"Reject as input with 422, matching the staff-status flow's treatment of transitions outside the table.\",\"witness\":{\"initial\":\"An active service principal exists and the administrator has a valid session.\",\"events\":[\"The administrator requests that the already-active principal be enabled.\",\"`service_identity.change_service_principal_status` evaluates a transition outside A3's table.\"],\"outcomes\":[\"The route rejects the request with 422 and changes nothing.\",\"The route rejects it with 409, or treats it as an idempotent success, and changes nothing.\"],\"observer\":\"The administrator calling the HTTP route\"}},{\"unit\":\"context\",\"subject\":\"grant_producer_project duplicate active grant\",\"kind\":\"unstated failure classification\",\"text\":\"`grant_producer_project` requires the project known and active ... Errors: Not an administrator: 403. Unknown principal, credential or grant: 404. Archived project for a new grant: 409. Registry failure: 502.\",\"question\":\"Which declared failure and HTTP outcome apply when an active `ProducerProjectGrant` already exists for the same principal and project?\",\"options\":[\"Authorization rejection, 403, matching active duplicate viewer and staff grants\",\"Conflict, 409\",\"Input rejection, 422\"],\"default_guess\":\"Authorization rejection with 403, matching the other active duplicate grant and assignment flows.\",\"witness\":{\"initial\":\"A `granted_projects` service principal already has an active grant for project P.\",\"events\":[\"An administrator submits another grant request for the same principal and P.\",\"The operation detects the active record before attempting the unique insert, as M15 requires.\"],\"outcomes\":[\"The administrator receives 403, following the viewer/staff duplicate-grant precedent.\",\"The administrator receives 409 or 422 because the service-principal flow names no duplicate-grant failure.\"],\"observer\":\"The administrator calling the producer-grant route\"}},{\"unit\":\"context\",\"subject\":\"import authorization changing after the route check\",\"kind\":\"incomplete race outcome\",\"text\":\"`import_snapshot` ... repeats `authorize_snapshot_import` ... only if access changed since step 2 does it classify an archived, unknown or scope-denied rejection instead of raising.\",\"question\":\"What happens if the service principal becomes disabled after step 2 but before the repeated authorization in step 3?\",\"options\":[\"Raise a concealed authentication/access failure and record no import attempt\",\"Record a fresh rejected import result using `scope_denied`\",\"Continue using the actor context authenticated before the disablement\"],\"default_guess\":\"Raise the concealed authentication failure and record nothing, because `ImportRejectReason` has no inactive-principal value and the common guard requires an active principal.\",\"witness\":{\"initial\":\"An active producer with a valid credential and project grant begins an import for an active project and passes step 2.\",\"events\":[\"An administrator disables the service principal, revoking its credentials, before step 3.\",\"`snapshot_import` repeats `authorize_snapshot_import`.\"],\"outcomes\":[\"The import raises an authentication/access failure and creates neither `SnapshotImportRecord` nor audit.\",\"The access change is classified as `scope_denied`, producing a rejected import record and audit.\"],\"observer\":\"The producer sees a transport error response versus a recorded result with an `import_id`; an auditor sees whether a record was written\"}}]}",
+ "set_aside": []
+}
