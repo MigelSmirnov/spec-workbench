@@ -120,6 +120,12 @@ predicate или method shape не замкнуты, diagnostic emitter возв
   Work. В v3 репозиторий с `transaction: owned` объявляет
   `begin`/`commit`/`rollback` в contracts, но не в `methods`: их lowering
   фиксирован версией.
+- Внешний Unit of Work над SQLite-репозиториями собирается детерминированно
+  отдельным IR `sqlite_unit_of_work_backend/v1`
+  ([раздел 6.12](SPEC_STANDARD.md#612-sqlite_unit_of_work_backendv1)): accessor
+  называет репозиторий `persistence_backend`, делегирование методов выводится
+  из contracts, классы контекста и bootstrap-порта получают в
+  `implementation_obligations` disposition `local`.
 - Один persistence module владеет одной repository class; partial class
   emission и companion ownership для методов запрещены.
 - Финальный `rules.persistence_backend` должен точно совпадать с закрытым
