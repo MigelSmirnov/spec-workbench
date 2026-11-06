@@ -1,0 +1,104 @@
+{
+ "open_points": [
+  {
+   "unit": "A5",
+   "subject": "access-management creation check precedence",
+   "kind": "missing precedence",
+   "text": "“the grant and assignment creation operations of access management ... read `exists` and `is_active` instead ... and proceed only when both are true” specifies precedence between `exists` and `is_active`, but not where Registry validation occurs relative to validating the target viewer, staff account or service principal, duplicate-record checks, or the administrator authorization checks.",
+   "question": "When an access-creation request has both a non-Registry defect and a Registry refusal or failure, which check wins and which error is returned?",
+   "options": [
+    "Validate authorization, target identity and duplicates before calling Registry.",
+    "Call Registry before validating the target identity or duplicate state.",
+    "Use a different explicit order for each grant or assignment operation."
+   ],
+   "default_guess": "Authenticate and authorize the administrator first, validate the target identity and existing record next, then validate the Registry project.",
+   "witness": {
+    "initial": "An authenticated administrator requests a staff assignment; the named staff account does not exist, and Registry reports the named project as unknown.",
+    "events": [
+     "The administrator submits the assignment creation request."
+    ],
+    "outcomes": [
+     "The operation first checks the staff account and returns the staff-not-found refusal without consulting Registry.",
+     "The operation first validates the project and returns the unknown-project refusal."
+    ],
+    "observer": "The administrator sees a different refusal and Registry sees a call in only one outcome."
+   }
+  },
+  {
+   "unit": "A7",
+   "subject": "expense replay versus pre-replay validation",
+   "kind": "contradictory precedence",
+   "text": "A7 says allocation and other content checks occur before replay and that “Every refusal before the replay check answers HTTP 422,” but then says “a replay with other content is the conflict of A8 (409)”; A8 says any different fingerprint for an existing `recognized_document_id` is an integrity conflict without limiting that rule to content which passed the earlier checks.",
+   "question": "For an existing `recognized_document_id`, does changed content that is itself invalid fail its earlier content check with 422, or does the changed fingerprint make it a 409 replay conflict?",
+   "options": [
+    "Run content validation first and return 422 without classifying replay.",
+    "Once the identity already exists, compare fingerprints first and return 409 for any changed content.",
+    "Return 409 only when the changed content is otherwise valid, and 422 when it is invalid."
+   ],
+   "default_guess": "Return 422 for invalid content because A7 explicitly places those checks before replay; use 409 only for otherwise-valid changed content.",
+   "witness": {
+    "initial": "An Expense already exists for `recognized_document_id = R` with valid allocations.",
+    "events": [
+     "An authorized operator submits `R` again with a changed allocation set whose sum does not equal the total."
+    ],
+    "outcomes": [
+     "The allocation-sum check runs before replay and returns HTTP 422 with an empty body.",
+     "The changed intake fingerprint is classified under A8 and returns HTTP 409."
+    ],
+    "observer": "The operator sees 422 versus 409."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "viewer project-list handling of an invalid Registry status",
+   "kind": "contradictory failure handling",
+   "text": "The changed client-view rule says a granted project “whose Registry context cannot be obtained at that moment is left out” of the project list, while A5 says “a read whose project context would carry [a status outside `active` and `archived`] is refused as an invalid Registry answer.”",
+   "question": "If one granted project's context is returned but has an unsupported status, is that project omitted while the rest of the list succeeds, or is the whole project-list read refused?",
+   "options": [
+    "Treat the invalid context as unobtainable, omit that project, and return the remaining list.",
+    "Refuse the entire project-list operation as an invalid Registry answer.",
+    "Distinguish transport/unavailability failures, which cause omission, from invalid decoded contexts, which refuse the list."
+   ],
+   "default_guess": "Omit only for unavailable context; refuse the list for a decoded context carrying an invalid status.",
+   "witness": {
+    "initial": "A viewer has active grants to projects A and B; Registry returns valid context for A and context for B with status `paused`.",
+    "events": [
+     "The viewer requests their project list."
+    ],
+    "outcomes": [
+     "The portal returns a successful list containing only A because B's usable context could not be obtained.",
+     "The portal refuses the complete list because B's context carries an unsupported status."
+    ],
+    "observer": "The viewer sees a partial list versus an error."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "snapshot import storage failure after classification",
+   "kind": "uncovered failure phase",
+   "text": "The changed text requires every classified import attempt to be recorded, and says only that “An import that fails before it classifies the attempt (a storage or Registry failure) ... records nothing.” It does not say what happens when storage fails after the operation has selected `accepted`, `idempotent_replay`, `integrity_conflict`, or `rejected` but before the import result and audit can commit.",
+   "question": "Is an in-memory outcome considered a classified attempt that must eventually be recorded, or does classification count only once its import result and audit commit successfully?",
+   "options": [
+    "Classification occurs before persistence; a later storage failure must be retried or otherwise resolved so the classified result and audit are recorded.",
+    "Classification is atomic with persistence; a commit failure means the attempt was never classified and records nothing.",
+    "Return the selected business outcome even if its result and audit could not be stored."
+   ],
+   "default_guess": "Treat classification and its import-result/audit writes as one transaction; if commit fails, answer the storage failure and leave no records.",
+   "witness": {
+    "initial": "A producer passes route authorization and submits a valid new snapshot; all reads needed to determine `accepted` succeed.",
+    "events": [
+     "The import selects the `accepted` outcome and constructs the snapshot, import result and audit intent.",
+     "Storage fails while committing those records."
+    ],
+    "outcomes": [
+     "The attempt remains classified and the implementation must ensure its accepted result and audit are recorded.",
+     "The transaction rolls back, the producer receives a storage failure, and no snapshot, import result or audit exists."
+    ],
+    "observer": "The producer sees an accepted result versus a storage failure; later readers and auditors see records in only one outcome."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A5\",\"subject\":\"access-management creation check precedence\",\"kind\":\"missing precedence\",\"text\":\"“the grant and assignment creation operations of access management ... read `exists` and `is_active` instead ... and proceed only when both are true” specifies precedence between `exists` and `is_active`, but not where Registry validation occurs relative to validating the target viewer, staff account or service principal, duplicate-record checks, or the administrator authorization checks.\",\"question\":\"When an access-creation request has both a non-Registry defect and a Registry refusal or failure, which check wins and which error is returned?\",\"options\":[\"Validate authorization, target identity and duplicates before calling Registry.\",\"Call Registry before validating the target identity or duplicate state.\",\"Use a different explicit order for each grant or assignment operation.\"],\"default_guess\":\"Authenticate and authorize the administrator first, validate the target identity and existing record next, then validate the Registry project.\",\"witness\":{\"initial\":\"An authenticated administrator requests a staff assignment; the named staff account does not exist, and Registry reports the named project as unknown.\",\"events\":[\"The administrator submits the assignment creation request.\"],\"outcomes\":[\"The operation first checks the staff account and returns the staff-not-found refusal without consulting Registry.\",\"The operation first validates the project and returns the unknown-project refusal.\"],\"observer\":\"The administrator sees a different refusal and Registry sees a call in only one outcome.\"}},{\"unit\":\"A7\",\"subject\":\"expense replay versus pre-replay validation\",\"kind\":\"contradictory precedence\",\"text\":\"A7 says allocation and other content checks occur before replay and that “Every refusal before the replay check answers HTTP 422,” but then says “a replay with other content is the conflict of A8 (409)”; A8 says any different fingerprint for an existing `recognized_document_id` is an integrity conflict without limiting that rule to content which passed the earlier checks.\",\"question\":\"For an existing `recognized_document_id`, does changed content that is itself invalid fail its earlier content check with 422, or does the changed fingerprint make it a 409 replay conflict?\",\"options\":[\"Run content validation first and return 422 without classifying replay.\",\"Once the identity already exists, compare fingerprints first and return 409 for any changed content.\",\"Return 409 only when the changed content is otherwise valid, and 422 when it is invalid.\"],\"default_guess\":\"Return 422 for invalid content because A7 explicitly places those checks before replay; use 409 only for otherwise-valid changed content.\",\"witness\":{\"initial\":\"An Expense already exists for `recognized_document_id = R` with valid allocations.\",\"events\":[\"An authorized operator submits `R` again with a changed allocation set whose sum does not equal the total.\"],\"outcomes\":[\"The allocation-sum check runs before replay and returns HTTP 422 with an empty body.\",\"The changed intake fingerprint is classified under A8 and returns HTTP 409.\"],\"observer\":\"The operator sees 422 versus 409.\"}},{\"unit\":\"context\",\"subject\":\"viewer project-list handling of an invalid Registry status\",\"kind\":\"contradictory failure handling\",\"text\":\"The changed client-view rule says a granted project “whose Registry context cannot be obtained at that moment is left out” of the project list, while A5 says “a read whose project context would carry [a status outside `active` and `archived`] is refused as an invalid Registry answer.”\",\"question\":\"If one granted project's context is returned but has an unsupported status, is that project omitted while the rest of the list succeeds, or is the whole project-list read refused?\",\"options\":[\"Treat the invalid context as unobtainable, omit that project, and return the remaining list.\",\"Refuse the entire project-list operation as an invalid Registry answer.\",\"Distinguish transport/unavailability failures, which cause omission, from invalid decoded contexts, which refuse the list.\"],\"default_guess\":\"Omit only for unavailable context; refuse the list for a decoded context carrying an invalid status.\",\"witness\":{\"initial\":\"A viewer has active grants to projects A and B; Registry returns valid context for A and context for B with status `paused`.\",\"events\":[\"The viewer requests their project list.\"],\"outcomes\":[\"The portal returns a successful list containing only A because B's usable context could not be obtained.\",\"The portal refuses the complete list because B's context carries an unsupported status.\"],\"observer\":\"The viewer sees a partial list versus an error.\"}},{\"unit\":\"context\",\"subject\":\"snapshot import storage failure after classification\",\"kind\":\"uncovered failure phase\",\"text\":\"The changed text requires every classified import attempt to be recorded, and says only that “An import that fails before it classifies the attempt (a storage or Registry failure) ... records nothing.” It does not say what happens when storage fails after the operation has selected `accepted`, `idempotent_replay`, `integrity_conflict`, or `rejected` but before the import result and audit can commit.\",\"question\":\"Is an in-memory outcome considered a classified attempt that must eventually be recorded, or does classification count only once its import result and audit commit successfully?\",\"options\":[\"Classification occurs before persistence; a later storage failure must be retried or otherwise resolved so the classified result and audit are recorded.\",\"Classification is atomic with persistence; a commit failure means the attempt was never classified and records nothing.\",\"Return the selected business outcome even if its result and audit could not be stored.\"],\"default_guess\":\"Treat classification and its import-result/audit writes as one transaction; if commit fails, answer the storage failure and leave no records.\",\"witness\":{\"initial\":\"A producer passes route authorization and submits a valid new snapshot; all reads needed to determine `accepted` succeed.\",\"events\":[\"The import selects the `accepted` outcome and constructs the snapshot, import result and audit intent.\",\"Storage fails while committing those records.\"],\"outcomes\":[\"The attempt remains classified and the implementation must ensure its accepted result and audit are recorded.\",\"The transaction rolls back, the producer receives a storage failure, and no snapshot, import result or audit exists.\"],\"observer\":\"The producer sees an accepted result versus a storage failure; later readers and auditors see records in only one outcome.\"}}]}",
+ "set_aside": []
+}

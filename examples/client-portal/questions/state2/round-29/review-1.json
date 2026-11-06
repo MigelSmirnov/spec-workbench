@@ -1,0 +1,105 @@
+{
+ "open_points": [
+  {
+   "subject": "Registry validation refusal returned by access-management creation operations",
+   "kind": "underspecified error mapping",
+   "text": "“each with its own operation's error (the table's labels name the refusal, not the error: a new viewer grant answers it as a Registry boundary failure, a staff assignment or producer grant as the not-found or archived rejection)” conflicts in terminology with A6's statement that `exists=false` and `is_active=false` are “read by the caller ... not a gateway failure”, and no exact operation error is named.",
+   "question": "For each of viewer-grant creation, staff-assignment creation and producer-grant creation, what exact error must be returned when `exists=false` and when `exists=true, is_active=false`, particularly whether the viewer case is a `RegistryBoundaryError` and with which `RegistryFailureKind`?",
+   "options": [
+    "Viewer grant returns `RegistryBoundaryError(kind=not_found|archived)` while staff assignment and producer grant return their domain not-found/archived errors",
+    "All three return domain unknown-project/archived-project errors after interpreting the decoded validation result",
+    "All three return Registry-boundary errors, with operation-specific HTTP translation"
+   ],
+   "default_guess": "Return `RegistryBoundaryError(kind=not_found)` for an unknown viewer-grant project, and domain not-found/archived errors for staff and producer creation as the new passage appears to distinguish them.",
+   "witness": {
+    "initial": "Registry returns a successfully decoded validation result with `exists=false`, `is_active=false`, and no gateway transport failure; an administrator has `portal.access.manage`.",
+    "events": [
+     "The administrator requests a new viewer grant for that project."
+    ],
+    "outcomes": [
+     "The operation raises a Registry boundary failure carrying `not_found`.",
+     "The operation raises the access-management operation's unknown-project rejection because A6 says the decoded result is not a gateway failure."
+    ],
+    "observer": "The administrator, through the later HTTP mapping and response status/body."
+   },
+   "unit": "A5"
+  },
+  {
+   "subject": "Lifecycle and ownership of REGISTRY_BASE_URL configuration",
+   "kind": "contradiction",
+   "text": "A30 says “`REGISTRY_BASE_URL` is read by the Registry gateway at each call, not at start-up: it is no required start-up variable”, while State 0 R0-10 says the service is configured only by environment variables “which it validates when it starts”, State 1 calls `RuntimeSettings` “the startup configuration ... read from the environment”, and A30's carried configuration table is “read into `RuntimeSettings`”.",
+   "question": "Is `REGISTRY_BASE_URL` excluded from startup settings and validation and read dynamically for every Registry call, or is it captured and validated as part of immutable startup `RuntimeSettings`?",
+   "options": [
+    "Exclude it from startup settings; each Registry call reads and validates the current environment value",
+    "Read it into `RuntimeSettings` at startup and fail startup when it is absent or invalid",
+    "Allow it to be absent at startup but, if present, capture it in `RuntimeSettings` rather than rereading it"
+   ],
+   "default_guess": "Treat the changed A30 sentence as the narrow exception: start without it and read the environment anew on every Registry call.",
+   "witness": {
+    "initial": "The process environment has no `REGISTRY_BASE_URL`; every other required setting is valid.",
+    "events": [
+     "The host starts the service.",
+     "After startup, the host supplies `REGISTRY_BASE_URL` and a caller performs a Registry-backed operation."
+    ],
+    "outcomes": [
+     "Startup succeeds and the later call uses the newly supplied value, as changed A30 requires.",
+     "Startup is refused, or the running process continues using the startup settings without the new value, as R0-10 and the `RuntimeSettings` descriptions imply."
+    ],
+    "observer": "The deployment operator and the caller of the Registry-backed operation."
+   },
+   "unit": "A30"
+  },
+  {
+   "subject": "Viewer project-list omission on Registry context failures",
+   "kind": "vague refusal set",
+   "text": "“a granted project, archived or not, whose Registry context cannot be obtained at that moment is left out of it rather than listed without context” does not define which Registry outcomes count as context that “cannot be obtained”: transient timeout/transport failures only, or also HTTP 404, schema mismatch, identity mismatch, and an unsupported status.",
+   "question": "For each `RegistryFailureKind` or invalid decoded context, must the project be silently omitted, or are some outcomes supposed to fail the project-list operation or receive another treatment?",
+   "options": [
+    "Omit the project for every failure to produce a valid typed `ProjectContext`",
+    "Omit only for timeout and transport errors; fail or reject on permanent/protocol failures",
+    "Omit for absence and transient failures but fail the whole list on schema or identity mismatch"
+   ],
+   "default_guess": "Omit any project for which the gateway cannot return a valid typed `ProjectContext`, while continuing to list the other grants.",
+   "witness": {
+    "initial": "A viewer has two active grants; Registry returns valid context for project A but returns a UUID identity mismatch for project B.",
+    "events": [
+     "The viewer requests their project list."
+    ],
+    "outcomes": [
+     "The response succeeds and contains only project A because every unavailable/invalid context causes per-project omission.",
+     "The response fails, or treats the identity mismatch differently from a temporary context outage, because only momentary availability failures are omitted."
+    ],
+    "observer": "The viewer."
+   },
+   "unit": "context"
+  },
+  {
+   "subject": "Snapshot import storage failure after in-memory classification",
+   "kind": "uncovered failure timing",
+   "text": "The text says “An attempt the import classifies ... is recorded” and “An import that fails before it classifies the attempt (a storage or Registry failure, R6) ... records nothing”, but it does not cover a storage failure after the outcome has been classified in memory and while the import result or audit record is being persisted.",
+   "question": "When classification has selected accepted, replay, conflict, or rejection but persistence of the snapshot, import record, or audit record fails, is the attempt considered classified and therefore required to have a result, or is the whole transaction treated as an unclassified storage failure with no records?",
+   "options": [
+    "Classification counts only when all corresponding records commit atomically; persistence failure rolls everything back and returns a storage failure with no import result or audit",
+    "Classification occurs before persistence; the system must preserve or later recover the classified import result and audit despite the immediate storage failure",
+    "Different writes may commit independently, leaving a snapshot, import result, or audit without the others"
+   ],
+   "default_guess": "Define classification as durably completed only with the atomic commit; any persistence failure rolls back all import writes and returns a storage failure with no records.",
+   "witness": {
+    "initial": "A valid new snapshot has passed route authorization and content validation; no snapshot with its identity exists.",
+    "events": [
+     "The import determines the outcome is `accepted`.",
+     "Storage accepts or stages the snapshot write but fails while inserting the fresh `SnapshotImportRecord` or its `snapshot.import` audit record."
+    ],
+    "outcomes": [
+     "The transaction rolls back completely; the producer receives a storage failure and no snapshot, import result, or audit remains.",
+     "The attempt is already classified under the literal wording and must leave or recover an accepted import result and audit, possibly with the snapshot write retained."
+    ],
+    "observer": "The producer on retry, and staff inspecting snapshots, import results, and audit records."
+   },
+   "unit": "context"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"Registry validation refusal returned by access-management creation operations\",\"kind\":\"underspecified error mapping\",\"text\":\"“each with its own operation's error (the table's labels name the refusal, not the error: a new viewer grant answers it as a Registry boundary failure, a staff assignment or producer grant as the not-found or archived rejection)” conflicts in terminology with A6's statement that `exists=false` and `is_active=false` are “read by the caller ... not a gateway failure”, and no exact operation error is named.\",\"question\":\"For each of viewer-grant creation, staff-assignment creation and producer-grant creation, what exact error must be returned when `exists=false` and when `exists=true, is_active=false`, particularly whether the viewer case is a `RegistryBoundaryError` and with which `RegistryFailureKind`?\",\"options\":[\"Viewer grant returns `RegistryBoundaryError(kind=not_found|archived)` while staff assignment and producer grant return their domain not-found/archived errors\",\"All three return domain unknown-project/archived-project errors after interpreting the decoded validation result\",\"All three return Registry-boundary errors, with operation-specific HTTP translation\"],\"default_guess\":\"Return `RegistryBoundaryError(kind=not_found)` for an unknown viewer-grant project, and domain not-found/archived errors for staff and producer creation as the new passage appears to distinguish them.\",\"witness\":{\"initial\":\"Registry returns a successfully decoded validation result with `exists=false`, `is_active=false`, and no gateway transport failure; an administrator has `portal.access.manage`.\",\"events\":[\"The administrator requests a new viewer grant for that project.\"],\"outcomes\":[\"The operation raises a Registry boundary failure carrying `not_found`.\",\"The operation raises the access-management operation's unknown-project rejection because A6 says the decoded result is not a gateway failure.\"],\"observer\":\"The administrator, through the later HTTP mapping and response status/body.\"},\"unit\":\"A5\"},{\"subject\":\"Lifecycle and ownership of REGISTRY_BASE_URL configuration\",\"kind\":\"contradiction\",\"text\":\"A30 says “`REGISTRY_BASE_URL` is read by the Registry gateway at each call, not at start-up: it is no required start-up variable”, while State 0 R0-10 says the service is configured only by environment variables “which it validates when it starts”, State 1 calls `RuntimeSettings` “the startup configuration ... read from the environment”, and A30's carried configuration table is “read into `RuntimeSettings`”.\",\"question\":\"Is `REGISTRY_BASE_URL` excluded from startup settings and validation and read dynamically for every Registry call, or is it captured and validated as part of immutable startup `RuntimeSettings`?\",\"options\":[\"Exclude it from startup settings; each Registry call reads and validates the current environment value\",\"Read it into `RuntimeSettings` at startup and fail startup when it is absent or invalid\",\"Allow it to be absent at startup but, if present, capture it in `RuntimeSettings` rather than rereading it\"],\"default_guess\":\"Treat the changed A30 sentence as the narrow exception: start without it and read the environment anew on every Registry call.\",\"witness\":{\"initial\":\"The process environment has no `REGISTRY_BASE_URL`; every other required setting is valid.\",\"events\":[\"The host starts the service.\",\"After startup, the host supplies `REGISTRY_BASE_URL` and a caller performs a Registry-backed operation.\"],\"outcomes\":[\"Startup succeeds and the later call uses the newly supplied value, as changed A30 requires.\",\"Startup is refused, or the running process continues using the startup settings without the new value, as R0-10 and the `RuntimeSettings` descriptions imply.\"],\"observer\":\"The deployment operator and the caller of the Registry-backed operation.\"},\"unit\":\"A30\"},{\"subject\":\"Viewer project-list omission on Registry context failures\",\"kind\":\"vague refusal set\",\"text\":\"“a granted project, archived or not, whose Registry context cannot be obtained at that moment is left out of it rather than listed without context” does not define which Registry outcomes count as context that “cannot be obtained”: transient timeout/transport failures only, or also HTTP 404, schema mismatch, identity mismatch, and an unsupported status.\",\"question\":\"For each `RegistryFailureKind` or invalid decoded context, must the project be silently omitted, or are some outcomes supposed to fail the project-list operation or receive another treatment?\",\"options\":[\"Omit the project for every failure to produce a valid typed `ProjectContext`\",\"Omit only for timeout and transport errors; fail or reject on permanent/protocol failures\",\"Omit for absence and transient failures but fail the whole list on schema or identity mismatch\"],\"default_guess\":\"Omit any project for which the gateway cannot return a valid typed `ProjectContext`, while continuing to list the other grants.\",\"witness\":{\"initial\":\"A viewer has two active grants; Registry returns valid context for project A but returns a UUID identity mismatch for project B.\",\"events\":[\"The viewer requests their project list.\"],\"outcomes\":[\"The response succeeds and contains only project A because every unavailable/invalid context causes per-project omission.\",\"The response fails, or treats the identity mismatch differently from a temporary context outage, because only momentary availability failures are omitted.\"],\"observer\":\"The viewer.\"},\"unit\":\"context\"},{\"subject\":\"Snapshot import storage failure after in-memory classification\",\"kind\":\"uncovered failure timing\",\"text\":\"The text says “An attempt the import classifies ... is recorded” and “An import that fails before it classifies the attempt (a storage or Registry failure, R6) ... records nothing”, but it does not cover a storage failure after the outcome has been classified in memory and while the import result or audit record is being persisted.\",\"question\":\"When classification has selected accepted, replay, conflict, or rejection but persistence of the snapshot, import record, or audit record fails, is the attempt considered classified and therefore required to have a result, or is the whole transaction treated as an unclassified storage failure with no records?\",\"options\":[\"Classification counts only when all corresponding records commit atomically; persistence failure rolls everything back and returns a storage failure with no import result or audit\",\"Classification occurs before persistence; the system must preserve or later recover the classified import result and audit despite the immediate storage failure\",\"Different writes may commit independently, leaving a snapshot, import result, or audit without the others\"],\"default_guess\":\"Define classification as durably completed only with the atomic commit; any persistence failure rolls back all import writes and returns a storage failure with no records.\",\"witness\":{\"initial\":\"A valid new snapshot has passed route authorization and content validation; no snapshot with its identity exists.\",\"events\":[\"The import determines the outcome is `accepted`.\",\"Storage accepts or stages the snapshot write but fails while inserting the fresh `SnapshotImportRecord` or its `snapshot.import` audit record.\"],\"outcomes\":[\"The transaction rolls back completely; the producer receives a storage failure and no snapshot, import result, or audit remains.\",\"The attempt is already classified under the literal wording and must leave or recover an accepted import result and audit, possibly with the snapshot write retained.\"],\"observer\":\"The producer on retry, and staff inspecting snapshots, import results, and audit records.\"},\"unit\":\"context\"}]}",
+ "set_aside": []
+}

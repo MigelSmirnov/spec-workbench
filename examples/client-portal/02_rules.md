@@ -1187,7 +1187,10 @@ binary_read_limit_env_name             = BINARY_MAX_READ_BYTES (required positiv
 Values are knobs; the *existence* of a timeout/TTL/rate limit is an
 invariant, its value is config. `REGISTRY_BASE_URL` is read by the Registry
 gateway at each call, not at start-up: it is no required start-up variable,
-and its absence fails only Registry calls (A6).
+and its absence fails only Registry calls (A6). Which values the gateway
+accepts and how it joins them with the request paths are the accepted
+gateway's (note `_registry_url`, `config.registry_request_paths`), carried
+to States 6–7.
 
 ### Carried changes
 

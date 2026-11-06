@@ -149,7 +149,14 @@ assertion that every module imports every earlier one.
   only by `api`.
 - **Configuration.** Environment values are read once, by `runtime_settings`,
   into `RuntimeSettings`; other modules read `config.*` constants or the
-  settings they are handed, never the environment.
+  settings they are handed, never the environment, with two exceptions
+  kept from the running service: `registry_gateway` reads
+  `REGISTRY_BASE_URL` at each Registry call (A6, A30) and `binary_storage`
+  reads `BINARY_STORAGE_ROOT` and `BINARY_MAX_READ_BYTES` at each binary
+  read, each refusing that call when its value is missing or unusable
+  (Factory code `adapters/registry_gateway.py` `_registry_url`,
+  `adapters/binary_storage.py`; owner 2026-11-06: current service
+  behaviour accepted; technical decisions delegated).
 
 ## Changes against the former text
 

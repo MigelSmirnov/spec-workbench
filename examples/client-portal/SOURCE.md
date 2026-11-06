@@ -271,6 +271,7 @@ decisions delegated).
 | viewer entry limiter: algorithm, window boundary, eviction, single worker, HTTP answer | A25 | `rules.http_transport_policy.limits.viewer_entry`; `config.runtime_environment_variables` (`VIEWER_ENTRY_RATE_LIMIT_*`); note `_record_viewer_entry_attempt` | `runtime/transport_guard.py`; `deploy/Dockerfile.api` |
 | security header list, `no-store` routes | A25 | `rules.http_transport_policy`; notes `_apply_security_headers`, `_requires_no_store`; `rules.binary_delivery_policy` | `runtime/transport_guard.py`, `api_irregular.py` `_binary_content_response` |
 | password hash profile and rehash behaviour | A30 | `rules.credential_security_backend.password` (`RFC_9106_LOW_MEMORY`); `config.credential_hash_scheme`; notes `hash_password`, `verify_password` | `security/credential_security.py` |
+| Registry endpoint value accepted at each call (scheme, host, no user info, path prefix kept) | A30 | note `_registry_url`; `config.registry_endpoint_env_name`, `config.registry_request_paths` | `adapters/registry_gateway.py` `_registry_url` |
 | exact dependency pins | A32 | — (deployment file) | `deploy/requirements.txt` |
 | how the pre-deploy vulnerability check is run | A32 | — (no Factory tool; the trimmed text had prescribed `pip-audit`, which the service does not have) | — |
 

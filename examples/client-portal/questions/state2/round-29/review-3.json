@@ -1,0 +1,106 @@
+{
+ "open_points": [
+  {
+   "unit": "A30",
+   "subject": "REGISTRY_BASE_URL lifecycle",
+   "kind": "contradiction",
+   "text": "A30 says “REGISTRY_BASE_URL is read by the Registry gateway at each call, not at start-up: it is no required start-up variable,” while R0-10 says the service's environment configuration “is validated when it starts,” and State 1 describes RuntimeSettings as startup configuration containing the Registry base URL candidate.",
+   "question": "Is REGISTRY_BASE_URL excluded from startup RuntimeSettings and startup validation, or must it be read and validated at startup with the other environment configuration?",
+   "options": [
+    "Exclude it from RuntimeSettings; startup succeeds without it and every Registry call rereads the environment.",
+    "Include it in RuntimeSettings; a missing or invalid value prevents startup.",
+    "Include it as an optional startup setting but reread or override it on each Registry call."
+   ],
+   "default_guess": "Treat A30 as the specific exception: exclude it from required startup validation and reread it for each Registry call.",
+   "witness": {
+    "initial": "The process environment has no REGISTRY_BASE_URL but all other required settings are valid.",
+    "events": [
+     "The host starts the portal.",
+     "A caller invokes an operation that needs Registry validation."
+    ],
+    "outcomes": [
+     "Under A30, startup succeeds and the later Registry call fails with transport_error.",
+     "Under R0-10 and the startup RuntimeSettings description, startup refuses the missing Registry configuration and no API call can occur."
+    ],
+    "observer": "The host operator and the API caller"
+   }
+  },
+  {
+   "unit": "A5",
+   "subject": "Access-management creation check precedence",
+   "kind": "unspecified order",
+   "text": "The texts say creation “requires a valid administrator session, an active principal and portal.access.manage” and also proceeds only when Registry reports exists=true and is_active=true, but they specify authorization-before-Registry only for viewer-project discovery/granting, not for staff-assignment or producer-grant creation, nor the precedence against target-existence and duplicate checks.",
+   "question": "For each grant or assignment creation, what is the exact order among administrator authorization, target principal/account/viewer existence, active-duplicate detection, and Registry exists/is_active validation?",
+   "options": [
+    "Authorize first, then validate the target and duplicate, then call Registry.",
+    "Authorize first, call Registry next, then validate the target and duplicate.",
+    "Use operation-specific orders, stated separately for viewer grants, staff assignments, and producer grants."
+   ],
+   "default_guess": "Authorize first, validate the target and duplicate next, and call Registry last.",
+   "witness": {
+    "initial": "A caller lacks a valid administrator session; the named service principal does not exist; the project is unknown to Registry.",
+    "events": [
+     "The caller requests creation of a producer project grant."
+    ],
+    "outcomes": [
+     "Authorization is checked first: the caller receives the concealed authorization rejection and Registry is not called.",
+     "Registry or target validation is checked first: the operation performs an external lookup and answers a project-not-found, Registry-boundary, or target-not-found rejection."
+    ],
+    "observer": "The caller and the Registry service"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "Viewer project-list Registry failure handling",
+   "kind": "ambiguous exception and contradiction",
+   "text": "The changed text says a granted project “whose Registry context cannot be obtained at that moment is left out” of the project list, while A5 says an unknown project is rejected and a read whose context carries a status outside active/archived “is refused as an invalid Registry answer.”",
+   "question": "Exactly which Registry outcomes cause only that project to be omitted from the viewer list, and which outcomes fail the entire list operation—timeout, transport_error, HTTP errors, not_found/exists=false, schema_mismatch, identity_mismatch, or an unsupported status string?",
+   "options": [
+    "Omit the project for every failure to obtain a typed ProjectContext, including not_found and unsupported status.",
+    "Omit only transient failures such as timeout and transport_error; fail the list for permanent or invalid answers.",
+    "Apply A5 strictly to unknown or invalid statuses and fail the entire list, while omitting only calls that produce no response."
+   ],
+   "default_guess": "Omit the affected project for every Registry failure that prevents construction of a valid typed context, while continuing with other grants.",
+   "witness": {
+    "initial": "A viewer has two active grants. Registry returns a valid active context for project A and a context with status paused, or a not-found answer, for project B.",
+    "events": [
+     "The viewer requests their project list.",
+     "The portal resolves both granted projects against Registry."
+    ],
+    "outcomes": [
+     "The changed project-list exception omits B and returns a list containing A.",
+     "A5's read policy refuses the project-list operation because B is unknown or has an invalid Registry status."
+    ],
+    "observer": "The viewer"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "Snapshot import persistence failure after classification",
+   "kind": "uncovered failure boundary",
+   "text": "The changed text guarantees that “an attempt the import classifies” is recorded with an import result and audit, and expressly says only an import that fails “before it classifies the attempt” records nothing; it says nothing about storage failure while persisting the snapshot, import result, or audit after classification.",
+   "question": "What is the required atomic outcome when classification has been reached but persistence of the snapshot, SnapshotImportRecord, or snapshot.import audit then fails?",
+   "options": [
+    "Roll back every import write, answer the storage failure, and treat the attempt as unrecorded despite having been classified.",
+    "Retry or otherwise require persistence until the classified attempt has exactly one import result and audit before answering.",
+    "Permit the successfully persisted subset to remain, such as a snapshot without its import result or audit."
+   ],
+   "default_guess": "Use one transaction, roll back the snapshot, import result, and audit together, and answer the storage failure with no record.",
+   "witness": {
+    "initial": "A valid new snapshot passes route authorization and all content checks and is classified as accepted; no snapshot with its identity exists.",
+    "events": [
+     "The import builds the accepted snapshot and fresh import result.",
+     "Storage succeeds for preliminary work but fails while inserting the import result or audit before transaction commit."
+    ],
+    "outcomes": [
+     "The transaction is rolled back and the producer receives a storage failure; no snapshot, import result, or audit exists.",
+     "The implementation preserves or retries the classified result to satisfy the rule that every classified attempt is recorded; a later read or replay finds a snapshot/import result."
+    ],
+    "observer": "The producer on retry and an administrator inspecting stored snapshots or audit records"
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A30\",\"subject\":\"REGISTRY_BASE_URL lifecycle\",\"kind\":\"contradiction\",\"text\":\"A30 says “REGISTRY_BASE_URL is read by the Registry gateway at each call, not at start-up: it is no required start-up variable,” while R0-10 says the service's environment configuration “is validated when it starts,” and State 1 describes RuntimeSettings as startup configuration containing the Registry base URL candidate.\",\"question\":\"Is REGISTRY_BASE_URL excluded from startup RuntimeSettings and startup validation, or must it be read and validated at startup with the other environment configuration?\",\"options\":[\"Exclude it from RuntimeSettings; startup succeeds without it and every Registry call rereads the environment.\",\"Include it in RuntimeSettings; a missing or invalid value prevents startup.\",\"Include it as an optional startup setting but reread or override it on each Registry call.\"],\"default_guess\":\"Treat A30 as the specific exception: exclude it from required startup validation and reread it for each Registry call.\",\"witness\":{\"initial\":\"The process environment has no REGISTRY_BASE_URL but all other required settings are valid.\",\"events\":[\"The host starts the portal.\",\"A caller invokes an operation that needs Registry validation.\"],\"outcomes\":[\"Under A30, startup succeeds and the later Registry call fails with transport_error.\",\"Under R0-10 and the startup RuntimeSettings description, startup refuses the missing Registry configuration and no API call can occur.\"],\"observer\":\"The host operator and the API caller\"}},{\"unit\":\"A5\",\"subject\":\"Access-management creation check precedence\",\"kind\":\"unspecified order\",\"text\":\"The texts say creation “requires a valid administrator session, an active principal and portal.access.manage” and also proceeds only when Registry reports exists=true and is_active=true, but they specify authorization-before-Registry only for viewer-project discovery/granting, not for staff-assignment or producer-grant creation, nor the precedence against target-existence and duplicate checks.\",\"question\":\"For each grant or assignment creation, what is the exact order among administrator authorization, target principal/account/viewer existence, active-duplicate detection, and Registry exists/is_active validation?\",\"options\":[\"Authorize first, then validate the target and duplicate, then call Registry.\",\"Authorize first, call Registry next, then validate the target and duplicate.\",\"Use operation-specific orders, stated separately for viewer grants, staff assignments, and producer grants.\"],\"default_guess\":\"Authorize first, validate the target and duplicate next, and call Registry last.\",\"witness\":{\"initial\":\"A caller lacks a valid administrator session; the named service principal does not exist; the project is unknown to Registry.\",\"events\":[\"The caller requests creation of a producer project grant.\"],\"outcomes\":[\"Authorization is checked first: the caller receives the concealed authorization rejection and Registry is not called.\",\"Registry or target validation is checked first: the operation performs an external lookup and answers a project-not-found, Registry-boundary, or target-not-found rejection.\"],\"observer\":\"The caller and the Registry service\"}},{\"unit\":\"context\",\"subject\":\"Viewer project-list Registry failure handling\",\"kind\":\"ambiguous exception and contradiction\",\"text\":\"The changed text says a granted project “whose Registry context cannot be obtained at that moment is left out” of the project list, while A5 says an unknown project is rejected and a read whose context carries a status outside active/archived “is refused as an invalid Registry answer.”\",\"question\":\"Exactly which Registry outcomes cause only that project to be omitted from the viewer list, and which outcomes fail the entire list operation—timeout, transport_error, HTTP errors, not_found/exists=false, schema_mismatch, identity_mismatch, or an unsupported status string?\",\"options\":[\"Omit the project for every failure to obtain a typed ProjectContext, including not_found and unsupported status.\",\"Omit only transient failures such as timeout and transport_error; fail the list for permanent or invalid answers.\",\"Apply A5 strictly to unknown or invalid statuses and fail the entire list, while omitting only calls that produce no response.\"],\"default_guess\":\"Omit the affected project for every Registry failure that prevents construction of a valid typed context, while continuing with other grants.\",\"witness\":{\"initial\":\"A viewer has two active grants. Registry returns a valid active context for project A and a context with status paused, or a not-found answer, for project B.\",\"events\":[\"The viewer requests their project list.\",\"The portal resolves both granted projects against Registry.\"],\"outcomes\":[\"The changed project-list exception omits B and returns a list containing A.\",\"A5's read policy refuses the project-list operation because B is unknown or has an invalid Registry status.\"],\"observer\":\"The viewer\"}},{\"unit\":\"context\",\"subject\":\"Snapshot import persistence failure after classification\",\"kind\":\"uncovered failure boundary\",\"text\":\"The changed text guarantees that “an attempt the import classifies” is recorded with an import result and audit, and expressly says only an import that fails “before it classifies the attempt” records nothing; it says nothing about storage failure while persisting the snapshot, import result, or audit after classification.\",\"question\":\"What is the required atomic outcome when classification has been reached but persistence of the snapshot, SnapshotImportRecord, or snapshot.import audit then fails?\",\"options\":[\"Roll back every import write, answer the storage failure, and treat the attempt as unrecorded despite having been classified.\",\"Retry or otherwise require persistence until the classified attempt has exactly one import result and audit before answering.\",\"Permit the successfully persisted subset to remain, such as a snapshot without its import result or audit.\"],\"default_guess\":\"Use one transaction, roll back the snapshot, import result, and audit together, and answer the storage failure with no record.\",\"witness\":{\"initial\":\"A valid new snapshot passes route authorization and all content checks and is classified as accepted; no snapshot with its identity exists.\",\"events\":[\"The import builds the accepted snapshot and fresh import result.\",\"Storage succeeds for preliminary work but fails while inserting the import result or audit before transaction commit.\"],\"outcomes\":[\"The transaction is rolled back and the producer receives a storage failure; no snapshot, import result, or audit exists.\",\"The implementation preserves or retries the classified result to satisfy the rule that every classified attempt is recorded; a later read or replay finds a snapshot/import result.\"],\"observer\":\"The producer on retry and an administrator inspecting stored snapshots or audit records\"}}]}",
+ "set_aside": []
+}
