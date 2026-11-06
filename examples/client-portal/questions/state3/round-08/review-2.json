@@ -1,0 +1,59 @@
+{
+ "open_points": [
+  {
+   "unit": "context",
+   "subject": "producer project-scope authorization",
+   "kind": "two owners",
+   "text": "`service_identity` “Owns A12 … and producer scope” and exposes `authorize_producer_scope`, while `authorization_guard` “Owns … the guard part of … A12” and exposes `authorize_snapshot_import`; the import route now checks “its scope and grant for the project” before calling the import.",
+   "question": "Which module owns the producer-scope decision used by the import route, and must the route call `authorize_producer_scope`, `authorize_snapshot_import`, or both?",
+   "options": [
+    "`service_identity.authorize_producer_scope` is authoritative and the authorization guard delegates to or consumes its result",
+    "`authorization_guard.authorize_snapshot_import` is authoritative and `service_identity` only owns grant lifecycle and bearer authentication",
+    "The route must call both checks, with an explicit order and race semantics"
+   ],
+   "default_guess": "Make `authorization_guard.authorize_snapshot_import` the single route-level scope decision and treat `service_identity` as owner only of producer identities, credentials and grants.",
+   "witness": {
+    "initial": "A granted-projects producer has an active credential and active grant for an active project.",
+    "events": [
+     "The producer starts a snapshot publication.",
+     "The route completes the scope check through whichever of the two advertised capabilities it calls first.",
+     "An administrator revokes the producer grant before the other possible check or before `import_snapshot` runs."
+    ],
+    "outcomes": [
+     "An implementation treating the first scope capability as authoritative proceeds to classification and may accept the snapshot.",
+     "An implementation calling the other capability as the authoritative or second check returns the scoped not-found access error and records nothing, or records `unknown_project` if it regards this as the import's own check."
+    ],
+    "observer": "The producer and the audit/import-result readers see whether an import result exists."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "credential revocation between route authorization and the import's own access check",
+   "kind": "unowned recheck semantics",
+   "text": "A record may carry `unknown_project`, `archived_project` or `scope_denied` “only when access changed between the route's check and the import's own”, but the route check includes “its authenticated bearer credential”; `ServiceActorContext` carries only principal, source type, scope mode and key version, `service_identity` owns credential usability, and `snapshot_import` may know only `authorization_guard`, not `service_identity`.",
+   "question": "If the credential used at the route is revoked or expires after route authorization but before the import's own access check, is it revalidated, and if so which permitted dependency performs that check and what import outcome or access response results?",
+   "options": [
+    "The authenticated `ServiceActorContext` remains valid for this request; credential changes are not rechecked and import classification continues",
+    "The import's own check revalidates the credential and treats failure as a route-style access refusal with no `import_id`",
+    "The import's own check revalidates the credential and writes a rejected import record, requiring a specified mapping to an existing reject reason or a new reason"
+   ],
+   "default_guess": "Treat route authentication as valid for the duration of that request and let the import's own check re-evaluate only principal status, project scope and Registry lifecycle.",
+   "witness": {
+    "initial": "A producer has an active bearer credential, an active grant and import capability for an active project.",
+    "events": [
+     "The producer sends a valid snapshot publication.",
+     "The route authenticates the bearer and completes its access check.",
+     "An administrator revokes that credential before `import_snapshot` performs the stated own access check."
+    ],
+    "outcomes": [
+     "The authenticated context remains authoritative for the request, so the import is classified and receives a fresh `import_id`.",
+     "Credential usability is rechecked, so the publication is refused; the texts do not determine whether it receives no record or a rejected record, nor which reject reason a record would carry."
+    ],
+    "observer": "The producer sees whether it receives an import result, and operators later see whether import and audit records exist."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"context\",\"subject\":\"producer project-scope authorization\",\"kind\":\"two owners\",\"text\":\"`service_identity` “Owns A12 … and producer scope” and exposes `authorize_producer_scope`, while `authorization_guard` “Owns … the guard part of … A12” and exposes `authorize_snapshot_import`; the import route now checks “its scope and grant for the project” before calling the import.\",\"question\":\"Which module owns the producer-scope decision used by the import route, and must the route call `authorize_producer_scope`, `authorize_snapshot_import`, or both?\",\"options\":[\"`service_identity.authorize_producer_scope` is authoritative and the authorization guard delegates to or consumes its result\",\"`authorization_guard.authorize_snapshot_import` is authoritative and `service_identity` only owns grant lifecycle and bearer authentication\",\"The route must call both checks, with an explicit order and race semantics\"],\"default_guess\":\"Make `authorization_guard.authorize_snapshot_import` the single route-level scope decision and treat `service_identity` as owner only of producer identities, credentials and grants.\",\"witness\":{\"initial\":\"A granted-projects producer has an active credential and active grant for an active project.\",\"events\":[\"The producer starts a snapshot publication.\",\"The route completes the scope check through whichever of the two advertised capabilities it calls first.\",\"An administrator revokes the producer grant before the other possible check or before `import_snapshot` runs.\"],\"outcomes\":[\"An implementation treating the first scope capability as authoritative proceeds to classification and may accept the snapshot.\",\"An implementation calling the other capability as the authoritative or second check returns the scoped not-found access error and records nothing, or records `unknown_project` if it regards this as the import's own check.\"],\"observer\":\"The producer and the audit/import-result readers see whether an import result exists.\"}},{\"unit\":\"context\",\"subject\":\"credential revocation between route authorization and the import's own access check\",\"kind\":\"unowned recheck semantics\",\"text\":\"A record may carry `unknown_project`, `archived_project` or `scope_denied` “only when access changed between the route's check and the import's own”, but the route check includes “its authenticated bearer credential”; `ServiceActorContext` carries only principal, source type, scope mode and key version, `service_identity` owns credential usability, and `snapshot_import` may know only `authorization_guard`, not `service_identity`.\",\"question\":\"If the credential used at the route is revoked or expires after route authorization but before the import's own access check, is it revalidated, and if so which permitted dependency performs that check and what import outcome or access response results?\",\"options\":[\"The authenticated `ServiceActorContext` remains valid for this request; credential changes are not rechecked and import classification continues\",\"The import's own check revalidates the credential and treats failure as a route-style access refusal with no `import_id`\",\"The import's own check revalidates the credential and writes a rejected import record, requiring a specified mapping to an existing reject reason or a new reason\"],\"default_guess\":\"Treat route authentication as valid for the duration of that request and let the import's own check re-evaluate only principal status, project scope and Registry lifecycle.\",\"witness\":{\"initial\":\"A producer has an active bearer credential, an active grant and import capability for an active project.\",\"events\":[\"The producer sends a valid snapshot publication.\",\"The route authenticates the bearer and completes its access check.\",\"An administrator revokes that credential before `import_snapshot` performs the stated own access check.\"],\"outcomes\":[\"The authenticated context remains authoritative for the request, so the import is classified and receives a fresh `import_id`.\",\"Credential usability is rechecked, so the publication is refused; the texts do not determine whether it receives no record or a rejected record, nor which reject reason a record would carry.\"],\"observer\":\"The producer sees whether it receives an import result, and operators later see whether import and audit records exist.\"}}]}",
+ "set_aside": []
+}

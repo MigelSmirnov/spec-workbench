@@ -1,0 +1,60 @@
+{
+ "open_points": [
+  {
+   "unit": "context",
+   "subject": "snapshot publication authorization ownership",
+   "kind": "contradictory check ownership",
+   "text": "“Before the import, the import route checks the producer's access” and “a record carries one of them only when access changed between the route's check and the import's own” require two authorization checks, while `authorization_guard` owns “one decision per operation” and the transaction rule describes “an authorization check” completing before the caller opens its transaction.",
+   "question": "Does one snapshot-publication operation authorize only once in the route, or does `snapshot_import` perform a second authorization decision; if twice, which module owns the second check and its race outcome?",
+   "options": [
+    "The API invokes the guard once and passes an AuthorizedProjectContext to `snapshot_import`.",
+    "The API checks access and `snapshot_import` independently invokes `authorization_guard` again.",
+    "The route delegates its only authorization check to `snapshot_import`, so there is no check-before-import/check-inside-import race."
+   ],
+   "default_guess": "Have the API perform the route check and have `snapshot_import` recheck immediately before classification, because the changed text explicitly describes an import-owned race classification.",
+   "witness": {
+    "initial": "An active producer has an active grant for an active project and publishes a valid new snapshot.",
+    "events": [
+     "The API authenticates the producer and the route's authorization check succeeds.",
+     "An administrator revokes the producer's project grant before snapshot persistence starts.",
+     "The import proceeds."
+    ],
+    "outcomes": [
+     "Following “one decision per operation,” the passed AuthorizedProjectContext remains authoritative and the snapshot is accepted with an `accepted` import record.",
+     "Following “the import's own” check, `snapshot_import` checks again and writes a rejected record with `unknown_project`."
+    ],
+    "observer": "The producer sees either an accepted snapshot result or a rejected import result, and staff see different persisted snapshot and audit history."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "access changes after route authorization",
+   "kind": "unclassifiable race",
+   "text": "“a record carries one of [unknown_project, archived_project, scope_denied] only when access changed between the route's check and the import's own” does not say what happens when the changed access is credential revocation or principal disablement; `SnapshotImportRecord` has no authentication/principal-disabled reason, `ServiceActorContext` carries no credential identifier or plaintext, and `snapshot_import` may not know `service_identity`.",
+   "question": "After the route has admitted a publication, which access facts are rechecked by the import, and how is a credential revoked or principal disabled in that interval classified and recorded?",
+   "options": [
+    "Do not recheck credential or principal status; only grant and Registry changes can produce race-time import records.",
+    "Re-authenticate before import and treat failure as a route-level access refusal with no `import_id` or record.",
+    "Recheck principal/credential state inside import and map the failure to an existing import rejection reason.",
+    "Add a distinct classified outcome or reason for this race."
+   ],
+   "default_guess": "Treat credential revocation or principal disablement as an authentication refusal with no import record, while limiting the import's second check to scope and Registry state.",
+   "witness": {
+    "initial": "A producer credential and its principal are active, and the target project is active and granted.",
+    "events": [
+     "The route authenticates the bearer credential and completes its access check.",
+     "An administrator revokes that credential or disables the principal.",
+     "The valid publication reaches `snapshot_import`."
+    ],
+    "outcomes": [
+     "The earlier authenticated context remains sufficient, so the import is classified and may be accepted with a fresh `import_id`.",
+     "The changed authentication state is rechecked, so the request is refused without a record; alternatively an implementer trying to record it has no specified `ImportRejectReason`."
+    ],
+    "observer": "The producer sees either an import result or an access error, and administrators see either persisted snapshot/audit records or none."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"context\",\"subject\":\"snapshot publication authorization ownership\",\"kind\":\"contradictory check ownership\",\"text\":\"“Before the import, the import route checks the producer's access” and “a record carries one of them only when access changed between the route's check and the import's own” require two authorization checks, while `authorization_guard` owns “one decision per operation” and the transaction rule describes “an authorization check” completing before the caller opens its transaction.\",\"question\":\"Does one snapshot-publication operation authorize only once in the route, or does `snapshot_import` perform a second authorization decision; if twice, which module owns the second check and its race outcome?\",\"options\":[\"The API invokes the guard once and passes an AuthorizedProjectContext to `snapshot_import`.\",\"The API checks access and `snapshot_import` independently invokes `authorization_guard` again.\",\"The route delegates its only authorization check to `snapshot_import`, so there is no check-before-import/check-inside-import race.\"],\"default_guess\":\"Have the API perform the route check and have `snapshot_import` recheck immediately before classification, because the changed text explicitly describes an import-owned race classification.\",\"witness\":{\"initial\":\"An active producer has an active grant for an active project and publishes a valid new snapshot.\",\"events\":[\"The API authenticates the producer and the route's authorization check succeeds.\",\"An administrator revokes the producer's project grant before snapshot persistence starts.\",\"The import proceeds.\"],\"outcomes\":[\"Following “one decision per operation,” the passed AuthorizedProjectContext remains authoritative and the snapshot is accepted with an `accepted` import record.\",\"Following “the import's own” check, `snapshot_import` checks again and writes a rejected record with `unknown_project`.\"],\"observer\":\"The producer sees either an accepted snapshot result or a rejected import result, and staff see different persisted snapshot and audit history.\"}},{\"unit\":\"context\",\"subject\":\"access changes after route authorization\",\"kind\":\"unclassifiable race\",\"text\":\"“a record carries one of [unknown_project, archived_project, scope_denied] only when access changed between the route's check and the import's own” does not say what happens when the changed access is credential revocation or principal disablement; `SnapshotImportRecord` has no authentication/principal-disabled reason, `ServiceActorContext` carries no credential identifier or plaintext, and `snapshot_import` may not know `service_identity`.\",\"question\":\"After the route has admitted a publication, which access facts are rechecked by the import, and how is a credential revoked or principal disabled in that interval classified and recorded?\",\"options\":[\"Do not recheck credential or principal status; only grant and Registry changes can produce race-time import records.\",\"Re-authenticate before import and treat failure as a route-level access refusal with no `import_id` or record.\",\"Recheck principal/credential state inside import and map the failure to an existing import rejection reason.\",\"Add a distinct classified outcome or reason for this race.\"],\"default_guess\":\"Treat credential revocation or principal disablement as an authentication refusal with no import record, while limiting the import's second check to scope and Registry state.\",\"witness\":{\"initial\":\"A producer credential and its principal are active, and the target project is active and granted.\",\"events\":[\"The route authenticates the bearer credential and completes its access check.\",\"An administrator revokes that credential or disables the principal.\",\"The valid publication reaches `snapshot_import`.\"],\"outcomes\":[\"The earlier authenticated context remains sufficient, so the import is classified and may be accepted with a fresh `import_id`.\",\"The changed authentication state is rechecked, so the request is refused without a record; alternatively an implementer trying to record it has no specified `ImportRejectReason`.\"],\"observer\":\"The producer sees either an import result or an access error, and administrators see either persisted snapshot/audit records or none.\"}}]}",
+ "set_aside": []
+}
