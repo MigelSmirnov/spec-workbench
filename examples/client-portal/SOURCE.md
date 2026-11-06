@@ -203,6 +203,8 @@ Nothing was designed; deferred features stay deferred.
 | round-06 | 0 | clear on the unchanged text; `design_questions.py status --state 1`: closed, every unit closed by two clear rounds |
 | round-07 | 2 | reopened by State 2 repairs (M17 mutation-policy field, M18 sections, M36 reason code, ProjectOverview availability); M18 empty and duplicate section lists stated as the producer's obligation, not a portal check |
 | round-08 | 0 | clear; M18 still needs a second clear round (State 1 open: M18 only) |
+| round-09 | 0 | clear on M18 after the trim of 2026-11-06 (M18 sentence on sections shortened, no meaning change) |
+| round-10 | 0 | clear (empty sections `answered_later`, repeated ids `answered`); `design_questions.py status --state 1`: closed |
 
 ### State 2 question rounds (in progress)
 
