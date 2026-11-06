@@ -177,6 +177,19 @@ Before Q11–Q14 or new functionality are designed, the case must be migrated to
 the current standard and linked to its Factory project, so that portal changes
 can follow the Workbench → Factory route.
 
+Migration findings (2026-11-06, branch `agent/client-portal`; `SOURCE.md`):
+
+- the authoritative design text is the authoring pass of 2026-07-18/19
+  (former `spec/`); the former top-level `01_…`–`09_…` are the frozen
+  requirements baseline, now under `baseline/`;
+- the accepted Factory spec (sha256 `459ac96c…`, 2026-08-17) is 45 accepted
+  Factory changes ahead of that text (565 contracts against 318, 39 modules
+  against 20). The migration carries the accepted spec's meaning, each change
+  into its earliest owning state with its Factory commit cited;
+- `PROJECT_INDEX.json` on `main` still names `product-decisions-and-reassembly`
+  as this case's canonical ref; until it names `agent/client-portal`,
+  `tools/authoring.py` and the Workbench gateway read the old layout.
+
 ### Q16 — Estimate capability box for the client's own chat agent
 
 Owner requirement 2026-11-06. For every accepted estimate version the client

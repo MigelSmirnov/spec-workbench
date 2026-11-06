@@ -1,4 +1,4 @@
-# Client Portal Requirements Baseline
+# Client Portal
 
 ## Purpose
 
@@ -7,53 +7,22 @@ project. A portal session always operates in the context of one Registry
 `project_id` and presents the client with budget, expense, payment, work
 progress, and photo information for that project.
 
-The documents in this directory form one technical assignment split by topic.
-They are requirements input for a future specification-authoring pass; they
-are not an assembled specification and do not define implementation.
+## Layout (migration of 2026-11-06, `open_questions.md` Q15)
 
-## Current baseline
+This case is being migrated to the current Workbench authoring standard. The
+design states move one at a time; a state not yet migrated is still in the
+former layout under `spec/`.
 
-- Registry already provides a reliable boundary for project identity,
-  validation, and current project context.
-- OCR is a separate external microservice. Telegram bot is an intake interface,
-  while Client Portal accepts only a confirmed normalized recognition result
-  through its OCR boundary.
-- PresuPro currently provides an editable estimate and calculated totals, but
-  not a published immutable budget suitable for Client Portal.
-- A manually entered portal budget is temporarily allowed for the MVP.
-- An approved PresuPro snapshot is a future source and is explicitly marked
-  unavailable wherever it is referenced.
-- An approved presupuesto is not a factura. Their detailed lifecycle
-  relationship remains unresolved.
+| path | content |
+|---|---|
+| `SOURCE.md` | which text is authoritative, the accepted Factory spec the migration carries, classified evidence |
+| `00_product.md` | State 0, product frame (migrated) |
+| `spec/10_models.md` … `spec/80_assembly.md`, `spec/invariant_ledger.json`, `spec/HANDOFF.md` | States 1–8 of the authoring pass of 2026-07-18/19, not yet migrated |
+| `baseline/01_product_boundary.md` … `baseline/09_notes.md` | the frozen requirements baseline the authoring pass started from; input, not design |
+| `open_questions.md` | the owner's open questions Q1–Q16 |
+| `global_spec.json` | the assembly of 2026-07-19; superseded by the accepted Factory spec (`SOURCE.md`) and replaced when State 8 is reached again |
 
-## Maturity
-
-The product requirements and external facts are recorded. Formal domain
-design, invariant landing, module design, exact contracts, behavioral notes,
-Factory assembly, and compatibility verification are separate future work.
-No `global_spec.json` belongs in this requirements baseline.
-
-## Navigation
-
-- [Product boundary](01_product_boundary.md)
-- [External boundaries](02_external_boundaries.md)
-- [Business entities](03_domain_models.md)
-- [Business rules and invariants](04_rules_and_invariants.md)
-- [Product responsibility areas](05_module_responsibilities.md)
-- [User and integration flows](06_system_flows.md)
-- [Required external capabilities](07_public_apis.md)
-- [Business contracts](08_contracts.md)
-- [Cross-cutting requirements notes](09_notes.md)
-- [Open questions](open_questions.md)
-
-## Future specification work
-
-Another authoring pass must use these documents in methodology order, resolve
-the recorded open questions with the product owner, and only then design the
-formal models, APIs, contracts, notes, and `global_spec.json`.
-
-That authoring pass lives in [spec/](spec/). Its State 0
-([spec/00_product.md](spec/00_product.md), decisions of 2026-07-18) closes the
-open questions of this baseline; later design states and the assembled
-specification are added there as the pass progresses. The documents 01–09 in
-this directory remain the frozen requirements input.
+The next phase is `python tools/design_authoring_next.py examples/client-portal`
+on this branch. `tools/authoring.py next client-portal` still resolves the
+former canonical ref `product-decisions-and-reassembly` until
+`PROJECT_INDEX.json` names `agent/client-portal` (a change on `main`).

@@ -2,10 +2,19 @@
 
 ## Status
 
-**Authoring pass over the requirements baseline `../01_product_boundary.md` …
-`../09_notes.md`. Product decisions in this document were made with the
+**Authoring pass over the requirements baseline `baseline/01_product_boundary.md` …
+`baseline/09_notes.md`. Product decisions in this document were made with the
 product owner on 2026-07-18 and supersede the corresponding open questions of
 the baseline.**
+
+Migrated to the current Workbench layout on 2026-11-06 (`open_questions.md`
+Q15). The text above "Decisions" is the State 0 of 2026-07-18 unchanged but
+for paths. "Decisions" numbers the owner decisions the case already holds and
+carries, each with its source, the product-level decisions the Factory
+accepted for `client_portal_sandbox` between 2026-07-22 and 2026-08-17 while
+this case was not updated (`SOURCE.md`, "Divergence"). A migration changes form, not
+meaning: nothing in "Decisions" is new to the product; every entry names the
+document or the accepted Factory spec change it comes from.
 
 ## Product statement
 
@@ -254,7 +263,7 @@ converts or guesses. Multi-currency is not designed into the models.
 
 ## Persistent data
 
-Conceptual records (physical storage undecided at this state):
+Conceptual records (physical storage undecided at this state; decided by R0-10):
 
 - client viewers, viewer access credentials (verification form), viewer
   sessions, project viewer grants;
@@ -274,7 +283,7 @@ Conceptual records (physical storage undecided at this state):
 
 Document and photo binaries stay outside business records; records hold
 stable file references. The binary storage boundary is undecided at this
-state.
+state; it is decided by State 3 ("Binary storage boundary"), R0-10 and R0-13.
 
 ## External systems
 
@@ -379,7 +388,7 @@ Detailed ownership is deferred to later states.
 
 ## Resolved baseline open questions
 
-Decisions of 2026-07-18 close `../open_questions.md` as follows:
+Decisions of 2026-07-18 close `open_questions.md` Q1–Q9 as follows:
 
 - Q1–Q2 (approved presupuesto lifecycle, presupuesto vs factura): closed for
   the portal boundary — the portal consumes explicitly approved immutable
@@ -401,7 +410,7 @@ Decisions of 2026-07-18 close `../open_questions.md` as follows:
 ## Unresolved decisions for later states
 
 - Mandatory MFA for operator/administrator accounts.
-- Session lifetime policy (staff and viewer TTLs, renewal).
+- Session lifetime policy (staff and viewer TTLs, renewal). Decided by R0-06.
 - Boundaries of an administrative area when more than one administrator
   exists.
 - Concrete transport between PresuPro and the portal (bearer / signed
@@ -410,9 +419,143 @@ Decisions of 2026-07-18 close `../open_questions.md` as follows:
   authorized objects but never deletes them as a side effect of business
   visibility or archival.
 - Presentation ordering and pagination details for lists (Registry list
-  ordering is not guaranteed by the platform contract).
+  ordering is not guaranteed by the platform contract). Ordering is decided
+  by State 2 R15; pagination stays absent (R0-01).
 - Whether expense corrections keep a visible change history beyond audit
   records.
+
+## Decisions
+
+Owner decisions of the case and product-level decisions of the accepted
+Factory spec, numbered so that later states can cite them. R0-01 to R0-06
+restate decisions already written above or in the former `spec/HANDOFF.md`;
+R0-07 to R0-12 are carried from accepted Factory spec changes (`SOURCE.md`);
+R0-13 is the owner decision of 2026-11-06 on Q12.
+
+### R0-01 — Sole-trader operating profile (owner, 2026-07-18)
+
+The product owner is a sole trader (autónomo) with few parallel projects.
+Operating simplicity is a first-class constraint; list pagination is absent for
+this few-project profile (former HANDOFF key decisions 1 and 14).
+
+### R0-02 — Three principal types, never merged (owner, 2026-07-18)
+
+`StaffAccount`, `ClientViewer` and `ServicePrincipal` as written under
+"Principals" (former HANDOFF key decision 2).
+
+### R0-03 — The Email Delivery Gateway is a mandatory external boundary (owner, 2026-07-18)
+
+As written under "External systems — Email Delivery Gateway" (former HANDOFF
+key decision 3). Administrative recovery is an exceptional, heavily audited
+flow.
+
+### R0-04 — Snapshot import is a push contract owned by the portal (owner, 2026-07-18)
+
+As written under "Approved estimate snapshot" and "Coexistence and transition"
+(former HANDOFF key decision 4).
+
+### R0-05 — Backend with a JSON API, EUR gross money, expenses only from OCR intake (owner, 2026-07-18)
+
+Backend and JSON API only; money is EUR, gross (IVA included), decimal,
+rounded half up to two places; an Expense is created only through OCR intake
+(former HANDOFF key decision 5; "Currency policy").
+
+### R0-06 — Sessions, self-service reset and configuration defaults (owner, 2026-07-19)
+
+Sessions have a fixed expiry with no sliding renewal; a staff member may
+request a password reset without authentication, and the request never reveals
+whether the address exists; the defaults are a staff session of 12 hours, a
+viewer session of 30 days, email verification 72 hours, email change 24 hours,
+password reset 60 minutes, 5 challenges per hour per account, and password
+hashing with argon2id (former HANDOFF, "Product-owner confirmation received").
+This closes the session-lifetime item of "Unresolved decisions for later
+states".
+
+### R0-07 — The first administrator is created by a local command, never over HTTP (accepted Factory spec, 2026-08-17)
+
+An empty deployment cannot acquire its first operator through the API, because
+creating a staff account needs an authorized administrator. The host operator
+runs a local administrative command that creates exactly one active, verified
+administrator when no staff account exists, and is refused once any exists. The
+command is not an HTTP route and does not appear in the API description; the
+email and password are its inputs, read neither from process arguments nor
+from the environment nor from a file, and never printed, logged or audited. Its
+outcome is a closed set of exit codes that deployment scripts may branch on
+(Factory `6011ac93`, `rules.staff_bootstrap_policy`).
+
+### R0-08 — Administrators discover the projects they grant (accepted Factory spec, 2026-08-08)
+
+To grant a viewer a project, an administrator lists the active Registry
+projects through an authenticated portal operation that requires the
+access-management capability; a denied authorization stops before Registry is
+asked. A viewer's own project discovery stays the grant-based path of "Client
+view" (Factory `fae77f99`).
+
+### R0-09 — A viewer's session travels only in a browser cookie; a producer only in a bearer header (accepted Factory spec, 2026-08-01)
+
+After a successful entry with the access link, the viewer's session is held in
+a host-only, HTTP-only, secure, same-site-strict cookie; no viewer credential is
+ever readable by page script. Viewer browser routes accept only that cookie, and
+mutating viewer requests are refused unless they come from the portal's own
+public origin. Viewers can restore and end their session explicitly. Service
+principals authenticate only with a bearer header (Factory `35a0a09c`,
+`babd5e52`, `51d19fdf`; `rules.http_transport_policy.browser_session`).
+
+### R0-10 — One deployment: one SQLite database, one local binary root, configured by environment (accepted Factory spec, 2026-07-22 to 2026-08-16)
+
+The portal runs as one service with one SQLite database file and one local
+directory under which `file_ref` resolves to stored bytes; the binary read
+bound `binary_max_read_bytes` stays a deployment setting. The service is
+configured only by environment variables, which it validates when it starts,
+and answers only on the trusted hosts it is
+configured with; wildcard hosts and origins are refused. This decides the
+"physical storage undecided" of "Persistent data" (Factory `4bdaa008`,
+`38626cc7`, `dc351917`, `8387e0a3`, `d1280708`; `config.persistence`,
+`config.runtime_environment_variables`).
+
+### R0-11 — Public liveness and readiness answers (accepted Factory spec, 2026-07-31)
+
+The service answers an unauthenticated liveness and readiness check that
+changes no product state and discloses no path, credential, schema, dependency
+version, configuration or exception (Factory `21658368`,
+`rules.http_transport_policy.health`).
+
+### R0-12 — Protected binaries are delivered as exact bytes (accepted Factory spec, 2026-08-01)
+
+An authorized document or photo is answered as its exact stored bytes, never
+inside a JSON envelope or a redirect. Its media type is recognized from the
+content and must be on a closed list per object kind; the download name is
+derived from the object kind and id, never from a stored name or caption. An
+unknown, cross-project, hidden, oversize or unlisted read is answered the same
+way, so the caller cannot tell them apart (Factory `babd5e52`,
+`rules.binary_delivery_policy`).
+
+### R0-13 — The portal's file boundary stays read-only (owner, 2026-11-06; Q12)
+
+The State 3 binary boundary is kept: the portal reads binaries behind
+`file_ref` and never accepts uploads. A separate future intake service places
+binaries and supplies the references. Until the hand-over between that service
+and the portal is decided (Q12 questions 1–5), operator placement of binaries
+stays the declared temporary route, outside the API.
+
+## Open questions
+
+Recorded in `open_questions.md`; none is designed by this migration (owner,
+2026-11-06).
+
+- Q10 — recovery after a lost one-time service credential response.
+- Q11 — what turns an accepted snapshot into a candidate budget version for
+  human activation.
+- Q12 — the hand-over between the future intake service and the portal (the
+  boundary itself is decided, R0-13).
+- Q13 — listing a viewer's access codes.
+- Q14 — replay-safe onboarding of a client.
+- Q16 — the estimate box for the client's own chat agent.
+- Still open from the authoring pass of 2026-07-19: staff MFA; administrative
+  area boundaries beyond the single current area; the PresuPro transport
+  binding; pagination beyond the few-project profile (R0-01); expense
+  correction history beyond audit; `SnapshotImportRecord` retention; external
+  binary deletion and retention.
 
 ## State 0 readiness assessment
 
