@@ -1,0 +1,162 @@
+{
+ "open_points": [
+  {
+   "unit": "context",
+   "subject": "service startup without Registry configuration",
+   "kind": "contradiction",
+   "text": "State 4 says “a missing, malformed or inconsistent value … stops the start before any request is served,” while State 2 A6 says “The Registry endpoint is not a start-up variable … the service starts without it” and later Registry calls fail as transport_error.",
+   "question": "Does a missing REGISTRY_BASE_URL prevent startup, or may the service start and fail only when a Registry operation is attempted?",
+   "options": [
+    "Start without the Registry endpoint and translate later calls to transport_error",
+    "Refuse startup when the Registry endpoint is missing"
+   ],
+   "default_guess": "Follow A6: permit startup and fail later Registry calls as transport_error.",
+   "witness": {
+    "initial": "All required local settings are valid, but REGISTRY_BASE_URL is absent.",
+    "events": [
+     "The deployment process calls runtime_settings.load_runtime_settings.",
+     "A monitor requests liveness.",
+     "A staff operation later requires Registry validation."
+    ],
+    "outcomes": [
+     "The service starts, liveness returns ok, and the later Registry operation fails as transport_error/502.",
+     "Startup is refused, so neither health nor the later operation is available."
+    ],
+    "observer": "The deployment operator and health monitor"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "staff.login_failed audit actor",
+   "kind": "model-flow contradiction",
+   "text": "State 4 says authenticate_staff appends staff.login_failed “on every rejection,” including an unknown or malformed email, but AuditRecord requires actor_id for actor_kind=staff and permits a missing actor_id only for actor_kind=system.",
+   "question": "What actor_kind and actor_id must a staff.login_failed audit use when no StaffAccount can be identified?",
+   "options": [
+    "Use system with no actor_id",
+    "Use staff with no actor_id despite the model validator",
+    "Do not write an audit when no account is identified",
+    "Use a synthetic or otherwise selected staff_id"
+   ],
+   "default_guess": "Use system with no actor_id for failures that cannot identify an account, and the staff account id when one is safely identified.",
+   "witness": {
+    "initial": "No staff account exists for normalized email nobody@example.test.",
+    "events": [
+     "A caller submits that email and an arbitrary password to the login route.",
+     "staff_identity rejects the login and must append staff.login_failed before returning the concealed rejection.",
+     "audit_writer validates the AuditIntent against M36/M37."
+    ],
+    "outcomes": [
+     "The failure is audited using system/no actor, which satisfies the actor closed choice but changes the stated actor semantics.",
+     "No valid AuditIntent can be constructed, so the audit is omitted or the login operation fails with an internal validation error instead of the required concealed 401."
+    ],
+    "observer": "The caller if an internal error escapes, and an audit reader otherwise"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "bootstrap CLI infrastructure failures",
+   "kind": "unstated failure outcome",
+   "text": "The bootstrap flow calls load_runtime_settings and performs schema creation and database writes, but its Errors section names only exit codes 1, 2 and 3; A29 says the exit-code contract is closed to 0, 1, 2 and 3.",
+   "question": "Which closed exit-code outcome applies when runtime configuration cannot be loaded or the bootstrap database/schema operation fails?",
+   "options": [
+    "Map infrastructure/configuration failure to one of exit codes 1–3",
+    "Return a new exit code, contradicting the closed contract",
+    "Let the command terminate by exception or process-level failure outside the exit-code contract"
+   ],
+   "default_guess": "Treat it as an exceptional process failure outside the four business outcomes, while ensuring no credential is disclosed.",
+   "witness": {
+    "initial": "The staff table is empty, but the configured SQLite path cannot be opened.",
+    "events": [
+     "The host operator enters matching valid credentials.",
+     "staff_bootstrap_cli loads settings and constructs the bootstrap store.",
+     "staff_bootstrap_store attempts to open the database."
+    ],
+    "outcomes": [
+     "The command maps the storage failure to one of the existing exit codes, although none has that meaning.",
+     "The command exits through an uncaught/translated infrastructure failure or a new code, despite the declared closed exit-code contract."
+    ],
+    "observer": "The host operator and deployment script"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "duplicate ProducerProjectGrant",
+   "kind": "missing failure outcome",
+   "text": "State 1 M15 says a second producer grant for the same principal/project is refused before writing while the first is active and becomes a persistence error after revocation, but flow:administer_service_principals gives no outcome for either duplicate-grant history.",
+   "question": "What declared failure and HTTP outcome does grant_producer_project produce for an already-used principal/project pair, both before and after revocation?",
+   "options": [
+    "Use authorization rejection/403 while active and persistence failure/500 after revocation, matching the analogous viewer and staff flows",
+    "Use conflict/409 for either duplicate history",
+    "Use input rejection/422 for either duplicate history"
+   ],
+   "default_guess": "Match the analogous access-management flows: 403 for an existing active grant and 500 for the terminal revoked-pair persistence conflict.",
+   "witness": {
+    "initial": "A granted_projects service principal already has an active ProducerProjectGrant for project P.",
+    "events": [
+     "An administrator calls grant_producer_project for the same principal and P.",
+     "The existing grant is later revoked.",
+     "An administrator calls grant_producer_project for the same pair again."
+    ],
+    "outcomes": [
+     "The calls follow the viewer/staff precedent: 403 while active, then 500 after revocation.",
+     "The implementation treats one or both attempts as a domain conflict or input error, returning 409 or 422."
+    ],
+    "observer": "The administrator calling the API"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "budget activation capability check",
+   "kind": "ownership contradiction",
+   "text": "State 4 says “The activation capability is checked by activate_budget_version itself … not by the guard,” while State 0 and State 2 A4 require the common authorization guard to check the required capability, and State 3 says budget_management must not own authorization.",
+   "question": "Must portal.estimate_snapshot.activate be checked by authorization_guard before calling budget_management, or by activate_budget_version as an input validation?",
+   "options": [
+    "The guard checks portal.estimate_snapshot.activate and budget_management receives the resulting authorized context",
+    "The route performs a generic mutation guard and budget_management checks the activation capability itself"
+   ],
+   "default_guess": "Have authorization_guard check portal.estimate_snapshot.activate before budget_management is called.",
+   "witness": {
+    "initial": "An active staff session is assigned to an active project; an AuthorizedProjectContext was produced for portal.budget.manage.",
+    "events": [
+     "The caller requests activation of an inactive BudgetVersion.",
+     "The route invokes the project mutation guard.",
+     "activate_budget_version receives the resulting context."
+    ],
+    "outcomes": [
+     "The guard is asked specifically for portal.estimate_snapshot.activate; failure is an authorization failure and budget_management is never entered.",
+     "The generic guard succeeds, then budget_management inspects the context capability and returns its input rejection/422."
+    ],
+    "observer": "The API caller and module-boundary tests"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "project-overview component failures",
+   "kind": "failure-policy contradiction",
+   "text": "The State 4 convention says “No failure becomes a success … with one exception: the viewer's project list,” but flow:build_project_overview says “a failed part is temporarily_unavailable” and “A part that cannot be read is marked unavailable,” returning the remaining overview.",
+   "question": "Which failures of an overview component are converted into temporarily_unavailable, and which must fail the whole overview request?",
+   "options": [
+    "Convert only declared dependency/read failures after authorization into component unavailability",
+    "Convert every exception raised while building a component into unavailability",
+    "Propagate component failures and reserve unavailability only for specifically named cases such as the second Registry context read"
+   ],
+   "default_guess": "Convert only explicitly classified dependency/read failures after the guard has passed; propagate programming, validation and authorization failures.",
+   "witness": {
+    "initial": "Authorization and Registry validation have succeeded, but reading expense records raises a persistence failure while the other overview components are readable.",
+    "events": [
+     "A staff member requests the project overview.",
+     "derived_views obtains project context and begins composing component views.",
+     "build_expense_view encounters the persistence failure."
+    ],
+    "outcomes": [
+     "The API returns 200 with expenses_availability=temporarily_unavailable and the other components present.",
+     "The persistence failure propagates and the whole request returns 500 under the general failure-translation convention."
+    ],
+    "observer": "The staff member requesting the overview"
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"context\",\"subject\":\"service startup without Registry configuration\",\"kind\":\"contradiction\",\"text\":\"State 4 says “a missing, malformed or inconsistent value … stops the start before any request is served,” while State 2 A6 says “The Registry endpoint is not a start-up variable … the service starts without it” and later Registry calls fail as transport_error.\",\"question\":\"Does a missing REGISTRY_BASE_URL prevent startup, or may the service start and fail only when a Registry operation is attempted?\",\"options\":[\"Start without the Registry endpoint and translate later calls to transport_error\",\"Refuse startup when the Registry endpoint is missing\"],\"default_guess\":\"Follow A6: permit startup and fail later Registry calls as transport_error.\",\"witness\":{\"initial\":\"All required local settings are valid, but REGISTRY_BASE_URL is absent.\",\"events\":[\"The deployment process calls runtime_settings.load_runtime_settings.\",\"A monitor requests liveness.\",\"A staff operation later requires Registry validation.\"],\"outcomes\":[\"The service starts, liveness returns ok, and the later Registry operation fails as transport_error/502.\",\"Startup is refused, so neither health nor the later operation is available.\"],\"observer\":\"The deployment operator and health monitor\"}},{\"unit\":\"context\",\"subject\":\"staff.login_failed audit actor\",\"kind\":\"model-flow contradiction\",\"text\":\"State 4 says authenticate_staff appends staff.login_failed “on every rejection,” including an unknown or malformed email, but AuditRecord requires actor_id for actor_kind=staff and permits a missing actor_id only for actor_kind=system.\",\"question\":\"What actor_kind and actor_id must a staff.login_failed audit use when no StaffAccount can be identified?\",\"options\":[\"Use system with no actor_id\",\"Use staff with no actor_id despite the model validator\",\"Do not write an audit when no account is identified\",\"Use a synthetic or otherwise selected staff_id\"],\"default_guess\":\"Use system with no actor_id for failures that cannot identify an account, and the staff account id when one is safely identified.\",\"witness\":{\"initial\":\"No staff account exists for normalized email nobody@example.test.\",\"events\":[\"A caller submits that email and an arbitrary password to the login route.\",\"staff_identity rejects the login and must append staff.login_failed before returning the concealed rejection.\",\"audit_writer validates the AuditIntent against M36/M37.\"],\"outcomes\":[\"The failure is audited using system/no actor, which satisfies the actor closed choice but changes the stated actor semantics.\",\"No valid AuditIntent can be constructed, so the audit is omitted or the login operation fails with an internal validation error instead of the required concealed 401.\"],\"observer\":\"The caller if an internal error escapes, and an audit reader otherwise\"}},{\"unit\":\"context\",\"subject\":\"bootstrap CLI infrastructure failures\",\"kind\":\"unstated failure outcome\",\"text\":\"The bootstrap flow calls load_runtime_settings and performs schema creation and database writes, but its Errors section names only exit codes 1, 2 and 3; A29 says the exit-code contract is closed to 0, 1, 2 and 3.\",\"question\":\"Which closed exit-code outcome applies when runtime configuration cannot be loaded or the bootstrap database/schema operation fails?\",\"options\":[\"Map infrastructure/configuration failure to one of exit codes 1–3\",\"Return a new exit code, contradicting the closed contract\",\"Let the command terminate by exception or process-level failure outside the exit-code contract\"],\"default_guess\":\"Treat it as an exceptional process failure outside the four business outcomes, while ensuring no credential is disclosed.\",\"witness\":{\"initial\":\"The staff table is empty, but the configured SQLite path cannot be opened.\",\"events\":[\"The host operator enters matching valid credentials.\",\"staff_bootstrap_cli loads settings and constructs the bootstrap store.\",\"staff_bootstrap_store attempts to open the database.\"],\"outcomes\":[\"The command maps the storage failure to one of the existing exit codes, although none has that meaning.\",\"The command exits through an uncaught/translated infrastructure failure or a new code, despite the declared closed exit-code contract.\"],\"observer\":\"The host operator and deployment script\"}},{\"unit\":\"context\",\"subject\":\"duplicate ProducerProjectGrant\",\"kind\":\"missing failure outcome\",\"text\":\"State 1 M15 says a second producer grant for the same principal/project is refused before writing while the first is active and becomes a persistence error after revocation, but flow:administer_service_principals gives no outcome for either duplicate-grant history.\",\"question\":\"What declared failure and HTTP outcome does grant_producer_project produce for an already-used principal/project pair, both before and after revocation?\",\"options\":[\"Use authorization rejection/403 while active and persistence failure/500 after revocation, matching the analogous viewer and staff flows\",\"Use conflict/409 for either duplicate history\",\"Use input rejection/422 for either duplicate history\"],\"default_guess\":\"Match the analogous access-management flows: 403 for an existing active grant and 500 for the terminal revoked-pair persistence conflict.\",\"witness\":{\"initial\":\"A granted_projects service principal already has an active ProducerProjectGrant for project P.\",\"events\":[\"An administrator calls grant_producer_project for the same principal and P.\",\"The existing grant is later revoked.\",\"An administrator calls grant_producer_project for the same pair again.\"],\"outcomes\":[\"The calls follow the viewer/staff precedent: 403 while active, then 500 after revocation.\",\"The implementation treats one or both attempts as a domain conflict or input error, returning 409 or 422.\"],\"observer\":\"The administrator calling the API\"}},{\"unit\":\"context\",\"subject\":\"budget activation capability check\",\"kind\":\"ownership contradiction\",\"text\":\"State 4 says “The activation capability is checked by activate_budget_version itself … not by the guard,” while State 0 and State 2 A4 require the common authorization guard to check the required capability, and State 3 says budget_management must not own authorization.\",\"question\":\"Must portal.estimate_snapshot.activate be checked by authorization_guard before calling budget_management, or by activate_budget_version as an input validation?\",\"options\":[\"The guard checks portal.estimate_snapshot.activate and budget_management receives the resulting authorized context\",\"The route performs a generic mutation guard and budget_management checks the activation capability itself\"],\"default_guess\":\"Have authorization_guard check portal.estimate_snapshot.activate before budget_management is called.\",\"witness\":{\"initial\":\"An active staff session is assigned to an active project; an AuthorizedProjectContext was produced for portal.budget.manage.\",\"events\":[\"The caller requests activation of an inactive BudgetVersion.\",\"The route invokes the project mutation guard.\",\"activate_budget_version receives the resulting context.\"],\"outcomes\":[\"The guard is asked specifically for portal.estimate_snapshot.activate; failure is an authorization failure and budget_management is never entered.\",\"The generic guard succeeds, then budget_management inspects the context capability and returns its input rejection/422.\"],\"observer\":\"The API caller and module-boundary tests\"}},{\"unit\":\"context\",\"subject\":\"project-overview component failures\",\"kind\":\"failure-policy contradiction\",\"text\":\"The State 4 convention says “No failure becomes a success … with one exception: the viewer's project list,” but flow:build_project_overview says “a failed part is temporarily_unavailable” and “A part that cannot be read is marked unavailable,” returning the remaining overview.\",\"question\":\"Which failures of an overview component are converted into temporarily_unavailable, and which must fail the whole overview request?\",\"options\":[\"Convert only declared dependency/read failures after authorization into component unavailability\",\"Convert every exception raised while building a component into unavailability\",\"Propagate component failures and reserve unavailability only for specifically named cases such as the second Registry context read\"],\"default_guess\":\"Convert only explicitly classified dependency/read failures after the guard has passed; propagate programming, validation and authorization failures.\",\"witness\":{\"initial\":\"Authorization and Registry validation have succeeded, but reading expense records raises a persistence failure while the other overview components are readable.\",\"events\":[\"A staff member requests the project overview.\",\"derived_views obtains project context and begins composing component views.\",\"build_expense_view encounters the persistence failure.\"],\"outcomes\":[\"The API returns 200 with expenses_availability=temporarily_unavailable and the other components present.\",\"The persistence failure propagates and the whole request returns 500 under the general failure-translation convention.\"],\"observer\":\"The staff member requesting the overview\"}}]}",
+ "set_aside": []
+}

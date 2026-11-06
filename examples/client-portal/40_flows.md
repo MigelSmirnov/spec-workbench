@@ -44,7 +44,9 @@ text" at the end.
   caller opens one. Registry calls happen outside any open portal transaction.
 - **Audit.** A significant success and its audit record commit in one
   transaction (A13, A23). Replay of an idempotent operation writes no second
-  creation audit.
+  creation audit; the snapshot import is the exception, because each of its
+  classified attempts, a replay included, is its own import result with its
+  own `snapshot.import` audit (R0-25, A13).
 - **Failure translation.** A use case raises one declared failure; the route
   table's `error_policy` maps it once to a status with an empty body
   (authentication 401, authorization 403, not found and concealed binary 404,
@@ -78,9 +80,10 @@ creates every repository schema when a transaction begins. Crossing models:
 ### Steps
 
 1. `capability:runtime_settings.load_runtime_settings` reads and validates the
-   environment; a missing, malformed or inconsistent value (a wildcard host or
-   origin, binary bounds out of order) stops the start before any request is
-   served.
+   environment variables of A30; a missing, malformed or inconsistent one (a
+   wildcard host or origin, binary bounds out of order) stops the start
+   before any request is served. The Registry endpoint is not one of them:
+   the service starts without it (A6).
 2. `capability:runtime.create_runtime_app` builds one `PortalStore` from the
    settings, builds the inner application with
    `capability:api.create_app`, installs
@@ -661,9 +664,11 @@ amounts. `module:audit_writer` appends each audit.
 ### Errors
 
 - Guard failures: 401, 403, 404, archived 409.
-- Invalid amounts or names: 422. The activation capability is checked by
-  `activate_budget_version` itself on the authorized context and refused as
-  its input rejection (422), not by the guard (Factory code
+- Invalid amounts or names: 422. The route's guard checks the activation
+  capability (`portal.estimate_snapshot.activate`, 403 without it);
+  `activate_budget_version` also refuses a context authorized for another
+  capability as its input rejection (422), which the route never passes
+  (Factory code `api/router.py` `activate_budget_version_endpoint`,
   `domain/budget_management.py`).
 - Allocations that would lose their section: conflict (409), nothing changed.
 

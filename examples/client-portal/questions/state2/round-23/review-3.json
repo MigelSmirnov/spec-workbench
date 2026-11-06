@@ -1,0 +1,131 @@
+{
+ "open_points": [
+  {
+   "unit": "A6",
+   "subject": "ProjectValidationResult consistency",
+   "kind": "unverified invariant",
+   "text": "“the two readings of A5 agree, because the Registry sets `is_active = true` exactly when `status` is `active`” together with “A decoded validation answer is returned as it is”",
+   "question": "What must happen when a type-valid validation answer has inconsistent `exists`, `status`, and `is_active` values: trust each field independently, or reject the answer as `schema_mismatch`?",
+   "options": [
+    "Trust the fields independently, allowing project guards and access-management operations to reach different decisions",
+    "Validate the cross-field relationship and reject an inconsistent answer as `schema_mismatch`"
+   ],
+   "default_guess": "Reject a cross-field-inconsistent validation answer as `schema_mismatch`.",
+   "witness": {
+    "initial": "Registry project P exists and the portal has an authorized administrator and operator.",
+    "events": [
+     "Registry returns the type-valid validation result `{project_id:P, exists:true, status:\"active\", is_active:false}`.",
+     "The operator performs a linked mutation on P.",
+     "The administrator tries to create a grant or assignment for P."
+    ],
+    "outcomes": [
+     "The project guard reads `status` and permits the mutation, while access management reads `is_active` and refuses the grant as archived.",
+     "The gateway treats the answer as invalid, so both operations fail with `schema_mismatch`."
+    ],
+    "observer": "The staff callers observe whether the mutation succeeds and which Registry-related refusal the grant operation returns."
+   }
+  },
+  {
+   "unit": "A5",
+   "subject": "Grant and assignment refusal precedence",
+   "kind": "check-order gap",
+   "text": "“a second grant while the first is active is refused by the grant operation before any write” and “the grant and assignment operations of access management decide by `is_active`”",
+   "question": "When a pair already has an active grant or assignment and Registry now reports the project inactive or unknown, which check wins: the existing-pair refusal or Registry project validation?",
+   "options": [
+    "Check the existing pair first and return the operation's duplicate refusal without consulting or prioritizing Registry",
+    "Validate Registry first and return the operation-specific unknown/archived or Registry-boundary refusal",
+    "Perform both but define one of their errors as having precedence"
+   ],
+   "default_guess": "Authorize the administrator, validate Registry, then check whether the pair already exists.",
+   "witness": {
+    "initial": "Viewer V already has an active grant for project P; Registry subsequently archives P.",
+    "events": [
+     "An administrator attempts to grant P to V again."
+    ],
+    "outcomes": [
+     "The operation detects the active pair first and returns the duplicate-grant refusal.",
+     "The operation validates P first and returns the viewer-grant Registry boundary failure for an inactive project."
+    ],
+    "observer": "The administrator sees a different refusal classification; Registry also sees a call in only one ordering."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "Concurrent duplicate grant and assignment creation",
+   "kind": "concurrency gap",
+   "text": "“a second grant while the first is active is refused by the grant operation before any write, one after its revocation as a persistence conflict” and the equivalent assignment and producer-grant rules",
+   "question": "How is the promised pre-write refusal classified when two creation operations for the same previously absent pair race and both pass the existence check before either writes?",
+   "options": [
+    "Serialize or lock the pair so the loser observes the active record and receives the operation-level pre-write refusal",
+    "Let both attempt insertion and classify the unique-constraint loser as a persistence conflict",
+    "Translate the unique-constraint race into the same operation-level duplicate refusal"
+   ],
+   "default_guess": "Translate the unique-constraint race into the operation-level active-pair refusal.",
+   "witness": {
+    "initial": "No grant exists for viewer V and active project P.",
+    "events": [
+     "Administrator A and administrator B concurrently request the same viewer grant.",
+     "Both transactions read before either transaction commits."
+    ],
+    "outcomes": [
+     "One transaction commits; the other is serialized, sees the active grant, and is refused before its write as an active-pair duplicate.",
+     "Both reach insertion; one commits and the other surfaces a persistence conflict from the unique constraint."
+    ],
+    "observer": "The losing administrator sees a different error classification."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "Snapshot import rejection after capability changes",
+   "kind": "missing enum mapping",
+   "text": "“a capability refused, between the route's check and the import is recorded as a rejection for that reason” while `ImportRejectReason` contains only `unsupported_contract_version`, `currency_mismatch`, `incomplete_content`, `unknown_project`, `archived_project`, `scope_denied`, and `invalid_sections`",
+   "question": "Which `ImportRejectReason` and audit `reason_code` represent a capability refusal discovered inside the import after the route check?",
+   "options": [
+    "Use `scope_denied` for capability refusal",
+    "Add a distinct capability-denied rejection reason",
+    "Answer the authorization failure and record nothing, like a principal disabled between checks"
+   ],
+   "default_guess": "Answer the authorization failure and record nothing because the closed rejection catalog has no capability-denied value.",
+   "witness": {
+    "initial": "A service principal passes the route checks for an import.",
+    "events": [
+     "Before the import's own access recheck, the required import capability is refused.",
+     "The import classifies the attempt and tries to create its immutable import and audit records."
+    ],
+    "outcomes": [
+     "The attempt is recorded as `rejected` with `scope_denied`.",
+     "The authorization failure is returned and no record is written because no closed rejection reason can encode it."
+    ],
+    "observer": "The producer sees whether an `import_id` is returned, and a later read or audit inspection sees whether a record exists."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "Capability refusal race for service principals",
+   "kind": "unrepresentable transition",
+   "text": "“a capability refused, between the route's check and the import” versus “Capability sets are read-only rules data; no runtime editing” and `ServicePrincipal.source_type` being immutable",
+   "question": "What permitted state change can make a service principal's import capability pass at the route and then become refused during the same import?",
+   "options": [
+    "No such runtime transition exists; remove or declare the branch unreachable",
+    "A deployment-time rules change may affect an in-flight request and must be modeled",
+    "Some other state, such as disabling the principal, is intended even though that case is separately specified to record nothing"
+   ],
+   "default_guess": "Treat capability refusal between the two checks as unreachable under the accepted models and static capability rules.",
+   "witness": {
+    "initial": "An active `estimate_producer` principal has authenticated and passed the route's capability check.",
+    "events": [
+     "No deployment occurs; the principal's immutable `source_type` and the static capability table remain unchanged.",
+     "The import repeats the capability check."
+    ],
+    "outcomes": [
+     "The repeated check necessarily still passes, making the newly specified recorded-rejection branch unreachable.",
+     "An implementation invents an unstated mutable capability source or reload behavior so the second check can fail and records a rejection."
+    ],
+    "observer": "Implementers and tests differ on whether this required branch can ever be exercised."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A6\",\"subject\":\"ProjectValidationResult consistency\",\"kind\":\"unverified invariant\",\"text\":\"“the two readings of A5 agree, because the Registry sets `is_active = true` exactly when `status` is `active`” together with “A decoded validation answer is returned as it is”\",\"question\":\"What must happen when a type-valid validation answer has inconsistent `exists`, `status`, and `is_active` values: trust each field independently, or reject the answer as `schema_mismatch`?\",\"options\":[\"Trust the fields independently, allowing project guards and access-management operations to reach different decisions\",\"Validate the cross-field relationship and reject an inconsistent answer as `schema_mismatch`\"],\"default_guess\":\"Reject a cross-field-inconsistent validation answer as `schema_mismatch`.\",\"witness\":{\"initial\":\"Registry project P exists and the portal has an authorized administrator and operator.\",\"events\":[\"Registry returns the type-valid validation result `{project_id:P, exists:true, status:\\\"active\\\", is_active:false}`.\",\"The operator performs a linked mutation on P.\",\"The administrator tries to create a grant or assignment for P.\"],\"outcomes\":[\"The project guard reads `status` and permits the mutation, while access management reads `is_active` and refuses the grant as archived.\",\"The gateway treats the answer as invalid, so both operations fail with `schema_mismatch`.\"],\"observer\":\"The staff callers observe whether the mutation succeeds and which Registry-related refusal the grant operation returns.\"}},{\"unit\":\"A5\",\"subject\":\"Grant and assignment refusal precedence\",\"kind\":\"check-order gap\",\"text\":\"“a second grant while the first is active is refused by the grant operation before any write” and “the grant and assignment operations of access management decide by `is_active`”\",\"question\":\"When a pair already has an active grant or assignment and Registry now reports the project inactive or unknown, which check wins: the existing-pair refusal or Registry project validation?\",\"options\":[\"Check the existing pair first and return the operation's duplicate refusal without consulting or prioritizing Registry\",\"Validate Registry first and return the operation-specific unknown/archived or Registry-boundary refusal\",\"Perform both but define one of their errors as having precedence\"],\"default_guess\":\"Authorize the administrator, validate Registry, then check whether the pair already exists.\",\"witness\":{\"initial\":\"Viewer V already has an active grant for project P; Registry subsequently archives P.\",\"events\":[\"An administrator attempts to grant P to V again.\"],\"outcomes\":[\"The operation detects the active pair first and returns the duplicate-grant refusal.\",\"The operation validates P first and returns the viewer-grant Registry boundary failure for an inactive project.\"],\"observer\":\"The administrator sees a different refusal classification; Registry also sees a call in only one ordering.\"}},{\"unit\":\"context\",\"subject\":\"Concurrent duplicate grant and assignment creation\",\"kind\":\"concurrency gap\",\"text\":\"“a second grant while the first is active is refused by the grant operation before any write, one after its revocation as a persistence conflict” and the equivalent assignment and producer-grant rules\",\"question\":\"How is the promised pre-write refusal classified when two creation operations for the same previously absent pair race and both pass the existence check before either writes?\",\"options\":[\"Serialize or lock the pair so the loser observes the active record and receives the operation-level pre-write refusal\",\"Let both attempt insertion and classify the unique-constraint loser as a persistence conflict\",\"Translate the unique-constraint race into the same operation-level duplicate refusal\"],\"default_guess\":\"Translate the unique-constraint race into the operation-level active-pair refusal.\",\"witness\":{\"initial\":\"No grant exists for viewer V and active project P.\",\"events\":[\"Administrator A and administrator B concurrently request the same viewer grant.\",\"Both transactions read before either transaction commits.\"],\"outcomes\":[\"One transaction commits; the other is serialized, sees the active grant, and is refused before its write as an active-pair duplicate.\",\"Both reach insertion; one commits and the other surfaces a persistence conflict from the unique constraint.\"],\"observer\":\"The losing administrator sees a different error classification.\"}},{\"unit\":\"context\",\"subject\":\"Snapshot import rejection after capability changes\",\"kind\":\"missing enum mapping\",\"text\":\"“a capability refused, between the route's check and the import is recorded as a rejection for that reason” while `ImportRejectReason` contains only `unsupported_contract_version`, `currency_mismatch`, `incomplete_content`, `unknown_project`, `archived_project`, `scope_denied`, and `invalid_sections`\",\"question\":\"Which `ImportRejectReason` and audit `reason_code` represent a capability refusal discovered inside the import after the route check?\",\"options\":[\"Use `scope_denied` for capability refusal\",\"Add a distinct capability-denied rejection reason\",\"Answer the authorization failure and record nothing, like a principal disabled between checks\"],\"default_guess\":\"Answer the authorization failure and record nothing because the closed rejection catalog has no capability-denied value.\",\"witness\":{\"initial\":\"A service principal passes the route checks for an import.\",\"events\":[\"Before the import's own access recheck, the required import capability is refused.\",\"The import classifies the attempt and tries to create its immutable import and audit records.\"],\"outcomes\":[\"The attempt is recorded as `rejected` with `scope_denied`.\",\"The authorization failure is returned and no record is written because no closed rejection reason can encode it.\"],\"observer\":\"The producer sees whether an `import_id` is returned, and a later read or audit inspection sees whether a record exists.\"}},{\"unit\":\"context\",\"subject\":\"Capability refusal race for service principals\",\"kind\":\"unrepresentable transition\",\"text\":\"“a capability refused, between the route's check and the import” versus “Capability sets are read-only rules data; no runtime editing” and `ServicePrincipal.source_type` being immutable\",\"question\":\"What permitted state change can make a service principal's import capability pass at the route and then become refused during the same import?\",\"options\":[\"No such runtime transition exists; remove or declare the branch unreachable\",\"A deployment-time rules change may affect an in-flight request and must be modeled\",\"Some other state, such as disabling the principal, is intended even though that case is separately specified to record nothing\"],\"default_guess\":\"Treat capability refusal between the two checks as unreachable under the accepted models and static capability rules.\",\"witness\":{\"initial\":\"An active `estimate_producer` principal has authenticated and passed the route's capability check.\",\"events\":[\"No deployment occurs; the principal's immutable `source_type` and the static capability table remain unchanged.\",\"The import repeats the capability check.\"],\"outcomes\":[\"The repeated check necessarily still passes, making the newly specified recorded-rejection branch unreachable.\",\"An implementation invents an unstated mutable capability source or reload behavior so the second check can fail and records a rejection.\"],\"observer\":\"Implementers and tests differ on whether this required branch can ever be exercised.\"}}]}",
+ "set_aside": []
+}

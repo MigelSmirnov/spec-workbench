@@ -294,7 +294,10 @@ gateway tests them in, are the accepted gateway's (notes of
 States 6–7. A decoded validation answer is returned as it is and read by
 its caller as A5 says; the two readings of A5 agree, because the Registry
 sets `is_active = true` exactly when `status` is `active` (Registry v1
-`validate_project_reference`). The Registry endpoint is not a start-up variable of
+`validate_project_reference`). The portal does not check the fields of an
+answer against each other: each caller acts on the field A5 names for it,
+whatever the others say (Factory code `application/authorization_guard.py`,
+`application/staff_identity.py`, `application/viewer_access.py`). The Registry endpoint is not a start-up variable of
 A30: the service starts without it, and a Registry call made while it is
 missing or unusable fails as `transport_error` (Factory code
 `adapters/registry_gateway.py` `_registry_url`; owner 2026-11-06: current service behaviour accepted; technical decisions delegated).

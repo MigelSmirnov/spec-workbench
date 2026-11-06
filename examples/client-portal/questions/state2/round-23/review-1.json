@@ -1,0 +1,81 @@
+{
+ "open_points": [
+  {
+   "unit": "A5",
+   "subject": "ProjectValidationResult consistency for access-management creation",
+   "kind": "contradictory decision inputs",
+   "text": "Access management operations \"decide by `is_active` alone\" while \"`exists` [tells] whether the refusal is for an unknown or an archived one\"; A6 says decoded validation answers are returned as-is and only asserts that `is_active = true` exactly when `status` is `active`.",
+   "question": "What must grant and assignment creation do when Registry returns inconsistent fields, such as `exists=false, is_active=true, status=active` or `exists=true, is_active=true, status=archived`: trust `is_active`, refuse according to `exists`/`status`, or reject the answer as `schema_mismatch`?",
+   "options": [
+    "Trust `is_active` and allow creation whenever it is true",
+    "Let `exists` or `status` override `is_active` and refuse",
+    "Reject inconsistent validation fields as `schema_mismatch`"
+   ],
+   "default_guess": "Reject an inconsistent validation answer as `schema_mismatch`.",
+   "witness": {
+    "initial": "An administrator has access-management capability; Registry returns `exists=false, is_active=true, status=active` for a requested project UUID.",
+    "events": [
+     "The administrator creates a staff assignment, viewer grant, or producer grant for that UUID."
+    ],
+    "outcomes": [
+     "The operation trusts `is_active` alone and creates the record for a project Registry says does not exist.",
+     "The operation treats `exists=false` as an unknown-project refusal, or treats the inconsistent response as `schema_mismatch`, and creates nothing."
+    ],
+    "observer": "The administrator sees success versus refusal; the assigned principal may also gain access to the UUID."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "Duplicate active viewer grants, staff assignments, and producer grants",
+   "kind": "unnamed refusal",
+   "text": "A second record while the first is active is \"refused by the grant operation before any write\" or \"refused by the assignment operation before any write\", whereas a second record after revocation is explicitly \"a persistence conflict\".",
+   "question": "What exact operation outcome or error class represents the pre-write refusal when the existing record is active, for each of the three creation operations?",
+   "options": [
+    "A dedicated already-granted/already-assigned domain rejection",
+    "The same persistence-conflict outcome used after revocation",
+    "A generic authorization or validation rejection"
+   ],
+   "default_guess": "Use a dedicated already-granted/already-assigned domain rejection, reserving persistence conflict for a terminal revoked record or a uniqueness race.",
+   "witness": {
+    "initial": "An active ProjectViewerGrant already exists for viewer V and project P.",
+    "events": [
+     "An administrator requests another grant for V and P after the first transaction has committed."
+    ],
+    "outcomes": [
+     "The operation returns a specific already-granted domain refusal after its pre-write lookup.",
+     "The operation returns a generic conflict, validation rejection, or the persistence-conflict error formerly used for every duplicate."
+    ],
+    "observer": "The administrator and API client see different error classifications."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "Concurrent duplicate access-record creation",
+   "kind": "race precedence",
+   "text": "The changed rules require a second creation while the first record is active to be refused \"before any write\", but the models also rely on a unique `(principal, project)` or `(staff, project)` persistence constraint.",
+   "question": "If two creation requests concurrently pass the no-existing-record check and one wins the unique insert, how is the losing request classified: the active-record pre-write refusal, a persistence conflict, or a retry followed by the pre-write refusal?",
+   "options": [
+    "Serialize or retry so the loser observes the active record and receives the pre-write refusal",
+    "Surface the unique-constraint failure as a persistence conflict",
+    "Define either result as acceptable for concurrent requests"
+   ],
+   "default_guess": "Translate the uniqueness collision by rereading the record: return the active-record refusal if it is active, otherwise persistence conflict if it is revoked.",
+   "witness": {
+    "initial": "No grant exists for viewer V and project P; two administrator requests can run concurrently.",
+    "events": [
+     "Administrator A and administrator B both request the same grant.",
+     "Both operations check for an existing record before either insert commits.",
+     "A commits the grant; B's insert reaches the unique constraint."
+    ],
+    "outcomes": [
+     "B surfaces a persistence conflict because its write collided.",
+     "B retries or rereads and returns the specified active-grant pre-write refusal."
+    ],
+    "observer": "Administrator B and its API client see different error classifications."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A5\",\"subject\":\"ProjectValidationResult consistency for access-management creation\",\"kind\":\"contradictory decision inputs\",\"text\":\"Access management operations \\\"decide by `is_active` alone\\\" while \\\"`exists` [tells] whether the refusal is for an unknown or an archived one\\\"; A6 says decoded validation answers are returned as-is and only asserts that `is_active = true` exactly when `status` is `active`.\",\"question\":\"What must grant and assignment creation do when Registry returns inconsistent fields, such as `exists=false, is_active=true, status=active` or `exists=true, is_active=true, status=archived`: trust `is_active`, refuse according to `exists`/`status`, or reject the answer as `schema_mismatch`?\",\"options\":[\"Trust `is_active` and allow creation whenever it is true\",\"Let `exists` or `status` override `is_active` and refuse\",\"Reject inconsistent validation fields as `schema_mismatch`\"],\"default_guess\":\"Reject an inconsistent validation answer as `schema_mismatch`.\",\"witness\":{\"initial\":\"An administrator has access-management capability; Registry returns `exists=false, is_active=true, status=active` for a requested project UUID.\",\"events\":[\"The administrator creates a staff assignment, viewer grant, or producer grant for that UUID.\"],\"outcomes\":[\"The operation trusts `is_active` alone and creates the record for a project Registry says does not exist.\",\"The operation treats `exists=false` as an unknown-project refusal, or treats the inconsistent response as `schema_mismatch`, and creates nothing.\"],\"observer\":\"The administrator sees success versus refusal; the assigned principal may also gain access to the UUID.\"}},{\"unit\":\"context\",\"subject\":\"Duplicate active viewer grants, staff assignments, and producer grants\",\"kind\":\"unnamed refusal\",\"text\":\"A second record while the first is active is \\\"refused by the grant operation before any write\\\" or \\\"refused by the assignment operation before any write\\\", whereas a second record after revocation is explicitly \\\"a persistence conflict\\\".\",\"question\":\"What exact operation outcome or error class represents the pre-write refusal when the existing record is active, for each of the three creation operations?\",\"options\":[\"A dedicated already-granted/already-assigned domain rejection\",\"The same persistence-conflict outcome used after revocation\",\"A generic authorization or validation rejection\"],\"default_guess\":\"Use a dedicated already-granted/already-assigned domain rejection, reserving persistence conflict for a terminal revoked record or a uniqueness race.\",\"witness\":{\"initial\":\"An active ProjectViewerGrant already exists for viewer V and project P.\",\"events\":[\"An administrator requests another grant for V and P after the first transaction has committed.\"],\"outcomes\":[\"The operation returns a specific already-granted domain refusal after its pre-write lookup.\",\"The operation returns a generic conflict, validation rejection, or the persistence-conflict error formerly used for every duplicate.\"],\"observer\":\"The administrator and API client see different error classifications.\"}},{\"unit\":\"context\",\"subject\":\"Concurrent duplicate access-record creation\",\"kind\":\"race precedence\",\"text\":\"The changed rules require a second creation while the first record is active to be refused \\\"before any write\\\", but the models also rely on a unique `(principal, project)` or `(staff, project)` persistence constraint.\",\"question\":\"If two creation requests concurrently pass the no-existing-record check and one wins the unique insert, how is the losing request classified: the active-record pre-write refusal, a persistence conflict, or a retry followed by the pre-write refusal?\",\"options\":[\"Serialize or retry so the loser observes the active record and receives the pre-write refusal\",\"Surface the unique-constraint failure as a persistence conflict\",\"Define either result as acceptable for concurrent requests\"],\"default_guess\":\"Translate the uniqueness collision by rereading the record: return the active-record refusal if it is active, otherwise persistence conflict if it is revoked.\",\"witness\":{\"initial\":\"No grant exists for viewer V and project P; two administrator requests can run concurrently.\",\"events\":[\"Administrator A and administrator B both request the same grant.\",\"Both operations check for an existing record before either insert commits.\",\"A commits the grant; B's insert reaches the unique constraint.\"],\"outcomes\":[\"B surfaces a persistence conflict because its write collided.\",\"B retries or rereads and returns the specified active-grant pre-write refusal.\"],\"observer\":\"Administrator B and its API client see different error classifications.\"}}]}",
+ "set_aside": []
+}

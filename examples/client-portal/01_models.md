@@ -257,10 +257,8 @@ None.
 - **Rules:** at most one grant record per `(viewer_id, project_id)`, active
   or revoked; revoking one grant affects only that project; Registry
   archival never changes grant status. A revoked grant is terminal and the
-  pair cannot be granted again: a second grant while the first is active is
-  refused by the grant operation before any write, one after its
-  revocation as a persistence conflict, and no operation reactivates a
-  revoked grant.
+  pair cannot be granted again (one record per pair), and no operation
+  reactivates a revoked grant.
 - **Created/modified by:** administrator only (R0-14).
 
 ### Carried changes
@@ -425,10 +423,7 @@ None.
   `revoked_by: UUID | None`.
 - **Rules:** at most one assignment record per `(staff_id, project_id)`,
   active or revoked; a revoked assignment is terminal and the pair cannot be
-  assigned again (a second assignment is refused by the assignment
-  operation before any write while the first is active, and as a
-  persistence conflict after its revocation; no operation reactivates
-  one). Revocation blocks the next
+  assigned again (one record per pair; no operation reactivates one). Revocation blocks the next
   project-scoped authorization check without changing project records or
   other assignments. In the current documented
   single administrative area, administrators cover all projects through that
@@ -859,9 +854,8 @@ None.
   `created_at`, `created_by`, `revoked_at | None`, `revoked_by | None`.
 - **Rules:** at most one grant record per `(principal, project)`, active or
   revoked; a revoked grant is terminal and the pair cannot be granted again
-  (a second grant is refused by the grant operation before any write while
-  the first is active, and as a persistence conflict after its revocation;
-  no operation reactivates one); consulted only when the principal's `scope_mode` is
+  (one record per pair; no operation reactivates one); consulted only when
+  the principal's `scope_mode` is
   `granted_projects`.
 
 ### Carried changes

@@ -1,0 +1,108 @@
+{
+ "open_points": [
+  {
+   "unit": "A5",
+   "subject": "ProjectValidationResult consistency for access-management creation",
+   "kind": "unverified cross-field invariant",
+   "text": "“access management decide by `is_active` instead … `exists` telling only whether the refusal is for an unknown or an archived one” and A6 says the readings agree “because the Registry sets `is_active = true` exactly when `status` is `active`”; decoded validation answers are otherwise returned as-is",
+   "question": "What must happen when a syntactically valid Registry validation answer has inconsistent `exists`, `status`, and `is_active` values?",
+   "options": [
+    "Trust `is_active` alone and possibly create access for a response whose `status` is `archived`, unknown, or absent",
+    "Reject the response as `schema_mismatch` or another Registry boundary failure",
+    "Derive activity from `status` or `exists` instead of the supplied `is_active`"
+   ],
+   "default_guess": "Reject an inconsistent answer as `schema_mismatch`.",
+   "witness": {
+    "initial": "An administrator is creating a viewer grant for project P; Registry currently considers P archived.",
+    "events": [
+     "Registry answers validation with `exists=true`, `status=\"archived\"`, and `is_active=true`; this shape satisfies the declared field types and the gateway returns decoded answers as-is.",
+     "The grant operation evaluates the response."
+    ],
+    "outcomes": [
+     "The operation trusts `is_active` alone and creates the grant, despite the archived status.",
+     "The operation treats the cross-field inconsistency as an invalid Registry answer and creates nothing."
+    ],
+    "observer": "The administrator sees success versus a Registry refusal; the viewer later sees whether the archived project was newly granted."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "Duplicate grant or assignment versus Registry validation",
+   "kind": "unspecified check precedence",
+   "text": "The changed model rules say an active duplicate “is refused by the grant [or assignment] operation before any write,” while State 0 and A5 require creation to validate that the Registry project is known and active.",
+   "question": "When the pair already has an active or revoked record and Registry now reports the project unknown or inactive, which refusal wins: duplicate/persistence conflict or the Registry-based refusal?",
+   "options": [
+    "Check the existing pair first and return the active-duplicate refusal or revoked-record persistence conflict without letting Registry status determine the result",
+    "Validate Registry first and return the operation-specific unknown/archived refusal",
+    "Use a different precedence for viewer grants, staff assignments, and producer grants"
+   ],
+   "default_guess": "Check the existing pair first, because the changed rules assign duplicate cases their own explicit classifications.",
+   "witness": {
+    "initial": "An active grant or assignment already exists for pair (principal, P), and Registry subsequently archives P.",
+    "events": [
+     "An administrator submits the same creation operation again.",
+     "The operation can inspect the existing local record and validate P with Registry; neither required order is stated."
+    ],
+    "outcomes": [
+     "The administrator receives the active-duplicate pre-write refusal.",
+     "The administrator receives A5's archived-project refusal, or the viewer-grant Registry boundary failure."
+    ],
+    "observer": "The administrator sees a different error classification; tests and API error translation also differ."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "Snapshot import race when the second Registry call returns HTTP 404",
+   "kind": "overlapping outcome rules",
+   "text": "R0-25 says a project that “becomes unknown … between the route's check and the import is recorded as a rejection,” but also says “a … Registry failure during the import is answered as that failure and records nothing”; A6 classifies an HTTP 404 answer as a Registry failure of kind `not_found`.",
+   "question": "If the project disappears after the route check and the import's Registry call answers HTTP 404, is that an `unknown_project` classified import with a fresh `import_id`, or a Registry boundary failure with no record?",
+   "options": [
+    "Record a rejected SnapshotImportRecord with `reject_reason=unknown_project`",
+    "Return `RegistryBoundaryError(kind=not_found)` and record nothing",
+    "Distinguish a successful validation body with `exists=false` from HTTP 404, recording only the former"
+   ],
+   "default_guess": "Treat HTTP 404 according to A6 as a Registry failure and record nothing; record `unknown_project` only from a decoded `exists=false` validation result.",
+   "witness": {
+    "initial": "Project P is active, and a producer passes the route's credential, scope, capability, and Registry checks for P.",
+    "events": [
+     "Registry removes P before the import use case performs its own validation.",
+     "That validation endpoint answers HTTP 404."
+    ],
+    "outcomes": [
+     "The portal creates a fresh rejected import result for `unknown_project` and returns its `import_id`.",
+     "The portal returns the `not_found` Registry boundary failure and creates no SnapshotImportRecord or audit record."
+    ],
+    "observer": "The producer sees an import result versus a boundary failure and can later read an `import_id` only in the first outcome."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "Cutoff for access changes during snapshot import",
+   "kind": "undefined race boundary",
+   "text": "“A project that becomes unknown, ungranted or archived, or a capability refused, between the route's check and the import is recorded as a rejection for that reason.”",
+   "question": "At what exact point is the import's access state fixed, and what happens if Registry archival or grant revocation occurs after the import's recheck but before its local transaction commits?",
+   "options": [
+    "The import uses one inner authorization observation; a later external change does not alter this attempt and the snapshot may be accepted",
+    "The operation must somehow ensure access remains valid through commit and otherwise record the corresponding rejection",
+    "The local commit succeeds, but the result is subsequently reclassified or compensated"
+   ],
+   "default_guess": "Use the last authorization observation made by the import; later external changes affect only subsequent requests.",
+   "witness": {
+    "initial": "A producer passes the route check for active project P and begins importing a valid new snapshot.",
+    "events": [
+     "The import performs its own access and Registry recheck and receives active/authorized.",
+     "Before the portal commits the snapshot and import record, an administrator revokes the producer grant or Registry archives P.",
+     "The portal attempts its local commit."
+    ],
+    "outcomes": [
+     "The snapshot and accepted import result commit because the import's check already passed.",
+     "The attempt is recorded as `scope_denied` or `archived_project`, with no accepted snapshot."
+    ],
+    "observer": "The producer sees accepted versus rejected; staff later see whether a snapshot was stored for access that changed during the operation."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A5\",\"subject\":\"ProjectValidationResult consistency for access-management creation\",\"kind\":\"unverified cross-field invariant\",\"text\":\"“access management decide by `is_active` instead … `exists` telling only whether the refusal is for an unknown or an archived one” and A6 says the readings agree “because the Registry sets `is_active = true` exactly when `status` is `active`”; decoded validation answers are otherwise returned as-is\",\"question\":\"What must happen when a syntactically valid Registry validation answer has inconsistent `exists`, `status`, and `is_active` values?\",\"options\":[\"Trust `is_active` alone and possibly create access for a response whose `status` is `archived`, unknown, or absent\",\"Reject the response as `schema_mismatch` or another Registry boundary failure\",\"Derive activity from `status` or `exists` instead of the supplied `is_active`\"],\"default_guess\":\"Reject an inconsistent answer as `schema_mismatch`.\",\"witness\":{\"initial\":\"An administrator is creating a viewer grant for project P; Registry currently considers P archived.\",\"events\":[\"Registry answers validation with `exists=true`, `status=\\\"archived\\\"`, and `is_active=true`; this shape satisfies the declared field types and the gateway returns decoded answers as-is.\",\"The grant operation evaluates the response.\"],\"outcomes\":[\"The operation trusts `is_active` alone and creates the grant, despite the archived status.\",\"The operation treats the cross-field inconsistency as an invalid Registry answer and creates nothing.\"],\"observer\":\"The administrator sees success versus a Registry refusal; the viewer later sees whether the archived project was newly granted.\"}},{\"unit\":\"context\",\"subject\":\"Duplicate grant or assignment versus Registry validation\",\"kind\":\"unspecified check precedence\",\"text\":\"The changed model rules say an active duplicate “is refused by the grant [or assignment] operation before any write,” while State 0 and A5 require creation to validate that the Registry project is known and active.\",\"question\":\"When the pair already has an active or revoked record and Registry now reports the project unknown or inactive, which refusal wins: duplicate/persistence conflict or the Registry-based refusal?\",\"options\":[\"Check the existing pair first and return the active-duplicate refusal or revoked-record persistence conflict without letting Registry status determine the result\",\"Validate Registry first and return the operation-specific unknown/archived refusal\",\"Use a different precedence for viewer grants, staff assignments, and producer grants\"],\"default_guess\":\"Check the existing pair first, because the changed rules assign duplicate cases their own explicit classifications.\",\"witness\":{\"initial\":\"An active grant or assignment already exists for pair (principal, P), and Registry subsequently archives P.\",\"events\":[\"An administrator submits the same creation operation again.\",\"The operation can inspect the existing local record and validate P with Registry; neither required order is stated.\"],\"outcomes\":[\"The administrator receives the active-duplicate pre-write refusal.\",\"The administrator receives A5's archived-project refusal, or the viewer-grant Registry boundary failure.\"],\"observer\":\"The administrator sees a different error classification; tests and API error translation also differ.\"}},{\"unit\":\"context\",\"subject\":\"Snapshot import race when the second Registry call returns HTTP 404\",\"kind\":\"overlapping outcome rules\",\"text\":\"R0-25 says a project that “becomes unknown … between the route's check and the import is recorded as a rejection,” but also says “a … Registry failure during the import is answered as that failure and records nothing”; A6 classifies an HTTP 404 answer as a Registry failure of kind `not_found`.\",\"question\":\"If the project disappears after the route check and the import's Registry call answers HTTP 404, is that an `unknown_project` classified import with a fresh `import_id`, or a Registry boundary failure with no record?\",\"options\":[\"Record a rejected SnapshotImportRecord with `reject_reason=unknown_project`\",\"Return `RegistryBoundaryError(kind=not_found)` and record nothing\",\"Distinguish a successful validation body with `exists=false` from HTTP 404, recording only the former\"],\"default_guess\":\"Treat HTTP 404 according to A6 as a Registry failure and record nothing; record `unknown_project` only from a decoded `exists=false` validation result.\",\"witness\":{\"initial\":\"Project P is active, and a producer passes the route's credential, scope, capability, and Registry checks for P.\",\"events\":[\"Registry removes P before the import use case performs its own validation.\",\"That validation endpoint answers HTTP 404.\"],\"outcomes\":[\"The portal creates a fresh rejected import result for `unknown_project` and returns its `import_id`.\",\"The portal returns the `not_found` Registry boundary failure and creates no SnapshotImportRecord or audit record.\"],\"observer\":\"The producer sees an import result versus a boundary failure and can later read an `import_id` only in the first outcome.\"}},{\"unit\":\"context\",\"subject\":\"Cutoff for access changes during snapshot import\",\"kind\":\"undefined race boundary\",\"text\":\"“A project that becomes unknown, ungranted or archived, or a capability refused, between the route's check and the import is recorded as a rejection for that reason.”\",\"question\":\"At what exact point is the import's access state fixed, and what happens if Registry archival or grant revocation occurs after the import's recheck but before its local transaction commits?\",\"options\":[\"The import uses one inner authorization observation; a later external change does not alter this attempt and the snapshot may be accepted\",\"The operation must somehow ensure access remains valid through commit and otherwise record the corresponding rejection\",\"The local commit succeeds, but the result is subsequently reclassified or compensated\"],\"default_guess\":\"Use the last authorization observation made by the import; later external changes affect only subsequent requests.\",\"witness\":{\"initial\":\"A producer passes the route check for active project P and begins importing a valid new snapshot.\",\"events\":[\"The import performs its own access and Registry recheck and receives active/authorized.\",\"Before the portal commits the snapshot and import record, an administrator revokes the producer grant or Registry archives P.\",\"The portal attempts its local commit.\"],\"outcomes\":[\"The snapshot and accepted import result commit because the import's check already passed.\",\"The attempt is recorded as `scope_denied` or `archived_project`, with no accepted snapshot.\"],\"observer\":\"The producer sees accepted versus rejected; staff later see whether a snapshot was stored for access that changed during the operation.\"}}]}",
+ "set_aside": []
+}
