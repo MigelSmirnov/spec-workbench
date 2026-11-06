@@ -143,3 +143,22 @@ non-heading line is kept; checked mechanically on 2026-11-06).
 | `ProgressPhotoView`, `ViewerSessionView`, `HealthStatus` | `9eab4d94`, `35a0a09c`, `21658368` | accepted spec change (projections) | "Projections and answers" |
 | 26 request models, 15 repository interfaces, `RuntimeSettings`, `RuntimeEnvironment` | `38626cc7`, `af686d73` … `6011ac93` | accepted spec change, not State 1 concepts | "Named in later states" (States 2, 3, 5, 6) |
 | Q13: older viewer codes stay valid after a new one is issued | `open_questions.md` Q13 (observation 2026-11-05) against M02, the accepted note `issue_viewer_access` ("MUST revoke every non-revoked prior credential") and Factory `application/viewer_access.py` `issue_viewer_access` (revokes every prior credential) | the probe disagrees with the observation; design and spec agree; nothing to carry | Q13 stays the owner's; "Evidence notes" of `01_models.md` |
+
+### Classification of what State 2 carries
+
+The former `spec/20_rules.md` moved into `02_rules.md` line for line (checked
+mechanically); `spec/invariant_ledger.json` stays as evidence, and each of its
+55 rows is a formal invariant of exactly one decision A1–A21 (checked by the
+build). Where each row finally lands (note, property, `30_trace.json`) is
+decided in States 3–7.
+
+| finding | evidence | classification | owner |
+|---|---|---|---|
+| R1–R12, R15–R17 tables | case text = accepted `rules.*` (identical values) | derivable (unchanged) | A1–A12, A15–A17 |
+| audit significant actions and reason policy | `5677993e` | accepted spec change | A13 |
+| binary delivery from content signature | `babd5e52` | accepted spec change | A14 |
+| transaction guard, audit entity id, immutability, transport, exception payload, clock, bootstrap | `0baceacc`, `0f9ae3ae`, `bd561732`, `38626cc7`…`51d19fdf`, `a12937fd`, `c92b6878`, `6011ac93` | accepted spec change | A22–A26, A28, A29 |
+| derived view tie-break orders | `d2c4511e` against State 1 text | **unresolved**: the accepted value and the recorded design differ | A27, OQ-18, Q18 |
+| Registry active list: `/projects/active` (State 0) against `projects` with decode-side filter | `300bd11d`, `config.registry_request_paths`; Registry v1 `api/runtime.py` serves both | external contract, State 6 | A30 note |
+| dependency vulnerability policy | `deploy/requirements.txt` pins, no decision anywhere | **unresolved** | A31, OQ-17, Q17 |
+| persistence, router and three backend IRs; `rules.role`, `rules.schema_version` | `8387e0a3`, `d1280708`, `300bd11d`…`a6916180314d` | later deterministic closures | "Carried to later closures" |

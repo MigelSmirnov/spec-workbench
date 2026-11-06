@@ -244,3 +244,35 @@ Questions for the portal:
    beyond explaining the estimate?
 6. Personal data: the client's own name, NIF and address may be in the box;
    nothing about other clients, staff accounts or internal notes may.
+
+### Q17 — Dependency vulnerability and update policy
+
+Raised 2026-11-06 by the State 2 security review of the migration
+(`02_rules.md` A31, OQ-17). The portal is reachable from the internet and runs
+on externally maintained libraries pinned in the Factory deployment
+(`projects/client_portal_sandbox/deploy/requirements.txt`: fastapi, pydantic,
+argon2-cffi, uvicorn). No design state and no accepted spec change says how a
+vulnerability in them is noticed, who updates the pins and how fast, or that
+no such policy is needed.
+
+1. Is a dependency vulnerability and update policy required for the portal?
+2. If yes: what source is watched, who decides an update, and within what
+   time does a fix reach production?
+
+Until it is answered, the State 2 security review records `dependencies`
+UNRESOLVED and State 3 does not start.
+
+### Q18 — Tie-break order of the derived views
+
+Found 2026-11-06 by the migration (`02_rules.md` A27, OQ-18). For records with
+equal dates the case and the accepted Factory spec order differently:
+
+| list | State 1 (`01_models.md`, text of 2026-07-19) | accepted Factory spec (`rules.derived_view_ordering`, `d2c4511e`) |
+|---|---|---|
+| expenses | `(document_date, expense_id)` descending | document date desc, created at desc, id desc |
+| allocations of an expense | `allocation_id` | created at asc, id asc |
+| payments | `(payment_date, payment_id)` descending | payment date desc, recorded at desc, id desc |
+| photos | `(photo_date, photo_id)` ascending | photo date asc, published at asc, id asc |
+
+The Factory commit calls these values "undeclared", so they were chosen
+without the case text. Which order does the client see?
