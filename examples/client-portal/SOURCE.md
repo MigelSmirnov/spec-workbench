@@ -484,3 +484,18 @@ the delegate of each of the 49 table routes and the handler of each of the 7
 | a missing or invisible photo answers `PhotoValidationError` (422) and an unreadable one `BinaryStorageError`; a document folds all three into `BinaryAccessRejected` | notes `_authorize_photo_reference`, `read_expense_document`; Factory code `domain/photo_management.py` | running service kept (owner 2026-11-06) | `public_op:photo_management.read_progress_photo` |
 | a malformed login address answers `IdentityInputRejected` before any audit | Factory code `application/staff_identity.py` `authenticate_staff` | running service kept (owner 2026-11-06); discloses no account | `public_op:staff_identity.authenticate_staff` |
 | former error families `DomainValidationRejected`, `DomainConflict` | accepted `error_policy` | accepted spec change (closed exception set) | `50_public_apis.md` conventions |
+
+### State 7 coordinator decisions (2026-11-06)
+
+Decided by the coordinator 2026-11-06 (owner 2026-11-06: current service
+behaviour accepted; technical decisions delegated), before the State 7 notes
+are written.
+
+| topic | evidence | decision |
+|---|---|---|
+| time source of the operations | the accepted contracts (459ac96c) have no clock port; the running modules read the time with `datetime.utcnow()` (`application/*.py` call sites) under `rules.clock_policy` | the contracts stay unchanged; a note that needs the current time names the clock policy as its address (a leaf of `= rules.clock_policy`, e.g. `= rules.clock_policy.capture_source`, `= rules.clock_policy.reuse`; the node itself is not a placement and does not resolve) |
+| `design_closure_gaps.py` `fresh_timestamp_without_source` (35) and `ambient_time_note` (0 at this decision) | report-only fuse; the time source is the clock policy above, not a contract parameter | accepted, report-only; no contract or model change |
+| `design_closure_gaps.py` `orphan_read_entity` (17: `BinaryPayload`, `BudgetActivationResult`, `ChallengeIssueView`, `ClientViewerView`, `DocumentMutationResult`, `ExpenseMutationResult`, `PhotoMutationResult`, `PresentedSecret`, `ProjectOverview`, `ServiceCredentialIssueResponse`, `ServicePrincipalView`, `SessionRevocationResult`, `StaffAccountView`, `StaffSessionGrant`, `ViewerCredentialIssueResponse`, `ViewerSessionGrant`, `WorkBalanceResult`) | result and view models built by the operations that return them (accepted contracts and notes of 459ac96c) | accepted, report-only; the State 7 notes of the returning operations state the construction |
+
+If the State 7 gate itself blocks on either class, the notes stop and the
+finding goes back to the coordinator.
