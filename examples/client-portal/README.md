@@ -20,8 +20,9 @@ former layout under `spec/`.
 | `01_models.md` | State 1, domain models (migrated) |
 | `02_rules.md` | State 2, rules and invariants (migrated) |
 | `30_modules.md`, `30_trace.json` | State 3, module responsibilities and the A1–A32 ownership trace (migrated) |
+| `40_flows.md`, `40_flow_plan.json` | State 4, reviewed flows and their plan (migrated) |
 | `questions/` | question rounds |
-| `spec/40_flows.md` … `spec/80_assembly.md`, `spec/HANDOFF.md` | States 4–8 of the authoring pass of 2026-07-18/19, not yet migrated |
+| `spec/50_public_apis.md` … `spec/80_assembly.md`, `spec/HANDOFF.md` | States 5–8 of the authoring pass of 2026-07-18/19, not yet migrated |
 | `baseline/01_product_boundary.md` … `baseline/09_notes.md` | the frozen requirements baseline the authoring pass started from; input, not design |
 | `spec/invariant_ledger.json` | the invariant ledger of 2026-07-19, kept as evidence; its rows are the formal invariants of `02_rules.md` |
 | `open_questions.md` | the owner's open questions Q1–Q19 |

@@ -220,3 +220,21 @@ accepted spec (`module_order`, `module_functions`,
 | renamed and reshaped capabilities | accepted `module_functions` | accepted spec change | `30_modules.md` "Changes against the former text" |
 | token-free notices (A10, A11, former `send_staff_security_notice`) have no sender | accepted spec has no sending function; Factory code uses the members only in `core/models.py` | running service kept (owner 2026-11-06); possible missing feature | `30_modules.md`, Q19 |
 | A22, A26, A28 have no single owning module | the rule appears in the notes of many modules, no shared mechanism | `cross_cutting` disposition | `30_trace.json` |
+
+### Classification of what State 4 carries
+
+The former `spec/40_flows.md` (flows F1–F9) is replaced by `40_flows.md` and
+`40_flow_plan.json` (15 flows); the former file is deleted. Each flow walks
+the accepted routes of `rules.http_router_backend`, the guard order
+`rules.project_guard_sequence` and the notes of the operations it names.
+
+| finding | evidence | classification | owner |
+|---|---|---|---|
+| F1 login and guarded mutation, F3 viewer entry, F4 import, F6 expenses, F7 binaries, F8 overview, F9 audit | former text = accepted operations of the same modules | derivable (kept, reshaped into flows and conventions) | `40_flows.md` |
+| F2 email challenges | accepted `staff_challenges` notes "remain inert while StaffChallengeRepository is deferred"; Factory code `application/staff_challenges.py` | running service kept (R0-23); missing feature Q19 | `flow:deferred_staff_challenges` |
+| viewer list leaves out a project without context instead of failing | Factory `00ac72f18d9c`, note `list_viewer_projects` | accepted spec change | `flow:viewer_reads_projects` |
+| import rejections recorded in the one import transaction, fresh `import_id` per attempt | notes `import_snapshot`, `_build_import_record` | accepted spec change | `flow:import_estimate_snapshot`, R0-25 |
+| activation refused while allocations would lose their section | note `activate_budget_version` (conflict before any update) | accepted spec change | `flow:maintain_and_activate_budget` |
+| no snapshot-to-candidate-version operation | Q11 | missing feature, deferred | `40_flows.md` "Deferred features" |
+| per-part availability of the overview | Factory `d2c4511ea119` | accepted spec change | `flow:build_project_overview` |
+| service start and health, bootstrap, staff and principal administration, progress/payments/photos, staff binary reads | `38626cc7be12`, `21658368525f`, `6011ac93b143`, `3080ef0dbe73`, `fae77f993e03` | accepted spec change (flows added) | `40_flow_plan.json` |
