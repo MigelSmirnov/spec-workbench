@@ -119,7 +119,7 @@ verify_secret: [SECURITY_BOUNDARY] MUST verify secret against verification_hash 
 
 # financial_policy
 
-FinancialValidationError.__init__: [VALIDATION_ERROR] MUST represent an R9 rejection without implicit conversion or replacement values.
+FinancialValidationError.__init__: [VALIDATION_ERROR] MUST represent an R9 rejection without implicit conversion or replacement values. The class defines this contracted __init__(self) -> None itself, calling the Exception constructor; its body is not a bare pass.
 validate_eur_amount: [VALIDATION_ERROR] MUST reject an amount whose currency is not EUR, the single portal currency, or whose sign is not allowed, and MUST return the accepted amount as a Decimal quantized to 2 fraction digits with ROUND_HALF_UP, without any currency conversion.
 calculate_completed_work: [BEHAVIOR] MUST compute each section's completed work as its planned work multiplied by its completion percent and divided by one hundred, quantize each per-section result to 2 fraction digits with ROUND_HALF_UP, and MUST NOT use float arithmetic.
 calculate_overall_progress: [BEHAVIOR] MUST use the weighted R9 formula over positive work_planned and return None when its denominator is zero; MUST NOT use arithmetic mean or fabricate zero. ProgressSectionView.completion_percent is optional, and a section whose completion_percent is None has no reported progress: it MUST contribute to neither the numerator nor the denominator, and MUST NOT be read as zero, because an unreported section is not a section reported as unstarted.
@@ -773,12 +773,12 @@ bootstrap_first_administrator: [FIELD_ASSIGNMENT] MUST allocate a fresh staff_id
 bootstrap_first_administrator: [SECURITY_BOUNDARY] MUST retain the supplied password only in hashed form and MUST NOT let that password or its hash reach standard output, standard error, a log, an audit record, a returned value or an exception message.
 bootstrap_first_administrator: [VALIDATION_ERROR] MUST raise BootstrapAlreadyCompleted, and never the input rejection, when the port reports an already initialized store, so a repeat attempt changes nothing and the caller can tell a second run apart from a mistyped address. IdentityInputRejected stays reserved for the supplied email and password. A genuine storage failure MUST propagate unchanged and MUST NOT be turned into either refusal.
 bootstrap_first_administrator: [DEPENDENCY_BOUNDARY] MUST reach persistence only through StaffBootstrapPort and reuse the existing credential and staff identity input boundaries; it MUST NOT import PortalStore, PortalTransaction, any repository, or the adapter implementing the port, and MUST NOT be reachable from the http router.
-BootstrapAlreadyCompleted.__init__: [VALIDATION_ERROR] MUST represent only the fact that a staff account already exists, carrying no account, email, identifier, or credential detail, because it is raised on a path where the caller supplied a password.
+BootstrapAlreadyCompleted.__init__: [VALIDATION_ERROR] MUST represent only the fact that a staff account already exists, carrying no account, email, identifier, or credential detail, because it is raised on a path where the caller supplied a password. BootstrapAlreadyCompleted is defined at top level in this module (application/staff_bootstrap.py), not imported, and defines this contracted __init__(self) -> None itself, calling the Exception constructor; its body is not a bare pass.
 
 # staff_challenges
 
-ChallengeRejected.__init__: [SECURITY_BOUNDARY] MUST carry no account, selector, token-purpose, or lifecycle detail.
-ChallengeRateLimited.__init__: [VALIDATION_ERROR] MUST identify the closed challenge-rate-limit rejection without address-existence evidence.
+ChallengeRejected.__init__: [SECURITY_BOUNDARY] MUST carry no account, selector, token-purpose, or lifecycle detail. The class defines this contracted __init__(self) -> None itself, calling the Exception constructor; its body is not a bare pass.
+ChallengeRateLimited.__init__: [VALIDATION_ERROR] MUST identify the closed challenge-rate-limit rejection without address-existence evidence. The class defines this contracted __init__(self) -> None itself, calling the Exception constructor; its body is not a bare pass.
 request_password_reset: [SECURITY_BOUNDARY] MUST return None for both known and unknown normalized email without exposing existence; issuing the R10 challenge is deferred with the challenge slice (R0-23), so no account is read and nothing is issued.
 _build_email_delivery_request: [FIELD_PROJECTION] MUST project recipient and message kind from record, include token only for token-bearing R10 kinds, and MUST NOT include any verification hash.
 _build_challenge_issue_view: [FIELD_PROJECTION] MUST set challenge_ref, expires_at, delivery_id, delivery_outcome, and message_kind from the committed challenge/delivery evidence and expose no token or hash.
@@ -1044,8 +1044,8 @@ _build_expense_aggregate: [FIELD_ASSIGNMENT] MUST mint a fresh random UUID for e
 
 # project_tracking
 
-TrackingValidationError.__init__: [VALIDATION_ERROR] MUST carry no untyped payload or persistence detail.
-TrackingConflictError.__init__: [VALIDATION_ERROR] MUST carry no untyped payload or persistence detail.
+TrackingValidationError.__init__: [VALIDATION_ERROR] MUST carry no untyped payload or persistence detail. The class defines this contracted __init__(self) -> None itself, calling the Exception constructor; its body is not a bare pass.
+TrackingConflictError.__init__: [VALIDATION_ERROR] MUST carry no untyped payload or persistence detail. The class defines this contracted __init__(self) -> None itself, calling the Exception constructor; its body is not a bare pass.
 set_section_progress: [BEHAVIOR] MUST validate the project section and integer range 0..100, upsert the manual value, and append AuditAction.PROGRESS_UPDATE atomically; photographs MUST NOT alter it.
 register_work_payment: [BEHAVIOR] MUST enforce the portal currency EUR and R9, with payment_id as the replay identity; equal payment_id/content returns existing, conflict changes nothing, and a new payment plus AuditAction.PAYMENT_REGISTER audit commits atomically without creating an invoice/accounting posting.
 list_project_progress: [SECURITY_BOUNDARY] MUST return every persisted progress record for context.project_id only in active-budget plan order, with stable section_id ties.
