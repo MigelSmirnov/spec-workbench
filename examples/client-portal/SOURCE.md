@@ -565,3 +565,41 @@ and the `/api` prefix in runtime, user-facing message texts in
 authorization_guard and service_identity, default ports in `_normalized_origin`,
 the session secret entropy in `authenticate_staff`); they are carried unchanged
 and belong to the same data-provider work.
+
+### Factory rules added after the accepted spec
+
+The accepted spec predates the Factory rule `missing_implementation_disposition`
+(`code_factory/tools/implementation_obligations.py` `validate`, added
+2026-10-10): every `kind: interface` used in a parameter type of another
+contract needs a row in the top-level `implementation_obligations` section
+(SPEC_STANDARD §5.1). The accepted spec has no such section, so it fails the
+current normalizer on six interfaces. No design artifact owns the section; it
+is written into `global_spec.json`, and the projection preserves it
+(`tools/SPEC_PROJECTION_WORKBENCH.md`).
+
+Rows written (2026-11-06), each the concrete class the running code hands to
+the consumer (Factory code `projects/client_portal_sandbox`):
+
+| interface | disposition | implementation | code |
+|---|---|---|---|
+| `AuditRepository` | local | `SqliteAuditRepository` | `adapters/audit_repository.py:27`; `PortalTransaction.audit` returns it (`adapters/portal_store.py:59,81`) |
+| `StaffAccessRepository` | local | `SqliteStaffAccessRepository` | `adapters/staff_access_repository.py:53`; `adapters/portal_store.py:67,547` |
+| `ViewerAccessRepository` | local | `SqliteViewerAccessRepository` | `adapters/viewer_access_repository.py:63`; `adapters/portal_store.py:68,674` |
+| `ServiceIdentityRepository` | local | `SqliteServiceIdentityRepository` | `adapters/service_identity_repository.py:56`; `adapters/portal_store.py:69,539` |
+
+Each of the four modules is selected by the Factory `repository` emitter, so the
+generation-closure rule `local_implementation_requires_deterministic_backend`
+passes for them.
+
+Held, coordinator decision needed: `AuditRepositoryContext` and
+`StaffBootstrapPort`. The code implements them by `PortalTransaction`
+(`adapters/portal_store.py:55`, passed as `self` to every repository at 59–69)
+and `SqliteStaffBootstrapStore` (`adapters/staff_bootstrap_store.py:12`, passed
+as `self` at 39–40; created by the bootstrap command `cli/staff_bootstrap.py:22`).
+`local` is the code-backed disposition, but no Factory emitter selects
+`portal_store` or `staff_bootstrap_store`, and the normalizer then blocks with
+`local_implementation_requires_deterministic_backend` (three findings; also
+`design_emitter_binding.py --coverage` with the Factory root: unbound 3).
+`policy` does not fit (`PortalTransaction.__init__` takes `connection: object`;
+the bootstrap store opens SQLite connections itself), and `external` would
+state a composition boundary the code does not have.
