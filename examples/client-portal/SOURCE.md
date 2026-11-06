@@ -240,6 +240,12 @@ as `Completed ahead of payments` or `Unused advance payment`" (State 0
 fingerprint, rounding, hash-profile and Registry-timeout topics came back
 `later_state`, `answered_later` or `judged_before`.
 
+Rounds 15–18 (`--since 9c18621c`) reopened A7, A8, A31 on the State 3–4
+repairs; after the coordinator's decisions of 2026-11-06 (`f25e808f` import
+route pre-checks, Q20; `e8e3831c` expense section check) rounds 19–20 were
+clear (blocking 0, 0) and State 2 is closed; States 0 (rounds 15–16) and 1
+(rounds 16–17) re-closed on R0-25, M20 and M36 the same way.
+
 ### Implementation precision carried to States 6–7 (trim of 2026-11-06)
 
 States 1–2 state what a rule guarantees, not its mechanism (State 1 scope:
