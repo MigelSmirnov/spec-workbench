@@ -144,6 +144,36 @@ def test_missing_router_handler_mapping_is_fail_closed(tmp_path: Path) -> None:
     assert any(item["code"] == "missing_router_handler_contract" for item in report["findings"])
 
 
+def _expose_self_handler(project: Path, router_operation: str) -> None:
+    """Make attach_local_source its own handler: drop the companion, mark the public function."""
+    plan_path = project / PLAN
+    plan = json.loads(plan_path.read_text(encoding="utf-8"))
+    plan["functions"] = [f for f in plan["functions"] if f.get("router_operation") != FIRST_EXTERNAL]
+    public = next(f for f in plan["functions"] if f.get("public_operation") == FIRST_EXTERNAL)
+    public["router_operation"] = router_operation
+    plan_path.write_text(json.dumps(plan), encoding="utf-8")
+
+
+def test_exposed_public_operation_may_be_its_own_handler(tmp_path: Path) -> None:
+    project = _project(tmp_path)
+    _expose_self_handler(project, FIRST_EXTERNAL)
+    codes = {item["code"] for item in design_stage6_contracts.coverage(project)["findings"]}
+    assert "public_has_router_operation" not in codes
+    assert "missing_router_handler_contract" not in codes
+
+
+def test_public_function_cannot_handle_another_operations_route(tmp_path: Path) -> None:
+    project = _project(tmp_path)
+    plan_path = project / PLAN
+    plan = json.loads(plan_path.read_text(encoding="utf-8"))
+    other = next(f for f in plan["functions"]
+                 if f.get("visibility") == "public" and f.get("public_operation") != FIRST_EXTERNAL)
+    other["router_operation"] = FIRST_EXTERNAL
+    plan_path.write_text(json.dumps(plan), encoding="utf-8")
+    codes = {item["code"] for item in design_stage6_contracts.coverage(project)["findings"]}
+    assert "public_has_router_operation" in codes
+
+
 def test_ready_handoff_contains_operation_and_handler_contracts(tmp_path: Path) -> None:
     handoff = design_stage6_contracts.handoff(_ready(tmp_path))
     assert handoff["ready"] is True
