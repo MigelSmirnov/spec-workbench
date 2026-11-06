@@ -1,0 +1,778 @@
+{
+ "open_points": [
+  {
+   "unit": "00_product.md:Status",
+   "subject": "Service-principal authorization",
+   "kind": "contradiction",
+   "text": "The changed Status says a producer's bearer credential “stands in for a session” and the Common authorization rule repeats that exception, while product invariant 2 says “Access requires session + active principal + project grant/assignment + capability + Registry lifecycle policy” without that exception.",
+   "question": "Does an authenticated service-principal bearer credential satisfy the session requirement, or must a producer also have a session?",
+   "options": [
+    "The bearer credential substitutes for a session",
+    "Every producer request also requires a separate session"
+   ],
+   "default_guess": "Treat the bearer credential as the producer's complete authentication and exempt producers from the session requirement.",
+   "witness": {
+    "initial": "An active producer has a valid bearer credential, project scope, and import capability but no session.",
+    "events": [
+     "The producer submits a snapshot import with its bearer credential."
+    ],
+    "outcomes": [
+     "The import reaches domain validation because the bearer credential stands in for a session.",
+     "The request is rejected because invariant 2 requires a session."
+    ],
+    "observer": "The snapshot producer"
+   }
+  },
+  {
+   "unit": "00_product.md:Principals",
+   "subject": "Service-principal transport",
+   "kind": "contradiction",
+   "text": "ServicePrincipal says “transport protection (bearer, signed request, mTLS, gateway) is permitted,” while R0-09 says service principals “authenticate only with a bearer header.”",
+   "question": "Which producer authentication transports are accepted by this product?",
+   "options": [
+    "Only a bearer header",
+    "Bearer, signed requests, mTLS, or a gateway that resolves the caller to a ServicePrincipal"
+   ],
+   "default_guess": "Accept only the bearer header specified by R0-09.",
+   "witness": {
+    "initial": "A producer has an active principal and valid signing key but sends no bearer header.",
+    "events": [
+     "The producer submits a correctly signed snapshot-import request."
+    ],
+    "outcomes": [
+     "The request is authenticated because signed requests are permitted.",
+     "The request is rejected because only bearer authentication is accepted."
+    ],
+    "observer": "The snapshot producer"
+   }
+  },
+  {
+   "unit": "00_product.md:Principals",
+   "subject": "Global producer authorization",
+   "kind": "incomplete capability model",
+   "text": "The service-principal capability set is described as closed and containing only `portal.estimate_snapshot.import` and `portal.estimate_snapshot.read_import_result`, but “a global producer exists only through an explicitly granted capability.”",
+   "question": "Is global project reach a third capability, a value in producer scope, or the absence of a project restriction?",
+   "options": [
+    "Add a distinct global-producer capability",
+    "Represent global reach as a producer-scope value while retaining the two listed capabilities",
+    "Do not support global producers"
+   ],
+   "default_guess": "Represent global reach explicitly in producer scope, not as an unlisted capability.",
+   "witness": {
+    "initial": "An administrator needs to authorize one producer for every Registry project.",
+    "events": [
+     "The administrator grants import capability without enumerating projects.",
+     "The producer imports for a newly created project."
+    ],
+    "outcomes": [
+     "The request succeeds because the principal has explicit global scope.",
+     "The request fails because no listed capability or project grant confers global reach."
+    ],
+    "observer": "The administrator and producer"
+   }
+  },
+  {
+   "unit": "00_product.md:Principals",
+   "subject": "Administrator project mutations",
+   "kind": "authorization ambiguity",
+   "text": "“Operators hold mutation capabilities for their assigned projects. Administrators additionally hold access-management capabilities … within their administrative area” does not say whether administrators may mutate project data through their administrative area or only through an assignment.",
+   "question": "What concrete project-access fact must an administrator have before performing operator-style mutations?",
+   "options": [
+    "A project assignment, exactly like an operator",
+    "Administrative-area membership is sufficient",
+    "Administrators cannot perform operator-style mutations"
+   ],
+   "default_guess": "Require a project assignment for project mutations; administrative area governs access management only.",
+   "witness": {
+    "initial": "An administrator is in the current administrative area but is not assigned to project P.",
+    "events": [
+     "The administrator attempts to correct an expense in P."
+    ],
+    "outcomes": [
+     "The correction succeeds because administrators inherit mutation access throughout their area.",
+     "The correction is denied because project mutation requires an assignment."
+    ],
+    "observer": "The administrator and project client"
+   }
+  },
+  {
+   "unit": "00_product.md:Principals",
+   "subject": "Staff email identity",
+   "kind": "undefined normalization",
+   "text": "Staff login requires a “mandatory unique normalized email,” but the normalization and comparison rules are not named.",
+   "question": "How are email inputs normalized and compared for uniqueness and login?",
+   "options": [
+    "Trim and compare the entire address case-insensitively",
+    "Lowercase only the domain and preserve local-part case",
+    "Apply a specified Unicode and provider-aware normalization"
+   ],
+   "default_guess": "Trim surrounding whitespace and compare a Unicode-normalized lowercase address, without provider-specific rewriting.",
+   "witness": {
+    "initial": "A staff account exists as `Alice@example.com`.",
+    "events": [
+     "An administrator tries to create `alice@example.com`.",
+     "The holder later logs in using the differently cased address."
+    ],
+    "outcomes": [
+     "Creation is rejected and login succeeds because the addresses normalize identically.",
+     "A second account is created or login fails because the local part remains case-sensitive."
+    ],
+    "observer": "The administrator and staff holder"
+   }
+  },
+  {
+   "unit": "00_product.md:Principals",
+   "subject": "Staff password input",
+   "kind": "missing validation policy",
+   "text": "StaffAccount requires a password and R0-19 accepts an “initial password,” but no password acceptance rules or rejection outcome are stated.",
+   "question": "Which passwords are accepted for creation, change, reset, and bootstrap, and how is invalid input reported?",
+   "options": [
+    "Only enforce non-empty input",
+    "Enforce a specified minimum length and maximum byte length",
+    "Enforce a broader composition or compromised-password policy"
+   ],
+   "default_guess": "Use a minimum length and a bounded maximum byte length, with no composition rules.",
+   "witness": {
+    "initial": "An administrator is creating a staff account.",
+    "events": [
+     "The administrator supplies `a` as the initial password."
+    ],
+    "outcomes": [
+     "The account is created because any non-empty password is accepted.",
+     "Creation fails because the password does not satisfy an unstated strength policy."
+    ],
+    "observer": "The administrator"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "Initial staff password change",
+   "kind": "unenforced promise",
+   "text": "R0-19 says “the holder logs in with the initial password and changes it” but does not say whether changing it is mandatory or what the holder may do first.",
+   "question": "Must a holder replace the initial password before using any other authenticated operation?",
+   "options": [
+    "Require a password change before granting normal capabilities",
+    "Allow normal use and rely on the holder to change it voluntarily"
+   ],
+   "default_guess": "Require replacement on first login before normal operations.",
+   "witness": {
+    "initial": "An administrator has activated a new account whose initial password is also known to the administrator.",
+    "events": [
+     "The holder logs in with that password.",
+     "The holder attempts a project mutation without changing it."
+    ],
+    "outcomes": [
+     "The mutation is blocked until the password is changed.",
+     "The mutation succeeds and the initial password can remain indefinitely."
+    ],
+    "observer": "The staff holder and audit reviewer"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "Initial password transport",
+   "kind": "contradiction",
+   "text": "R0-19 first says an administrator creates an account “with its email, role and an initial password,” then says “no portal operation, message or answer carries it.”",
+   "question": "Does the create-staff operation accept the administrator-chosen initial password as request input, or is “carries it” intended to prohibit only portal delivery and response output?",
+   "options": [
+    "The create request contains the initial password, but no response or portal message reveals it",
+    "The portal generates the password and returns it once",
+    "No portal operation handles an initial password"
+   ],
+   "default_guess": "Accept the administrator-chosen password in the create request and interpret the prohibition as applying to delivery and output.",
+   "witness": {
+    "initial": "An administrator wants to create a staff account.",
+    "events": [
+     "The administrator invokes `create_staff_account`."
+    ],
+    "outcomes": [
+     "The request includes the initial password, as the first sentence requires.",
+     "The request cannot include the password because no portal operation may carry it, leaving no defined way to set it."
+    ],
+    "observer": "The administrator and API implementer"
+   }
+  },
+  {
+   "unit": "00_product.md:Principals",
+   "subject": "Staff status lifecycle",
+   "kind": "missing lifecycle",
+   "text": "The texts name `pending_verification`, `active`, suspended, and disabled states, but do not define allowed transitions, whether suspension or disabling is reversible, or their distinction after sessions are invalidated.",
+   "question": "What are the allowed staff-status transitions and the observable difference between suspended and disabled accounts?",
+   "options": [
+    "Suspension is reversible; disabling is final",
+    "Both are reversible but carry different administrative meanings",
+    "Use only one blocked state"
+   ],
+   "default_guess": "Make suspension reversible and disabling an explicit long-term state that can be re-enabled only by an administrator.",
+   "witness": {
+    "initial": "An active staff account is suspended and all its sessions are invalidated.",
+    "events": [
+     "An administrator later attempts to restore the account."
+    ],
+    "outcomes": [
+     "The account returns to active and may log in again.",
+     "Restoration is rejected because suspension was treated as terminal or no transition was implemented."
+    ],
+    "observer": "The administrator and staff holder"
+   }
+  },
+  {
+   "unit": "00_product.md:Principals",
+   "subject": "Viewer access-link consumption",
+   "kind": "missing credential semantics",
+   "text": "A ViewerAccessCredential is an “unguessable capability link” whose successful entry opens a session, but the text does not say whether successful use consumes the credential or whether it remains reusable until revocation or re-issue.",
+   "question": "Can the same viewer access link open multiple sessions before it is revoked?",
+   "options": [
+    "Reusable until revoked or superseded",
+    "Single-use and consumed by the first successful entry"
+   ],
+   "default_guess": "Keep it reusable until revoked or superseded.",
+   "witness": {
+    "initial": "A viewer has a valid link and has already used it on one browser.",
+    "events": [
+     "The viewer opens the same link on a second device."
+    ],
+    "outcomes": [
+     "A second ViewerSession is opened.",
+     "Entry fails because the first use consumed the credential."
+    ],
+    "observer": "The client viewer"
+   }
+  },
+  {
+   "unit": "00_product.md:Principals",
+   "subject": "Service-credential rotation",
+   "kind": "undefined overlap policy",
+   "text": "Service credentials are “rotatable with an overlap period,” but no overlap duration, source of that duration, or old-credential expiry rule is given.",
+   "question": "How is the rotation overlap period selected, and when exactly does the replaced credential stop authenticating?",
+   "options": [
+    "A fixed product duration",
+    "A deployment configuration value",
+    "An expiry selected for each rotation",
+    "No overlap; replacement revokes immediately"
+   ],
+   "default_guess": "Use a bounded deployment-configured overlap and record its exact expiry on the old credential.",
+   "witness": {
+    "initial": "Credential A is active for a producer.",
+    "events": [
+     "An administrator rotates A and receives credential B.",
+     "The producer uses A one hour later."
+    ],
+    "outcomes": [
+     "A remains valid because the overlap has not expired.",
+     "A is rejected because rotation immediately revoked it or used a shorter unstated overlap."
+    ],
+    "observer": "The producer and administrator"
+   }
+  },
+  {
+   "unit": "00_product.md:Primary outcomes",
+   "subject": "Confirmed OCR input contract",
+   "kind": "unnamed input",
+   "text": "Expense intake accepts a “confirmed normalized recognition result” with “complete confirmed content,” but the required business fields, nullability, totals, date/vendor/document rules, and supported contract versions are not named.",
+   "question": "What exact normalized fields and validations constitute a complete confirmed recognition result?",
+   "options": [
+    "Only identity, total, currency, provenance, and file reference are mandatory",
+    "A specified invoice schema including issuer, date, tax and line data is mandatory",
+    "The contract is opaque and stored without field validation"
+   ],
+   "default_guess": "Define a versioned minimal invoice schema with identity, gross total, EUR currency, document date, provenance, and file reference, and reject unsupported or incomplete versions.",
+   "witness": {
+    "initial": "An operator has a confirmed OCR result containing an ID, EUR total, and file reference but no vendor or document date.",
+    "events": [
+     "The operator submits it with a project and allocation."
+    ],
+    "outcomes": [
+     "An Expense and Document are created because the result is complete enough.",
+     "The request is rejected because vendor or date is required by an unstated normalized contract."
+    ],
+    "observer": "The operator"
+   }
+  },
+  {
+   "unit": "00_product.md:Primary outcomes",
+   "subject": "Expense replay with changed content",
+   "kind": "incomplete idempotency rule",
+   "text": "“One recognized document creates at most one Expense with one Document; replay is idempotent,” but the result of reusing the same `recognized_document_id` with different content, project, document reference, or allocation is not stated.",
+   "question": "What happens when an existing recognized-document identity is submitted again with non-identical input?",
+   "options": [
+    "Reject it as an identity/integrity conflict",
+    "Return the original result and ignore all changed input",
+    "Treat selected mutable fields as an update"
+   ],
+   "default_guess": "Reject non-identical reuse as an integrity conflict without revealing a cross-project record.",
+   "witness": {
+    "initial": "Recognition ID R already created an expense in project A.",
+    "events": [
+     "An operator submits R for project B with a different total and allocation."
+    ],
+    "outcomes": [
+     "The request is rejected as a conflicting replay.",
+     "The original result is returned, or a second expense/update is produced, because only identical replay behavior was implemented."
+    ],
+    "observer": "The operator and clients of projects A and B"
+   }
+  },
+  {
+   "unit": "00_product.md:Primary outcomes",
+   "subject": "Expense correction",
+   "kind": "vague action",
+   "text": "An operator can “correct” an expense, but the correctable fields, immutable provenance fields, validation, and effect on existing allocations are not specified.",
+   "question": "Which expense facts may be corrected, and what must happen when a correction changes the expense total?",
+   "options": [
+    "Only descriptive fields may change; total and provenance are immutable",
+    "The total may change only with simultaneous replacement allocations that still sum exactly",
+    "The total may change and existing allocations are automatically adjusted"
+   ],
+   "default_guess": "Keep identity, source document, currency, and provenance immutable; permit total correction only with explicit replacement allocations summing to the new total.",
+   "witness": {
+    "initial": "An included expense totals EUR 100 and has allocations summing to EUR 100.",
+    "events": [
+     "An operator corrects its total to EUR 120 without submitting new allocations."
+    ],
+    "outcomes": [
+     "The correction is rejected until explicit allocations sum to EUR 120.",
+     "The correction succeeds with stale allocations, or allocations are silently rescaled."
+    ],
+    "observer": "The operator and client viewer"
+   }
+  },
+  {
+   "unit": "00_product.md:Primary outcomes",
+   "subject": "Work progress across budget sources",
+   "kind": "scope ambiguity",
+   "text": "Operator management permits “update manual work progress per section (0–100%),” which does not say whether “manual” describes the entry method or restricts progress to manual-budget sections; transition rules also do not state how progress follows a newly activated version.",
+   "question": "Can staff update progress on imported-snapshot sections, and what happens to existing section progress on budget-version activation?",
+   "options": [
+    "Progress is manually entered for sections of either source and is explicitly mapped on activation",
+    "Progress exists only for manual-budget sections",
+    "Each activation starts new progress at unavailable or zero"
+   ],
+   "default_guess": "Allow manually entered progress for either source and require explicit stable-ID or manual mapping during activation.",
+   "witness": {
+    "initial": "Project P has 60% progress on a manual section and activates an imported snapshot containing a corresponding stable section.",
+    "events": [
+     "An operator opens the progress update for the imported section."
+    ],
+    "outcomes": [
+     "The mapped 60% remains and can be updated.",
+     "Progress is unavailable or reset because progress was implemented only for manual budgets or per version."
+    ],
+    "observer": "The operator and client viewer"
+   }
+  },
+  {
+   "unit": "00_product.md:Primary outcomes",
+   "subject": "Payment idempotency identity",
+   "kind": "incomplete idempotency contract",
+   "text": "Work payments are “idempotent by stable payment identity,” but the identity's issuer, uniqueness scope, required format, and changed-payload collision behavior are unnamed.",
+   "question": "Who supplies a payment identity, within what scope is it unique, and what happens when the same identity is reused with different payment data?",
+   "options": [
+    "Operator supplies an ID unique per project; changed reuse is rejected",
+    "Operator supplies a globally unique ID; changed reuse is rejected",
+    "Portal creates the ID, so client retries need another idempotency key"
+   ],
+   "default_guess": "Require a caller-supplied identity unique within the project and reject reuse with different content.",
+   "witness": {
+    "initial": "Payment identity PAY-7 already records EUR 500 in project A.",
+    "events": [
+     "A staff member submits PAY-7 again for EUR 700 in project A."
+    ],
+    "outcomes": [
+     "The request is rejected as a conflicting replay.",
+     "The old payment is returned, overwritten, or a second payment is created."
+    ],
+    "observer": "The staff member and client viewer"
+   }
+  },
+  {
+   "unit": "00_product.md:Primary outcomes",
+   "subject": "Zero work balance presentation",
+   "kind": "missing output case",
+   "text": "Work balance is `completed work value − received payments`, shown as “Completed ahead of payments” or “Unused advance payment,” but the zero-balance case is not assigned an observable label or state.",
+   "question": "What status is shown when completed value exactly equals received payments?",
+   "options": [
+    "A distinct balanced/settled status",
+    "Completed ahead of payments",
+    "Unused advance payment",
+    "No status label, only zero"
+   ],
+   "default_guess": "Expose a distinct balanced status with a zero amount.",
+   "witness": {
+    "initial": "Completed work value and received payments are both EUR 10,000.",
+    "events": [
+     "A viewer opens the project financial summary."
+    ],
+    "outcomes": [
+     "The API reports a distinct balanced state.",
+     "The API reports one of the two directional labels or omits the state."
+    ],
+    "observer": "The client viewer"
+   }
+  },
+  {
+   "unit": "00_product.md:Primary outcomes",
+   "subject": "Audit coverage",
+   "kind": "undefined significance",
+   "text": "“Every significant action” is audited with a `result`, but “significant” and whether rejected attempts are records are not defined.",
+   "question": "Which failed or denied operations must create audit records, including login failures, authorization denials, validation failures, and not-found/concealed responses?",
+   "options": [
+    "Audit all authentication attempts and all authorized business-command outcomes",
+    "Audit successful state changes plus selected security failures",
+    "Audit only successful state changes"
+   ],
+   "default_guess": "Audit every attempted state-changing command after actor resolution, all authentication attempts, and all access-management denials, while avoiding sensitive submitted values.",
+   "witness": {
+    "initial": "A suspended operator repeatedly attempts to mutate an assigned project.",
+    "events": [
+     "Each request is denied before the business record changes.",
+     "An administrator investigates the incident."
+    ],
+    "outcomes": [
+     "Audit records show the denied attempts and their actor/result.",
+     "No audit records exist because no significant state change completed."
+    ],
+    "observer": "The administrator or security reviewer"
+   }
+  },
+  {
+   "unit": "00_product.md:External systems",
+   "subject": "Prepared photo facts",
+   "kind": "unnamed input contract",
+   "text": "The portal consumes “prepared photo facts,” and R0-17 says a photo is published “the same way,” but no photo-fact fields, identity, chronology timestamp, provenance requirements, or replay behavior are specified.",
+   "question": "What exact input identifies a prepared photo and makes publication valid and idempotent?",
+   "options": [
+    "A versioned fact containing stable photo ID, file reference, capture time, provenance, media metadata and project selection",
+    "Only a file reference plus operator-selected project and visibility",
+    "Photo publication has no stable intake identity and may duplicate on retry"
+   ],
+   "default_guess": "Require a versioned stable photo identity, file reference, capture time, provenance reference, and operator-selected project/visibility, with replay-safe publication.",
+   "witness": {
+    "initial": "An intake-produced photo is submitted successfully, but the operator receives no response and retries.",
+    "events": [
+     "The operator submits the same prepared facts again."
+    ],
+    "outcomes": [
+     "The existing photo result is returned and the gallery has one item.",
+     "A second photo record is published because no stable identity or replay rule exists."
+    ],
+    "observer": "The operator and client viewer"
+   }
+  },
+  {
+   "unit": "00_product.md:External systems",
+   "subject": "Registry failures",
+   "kind": "undefined failure translation",
+   "text": "Registry integration promises “typed failure translation,” but the types and portal-visible outcomes for missing projects, archived projects, Registry unavailability, timeout, malformed responses, and stale context are not named.",
+   "question": "What portal failure does each Registry condition produce, and which conditions may be concealed as not found?",
+   "options": [
+    "Define separate not-found, archived/immutable, and dependency-unavailable failures",
+    "Collapse every Registry failure into not found",
+    "Use the Registry's raw response status and body"
+   ],
+   "default_guess": "Distinguish not found, archived mutation denial, and temporary dependency unavailability while concealing unauthorized project existence.",
+   "witness": {
+    "initial": "An authorized operator submits a write for an assigned active project while Registry is unavailable.",
+    "events": [
+     "The portal attempts server-side validation and times out."
+    ],
+    "outcomes": [
+     "The portal reports a retryable Registry-unavailable failure.",
+     "The portal reports not found or forbidden because typed translation was chosen differently."
+    ],
+    "observer": "The operator and monitoring system"
+   }
+  },
+  {
+   "unit": "00_product.md:External systems",
+   "subject": "Email gateway runtime dependency",
+   "kind": "boundary ambiguity",
+   "text": "R0-03 calls the Email Delivery Gateway “a mandatory external boundary,” while the External systems section says it “is called by no operation of the running portal” because all mail operations are deferred.",
+   "question": "Must the accepted running service be configured with or establish readiness against an email gateway before Q19 is implemented?",
+   "options": [
+    "No gateway configuration or reachability is required while all mail operations are inert",
+    "Gateway configuration is mandatory but reachability is not checked",
+    "Gateway configuration and reachability are required for readiness"
+   ],
+   "default_guess": "Do not require gateway configuration or reachability until a mail-sending operation is implemented.",
+   "witness": {
+    "initial": "A deployment has valid database and binary configuration but no email-gateway settings.",
+    "events": [
+     "The service starts and its readiness endpoint is checked."
+    ],
+    "outcomes": [
+     "The service becomes ready because no current operation uses email.",
+     "Startup or readiness fails because the gateway is mandatory."
+    ],
+    "observer": "The host operator"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "Runtime environment contract",
+   "kind": "unnamed configuration input",
+   "text": "R0-10 says the service is “configured only by environment variables” and validates them at startup, but does not name the variables, required values, formats, defaults, or validation failures for the database, binary root, trusted hosts/origins, and binary read bound.",
+   "question": "What is the complete environment-variable contract and startup behavior for missing or invalid values?",
+   "options": [
+    "All listed settings are mandatory with specified names and formats",
+    "Some settings have explicit safe defaults",
+    "Names and validation are left to each implementation"
+   ],
+   "default_guess": "Define named mandatory variables for paths and trusted hosts/origins, an explicit bounded default for binary size, and fail startup with non-secret diagnostic codes.",
+   "witness": {
+    "initial": "A deployment supplies database and binary paths but omits trusted origins.",
+    "events": [
+     "The service starts."
+    ],
+    "outcomes": [
+     "Startup fails because trusted origins are mandatory.",
+     "The service starts with an implementation-chosen default origin policy."
+    ],
+    "observer": "The host operator"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "Bootstrap input channel",
+   "kind": "unnamed action input",
+   "text": "R0-07 says bootstrap email and password are read neither from process arguments, environment, nor a file, but does not state the permitted input channel or non-interactive behavior.",
+   "question": "How does the local command receive its email and password, and what happens when no interactive terminal is available?",
+   "options": [
+    "Prompt through a controlling terminal with hidden password entry",
+    "Read a structured request from standard input",
+    "Support only an interactive prompt and reject non-interactive execution"
+   ],
+   "default_guess": "Read the email and hidden password from a controlling terminal and fail with a defined code when no terminal is available.",
+   "witness": {
+    "initial": "An automated deployment runs the bootstrap command without a TTY.",
+    "events": [
+     "The deployment attempts to provide credentials over standard input."
+    ],
+    "outcomes": [
+     "Bootstrap succeeds because standard input is the defined channel.",
+     "Bootstrap refuses because only an interactive terminal is accepted."
+    ],
+    "observer": "The host operator and deployment script"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "Bootstrap exit codes",
+   "kind": "hidden outcome set",
+   "text": "R0-07 promises “a closed set of exit codes that deployment scripts may branch on” but does not enumerate the codes or their meanings.",
+   "question": "What exact exit codes distinguish success, existing staff, invalid input, invalid configuration, persistence failure, and other execution failures?",
+   "options": [
+    "Enumerate a distinct stable code for each branchable condition",
+    "Use success plus one generic failure code",
+    "Write structured output and use only success/failure exit codes"
+   ],
+   "default_guess": "Enumerate stable codes for success, already initialized, invalid input/configuration, and internal persistence failure.",
+   "witness": {
+    "initial": "A deployment script invokes bootstrap after another process has already created a staff account.",
+    "events": [
+     "The command refuses to create the administrator and exits."
+    ],
+    "outcomes": [
+     "The script receives a dedicated already-initialized code and continues safely.",
+     "The script receives the same generic failure used for database corruption and aborts or retries."
+    ],
+    "observer": "The deployment script and host operator"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "Bootstrap auditing",
+   "kind": "contradiction",
+   "text": "R0-07 says creation of the first administrator is “never … audited,” while the Audit outcome and invariant 12 require every significant action to carry actor provenance to audit, including access-management actions.",
+   "question": "Is first-administrator creation an explicit exception to the universal audit promise?",
+   "options": [
+    "Bootstrap creation is intentionally unaudited and the audit invariant must state the exception",
+    "Bootstrap creates an audit record attributed to a host/bootstrap actor"
+   ],
+   "default_guess": "Treat R0-07 as an explicit exception and narrow the universal audit statements accordingly.",
+   "witness": {
+    "initial": "The deployment has no staff accounts.",
+    "events": [
+     "The host operator successfully runs the bootstrap command.",
+     "An auditor later examines the audit records."
+    ],
+    "outcomes": [
+     "No creation record exists, as R0-07 requires.",
+     "A bootstrap/admin-creation record exists, as the universal audit promise requires."
+    ],
+    "observer": "The auditor"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "Readiness semantics",
+   "kind": "vague health promise",
+   "text": "R0-11 says the service answers unauthenticated “liveness and readiness” checks but does not define what each check tests, their success/failure statuses, or which dependencies make the service unready.",
+   "question": "What conditions make liveness and readiness succeed or fail, and what stable response is exposed?",
+   "options": [
+    "Liveness tests only the process; readiness tests validated configuration, database access, and binary-root access",
+    "Both checks only confirm that HTTP is responding",
+    "Readiness also requires external Registry and email reachability"
+   ],
+   "default_guess": "Make liveness process-only and readiness require validated configuration plus usable SQLite and binary storage, but not currently unused or request-time external services.",
+   "witness": {
+    "initial": "The HTTP process is running but the SQLite file cannot be opened.",
+    "events": [
+     "Monitoring calls liveness and readiness."
+    ],
+    "outcomes": [
+     "Liveness succeeds and readiness fails.",
+     "Both checks succeed because they test only HTTP responsiveness."
+    ],
+    "observer": "The host operator and orchestrator"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "Protected binary failure response",
+   "kind": "unnamed observable failure",
+   "text": "R0-12 says an unknown, cross-project, hidden, oversize, or unlisted read is answered “the same way” but never names that response.",
+   "question": "What exact status, body, headers, and caching behavior form the indistinguishable protected-binary failure?",
+   "options": [
+    "A bodyless generic not-found response",
+    "A bodyless forbidden response",
+    "A generic JSON error shared by all listed conditions"
+   ],
+   "default_guess": "Return a bodyless generic not-found response with no object metadata and no cacheable distinction.",
+   "witness": {
+    "initial": "A caller requests first an unknown object ID and then a known cross-project object ID.",
+    "events": [
+     "The portal rejects both reads."
+    ],
+    "outcomes": [
+     "Both receive the same generic 404 response.",
+     "Both receive the same generic 403 or JSON response chosen by another implementation."
+    ],
+    "observer": "The caller and API client"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "Hidden binary access by staff",
+   "kind": "authorization ambiguity",
+   "text": "R0-12 groups a “hidden” read with unknown and cross-project reads, while R0-18 says staff may hide and show documents and photos; it does not state whether hidden means hidden only from viewers or unreadable by every principal.",
+   "question": "May authorized project staff download a client-hidden document or photo?",
+   "options": [
+    "Yes; visibility controls only client viewers",
+    "No; hidden objects cannot be downloaded by any API principal",
+    "Only administrators may download hidden objects"
+   ],
+   "default_guess": "Allow assigned staff with the relevant management capability to read hidden objects; conceal them from viewers.",
+   "witness": {
+    "initial": "An operator hides an expense document from the client but remains assigned to the project.",
+    "events": [
+     "The operator requests the document bytes to review whether it should be shown again."
+    ],
+    "outcomes": [
+     "The exact bytes are returned because client visibility does not restrict staff.",
+     "The generic concealed failure is returned because every hidden read is blocked."
+    ],
+    "observer": "The operator"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "Binary media allowlists",
+   "kind": "hidden closed set",
+   "text": "R0-12 requires media type to be “on a closed list per object kind,” but neither the document list nor the photo list is enumerated.",
+   "question": "Which recognized media types are allowed for ExpenseDocument and ProgressPhoto reads?",
+   "options": [
+    "Enumerate separate MIME allowlists for documents and photos",
+    "Use one shared image/PDF allowlist",
+    "Accept every reliably detected type"
+   ],
+   "default_guess": "Use explicit separate allowlists, at minimum PDF and common safe raster formats for documents, and safe raster formats for photos.",
+   "witness": {
+    "initial": "An authorized ExpenseDocument contains valid TIFF bytes.",
+    "events": [
+     "The operator requests the binary."
+    ],
+    "outcomes": [
+     "The bytes are returned because TIFF is on the implementation's document list.",
+     "The concealed failure is returned because another implementation omits TIFF."
+    ],
+    "observer": "The operator"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "Recovery-override sessions",
+   "kind": "missing security effect",
+   "text": "R0-20 atomically replaces the login email and marks it verified, but does not say whether existing sessions survive, whether sign-out-everywhere is performed, or whether the password is changed.",
+   "question": "Which existing authentication material is invalidated by a recovery override?",
+   "options": [
+    "Invalidate all staff sessions but retain the password",
+    "Invalidate sessions and require a new password",
+    "Preserve all sessions and the password"
+   ],
+   "default_guess": "Invalidate all sessions, retain the password unless separately changed, and require a fresh login at the new email.",
+   "witness": {
+    "initial": "A staff account has an active session controlled by a person who no longer controls the account's email.",
+    "events": [
+     "An administrator performs the recovery override to a new verified address.",
+     "The old session makes another request."
+    ],
+    "outcomes": [
+     "The request is rejected because recovery invalidated all sessions.",
+     "The request succeeds because the override changed only the email."
+    ],
+    "observer": "The recovered staff holder, the old session holder, and administrator"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "Deferred challenge authorization",
+   "kind": "contradiction",
+   "text": "R0-15 says email-verification confirmation, email-change confirmation, and password-reset completion each “proves its own authority” with a single-use token, while R0-23 says those operations always return the concealed authentication rejection and “read, write, audit and deliver nothing.”",
+   "question": "In the accepted current service, can any challenge token authorize these operations, or are the routes unconditionally inert until Q19 is implemented?",
+   "options": [
+    "They are unconditionally inert and no supplied token can authorize them",
+    "Valid pre-existing tokens can authorize them even though issuance is deferred"
+   ],
+   "default_guess": "Treat every challenge operation as unconditionally inert until Q19 is implemented and qualify R0-15 accordingly.",
+   "witness": {
+    "initial": "A caller possesses a syntactically valid token, whether created before deployment or inserted by an administrator.",
+    "events": [
+     "The caller submits an email-verification confirmation without a session."
+    ],
+    "outcomes": [
+     "The operation proves its own authority and verifies the email under R0-15.",
+     "The operation returns the concealed rejection and performs no read or write under R0-23."
+    ],
+    "observer": "The staff holder and administrator"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "Concealed challenge rejection",
+   "kind": "unnamed observable failure",
+   "text": "R0-23 says inert challenge operations answer with “the concealed authentication rejection,” but that rejection's concrete status, body, headers, and equivalence class are not defined in State 0.",
+   "question": "What observable response must every inert challenge confirmation and completion return?",
+   "options": [
+    "The same generic authentication failure used for invalid login credentials",
+    "A generic not-found response",
+    "A dedicated temporarily-unavailable response that still conceals token validity"
+   ],
+   "default_guess": "Return the same generic authentication rejection for missing, invalid, expired, and otherwise unusable challenge tokens, with no token-validity detail.",
+   "witness": {
+    "initial": "One caller submits a random token and another submits a token-shaped value associated with a known account.",
+    "events": [
+     "Both call password-reset completion while challenges are deferred."
+    ],
+    "outcomes": [
+     "Both receive one stable generic authentication response.",
+     "They receive different implementation-chosen concealed responses or a service-unavailable response."
+    ],
+    "observer": "The callers and API client"
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"00_product.md:Status\",\"subject\":\"Service-principal authorization\",\"kind\":\"contradiction\",\"text\":\"The changed Status says a producer's bearer credential “stands in for a session” and the Common authorization rule repeats that exception, while product invariant 2 says “Access requires session + active principal + project grant/assignment + capability + Registry lifecycle policy” without that exception.\",\"question\":\"Does an authenticated service-principal bearer credential satisfy the session requirement, or must a producer also have a session?\",\"options\":[\"The bearer credential substitutes for a session\",\"Every producer request also requires a separate session\"],\"default_guess\":\"Treat the bearer credential as the producer's complete authentication and exempt producers from the session requirement.\",\"witness\":{\"initial\":\"An active producer has a valid bearer credential, project scope, and import capability but no session.\",\"events\":[\"The producer submits a snapshot import with its bearer credential.\"],\"outcomes\":[\"The import reaches domain validation because the bearer credential stands in for a session.\",\"The request is rejected because invariant 2 requires a session.\"],\"observer\":\"The snapshot producer\"}},{\"unit\":\"00_product.md:Principals\",\"subject\":\"Service-principal transport\",\"kind\":\"contradiction\",\"text\":\"ServicePrincipal says “transport protection (bearer, signed request, mTLS, gateway) is permitted,” while R0-09 says service principals “authenticate only with a bearer header.”\",\"question\":\"Which producer authentication transports are accepted by this product?\",\"options\":[\"Only a bearer header\",\"Bearer, signed requests, mTLS, or a gateway that resolves the caller to a ServicePrincipal\"],\"default_guess\":\"Accept only the bearer header specified by R0-09.\",\"witness\":{\"initial\":\"A producer has an active principal and valid signing key but sends no bearer header.\",\"events\":[\"The producer submits a correctly signed snapshot-import request.\"],\"outcomes\":[\"The request is authenticated because signed requests are permitted.\",\"The request is rejected because only bearer authentication is accepted.\"],\"observer\":\"The snapshot producer\"}},{\"unit\":\"00_product.md:Principals\",\"subject\":\"Global producer authorization\",\"kind\":\"incomplete capability model\",\"text\":\"The service-principal capability set is described as closed and containing only `portal.estimate_snapshot.import` and `portal.estimate_snapshot.read_import_result`, but “a global producer exists only through an explicitly granted capability.”\",\"question\":\"Is global project reach a third capability, a value in producer scope, or the absence of a project restriction?\",\"options\":[\"Add a distinct global-producer capability\",\"Represent global reach as a producer-scope value while retaining the two listed capabilities\",\"Do not support global producers\"],\"default_guess\":\"Represent global reach explicitly in producer scope, not as an unlisted capability.\",\"witness\":{\"initial\":\"An administrator needs to authorize one producer for every Registry project.\",\"events\":[\"The administrator grants import capability without enumerating projects.\",\"The producer imports for a newly created project.\"],\"outcomes\":[\"The request succeeds because the principal has explicit global scope.\",\"The request fails because no listed capability or project grant confers global reach.\"],\"observer\":\"The administrator and producer\"}},{\"unit\":\"00_product.md:Principals\",\"subject\":\"Administrator project mutations\",\"kind\":\"authorization ambiguity\",\"text\":\"“Operators hold mutation capabilities for their assigned projects. Administrators additionally hold access-management capabilities … within their administrative area” does not say whether administrators may mutate project data through their administrative area or only through an assignment.\",\"question\":\"What concrete project-access fact must an administrator have before performing operator-style mutations?\",\"options\":[\"A project assignment, exactly like an operator\",\"Administrative-area membership is sufficient\",\"Administrators cannot perform operator-style mutations\"],\"default_guess\":\"Require a project assignment for project mutations; administrative area governs access management only.\",\"witness\":{\"initial\":\"An administrator is in the current administrative area but is not assigned to project P.\",\"events\":[\"The administrator attempts to correct an expense in P.\"],\"outcomes\":[\"The correction succeeds because administrators inherit mutation access throughout their area.\",\"The correction is denied because project mutation requires an assignment.\"],\"observer\":\"The administrator and project client\"}},{\"unit\":\"00_product.md:Principals\",\"subject\":\"Staff email identity\",\"kind\":\"undefined normalization\",\"text\":\"Staff login requires a “mandatory unique normalized email,” but the normalization and comparison rules are not named.\",\"question\":\"How are email inputs normalized and compared for uniqueness and login?\",\"options\":[\"Trim and compare the entire address case-insensitively\",\"Lowercase only the domain and preserve local-part case\",\"Apply a specified Unicode and provider-aware normalization\"],\"default_guess\":\"Trim surrounding whitespace and compare a Unicode-normalized lowercase address, without provider-specific rewriting.\",\"witness\":{\"initial\":\"A staff account exists as `Alice@example.com`.\",\"events\":[\"An administrator tries to create `alice@example.com`.\",\"The holder later logs in using the differently cased address.\"],\"outcomes\":[\"Creation is rejected and login succeeds because the addresses normalize identically.\",\"A second account is created or login fails because the local part remains case-sensitive.\"],\"observer\":\"The administrator and staff holder\"}},{\"unit\":\"00_product.md:Principals\",\"subject\":\"Staff password input\",\"kind\":\"missing validation policy\",\"text\":\"StaffAccount requires a password and R0-19 accepts an “initial password,” but no password acceptance rules or rejection outcome are stated.\",\"question\":\"Which passwords are accepted for creation, change, reset, and bootstrap, and how is invalid input reported?\",\"options\":[\"Only enforce non-empty input\",\"Enforce a specified minimum length and maximum byte length\",\"Enforce a broader composition or compromised-password policy\"],\"default_guess\":\"Use a minimum length and a bounded maximum byte length, with no composition rules.\",\"witness\":{\"initial\":\"An administrator is creating a staff account.\",\"events\":[\"The administrator supplies `a` as the initial password.\"],\"outcomes\":[\"The account is created because any non-empty password is accepted.\",\"Creation fails because the password does not satisfy an unstated strength policy.\"],\"observer\":\"The administrator\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"Initial staff password change\",\"kind\":\"unenforced promise\",\"text\":\"R0-19 says “the holder logs in with the initial password and changes it” but does not say whether changing it is mandatory or what the holder may do first.\",\"question\":\"Must a holder replace the initial password before using any other authenticated operation?\",\"options\":[\"Require a password change before granting normal capabilities\",\"Allow normal use and rely on the holder to change it voluntarily\"],\"default_guess\":\"Require replacement on first login before normal operations.\",\"witness\":{\"initial\":\"An administrator has activated a new account whose initial password is also known to the administrator.\",\"events\":[\"The holder logs in with that password.\",\"The holder attempts a project mutation without changing it.\"],\"outcomes\":[\"The mutation is blocked until the password is changed.\",\"The mutation succeeds and the initial password can remain indefinitely.\"],\"observer\":\"The staff holder and audit reviewer\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"Initial password transport\",\"kind\":\"contradiction\",\"text\":\"R0-19 first says an administrator creates an account “with its email, role and an initial password,” then says “no portal operation, message or answer carries it.”\",\"question\":\"Does the create-staff operation accept the administrator-chosen initial password as request input, or is “carries it” intended to prohibit only portal delivery and response output?\",\"options\":[\"The create request contains the initial password, but no response or portal message reveals it\",\"The portal generates the password and returns it once\",\"No portal operation handles an initial password\"],\"default_guess\":\"Accept the administrator-chosen password in the create request and interpret the prohibition as applying to delivery and output.\",\"witness\":{\"initial\":\"An administrator wants to create a staff account.\",\"events\":[\"The administrator invokes `create_staff_account`.\"],\"outcomes\":[\"The request includes the initial password, as the first sentence requires.\",\"The request cannot include the password because no portal operation may carry it, leaving no defined way to set it.\"],\"observer\":\"The administrator and API implementer\"}},{\"unit\":\"00_product.md:Principals\",\"subject\":\"Staff status lifecycle\",\"kind\":\"missing lifecycle\",\"text\":\"The texts name `pending_verification`, `active`, suspended, and disabled states, but do not define allowed transitions, whether suspension or disabling is reversible, or their distinction after sessions are invalidated.\",\"question\":\"What are the allowed staff-status transitions and the observable difference between suspended and disabled accounts?\",\"options\":[\"Suspension is reversible; disabling is final\",\"Both are reversible but carry different administrative meanings\",\"Use only one blocked state\"],\"default_guess\":\"Make suspension reversible and disabling an explicit long-term state that can be re-enabled only by an administrator.\",\"witness\":{\"initial\":\"An active staff account is suspended and all its sessions are invalidated.\",\"events\":[\"An administrator later attempts to restore the account.\"],\"outcomes\":[\"The account returns to active and may log in again.\",\"Restoration is rejected because suspension was treated as terminal or no transition was implemented.\"],\"observer\":\"The administrator and staff holder\"}},{\"unit\":\"00_product.md:Principals\",\"subject\":\"Viewer access-link consumption\",\"kind\":\"missing credential semantics\",\"text\":\"A ViewerAccessCredential is an “unguessable capability link” whose successful entry opens a session, but the text does not say whether successful use consumes the credential or whether it remains reusable until revocation or re-issue.\",\"question\":\"Can the same viewer access link open multiple sessions before it is revoked?\",\"options\":[\"Reusable until revoked or superseded\",\"Single-use and consumed by the first successful entry\"],\"default_guess\":\"Keep it reusable until revoked or superseded.\",\"witness\":{\"initial\":\"A viewer has a valid link and has already used it on one browser.\",\"events\":[\"The viewer opens the same link on a second device.\"],\"outcomes\":[\"A second ViewerSession is opened.\",\"Entry fails because the first use consumed the credential.\"],\"observer\":\"The client viewer\"}},{\"unit\":\"00_product.md:Principals\",\"subject\":\"Service-credential rotation\",\"kind\":\"undefined overlap policy\",\"text\":\"Service credentials are “rotatable with an overlap period,” but no overlap duration, source of that duration, or old-credential expiry rule is given.\",\"question\":\"How is the rotation overlap period selected, and when exactly does the replaced credential stop authenticating?\",\"options\":[\"A fixed product duration\",\"A deployment configuration value\",\"An expiry selected for each rotation\",\"No overlap; replacement revokes immediately\"],\"default_guess\":\"Use a bounded deployment-configured overlap and record its exact expiry on the old credential.\",\"witness\":{\"initial\":\"Credential A is active for a producer.\",\"events\":[\"An administrator rotates A and receives credential B.\",\"The producer uses A one hour later.\"],\"outcomes\":[\"A remains valid because the overlap has not expired.\",\"A is rejected because rotation immediately revoked it or used a shorter unstated overlap.\"],\"observer\":\"The producer and administrator\"}},{\"unit\":\"00_product.md:Primary outcomes\",\"subject\":\"Confirmed OCR input contract\",\"kind\":\"unnamed input\",\"text\":\"Expense intake accepts a “confirmed normalized recognition result” with “complete confirmed content,” but the required business fields, nullability, totals, date/vendor/document rules, and supported contract versions are not named.\",\"question\":\"What exact normalized fields and validations constitute a complete confirmed recognition result?\",\"options\":[\"Only identity, total, currency, provenance, and file reference are mandatory\",\"A specified invoice schema including issuer, date, tax and line data is mandatory\",\"The contract is opaque and stored without field validation\"],\"default_guess\":\"Define a versioned minimal invoice schema with identity, gross total, EUR currency, document date, provenance, and file reference, and reject unsupported or incomplete versions.\",\"witness\":{\"initial\":\"An operator has a confirmed OCR result containing an ID, EUR total, and file reference but no vendor or document date.\",\"events\":[\"The operator submits it with a project and allocation.\"],\"outcomes\":[\"An Expense and Document are created because the result is complete enough.\",\"The request is rejected because vendor or date is required by an unstated normalized contract.\"],\"observer\":\"The operator\"}},{\"unit\":\"00_product.md:Primary outcomes\",\"subject\":\"Expense replay with changed content\",\"kind\":\"incomplete idempotency rule\",\"text\":\"“One recognized document creates at most one Expense with one Document; replay is idempotent,” but the result of reusing the same `recognized_document_id` with different content, project, document reference, or allocation is not stated.\",\"question\":\"What happens when an existing recognized-document identity is submitted again with non-identical input?\",\"options\":[\"Reject it as an identity/integrity conflict\",\"Return the original result and ignore all changed input\",\"Treat selected mutable fields as an update\"],\"default_guess\":\"Reject non-identical reuse as an integrity conflict without revealing a cross-project record.\",\"witness\":{\"initial\":\"Recognition ID R already created an expense in project A.\",\"events\":[\"An operator submits R for project B with a different total and allocation.\"],\"outcomes\":[\"The request is rejected as a conflicting replay.\",\"The original result is returned, or a second expense/update is produced, because only identical replay behavior was implemented.\"],\"observer\":\"The operator and clients of projects A and B\"}},{\"unit\":\"00_product.md:Primary outcomes\",\"subject\":\"Expense correction\",\"kind\":\"vague action\",\"text\":\"An operator can “correct” an expense, but the correctable fields, immutable provenance fields, validation, and effect on existing allocations are not specified.\",\"question\":\"Which expense facts may be corrected, and what must happen when a correction changes the expense total?\",\"options\":[\"Only descriptive fields may change; total and provenance are immutable\",\"The total may change only with simultaneous replacement allocations that still sum exactly\",\"The total may change and existing allocations are automatically adjusted\"],\"default_guess\":\"Keep identity, source document, currency, and provenance immutable; permit total correction only with explicit replacement allocations summing to the new total.\",\"witness\":{\"initial\":\"An included expense totals EUR 100 and has allocations summing to EUR 100.\",\"events\":[\"An operator corrects its total to EUR 120 without submitting new allocations.\"],\"outcomes\":[\"The correction is rejected until explicit allocations sum to EUR 120.\",\"The correction succeeds with stale allocations, or allocations are silently rescaled.\"],\"observer\":\"The operator and client viewer\"}},{\"unit\":\"00_product.md:Primary outcomes\",\"subject\":\"Work progress across budget sources\",\"kind\":\"scope ambiguity\",\"text\":\"Operator management permits “update manual work progress per section (0–100%),” which does not say whether “manual” describes the entry method or restricts progress to manual-budget sections; transition rules also do not state how progress follows a newly activated version.\",\"question\":\"Can staff update progress on imported-snapshot sections, and what happens to existing section progress on budget-version activation?\",\"options\":[\"Progress is manually entered for sections of either source and is explicitly mapped on activation\",\"Progress exists only for manual-budget sections\",\"Each activation starts new progress at unavailable or zero\"],\"default_guess\":\"Allow manually entered progress for either source and require explicit stable-ID or manual mapping during activation.\",\"witness\":{\"initial\":\"Project P has 60% progress on a manual section and activates an imported snapshot containing a corresponding stable section.\",\"events\":[\"An operator opens the progress update for the imported section.\"],\"outcomes\":[\"The mapped 60% remains and can be updated.\",\"Progress is unavailable or reset because progress was implemented only for manual budgets or per version.\"],\"observer\":\"The operator and client viewer\"}},{\"unit\":\"00_product.md:Primary outcomes\",\"subject\":\"Payment idempotency identity\",\"kind\":\"incomplete idempotency contract\",\"text\":\"Work payments are “idempotent by stable payment identity,” but the identity's issuer, uniqueness scope, required format, and changed-payload collision behavior are unnamed.\",\"question\":\"Who supplies a payment identity, within what scope is it unique, and what happens when the same identity is reused with different payment data?\",\"options\":[\"Operator supplies an ID unique per project; changed reuse is rejected\",\"Operator supplies a globally unique ID; changed reuse is rejected\",\"Portal creates the ID, so client retries need another idempotency key\"],\"default_guess\":\"Require a caller-supplied identity unique within the project and reject reuse with different content.\",\"witness\":{\"initial\":\"Payment identity PAY-7 already records EUR 500 in project A.\",\"events\":[\"A staff member submits PAY-7 again for EUR 700 in project A.\"],\"outcomes\":[\"The request is rejected as a conflicting replay.\",\"The old payment is returned, overwritten, or a second payment is created.\"],\"observer\":\"The staff member and client viewer\"}},{\"unit\":\"00_product.md:Primary outcomes\",\"subject\":\"Zero work balance presentation\",\"kind\":\"missing output case\",\"text\":\"Work balance is `completed work value − received payments`, shown as “Completed ahead of payments” or “Unused advance payment,” but the zero-balance case is not assigned an observable label or state.\",\"question\":\"What status is shown when completed value exactly equals received payments?\",\"options\":[\"A distinct balanced/settled status\",\"Completed ahead of payments\",\"Unused advance payment\",\"No status label, only zero\"],\"default_guess\":\"Expose a distinct balanced status with a zero amount.\",\"witness\":{\"initial\":\"Completed work value and received payments are both EUR 10,000.\",\"events\":[\"A viewer opens the project financial summary.\"],\"outcomes\":[\"The API reports a distinct balanced state.\",\"The API reports one of the two directional labels or omits the state.\"],\"observer\":\"The client viewer\"}},{\"unit\":\"00_product.md:Primary outcomes\",\"subject\":\"Audit coverage\",\"kind\":\"undefined significance\",\"text\":\"“Every significant action” is audited with a `result`, but “significant” and whether rejected attempts are records are not defined.\",\"question\":\"Which failed or denied operations must create audit records, including login failures, authorization denials, validation failures, and not-found/concealed responses?\",\"options\":[\"Audit all authentication attempts and all authorized business-command outcomes\",\"Audit successful state changes plus selected security failures\",\"Audit only successful state changes\"],\"default_guess\":\"Audit every attempted state-changing command after actor resolution, all authentication attempts, and all access-management denials, while avoiding sensitive submitted values.\",\"witness\":{\"initial\":\"A suspended operator repeatedly attempts to mutate an assigned project.\",\"events\":[\"Each request is denied before the business record changes.\",\"An administrator investigates the incident.\"],\"outcomes\":[\"Audit records show the denied attempts and their actor/result.\",\"No audit records exist because no significant state change completed.\"],\"observer\":\"The administrator or security reviewer\"}},{\"unit\":\"00_product.md:External systems\",\"subject\":\"Prepared photo facts\",\"kind\":\"unnamed input contract\",\"text\":\"The portal consumes “prepared photo facts,” and R0-17 says a photo is published “the same way,” but no photo-fact fields, identity, chronology timestamp, provenance requirements, or replay behavior are specified.\",\"question\":\"What exact input identifies a prepared photo and makes publication valid and idempotent?\",\"options\":[\"A versioned fact containing stable photo ID, file reference, capture time, provenance, media metadata and project selection\",\"Only a file reference plus operator-selected project and visibility\",\"Photo publication has no stable intake identity and may duplicate on retry\"],\"default_guess\":\"Require a versioned stable photo identity, file reference, capture time, provenance reference, and operator-selected project/visibility, with replay-safe publication.\",\"witness\":{\"initial\":\"An intake-produced photo is submitted successfully, but the operator receives no response and retries.\",\"events\":[\"The operator submits the same prepared facts again.\"],\"outcomes\":[\"The existing photo result is returned and the gallery has one item.\",\"A second photo record is published because no stable identity or replay rule exists.\"],\"observer\":\"The operator and client viewer\"}},{\"unit\":\"00_product.md:External systems\",\"subject\":\"Registry failures\",\"kind\":\"undefined failure translation\",\"text\":\"Registry integration promises “typed failure translation,” but the types and portal-visible outcomes for missing projects, archived projects, Registry unavailability, timeout, malformed responses, and stale context are not named.\",\"question\":\"What portal failure does each Registry condition produce, and which conditions may be concealed as not found?\",\"options\":[\"Define separate not-found, archived/immutable, and dependency-unavailable failures\",\"Collapse every Registry failure into not found\",\"Use the Registry's raw response status and body\"],\"default_guess\":\"Distinguish not found, archived mutation denial, and temporary dependency unavailability while concealing unauthorized project existence.\",\"witness\":{\"initial\":\"An authorized operator submits a write for an assigned active project while Registry is unavailable.\",\"events\":[\"The portal attempts server-side validation and times out.\"],\"outcomes\":[\"The portal reports a retryable Registry-unavailable failure.\",\"The portal reports not found or forbidden because typed translation was chosen differently.\"],\"observer\":\"The operator and monitoring system\"}},{\"unit\":\"00_product.md:External systems\",\"subject\":\"Email gateway runtime dependency\",\"kind\":\"boundary ambiguity\",\"text\":\"R0-03 calls the Email Delivery Gateway “a mandatory external boundary,” while the External systems section says it “is called by no operation of the running portal” because all mail operations are deferred.\",\"question\":\"Must the accepted running service be configured with or establish readiness against an email gateway before Q19 is implemented?\",\"options\":[\"No gateway configuration or reachability is required while all mail operations are inert\",\"Gateway configuration is mandatory but reachability is not checked\",\"Gateway configuration and reachability are required for readiness\"],\"default_guess\":\"Do not require gateway configuration or reachability until a mail-sending operation is implemented.\",\"witness\":{\"initial\":\"A deployment has valid database and binary configuration but no email-gateway settings.\",\"events\":[\"The service starts and its readiness endpoint is checked.\"],\"outcomes\":[\"The service becomes ready because no current operation uses email.\",\"Startup or readiness fails because the gateway is mandatory.\"],\"observer\":\"The host operator\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"Runtime environment contract\",\"kind\":\"unnamed configuration input\",\"text\":\"R0-10 says the service is “configured only by environment variables” and validates them at startup, but does not name the variables, required values, formats, defaults, or validation failures for the database, binary root, trusted hosts/origins, and binary read bound.\",\"question\":\"What is the complete environment-variable contract and startup behavior for missing or invalid values?\",\"options\":[\"All listed settings are mandatory with specified names and formats\",\"Some settings have explicit safe defaults\",\"Names and validation are left to each implementation\"],\"default_guess\":\"Define named mandatory variables for paths and trusted hosts/origins, an explicit bounded default for binary size, and fail startup with non-secret diagnostic codes.\",\"witness\":{\"initial\":\"A deployment supplies database and binary paths but omits trusted origins.\",\"events\":[\"The service starts.\"],\"outcomes\":[\"Startup fails because trusted origins are mandatory.\",\"The service starts with an implementation-chosen default origin policy.\"],\"observer\":\"The host operator\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"Bootstrap input channel\",\"kind\":\"unnamed action input\",\"text\":\"R0-07 says bootstrap email and password are read neither from process arguments, environment, nor a file, but does not state the permitted input channel or non-interactive behavior.\",\"question\":\"How does the local command receive its email and password, and what happens when no interactive terminal is available?\",\"options\":[\"Prompt through a controlling terminal with hidden password entry\",\"Read a structured request from standard input\",\"Support only an interactive prompt and reject non-interactive execution\"],\"default_guess\":\"Read the email and hidden password from a controlling terminal and fail with a defined code when no terminal is available.\",\"witness\":{\"initial\":\"An automated deployment runs the bootstrap command without a TTY.\",\"events\":[\"The deployment attempts to provide credentials over standard input.\"],\"outcomes\":[\"Bootstrap succeeds because standard input is the defined channel.\",\"Bootstrap refuses because only an interactive terminal is accepted.\"],\"observer\":\"The host operator and deployment script\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"Bootstrap exit codes\",\"kind\":\"hidden outcome set\",\"text\":\"R0-07 promises “a closed set of exit codes that deployment scripts may branch on” but does not enumerate the codes or their meanings.\",\"question\":\"What exact exit codes distinguish success, existing staff, invalid input, invalid configuration, persistence failure, and other execution failures?\",\"options\":[\"Enumerate a distinct stable code for each branchable condition\",\"Use success plus one generic failure code\",\"Write structured output and use only success/failure exit codes\"],\"default_guess\":\"Enumerate stable codes for success, already initialized, invalid input/configuration, and internal persistence failure.\",\"witness\":{\"initial\":\"A deployment script invokes bootstrap after another process has already created a staff account.\",\"events\":[\"The command refuses to create the administrator and exits.\"],\"outcomes\":[\"The script receives a dedicated already-initialized code and continues safely.\",\"The script receives the same generic failure used for database corruption and aborts or retries.\"],\"observer\":\"The deployment script and host operator\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"Bootstrap auditing\",\"kind\":\"contradiction\",\"text\":\"R0-07 says creation of the first administrator is “never … audited,” while the Audit outcome and invariant 12 require every significant action to carry actor provenance to audit, including access-management actions.\",\"question\":\"Is first-administrator creation an explicit exception to the universal audit promise?\",\"options\":[\"Bootstrap creation is intentionally unaudited and the audit invariant must state the exception\",\"Bootstrap creates an audit record attributed to a host/bootstrap actor\"],\"default_guess\":\"Treat R0-07 as an explicit exception and narrow the universal audit statements accordingly.\",\"witness\":{\"initial\":\"The deployment has no staff accounts.\",\"events\":[\"The host operator successfully runs the bootstrap command.\",\"An auditor later examines the audit records.\"],\"outcomes\":[\"No creation record exists, as R0-07 requires.\",\"A bootstrap/admin-creation record exists, as the universal audit promise requires.\"],\"observer\":\"The auditor\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"Readiness semantics\",\"kind\":\"vague health promise\",\"text\":\"R0-11 says the service answers unauthenticated “liveness and readiness” checks but does not define what each check tests, their success/failure statuses, or which dependencies make the service unready.\",\"question\":\"What conditions make liveness and readiness succeed or fail, and what stable response is exposed?\",\"options\":[\"Liveness tests only the process; readiness tests validated configuration, database access, and binary-root access\",\"Both checks only confirm that HTTP is responding\",\"Readiness also requires external Registry and email reachability\"],\"default_guess\":\"Make liveness process-only and readiness require validated configuration plus usable SQLite and binary storage, but not currently unused or request-time external services.\",\"witness\":{\"initial\":\"The HTTP process is running but the SQLite file cannot be opened.\",\"events\":[\"Monitoring calls liveness and readiness.\"],\"outcomes\":[\"Liveness succeeds and readiness fails.\",\"Both checks succeed because they test only HTTP responsiveness.\"],\"observer\":\"The host operator and orchestrator\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"Protected binary failure response\",\"kind\":\"unnamed observable failure\",\"text\":\"R0-12 says an unknown, cross-project, hidden, oversize, or unlisted read is answered “the same way” but never names that response.\",\"question\":\"What exact status, body, headers, and caching behavior form the indistinguishable protected-binary failure?\",\"options\":[\"A bodyless generic not-found response\",\"A bodyless forbidden response\",\"A generic JSON error shared by all listed conditions\"],\"default_guess\":\"Return a bodyless generic not-found response with no object metadata and no cacheable distinction.\",\"witness\":{\"initial\":\"A caller requests first an unknown object ID and then a known cross-project object ID.\",\"events\":[\"The portal rejects both reads.\"],\"outcomes\":[\"Both receive the same generic 404 response.\",\"Both receive the same generic 403 or JSON response chosen by another implementation.\"],\"observer\":\"The caller and API client\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"Hidden binary access by staff\",\"kind\":\"authorization ambiguity\",\"text\":\"R0-12 groups a “hidden” read with unknown and cross-project reads, while R0-18 says staff may hide and show documents and photos; it does not state whether hidden means hidden only from viewers or unreadable by every principal.\",\"question\":\"May authorized project staff download a client-hidden document or photo?\",\"options\":[\"Yes; visibility controls only client viewers\",\"No; hidden objects cannot be downloaded by any API principal\",\"Only administrators may download hidden objects\"],\"default_guess\":\"Allow assigned staff with the relevant management capability to read hidden objects; conceal them from viewers.\",\"witness\":{\"initial\":\"An operator hides an expense document from the client but remains assigned to the project.\",\"events\":[\"The operator requests the document bytes to review whether it should be shown again.\"],\"outcomes\":[\"The exact bytes are returned because client visibility does not restrict staff.\",\"The generic concealed failure is returned because every hidden read is blocked.\"],\"observer\":\"The operator\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"Binary media allowlists\",\"kind\":\"hidden closed set\",\"text\":\"R0-12 requires media type to be “on a closed list per object kind,” but neither the document list nor the photo list is enumerated.\",\"question\":\"Which recognized media types are allowed for ExpenseDocument and ProgressPhoto reads?\",\"options\":[\"Enumerate separate MIME allowlists for documents and photos\",\"Use one shared image/PDF allowlist\",\"Accept every reliably detected type\"],\"default_guess\":\"Use explicit separate allowlists, at minimum PDF and common safe raster formats for documents, and safe raster formats for photos.\",\"witness\":{\"initial\":\"An authorized ExpenseDocument contains valid TIFF bytes.\",\"events\":[\"The operator requests the binary.\"],\"outcomes\":[\"The bytes are returned because TIFF is on the implementation's document list.\",\"The concealed failure is returned because another implementation omits TIFF.\"],\"observer\":\"The operator\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"Recovery-override sessions\",\"kind\":\"missing security effect\",\"text\":\"R0-20 atomically replaces the login email and marks it verified, but does not say whether existing sessions survive, whether sign-out-everywhere is performed, or whether the password is changed.\",\"question\":\"Which existing authentication material is invalidated by a recovery override?\",\"options\":[\"Invalidate all staff sessions but retain the password\",\"Invalidate sessions and require a new password\",\"Preserve all sessions and the password\"],\"default_guess\":\"Invalidate all sessions, retain the password unless separately changed, and require a fresh login at the new email.\",\"witness\":{\"initial\":\"A staff account has an active session controlled by a person who no longer controls the account's email.\",\"events\":[\"An administrator performs the recovery override to a new verified address.\",\"The old session makes another request.\"],\"outcomes\":[\"The request is rejected because recovery invalidated all sessions.\",\"The request succeeds because the override changed only the email.\"],\"observer\":\"The recovered staff holder, the old session holder, and administrator\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"Deferred challenge authorization\",\"kind\":\"contradiction\",\"text\":\"R0-15 says email-verification confirmation, email-change confirmation, and password-reset completion each “proves its own authority” with a single-use token, while R0-23 says those operations always return the concealed authentication rejection and “read, write, audit and deliver nothing.”\",\"question\":\"In the accepted current service, can any challenge token authorize these operations, or are the routes unconditionally inert until Q19 is implemented?\",\"options\":[\"They are unconditionally inert and no supplied token can authorize them\",\"Valid pre-existing tokens can authorize them even though issuance is deferred\"],\"default_guess\":\"Treat every challenge operation as unconditionally inert until Q19 is implemented and qualify R0-15 accordingly.\",\"witness\":{\"initial\":\"A caller possesses a syntactically valid token, whether created before deployment or inserted by an administrator.\",\"events\":[\"The caller submits an email-verification confirmation without a session.\"],\"outcomes\":[\"The operation proves its own authority and verifies the email under R0-15.\",\"The operation returns the concealed rejection and performs no read or write under R0-23.\"],\"observer\":\"The staff holder and administrator\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"Concealed challenge rejection\",\"kind\":\"unnamed observable failure\",\"text\":\"R0-23 says inert challenge operations answer with “the concealed authentication rejection,” but that rejection's concrete status, body, headers, and equivalence class are not defined in State 0.\",\"question\":\"What observable response must every inert challenge confirmation and completion return?\",\"options\":[\"The same generic authentication failure used for invalid login credentials\",\"A generic not-found response\",\"A dedicated temporarily-unavailable response that still conceals token validity\"],\"default_guess\":\"Return the same generic authentication rejection for missing, invalid, expired, and otherwise unusable challenge tokens, with no token-validity detail.\",\"witness\":{\"initial\":\"One caller submits a random token and another submits a token-shaped value associated with a known account.\",\"events\":[\"Both call password-reset completion while challenges are deferred.\"],\"outcomes\":[\"Both receive one stable generic authentication response.\",\"They receive different implementation-chosen concealed responses or a service-unavailable response.\"],\"observer\":\"The callers and API client\"}}]}",
+ "set_aside": []
+}

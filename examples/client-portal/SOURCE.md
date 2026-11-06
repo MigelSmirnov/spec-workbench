@@ -140,6 +140,17 @@ text of `65c7894013ca`): 38 topics, 2 blocking.
 | T11 bearer-only producer against "valid active session" | contradiction | R0-09; accepted `authenticate_service_principal`, `authorize_snapshot_import` take a `ServiceActorContext`, no session | common authorization rule: a service principal's authenticated bearer credential stands in for the session |
 | T23 how the initial staff password reaches its holder | consequential_gap | accepted `create_staff_account` (no delivery), `change_staff_status` (`pending_verification` → `active` sets `email_verified_at`), `staff_challenges` notes "remain inert while StaffChallengeRepository is deferred", Factory code `application/staff_challenges.py` | R0-19 rewritten (administrator hands the password over outside the portal and activates the account); R0-23 records the deferred challenges and notices; A10, A11 "Carried changes"; Q19 for the owner |
 
+Round-04 (`questions/state0/round-04/`, on the text of `41d0f523e8c6`): 45
+topics, 7 blocking, not yet repaired: T3 R0-15 gives the deferred operations
+token authority while R0-23 says they read nothing; T23 the ServicePrincipal
+passage still allows several transports against R0-09; T29 the ClientViewer
+passage still lets operators create viewers and links against R0-14; T31
+"no portal operation carries" the initial password against its creation
+request; T33 archived-project immutability against grant and assignment
+changes; T40 who creates `import_id` and how the producer learns it; T44
+invariant 2 "access requires a session" without the service-principal
+exception.
+
 ### Classification of what State 1 carries
 
 The former `spec/10_models.md` moved into `01_models.md` line for line (every
