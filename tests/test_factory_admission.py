@@ -724,6 +724,35 @@ def test_external_obligation_does_not_make_a_lowered_repository_reachable() -> N
     assert _runtime_carrier_check(spec).status == "BLOCK"
 
 
+@pytest.mark.parametrize("where", ["accessor", "bootstrap_write"])
+def test_repository_constructed_by_the_unit_of_work_is_reachable(where: str) -> None:
+    spec = _carrier_spec()
+    spec["contracts"]["begin_unit_of_work"] = "(purpose: str) -> None"
+    backend = {"kind": "sqlite_unit_of_work_backend", "accessors": []}
+    row = {"repository": "SqliteStoreRepository"}
+    if where == "accessor":
+        backend["accessors"].append({"accessor": "store", **row})
+    else:
+        backend["bootstrap_store"] = {"writes": [{"parameter": "slot", "method": "insert_slot", **row}]}
+    spec["rules"]["sqlite_unit_of_work_backend"] = backend
+
+    result = _runtime_carrier_check(spec)
+
+    assert result.status == "PASS"
+    assert result.evidence["unit_of_work_repositories"] == ["SqliteStoreRepository"]
+
+
+def test_unit_of_work_of_another_kind_does_not_make_a_repository_reachable() -> None:
+    spec = _carrier_spec()
+    spec["contracts"]["begin_unit_of_work"] = "(purpose: str) -> None"
+    spec["rules"]["sqlite_unit_of_work_backend"] = {
+        "kind": "persistence_backend",
+        "accessors": [{"accessor": "store", "repository": "SqliteStoreRepository"}],
+    }
+
+    assert _runtime_carrier_check(spec).status == "BLOCK"
+
+
 def test_runtime_carrier_check_blocks_malformed_spec() -> None:
     assert _runtime_carrier_check({"contracts": [], "models": {}}).status == "BLOCK"
 
