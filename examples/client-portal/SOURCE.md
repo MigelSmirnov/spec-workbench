@@ -183,6 +183,25 @@ non-heading line is kept; checked mechanically on 2026-11-06).
 | 26 request models, 15 repository interfaces, `RuntimeSettings`, `RuntimeEnvironment` | `38626cc7`, `af686d73` … `6011ac93` | accepted spec change, not State 1 concepts | "Named in later states" (States 2, 3, 5, 6) |
 | Q13: older viewer codes stay valid after a new one is issued | `open_questions.md` Q13 (observation 2026-11-05) against M02, the accepted note `issue_viewer_access` ("MUST revoke every non-revoked prior credential") and Factory `application/viewer_access.py` `issue_viewer_access` (revokes every prior credential) | the probe disagrees with the observation; design and spec agree; nothing to carry | Q13 stays the owner's; "Evidence notes" of `01_models.md` |
 
+### State 1 question rounds
+
+The rounds (`questions/state1/`, Codex CLI provider) asked on the migrated
+`01_models.md`. Every blocking topic was closed by repairing the State 1
+text to the accepted spec 459ac96c and its code under the owner decision of
+2026-11-06 ("current service behaviour accepted; technical decisions
+delegated"); each repaired model records it under `Carried changes`, so
+the line-for-line claim above holds for the text before these repairs.
+Nothing was designed; deferred features stay deferred.
+
+| round | blocking | topics and resolution |
+|---|---|---|
+| round-01 | 40 | operators named as viewer, link and grant managers (M01, M02, M04 → administrator, R0-14); challenge, reset, email-change, delivery and notice records written as current (M08–M12, Status, M05, M06 marked deferred: R0-23, Q19); plaintext of presented passwords and tokens (conventions); `payment_id` and photo `intake_id` minted by the staff caller (conventions, M33, M34); re-allocation replaces allocations with fresh ids (M29); snapshot identity, replay and conflict answers, conflict `reject_reason = None` (M19, M20, R0-25); `ProjectReference.status` the Registry's string, acted on only as `active`/`archived` (M16, M17); one grant or assignment record per pair, no re-grant (M04, M07, M15: accepted UNIQUE constraints); role, scope mode and viewer display name immutable (M05, M13, M01); viewer session has no credential reference (M03); progress record created by the first update, absence is `None` (M32); expense document view present with `client_visible` (projections); bootstrap audit and password change without audit (M36); imported versions, `source_key` namespace and manual mapping are Q11 (M21, section linking, deferred) |
+| round-02 | 6 | principal re-enabling (M13); State 0 sign-out-everywhere is the administrator revocation (M06); initial document description is `document_type` (M30, Factory code `application/expense_intake.py`); administrator scope is the area, not an assignment (M07, A2); unauthenticated import attempts and password changes write no audit (M36) |
+| round-03 | 1 | activation refused while an allocation would be unresolved, against "become unresolved" (section linking) |
+| round-04 | 4 | `all_projects` chosen at creation is State 0's "explicitly granted capability" (M13); `disabled_at`/`disabled_by` cleared on re-enabling (M13, Factory code `application/service_identity.py`); administrator assignments inert, R0-24 concerns operator assignments (M07); when an imported version is built relative to activation is Q11 (section linking) |
+| round-05 | 0 | clear |
+| round-06 | 0 | clear on the unchanged text; `design_questions.py status --state 1`: closed, every unit closed by two clear rounds |
+
 ### Classification of what State 2 carries
 
 The former `spec/20_rules.md` moved into `02_rules.md` line for line (checked

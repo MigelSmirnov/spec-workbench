@@ -1,0 +1,223 @@
+{
+ "open_points": [
+  {
+   "subject": "StaffAccount status transition",
+   "kind": "ambiguous lifecycle",
+   "text": "`pending_verification → active ↔ suspended → disabled`",
+   "question": "May an administrator disable an active or pending-verification account directly, or may `disabled` be entered only from `suspended`?",
+   "options": [
+    "Allow `active → disabled` and `pending_verification → disabled` directly",
+    "Allow `active → disabled` directly but not `pending_verification → disabled`",
+    "Require `suspended → disabled` for every account"
+   ],
+   "default_guess": "Allow an administrator to disable an active account directly, but require activation before an account can be suspended or disabled.",
+   "witness": {
+    "initial": "A staff account is active and has an active session.",
+    "events": [
+     "An administrator requests that the account be disabled immediately."
+    ],
+    "outcomes": [
+     "The account moves directly to `disabled` and its sessions are invalidated.",
+     "The request is refused because the written lifecycle reaches `disabled` only from `suspended`."
+    ],
+    "observer": "The administrator and the affected staff member"
+   },
+   "unit": "01_models.md:Model M05 — StaffAccount"
+  },
+  {
+   "subject": "Issuing ViewerAccessCredential for a revoked viewer",
+   "kind": "missing action precondition",
+   "text": "`Created/modified by: administrator only (R0-14): issue, re-issue and revocation.`",
+   "question": "Can an administrator issue or re-issue a credential for a terminally revoked ClientViewer?",
+   "options": [
+    "Refuse issuance for a revoked viewer",
+    "Create the credential, although it cannot produce an active viewer session",
+    "Permit issuance and treat it as restoring access despite the viewer remaining revoked"
+   ],
+   "default_guess": "Refuse issuance for a revoked viewer.",
+   "witness": {
+    "initial": "Viewer V has status `revoked`; all of V's old credentials and sessions have been revoked.",
+    "events": [
+     "An administrator issues a new access link for V.",
+     "The client presents the new link."
+    ],
+    "outcomes": [
+     "Issuance is refused because V is terminally revoked.",
+     "A new ViewerAccessCredential is persisted, but entry cannot create a usable session because V remains revoked."
+    ],
+    "observer": "The administrator receives a different issuance result and the client may receive an unusable link"
+   },
+   "unit": "01_models.md:Model M02 — ViewerAccessCredential"
+  },
+  {
+   "subject": "Creating ProjectViewerGrant for a revoked viewer",
+   "kind": "missing action precondition",
+   "text": "`Created/modified by: administrator only (R0-14).`",
+   "question": "May an administrator create the sole `(viewer_id, project_id)` grant record when the viewer is already revoked?",
+   "options": [
+    "Require the viewer to be active",
+    "Allow a grant for any existing viewer, including a revoked viewer"
+   ],
+   "default_guess": "Require the viewer to be active.",
+   "witness": {
+    "initial": "Viewer V is revoked and has never had a grant for active Registry project P.",
+    "events": [
+     "An administrator grants P to V."
+    ],
+    "outcomes": [
+     "The grant is refused because V is revoked.",
+     "A terminally unusable active grant is created; because the pair is unique and grants cannot be re-created, that pair is permanently consumed."
+    ],
+    "observer": "The administrator and repository state"
+   },
+   "unit": "01_models.md:Model M04 — ProjectViewerGrant"
+  },
+  {
+   "subject": "ProducerProjectGrant eligibility by scope mode",
+   "kind": "missing action precondition",
+   "text": "`consulted only when the principal's scope_mode is granted_projects`",
+   "question": "Can a ProducerProjectGrant be created for a ServicePrincipal whose immutable `scope_mode` is `all_projects`?",
+   "options": [
+    "Refuse grants unless `scope_mode = granted_projects`",
+    "Allow the inert grant even though authorization will never consult it"
+   ],
+   "default_guess": "Refuse grants for an `all_projects` principal.",
+   "witness": {
+    "initial": "Active service principal S has immutable `scope_mode = all_projects` and has no grant for active project P.",
+    "events": [
+     "An administrator creates a producer grant from S to P."
+    ],
+    "outcomes": [
+     "The action is refused because S cannot use per-project grants.",
+     "A ProducerProjectGrant is persisted but never participates in authorization."
+    ],
+    "observer": "The administrator and audit/repository readers"
+   },
+   "unit": "01_models.md:Model M15 — ProducerProjectGrant"
+  },
+  {
+   "subject": "ProducerProjectGrant eligibility by principal status",
+   "kind": "missing action precondition",
+   "text": "`at most one grant record per (principal, project), active or revoked`",
+   "question": "May an administrator create a producer grant for a disabled ServicePrincipal?",
+   "options": [
+    "Require the service principal to be active",
+    "Allow a grant for any existing service principal, with the grant becoming usable only if the principal is re-enabled and credentialed"
+   ],
+   "default_guess": "Require the service principal to be active.",
+   "witness": {
+    "initial": "Service principal S is disabled, has `scope_mode = granted_projects`, and has no grant for active project P.",
+    "events": [
+     "An administrator grants P to S.",
+     "S is later re-enabled and receives a new credential."
+    ],
+    "outcomes": [
+     "Grant creation while disabled is refused, so S still lacks access after re-enablement.",
+     "The grant is created while disabled and becomes effective after S is re-enabled and credentialed."
+    ],
+    "observer": "The administrator and the producer after re-enablement"
+   },
+   "unit": "01_models.md:Model M15 — ProducerProjectGrant"
+  },
+  {
+   "subject": "First manual SectionPlan and its BudgetVersion",
+   "kind": "missing creation action",
+   "text": "`A manual plan is created or edited by the upsert of its section and is never removed.`",
+   "question": "When the first manual-section upsert is made for a project with no manual BudgetVersion, does that action mint the manual BudgetVersion, and if so is it initially active or inactive?",
+   "options": [
+    "The first upsert atomically creates an active manual BudgetVersion, PortalSection, and SectionPlan",
+    "The first upsert creates an inactive manual BudgetVersion that requires a separate activation",
+    "The upsert requires a manual BudgetVersion to exist already"
+   ],
+   "default_guess": "Atomically create the project's active manual BudgetVersion with its first PortalSection and SectionPlan.",
+   "witness": {
+    "initial": "An active Registry project has no BudgetVersion, PortalSection, or SectionPlan.",
+    "events": [
+     "An assigned operator submits a manual-section upsert without a `section_id`."
+    ],
+    "outcomes": [
+     "The operation mints an active manual version, its section, and its plan, making the budget readable.",
+     "The operation is refused because no version exists, or it creates an inactive version that is absent from the client budget until another action activates it."
+    ],
+    "observer": "The operator and the client viewer"
+   },
+   "unit": "01_models.md:Model M23 — SectionPlan"
+  },
+  {
+   "subject": "SectionProgress identity",
+   "kind": "unspecified identity",
+   "text": "`Fields: project_id: UUID, section_id: UUID (unique), completion_percent: int (0–100), updated_at, updated_by: UUID.`",
+   "question": "What is the entity identity of SectionProgress: the existing `section_id`, the `(project_id, section_id)` pair, or a separate portal-minted progress identifier omitted from the field list?",
+   "options": [
+    "Use `section_id` as the SectionProgress identity",
+    "Use `(project_id, section_id)` as a composite identity",
+    "Mint and store a separate `progress_id`"
+   ],
+   "default_guess": "Use `section_id` as the identity because it is declared unique and there is one current record per section.",
+   "witness": {
+    "initial": "Section S in project P has no progress record.",
+    "events": [
+     "A staff member records progress for S.",
+     "The owning use case writes the required `section_progress` audit reference."
+    ],
+    "outcomes": [
+     "The record and audit identify progress by S's `section_id`.",
+     "The implementation mints a separate progress identifier, or serializes a project/section composite, and audit references that different identity."
+    ],
+    "observer": "Audit readers and later modules that reference or update SectionProgress"
+   },
+   "unit": "01_models.md:Model M32 — SectionProgress"
+  },
+  {
+   "subject": "Eligibility to create or update SectionProgress",
+   "kind": "missing action precondition",
+   "text": "`only sections with planned work in the active version participate in derived progress`",
+   "question": "Can staff set progress for a project section that has no plan in the active budget version, has zero planned work, or belongs only to an inactive version?",
+   "options": [
+    "Allow updates for any PortalSection in the project; participation is only a read-time rule",
+    "Require the section to appear in the active version",
+    "Require the section to appear in the active version with `work_planned > 0`"
+   ],
+   "default_guess": "Require the section to appear in the active version, but allow a progress record when its planned work is zero.",
+   "witness": {
+    "initial": "Project P has an active budget whose plans omit old PortalSection S; S still exists and may have historical allocations.",
+    "events": [
+     "An assigned operator sets S to 60% completion."
+    ],
+    "outcomes": [
+     "A SectionProgress record is created or updated but is ignored by current derived progress.",
+     "The action is refused because S is not a section of the active budget."
+    ],
+    "observer": "The operator and staff reading stored progress"
+   },
+   "unit": "01_models.md:Model M32 — SectionProgress"
+  },
+  {
+   "subject": "Viewer photo-gallery visibility",
+   "kind": "unspecified read filtering",
+   "text": "`PhotoView` fields: `photo_id: UUID`, `photo_date: datetime`, `section_id: UUID | None`, `section_display_name: str | None`, `caption: str | None`.",
+   "question": "Does a viewer-facing photo read exclude ProgressPhoto records with `client_visible = false`, or return their PhotoView metadata while refusing only the binary?",
+   "options": [
+    "Exclude hidden photos entirely from viewer photo lists and ProjectOverview",
+    "Return hidden photo metadata but refuse its binary",
+    "Use different filtering for viewer and staff reads, with the exact producing actions named"
+   ],
+   "default_guess": "Exclude hidden photos entirely from viewer-facing lists and overviews; expose them only through the staff-side projection.",
+   "witness": {
+    "initial": "Viewer V has an active grant to project P. P contains photo H with `client_visible = false` and photo V1 with `client_visible = true`.",
+    "events": [
+     "V reads P's ProjectOverview or chronological gallery."
+    ],
+    "outcomes": [
+     "The photos list contains only V1.",
+     "The photos list contains H and V1, revealing H's date, section, and caption, although H's binary remains unavailable."
+    ],
+    "observer": "The client viewer"
+   },
+   "unit": "01_models.md:Projections and answers"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"StaffAccount status transition\",\"kind\":\"ambiguous lifecycle\",\"text\":\"`pending_verification → active ↔ suspended → disabled`\",\"question\":\"May an administrator disable an active or pending-verification account directly, or may `disabled` be entered only from `suspended`?\",\"options\":[\"Allow `active → disabled` and `pending_verification → disabled` directly\",\"Allow `active → disabled` directly but not `pending_verification → disabled`\",\"Require `suspended → disabled` for every account\"],\"default_guess\":\"Allow an administrator to disable an active account directly, but require activation before an account can be suspended or disabled.\",\"witness\":{\"initial\":\"A staff account is active and has an active session.\",\"events\":[\"An administrator requests that the account be disabled immediately.\"],\"outcomes\":[\"The account moves directly to `disabled` and its sessions are invalidated.\",\"The request is refused because the written lifecycle reaches `disabled` only from `suspended`.\"],\"observer\":\"The administrator and the affected staff member\"},\"unit\":\"01_models.md:Model M05 — StaffAccount\"},{\"subject\":\"Issuing ViewerAccessCredential for a revoked viewer\",\"kind\":\"missing action precondition\",\"text\":\"`Created/modified by: administrator only (R0-14): issue, re-issue and revocation.`\",\"question\":\"Can an administrator issue or re-issue a credential for a terminally revoked ClientViewer?\",\"options\":[\"Refuse issuance for a revoked viewer\",\"Create the credential, although it cannot produce an active viewer session\",\"Permit issuance and treat it as restoring access despite the viewer remaining revoked\"],\"default_guess\":\"Refuse issuance for a revoked viewer.\",\"witness\":{\"initial\":\"Viewer V has status `revoked`; all of V's old credentials and sessions have been revoked.\",\"events\":[\"An administrator issues a new access link for V.\",\"The client presents the new link.\"],\"outcomes\":[\"Issuance is refused because V is terminally revoked.\",\"A new ViewerAccessCredential is persisted, but entry cannot create a usable session because V remains revoked.\"],\"observer\":\"The administrator receives a different issuance result and the client may receive an unusable link\"},\"unit\":\"01_models.md:Model M02 — ViewerAccessCredential\"},{\"subject\":\"Creating ProjectViewerGrant for a revoked viewer\",\"kind\":\"missing action precondition\",\"text\":\"`Created/modified by: administrator only (R0-14).`\",\"question\":\"May an administrator create the sole `(viewer_id, project_id)` grant record when the viewer is already revoked?\",\"options\":[\"Require the viewer to be active\",\"Allow a grant for any existing viewer, including a revoked viewer\"],\"default_guess\":\"Require the viewer to be active.\",\"witness\":{\"initial\":\"Viewer V is revoked and has never had a grant for active Registry project P.\",\"events\":[\"An administrator grants P to V.\"],\"outcomes\":[\"The grant is refused because V is revoked.\",\"A terminally unusable active grant is created; because the pair is unique and grants cannot be re-created, that pair is permanently consumed.\"],\"observer\":\"The administrator and repository state\"},\"unit\":\"01_models.md:Model M04 — ProjectViewerGrant\"},{\"subject\":\"ProducerProjectGrant eligibility by scope mode\",\"kind\":\"missing action precondition\",\"text\":\"`consulted only when the principal's scope_mode is granted_projects`\",\"question\":\"Can a ProducerProjectGrant be created for a ServicePrincipal whose immutable `scope_mode` is `all_projects`?\",\"options\":[\"Refuse grants unless `scope_mode = granted_projects`\",\"Allow the inert grant even though authorization will never consult it\"],\"default_guess\":\"Refuse grants for an `all_projects` principal.\",\"witness\":{\"initial\":\"Active service principal S has immutable `scope_mode = all_projects` and has no grant for active project P.\",\"events\":[\"An administrator creates a producer grant from S to P.\"],\"outcomes\":[\"The action is refused because S cannot use per-project grants.\",\"A ProducerProjectGrant is persisted but never participates in authorization.\"],\"observer\":\"The administrator and audit/repository readers\"},\"unit\":\"01_models.md:Model M15 — ProducerProjectGrant\"},{\"subject\":\"ProducerProjectGrant eligibility by principal status\",\"kind\":\"missing action precondition\",\"text\":\"`at most one grant record per (principal, project), active or revoked`\",\"question\":\"May an administrator create a producer grant for a disabled ServicePrincipal?\",\"options\":[\"Require the service principal to be active\",\"Allow a grant for any existing service principal, with the grant becoming usable only if the principal is re-enabled and credentialed\"],\"default_guess\":\"Require the service principal to be active.\",\"witness\":{\"initial\":\"Service principal S is disabled, has `scope_mode = granted_projects`, and has no grant for active project P.\",\"events\":[\"An administrator grants P to S.\",\"S is later re-enabled and receives a new credential.\"],\"outcomes\":[\"Grant creation while disabled is refused, so S still lacks access after re-enablement.\",\"The grant is created while disabled and becomes effective after S is re-enabled and credentialed.\"],\"observer\":\"The administrator and the producer after re-enablement\"},\"unit\":\"01_models.md:Model M15 — ProducerProjectGrant\"},{\"subject\":\"First manual SectionPlan and its BudgetVersion\",\"kind\":\"missing creation action\",\"text\":\"`A manual plan is created or edited by the upsert of its section and is never removed.`\",\"question\":\"When the first manual-section upsert is made for a project with no manual BudgetVersion, does that action mint the manual BudgetVersion, and if so is it initially active or inactive?\",\"options\":[\"The first upsert atomically creates an active manual BudgetVersion, PortalSection, and SectionPlan\",\"The first upsert creates an inactive manual BudgetVersion that requires a separate activation\",\"The upsert requires a manual BudgetVersion to exist already\"],\"default_guess\":\"Atomically create the project's active manual BudgetVersion with its first PortalSection and SectionPlan.\",\"witness\":{\"initial\":\"An active Registry project has no BudgetVersion, PortalSection, or SectionPlan.\",\"events\":[\"An assigned operator submits a manual-section upsert without a `section_id`.\"],\"outcomes\":[\"The operation mints an active manual version, its section, and its plan, making the budget readable.\",\"The operation is refused because no version exists, or it creates an inactive version that is absent from the client budget until another action activates it.\"],\"observer\":\"The operator and the client viewer\"},\"unit\":\"01_models.md:Model M23 — SectionPlan\"},{\"subject\":\"SectionProgress identity\",\"kind\":\"unspecified identity\",\"text\":\"`Fields: project_id: UUID, section_id: UUID (unique), completion_percent: int (0–100), updated_at, updated_by: UUID.`\",\"question\":\"What is the entity identity of SectionProgress: the existing `section_id`, the `(project_id, section_id)` pair, or a separate portal-minted progress identifier omitted from the field list?\",\"options\":[\"Use `section_id` as the SectionProgress identity\",\"Use `(project_id, section_id)` as a composite identity\",\"Mint and store a separate `progress_id`\"],\"default_guess\":\"Use `section_id` as the identity because it is declared unique and there is one current record per section.\",\"witness\":{\"initial\":\"Section S in project P has no progress record.\",\"events\":[\"A staff member records progress for S.\",\"The owning use case writes the required `section_progress` audit reference.\"],\"outcomes\":[\"The record and audit identify progress by S's `section_id`.\",\"The implementation mints a separate progress identifier, or serializes a project/section composite, and audit references that different identity.\"],\"observer\":\"Audit readers and later modules that reference or update SectionProgress\"},\"unit\":\"01_models.md:Model M32 — SectionProgress\"},{\"subject\":\"Eligibility to create or update SectionProgress\",\"kind\":\"missing action precondition\",\"text\":\"`only sections with planned work in the active version participate in derived progress`\",\"question\":\"Can staff set progress for a project section that has no plan in the active budget version, has zero planned work, or belongs only to an inactive version?\",\"options\":[\"Allow updates for any PortalSection in the project; participation is only a read-time rule\",\"Require the section to appear in the active version\",\"Require the section to appear in the active version with `work_planned > 0`\"],\"default_guess\":\"Require the section to appear in the active version, but allow a progress record when its planned work is zero.\",\"witness\":{\"initial\":\"Project P has an active budget whose plans omit old PortalSection S; S still exists and may have historical allocations.\",\"events\":[\"An assigned operator sets S to 60% completion.\"],\"outcomes\":[\"A SectionProgress record is created or updated but is ignored by current derived progress.\",\"The action is refused because S is not a section of the active budget.\"],\"observer\":\"The operator and staff reading stored progress\"},\"unit\":\"01_models.md:Model M32 — SectionProgress\"},{\"subject\":\"Viewer photo-gallery visibility\",\"kind\":\"unspecified read filtering\",\"text\":\"`PhotoView` fields: `photo_id: UUID`, `photo_date: datetime`, `section_id: UUID | None`, `section_display_name: str | None`, `caption: str | None`.\",\"question\":\"Does a viewer-facing photo read exclude ProgressPhoto records with `client_visible = false`, or return their PhotoView metadata while refusing only the binary?\",\"options\":[\"Exclude hidden photos entirely from viewer photo lists and ProjectOverview\",\"Return hidden photo metadata but refuse its binary\",\"Use different filtering for viewer and staff reads, with the exact producing actions named\"],\"default_guess\":\"Exclude hidden photos entirely from viewer-facing lists and overviews; expose them only through the staff-side projection.\",\"witness\":{\"initial\":\"Viewer V has an active grant to project P. P contains photo H with `client_visible = false` and photo V1 with `client_visible = true`.\",\"events\":[\"V reads P's ProjectOverview or chronological gallery.\"],\"outcomes\":[\"The photos list contains only V1.\",\"The photos list contains H and V1, revealing H's date, section, and caption, although H's binary remains unavailable.\"],\"observer\":\"The client viewer\"},\"unit\":\"01_models.md:Projections and answers\"}]}",
+ "set_aside": []
+}

@@ -1,0 +1,109 @@
+{
+ "open_points": [
+  {
+   "unit": "01_models.md:Model M07 — StaffProjectAssignment",
+   "subject": "StaffProjectAssignment for an administrator",
+   "kind": "contradictory access effect",
+   "text": "M07 says, “The assignment operation accepts any existing staff account; an assignment naming an administrator has no effect, because authorization never consults assignments for the administrator role.” State 0 invariant 4 says, “Revoked membership/grant blocks new requests immediately,” and R0-24 says an existing staff assignment “keeps giving read access” and may be revoked.",
+   "question": "Is an administrator’s StaffProjectAssignment intentionally inert, or must creating and revoking every StaffProjectAssignment grant and remove project access?",
+   "options": [
+    "Assignments may be created for administrators but are inert; revocation does not affect their area-based access.",
+    "Assignments grant and revoke project access for administrators as they do for operators.",
+    "Assignments naming administrators are refused, so every persisted assignment is effective."
+   ],
+   "default_guess": "Treat administrator assignments as permitted but inert because M07 states that behavior most specifically.",
+   "witness": {
+    "initial": "An active administrator covers project P through the single administrative-area policy and has no assignment for P.",
+    "events": [
+     "An administrator creates a StaffProjectAssignment from that administrator account to active project P.",
+     "The assignment is revoked.",
+     "The assigned administrator requests a read of P."
+    ],
+    "outcomes": [
+     "Under M07, both assignment operations are inert and the administrator still reads P through administrative-area scope.",
+     "If State 0's grant/assignment invariants apply to every StaffProjectAssignment, the active assignment supplies access and its revocation blocks the next request."
+    ],
+    "observer": "The administrator making the project read and the administrator managing assignments."
+   }
+  },
+  {
+   "unit": "01_models.md:Model M13 — ServicePrincipal",
+   "subject": "Initial ServicePrincipal status",
+   "kind": "missing lifecycle entry state",
+   "text": "M13 defines `status: PrincipalStatus (active | disabled)` and says “the only modification is the status change `active ↔ disabled`,” but does not state which status `create_service_principal` assigns.",
+   "question": "Is a newly created ServicePrincipal initially active or disabled?",
+   "options": [
+    "Created active and immediately able to authenticate after a credential is issued.",
+    "Created disabled and must be enabled before any credential can authenticate.",
+    "The administrator selects the initial status during creation."
+   ],
+   "default_guess": "Create it active, matching the usual entry point implied by the lifecycle and the separate disable action.",
+   "witness": {
+    "initial": "An administrator is authorized to manage service principals for active project P.",
+    "events": [
+     "The administrator creates a `granted_projects` ServicePrincipal.",
+     "The administrator grants it P and issues a credential.",
+     "The producer authenticates with that credential and imports a snapshot for P without any intervening status-change action."
+    ],
+    "outcomes": [
+     "If creation enters `active`, the import can pass principal-status checking.",
+     "If creation enters `disabled`, the import is rejected until an administrator explicitly enables the principal."
+    ],
+    "observer": "The producer receiving the import result and the administrator provisioning the integration."
+   }
+  },
+  {
+   "unit": "01_models.md:Model M13 — ServicePrincipal",
+   "subject": "Global producer authorization",
+   "kind": "contradictory scope requirement",
+   "text": "State 0 says, “a global producer exists only through an explicitly granted capability,” and its common rule requires project access through a grant/assignment. M13 instead says, “With `all_projects` the scope mode alone admits an import for any project the Registry reports active; no grant is consulted and no further capability is needed.”",
+   "question": "Does `scope_mode = all_projects` itself authorize every active project, or must a global producer also hold a separate explicitly granted global capability or project-access grant?",
+   "options": [
+    "`all_projects` is the explicit global grant; the static import capability plus that scope mode is sufficient.",
+    "A separate global capability must be granted in addition to `all_projects`.",
+    "Even an `all_projects` principal must have a ProducerProjectGrant for each project."
+   ],
+   "default_guess": "Treat the administrator-selected and audited `all_projects` scope mode as the explicit global grant, because M13 states that no further capability or grant is consulted.",
+   "witness": {
+    "initial": "Active Registry project P exists. An active ServicePrincipal has `scope_mode = all_projects`, a valid credential, the static snapshot-import capability, and no ProducerProjectGrant for P.",
+    "events": [
+     "The producer submits a valid snapshot publication for P."
+    ],
+    "outcomes": [
+     "Under M13, authorization succeeds because Registry reports P active and `all_projects` is sufficient.",
+     "Under State 0's literal global-capability and grant/assignment requirements, authorization fails because no separate global capability or project grant exists."
+    ],
+    "observer": "The producer receiving the import result and the administrator who configured its scope."
+   }
+  },
+  {
+   "unit": "01_models.md:Section linking at activation",
+   "subject": "Creation of imported plans and unmatched PortalSections versus pre-activation reallocation",
+   "kind": "lifecycle ordering contradiction",
+   "text": "The section says, “Activation of an imported version creates plans” and unmatched source sections create new `PortalSection` records, but also says allocations to absent previous sections “must be explicitly re-allocated by an operator before that version can be activated: activation is refused while any is unresolved.”",
+   "question": "Which product action creates the candidate version’s SectionPlans and unmatched PortalSections early enough for operators to target them during the required pre-activation reallocation, and do those records survive a refused activation?",
+   "options": [
+    "Candidate-version creation, not activation, creates all plans and unmatched PortalSections; activation only links, validates and changes status.",
+    "A first refused activation creates and retains the plans and PortalSections so reallocation can follow.",
+    "Activation creates them only in its successful transaction; unresolved allocations must instead be moved to already-existing sections or `other_expenses`, so unmatched new sections cannot receive allocations before activation."
+   ],
+   "default_guess": "Create the imported plans and unmatched PortalSections when the imported candidate BudgetVersion is created, then make activation only validate resolution and switch status.",
+   "witness": {
+    "initial": "Project P has an active manual version with old section O, and expense E is allocated to O. An accepted snapshot candidate contains only unmatched source section N.",
+    "events": [
+     "A staff member attempts to prepare the imported version for activation.",
+     "The staff member must explicitly reallocate E before activation.",
+     "The staff member tries to target N."
+    ],
+    "outcomes": [
+     "If candidate creation already minted N and its plan, the staff member can reallocate E to N and then activate the version.",
+     "If activation alone mints N but refuses while E remains allocated to O, N does not yet exist as a target; the required reallocation cannot be completed unless a failed activation persists model records or E is diverted elsewhere."
+    ],
+    "observer": "The staff member preparing the budget transition and clients who later see E under N or under a different target."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"01_models.md:Model M07 — StaffProjectAssignment\",\"subject\":\"StaffProjectAssignment for an administrator\",\"kind\":\"contradictory access effect\",\"text\":\"M07 says, “The assignment operation accepts any existing staff account; an assignment naming an administrator has no effect, because authorization never consults assignments for the administrator role.” State 0 invariant 4 says, “Revoked membership/grant blocks new requests immediately,” and R0-24 says an existing staff assignment “keeps giving read access” and may be revoked.\",\"question\":\"Is an administrator’s StaffProjectAssignment intentionally inert, or must creating and revoking every StaffProjectAssignment grant and remove project access?\",\"options\":[\"Assignments may be created for administrators but are inert; revocation does not affect their area-based access.\",\"Assignments grant and revoke project access for administrators as they do for operators.\",\"Assignments naming administrators are refused, so every persisted assignment is effective.\"],\"default_guess\":\"Treat administrator assignments as permitted but inert because M07 states that behavior most specifically.\",\"witness\":{\"initial\":\"An active administrator covers project P through the single administrative-area policy and has no assignment for P.\",\"events\":[\"An administrator creates a StaffProjectAssignment from that administrator account to active project P.\",\"The assignment is revoked.\",\"The assigned administrator requests a read of P.\"],\"outcomes\":[\"Under M07, both assignment operations are inert and the administrator still reads P through administrative-area scope.\",\"If State 0's grant/assignment invariants apply to every StaffProjectAssignment, the active assignment supplies access and its revocation blocks the next request.\"],\"observer\":\"The administrator making the project read and the administrator managing assignments.\"}},{\"unit\":\"01_models.md:Model M13 — ServicePrincipal\",\"subject\":\"Initial ServicePrincipal status\",\"kind\":\"missing lifecycle entry state\",\"text\":\"M13 defines `status: PrincipalStatus (active | disabled)` and says “the only modification is the status change `active ↔ disabled`,” but does not state which status `create_service_principal` assigns.\",\"question\":\"Is a newly created ServicePrincipal initially active or disabled?\",\"options\":[\"Created active and immediately able to authenticate after a credential is issued.\",\"Created disabled and must be enabled before any credential can authenticate.\",\"The administrator selects the initial status during creation.\"],\"default_guess\":\"Create it active, matching the usual entry point implied by the lifecycle and the separate disable action.\",\"witness\":{\"initial\":\"An administrator is authorized to manage service principals for active project P.\",\"events\":[\"The administrator creates a `granted_projects` ServicePrincipal.\",\"The administrator grants it P and issues a credential.\",\"The producer authenticates with that credential and imports a snapshot for P without any intervening status-change action.\"],\"outcomes\":[\"If creation enters `active`, the import can pass principal-status checking.\",\"If creation enters `disabled`, the import is rejected until an administrator explicitly enables the principal.\"],\"observer\":\"The producer receiving the import result and the administrator provisioning the integration.\"}},{\"unit\":\"01_models.md:Model M13 — ServicePrincipal\",\"subject\":\"Global producer authorization\",\"kind\":\"contradictory scope requirement\",\"text\":\"State 0 says, “a global producer exists only through an explicitly granted capability,” and its common rule requires project access through a grant/assignment. M13 instead says, “With `all_projects` the scope mode alone admits an import for any project the Registry reports active; no grant is consulted and no further capability is needed.”\",\"question\":\"Does `scope_mode = all_projects` itself authorize every active project, or must a global producer also hold a separate explicitly granted global capability or project-access grant?\",\"options\":[\"`all_projects` is the explicit global grant; the static import capability plus that scope mode is sufficient.\",\"A separate global capability must be granted in addition to `all_projects`.\",\"Even an `all_projects` principal must have a ProducerProjectGrant for each project.\"],\"default_guess\":\"Treat the administrator-selected and audited `all_projects` scope mode as the explicit global grant, because M13 states that no further capability or grant is consulted.\",\"witness\":{\"initial\":\"Active Registry project P exists. An active ServicePrincipal has `scope_mode = all_projects`, a valid credential, the static snapshot-import capability, and no ProducerProjectGrant for P.\",\"events\":[\"The producer submits a valid snapshot publication for P.\"],\"outcomes\":[\"Under M13, authorization succeeds because Registry reports P active and `all_projects` is sufficient.\",\"Under State 0's literal global-capability and grant/assignment requirements, authorization fails because no separate global capability or project grant exists.\"],\"observer\":\"The producer receiving the import result and the administrator who configured its scope.\"}},{\"unit\":\"01_models.md:Section linking at activation\",\"subject\":\"Creation of imported plans and unmatched PortalSections versus pre-activation reallocation\",\"kind\":\"lifecycle ordering contradiction\",\"text\":\"The section says, “Activation of an imported version creates plans” and unmatched source sections create new `PortalSection` records, but also says allocations to absent previous sections “must be explicitly re-allocated by an operator before that version can be activated: activation is refused while any is unresolved.”\",\"question\":\"Which product action creates the candidate version’s SectionPlans and unmatched PortalSections early enough for operators to target them during the required pre-activation reallocation, and do those records survive a refused activation?\",\"options\":[\"Candidate-version creation, not activation, creates all plans and unmatched PortalSections; activation only links, validates and changes status.\",\"A first refused activation creates and retains the plans and PortalSections so reallocation can follow.\",\"Activation creates them only in its successful transaction; unresolved allocations must instead be moved to already-existing sections or `other_expenses`, so unmatched new sections cannot receive allocations before activation.\"],\"default_guess\":\"Create the imported plans and unmatched PortalSections when the imported candidate BudgetVersion is created, then make activation only validate resolution and switch status.\",\"witness\":{\"initial\":\"Project P has an active manual version with old section O, and expense E is allocated to O. An accepted snapshot candidate contains only unmatched source section N.\",\"events\":[\"A staff member attempts to prepare the imported version for activation.\",\"The staff member must explicitly reallocate E before activation.\",\"The staff member tries to target N.\"],\"outcomes\":[\"If candidate creation already minted N and its plan, the staff member can reallocate E to N and then activate the version.\",\"If activation alone mints N but refuses while E remains allocated to O, N does not yet exist as a target; the required reallocation cannot be completed unless a failed activation persists model records or E is diverted elsewhere.\"],\"observer\":\"The staff member preparing the budget transition and clients who later see E under N or under a different target.\"}}]}",
+ "set_aside": []
+}

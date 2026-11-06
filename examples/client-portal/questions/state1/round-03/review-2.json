@@ -1,0 +1,130 @@
+{
+ "open_points": [
+  {
+   "unit": "01_models.md:Model M01 — ClientViewer",
+   "subject": "ClientViewer revocation cascade into ViewerAccessCredential",
+   "kind": "lifecycle ambiguity",
+   "text": "“Revocation invalidates all viewer sessions and credentials but deletes nothing” does not say whether credentials are merely unusable because their viewer is revoked or are themselves transitioned by setting `revoked_at` and `revoked_by`; M03 explicitly says sessions are revoked, but M02 does not define the corresponding credential cascade.",
+   "question": "When an administrator revokes a ClientViewer, are that viewer’s non-revoked ViewerAccessCredential records themselves revoked, or do they remain non-revoked records that authentication rejects because the viewer is revoked?",
+   "options": [
+    "Set `revoked_at` and `revoked_by` on every non-revoked credential as part of viewer revocation.",
+    "Leave credential lifecycle fields unchanged and make them unusable solely through ClientViewer.status.",
+    "Introduce a distinct invalidated state or cause separate from explicit credential revocation."
+   ],
+   "default_guess": "Revoke every non-revoked credential in the same operation, recording the administrator and revocation time."
+  },
+  {
+   "unit": "01_models.md:Model M29 — ExpenseAllocation",
+   "subject": "ExpenseAllocation update provenance",
+   "kind": "missing field producer",
+   "text": "ExpenseAllocation declares `updated_at | None` and `updated_by | None`, but its continuity says every re-allocation or amount correction deletes the whole allocation set and inserts fresh records with fresh `allocation_id` values. No action is defined that updates an existing allocation.",
+   "question": "What product action, if any, sets `updated_at` and `updated_by` on an ExpenseAllocation?",
+   "options": [
+    "No action sets them; every allocation retains `updated_at = updated_by = None`.",
+    "Fresh replacement allocations record the replacement action in `updated_at` and `updated_by` despite being newly created.",
+    "Some allocation edits update existing records in place, contrary to the stated replacement lifecycle.",
+    "Remove these fields because allocations are only created and deleted."
+   ],
+   "default_guess": "No action sets them; replacement records are new creations and both fields remain None."
+  },
+  {
+   "unit": "01_models.md:Model M32 — SectionProgress",
+   "subject": "Eligibility to create or update progress for a section",
+   "kind": "action precondition gap",
+   "text": "The model says only that “sections with planned work in the active version participate in derived progress” and that the first staff update creates the record. It does not say whether the update action is restricted to a section in the active budget, a section with positive planned work, or any PortalSection belonging to the project.",
+   "question": "Which PortalSections may a staff progress update create or change a SectionProgress record for?",
+   "options": [
+    "Any PortalSection belonging to the project.",
+    "Only sections represented by a plan in the active budget version.",
+    "Only active-version sections whose `work_planned` is greater than zero."
+   ],
+   "default_guess": "Only sections represented in the active budget version, including those whose planned work is zero.",
+   "witness": {
+    "initial": "Project P has section S in an inactive former budget version; S is absent from P’s current active version and has no SectionProgress record.",
+    "events": [
+     "An assigned operator submits a progress update for S while P is active.",
+     "Later, authorized staff reactivate the former budget version containing S."
+    ],
+    "outcomes": [
+     "The first action is accepted because S belongs to P; a SectionProgress record is created and its value becomes visible when the former version is reactivated.",
+     "The first action is rejected because S is not in the active budget; after reactivation S still has no recorded progress."
+    ],
+    "observer": "The operator sees acceptance versus rejection, and a viewer later sees recorded progress versus no recorded progress."
+   }
+  },
+  {
+   "unit": "01_models.md:Model M33 — WorkPayment",
+   "subject": "Scope of payment idempotency identity",
+   "kind": "identity scope ambiguity",
+   "text": "`payment_id` is called the payment’s caller-generated identity, but replay equality is defined only by equal “amount, date and description”; the text does not state whether `project_id` is part of replay identity or whether uniqueness is global or per project.",
+   "question": "If the same `payment_id` is submitted for two different projects, is the second request a conflict, a distinct payment under project-scoped uniqueness, or a replay of the first payment?",
+   "options": [
+    "`payment_id` is globally unique; a request under another project is a conflict.",
+    "Identity is `(project_id, payment_id)`; the same caller value may create one payment in each project.",
+    "The second request is treated as a replay when amount, date and description match, even though the stored payment belongs to another project."
+   ],
+   "default_guess": "Treat `payment_id` as globally unique and treat any project mismatch as an integrity conflict.",
+   "witness": {
+    "initial": "Operator O is assigned to active projects A and B; A already contains payment ID X for EUR 100 on a given date with description D.",
+    "events": [
+     "O registers a EUR 100 payment on project B using the same payment ID X, date and description D."
+    ],
+    "outcomes": [
+     "Global identity yields a conflict because X already identifies A’s payment.",
+     "Project-scoped identity creates a second payment under B."
+    ],
+    "observer": "Operator O sees conflict versus successful registration, and viewers of B see no payment versus EUR 100."
+   }
+  },
+  {
+   "unit": "01_models.md:Model M35 — ProgressPhoto",
+   "subject": "Conflicting replay of a photo intake identity",
+   "kind": "replay semantics gap",
+   "text": "The model says only that “replay of one `intake_id` never duplicates”; unlike Expense and WorkPayment, it does not say what happens when the same `intake_id` is submitted with different project, file, date, section, caption, or visibility facts.",
+   "question": "How must publication handle an existing `intake_id` whose newly supplied content differs from the stored ProgressPhoto?",
+   "options": [
+    "Return the existing photo as a replay regardless of differing content.",
+    "Reject the publication as an integrity conflict and change nothing.",
+    "Apply some or all differing fields as an update to the existing photo."
+   ],
+   "default_guess": "Reject differing content as an integrity conflict and leave the existing photo unchanged.",
+   "witness": {
+    "initial": "Active project P contains photo F created from intake ID I with file reference A and caption “before”.",
+    "events": [
+     "An assigned operator publishes intake ID I again with file reference B and caption “after”."
+    ],
+    "outcomes": [
+     "The operation returns F as a replay and silently ignores the differing publication.",
+     "The operation rejects an integrity conflict and reports that I cannot identify the new content."
+    ],
+    "observer": "The publishing operator sees replay success versus conflict; audit and operation-result consumers also observe different outcomes."
+   }
+  },
+  {
+   "unit": "01_models.md:Model M36 — AuditRecord",
+   "subject": "Audit behavior of first-administrator bootstrap",
+   "kind": "direct contradiction",
+   "text": "State 0 R0-07 says the bootstrap command is “never printed, logged or audited,” while M36 says “The first-administrator bootstrap of R0-07 is no exception: it writes one `staff.create` record with actor kind `system`.”",
+   "question": "Does successful creation of the first administrator append an AuditRecord?",
+   "options": [
+    "No; R0-07’s explicit bootstrap exception applies.",
+    "Yes; append exactly one system-actor `staff.create` AuditRecord as M36 requires."
+   ],
+   "default_guess": "Follow the later, model-specific M36 rule and append the system-actor audit record, but the contradiction must be resolved explicitly.",
+   "witness": {
+    "initial": "A fresh deployment has no StaffAccount and an empty audit log.",
+    "events": [
+     "The host operator successfully runs the local bootstrap command, creating the first active verified administrator."
+    ],
+    "outcomes": [
+     "Under R0-07, the audit log remains empty.",
+     "Under M36, the audit log contains one successful `staff.create` record naming the new staff account."
+    ],
+    "observer": "A host operator, auditor, or administrator reading persisted audit history sees the difference."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"01_models.md:Model M01 — ClientViewer\",\"subject\":\"ClientViewer revocation cascade into ViewerAccessCredential\",\"kind\":\"lifecycle ambiguity\",\"text\":\"“Revocation invalidates all viewer sessions and credentials but deletes nothing” does not say whether credentials are merely unusable because their viewer is revoked or are themselves transitioned by setting `revoked_at` and `revoked_by`; M03 explicitly says sessions are revoked, but M02 does not define the corresponding credential cascade.\",\"question\":\"When an administrator revokes a ClientViewer, are that viewer’s non-revoked ViewerAccessCredential records themselves revoked, or do they remain non-revoked records that authentication rejects because the viewer is revoked?\",\"options\":[\"Set `revoked_at` and `revoked_by` on every non-revoked credential as part of viewer revocation.\",\"Leave credential lifecycle fields unchanged and make them unusable solely through ClientViewer.status.\",\"Introduce a distinct invalidated state or cause separate from explicit credential revocation.\"],\"default_guess\":\"Revoke every non-revoked credential in the same operation, recording the administrator and revocation time.\"},{\"unit\":\"01_models.md:Model M29 — ExpenseAllocation\",\"subject\":\"ExpenseAllocation update provenance\",\"kind\":\"missing field producer\",\"text\":\"ExpenseAllocation declares `updated_at | None` and `updated_by | None`, but its continuity says every re-allocation or amount correction deletes the whole allocation set and inserts fresh records with fresh `allocation_id` values. No action is defined that updates an existing allocation.\",\"question\":\"What product action, if any, sets `updated_at` and `updated_by` on an ExpenseAllocation?\",\"options\":[\"No action sets them; every allocation retains `updated_at = updated_by = None`.\",\"Fresh replacement allocations record the replacement action in `updated_at` and `updated_by` despite being newly created.\",\"Some allocation edits update existing records in place, contrary to the stated replacement lifecycle.\",\"Remove these fields because allocations are only created and deleted.\"],\"default_guess\":\"No action sets them; replacement records are new creations and both fields remain None.\"},{\"unit\":\"01_models.md:Model M32 — SectionProgress\",\"subject\":\"Eligibility to create or update progress for a section\",\"kind\":\"action precondition gap\",\"text\":\"The model says only that “sections with planned work in the active version participate in derived progress” and that the first staff update creates the record. It does not say whether the update action is restricted to a section in the active budget, a section with positive planned work, or any PortalSection belonging to the project.\",\"question\":\"Which PortalSections may a staff progress update create or change a SectionProgress record for?\",\"options\":[\"Any PortalSection belonging to the project.\",\"Only sections represented by a plan in the active budget version.\",\"Only active-version sections whose `work_planned` is greater than zero.\"],\"default_guess\":\"Only sections represented in the active budget version, including those whose planned work is zero.\",\"witness\":{\"initial\":\"Project P has section S in an inactive former budget version; S is absent from P’s current active version and has no SectionProgress record.\",\"events\":[\"An assigned operator submits a progress update for S while P is active.\",\"Later, authorized staff reactivate the former budget version containing S.\"],\"outcomes\":[\"The first action is accepted because S belongs to P; a SectionProgress record is created and its value becomes visible when the former version is reactivated.\",\"The first action is rejected because S is not in the active budget; after reactivation S still has no recorded progress.\"],\"observer\":\"The operator sees acceptance versus rejection, and a viewer later sees recorded progress versus no recorded progress.\"}},{\"unit\":\"01_models.md:Model M33 — WorkPayment\",\"subject\":\"Scope of payment idempotency identity\",\"kind\":\"identity scope ambiguity\",\"text\":\"`payment_id` is called the payment’s caller-generated identity, but replay equality is defined only by equal “amount, date and description”; the text does not state whether `project_id` is part of replay identity or whether uniqueness is global or per project.\",\"question\":\"If the same `payment_id` is submitted for two different projects, is the second request a conflict, a distinct payment under project-scoped uniqueness, or a replay of the first payment?\",\"options\":[\"`payment_id` is globally unique; a request under another project is a conflict.\",\"Identity is `(project_id, payment_id)`; the same caller value may create one payment in each project.\",\"The second request is treated as a replay when amount, date and description match, even though the stored payment belongs to another project.\"],\"default_guess\":\"Treat `payment_id` as globally unique and treat any project mismatch as an integrity conflict.\",\"witness\":{\"initial\":\"Operator O is assigned to active projects A and B; A already contains payment ID X for EUR 100 on a given date with description D.\",\"events\":[\"O registers a EUR 100 payment on project B using the same payment ID X, date and description D.\"],\"outcomes\":[\"Global identity yields a conflict because X already identifies A’s payment.\",\"Project-scoped identity creates a second payment under B.\"],\"observer\":\"Operator O sees conflict versus successful registration, and viewers of B see no payment versus EUR 100.\"}},{\"unit\":\"01_models.md:Model M35 — ProgressPhoto\",\"subject\":\"Conflicting replay of a photo intake identity\",\"kind\":\"replay semantics gap\",\"text\":\"The model says only that “replay of one `intake_id` never duplicates”; unlike Expense and WorkPayment, it does not say what happens when the same `intake_id` is submitted with different project, file, date, section, caption, or visibility facts.\",\"question\":\"How must publication handle an existing `intake_id` whose newly supplied content differs from the stored ProgressPhoto?\",\"options\":[\"Return the existing photo as a replay regardless of differing content.\",\"Reject the publication as an integrity conflict and change nothing.\",\"Apply some or all differing fields as an update to the existing photo.\"],\"default_guess\":\"Reject differing content as an integrity conflict and leave the existing photo unchanged.\",\"witness\":{\"initial\":\"Active project P contains photo F created from intake ID I with file reference A and caption “before”.\",\"events\":[\"An assigned operator publishes intake ID I again with file reference B and caption “after”.\"],\"outcomes\":[\"The operation returns F as a replay and silently ignores the differing publication.\",\"The operation rejects an integrity conflict and reports that I cannot identify the new content.\"],\"observer\":\"The publishing operator sees replay success versus conflict; audit and operation-result consumers also observe different outcomes.\"}},{\"unit\":\"01_models.md:Model M36 — AuditRecord\",\"subject\":\"Audit behavior of first-administrator bootstrap\",\"kind\":\"direct contradiction\",\"text\":\"State 0 R0-07 says the bootstrap command is “never printed, logged or audited,” while M36 says “The first-administrator bootstrap of R0-07 is no exception: it writes one `staff.create` record with actor kind `system`.”\",\"question\":\"Does successful creation of the first administrator append an AuditRecord?\",\"options\":[\"No; R0-07’s explicit bootstrap exception applies.\",\"Yes; append exactly one system-actor `staff.create` AuditRecord as M36 requires.\"],\"default_guess\":\"Follow the later, model-specific M36 rule and append the system-actor audit record, but the contradiction must be resolved explicitly.\",\"witness\":{\"initial\":\"A fresh deployment has no StaffAccount and an empty audit log.\",\"events\":[\"The host operator successfully runs the local bootstrap command, creating the first active verified administrator.\"],\"outcomes\":[\"Under R0-07, the audit log remains empty.\",\"Under M36, the audit log contains one successful `staff.create` record naming the new staff account.\"],\"observer\":\"A host operator, auditor, or administrator reading persisted audit history sees the difference.\"}}]}",
+ "set_aside": []
+}

@@ -1,0 +1,221 @@
+{
+ "open_points": [
+  {
+   "subject": "Issuing credentials for a revoked viewer",
+   "kind": "missing lifecycle precondition",
+   "text": "M01 says `active → revoked` is terminal and revocation invalidates all viewer credentials, while M02 says only that credentials are issued, re-issued, and revoked by an administrator; it does not say whether issuance is allowed after the viewer is revoked.",
+   "question": "May an administrator issue or re-issue a ViewerAccessCredential for a revoked ClientViewer?",
+   "options": [
+    "Reject issuance because viewer revocation is terminal",
+    "Create a non-revoked credential that remains unusable while the viewer is revoked"
+   ],
+   "default_guess": "Reject issuance for a revoked viewer.",
+   "witness": {
+    "initial": "Viewer V is revoked and all of V's old credentials and sessions have been revoked.",
+    "events": [
+     "An administrator requests a new access link for V."
+    ],
+    "outcomes": [
+     "The request is rejected because a revoked viewer cannot receive credentials.",
+     "A fresh ViewerAccessCredential is created, but entry cannot create an active session because V remains revoked."
+    ],
+    "observer": "The administrator sees either a rejection or a new one-time access secret."
+   },
+   "unit": "01_models.md:Model M02 — ViewerAccessCredential"
+  },
+  {
+   "subject": "Creating a project grant for a revoked viewer",
+   "kind": "missing target-status rule",
+   "text": "M04 says a ProjectViewerGrant is created by an administrator and validates the project lifecycle elsewhere, but it does not say whether the target ClientViewer must be active; M01 makes viewer revocation terminal.",
+   "question": "May a new ProjectViewerGrant be created for a revoked ClientViewer?",
+   "options": [
+    "Require the target viewer to be active",
+    "Allow the grant record to be created even though the revoked viewer cannot use it"
+   ],
+   "default_guess": "Require an active target viewer.",
+   "witness": {
+    "initial": "Viewer V is revoked; active Registry project P has never been granted to V.",
+    "events": [
+     "An administrator grants P to V."
+    ],
+    "outcomes": [
+     "No grant is created because V is revoked.",
+     "An active ProjectViewerGrant is created but remains unusable because V cannot authenticate."
+    ],
+    "observer": "The administrator sees either a rejection or a persisted grant in access-management reads and audit."
+   },
+   "unit": "01_models.md:Model M04 — ProjectViewerGrant"
+  },
+  {
+   "subject": "Producer grants for an all-projects principal",
+   "kind": "missing creation eligibility",
+   "text": "M13 says an `all_projects` principal admits imports without consulting grants, while M15 says ProducerProjectGrant is `consulted only when the principal's scope_mode is granted_projects`; neither passage says whether the grant-creation action refuses an `all_projects` principal or creates an inert grant.",
+   "question": "Can an administrator create a ProducerProjectGrant for a ServicePrincipal whose scope_mode is `all_projects`?",
+   "options": [
+    "Reject it because grants are valid only for `granted_projects` principals",
+    "Create and retain the grant even though authorization never consults it"
+   ],
+   "default_guess": "Reject the redundant grant.",
+   "witness": {
+    "initial": "Active service principal S has `scope_mode = all_projects`; Registry project P is active.",
+    "events": [
+     "An administrator requests a producer grant from S to P."
+    ],
+    "outcomes": [
+     "The request is rejected and no ProducerProjectGrant exists.",
+     "A ProducerProjectGrant is created and audited, but has no authorization effect."
+    ],
+    "observer": "The administrator sees different command results and persisted producer-grant data."
+   },
+   "unit": "01_models.md:Model M15 — ProducerProjectGrant"
+  },
+  {
+   "subject": "Allocations missing from an imported version during activation",
+   "kind": "contradictory activation outcome",
+   "text": "The section first says that on activation, sections absent from the new version leave allocations that `become unresolved against the active version`, but later says `activation of a version is refused while any section allocation would be unresolved against it`.",
+   "question": "When a candidate imported version omits a section targeted by an existing allocation, does activation succeed and expose an unresolved allocation, or is activation refused until re-allocation?",
+   "options": [
+    "Activate and retain the allocation as unresolved against the new active version",
+    "Refuse activation until all such allocations are re-allocated"
+   ],
+   "default_guess": "Refuse activation until the allocations are resolved.",
+   "witness": {
+    "initial": "Version V1 is active and expense E has an allocation to section A; candidate version V2 has no plan for A.",
+    "events": [
+     "An operator attempts to activate V2 without re-allocating E."
+    ],
+    "outcomes": [
+     "V2 becomes active and E's allocation is reported as unresolved.",
+     "Activation is refused; V1 remains active."
+    ],
+    "observer": "The operator sees success versus refusal, and viewers may see either V2 with unresolved data or the unchanged V1 budget."
+   },
+   "unit": "01_models.md:Section linking at activation"
+  },
+  {
+   "subject": "Identity of SectionProgress",
+   "kind": "missing entity identity",
+   "text": "M32 calls SectionProgress a persisted entity and gives fields `project_id` and `section_id (unique)`, but supplies no `progress_id` and never states whether its identity is `section_id`, `(project_id, section_id)`, or a separate portal-minted identifier.",
+   "question": "What is the identity of a SectionProgress entity, and what identifier names it in repositories, references, and audit records?",
+   "options": [
+    "The globally unique `section_id` is also the SectionProgress identity",
+    "The composite `(project_id, section_id)` is its identity",
+    "The portal mints a separate `progress_id`"
+   ],
+   "default_guess": "Use `section_id` as the SectionProgress identity because the text declares it unique and specifies one row per section.",
+   "witness": {
+    "initial": "Section S in project P has no progress record.",
+    "events": [
+     "A staff member records progress for S for the first time.",
+     "The progress update is audited or later addressed for another update."
+    ],
+    "outcomes": [
+     "The record and audit are named by S's `section_id` or the `(P,S)` composite.",
+     "A fresh portal UUID identifies the progress entity independently of S."
+    ],
+    "observer": "Repository, audit, and later API implementers see incompatible identifiers for the same entity."
+   },
+   "unit": "01_models.md:Model M32 — SectionProgress"
+  },
+  {
+   "subject": "Eligibility to create or update SectionProgress",
+   "kind": "missing write rule",
+   "text": "M32 says `only sections with planned work in the active version participate in derived progress`, but does not say whether `set_section_progress` may create or update a record for a same-project section that is absent from the active version or has zero planned work.",
+   "question": "Must a section currently have positive planned work in the active budget version before staff may create or update its SectionProgress?",
+   "options": [
+    "Allow progress for any same-project PortalSection and ignore it in derived progress until it has active planned work",
+    "Reject the update unless the section has planned work in the active version"
+   ],
+   "default_guess": "Allow it for any same-project section, because progress is attached to the stable PortalSection across version changes.",
+   "witness": {
+    "initial": "Project P has active budget V; stable section S exists but has no plan in V.",
+    "events": [
+     "Authorized staff sets S to 40% completion.",
+     "A later budget version containing S with planned work is activated."
+    ],
+    "outcomes": [
+     "The update is stored and the later version immediately derives 40% for S.",
+     "The update is rejected, so the later version has no recorded progress for S."
+    ],
+    "observer": "Staff sees acceptance versus rejection, and later viewers see different progress after S returns to the active budget."
+   },
+   "unit": "01_models.md:Model M32 — SectionProgress"
+  },
+  {
+   "subject": "Replay of a progress-photo intake with changed content",
+   "kind": "undefined replay conflict",
+   "text": "M35 says `replay of one intake_id never duplicates`, but unlike Expense and WorkPayment it does not say whether the same `intake_id` with different file, project, date, section, caption, or visibility returns the existing photo, conflicts, or modifies it.",
+   "question": "What happens when a PhotoPublication repeats an existing `intake_id` with content different from the stored ProgressPhoto?",
+   "options": [
+    "Return the existing photo regardless of differing content",
+    "Treat differing content as an integrity conflict and change nothing",
+    "Apply some differing fields as an update to the existing photo"
+   ],
+   "default_guess": "Treat different content as an integrity conflict and change nothing.",
+   "witness": {
+    "initial": "Photo F exists from `intake_id = I`, with file reference X and caption `before`.",
+    "events": [
+     "Authorized staff publishes `intake_id = I` again with file reference Y and caption `after`."
+    ],
+    "outcomes": [
+     "The operation reports replay and returns F unchanged.",
+     "The operation reports an integrity conflict.",
+     "F is changed to use some or all of the new publication facts."
+    ],
+    "observer": "The publishing staff member and later gallery readers see different operation results or photo content."
+   },
+   "unit": "01_models.md:Model M35 — ProgressPhoto"
+  },
+  {
+   "subject": "Meaning of ProgressPhoto client visibility on reads",
+   "kind": "undefined read effect",
+   "text": "M35 says staff can change `client_visible` and refers to `hiding a photo`, while PhotoView omits `client_visible`; the texts do not state whether a hidden photo is omitted from a viewer's gallery entirely or remains listed with only its binary inaccessible.",
+   "question": "For a ClientViewer, does `client_visible = false` hide the entire ProgressPhoto from gallery reads, or only prohibit its binary download?",
+   "options": [
+    "Exclude the photo from viewer gallery results and refuse its binary",
+    "Include its metadata in the viewer gallery but refuse its binary"
+   ],
+   "default_guess": "Exclude the photo from the viewer gallery and refuse its binary.",
+   "witness": {
+    "initial": "Viewer V has access to project P; photo F in P is initially client-visible.",
+    "events": [
+     "Authorized staff changes F to `client_visible = false`.",
+     "V reads the gallery."
+    ],
+    "outcomes": [
+     "F is absent from the gallery.",
+     "F remains in the gallery with date, caption, and section, but its binary cannot be downloaded."
+    ],
+    "observer": "The ClientViewer sees whether hidden-photo metadata remains visible."
+   },
+   "unit": "01_models.md:Model M35 — ProgressPhoto"
+  },
+  {
+   "subject": "Audit of first-administrator bootstrap",
+   "kind": "direct contradiction",
+   "text": "R0-07 says the bootstrap command is `never printed, logged or audited`, while M36 says `The first-administrator bootstrap of R0-07 is no exception: it writes one staff.create record with actor kind system`.",
+   "question": "Does successful first-administrator bootstrap create an AuditRecord?",
+   "options": [
+    "Create no audit record, as R0-07 requires",
+    "Create exactly one system `staff.create` AuditRecord, as M36 requires"
+   ],
+   "default_guess": "Create the M36 system audit record because it is the later model-specific statement, while flagging the unresolved contradiction.",
+   "witness": {
+    "initial": "A fresh deployment has no StaffAccount and no AuditRecord.",
+    "events": [
+     "The host operator successfully runs the local bootstrap command to create administrator A.",
+     "An authorized audit reader or database inspection reads audit history."
+    ],
+    "outcomes": [
+     "No audit entry exists for the bootstrap.",
+     "One successful system `staff.create` entry names A's `staff_id`."
+    ],
+    "observer": "An administrator, auditor, or deployment operator inspecting audit history sees the difference."
+   },
+   "unit": "01_models.md:Model M36 — AuditRecord"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"Issuing credentials for a revoked viewer\",\"kind\":\"missing lifecycle precondition\",\"text\":\"M01 says `active → revoked` is terminal and revocation invalidates all viewer credentials, while M02 says only that credentials are issued, re-issued, and revoked by an administrator; it does not say whether issuance is allowed after the viewer is revoked.\",\"question\":\"May an administrator issue or re-issue a ViewerAccessCredential for a revoked ClientViewer?\",\"options\":[\"Reject issuance because viewer revocation is terminal\",\"Create a non-revoked credential that remains unusable while the viewer is revoked\"],\"default_guess\":\"Reject issuance for a revoked viewer.\",\"witness\":{\"initial\":\"Viewer V is revoked and all of V's old credentials and sessions have been revoked.\",\"events\":[\"An administrator requests a new access link for V.\"],\"outcomes\":[\"The request is rejected because a revoked viewer cannot receive credentials.\",\"A fresh ViewerAccessCredential is created, but entry cannot create an active session because V remains revoked.\"],\"observer\":\"The administrator sees either a rejection or a new one-time access secret.\"},\"unit\":\"01_models.md:Model M02 — ViewerAccessCredential\"},{\"subject\":\"Creating a project grant for a revoked viewer\",\"kind\":\"missing target-status rule\",\"text\":\"M04 says a ProjectViewerGrant is created by an administrator and validates the project lifecycle elsewhere, but it does not say whether the target ClientViewer must be active; M01 makes viewer revocation terminal.\",\"question\":\"May a new ProjectViewerGrant be created for a revoked ClientViewer?\",\"options\":[\"Require the target viewer to be active\",\"Allow the grant record to be created even though the revoked viewer cannot use it\"],\"default_guess\":\"Require an active target viewer.\",\"witness\":{\"initial\":\"Viewer V is revoked; active Registry project P has never been granted to V.\",\"events\":[\"An administrator grants P to V.\"],\"outcomes\":[\"No grant is created because V is revoked.\",\"An active ProjectViewerGrant is created but remains unusable because V cannot authenticate.\"],\"observer\":\"The administrator sees either a rejection or a persisted grant in access-management reads and audit.\"},\"unit\":\"01_models.md:Model M04 — ProjectViewerGrant\"},{\"subject\":\"Producer grants for an all-projects principal\",\"kind\":\"missing creation eligibility\",\"text\":\"M13 says an `all_projects` principal admits imports without consulting grants, while M15 says ProducerProjectGrant is `consulted only when the principal's scope_mode is granted_projects`; neither passage says whether the grant-creation action refuses an `all_projects` principal or creates an inert grant.\",\"question\":\"Can an administrator create a ProducerProjectGrant for a ServicePrincipal whose scope_mode is `all_projects`?\",\"options\":[\"Reject it because grants are valid only for `granted_projects` principals\",\"Create and retain the grant even though authorization never consults it\"],\"default_guess\":\"Reject the redundant grant.\",\"witness\":{\"initial\":\"Active service principal S has `scope_mode = all_projects`; Registry project P is active.\",\"events\":[\"An administrator requests a producer grant from S to P.\"],\"outcomes\":[\"The request is rejected and no ProducerProjectGrant exists.\",\"A ProducerProjectGrant is created and audited, but has no authorization effect.\"],\"observer\":\"The administrator sees different command results and persisted producer-grant data.\"},\"unit\":\"01_models.md:Model M15 — ProducerProjectGrant\"},{\"subject\":\"Allocations missing from an imported version during activation\",\"kind\":\"contradictory activation outcome\",\"text\":\"The section first says that on activation, sections absent from the new version leave allocations that `become unresolved against the active version`, but later says `activation of a version is refused while any section allocation would be unresolved against it`.\",\"question\":\"When a candidate imported version omits a section targeted by an existing allocation, does activation succeed and expose an unresolved allocation, or is activation refused until re-allocation?\",\"options\":[\"Activate and retain the allocation as unresolved against the new active version\",\"Refuse activation until all such allocations are re-allocated\"],\"default_guess\":\"Refuse activation until the allocations are resolved.\",\"witness\":{\"initial\":\"Version V1 is active and expense E has an allocation to section A; candidate version V2 has no plan for A.\",\"events\":[\"An operator attempts to activate V2 without re-allocating E.\"],\"outcomes\":[\"V2 becomes active and E's allocation is reported as unresolved.\",\"Activation is refused; V1 remains active.\"],\"observer\":\"The operator sees success versus refusal, and viewers may see either V2 with unresolved data or the unchanged V1 budget.\"},\"unit\":\"01_models.md:Section linking at activation\"},{\"subject\":\"Identity of SectionProgress\",\"kind\":\"missing entity identity\",\"text\":\"M32 calls SectionProgress a persisted entity and gives fields `project_id` and `section_id (unique)`, but supplies no `progress_id` and never states whether its identity is `section_id`, `(project_id, section_id)`, or a separate portal-minted identifier.\",\"question\":\"What is the identity of a SectionProgress entity, and what identifier names it in repositories, references, and audit records?\",\"options\":[\"The globally unique `section_id` is also the SectionProgress identity\",\"The composite `(project_id, section_id)` is its identity\",\"The portal mints a separate `progress_id`\"],\"default_guess\":\"Use `section_id` as the SectionProgress identity because the text declares it unique and specifies one row per section.\",\"witness\":{\"initial\":\"Section S in project P has no progress record.\",\"events\":[\"A staff member records progress for S for the first time.\",\"The progress update is audited or later addressed for another update.\"],\"outcomes\":[\"The record and audit are named by S's `section_id` or the `(P,S)` composite.\",\"A fresh portal UUID identifies the progress entity independently of S.\"],\"observer\":\"Repository, audit, and later API implementers see incompatible identifiers for the same entity.\"},\"unit\":\"01_models.md:Model M32 — SectionProgress\"},{\"subject\":\"Eligibility to create or update SectionProgress\",\"kind\":\"missing write rule\",\"text\":\"M32 says `only sections with planned work in the active version participate in derived progress`, but does not say whether `set_section_progress` may create or update a record for a same-project section that is absent from the active version or has zero planned work.\",\"question\":\"Must a section currently have positive planned work in the active budget version before staff may create or update its SectionProgress?\",\"options\":[\"Allow progress for any same-project PortalSection and ignore it in derived progress until it has active planned work\",\"Reject the update unless the section has planned work in the active version\"],\"default_guess\":\"Allow it for any same-project section, because progress is attached to the stable PortalSection across version changes.\",\"witness\":{\"initial\":\"Project P has active budget V; stable section S exists but has no plan in V.\",\"events\":[\"Authorized staff sets S to 40% completion.\",\"A later budget version containing S with planned work is activated.\"],\"outcomes\":[\"The update is stored and the later version immediately derives 40% for S.\",\"The update is rejected, so the later version has no recorded progress for S.\"],\"observer\":\"Staff sees acceptance versus rejection, and later viewers see different progress after S returns to the active budget.\"},\"unit\":\"01_models.md:Model M32 — SectionProgress\"},{\"subject\":\"Replay of a progress-photo intake with changed content\",\"kind\":\"undefined replay conflict\",\"text\":\"M35 says `replay of one intake_id never duplicates`, but unlike Expense and WorkPayment it does not say whether the same `intake_id` with different file, project, date, section, caption, or visibility returns the existing photo, conflicts, or modifies it.\",\"question\":\"What happens when a PhotoPublication repeats an existing `intake_id` with content different from the stored ProgressPhoto?\",\"options\":[\"Return the existing photo regardless of differing content\",\"Treat differing content as an integrity conflict and change nothing\",\"Apply some differing fields as an update to the existing photo\"],\"default_guess\":\"Treat different content as an integrity conflict and change nothing.\",\"witness\":{\"initial\":\"Photo F exists from `intake_id = I`, with file reference X and caption `before`.\",\"events\":[\"Authorized staff publishes `intake_id = I` again with file reference Y and caption `after`.\"],\"outcomes\":[\"The operation reports replay and returns F unchanged.\",\"The operation reports an integrity conflict.\",\"F is changed to use some or all of the new publication facts.\"],\"observer\":\"The publishing staff member and later gallery readers see different operation results or photo content.\"},\"unit\":\"01_models.md:Model M35 — ProgressPhoto\"},{\"subject\":\"Meaning of ProgressPhoto client visibility on reads\",\"kind\":\"undefined read effect\",\"text\":\"M35 says staff can change `client_visible` and refers to `hiding a photo`, while PhotoView omits `client_visible`; the texts do not state whether a hidden photo is omitted from a viewer's gallery entirely or remains listed with only its binary inaccessible.\",\"question\":\"For a ClientViewer, does `client_visible = false` hide the entire ProgressPhoto from gallery reads, or only prohibit its binary download?\",\"options\":[\"Exclude the photo from viewer gallery results and refuse its binary\",\"Include its metadata in the viewer gallery but refuse its binary\"],\"default_guess\":\"Exclude the photo from the viewer gallery and refuse its binary.\",\"witness\":{\"initial\":\"Viewer V has access to project P; photo F in P is initially client-visible.\",\"events\":[\"Authorized staff changes F to `client_visible = false`.\",\"V reads the gallery.\"],\"outcomes\":[\"F is absent from the gallery.\",\"F remains in the gallery with date, caption, and section, but its binary cannot be downloaded.\"],\"observer\":\"The ClientViewer sees whether hidden-photo metadata remains visible.\"},\"unit\":\"01_models.md:Model M35 — ProgressPhoto\"},{\"subject\":\"Audit of first-administrator bootstrap\",\"kind\":\"direct contradiction\",\"text\":\"R0-07 says the bootstrap command is `never printed, logged or audited`, while M36 says `The first-administrator bootstrap of R0-07 is no exception: it writes one staff.create record with actor kind system`.\",\"question\":\"Does successful first-administrator bootstrap create an AuditRecord?\",\"options\":[\"Create no audit record, as R0-07 requires\",\"Create exactly one system `staff.create` AuditRecord, as M36 requires\"],\"default_guess\":\"Create the M36 system audit record because it is the later model-specific statement, while flagging the unresolved contradiction.\",\"witness\":{\"initial\":\"A fresh deployment has no StaffAccount and no AuditRecord.\",\"events\":[\"The host operator successfully runs the local bootstrap command to create administrator A.\",\"An authorized audit reader or database inspection reads audit history.\"],\"outcomes\":[\"No audit entry exists for the bootstrap.\",\"One successful system `staff.create` entry names A's `staff_id`.\"],\"observer\":\"An administrator, auditor, or deployment operator inspecting audit history sees the difference.\"},\"unit\":\"01_models.md:Model M36 — AuditRecord\"}]}",
+ "set_aside": []
+}

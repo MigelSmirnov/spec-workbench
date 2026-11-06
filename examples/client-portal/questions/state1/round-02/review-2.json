@@ -1,0 +1,308 @@
+{
+ "open_points": [
+  {
+   "unit": "01_models.md:Model M07 — StaffProjectAssignment",
+   "subject": "administrator project scope",
+   "kind": "contradiction",
+   "text": "State 0 invariant 2 says project-scoped access requires \"project grant/assignment\", while M07 says \"administrators cover all projects through that area policy\" and authorization \"never consults assignments for the administrator role\".",
+   "question": "May an administrator perform project-scoped operations without a StaffProjectAssignment?",
+   "options": [
+    "Yes; the single-area administrator policy supplies project access without assignments.",
+    "No; every staff principal, including an administrator, needs an active assignment to the project."
+   ],
+   "default_guess": "Treat the more specific M07 rule as controlling and allow administrators without assignments.",
+   "witness": {
+    "initial": "An active administrator has no assignment to active project P.",
+    "events": [
+     "The administrator requests P's budget."
+    ],
+    "outcomes": [
+     "M07 permits the read because administrators cover every project in the single administrative area.",
+     "State 0 invariant 2 denies the read because no project assignment exists."
+    ],
+    "observer": "The administrator"
+   }
+  },
+  {
+   "unit": "01_models.md:Model M13 — ServicePrincipal",
+   "subject": "ServicePrincipal disablement lifecycle",
+   "kind": "contradiction",
+   "text": "Meaning says \"the only modification is the status change `active ↔ disabled`\", but Lifecycle candidate says \"`active → disabled`\".",
+   "question": "Can a disabled ServicePrincipal be returned to active status?",
+   "options": [
+    "Yes; disablement is reversible.",
+    "No; disabled is terminal."
+   ],
+   "default_guess": "Allow re-enabling because the detailed Meaning explicitly uses a bidirectional transition.",
+   "witness": {
+    "initial": "A ServicePrincipal is active and then disabled; all its credentials are revoked.",
+    "events": [
+     "An administrator attempts to change the principal back to active."
+    ],
+    "outcomes": [
+     "The principal becomes active and can receive a new credential.",
+     "The action is refused because disabled is terminal."
+    ],
+    "observer": "The administrator and integration operator"
+   }
+  },
+  {
+   "unit": "01_models.md:Model M22 — BudgetVersion",
+   "subject": "reactivation of a deactivated BudgetVersion",
+   "kind": "lifecycle gap",
+   "text": "The lifecycle is written as \"`inactive → active → inactive`\" and says deactivated versions are never deleted, but it does not say whether the final inactive state may transition to active again.",
+   "question": "May staff reactivate a previously deactivated BudgetVersion?",
+   "options": [
+    "Yes; any retained inactive version may be activated again.",
+    "No; once a version has been deactivated, that version can never become active again."
+   ],
+   "default_guess": "Allow reactivation because status has only inactive and active values and activation is described for a version without excluding previously active versions.",
+   "witness": {
+    "initial": "Project P has version V1 active; activating V2 deactivates V1.",
+    "events": [
+     "An operator later activates V1 again."
+    ],
+    "outcomes": [
+     "V1 becomes active and V2 is deactivated atomically.",
+     "The action is refused because V1's deactivation is terminal."
+    ],
+    "observer": "Staff and viewers reading P's budget"
+   }
+  },
+  {
+   "unit": "01_models.md:Model M22 — BudgetVersion",
+   "subject": "creation of the manual BudgetVersion",
+   "kind": "producer gap",
+   "text": "M22 says there is \"at most one manual version per project\" and M21 says a \"manual plan upsert without a `section_id` creates\" a section, but no text says whether that upsert also creates the project's manual BudgetVersion or which other product action creates it.",
+   "question": "Which product action creates the first manual BudgetVersion for a project?",
+   "options": [
+    "The first manual-section upsert creates the manual BudgetVersion implicitly.",
+    "A distinct budget-creation action must create the manual BudgetVersion before sections can be upserted."
+   ],
+   "default_guess": "Create the manual BudgetVersion implicitly on the first manual-section upsert.",
+   "witness": {
+    "initial": "Active project P has no BudgetVersion.",
+    "events": [
+     "An assigned operator submits the first manual section plan for P."
+    ],
+    "outcomes": [
+     "The operation creates a manual BudgetVersion, PortalSection, and SectionPlan.",
+     "The operation is refused until a separate manual-budget creation action has run."
+    ],
+    "observer": "The operator"
+   }
+  },
+  {
+   "unit": "01_models.md:Model M28 — Expense",
+   "subject": "intake fingerprint after expense correction",
+   "kind": "mutation gap",
+   "text": "The model stores `intake_fingerprint`, says corrections may change supplier, date, amount and allocations, and classifies later intake replay by fingerprint, but never says whether a correction preserves or recomputes the stored fingerprint.",
+   "question": "Does correcting an Expense change its `intake_fingerprint`?",
+   "options": [
+    "No; it permanently records the originally accepted intake content.",
+    "Yes; it is recomputed from the corrected expense and replacement allocations."
+   ],
+   "default_guess": "Preserve the original intake fingerprint as immutable intake provenance.",
+   "witness": {
+    "initial": "An intake creates expense E with fingerprint F; staff then correct E's amount and allocations.",
+    "events": [
+     "The original intake is submitted again with fingerprint F."
+    ],
+    "outcomes": [
+     "It is an equal replay and returns the existing, now-corrected expense.",
+     "It is an integrity conflict because E's stored fingerprint was recomputed after correction."
+    ],
+    "observer": "The staff caller retrying the intake"
+   }
+  },
+  {
+   "unit": "01_models.md:Model M35 — ProgressPhoto",
+   "subject": "same intake_id with different photo content",
+   "kind": "replay gap",
+   "text": "The only replay rule is \"replay of one `intake_id` never duplicates\"; unlike Expense and WorkPayment, the text does not say how a repeated `intake_id` with different `file_ref`, date, section, caption, or visibility is classified.",
+   "question": "What does publication do when an existing `intake_id` is submitted with different content?",
+   "options": [
+    "Return the existing ProgressPhoto as a replay regardless of differing content.",
+    "Reject it as an integrity conflict and change nothing.",
+    "Treat the request as an edit of the existing ProgressPhoto."
+   ],
+   "default_guess": "Reject different content as an integrity conflict and change nothing.",
+   "witness": {
+    "initial": "Photo A was published with intake_id I, file F1 and caption C1.",
+    "events": [
+     "Staff publishes intake_id I again with file F2 and caption C2."
+    ],
+    "outcomes": [
+     "The existing photo is returned unchanged as a replay.",
+     "The request is rejected as a conflicting reuse of I.",
+     "The existing photo is changed to F2/C2."
+    ],
+    "observer": "The staff caller and viewers of the gallery"
+   }
+  },
+  {
+   "unit": "01_models.md:Model M36 — AuditRecord",
+   "subject": "first-administrator bootstrap audit",
+   "kind": "contradiction",
+   "text": "State 0 R0-07 says the bootstrap command is \"never printed, logged or audited\", while M36 says it \"writes one `staff.create` record with actor kind `system`\".",
+   "question": "Does successful first-administrator bootstrap create an AuditRecord?",
+   "options": [
+    "No; bootstrap is expressly unaudited.",
+    "Yes; it creates exactly one system-authored `staff.create` AuditRecord."
+   ],
+   "default_guess": "Follow State 0 R0-07 and create no AuditRecord.",
+   "witness": {
+    "initial": "The deployment contains no staff accounts.",
+    "events": [
+     "The host operator successfully runs the local bootstrap command."
+    ],
+    "outcomes": [
+     "One active administrator is created and no audit record exists.",
+     "One active administrator and one system-authored `staff.create` AuditRecord are created."
+    ],
+    "observer": "A later administrator or auditor inspecting audit history"
+   }
+  },
+  {
+   "unit": "01_models.md:Model M36 — AuditRecord",
+   "subject": "audit of unauthenticated snapshot-import attempts",
+   "kind": "contradiction",
+   "text": "M36 says \"every significant action writes exactly one record\" and explicitly includes \"snapshot import\", with `result` supporting `rejected`; State 0 R0-25 says an attempt whose bearer credential fails authentication \"is recorded nowhere\".",
+   "question": "Does a snapshot-import request with a failing bearer credential create a rejected AuditRecord?",
+   "options": [
+    "No; authentication failure is recorded nowhere.",
+    "Yes; every rejected snapshot-import action creates one AuditRecord."
+   ],
+   "default_guess": "Create no record, following the explicit R0-25 authentication-failure rule.",
+   "witness": {
+    "initial": "A request carries an invalid producer bearer credential.",
+    "events": [
+     "The caller submits a syntactically valid snapshot publication."
+    ],
+    "outcomes": [
+     "Authentication is rejected and neither SnapshotImportRecord nor AuditRecord is written.",
+     "Authentication is rejected and a rejected AuditRecord is written, although no authenticated service actor is available."
+    ],
+    "observer": "An auditor"
+   }
+  },
+  {
+   "unit": "01_models.md:Model M31 — ExpenseAggregate",
+   "subject": "replay outcome placement",
+   "kind": "contradiction",
+   "text": "Meaning defines `ExpenseAggregate` with `replayed: bool`, while Carried changes says \"the aggregate no longer carries `replayed`; the replay outcome travels in a separate operation outcome beside the aggregate\" and also says \"The Meaning above is the text of 2026-07-19.\"",
+   "question": "Is `replayed` a field of ExpenseAggregate or only a field of ExpenseOperationOutcome?",
+   "options": [
+    "ExpenseAggregate contains `replayed`.",
+    "ExpenseAggregate has only expense, allocations and document; ExpenseOperationOutcome carries `replayed` separately."
+   ],
+   "default_guess": "Use the carried accepted-spec change: keep `replayed` only in ExpenseOperationOutcome.",
+   "witness": {
+    "initial": "An existing expense is returned after an equal-fingerprint intake replay.",
+    "events": [
+     "The expense operation constructs its result."
+    ],
+    "outcomes": [
+     "The returned ExpenseAggregate itself has `replayed=true`.",
+     "The ExpenseAggregate has no replay field and is wrapped beside `replayed=true` in ExpenseOperationOutcome."
+    ],
+    "observer": "The calling application/API module"
+   }
+  },
+  {
+   "unit": "01_models.md:Projections and answers",
+   "subject": "ProjectOverview project availability shape",
+   "kind": "contradiction",
+   "text": "ProjectOverview initially requires `project: ProjectContext`, but \"Changes the accepted Factory spec made to the projections\" says project context \"is absent when Registry cannot be read, and a `project_availability` says so\".",
+   "question": "What is the final ProjectOverview shape for its project component?",
+   "options": [
+    "`project` is always required and a Registry failure prevents a ProjectOverview result.",
+    "Add `project_availability`; require `project` only when that availability is `available`."
+   ],
+   "default_guess": "Apply the accepted-spec change and add the availability/optional-project pair.",
+   "witness": {
+    "initial": "The portal has local data for project P, but Registry is temporarily unavailable.",
+    "events": [
+     "An authorized caller requests P's overview."
+    ],
+    "outcomes": [
+     "No ProjectOverview can be returned because its required `project` field cannot be populated.",
+     "A ProjectOverview is returned with `project_availability=temporarily_unavailable`, no project context, and independently available local components."
+    ],
+    "observer": "The overview caller"
+   }
+  },
+  {
+   "unit": "01_models.md:Projections and answers",
+   "subject": "BinaryPayload download_name presence",
+   "kind": "contradiction",
+   "text": "BinaryPayload declares `download_name: str | None`, while the accepted-spec changes say \"`download_name` is always present\".",
+   "question": "Is `BinaryPayload.download_name` optional or required?",
+   "options": [
+    "Optional; storage may return no download name.",
+    "Required; it is always derived from object kind and id."
+   ],
+   "default_guess": "Make it required and always derive it, following R0-12 and the accepted-spec change.",
+   "witness": {
+    "initial": "An authorized caller requests an existing ExpenseDocument binary.",
+    "events": [
+     "The storage boundary returns its BinaryPayload."
+    ],
+    "outcomes": [
+     "The payload may contain `download_name=None`.",
+     "The payload must contain a derived document-and-id download name."
+    ],
+    "observer": "The API handler and downloading client"
+   }
+  },
+  {
+   "unit": "01_models.md:Model M02 — ViewerAccessCredential",
+   "subject": "issuing access after ClientViewer revocation",
+   "kind": "lifecycle/action gap",
+   "text": "M01 says viewer revocation is terminal and \"invalidates all viewer sessions and credentials\", while M02 says administrators issue and re-issue credentials but gives no target-viewer status precondition.",
+   "question": "Can an administrator issue or re-issue a ViewerAccessCredential for a revoked ClientViewer?",
+   "options": [
+    "No; credential issuance requires an active viewer.",
+    "Yes; a credential record and secret may be issued, but authentication can never succeed while the viewer remains revoked."
+   ],
+   "default_guess": "Reject issuance for a revoked viewer.",
+   "witness": {
+    "initial": "Viewer V has been revoked, and all prior credentials and sessions are revoked.",
+    "events": [
+     "An administrator requests a new access link for V."
+    ],
+    "outcomes": [
+     "The request is refused and no credential is minted.",
+     "A fresh credential and one-time secret are minted, but using the link cannot open an active session."
+    ],
+    "observer": "The administrator receiving the issuance response"
+   }
+  },
+  {
+   "unit": "01_models.md:Model M32 — SectionProgress",
+   "subject": "progress updates for sections outside the active work plan",
+   "kind": "action precondition gap",
+   "text": "M32 says only sections with planned work in the active version participate in derived progress, but says a record is created by the first update \"of a section\" without saying whether the section must have a work plan in the active BudgetVersion.",
+   "question": "May staff create or update SectionProgress for a project section that has no planned work entry in the active budget version?",
+   "options": [
+    "Yes; the record is accepted but omitted from current derived progress until the section participates in an active work plan.",
+    "No; progress updates require a section with planned work in the active budget version."
+   ],
+   "default_guess": "Require the section to have a plan with positive planned work in the active version.",
+   "witness": {
+    "initial": "Section S belongs to project P but is absent from P's active BudgetVersion, or its active plan has zero work_planned.",
+    "events": [
+     "An assigned operator sets S to 50% completion."
+    ],
+    "outcomes": [
+     "A SectionProgress record is created but does not affect the current ProgressView.",
+     "The operation is refused because S does not currently participate in planned work."
+    ],
+    "observer": "The operator and later readers after S enters an active budget"
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"01_models.md:Model M07 — StaffProjectAssignment\",\"subject\":\"administrator project scope\",\"kind\":\"contradiction\",\"text\":\"State 0 invariant 2 says project-scoped access requires \\\"project grant/assignment\\\", while M07 says \\\"administrators cover all projects through that area policy\\\" and authorization \\\"never consults assignments for the administrator role\\\".\",\"question\":\"May an administrator perform project-scoped operations without a StaffProjectAssignment?\",\"options\":[\"Yes; the single-area administrator policy supplies project access without assignments.\",\"No; every staff principal, including an administrator, needs an active assignment to the project.\"],\"default_guess\":\"Treat the more specific M07 rule as controlling and allow administrators without assignments.\",\"witness\":{\"initial\":\"An active administrator has no assignment to active project P.\",\"events\":[\"The administrator requests P's budget.\"],\"outcomes\":[\"M07 permits the read because administrators cover every project in the single administrative area.\",\"State 0 invariant 2 denies the read because no project assignment exists.\"],\"observer\":\"The administrator\"}},{\"unit\":\"01_models.md:Model M13 — ServicePrincipal\",\"subject\":\"ServicePrincipal disablement lifecycle\",\"kind\":\"contradiction\",\"text\":\"Meaning says \\\"the only modification is the status change `active ↔ disabled`\\\", but Lifecycle candidate says \\\"`active → disabled`\\\".\",\"question\":\"Can a disabled ServicePrincipal be returned to active status?\",\"options\":[\"Yes; disablement is reversible.\",\"No; disabled is terminal.\"],\"default_guess\":\"Allow re-enabling because the detailed Meaning explicitly uses a bidirectional transition.\",\"witness\":{\"initial\":\"A ServicePrincipal is active and then disabled; all its credentials are revoked.\",\"events\":[\"An administrator attempts to change the principal back to active.\"],\"outcomes\":[\"The principal becomes active and can receive a new credential.\",\"The action is refused because disabled is terminal.\"],\"observer\":\"The administrator and integration operator\"}},{\"unit\":\"01_models.md:Model M22 — BudgetVersion\",\"subject\":\"reactivation of a deactivated BudgetVersion\",\"kind\":\"lifecycle gap\",\"text\":\"The lifecycle is written as \\\"`inactive → active → inactive`\\\" and says deactivated versions are never deleted, but it does not say whether the final inactive state may transition to active again.\",\"question\":\"May staff reactivate a previously deactivated BudgetVersion?\",\"options\":[\"Yes; any retained inactive version may be activated again.\",\"No; once a version has been deactivated, that version can never become active again.\"],\"default_guess\":\"Allow reactivation because status has only inactive and active values and activation is described for a version without excluding previously active versions.\",\"witness\":{\"initial\":\"Project P has version V1 active; activating V2 deactivates V1.\",\"events\":[\"An operator later activates V1 again.\"],\"outcomes\":[\"V1 becomes active and V2 is deactivated atomically.\",\"The action is refused because V1's deactivation is terminal.\"],\"observer\":\"Staff and viewers reading P's budget\"}},{\"unit\":\"01_models.md:Model M22 — BudgetVersion\",\"subject\":\"creation of the manual BudgetVersion\",\"kind\":\"producer gap\",\"text\":\"M22 says there is \\\"at most one manual version per project\\\" and M21 says a \\\"manual plan upsert without a `section_id` creates\\\" a section, but no text says whether that upsert also creates the project's manual BudgetVersion or which other product action creates it.\",\"question\":\"Which product action creates the first manual BudgetVersion for a project?\",\"options\":[\"The first manual-section upsert creates the manual BudgetVersion implicitly.\",\"A distinct budget-creation action must create the manual BudgetVersion before sections can be upserted.\"],\"default_guess\":\"Create the manual BudgetVersion implicitly on the first manual-section upsert.\",\"witness\":{\"initial\":\"Active project P has no BudgetVersion.\",\"events\":[\"An assigned operator submits the first manual section plan for P.\"],\"outcomes\":[\"The operation creates a manual BudgetVersion, PortalSection, and SectionPlan.\",\"The operation is refused until a separate manual-budget creation action has run.\"],\"observer\":\"The operator\"}},{\"unit\":\"01_models.md:Model M28 — Expense\",\"subject\":\"intake fingerprint after expense correction\",\"kind\":\"mutation gap\",\"text\":\"The model stores `intake_fingerprint`, says corrections may change supplier, date, amount and allocations, and classifies later intake replay by fingerprint, but never says whether a correction preserves or recomputes the stored fingerprint.\",\"question\":\"Does correcting an Expense change its `intake_fingerprint`?\",\"options\":[\"No; it permanently records the originally accepted intake content.\",\"Yes; it is recomputed from the corrected expense and replacement allocations.\"],\"default_guess\":\"Preserve the original intake fingerprint as immutable intake provenance.\",\"witness\":{\"initial\":\"An intake creates expense E with fingerprint F; staff then correct E's amount and allocations.\",\"events\":[\"The original intake is submitted again with fingerprint F.\"],\"outcomes\":[\"It is an equal replay and returns the existing, now-corrected expense.\",\"It is an integrity conflict because E's stored fingerprint was recomputed after correction.\"],\"observer\":\"The staff caller retrying the intake\"}},{\"unit\":\"01_models.md:Model M35 — ProgressPhoto\",\"subject\":\"same intake_id with different photo content\",\"kind\":\"replay gap\",\"text\":\"The only replay rule is \\\"replay of one `intake_id` never duplicates\\\"; unlike Expense and WorkPayment, the text does not say how a repeated `intake_id` with different `file_ref`, date, section, caption, or visibility is classified.\",\"question\":\"What does publication do when an existing `intake_id` is submitted with different content?\",\"options\":[\"Return the existing ProgressPhoto as a replay regardless of differing content.\",\"Reject it as an integrity conflict and change nothing.\",\"Treat the request as an edit of the existing ProgressPhoto.\"],\"default_guess\":\"Reject different content as an integrity conflict and change nothing.\",\"witness\":{\"initial\":\"Photo A was published with intake_id I, file F1 and caption C1.\",\"events\":[\"Staff publishes intake_id I again with file F2 and caption C2.\"],\"outcomes\":[\"The existing photo is returned unchanged as a replay.\",\"The request is rejected as a conflicting reuse of I.\",\"The existing photo is changed to F2/C2.\"],\"observer\":\"The staff caller and viewers of the gallery\"}},{\"unit\":\"01_models.md:Model M36 — AuditRecord\",\"subject\":\"first-administrator bootstrap audit\",\"kind\":\"contradiction\",\"text\":\"State 0 R0-07 says the bootstrap command is \\\"never printed, logged or audited\\\", while M36 says it \\\"writes one `staff.create` record with actor kind `system`\\\".\",\"question\":\"Does successful first-administrator bootstrap create an AuditRecord?\",\"options\":[\"No; bootstrap is expressly unaudited.\",\"Yes; it creates exactly one system-authored `staff.create` AuditRecord.\"],\"default_guess\":\"Follow State 0 R0-07 and create no AuditRecord.\",\"witness\":{\"initial\":\"The deployment contains no staff accounts.\",\"events\":[\"The host operator successfully runs the local bootstrap command.\"],\"outcomes\":[\"One active administrator is created and no audit record exists.\",\"One active administrator and one system-authored `staff.create` AuditRecord are created.\"],\"observer\":\"A later administrator or auditor inspecting audit history\"}},{\"unit\":\"01_models.md:Model M36 — AuditRecord\",\"subject\":\"audit of unauthenticated snapshot-import attempts\",\"kind\":\"contradiction\",\"text\":\"M36 says \\\"every significant action writes exactly one record\\\" and explicitly includes \\\"snapshot import\\\", with `result` supporting `rejected`; State 0 R0-25 says an attempt whose bearer credential fails authentication \\\"is recorded nowhere\\\".\",\"question\":\"Does a snapshot-import request with a failing bearer credential create a rejected AuditRecord?\",\"options\":[\"No; authentication failure is recorded nowhere.\",\"Yes; every rejected snapshot-import action creates one AuditRecord.\"],\"default_guess\":\"Create no record, following the explicit R0-25 authentication-failure rule.\",\"witness\":{\"initial\":\"A request carries an invalid producer bearer credential.\",\"events\":[\"The caller submits a syntactically valid snapshot publication.\"],\"outcomes\":[\"Authentication is rejected and neither SnapshotImportRecord nor AuditRecord is written.\",\"Authentication is rejected and a rejected AuditRecord is written, although no authenticated service actor is available.\"],\"observer\":\"An auditor\"}},{\"unit\":\"01_models.md:Model M31 — ExpenseAggregate\",\"subject\":\"replay outcome placement\",\"kind\":\"contradiction\",\"text\":\"Meaning defines `ExpenseAggregate` with `replayed: bool`, while Carried changes says \\\"the aggregate no longer carries `replayed`; the replay outcome travels in a separate operation outcome beside the aggregate\\\" and also says \\\"The Meaning above is the text of 2026-07-19.\\\"\",\"question\":\"Is `replayed` a field of ExpenseAggregate or only a field of ExpenseOperationOutcome?\",\"options\":[\"ExpenseAggregate contains `replayed`.\",\"ExpenseAggregate has only expense, allocations and document; ExpenseOperationOutcome carries `replayed` separately.\"],\"default_guess\":\"Use the carried accepted-spec change: keep `replayed` only in ExpenseOperationOutcome.\",\"witness\":{\"initial\":\"An existing expense is returned after an equal-fingerprint intake replay.\",\"events\":[\"The expense operation constructs its result.\"],\"outcomes\":[\"The returned ExpenseAggregate itself has `replayed=true`.\",\"The ExpenseAggregate has no replay field and is wrapped beside `replayed=true` in ExpenseOperationOutcome.\"],\"observer\":\"The calling application/API module\"}},{\"unit\":\"01_models.md:Projections and answers\",\"subject\":\"ProjectOverview project availability shape\",\"kind\":\"contradiction\",\"text\":\"ProjectOverview initially requires `project: ProjectContext`, but \\\"Changes the accepted Factory spec made to the projections\\\" says project context \\\"is absent when Registry cannot be read, and a `project_availability` says so\\\".\",\"question\":\"What is the final ProjectOverview shape for its project component?\",\"options\":[\"`project` is always required and a Registry failure prevents a ProjectOverview result.\",\"Add `project_availability`; require `project` only when that availability is `available`.\"],\"default_guess\":\"Apply the accepted-spec change and add the availability/optional-project pair.\",\"witness\":{\"initial\":\"The portal has local data for project P, but Registry is temporarily unavailable.\",\"events\":[\"An authorized caller requests P's overview.\"],\"outcomes\":[\"No ProjectOverview can be returned because its required `project` field cannot be populated.\",\"A ProjectOverview is returned with `project_availability=temporarily_unavailable`, no project context, and independently available local components.\"],\"observer\":\"The overview caller\"}},{\"unit\":\"01_models.md:Projections and answers\",\"subject\":\"BinaryPayload download_name presence\",\"kind\":\"contradiction\",\"text\":\"BinaryPayload declares `download_name: str | None`, while the accepted-spec changes say \\\"`download_name` is always present\\\".\",\"question\":\"Is `BinaryPayload.download_name` optional or required?\",\"options\":[\"Optional; storage may return no download name.\",\"Required; it is always derived from object kind and id.\"],\"default_guess\":\"Make it required and always derive it, following R0-12 and the accepted-spec change.\",\"witness\":{\"initial\":\"An authorized caller requests an existing ExpenseDocument binary.\",\"events\":[\"The storage boundary returns its BinaryPayload.\"],\"outcomes\":[\"The payload may contain `download_name=None`.\",\"The payload must contain a derived document-and-id download name.\"],\"observer\":\"The API handler and downloading client\"}},{\"unit\":\"01_models.md:Model M02 — ViewerAccessCredential\",\"subject\":\"issuing access after ClientViewer revocation\",\"kind\":\"lifecycle/action gap\",\"text\":\"M01 says viewer revocation is terminal and \\\"invalidates all viewer sessions and credentials\\\", while M02 says administrators issue and re-issue credentials but gives no target-viewer status precondition.\",\"question\":\"Can an administrator issue or re-issue a ViewerAccessCredential for a revoked ClientViewer?\",\"options\":[\"No; credential issuance requires an active viewer.\",\"Yes; a credential record and secret may be issued, but authentication can never succeed while the viewer remains revoked.\"],\"default_guess\":\"Reject issuance for a revoked viewer.\",\"witness\":{\"initial\":\"Viewer V has been revoked, and all prior credentials and sessions are revoked.\",\"events\":[\"An administrator requests a new access link for V.\"],\"outcomes\":[\"The request is refused and no credential is minted.\",\"A fresh credential and one-time secret are minted, but using the link cannot open an active session.\"],\"observer\":\"The administrator receiving the issuance response\"}},{\"unit\":\"01_models.md:Model M32 — SectionProgress\",\"subject\":\"progress updates for sections outside the active work plan\",\"kind\":\"action precondition gap\",\"text\":\"M32 says only sections with planned work in the active version participate in derived progress, but says a record is created by the first update \\\"of a section\\\" without saying whether the section must have a work plan in the active BudgetVersion.\",\"question\":\"May staff create or update SectionProgress for a project section that has no planned work entry in the active budget version?\",\"options\":[\"Yes; the record is accepted but omitted from current derived progress until the section participates in an active work plan.\",\"No; progress updates require a section with planned work in the active budget version.\"],\"default_guess\":\"Require the section to have a plan with positive planned work in the active version.\",\"witness\":{\"initial\":\"Section S belongs to project P but is absent from P's active BudgetVersion, or its active plan has zero work_planned.\",\"events\":[\"An assigned operator sets S to 50% completion.\"],\"outcomes\":[\"A SectionProgress record is created but does not affect the current ProgressView.\",\"The operation is refused because S does not currently participate in planned work.\"],\"observer\":\"The operator and later readers after S enters an active budget\"}}]}",
+ "set_aside": []
+}

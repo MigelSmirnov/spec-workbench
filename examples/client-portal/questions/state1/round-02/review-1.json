@@ -1,0 +1,339 @@
+{
+ "open_points": [
+  {
+   "unit": "01_models.md:Model M02 — ViewerAccessCredential",
+   "subject": "ViewerAccessCredential issuance for a revoked viewer",
+   "kind": "missing target-state precondition",
+   "text": "“Created/modified by: administrator only (R0-14): issue, re-issue and revocation.” The text does not say whether issue or re-issue is permitted after the ClientViewer is terminally revoked.",
+   "question": "May an administrator create a new ViewerAccessCredential for a revoked ClientViewer?",
+   "options": [
+    "Refuse issuance because the viewer is revoked.",
+    "Create the credential, although it can never establish an active viewer session."
+   ],
+   "default_guess": "Refuse issuance for a revoked viewer.",
+   "witness": {
+    "initial": "A ClientViewer has been revoked, and all of its former credentials and sessions are revoked.",
+    "events": [
+     "An administrator requests a new access link for that viewer."
+    ],
+    "outcomes": [
+     "The request is refused and no ViewerAccessCredential is created.",
+     "A fresh ViewerAccessCredential is created and its one-time secret is returned, but authentication remains impossible because the viewer is revoked."
+    ],
+    "observer": "The administrator receiving the issuance result."
+   }
+  },
+  {
+   "unit": "01_models.md:Model M04 — ProjectViewerGrant",
+   "subject": "ProjectViewerGrant creation for a revoked viewer",
+   "kind": "missing target-state precondition",
+   "text": "“Created/modified by: administrator only (R0-14).” Creation requires an active Registry project, but neither M04 nor the common authorization rule says whether the target viewer must be active.",
+   "question": "May an administrator create a ProjectViewerGrant for a terminally revoked ClientViewer?",
+   "options": [
+    "Require the target viewer to be active and refuse the grant.",
+    "Allow a permanent but unusable grant to be created for the revoked viewer."
+   ],
+   "default_guess": "Require an active target viewer.",
+   "witness": {
+    "initial": "Viewer V is revoked, project P is active, and no grant for (V,P) exists.",
+    "events": [
+     "An administrator grants P to V."
+    ],
+    "outcomes": [
+     "No grant is created because V is revoked.",
+     "An active grant is created; it cannot confer access, and the unique pair rule prevents any later replacement grant."
+    ],
+    "observer": "The administrator and anyone later inspecting V's grants."
+   }
+  },
+  {
+   "unit": "01_models.md:Model M05 — StaffAccount",
+   "subject": "Recovery override effect on StaffSession records",
+   "kind": "missing lifecycle effect",
+   "text": "“replaces its email by the recovery override” and R0-20 define the email and verification changes, but say nothing about existing StaffSession records.",
+   "question": "Does an administrative recovery override revoke the target account's existing staff sessions?",
+   "options": [
+    "Revoke all existing sessions as part of the recovery override.",
+    "Keep existing sessions active until their ordinary expiry or another revocation action."
+   ],
+   "default_guess": "Revoke all existing sessions atomically with the recovery override.",
+   "witness": {
+    "initial": "A staff account has an active session whose holder may still control the old login email.",
+    "events": [
+     "An administrator performs the recovery override and replaces the login email."
+    ],
+    "outcomes": [
+     "The old active session is revoked immediately.",
+     "The old active session remains usable after the recovery email change."
+    ],
+    "observer": "The session holder and the recovering administrator."
+   }
+  },
+  {
+   "unit": "01_models.md:Model M06 — StaffSession",
+   "subject": "Holder-initiated sign-out-everywhere",
+   "kind": "cross-text action mismatch",
+   "text": "State 0 promises “managed sessions with expiry, revocation, and sign-out-everywhere,” while M06 lists only “logout (that session), an administrator revoking all sessions of an account, the holder's own password change (every other session of the account), and suspension/disabling.”",
+   "question": "Can a staff holder explicitly revoke all of their own sessions without changing their password, and if so does that action include the current session?",
+   "options": [
+    "Provide holder-initiated sign-out-everywhere and revoke every session, including the current one.",
+    "Provide no such holder action; only per-session logout, password change, or administrator revocation has the listed effects."
+   ],
+   "default_guess": "Provide holder-initiated sign-out-everywhere that revokes every session including the current one.",
+   "witness": {
+    "initial": "A staff member has two active sessions and does not want to change their password.",
+    "events": [
+     "The holder invokes the promised sign-out-everywhere action from one session."
+    ],
+    "outcomes": [
+     "Both sessions are revoked.",
+     "No holder-level action exists; at most the current session can be logged out."
+    ],
+    "observer": "The staff holder attempting to use the second session."
+   }
+  },
+  {
+   "unit": "01_models.md:Model M13 — ServicePrincipal",
+   "subject": "ServicePrincipal disabled-state terminality",
+   "kind": "internal lifecycle contradiction",
+   "text": "Meaning says “the only modification is the status change `active ↔ disabled`,” but Lifecycle candidate says “`active → disabled`.”",
+   "question": "Can a disabled ServicePrincipal be returned to active status?",
+   "options": [
+    "Allow `disabled → active`.",
+    "Treat disabled as terminal and require a new ServicePrincipal."
+   ],
+   "default_guess": "Allow reactivation because the detailed Meaning explicitly uses a bidirectional transition.",
+   "witness": {
+    "initial": "A ServicePrincipal was disabled and all of its credentials were revoked.",
+    "events": [
+     "An administrator asks to restore that same principal."
+    ],
+    "outcomes": [
+     "The same principal returns to active status and can receive new credentials.",
+     "The transition is refused because disabled is terminal; a new principal identity is required."
+    ],
+    "observer": "The administrator and producer integration."
+   }
+  },
+  {
+   "unit": "01_models.md:Model M14 — ServiceCredential",
+   "subject": "ServiceCredential rotation and expires_at production",
+   "kind": "missing rotation lifecycle",
+   "text": "M14 says “several credentials of one principal may be simultaneously valid (rotation overlap)” and defines optional `expires_at`, but does not say what a rotation action does to the old credential or who determines `expires_at`; State 0 calls credentials “rotatable with an overlap period.”",
+   "question": "When an administrator rotates a service credential, is the old credential given an overlap expiry, left valid until separately revoked, or revoked immediately, and who chooses any expiry?",
+   "options": [
+    "Set the old credential's `expires_at` to a system/configured overlap deadline.",
+    "Leave the old credential valid indefinitely until an explicit administrator revocation.",
+    "Revoke the old credential immediately, providing no overlap."
+   ],
+   "default_guess": "Set an overlap expiry using a configured policy while leaving explicit immediate revocation available.",
+   "witness": {
+    "initial": "A principal has credential K1 with no expiry.",
+    "events": [
+     "An administrator rotates the credential and receives K2.",
+     "The producer continues using K1 during deployment rollover."
+    ],
+    "outcomes": [
+     "K1 works only until an automatically assigned overlap deadline.",
+     "K1 remains valid indefinitely until another administrator action.",
+     "K1 stops working immediately when K2 is issued."
+    ],
+    "observer": "The producer using K1 and the administrator managing rotation."
+   }
+  },
+  {
+   "unit": "01_models.md:Model M14 — ServiceCredential",
+   "subject": "Credential issuance for a disabled ServicePrincipal",
+   "kind": "missing target-state precondition",
+   "text": "“Created/modified by: administrator.” M13 says disabling revokes every credential, but neither model says whether a new credential may be issued while the principal remains disabled.",
+   "question": "May an administrator issue or rotate a ServiceCredential for a disabled ServicePrincipal?",
+   "options": [
+    "Refuse credential issuance until the principal is active.",
+    "Allow creation while disabled, with the credential unusable until possible reactivation."
+   ],
+   "default_guess": "Refuse issuance while the principal is disabled.",
+   "witness": {
+    "initial": "A ServicePrincipal is disabled and has no valid credentials.",
+    "events": [
+     "An administrator requests a new credential for it."
+    ],
+    "outcomes": [
+     "No credential is created.",
+     "A new credential and one-time secret are created, although authentication remains blocked while the principal is disabled."
+    ],
+    "observer": "The administrator receiving the secret and the producer attempting authentication."
+   }
+  },
+  {
+   "unit": "01_models.md:Model M15 — ProducerProjectGrant",
+   "subject": "ProducerProjectGrant eligibility by principal state and scope mode",
+   "kind": "missing creation preconditions",
+   "text": "The grant is “consulted only when the principal's `scope_mode` is `granted_projects`,” but the text does not say whether creation is restricted to active `granted_projects` principals.",
+   "question": "May an administrator create a ProducerProjectGrant for a disabled principal or for an `all_projects` principal?",
+   "options": [
+    "Require an active principal whose scope mode is `granted_projects`.",
+    "Allow grants for disabled principals as advance configuration, but refuse them for `all_projects` principals.",
+    "Allow both kinds of inert grant records."
+   ],
+   "default_guess": "Require an active `granted_projects` principal.",
+   "witness": {
+    "initial": "Project P is active; principal S has `scope_mode=all_projects` or is disabled; no (S,P) grant exists.",
+    "events": [
+     "An administrator requests a producer grant for S and P."
+    ],
+    "outcomes": [
+     "The request is refused because the grant cannot participate in current authorization.",
+     "An active grant is persisted even though authorization ignores it or the principal cannot authenticate."
+    ],
+    "observer": "The administrator and later grant readers."
+   }
+  },
+  {
+   "unit": "01_models.md:Model M22 — BudgetVersion",
+   "subject": "Creation of the manual BudgetVersion",
+   "kind": "missing producing action",
+   "text": "M22 defines “at most one manual version per project,” while M21 and M23 say a manual section-plan upsert creates a section and plan, but no text says which running-service action creates the containing manual BudgetVersion.",
+   "question": "How does a project acquire its one manual BudgetVersion before the first manual SectionPlan is written?",
+   "options": [
+    "The first manual section-plan upsert atomically creates an inactive manual BudgetVersion.",
+    "A separate explicit product action creates the manual BudgetVersion before section upserts are allowed.",
+    "Every project receives a manual BudgetVersion at some earlier project-discovery or setup event."
+   ],
+   "default_guess": "Have the first manual section-plan upsert atomically create an inactive manual BudgetVersion, preserving the rule that activation is a separate explicit action.",
+   "witness": {
+    "initial": "An active Registry project has no BudgetVersion or PortalSection.",
+    "events": [
+     "An operator submits the first manual section-plan upsert."
+    ],
+    "outcomes": [
+     "The operation creates the manual BudgetVersion, PortalSection, and SectionPlan.",
+     "The operation is refused until an otherwise unnamed version-creation action occurs."
+    ],
+    "observer": "The operator managing the initial budget."
+   }
+  },
+  {
+   "unit": "01_models.md:Model M22 — BudgetVersion",
+   "subject": "Reactivation of a deactivated BudgetVersion",
+   "kind": "ambiguous lifecycle",
+   "text": "The lifecycle is written as “`inactive → active → inactive`”; activation deactivates the previous version and “deactivated versions are never deleted,” but no text says whether the final inactive state may transition to active again.",
+   "question": "May a previously deactivated BudgetVersion be activated again?",
+   "options": [
+    "Allow repeated inactive/active cycles for the same version.",
+    "Treat deactivation as terminal for activation and require another version to restore equivalent content."
+   ],
+   "default_guess": "Treat a deactivated version as non-reactivatable because the model has only one `activated_at` and one `deactivated_at` and the stated lifecycle does not show a return transition.",
+   "witness": {
+    "initial": "Budget version V1 was active, then activation of V2 deactivated V1.",
+    "events": [
+     "A staff member asks to make V1 the active budget again."
+    ],
+    "outcomes": [
+     "V1 is reactivated and V2 is deactivated.",
+     "Reactivation is refused because V1's active lifecycle has ended."
+    ],
+    "observer": "Staff and client viewers, who see different active budgets."
+   }
+  },
+  {
+   "unit": "01_models.md:Model M30 — ExpenseDocument",
+   "subject": "Initial ExpenseDocument description",
+   "kind": "missing initial fact",
+   "text": "`description: str | None` is editable after creation, but ExpenseDocument is “created with the expense” and the text never states its initial description or which ExpenseIntake field, if any, supplies it.",
+   "question": "What is `ExpenseDocument.description` when an ExpenseDocument is first created?",
+   "options": [
+    "Always initialize it to `None`.",
+    "Initialize it from an intake fact such as `document_type` or `document_reference`.",
+    "Require the authenticated operator to supply a separate initial description."
+   ],
+   "default_guess": "Initialize it to `None`; the operator may set it later.",
+   "witness": {
+    "initial": "A valid ExpenseIntake contains `document_type`, `document_reference`, and no explicit document-description field.",
+    "events": [
+     "A staff member creates the expense from that intake.",
+     "A viewer or staff member reads the resulting ExpenseView."
+    ],
+    "outcomes": [
+     "The document description is absent.",
+     "The document description is populated from one of the intake strings."
+    ],
+    "observer": "The staff member or viewer reading the expense."
+   }
+  },
+  {
+   "unit": "01_models.md:Model M33 — WorkPayment",
+   "subject": "Cross-project reuse of payment_id",
+   "kind": "authorization/replay contradiction",
+   "text": "M33 says replay equality compares “amount, date and description” and returns the existing record, while State 0 requires every project-scoped query to be bounded by the permitted `project_id`; `payment_id` is the entity identity and is not scoped in the stated replay comparison.",
+   "question": "If the same `payment_id` is submitted for a different project with otherwise equal payment fields, is it an idempotent replay of the first project's payment or a non-replay conflict scoped to the requested project?",
+   "options": [
+    "Treat `payment_id` as globally unique but require the existing payment's `project_id` to match before returning it.",
+    "Return the existing payment whenever amount, date, and description match, even though it belongs to another project.",
+    "Scope payment identity by project despite the model declaring `payment_id` as the identity."
+   ],
+   "default_guess": "Require `project_id` to match; never return another project's payment as a replay.",
+   "witness": {
+    "initial": "Operator A registered payment ID X for project P1. Operator B can mutate P2 but has no access to P1.",
+    "events": [
+     "Operator B registers payment ID X for P2 with the same amount, date, and description."
+    ],
+    "outcomes": [
+     "The operation changes nothing and does not return P1's record because the project differs.",
+     "The operation is classified as an equal replay and returns the existing P1 payment."
+    ],
+    "observer": "Operator B and readers of P2's payment result."
+   }
+  },
+  {
+   "unit": "01_models.md:Model M35 — ProgressPhoto",
+   "subject": "Conflicting replay of a photo intake_id",
+   "kind": "missing replay outcome",
+   "text": "“replay of one `intake_id` never duplicates” defines duplicate prevention but does not say what happens when the repeated `intake_id` carries different project, file, date, section, caption, or visibility facts.",
+   "question": "How is a repeated `intake_id` with changed publication content classified, and may it alter the existing ProgressPhoto?",
+   "options": [
+    "Return the existing photo only when all replay-relevant facts match; otherwise report an integrity conflict and change nothing.",
+    "Return the existing photo for every repeated `intake_id`, ignoring changed content.",
+    "Treat changed content as an update to the existing photo."
+   ],
+   "default_guess": "Use equal-content replay and reject differing content without changing the photo.",
+   "witness": {
+    "initial": "Photo intake ID I created a visible photo in project P using file F1.",
+    "events": [
+     "A staff caller republishes I with file F2 or a different project."
+    ],
+    "outcomes": [
+     "The second publication is a conflict and the original photo remains unchanged.",
+     "The existing photo is returned as a replay despite the changed facts.",
+     "The existing photo is changed to use the new facts."
+    ],
+    "observer": "The publishing staff member and gallery viewers."
+   }
+  },
+  {
+   "unit": "01_models.md:Model M36 — AuditRecord",
+   "subject": "Audit of staff password changes",
+   "kind": "cross-text contradiction",
+   "text": "State 0 says “Every significant action records actor provenance,” and M36 first says “every significant action writes exactly one record” including “staff account and session security events,” but M36 then says “A password change writes none.”",
+   "question": "Does a successful staff password change create an AuditRecord?",
+   "options": [
+    "Write exactly one password-change audit record without password material.",
+    "Write no AuditRecord for password changes, as the final M36 sentence states."
+   ],
+   "default_guess": "Follow the explicit M36 exception and write no record, but the broader audit invariant must be narrowed to exclude password changes.",
+   "witness": {
+    "initial": "An active staff holder has a valid session and changes their password successfully.",
+    "events": [
+     "An auditor later inspects AuditRecord history for the account."
+    ],
+    "outcomes": [
+     "One security-event audit record identifies the actor, time, result, and staff account.",
+     "No audit record reflects the password change."
+    ],
+    "observer": "The security auditor."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"01_models.md:Model M02 — ViewerAccessCredential\",\"subject\":\"ViewerAccessCredential issuance for a revoked viewer\",\"kind\":\"missing target-state precondition\",\"text\":\"“Created/modified by: administrator only (R0-14): issue, re-issue and revocation.” The text does not say whether issue or re-issue is permitted after the ClientViewer is terminally revoked.\",\"question\":\"May an administrator create a new ViewerAccessCredential for a revoked ClientViewer?\",\"options\":[\"Refuse issuance because the viewer is revoked.\",\"Create the credential, although it can never establish an active viewer session.\"],\"default_guess\":\"Refuse issuance for a revoked viewer.\",\"witness\":{\"initial\":\"A ClientViewer has been revoked, and all of its former credentials and sessions are revoked.\",\"events\":[\"An administrator requests a new access link for that viewer.\"],\"outcomes\":[\"The request is refused and no ViewerAccessCredential is created.\",\"A fresh ViewerAccessCredential is created and its one-time secret is returned, but authentication remains impossible because the viewer is revoked.\"],\"observer\":\"The administrator receiving the issuance result.\"}},{\"unit\":\"01_models.md:Model M04 — ProjectViewerGrant\",\"subject\":\"ProjectViewerGrant creation for a revoked viewer\",\"kind\":\"missing target-state precondition\",\"text\":\"“Created/modified by: administrator only (R0-14).” Creation requires an active Registry project, but neither M04 nor the common authorization rule says whether the target viewer must be active.\",\"question\":\"May an administrator create a ProjectViewerGrant for a terminally revoked ClientViewer?\",\"options\":[\"Require the target viewer to be active and refuse the grant.\",\"Allow a permanent but unusable grant to be created for the revoked viewer.\"],\"default_guess\":\"Require an active target viewer.\",\"witness\":{\"initial\":\"Viewer V is revoked, project P is active, and no grant for (V,P) exists.\",\"events\":[\"An administrator grants P to V.\"],\"outcomes\":[\"No grant is created because V is revoked.\",\"An active grant is created; it cannot confer access, and the unique pair rule prevents any later replacement grant.\"],\"observer\":\"The administrator and anyone later inspecting V's grants.\"}},{\"unit\":\"01_models.md:Model M05 — StaffAccount\",\"subject\":\"Recovery override effect on StaffSession records\",\"kind\":\"missing lifecycle effect\",\"text\":\"“replaces its email by the recovery override” and R0-20 define the email and verification changes, but say nothing about existing StaffSession records.\",\"question\":\"Does an administrative recovery override revoke the target account's existing staff sessions?\",\"options\":[\"Revoke all existing sessions as part of the recovery override.\",\"Keep existing sessions active until their ordinary expiry or another revocation action.\"],\"default_guess\":\"Revoke all existing sessions atomically with the recovery override.\",\"witness\":{\"initial\":\"A staff account has an active session whose holder may still control the old login email.\",\"events\":[\"An administrator performs the recovery override and replaces the login email.\"],\"outcomes\":[\"The old active session is revoked immediately.\",\"The old active session remains usable after the recovery email change.\"],\"observer\":\"The session holder and the recovering administrator.\"}},{\"unit\":\"01_models.md:Model M06 — StaffSession\",\"subject\":\"Holder-initiated sign-out-everywhere\",\"kind\":\"cross-text action mismatch\",\"text\":\"State 0 promises “managed sessions with expiry, revocation, and sign-out-everywhere,” while M06 lists only “logout (that session), an administrator revoking all sessions of an account, the holder's own password change (every other session of the account), and suspension/disabling.”\",\"question\":\"Can a staff holder explicitly revoke all of their own sessions without changing their password, and if so does that action include the current session?\",\"options\":[\"Provide holder-initiated sign-out-everywhere and revoke every session, including the current one.\",\"Provide no such holder action; only per-session logout, password change, or administrator revocation has the listed effects.\"],\"default_guess\":\"Provide holder-initiated sign-out-everywhere that revokes every session including the current one.\",\"witness\":{\"initial\":\"A staff member has two active sessions and does not want to change their password.\",\"events\":[\"The holder invokes the promised sign-out-everywhere action from one session.\"],\"outcomes\":[\"Both sessions are revoked.\",\"No holder-level action exists; at most the current session can be logged out.\"],\"observer\":\"The staff holder attempting to use the second session.\"}},{\"unit\":\"01_models.md:Model M13 — ServicePrincipal\",\"subject\":\"ServicePrincipal disabled-state terminality\",\"kind\":\"internal lifecycle contradiction\",\"text\":\"Meaning says “the only modification is the status change `active ↔ disabled`,” but Lifecycle candidate says “`active → disabled`.”\",\"question\":\"Can a disabled ServicePrincipal be returned to active status?\",\"options\":[\"Allow `disabled → active`.\",\"Treat disabled as terminal and require a new ServicePrincipal.\"],\"default_guess\":\"Allow reactivation because the detailed Meaning explicitly uses a bidirectional transition.\",\"witness\":{\"initial\":\"A ServicePrincipal was disabled and all of its credentials were revoked.\",\"events\":[\"An administrator asks to restore that same principal.\"],\"outcomes\":[\"The same principal returns to active status and can receive new credentials.\",\"The transition is refused because disabled is terminal; a new principal identity is required.\"],\"observer\":\"The administrator and producer integration.\"}},{\"unit\":\"01_models.md:Model M14 — ServiceCredential\",\"subject\":\"ServiceCredential rotation and expires_at production\",\"kind\":\"missing rotation lifecycle\",\"text\":\"M14 says “several credentials of one principal may be simultaneously valid (rotation overlap)” and defines optional `expires_at`, but does not say what a rotation action does to the old credential or who determines `expires_at`; State 0 calls credentials “rotatable with an overlap period.”\",\"question\":\"When an administrator rotates a service credential, is the old credential given an overlap expiry, left valid until separately revoked, or revoked immediately, and who chooses any expiry?\",\"options\":[\"Set the old credential's `expires_at` to a system/configured overlap deadline.\",\"Leave the old credential valid indefinitely until an explicit administrator revocation.\",\"Revoke the old credential immediately, providing no overlap.\"],\"default_guess\":\"Set an overlap expiry using a configured policy while leaving explicit immediate revocation available.\",\"witness\":{\"initial\":\"A principal has credential K1 with no expiry.\",\"events\":[\"An administrator rotates the credential and receives K2.\",\"The producer continues using K1 during deployment rollover.\"],\"outcomes\":[\"K1 works only until an automatically assigned overlap deadline.\",\"K1 remains valid indefinitely until another administrator action.\",\"K1 stops working immediately when K2 is issued.\"],\"observer\":\"The producer using K1 and the administrator managing rotation.\"}},{\"unit\":\"01_models.md:Model M14 — ServiceCredential\",\"subject\":\"Credential issuance for a disabled ServicePrincipal\",\"kind\":\"missing target-state precondition\",\"text\":\"“Created/modified by: administrator.” M13 says disabling revokes every credential, but neither model says whether a new credential may be issued while the principal remains disabled.\",\"question\":\"May an administrator issue or rotate a ServiceCredential for a disabled ServicePrincipal?\",\"options\":[\"Refuse credential issuance until the principal is active.\",\"Allow creation while disabled, with the credential unusable until possible reactivation.\"],\"default_guess\":\"Refuse issuance while the principal is disabled.\",\"witness\":{\"initial\":\"A ServicePrincipal is disabled and has no valid credentials.\",\"events\":[\"An administrator requests a new credential for it.\"],\"outcomes\":[\"No credential is created.\",\"A new credential and one-time secret are created, although authentication remains blocked while the principal is disabled.\"],\"observer\":\"The administrator receiving the secret and the producer attempting authentication.\"}},{\"unit\":\"01_models.md:Model M15 — ProducerProjectGrant\",\"subject\":\"ProducerProjectGrant eligibility by principal state and scope mode\",\"kind\":\"missing creation preconditions\",\"text\":\"The grant is “consulted only when the principal's `scope_mode` is `granted_projects`,” but the text does not say whether creation is restricted to active `granted_projects` principals.\",\"question\":\"May an administrator create a ProducerProjectGrant for a disabled principal or for an `all_projects` principal?\",\"options\":[\"Require an active principal whose scope mode is `granted_projects`.\",\"Allow grants for disabled principals as advance configuration, but refuse them for `all_projects` principals.\",\"Allow both kinds of inert grant records.\"],\"default_guess\":\"Require an active `granted_projects` principal.\",\"witness\":{\"initial\":\"Project P is active; principal S has `scope_mode=all_projects` or is disabled; no (S,P) grant exists.\",\"events\":[\"An administrator requests a producer grant for S and P.\"],\"outcomes\":[\"The request is refused because the grant cannot participate in current authorization.\",\"An active grant is persisted even though authorization ignores it or the principal cannot authenticate.\"],\"observer\":\"The administrator and later grant readers.\"}},{\"unit\":\"01_models.md:Model M22 — BudgetVersion\",\"subject\":\"Creation of the manual BudgetVersion\",\"kind\":\"missing producing action\",\"text\":\"M22 defines “at most one manual version per project,” while M21 and M23 say a manual section-plan upsert creates a section and plan, but no text says which running-service action creates the containing manual BudgetVersion.\",\"question\":\"How does a project acquire its one manual BudgetVersion before the first manual SectionPlan is written?\",\"options\":[\"The first manual section-plan upsert atomically creates an inactive manual BudgetVersion.\",\"A separate explicit product action creates the manual BudgetVersion before section upserts are allowed.\",\"Every project receives a manual BudgetVersion at some earlier project-discovery or setup event.\"],\"default_guess\":\"Have the first manual section-plan upsert atomically create an inactive manual BudgetVersion, preserving the rule that activation is a separate explicit action.\",\"witness\":{\"initial\":\"An active Registry project has no BudgetVersion or PortalSection.\",\"events\":[\"An operator submits the first manual section-plan upsert.\"],\"outcomes\":[\"The operation creates the manual BudgetVersion, PortalSection, and SectionPlan.\",\"The operation is refused until an otherwise unnamed version-creation action occurs.\"],\"observer\":\"The operator managing the initial budget.\"}},{\"unit\":\"01_models.md:Model M22 — BudgetVersion\",\"subject\":\"Reactivation of a deactivated BudgetVersion\",\"kind\":\"ambiguous lifecycle\",\"text\":\"The lifecycle is written as “`inactive → active → inactive`”; activation deactivates the previous version and “deactivated versions are never deleted,” but no text says whether the final inactive state may transition to active again.\",\"question\":\"May a previously deactivated BudgetVersion be activated again?\",\"options\":[\"Allow repeated inactive/active cycles for the same version.\",\"Treat deactivation as terminal for activation and require another version to restore equivalent content.\"],\"default_guess\":\"Treat a deactivated version as non-reactivatable because the model has only one `activated_at` and one `deactivated_at` and the stated lifecycle does not show a return transition.\",\"witness\":{\"initial\":\"Budget version V1 was active, then activation of V2 deactivated V1.\",\"events\":[\"A staff member asks to make V1 the active budget again.\"],\"outcomes\":[\"V1 is reactivated and V2 is deactivated.\",\"Reactivation is refused because V1's active lifecycle has ended.\"],\"observer\":\"Staff and client viewers, who see different active budgets.\"}},{\"unit\":\"01_models.md:Model M30 — ExpenseDocument\",\"subject\":\"Initial ExpenseDocument description\",\"kind\":\"missing initial fact\",\"text\":\"`description: str | None` is editable after creation, but ExpenseDocument is “created with the expense” and the text never states its initial description or which ExpenseIntake field, if any, supplies it.\",\"question\":\"What is `ExpenseDocument.description` when an ExpenseDocument is first created?\",\"options\":[\"Always initialize it to `None`.\",\"Initialize it from an intake fact such as `document_type` or `document_reference`.\",\"Require the authenticated operator to supply a separate initial description.\"],\"default_guess\":\"Initialize it to `None`; the operator may set it later.\",\"witness\":{\"initial\":\"A valid ExpenseIntake contains `document_type`, `document_reference`, and no explicit document-description field.\",\"events\":[\"A staff member creates the expense from that intake.\",\"A viewer or staff member reads the resulting ExpenseView.\"],\"outcomes\":[\"The document description is absent.\",\"The document description is populated from one of the intake strings.\"],\"observer\":\"The staff member or viewer reading the expense.\"}},{\"unit\":\"01_models.md:Model M33 — WorkPayment\",\"subject\":\"Cross-project reuse of payment_id\",\"kind\":\"authorization/replay contradiction\",\"text\":\"M33 says replay equality compares “amount, date and description” and returns the existing record, while State 0 requires every project-scoped query to be bounded by the permitted `project_id`; `payment_id` is the entity identity and is not scoped in the stated replay comparison.\",\"question\":\"If the same `payment_id` is submitted for a different project with otherwise equal payment fields, is it an idempotent replay of the first project's payment or a non-replay conflict scoped to the requested project?\",\"options\":[\"Treat `payment_id` as globally unique but require the existing payment's `project_id` to match before returning it.\",\"Return the existing payment whenever amount, date, and description match, even though it belongs to another project.\",\"Scope payment identity by project despite the model declaring `payment_id` as the identity.\"],\"default_guess\":\"Require `project_id` to match; never return another project's payment as a replay.\",\"witness\":{\"initial\":\"Operator A registered payment ID X for project P1. Operator B can mutate P2 but has no access to P1.\",\"events\":[\"Operator B registers payment ID X for P2 with the same amount, date, and description.\"],\"outcomes\":[\"The operation changes nothing and does not return P1's record because the project differs.\",\"The operation is classified as an equal replay and returns the existing P1 payment.\"],\"observer\":\"Operator B and readers of P2's payment result.\"}},{\"unit\":\"01_models.md:Model M35 — ProgressPhoto\",\"subject\":\"Conflicting replay of a photo intake_id\",\"kind\":\"missing replay outcome\",\"text\":\"“replay of one `intake_id` never duplicates” defines duplicate prevention but does not say what happens when the repeated `intake_id` carries different project, file, date, section, caption, or visibility facts.\",\"question\":\"How is a repeated `intake_id` with changed publication content classified, and may it alter the existing ProgressPhoto?\",\"options\":[\"Return the existing photo only when all replay-relevant facts match; otherwise report an integrity conflict and change nothing.\",\"Return the existing photo for every repeated `intake_id`, ignoring changed content.\",\"Treat changed content as an update to the existing photo.\"],\"default_guess\":\"Use equal-content replay and reject differing content without changing the photo.\",\"witness\":{\"initial\":\"Photo intake ID I created a visible photo in project P using file F1.\",\"events\":[\"A staff caller republishes I with file F2 or a different project.\"],\"outcomes\":[\"The second publication is a conflict and the original photo remains unchanged.\",\"The existing photo is returned as a replay despite the changed facts.\",\"The existing photo is changed to use the new facts.\"],\"observer\":\"The publishing staff member and gallery viewers.\"}},{\"unit\":\"01_models.md:Model M36 — AuditRecord\",\"subject\":\"Audit of staff password changes\",\"kind\":\"cross-text contradiction\",\"text\":\"State 0 says “Every significant action records actor provenance,” and M36 first says “every significant action writes exactly one record” including “staff account and session security events,” but M36 then says “A password change writes none.”\",\"question\":\"Does a successful staff password change create an AuditRecord?\",\"options\":[\"Write exactly one password-change audit record without password material.\",\"Write no AuditRecord for password changes, as the final M36 sentence states.\"],\"default_guess\":\"Follow the explicit M36 exception and write no record, but the broader audit invariant must be narrowed to exclude password changes.\",\"witness\":{\"initial\":\"An active staff holder has a valid session and changes their password successfully.\",\"events\":[\"An auditor later inspects AuditRecord history for the account.\"],\"outcomes\":[\"One security-event audit record identifies the actor, time, result, and staff account.\",\"No audit record reflects the password change.\"],\"observer\":\"The security auditor.\"}}]}",
+ "set_aside": []
+}

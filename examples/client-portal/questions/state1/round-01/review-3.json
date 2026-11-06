@@ -1,0 +1,668 @@
+{
+ "open_points": [
+  {
+   "unit": "01_models.md:Status",
+   "subject": "Deferred staff email security flows",
+   "kind": "temporal contradiction",
+   "text": "The retained status says account creation, email change, and password reset \"complete through single-use purpose-bound challenges\" and security changes \"produce notifications\"; State 0 R0-23 says those operations change nothing, audit nothing, deliver nothing, and are a missing feature outside the migration.",
+   "question": "Are challenge and notification flows part of the service being modeled and implemented now, or only dormant future designs while the current operations remain inert?",
+   "options": [
+    "Implement the challenge and notification lifecycles described in State 1",
+    "Keep every challenge/notification operation inert and treat M08–M12 as unused future models"
+   ],
+   "default_guess": "Keep the accepted current-service operations inert and treat the challenge models as future-only.",
+   "witness": {
+    "initial": "An active verified staff account exists and no challenge records exist.",
+    "events": [
+     "The staff member requests a password reset.",
+     "The staff member later attempts reset completion."
+    ],
+    "outcomes": [
+     "A PasswordResetToken and delivery are created, and successful completion changes the password and revokes sessions.",
+     "The request returns its concealed normal answer but creates, delivers, audits, and changes nothing; completion is rejected."
+    ],
+    "observer": "The staff member, administrator, email gateway, and persistence/audit readers"
+   }
+  },
+  {
+   "unit": "01_models.md:Modeling conventions",
+   "subject": "Plaintext password handling",
+   "kind": "contradiction",
+   "text": "\"Secrets (... passwords ...) ... plaintext exists only in the issuing response\" conflicts with R0-19, where the administrator submits the initial password in the staff-account creation request and no portal response carries it back.",
+   "question": "Is password plaintext permitted as request input, and is it ever returned in an issuing response?",
+   "options": [
+    "Accept password plaintext only as request input and never return it",
+    "Treat passwords like issued credentials and return generated plaintext once"
+   ],
+   "default_guess": "Accept administrator- or holder-supplied password plaintext only as request input and never return it.",
+   "witness": {
+    "initial": "An administrator is creating a staff account.",
+    "events": [
+     "The administrator supplies the holder's initial password."
+    ],
+    "outcomes": [
+     "The request accepts the password and the response contains no plaintext password.",
+     "The request cannot supply plaintext under the convention, so the portal must generate and return a password once."
+    ],
+    "observer": "The administrator and new staff holder"
+   }
+  },
+  {
+   "unit": "01_models.md:Model M01 — ClientViewer",
+   "subject": "ClientViewer management authority",
+   "kind": "contradiction",
+   "text": "\"Created/modified by: operator or administrator only\" conflicts with R0-14, which makes creating and revoking client viewers administrator-only access management.",
+   "question": "Can an operator create or revoke a ClientViewer, or may only an administrator do so?",
+   "options": [
+    "Administrator only",
+    "Operator or administrator"
+   ],
+   "default_guess": "Administrator only.",
+   "witness": {
+    "initial": "An authenticated operator has no access-management capability.",
+    "events": [
+     "The operator requests creation of a ClientViewer."
+    ],
+    "outcomes": [
+     "The viewer is created because M01 names operators as creators.",
+     "The request is denied because R0-14 reserves viewer management to administrators."
+    ],
+    "observer": "The operator and audit reader"
+   }
+  },
+  {
+   "unit": "01_models.md:Model M02 — ViewerAccessCredential",
+   "subject": "Viewer access-link management authority",
+   "kind": "contradiction",
+   "text": "\"Created/modified by: operator or administrator\" conflicts with R0-14, which makes creation, revocation, and re-issue of viewer access links administrator-only.",
+   "question": "Can operators issue or revoke ViewerAccessCredentials?",
+   "options": [
+    "Administrator only",
+    "Operator or administrator"
+   ],
+   "default_guess": "Administrator only.",
+   "witness": {
+    "initial": "A viewer exists and an operator is authenticated without access-management capability.",
+    "events": [
+     "The operator requests a new access link for the viewer."
+    ],
+    "outcomes": [
+     "A new credential is issued and the old one is revoked.",
+     "The request is denied before any credential or session changes."
+    ],
+    "observer": "The operator and viewer"
+   }
+  },
+  {
+   "unit": "01_models.md:Model M03 — ViewerSession",
+   "subject": "Session-to-credential association",
+   "kind": "missing identity relation",
+   "text": "A session is active only if \"its credential\" is not revoked, and credential revocation/re-issue revokes sessions, but ViewerSession contains no credential_id or other fact identifying which credential opened it.",
+   "question": "What credential fact, if any, associates a ViewerSession with the ViewerAccessCredential used at entry?",
+   "options": [
+    "Persist credential_id on each ViewerSession",
+    "Do not associate them; every credential revocation/re-issue explicitly revokes all sessions of the viewer",
+    "Resolve \"its credential\" as the viewer's current non-revoked credential"
+   ],
+   "default_guess": "Persist the credential_id used to open the session, while still applying the stated all-session revocation operation on re-issue.",
+   "witness": {
+    "initial": "A viewer has credential C1 and sessions S1 and S2 opened through C1.",
+    "events": [
+     "An administrator re-issues access as C2.",
+     "A session resolver later examines S1."
+    ],
+    "outcomes": [
+     "S1 can be related to revoked C1 and is inactive even if its own revoked_at was not written.",
+     "No credential relation exists, so S1 is inactive only if re-issue explicitly wrote S1.revoked_at; otherwise the resolver can regard it as active."
+    ],
+    "observer": "The viewer attempting to restore S1"
+   }
+  },
+  {
+   "unit": "01_models.md:Model M04 — ProjectViewerGrant",
+   "subject": "Viewer project-grant management authority",
+   "kind": "contradiction",
+   "text": "\"Created/modified by: operator or administrator\" conflicts with R0-14, which makes client viewer grants administrator-only access management.",
+   "question": "Can an operator create or revoke a ProjectViewerGrant?",
+   "options": [
+    "Administrator only",
+    "Operator or administrator"
+   ],
+   "default_guess": "Administrator only.",
+   "witness": {
+    "initial": "A viewer and an active Registry project exist; an operator is authenticated.",
+    "events": [
+     "The operator attempts to grant the project to the viewer."
+    ],
+    "outcomes": [
+     "An active grant is created.",
+     "The request is denied for lack of access-management capability."
+    ],
+    "observer": "The operator and viewer"
+   }
+  },
+  {
+   "unit": "01_models.md:Model M05 — StaffAccount",
+   "subject": "Bootstrap administrator lifecycle",
+   "kind": "lifecycle contradiction",
+   "text": "The lifecycle is only \"pending_verification → active ↔ suspended → disabled\", while R0-07 creates the first administrator directly as active and verified when no staff account exists.",
+   "question": "Is direct creation in active status an explicit bootstrap-only lifecycle entry for StaffAccount?",
+   "options": [
+    "Yes, add a bootstrap-only direct active/verified creation path",
+    "No, even the first administrator must first exist as pending_verification"
+   ],
+   "default_guess": "Allow direct active/verified creation only through the R0-07 local bootstrap command.",
+   "witness": {
+    "initial": "The deployment contains no staff accounts.",
+    "events": [
+     "The host operator runs the first-administrator command."
+    ],
+    "outcomes": [
+     "An active, verified administrator is created directly.",
+     "A pending_verification account must be created first, contradicting the command's stated result or requiring another activation step."
+    ],
+    "observer": "The host operator and the new administrator"
+   }
+  },
+  {
+   "unit": "01_models.md:Model M05 — StaffAccount",
+   "subject": "Who may modify a StaffAccount",
+   "kind": "contradiction",
+   "text": "\"Created/modified by: administrator\" conflicts with R0-19's accepted change_staff_password flow in which the holder logs in and changes the initial password; M10 also says the account itself may request an email change.",
+   "question": "Which StaffAccount facts may the account holder change without an administrator?",
+   "options": [
+    "The holder may change its own password and initiate its own email change",
+    "Only an administrator may modify any StaffAccount fact"
+   ],
+   "default_guess": "Permit an active holder to change its own password and, once the deferred flow exists, initiate its own email change; reserve role/status and administrative recovery for administrators.",
+   "witness": {
+    "initial": "A newly activated staff holder is logged in with the administrator-chosen initial password.",
+    "events": [
+     "The holder invokes change_staff_password."
+    ],
+    "outcomes": [
+     "password_hash is changed by the holder's authenticated action.",
+     "The action is impossible because M05 permits only administrator modification."
+    ],
+    "observer": "The staff holder"
+   }
+  },
+  {
+   "unit": "01_models.md:Model M05 — StaffAccount",
+   "subject": "Staff security notifications",
+   "kind": "contradiction",
+   "text": "M05 says suspension and disabling \"trigger a security notification\"; R0-23 says no token-free notice is sent and the notification feature is outside the migration.",
+   "question": "Do suspension and disabling currently create an EmailDeliveryRecord and call the gateway?",
+   "options": [
+    "Yes, send the security notification",
+    "No, change status and sessions without creating or sending a notice"
+   ],
+   "default_guess": "Do not create or send notices in the accepted current service.",
+   "witness": {
+    "initial": "An active staff account has an active session.",
+    "events": [
+     "An administrator suspends the account."
+    ],
+    "outcomes": [
+     "The session is invalidated and an account-security email delivery is created.",
+     "The session is invalidated but no delivery record, gateway call, or notice exists."
+    ],
+    "observer": "The staff holder, gateway, and administrator"
+   }
+  },
+  {
+   "unit": "01_models.md:Model M08 — PasswordResetToken",
+   "subject": "Password-reset token creation and consumption",
+   "kind": "contradiction",
+   "text": "M08 says reset tokens are created by self-service requests or administrators, delivered through email, and successfully consumed; R0-23 says a password-reset request does nothing and reset completion always gives the concealed rejection with no reads, writes, audit, or delivery.",
+   "question": "Can any current product action mint or consume a PasswordResetToken?",
+   "options": [
+    "Yes, implement the M08 lifecycle",
+    "No, M08 is dormant until Q19 is implemented"
+   ],
+   "default_guess": "No current action mints or consumes it; keep the model dormant.",
+   "witness": {
+    "initial": "A verified active staff account exists.",
+    "events": [
+     "Its holder submits a password-reset request."
+    ],
+    "outcomes": [
+     "A PasswordResetToken and email delivery are persisted.",
+     "No token or delivery is persisted, although the external response is the usual concealed response."
+    ],
+    "observer": "The account holder, administrator, and database/audit reader"
+   }
+  },
+  {
+   "unit": "01_models.md:Model M09 — EmailVerificationChallenge",
+   "subject": "Initial-email verification and activation",
+   "kind": "contradiction",
+   "text": "M09 says a challenge is created at account creation and consuming it activates the account; R0-19 and R0-23 say no challenge is created or consumed and an administrator activates the pending account, which marks the email verified.",
+   "question": "What current action moves a new staff account from pending_verification to active and sets email_verified_at?",
+   "options": [
+    "Holder consumes an EmailVerificationChallenge",
+    "Administrator activates the account without a challenge"
+   ],
+   "default_guess": "Administrator activation without a challenge, as required by R0-19/R0-23.",
+   "witness": {
+    "initial": "An administrator has just created a pending staff account.",
+    "events": [
+     "No email challenge is delivered.",
+     "The administrator invokes account activation."
+    ],
+    "outcomes": [
+     "Activation succeeds and marks the email verified.",
+     "Activation cannot complete verification because only challenge consumption performs that transition."
+    ],
+    "observer": "The administrator and new staff holder"
+   }
+  },
+  {
+   "unit": "01_models.md:Model M10 — PendingEmailChange",
+   "subject": "Ordinary email-change operation",
+   "kind": "contradiction",
+   "text": "M10 says the staff account or an administrator creates a staged email change and consumption replaces the login email; R0-23 says requesting and confirming an email change read, write, audit, and deliver nothing and confirmation is rejected.",
+   "question": "Can current requests create or consume PendingEmailChange records?",
+   "options": [
+    "Yes, implement the staged email-change lifecycle",
+    "No, keep both operations inert until Q19 is implemented"
+   ],
+   "default_guess": "Keep the ordinary email-change operations inert; only R0-20 administrative recovery may replace the email now.",
+   "witness": {
+    "initial": "An active staff account uses old@example.test.",
+    "events": [
+     "The holder requests new@example.test.",
+     "The holder submits the delivered confirmation token."
+    ],
+    "outcomes": [
+     "A PendingEmailChange is created and consumed, making the new address the login.",
+     "No record or email is created, and confirmation is rejected without changing the login."
+    ],
+    "observer": "The staff holder and login/authentication module"
+   }
+  },
+  {
+   "unit": "01_models.md:Model M13 — ServicePrincipal",
+   "subject": "Global producer authorization",
+   "kind": "scope/capability contradiction",
+   "text": "State 0 says a global producer exists only through an \"explicitly granted capability\"; M13 makes capabilities static by source_type and represents global access only as scope_mode=all_projects chosen by an administrator.",
+   "question": "Is all-project publication authorized solely by scope_mode=all_projects, or is a separately granted global capability/fact required?",
+   "options": [
+    "scope_mode=all_projects is the complete explicit global grant",
+    "A distinct runtime global capability or grant is required in addition to the static import capability"
+   ],
+   "default_guess": "Treat the audited administrator selection of scope_mode=all_projects as the explicit global grant.",
+   "witness": {
+    "initial": "An estimate_producer principal has the static import capability, scope_mode=all_projects, and no ProducerProjectGrant for project P.",
+    "events": [
+     "The producer imports a snapshot for active project P."
+    ],
+    "outcomes": [
+     "Import is authorized because all_projects is sufficient.",
+     "Import is denied because no separately granted global capability exists."
+    ],
+    "observer": "The producer and administrator"
+   }
+  },
+  {
+   "unit": "01_models.md:Model M16 — ProjectReference",
+   "subject": "Registry project status type",
+   "kind": "type contradiction",
+   "text": "ProjectReference declares \"status: str\", while M17 accepts only active and archived, the catalogs define RegistryProjectStatus as a closed enum, and the readiness assessment says no open status:str remains.",
+   "question": "Is ProjectReference.status the closed RegistryProjectStatus enum or an arbitrary Registry string?",
+   "options": [
+    "Closed RegistryProjectStatus(active|archived)",
+    "Arbitrary string passed through from Registry"
+   ],
+   "default_guess": "Use the closed RegistryProjectStatus enum.",
+   "witness": {
+    "initial": "Registry returns a project with status \"paused\".",
+    "events": [
+     "The portal builds a ProjectReference."
+    ],
+    "outcomes": [
+     "The reference is accepted because status is an unrestricted string.",
+     "The Registry answer is rejected because only active and archived are valid."
+    ],
+    "observer": "The caller listing or opening the project"
+   }
+  },
+  {
+   "unit": "01_models.md:Model M17 — ProjectContext",
+   "subject": "ProjectValidationResult failure fact",
+   "kind": "type ambiguity",
+   "text": "ProjectValidationResult declares \"failure: str | None\" immediately before defining RegistryFailureKind as the closed enum for boundary failure translation, without saying whether failure contains that enum.",
+   "question": "Does ProjectValidationResult.failure carry RegistryFailureKind, an explanatory string, or both as separate facts?",
+   "options": [
+    "failure: RegistryFailureKind | None",
+    "failure: str | None with unrestricted text",
+    "Separate failure_kind and failure_detail facts"
+   ],
+   "default_guess": "Use RegistryFailureKind | None and keep unrestricted diagnostic text outside the domain result.",
+   "witness": {
+    "initial": "Registry times out while validating a project.",
+    "events": [
+     "The Registry gateway creates ProjectValidationResult.",
+     "The authorization caller branches on the failure."
+    ],
+    "outcomes": [
+     "The caller receives the typed RegistryFailureKind.timeout value.",
+     "The caller receives an arbitrary string and must guess or parse how to classify it."
+    ],
+    "observer": "The authorization/use-case module"
+   }
+  },
+  {
+   "unit": "01_models.md:Model M19 — ApprovedEstimateSnapshot",
+   "subject": "Identical snapshot re-publication result",
+   "kind": "contradiction",
+   "text": "M19 says same identity plus same fingerprint gives \"idempotent success returning the existing record\"; R0-25 says every classified attempt returns a fresh SnapshotImportRecord with a fresh import_id and never returns the snapshot itself.",
+   "question": "What does the import product action return for an identical re-publication?",
+   "options": [
+    "A fresh idempotent_replay SnapshotImportRecord naming the existing snapshot",
+    "The existing ApprovedEstimateSnapshot record"
+   ],
+   "default_guess": "Return a fresh idempotent_replay SnapshotImportRecord, never the snapshot itself.",
+   "witness": {
+    "initial": "Snapshot S for project P and estimate version V is already accepted.",
+    "events": [
+     "The same producer republishes byte-for-byte equivalent content for P/V."
+    ],
+    "outcomes": [
+     "A new import result with a new import_id is returned and names S.",
+     "S itself is returned as the idempotent success result."
+    ],
+    "observer": "The producer"
+   }
+  },
+  {
+   "unit": "01_models.md:Model M20 — SnapshotImportRecord",
+   "subject": "Integrity-conflict reject reason",
+   "kind": "unsatisfiable closed choice",
+   "text": "reject_reason is required when outcome is integrity_conflict, but ImportRejectReason's closed catalog contains no integrity-conflict reason.",
+   "question": "What reject_reason must an integrity_conflict SnapshotImportRecord contain?",
+   "options": [
+    "Add an integrity_conflict reason to ImportRejectReason",
+    "Permit reject_reason to be absent for integrity_conflict",
+    "Use one of the listed rejection reasons despite none describing the conflict"
+   ],
+   "default_guess": "Add a dedicated integrity_conflict reason to the closed catalog.",
+   "witness": {
+    "initial": "An accepted snapshot exists for identity P/E/V with fingerprint F1.",
+    "events": [
+     "The producer submits the same identity with fingerprint F2."
+    ],
+    "outcomes": [
+     "The portal can persist a valid integrity_conflict record using a dedicated reason.",
+     "The portal cannot satisfy both the required-reason validator and the closed reason enum."
+    ],
+    "observer": "The producer reading the import result and the persistence layer"
+   }
+  },
+  {
+   "unit": "01_models.md:Model M22 — BudgetVersion",
+   "subject": "Creation of the manual BudgetVersion",
+   "kind": "missing creation action",
+   "text": "M22 says there is at most one manual version and that it is mutable, but names no action or event that creates the project's manual BudgetVersion or whether it exists before the first manual section is maintained.",
+   "question": "When and by whom is a project's manual BudgetVersion minted?",
+   "options": [
+    "Create it lazily on the first authorized manual-budget edit",
+    "Create it through an explicit staff budget-initialization action",
+    "Create it automatically when the portal first encounters or assigns the project"
+   ],
+   "default_guess": "Create it lazily in the first authorized manual-budget mutation.",
+   "witness": {
+    "initial": "An active Registry project has a staff assignment but no portal budget records.",
+    "events": [
+     "The assigned operator attempts to add the first manual section."
+    ],
+    "outcomes": [
+     "The operation mints the manual BudgetVersion and first SectionPlan atomically.",
+     "The operation is impossible until a separate initialization action or automatic project setup has created the version."
+    ],
+    "observer": "The operator and client budget reader"
+   }
+  },
+  {
+   "unit": "01_models.md:Model M22 — BudgetVersion",
+   "subject": "Reactivation of a deactivated budget version",
+   "kind": "lifecycle ambiguity",
+   "text": "The lifecycle is written \"inactive → active → inactive\" and deactivated versions are retained, but the text does not say whether the final inactive state is terminal or may transition to active again.",
+   "question": "May a previously deactivated BudgetVersion be activated again?",
+   "options": [
+    "Yes, activation and deactivation may repeat",
+    "No, the inactive state after deactivation is terminal"
+   ],
+   "default_guess": "Allow explicit reactivation while the project is active, subject to the same linking and audit operation.",
+   "witness": {
+    "initial": "Version V1 was active, then V2 was activated and V1 became inactive.",
+    "events": [
+     "A staff member requests activation of V1 again."
+    ],
+    "outcomes": [
+     "V1 becomes active and V2 becomes inactive.",
+     "The request is rejected because a deactivated version cannot be reactivated."
+    ],
+    "observer": "The staff member and client budget reader"
+   }
+  },
+  {
+   "unit": "01_models.md:Model M23 — SectionPlan",
+   "subject": "Manual section creation and removal lifecycle",
+   "kind": "missing lifecycle/actions",
+   "text": "A manual SectionPlan is \"edited in place\" and manual budgets are maintained, but the text does not state whether staff may add plans after initialization, remove an unreferenced plan, or how removal affects the corresponding PortalSection.",
+   "question": "Which product actions create and remove manual SectionPlans and PortalSections, and is removal allowed when no allocation or progress references the section?",
+   "options": [
+    "Allow staff to add plans and delete unreferenced plans/sections",
+    "Allow adding plans but only retire/remove a plan from the version while retaining PortalSection identity",
+    "Allow edits only; the complete manual section set is fixed at version creation"
+   ],
+   "default_guess": "Allow staff to add plans and remove a plan from the manual version; delete its PortalSection only when it has no references anywhere.",
+   "witness": {
+    "initial": "An active manual budget has section S with no allocations or progress.",
+    "events": [
+     "The operator decides S should no longer appear in the budget."
+    ],
+    "outcomes": [
+     "The SectionPlan, and possibly the unreferenced PortalSection, are removed.",
+     "No removal action exists, so S remains client-visible indefinitely."
+    ],
+    "observer": "The operator and client viewer"
+   }
+  },
+  {
+   "unit": "01_models.md:Model M29 — ExpenseAllocation",
+   "subject": "Allocation identity during re-allocation",
+   "kind": "identity/lifecycle contradiction",
+   "text": "Identity evidence says allocations are \"replaced and audited by id\" while continuity says \"An allocation stays the same record while it is re-allocated\" and the lifecycle says \"created and replaced\".",
+   "question": "When an amount is moved to another target, is the existing ExpenseAllocation mutated under the same allocation_id or replaced by newly identified records?",
+   "options": [
+    "Mutate the existing allocation and retain allocation_id",
+    "Delete/retire the old allocation and create a new allocation_id",
+    "Replace the complete allocation set, retaining IDs only for unchanged entries"
+   ],
+   "default_guess": "Replace the complete allocation set atomically, retaining IDs only where the same logical allocation is explicitly edited in place.",
+   "witness": {
+    "initial": "Expense E has allocation A1 assigning EUR 100 to section S1.",
+    "events": [
+     "An operator reallocates the EUR 100 to section S2."
+    ],
+    "outcomes": [
+     "A1 remains the allocation and its section_id changes to S2.",
+     "A1 is replaced by new allocation A2 targeting S2."
+    ],
+    "observer": "Staff/client allocation views and the audit reader"
+   }
+  },
+  {
+   "unit": "01_models.md:Model M32 — SectionProgress",
+   "subject": "Creation of SectionProgress",
+   "kind": "missing creation action",
+   "text": "SectionProgress is current state with one row per section, but the text does not say whether a row is created with the section, when a work-bearing plan becomes active, or only on the first staff progress update.",
+   "question": "When is a SectionProgress entity minted, and what does the absence of one mean?",
+   "options": [
+    "Create it on first staff update; absence projects as completion_percent=None",
+    "Create it with every PortalSection using an initial zero percent",
+    "Create it when a section first participates in an active version with planned work"
+   ],
+   "default_guess": "Create it on the first explicit staff progress update and project absence as unavailable/None, not zero.",
+   "witness": {
+    "initial": "A newly activated budget contains a work-bearing section with no progress update.",
+    "events": [
+     "A client reads progress."
+    ],
+    "outcomes": [
+     "No SectionProgress exists and completion_percent is None.",
+     "A SectionProgress was automatically created with completion_percent=0."
+    ],
+    "observer": "The client viewer"
+   }
+  },
+  {
+   "unit": "01_models.md:Model M33 — WorkPayment",
+   "subject": "Who mints payment_id",
+   "kind": "identity contradiction",
+   "text": "WorkPayment says payment_id is a \"client-generated idempotency identity, supplied by the operator command\"; the modeling convention says portal-owned identifiers are generated by the portal and lists no payment_id exception.",
+   "question": "Is payment_id supplied by the caller or minted by the portal?",
+   "options": [
+    "Caller/operator command supplies the stable payment_id",
+    "Portal generates payment_id and a separate caller idempotency key is needed",
+    "Portal generates payment_id with no caller idempotency identity"
+   ],
+   "default_guess": "Treat payment_id as caller-supplied, as M33 states explicitly.",
+   "witness": {
+    "initial": "An operator is registering a payment for the first time.",
+    "events": [
+     "The operator command includes stable UUID X."
+    ],
+    "outcomes": [
+     "The stored WorkPayment has payment_id X and replay uses X.",
+     "The portal ignores/rejects X and generates UUID Y, so the operator lacks the stated replay identity."
+    ],
+    "observer": "The operator and payment API client"
+   }
+  },
+  {
+   "unit": "01_models.md:Model M33 — WorkPayment",
+   "subject": "Conflicting payment replay",
+   "kind": "idempotency gap",
+   "text": "\"Replay of the same payment_id returns the existing record\" does not say what happens when the repeated identity carries a different amount, date, or description.",
+   "question": "How does registration handle an existing payment_id with different payment facts?",
+   "options": [
+    "Reject it as an identity/content conflict",
+    "Return the existing payment and ignore the differing facts",
+    "Update the existing payment"
+   ],
+   "default_guess": "Reject it as an identity/content conflict without changing the existing payment.",
+   "witness": {
+    "initial": "Payment X exists for EUR 100 on 2026-10-01.",
+    "events": [
+     "An operator submits payment_id X for EUR 900 on 2026-10-02."
+    ],
+    "outcomes": [
+     "The command returns the original EUR 100 payment as a replay.",
+     "The command rejects a conflicting reuse of payment_id X."
+    ],
+    "observer": "The operator and client payment reader"
+   }
+  },
+  {
+   "unit": "01_models.md:Model M34 — PhotoPublication",
+   "subject": "Authority over photo publication facts",
+   "kind": "contradiction",
+   "text": "M34 calls PhotoPublication an input DTO \"from Telegram intake\" and lets it carry project_id, section_id, caption, and client_visible; R0-17 says a progress photo is published by authenticated staff in the same manner as expense intake and that the intake interface decides nothing.",
+   "question": "Which actor supplies or authoritatively chooses the photo's project, section association, caption, and initial visibility?",
+   "options": [
+    "Authenticated staff chooses all decision facts; intake supplies only prepared source facts/provenance",
+    "Telegram intake supplies the listed facts and staff merely authenticates publication",
+    "Split the fields explicitly between intake-owned source facts and staff-owned decisions"
+   ],
+   "default_guess": "Split the contract: intake supplies stable source/file/date/provenance facts, while authenticated staff chooses project, section, caption, and visibility.",
+   "witness": {
+    "initial": "Telegram intake proposes project P1 and client_visible=true; the authenticated operator intends project P2 and hidden visibility.",
+    "events": [
+     "The operator submits the prepared photo publication."
+    ],
+    "outcomes": [
+     "The portal trusts the DTO's P1 and visible flag as Telegram-owned facts.",
+     "The portal uses the operator's P2 and hidden choice because intake decisions carry no authority."
+    ],
+    "observer": "The operator and viewers of P1/P2"
+   }
+  },
+  {
+   "unit": "01_models.md:Model M35 — ProgressPhoto",
+   "subject": "Persisted photo provenance",
+   "kind": "missing required fact",
+   "text": "R0-17 says the portal records the authenticated photo submission's provenance_ref; M34 carries intake_source instead, and M35 persists neither provenance_ref nor intake_source.",
+   "question": "What provenance fact must ProgressPhoto persist, and from which publication field is it derived?",
+   "options": [
+    "Persist provenance_ref on ProgressPhoto",
+    "Persist intake_source on ProgressPhoto as the provenance fact",
+    "Do not persist photo-source provenance despite R0-17"
+   ],
+   "default_guess": "Persist a portable provenance_ref on ProgressPhoto and map the intake's source reference into it.",
+   "witness": {
+    "initial": "A prepared photo from intake source T is published successfully.",
+    "events": [
+     "Staff later investigates where the photo came from."
+    ],
+    "outcomes": [
+     "The ProgressPhoto exposes its persisted provenance reference T.",
+     "Only intake_id/file_ref remain; the source provenance required by R0-17 was discarded."
+    ],
+    "observer": "Staff and audit/investigation readers"
+   }
+  },
+  {
+   "unit": "01_models.md:Model M35 — ProgressPhoto",
+   "subject": "Conflicting photo replay",
+   "kind": "idempotency gap",
+   "text": "\"Replay of one intake_id never duplicates\" does not say what happens when the same intake_id is submitted with a different file_ref, project_id, photo_date, or initial metadata.",
+   "question": "How does photo publication handle reuse of an intake_id with different content?",
+   "options": [
+    "Reject it as an identity/content conflict",
+    "Return the existing photo and ignore differing content",
+    "Treat it as an update of the existing photo"
+   ],
+   "default_guess": "Reject conflicting reuse without changing the existing photo.",
+   "witness": {
+    "initial": "intake_id T already created photo P in project A using file F1.",
+    "events": [
+     "Staff submits intake_id T for project B using file F2."
+    ],
+    "outcomes": [
+     "The portal returns P as an idempotent replay and ignores the differences.",
+     "The portal rejects the conflicting reuse of T."
+    ],
+    "observer": "The submitting staff member and viewers of projects A and B"
+   }
+  },
+  {
+   "unit": "01_models.md:Model M36 — AuditRecord",
+   "subject": "Audit of first-administrator bootstrap",
+   "kind": "contradiction",
+   "text": "M36 says every significant action writes exactly one AuditRecord and includes staff-account actions; R0-07 says creation of the first administrator by the local command is never audited.",
+   "question": "Is R0-07 bootstrap creation an explicit exception to the AuditRecord invariant?",
+   "options": [
+    "Yes, bootstrap creates no AuditRecord",
+    "No, bootstrap must create exactly one staff-account AuditRecord"
+   ],
+   "default_guess": "Treat R0-07 as an explicit bootstrap-only exception and create no audit record.",
+   "witness": {
+    "initial": "The deployment has no staff accounts or audit records.",
+    "events": [
+     "The host operator successfully runs the first-administrator command."
+    ],
+    "outcomes": [
+     "The administrator exists and no AuditRecord was written, as R0-07 requires.",
+     "The administrator exists together with one staff-account creation AuditRecord, as M36 requires."
+    ],
+    "observer": "The host operator and audit reader"
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"01_models.md:Status\",\"subject\":\"Deferred staff email security flows\",\"kind\":\"temporal contradiction\",\"text\":\"The retained status says account creation, email change, and password reset \\\"complete through single-use purpose-bound challenges\\\" and security changes \\\"produce notifications\\\"; State 0 R0-23 says those operations change nothing, audit nothing, deliver nothing, and are a missing feature outside the migration.\",\"question\":\"Are challenge and notification flows part of the service being modeled and implemented now, or only dormant future designs while the current operations remain inert?\",\"options\":[\"Implement the challenge and notification lifecycles described in State 1\",\"Keep every challenge/notification operation inert and treat M08–M12 as unused future models\"],\"default_guess\":\"Keep the accepted current-service operations inert and treat the challenge models as future-only.\",\"witness\":{\"initial\":\"An active verified staff account exists and no challenge records exist.\",\"events\":[\"The staff member requests a password reset.\",\"The staff member later attempts reset completion.\"],\"outcomes\":[\"A PasswordResetToken and delivery are created, and successful completion changes the password and revokes sessions.\",\"The request returns its concealed normal answer but creates, delivers, audits, and changes nothing; completion is rejected.\"],\"observer\":\"The staff member, administrator, email gateway, and persistence/audit readers\"}},{\"unit\":\"01_models.md:Modeling conventions\",\"subject\":\"Plaintext password handling\",\"kind\":\"contradiction\",\"text\":\"\\\"Secrets (... passwords ...) ... plaintext exists only in the issuing response\\\" conflicts with R0-19, where the administrator submits the initial password in the staff-account creation request and no portal response carries it back.\",\"question\":\"Is password plaintext permitted as request input, and is it ever returned in an issuing response?\",\"options\":[\"Accept password plaintext only as request input and never return it\",\"Treat passwords like issued credentials and return generated plaintext once\"],\"default_guess\":\"Accept administrator- or holder-supplied password plaintext only as request input and never return it.\",\"witness\":{\"initial\":\"An administrator is creating a staff account.\",\"events\":[\"The administrator supplies the holder's initial password.\"],\"outcomes\":[\"The request accepts the password and the response contains no plaintext password.\",\"The request cannot supply plaintext under the convention, so the portal must generate and return a password once.\"],\"observer\":\"The administrator and new staff holder\"}},{\"unit\":\"01_models.md:Model M01 — ClientViewer\",\"subject\":\"ClientViewer management authority\",\"kind\":\"contradiction\",\"text\":\"\\\"Created/modified by: operator or administrator only\\\" conflicts with R0-14, which makes creating and revoking client viewers administrator-only access management.\",\"question\":\"Can an operator create or revoke a ClientViewer, or may only an administrator do so?\",\"options\":[\"Administrator only\",\"Operator or administrator\"],\"default_guess\":\"Administrator only.\",\"witness\":{\"initial\":\"An authenticated operator has no access-management capability.\",\"events\":[\"The operator requests creation of a ClientViewer.\"],\"outcomes\":[\"The viewer is created because M01 names operators as creators.\",\"The request is denied because R0-14 reserves viewer management to administrators.\"],\"observer\":\"The operator and audit reader\"}},{\"unit\":\"01_models.md:Model M02 — ViewerAccessCredential\",\"subject\":\"Viewer access-link management authority\",\"kind\":\"contradiction\",\"text\":\"\\\"Created/modified by: operator or administrator\\\" conflicts with R0-14, which makes creation, revocation, and re-issue of viewer access links administrator-only.\",\"question\":\"Can operators issue or revoke ViewerAccessCredentials?\",\"options\":[\"Administrator only\",\"Operator or administrator\"],\"default_guess\":\"Administrator only.\",\"witness\":{\"initial\":\"A viewer exists and an operator is authenticated without access-management capability.\",\"events\":[\"The operator requests a new access link for the viewer.\"],\"outcomes\":[\"A new credential is issued and the old one is revoked.\",\"The request is denied before any credential or session changes.\"],\"observer\":\"The operator and viewer\"}},{\"unit\":\"01_models.md:Model M03 — ViewerSession\",\"subject\":\"Session-to-credential association\",\"kind\":\"missing identity relation\",\"text\":\"A session is active only if \\\"its credential\\\" is not revoked, and credential revocation/re-issue revokes sessions, but ViewerSession contains no credential_id or other fact identifying which credential opened it.\",\"question\":\"What credential fact, if any, associates a ViewerSession with the ViewerAccessCredential used at entry?\",\"options\":[\"Persist credential_id on each ViewerSession\",\"Do not associate them; every credential revocation/re-issue explicitly revokes all sessions of the viewer\",\"Resolve \\\"its credential\\\" as the viewer's current non-revoked credential\"],\"default_guess\":\"Persist the credential_id used to open the session, while still applying the stated all-session revocation operation on re-issue.\",\"witness\":{\"initial\":\"A viewer has credential C1 and sessions S1 and S2 opened through C1.\",\"events\":[\"An administrator re-issues access as C2.\",\"A session resolver later examines S1.\"],\"outcomes\":[\"S1 can be related to revoked C1 and is inactive even if its own revoked_at was not written.\",\"No credential relation exists, so S1 is inactive only if re-issue explicitly wrote S1.revoked_at; otherwise the resolver can regard it as active.\"],\"observer\":\"The viewer attempting to restore S1\"}},{\"unit\":\"01_models.md:Model M04 — ProjectViewerGrant\",\"subject\":\"Viewer project-grant management authority\",\"kind\":\"contradiction\",\"text\":\"\\\"Created/modified by: operator or administrator\\\" conflicts with R0-14, which makes client viewer grants administrator-only access management.\",\"question\":\"Can an operator create or revoke a ProjectViewerGrant?\",\"options\":[\"Administrator only\",\"Operator or administrator\"],\"default_guess\":\"Administrator only.\",\"witness\":{\"initial\":\"A viewer and an active Registry project exist; an operator is authenticated.\",\"events\":[\"The operator attempts to grant the project to the viewer.\"],\"outcomes\":[\"An active grant is created.\",\"The request is denied for lack of access-management capability.\"],\"observer\":\"The operator and viewer\"}},{\"unit\":\"01_models.md:Model M05 — StaffAccount\",\"subject\":\"Bootstrap administrator lifecycle\",\"kind\":\"lifecycle contradiction\",\"text\":\"The lifecycle is only \\\"pending_verification → active ↔ suspended → disabled\\\", while R0-07 creates the first administrator directly as active and verified when no staff account exists.\",\"question\":\"Is direct creation in active status an explicit bootstrap-only lifecycle entry for StaffAccount?\",\"options\":[\"Yes, add a bootstrap-only direct active/verified creation path\",\"No, even the first administrator must first exist as pending_verification\"],\"default_guess\":\"Allow direct active/verified creation only through the R0-07 local bootstrap command.\",\"witness\":{\"initial\":\"The deployment contains no staff accounts.\",\"events\":[\"The host operator runs the first-administrator command.\"],\"outcomes\":[\"An active, verified administrator is created directly.\",\"A pending_verification account must be created first, contradicting the command's stated result or requiring another activation step.\"],\"observer\":\"The host operator and the new administrator\"}},{\"unit\":\"01_models.md:Model M05 — StaffAccount\",\"subject\":\"Who may modify a StaffAccount\",\"kind\":\"contradiction\",\"text\":\"\\\"Created/modified by: administrator\\\" conflicts with R0-19's accepted change_staff_password flow in which the holder logs in and changes the initial password; M10 also says the account itself may request an email change.\",\"question\":\"Which StaffAccount facts may the account holder change without an administrator?\",\"options\":[\"The holder may change its own password and initiate its own email change\",\"Only an administrator may modify any StaffAccount fact\"],\"default_guess\":\"Permit an active holder to change its own password and, once the deferred flow exists, initiate its own email change; reserve role/status and administrative recovery for administrators.\",\"witness\":{\"initial\":\"A newly activated staff holder is logged in with the administrator-chosen initial password.\",\"events\":[\"The holder invokes change_staff_password.\"],\"outcomes\":[\"password_hash is changed by the holder's authenticated action.\",\"The action is impossible because M05 permits only administrator modification.\"],\"observer\":\"The staff holder\"}},{\"unit\":\"01_models.md:Model M05 — StaffAccount\",\"subject\":\"Staff security notifications\",\"kind\":\"contradiction\",\"text\":\"M05 says suspension and disabling \\\"trigger a security notification\\\"; R0-23 says no token-free notice is sent and the notification feature is outside the migration.\",\"question\":\"Do suspension and disabling currently create an EmailDeliveryRecord and call the gateway?\",\"options\":[\"Yes, send the security notification\",\"No, change status and sessions without creating or sending a notice\"],\"default_guess\":\"Do not create or send notices in the accepted current service.\",\"witness\":{\"initial\":\"An active staff account has an active session.\",\"events\":[\"An administrator suspends the account.\"],\"outcomes\":[\"The session is invalidated and an account-security email delivery is created.\",\"The session is invalidated but no delivery record, gateway call, or notice exists.\"],\"observer\":\"The staff holder, gateway, and administrator\"}},{\"unit\":\"01_models.md:Model M08 — PasswordResetToken\",\"subject\":\"Password-reset token creation and consumption\",\"kind\":\"contradiction\",\"text\":\"M08 says reset tokens are created by self-service requests or administrators, delivered through email, and successfully consumed; R0-23 says a password-reset request does nothing and reset completion always gives the concealed rejection with no reads, writes, audit, or delivery.\",\"question\":\"Can any current product action mint or consume a PasswordResetToken?\",\"options\":[\"Yes, implement the M08 lifecycle\",\"No, M08 is dormant until Q19 is implemented\"],\"default_guess\":\"No current action mints or consumes it; keep the model dormant.\",\"witness\":{\"initial\":\"A verified active staff account exists.\",\"events\":[\"Its holder submits a password-reset request.\"],\"outcomes\":[\"A PasswordResetToken and email delivery are persisted.\",\"No token or delivery is persisted, although the external response is the usual concealed response.\"],\"observer\":\"The account holder, administrator, and database/audit reader\"}},{\"unit\":\"01_models.md:Model M09 — EmailVerificationChallenge\",\"subject\":\"Initial-email verification and activation\",\"kind\":\"contradiction\",\"text\":\"M09 says a challenge is created at account creation and consuming it activates the account; R0-19 and R0-23 say no challenge is created or consumed and an administrator activates the pending account, which marks the email verified.\",\"question\":\"What current action moves a new staff account from pending_verification to active and sets email_verified_at?\",\"options\":[\"Holder consumes an EmailVerificationChallenge\",\"Administrator activates the account without a challenge\"],\"default_guess\":\"Administrator activation without a challenge, as required by R0-19/R0-23.\",\"witness\":{\"initial\":\"An administrator has just created a pending staff account.\",\"events\":[\"No email challenge is delivered.\",\"The administrator invokes account activation.\"],\"outcomes\":[\"Activation succeeds and marks the email verified.\",\"Activation cannot complete verification because only challenge consumption performs that transition.\"],\"observer\":\"The administrator and new staff holder\"}},{\"unit\":\"01_models.md:Model M10 — PendingEmailChange\",\"subject\":\"Ordinary email-change operation\",\"kind\":\"contradiction\",\"text\":\"M10 says the staff account or an administrator creates a staged email change and consumption replaces the login email; R0-23 says requesting and confirming an email change read, write, audit, and deliver nothing and confirmation is rejected.\",\"question\":\"Can current requests create or consume PendingEmailChange records?\",\"options\":[\"Yes, implement the staged email-change lifecycle\",\"No, keep both operations inert until Q19 is implemented\"],\"default_guess\":\"Keep the ordinary email-change operations inert; only R0-20 administrative recovery may replace the email now.\",\"witness\":{\"initial\":\"An active staff account uses old@example.test.\",\"events\":[\"The holder requests new@example.test.\",\"The holder submits the delivered confirmation token.\"],\"outcomes\":[\"A PendingEmailChange is created and consumed, making the new address the login.\",\"No record or email is created, and confirmation is rejected without changing the login.\"],\"observer\":\"The staff holder and login/authentication module\"}},{\"unit\":\"01_models.md:Model M13 — ServicePrincipal\",\"subject\":\"Global producer authorization\",\"kind\":\"scope/capability contradiction\",\"text\":\"State 0 says a global producer exists only through an \\\"explicitly granted capability\\\"; M13 makes capabilities static by source_type and represents global access only as scope_mode=all_projects chosen by an administrator.\",\"question\":\"Is all-project publication authorized solely by scope_mode=all_projects, or is a separately granted global capability/fact required?\",\"options\":[\"scope_mode=all_projects is the complete explicit global grant\",\"A distinct runtime global capability or grant is required in addition to the static import capability\"],\"default_guess\":\"Treat the audited administrator selection of scope_mode=all_projects as the explicit global grant.\",\"witness\":{\"initial\":\"An estimate_producer principal has the static import capability, scope_mode=all_projects, and no ProducerProjectGrant for project P.\",\"events\":[\"The producer imports a snapshot for active project P.\"],\"outcomes\":[\"Import is authorized because all_projects is sufficient.\",\"Import is denied because no separately granted global capability exists.\"],\"observer\":\"The producer and administrator\"}},{\"unit\":\"01_models.md:Model M16 — ProjectReference\",\"subject\":\"Registry project status type\",\"kind\":\"type contradiction\",\"text\":\"ProjectReference declares \\\"status: str\\\", while M17 accepts only active and archived, the catalogs define RegistryProjectStatus as a closed enum, and the readiness assessment says no open status:str remains.\",\"question\":\"Is ProjectReference.status the closed RegistryProjectStatus enum or an arbitrary Registry string?\",\"options\":[\"Closed RegistryProjectStatus(active|archived)\",\"Arbitrary string passed through from Registry\"],\"default_guess\":\"Use the closed RegistryProjectStatus enum.\",\"witness\":{\"initial\":\"Registry returns a project with status \\\"paused\\\".\",\"events\":[\"The portal builds a ProjectReference.\"],\"outcomes\":[\"The reference is accepted because status is an unrestricted string.\",\"The Registry answer is rejected because only active and archived are valid.\"],\"observer\":\"The caller listing or opening the project\"}},{\"unit\":\"01_models.md:Model M17 — ProjectContext\",\"subject\":\"ProjectValidationResult failure fact\",\"kind\":\"type ambiguity\",\"text\":\"ProjectValidationResult declares \\\"failure: str | None\\\" immediately before defining RegistryFailureKind as the closed enum for boundary failure translation, without saying whether failure contains that enum.\",\"question\":\"Does ProjectValidationResult.failure carry RegistryFailureKind, an explanatory string, or both as separate facts?\",\"options\":[\"failure: RegistryFailureKind | None\",\"failure: str | None with unrestricted text\",\"Separate failure_kind and failure_detail facts\"],\"default_guess\":\"Use RegistryFailureKind | None and keep unrestricted diagnostic text outside the domain result.\",\"witness\":{\"initial\":\"Registry times out while validating a project.\",\"events\":[\"The Registry gateway creates ProjectValidationResult.\",\"The authorization caller branches on the failure.\"],\"outcomes\":[\"The caller receives the typed RegistryFailureKind.timeout value.\",\"The caller receives an arbitrary string and must guess or parse how to classify it.\"],\"observer\":\"The authorization/use-case module\"}},{\"unit\":\"01_models.md:Model M19 — ApprovedEstimateSnapshot\",\"subject\":\"Identical snapshot re-publication result\",\"kind\":\"contradiction\",\"text\":\"M19 says same identity plus same fingerprint gives \\\"idempotent success returning the existing record\\\"; R0-25 says every classified attempt returns a fresh SnapshotImportRecord with a fresh import_id and never returns the snapshot itself.\",\"question\":\"What does the import product action return for an identical re-publication?\",\"options\":[\"A fresh idempotent_replay SnapshotImportRecord naming the existing snapshot\",\"The existing ApprovedEstimateSnapshot record\"],\"default_guess\":\"Return a fresh idempotent_replay SnapshotImportRecord, never the snapshot itself.\",\"witness\":{\"initial\":\"Snapshot S for project P and estimate version V is already accepted.\",\"events\":[\"The same producer republishes byte-for-byte equivalent content for P/V.\"],\"outcomes\":[\"A new import result with a new import_id is returned and names S.\",\"S itself is returned as the idempotent success result.\"],\"observer\":\"The producer\"}},{\"unit\":\"01_models.md:Model M20 — SnapshotImportRecord\",\"subject\":\"Integrity-conflict reject reason\",\"kind\":\"unsatisfiable closed choice\",\"text\":\"reject_reason is required when outcome is integrity_conflict, but ImportRejectReason's closed catalog contains no integrity-conflict reason.\",\"question\":\"What reject_reason must an integrity_conflict SnapshotImportRecord contain?\",\"options\":[\"Add an integrity_conflict reason to ImportRejectReason\",\"Permit reject_reason to be absent for integrity_conflict\",\"Use one of the listed rejection reasons despite none describing the conflict\"],\"default_guess\":\"Add a dedicated integrity_conflict reason to the closed catalog.\",\"witness\":{\"initial\":\"An accepted snapshot exists for identity P/E/V with fingerprint F1.\",\"events\":[\"The producer submits the same identity with fingerprint F2.\"],\"outcomes\":[\"The portal can persist a valid integrity_conflict record using a dedicated reason.\",\"The portal cannot satisfy both the required-reason validator and the closed reason enum.\"],\"observer\":\"The producer reading the import result and the persistence layer\"}},{\"unit\":\"01_models.md:Model M22 — BudgetVersion\",\"subject\":\"Creation of the manual BudgetVersion\",\"kind\":\"missing creation action\",\"text\":\"M22 says there is at most one manual version and that it is mutable, but names no action or event that creates the project's manual BudgetVersion or whether it exists before the first manual section is maintained.\",\"question\":\"When and by whom is a project's manual BudgetVersion minted?\",\"options\":[\"Create it lazily on the first authorized manual-budget edit\",\"Create it through an explicit staff budget-initialization action\",\"Create it automatically when the portal first encounters or assigns the project\"],\"default_guess\":\"Create it lazily in the first authorized manual-budget mutation.\",\"witness\":{\"initial\":\"An active Registry project has a staff assignment but no portal budget records.\",\"events\":[\"The assigned operator attempts to add the first manual section.\"],\"outcomes\":[\"The operation mints the manual BudgetVersion and first SectionPlan atomically.\",\"The operation is impossible until a separate initialization action or automatic project setup has created the version.\"],\"observer\":\"The operator and client budget reader\"}},{\"unit\":\"01_models.md:Model M22 — BudgetVersion\",\"subject\":\"Reactivation of a deactivated budget version\",\"kind\":\"lifecycle ambiguity\",\"text\":\"The lifecycle is written \\\"inactive → active → inactive\\\" and deactivated versions are retained, but the text does not say whether the final inactive state is terminal or may transition to active again.\",\"question\":\"May a previously deactivated BudgetVersion be activated again?\",\"options\":[\"Yes, activation and deactivation may repeat\",\"No, the inactive state after deactivation is terminal\"],\"default_guess\":\"Allow explicit reactivation while the project is active, subject to the same linking and audit operation.\",\"witness\":{\"initial\":\"Version V1 was active, then V2 was activated and V1 became inactive.\",\"events\":[\"A staff member requests activation of V1 again.\"],\"outcomes\":[\"V1 becomes active and V2 becomes inactive.\",\"The request is rejected because a deactivated version cannot be reactivated.\"],\"observer\":\"The staff member and client budget reader\"}},{\"unit\":\"01_models.md:Model M23 — SectionPlan\",\"subject\":\"Manual section creation and removal lifecycle\",\"kind\":\"missing lifecycle/actions\",\"text\":\"A manual SectionPlan is \\\"edited in place\\\" and manual budgets are maintained, but the text does not state whether staff may add plans after initialization, remove an unreferenced plan, or how removal affects the corresponding PortalSection.\",\"question\":\"Which product actions create and remove manual SectionPlans and PortalSections, and is removal allowed when no allocation or progress references the section?\",\"options\":[\"Allow staff to add plans and delete unreferenced plans/sections\",\"Allow adding plans but only retire/remove a plan from the version while retaining PortalSection identity\",\"Allow edits only; the complete manual section set is fixed at version creation\"],\"default_guess\":\"Allow staff to add plans and remove a plan from the manual version; delete its PortalSection only when it has no references anywhere.\",\"witness\":{\"initial\":\"An active manual budget has section S with no allocations or progress.\",\"events\":[\"The operator decides S should no longer appear in the budget.\"],\"outcomes\":[\"The SectionPlan, and possibly the unreferenced PortalSection, are removed.\",\"No removal action exists, so S remains client-visible indefinitely.\"],\"observer\":\"The operator and client viewer\"}},{\"unit\":\"01_models.md:Model M29 — ExpenseAllocation\",\"subject\":\"Allocation identity during re-allocation\",\"kind\":\"identity/lifecycle contradiction\",\"text\":\"Identity evidence says allocations are \\\"replaced and audited by id\\\" while continuity says \\\"An allocation stays the same record while it is re-allocated\\\" and the lifecycle says \\\"created and replaced\\\".\",\"question\":\"When an amount is moved to another target, is the existing ExpenseAllocation mutated under the same allocation_id or replaced by newly identified records?\",\"options\":[\"Mutate the existing allocation and retain allocation_id\",\"Delete/retire the old allocation and create a new allocation_id\",\"Replace the complete allocation set, retaining IDs only for unchanged entries\"],\"default_guess\":\"Replace the complete allocation set atomically, retaining IDs only where the same logical allocation is explicitly edited in place.\",\"witness\":{\"initial\":\"Expense E has allocation A1 assigning EUR 100 to section S1.\",\"events\":[\"An operator reallocates the EUR 100 to section S2.\"],\"outcomes\":[\"A1 remains the allocation and its section_id changes to S2.\",\"A1 is replaced by new allocation A2 targeting S2.\"],\"observer\":\"Staff/client allocation views and the audit reader\"}},{\"unit\":\"01_models.md:Model M32 — SectionProgress\",\"subject\":\"Creation of SectionProgress\",\"kind\":\"missing creation action\",\"text\":\"SectionProgress is current state with one row per section, but the text does not say whether a row is created with the section, when a work-bearing plan becomes active, or only on the first staff progress update.\",\"question\":\"When is a SectionProgress entity minted, and what does the absence of one mean?\",\"options\":[\"Create it on first staff update; absence projects as completion_percent=None\",\"Create it with every PortalSection using an initial zero percent\",\"Create it when a section first participates in an active version with planned work\"],\"default_guess\":\"Create it on the first explicit staff progress update and project absence as unavailable/None, not zero.\",\"witness\":{\"initial\":\"A newly activated budget contains a work-bearing section with no progress update.\",\"events\":[\"A client reads progress.\"],\"outcomes\":[\"No SectionProgress exists and completion_percent is None.\",\"A SectionProgress was automatically created with completion_percent=0.\"],\"observer\":\"The client viewer\"}},{\"unit\":\"01_models.md:Model M33 — WorkPayment\",\"subject\":\"Who mints payment_id\",\"kind\":\"identity contradiction\",\"text\":\"WorkPayment says payment_id is a \\\"client-generated idempotency identity, supplied by the operator command\\\"; the modeling convention says portal-owned identifiers are generated by the portal and lists no payment_id exception.\",\"question\":\"Is payment_id supplied by the caller or minted by the portal?\",\"options\":[\"Caller/operator command supplies the stable payment_id\",\"Portal generates payment_id and a separate caller idempotency key is needed\",\"Portal generates payment_id with no caller idempotency identity\"],\"default_guess\":\"Treat payment_id as caller-supplied, as M33 states explicitly.\",\"witness\":{\"initial\":\"An operator is registering a payment for the first time.\",\"events\":[\"The operator command includes stable UUID X.\"],\"outcomes\":[\"The stored WorkPayment has payment_id X and replay uses X.\",\"The portal ignores/rejects X and generates UUID Y, so the operator lacks the stated replay identity.\"],\"observer\":\"The operator and payment API client\"}},{\"unit\":\"01_models.md:Model M33 — WorkPayment\",\"subject\":\"Conflicting payment replay\",\"kind\":\"idempotency gap\",\"text\":\"\\\"Replay of the same payment_id returns the existing record\\\" does not say what happens when the repeated identity carries a different amount, date, or description.\",\"question\":\"How does registration handle an existing payment_id with different payment facts?\",\"options\":[\"Reject it as an identity/content conflict\",\"Return the existing payment and ignore the differing facts\",\"Update the existing payment\"],\"default_guess\":\"Reject it as an identity/content conflict without changing the existing payment.\",\"witness\":{\"initial\":\"Payment X exists for EUR 100 on 2026-10-01.\",\"events\":[\"An operator submits payment_id X for EUR 900 on 2026-10-02.\"],\"outcomes\":[\"The command returns the original EUR 100 payment as a replay.\",\"The command rejects a conflicting reuse of payment_id X.\"],\"observer\":\"The operator and client payment reader\"}},{\"unit\":\"01_models.md:Model M34 — PhotoPublication\",\"subject\":\"Authority over photo publication facts\",\"kind\":\"contradiction\",\"text\":\"M34 calls PhotoPublication an input DTO \\\"from Telegram intake\\\" and lets it carry project_id, section_id, caption, and client_visible; R0-17 says a progress photo is published by authenticated staff in the same manner as expense intake and that the intake interface decides nothing.\",\"question\":\"Which actor supplies or authoritatively chooses the photo's project, section association, caption, and initial visibility?\",\"options\":[\"Authenticated staff chooses all decision facts; intake supplies only prepared source facts/provenance\",\"Telegram intake supplies the listed facts and staff merely authenticates publication\",\"Split the fields explicitly between intake-owned source facts and staff-owned decisions\"],\"default_guess\":\"Split the contract: intake supplies stable source/file/date/provenance facts, while authenticated staff chooses project, section, caption, and visibility.\",\"witness\":{\"initial\":\"Telegram intake proposes project P1 and client_visible=true; the authenticated operator intends project P2 and hidden visibility.\",\"events\":[\"The operator submits the prepared photo publication.\"],\"outcomes\":[\"The portal trusts the DTO's P1 and visible flag as Telegram-owned facts.\",\"The portal uses the operator's P2 and hidden choice because intake decisions carry no authority.\"],\"observer\":\"The operator and viewers of P1/P2\"}},{\"unit\":\"01_models.md:Model M35 — ProgressPhoto\",\"subject\":\"Persisted photo provenance\",\"kind\":\"missing required fact\",\"text\":\"R0-17 says the portal records the authenticated photo submission's provenance_ref; M34 carries intake_source instead, and M35 persists neither provenance_ref nor intake_source.\",\"question\":\"What provenance fact must ProgressPhoto persist, and from which publication field is it derived?\",\"options\":[\"Persist provenance_ref on ProgressPhoto\",\"Persist intake_source on ProgressPhoto as the provenance fact\",\"Do not persist photo-source provenance despite R0-17\"],\"default_guess\":\"Persist a portable provenance_ref on ProgressPhoto and map the intake's source reference into it.\",\"witness\":{\"initial\":\"A prepared photo from intake source T is published successfully.\",\"events\":[\"Staff later investigates where the photo came from.\"],\"outcomes\":[\"The ProgressPhoto exposes its persisted provenance reference T.\",\"Only intake_id/file_ref remain; the source provenance required by R0-17 was discarded.\"],\"observer\":\"Staff and audit/investigation readers\"}},{\"unit\":\"01_models.md:Model M35 — ProgressPhoto\",\"subject\":\"Conflicting photo replay\",\"kind\":\"idempotency gap\",\"text\":\"\\\"Replay of one intake_id never duplicates\\\" does not say what happens when the same intake_id is submitted with a different file_ref, project_id, photo_date, or initial metadata.\",\"question\":\"How does photo publication handle reuse of an intake_id with different content?\",\"options\":[\"Reject it as an identity/content conflict\",\"Return the existing photo and ignore differing content\",\"Treat it as an update of the existing photo\"],\"default_guess\":\"Reject conflicting reuse without changing the existing photo.\",\"witness\":{\"initial\":\"intake_id T already created photo P in project A using file F1.\",\"events\":[\"Staff submits intake_id T for project B using file F2.\"],\"outcomes\":[\"The portal returns P as an idempotent replay and ignores the differences.\",\"The portal rejects the conflicting reuse of T.\"],\"observer\":\"The submitting staff member and viewers of projects A and B\"}},{\"unit\":\"01_models.md:Model M36 — AuditRecord\",\"subject\":\"Audit of first-administrator bootstrap\",\"kind\":\"contradiction\",\"text\":\"M36 says every significant action writes exactly one AuditRecord and includes staff-account actions; R0-07 says creation of the first administrator by the local command is never audited.\",\"question\":\"Is R0-07 bootstrap creation an explicit exception to the AuditRecord invariant?\",\"options\":[\"Yes, bootstrap creates no AuditRecord\",\"No, bootstrap must create exactly one staff-account AuditRecord\"],\"default_guess\":\"Treat R0-07 as an explicit bootstrap-only exception and create no audit record.\",\"witness\":{\"initial\":\"The deployment has no staff accounts or audit records.\",\"events\":[\"The host operator successfully runs the first-administrator command.\"],\"outcomes\":[\"The administrator exists and no AuditRecord was written, as R0-07 requires.\",\"The administrator exists together with one staff-account creation AuditRecord, as M36 requires.\"],\"observer\":\"The host operator and audit reader\"}}]}",
+ "set_aside": []
+}
