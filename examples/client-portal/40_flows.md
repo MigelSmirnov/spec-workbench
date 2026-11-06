@@ -48,7 +48,9 @@ text" at the end.
   (authentication 401, authorization 403, not found and concealed binary 404,
   archived project and conflicts 409, input 422, challenge 400 and 429,
   Registry 502, persistence and storage 500). No failure becomes a success,
-  an empty list or a zero.
+  an empty list or a zero, with one exception: the viewer's project list
+  leaves out a project whose context cannot be obtained
+  (`flow:viewer_reads_projects`).
 - **Archived projects.** Reads of an archived project succeed; every mutation
   of its records and every new grant or assignment for it is refused;
   revocation of existing access does not consult the Registry (R0-24).
@@ -205,7 +207,8 @@ authentication failure and the access-management check (A1, A11).
    revocation, the active account and its verified email, and returns the
    `StaffActorContext`.
 4. `capability:staff_identity.change_staff_password` verifies the current
-   password, stores the new hash and audits the change.
+   password and stores the new hash; it writes no audit record (State 1: no
+   catalog action exists for it).
 5. `capability:staff_identity.sign_out_staff` revokes the presented session.
 6. An administrator, checked by
    `capability:authorization_guard.authorize_access_management`, calls
@@ -332,7 +335,10 @@ projects. `module:credential_security` hashes the initial password.
   input rejection (422), nothing written.
 - Unknown project or assignment: not found (404); archived project for a new
   assignment: 409; Registry failure: 502.
-- Duplicate active assignment: authorization rejection (403).
+- A second assignment for a pair: while the first is active, refused by the
+  operation's own check before any write (authorization rejection, 403);
+  after its revocation, refused by State 1's one-record-per-pair rule
+  (persistence conflict, 500).
 
 ## `flow:administer_viewer_access`
 
@@ -364,7 +370,8 @@ grant. `module:credential_security` issues the link secret.
    the viewer's sessions and appends `viewer.credential_revoke`.
 5. `capability:viewer_access.grant_viewer_project` requires the project known
    and active (`capability:registry_gateway.validate_project_reference`,
-   before the transaction), an active viewer and no active grant for the pair,
+   before the transaction; an unknown or inactive project is the Registry
+   boundary failure here, unlike a staff assignment), an active viewer and no active grant for the pair,
    and appends `grant.create`.
 6. `capability:viewer_access.revoke_viewer_project` revokes the addressed
    active grant without consulting the Registry and appends `grant.revoke`;
@@ -382,8 +389,11 @@ grant. `module:credential_security` issues the link secret.
 
 - Not an administrator: 403.
 - Unknown or inactive viewer, unknown credential or grant: not found (404).
-- Duplicate active grant: 403; project not known or not active for a new
-  grant: Registry boundary failure (502).
+- A second grant for a pair: while the first is active, refused by the
+  operation's own check before any write (403); after its revocation,
+  refused by State 1's one-record-per-pair rule (persistence conflict, 500).
+- Project not known or not active for a new grant: Registry boundary
+  failure (502).
 
 ## `flow:viewer_entry_and_session`
 
@@ -485,8 +495,10 @@ reads the bytes.
 
 - Session failures: 401. A project without an active grant is not found
   (404), never "forbidden".
-- Unknown, hidden, cross-project, oversize or unlisted binary: one concealed
-  not-found answer (404).
+- Binary reads answer as in `flow:staff_reads_protected_binary`: a document
+  refusal is one concealed not-found answer (404); a photo refusal is one
+  validation refusal (422) and its undeliverable content a
+  storage-unavailable failure (500) (State 0 R0-12).
 - Registry failure while authorizing one project: 502.
 
 ## `flow:administer_service_principals`
@@ -633,7 +645,10 @@ amounts. `module:audit_writer` appends each audit.
 ### Errors
 
 - Guard failures: 401, 403, 404, archived 409.
-- Invalid amounts or names, missing activation capability: 422.
+- Invalid amounts or names: 422. The activation capability is checked by
+  `activate_budget_version` itself on the authorized context and refused as
+  its input rejection (422), not by the guard (Factory code
+  `domain/budget_management.py`).
 - Allocations that would lose their section: conflict (409), nothing changed.
 
 ## `flow:expense_intake_and_management`
@@ -649,7 +664,9 @@ edits its document's description and visibility (R0-05, R0-17, R0-18).
 `module:authorization_guard` authorizes the staff mutation.
 `module:expense_intake` owns the OCR contract, creation and replay (A7, A8).
 `module:expense_management` owns corrections, inclusion, allocations and
-documents (A19). `module:budget_management` resolves sections of the project.
+documents (A19). Each of them resolves sections of the project itself,
+through `module:portal_store`'s section repository (Factory code
+`application/expense_intake.py`, `domain/expense_management.py`).
 `module:financial_policy` validates money.
 
 ### Steps
@@ -698,7 +715,11 @@ progress, payments and photos.
 
 `module:authorization_guard` authorizes. `module:project_tracking` owns
 progress and payments (A20). `module:photo_management` owns photos and their
-replay. `module:budget_management` resolves sections. `module:financial_policy`
+replay. `module:project_tracking` validates its section through
+`module:budget_management` (`capability:budget_management.validate_project_section`);
+`module:photo_management` resolves an optional section through
+`module:portal_store`'s section repository (Factory code
+`domain/photo_management.py`). `module:financial_policy`
 validates payment amounts.
 
 ### Steps
@@ -812,8 +833,12 @@ the local root, bounds the read and recognizes the media type (A14).
 
 ### Errors
 
-- Missing record, other project, missing object, oversize or unlisted media
-  type: one concealed not-found answer (404). Nothing is written.
+- Document: missing record, other project, hidden, missing object, oversize
+  or unlisted media type: one concealed not-found answer (404). Photo:
+  missing record, other project or hidden: one validation refusal (422);
+  stored content that cannot be delivered (missing object, oversize,
+  unlisted type): storage-unavailable failure (500), as State 0 R0-12
+  says. Nothing is written.
 
 ## Changes against the former text
 

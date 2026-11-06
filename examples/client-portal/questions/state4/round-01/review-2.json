@@ -1,0 +1,315 @@
+{
+ "open_points": [
+  {
+   "unit": "40_flows.md:`flow:staff_session_lifecycle`",
+   "subject": "staff password-change audit",
+   "kind": "contradiction",
+   "text": "`change_staff_password` \"stores the new hash and audits the change\", but M36 says \"A password change is not a significant action and writes no record\" and A13 has no password-change audit action.",
+   "question": "Does a successful staff password change append an audit record?",
+   "options": [
+    "Append an audit record, requiring a new or selected AuditAction",
+    "Append no audit record, as M36 and A13 require"
+   ],
+   "default_guess": "Append no audit record.",
+   "witness": {
+    "initial": "An active staff account has a valid session and knows its current password.",
+    "events": [
+     "The staff member submits a valid password change.",
+     "`staff_identity` commits the new password hash."
+    ],
+    "outcomes": [
+     "An audit record for the password change is committed.",
+     "No audit record is written because the closed catalog has no such action."
+    ],
+    "observer": "An auditor reading the audit log"
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:staff_session_lifecycle`",
+   "subject": "wrong current password during password change",
+   "kind": "unstated failure outcome",
+   "text": "Step 4 says `change_staff_password` \"verifies the current password\", but the flow states no outcome when that verification fails.",
+   "question": "What response is produced when an authenticated staff member supplies the wrong current password?",
+   "options": [
+    "Concealed authentication failure (401)",
+    "Input rejection (422)",
+    "Authorization failure (403)"
+   ],
+   "default_guess": "Concealed authentication failure (401).",
+   "witness": {
+    "initial": "An active staff account has a valid session.",
+    "events": [
+     "The staff member requests a password change with an incorrect current password and a valid new password."
+    ],
+    "outcomes": [
+     "The request receives the concealed 401 authentication response.",
+     "The request receives a 422 input rejection."
+    ],
+    "observer": "The staff caller"
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:bootstrap_first_administrator`",
+   "subject": "bootstrap configuration and storage failures",
+   "kind": "unstated failure outcome",
+   "text": "The flow loads runtime settings and opens a bootstrap store, but its error list and A29's closed exit-code contract name only codes 0–3 and give no outcome for invalid configuration, an unavailable database, schema creation failure, or commit failure.",
+   "question": "How does the CLI terminate when settings or persistence fail, and is that outcome part of the closed exit-code contract?",
+   "options": [
+    "Add a distinct documented exit code",
+    "Map the failure to one of codes 1–3",
+    "Let an operational exception escape with an implementation-dependent nonzero process status"
+   ],
+   "default_guess": "Use a distinct documented operational-failure exit code.",
+   "witness": {
+    "initial": "No staff account exists, but the configured SQLite database cannot be opened.",
+    "events": [
+     "The host operator starts the bootstrap command.",
+     "The CLI accepts matching terminal input and attempts to build or use the bootstrap store."
+    ],
+    "outcomes": [
+     "The process exits with an undocumented generic nonzero status after an uncaught failure.",
+     "The implementation maps the failure to one of the documented codes even though none describes storage failure."
+    ],
+    "observer": "The host operator or deployment script"
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:administer_staff_accounts`",
+   "subject": "reassignment after revocation",
+   "kind": "contradiction",
+   "text": "The flow says `assign_staff_project` \"refuses a duplicate active assignment\", while M07 says there is at most one assignment record per pair, a revoked assignment is terminal, and any second assignment is refused as a persistence conflict.",
+   "question": "Can a `(staff_id, project_id)` pair be assigned again after its assignment was revoked?",
+   "options": [
+    "No; refuse every second assignment for the pair as a conflict",
+    "Yes; only an active duplicate is refused and a new assignment may follow revocation"
+   ],
+   "default_guess": "No; keep the terminal one-record-per-pair rule.",
+   "witness": {
+    "initial": "An operator has a revoked assignment record for project P.",
+    "events": [
+     "An administrator requests assignment of the same operator to P again.",
+     "Registry reports P active."
+    ],
+    "outcomes": [
+     "The request is refused because the pair already has a terminal assignment record.",
+     "A new active assignment is created because no active assignment currently exists."
+    ],
+    "observer": "The administrator and the operator attempting to access P"
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:administer_viewer_access`",
+   "subject": "viewer regrant after revocation",
+   "kind": "contradiction",
+   "text": "The flow says `grant_viewer_project` requires \"no active grant for the pair\" and reports only a duplicate active grant, while M04 says one grant record per pair, a revoked grant is terminal, and every second grant is refused as a persistence conflict.",
+   "question": "Can a viewer be granted the same project again after the earlier grant was revoked?",
+   "options": [
+    "No; refuse every second grant for the pair as a conflict",
+    "Yes; create a new grant when the existing record is revoked"
+   ],
+   "default_guess": "No; keep the terminal one-record-per-pair rule.",
+   "witness": {
+    "initial": "Viewer V has a revoked grant for project P.",
+    "events": [
+     "An administrator requests a new grant from V to P.",
+     "Registry reports P active."
+    ],
+    "outcomes": [
+     "The request is refused because the pair already has a terminal grant record.",
+     "A new active grant is created because there is no active grant."
+    ],
+    "observer": "The administrator and viewer V"
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:administer_viewer_access`",
+   "subject": "new viewer-grant Registry failures",
+   "kind": "contradiction",
+   "text": "Step 5 says an unknown project is not found and an inactive project is refused as archived, but the Errors section says \"project not known or not active for a new grant: Registry boundary failure (502).\"",
+   "question": "Which HTTP outcomes apply when Registry successfully reports that the project is unknown or archived?",
+   "options": [
+    "Unknown project 404 and archived project 409",
+    "Both cases 502",
+    "Unknown project 502 and archived project 409"
+   ],
+   "default_guess": "Unknown project 404 and archived project 409, reserving 502 for Registry transport or decoding failures.",
+   "witness": {
+    "initial": "An administrator has access-management authority and requests a viewer grant for project P.",
+    "events": [
+     "The portal calls Registry validation.",
+     "Registry successfully answers that P does not exist."
+    ],
+    "outcomes": [
+     "The portal returns 404 not found.",
+     "The portal returns 502 Registry boundary failure."
+    ],
+    "observer": "The administrator"
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:viewer_reads_projects`",
+   "subject": "Registry failure while listing viewer projects",
+   "kind": "contradiction",
+   "text": "The flow says a grant whose context cannot be obtained \"is left out\" and may therefore yield an empty list, while the global failure convention says \"No failure becomes a success, an empty list or a zero.\"",
+   "question": "Is failure to fetch one granted project's Registry context suppressed for this list, or does it fail the list operation?",
+   "options": [
+    "Omit only the failed project and return the remaining list",
+    "Fail the entire list with the translated Registry failure",
+    "Return a per-item availability or error representation"
+   ],
+   "default_guess": "Omit the failed project, following the explicitly recorded accepted viewer-list behavior.",
+   "witness": {
+    "initial": "A viewer has exactly one active grant, for project P.",
+    "events": [
+     "The viewer requests the project list.",
+     "Registry context lookup for P times out."
+    ],
+    "outcomes": [
+     "The request succeeds with an empty list because P is omitted.",
+     "The request fails, because a dependency failure may not become an empty successful result."
+    ],
+    "observer": "The viewer"
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:import_estimate_snapshot`",
+   "subject": "producer-scope authorization call",
+   "kind": "module dependency contradiction",
+   "text": "Step 2 says `authorization_guard.authorize_snapshot_import` checks scope by calling `service_identity.authorize_producer_scope`, but State 3 places `authorization_guard` before `service_identity`, does not allow it to know that module, and `snapshot_import` also does not know `service_identity`.",
+   "question": "Which permitted module owns and performs the producer-scope check without violating the declared dependency direction?",
+   "options": [
+    "`authorization_guard` implements the scope check directly from persistence and rules",
+    "`api` calls `service_identity.authorize_producer_scope` before invoking snapshot import",
+    "Change the dependency graph so `authorization_guard` may call `service_identity`"
+   ],
+   "default_guess": "Have `authorization_guard` implement the scope check directly, consistent with its stated ownership of the guard part of A12."
+  },
+  {
+   "unit": "40_flows.md:`flow:expense_intake_and_management`",
+   "subject": "section validation during expense intake",
+   "kind": "unavailable module operation",
+   "text": "The flow requires `expense_intake.create_expense_from_recognition` to call `budget_management.validate_project_section`, but State 3 says `expense_intake` knows `expense_management` and not `budget_management`; no permitted intermediary capability is named.",
+   "question": "How does expense intake validate that every allocation section belongs to the project without violating the module dependency graph?",
+   "options": [
+    "Permit `expense_intake` to depend on `budget_management`",
+    "Expose section validation through an already permitted dependency",
+    "Have `expense_intake` query the section repository through its transaction and own this check"
+   ],
+   "default_guess": "Permit an explicit dependency on the section-validation owner, `budget_management`."
+  },
+  {
+   "unit": "40_flows.md:`flow:maintain_and_activate_budget`",
+   "subject": "unknown supplied manual section id",
+   "kind": "unstated failure outcome",
+   "text": "`upsert_manual_section_plan` \"creates or renames the stable section or reuses a given one of the project\", but no outcome is stated when the caller supplies a `section_id` that does not exist or belongs to another project.",
+   "question": "What happens when a manual-plan upsert supplies an unknown or cross-project `section_id`?",
+   "options": [
+    "Return concealed/not-found 404",
+    "Return input rejection 422",
+    "Treat it as a request to create a new portal-minted section"
+   ],
+   "default_guess": "Return not found without creating a section.",
+   "witness": {
+    "initial": "Project P is active and has no section with id S; S is either unknown or belongs to project Q.",
+    "events": [
+     "Authorized staff upserts a manual plan for P while supplying S."
+    ],
+    "outcomes": [
+     "The request is refused as not found.",
+     "The request is refused as invalid input."
+    ],
+    "observer": "The staff caller"
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:track_progress_payments_and_photos`",
+   "subject": "progress-photo replay classification",
+   "kind": "contradictory and underspecified replay rule",
+   "text": "A8 defines ProgressPhoto idempotency solely by `intake_id` with \"return existing photo\", while this flow says \"replay with different content: 409\" without defining photo content equality or a canonical fingerprint; `intake_source` is accepted but not persisted.",
+   "question": "Does reuse of an `intake_id` always return the existing photo, or only when selected fields match, and exactly which fields participate in that comparison?",
+   "options": [
+    "Always return the existing photo for the same `intake_id`",
+    "Compare all publication fields, including `intake_source`",
+    "Compare only persisted photo fields and ignore discarded `intake_source`"
+   ],
+   "default_guess": "Compare persisted photo fields and ignore `intake_source`; equal content replays and different persisted content conflicts.",
+   "witness": {
+    "initial": "A photo exists for `intake_id` I with given file, date, project, caption, section and visibility.",
+    "events": [
+     "Staff republishes I with all persisted fields unchanged but a different `intake_source` label."
+    ],
+    "outcomes": [
+     "The existing photo is returned as an idempotent replay.",
+     "The request conflicts because the incoming publication differs."
+    ],
+    "observer": "The staff caller"
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:track_progress_payments_and_photos`",
+   "subject": "photo section validation ownership",
+   "kind": "unavailable module operation",
+   "text": "The boundary says `budget_management` resolves sections and photo publication/update resolves an optional section, but State 3 says `photo_management` does not know `budget_management`; no other operation for this validation is named.",
+   "question": "Which permitted capability validates that a photo's optional section belongs to its project?",
+   "options": [
+    "Allow `photo_management` to call `budget_management.validate_project_section`",
+    "Move or expose the check through a module `photo_management` already knows",
+    "Make `photo_management` own the repository-level same-project check"
+   ],
+   "default_guess": "Allow `photo_management` to use the explicit section-validation capability."
+  },
+  {
+   "unit": "40_flows.md:`flow:viewer_reads_projects`",
+   "subject": "viewer progress-photo binary storage failure",
+   "kind": "contradiction",
+   "text": "The flow says an oversize or unlisted binary receives the concealed 404 used for unknown and hidden records, while R0-12 and State 3 say a photo whose stored content cannot be delivered produces an explicit storage-unavailable error and `photo_management` passes `binary_storage` failures through.",
+   "question": "After a viewer is authorized for a visible photo, are missing, oversize, unreadable, or unlisted photo bytes concealed as 404 or exposed as storage-unavailable 500?",
+   "options": [
+    "Return explicit storage-unavailable for authorized visible photos",
+    "Conceal every photo delivery failure as 404",
+    "Use different outcomes for missing, oversize, unreadable and unlisted content"
+   ],
+   "default_guess": "Return explicit storage-unavailable for an authorized visible photo, as R0-12 requires.",
+   "witness": {
+    "initial": "A viewer has an active grant and requests a client-visible photo whose stored bytes have an unlisted media signature.",
+    "events": [
+     "The project and photo visibility checks succeed.",
+     "`binary_storage` rejects the content signature."
+    ],
+    "outcomes": [
+     "The endpoint returns concealed 404.",
+     "The endpoint returns explicit storage-unavailable 500."
+    ],
+    "observer": "The viewer"
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:staff_reads_protected_binary`",
+   "subject": "staff progress-photo binary storage failure",
+   "kind": "contradiction",
+   "text": "The flow groups documents and photos together and says \"missing object, oversize or unlisted media type: one concealed not-found answer (404)\", while R0-12 distinguishes them: refused document delivery is concealed, but an authorized photo whose content cannot be delivered fails explicitly as storage unavailable.",
+   "question": "Does an authorized staff read of an undeliverable progress photo return concealed 404 or explicit storage-unavailable 500?",
+   "options": [
+    "Explicit storage-unavailable for photos; concealed 404 for documents",
+    "Concealed 404 for both object kinds"
+   ],
+   "default_guess": "Preserve the R0-12 split: explicit storage-unavailable for photos and concealed 404 for documents.",
+   "witness": {
+    "initial": "Staff may read project P, and P contains a photo record whose file is missing.",
+    "events": [
+     "Staff requests that photo.",
+     "Authorization and record/project checks succeed.",
+     "Binary storage cannot read the file."
+    ],
+    "outcomes": [
+     "The endpoint returns concealed 404.",
+     "The endpoint returns explicit storage-unavailable 500."
+    ],
+    "observer": "The staff caller"
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"40_flows.md:`flow:staff_session_lifecycle`\",\"subject\":\"staff password-change audit\",\"kind\":\"contradiction\",\"text\":\"`change_staff_password` \\\"stores the new hash and audits the change\\\", but M36 says \\\"A password change is not a significant action and writes no record\\\" and A13 has no password-change audit action.\",\"question\":\"Does a successful staff password change append an audit record?\",\"options\":[\"Append an audit record, requiring a new or selected AuditAction\",\"Append no audit record, as M36 and A13 require\"],\"default_guess\":\"Append no audit record.\",\"witness\":{\"initial\":\"An active staff account has a valid session and knows its current password.\",\"events\":[\"The staff member submits a valid password change.\",\"`staff_identity` commits the new password hash.\"],\"outcomes\":[\"An audit record for the password change is committed.\",\"No audit record is written because the closed catalog has no such action.\"],\"observer\":\"An auditor reading the audit log\"}},{\"unit\":\"40_flows.md:`flow:staff_session_lifecycle`\",\"subject\":\"wrong current password during password change\",\"kind\":\"unstated failure outcome\",\"text\":\"Step 4 says `change_staff_password` \\\"verifies the current password\\\", but the flow states no outcome when that verification fails.\",\"question\":\"What response is produced when an authenticated staff member supplies the wrong current password?\",\"options\":[\"Concealed authentication failure (401)\",\"Input rejection (422)\",\"Authorization failure (403)\"],\"default_guess\":\"Concealed authentication failure (401).\",\"witness\":{\"initial\":\"An active staff account has a valid session.\",\"events\":[\"The staff member requests a password change with an incorrect current password and a valid new password.\"],\"outcomes\":[\"The request receives the concealed 401 authentication response.\",\"The request receives a 422 input rejection.\"],\"observer\":\"The staff caller\"}},{\"unit\":\"40_flows.md:`flow:bootstrap_first_administrator`\",\"subject\":\"bootstrap configuration and storage failures\",\"kind\":\"unstated failure outcome\",\"text\":\"The flow loads runtime settings and opens a bootstrap store, but its error list and A29's closed exit-code contract name only codes 0–3 and give no outcome for invalid configuration, an unavailable database, schema creation failure, or commit failure.\",\"question\":\"How does the CLI terminate when settings or persistence fail, and is that outcome part of the closed exit-code contract?\",\"options\":[\"Add a distinct documented exit code\",\"Map the failure to one of codes 1–3\",\"Let an operational exception escape with an implementation-dependent nonzero process status\"],\"default_guess\":\"Use a distinct documented operational-failure exit code.\",\"witness\":{\"initial\":\"No staff account exists, but the configured SQLite database cannot be opened.\",\"events\":[\"The host operator starts the bootstrap command.\",\"The CLI accepts matching terminal input and attempts to build or use the bootstrap store.\"],\"outcomes\":[\"The process exits with an undocumented generic nonzero status after an uncaught failure.\",\"The implementation maps the failure to one of the documented codes even though none describes storage failure.\"],\"observer\":\"The host operator or deployment script\"}},{\"unit\":\"40_flows.md:`flow:administer_staff_accounts`\",\"subject\":\"reassignment after revocation\",\"kind\":\"contradiction\",\"text\":\"The flow says `assign_staff_project` \\\"refuses a duplicate active assignment\\\", while M07 says there is at most one assignment record per pair, a revoked assignment is terminal, and any second assignment is refused as a persistence conflict.\",\"question\":\"Can a `(staff_id, project_id)` pair be assigned again after its assignment was revoked?\",\"options\":[\"No; refuse every second assignment for the pair as a conflict\",\"Yes; only an active duplicate is refused and a new assignment may follow revocation\"],\"default_guess\":\"No; keep the terminal one-record-per-pair rule.\",\"witness\":{\"initial\":\"An operator has a revoked assignment record for project P.\",\"events\":[\"An administrator requests assignment of the same operator to P again.\",\"Registry reports P active.\"],\"outcomes\":[\"The request is refused because the pair already has a terminal assignment record.\",\"A new active assignment is created because no active assignment currently exists.\"],\"observer\":\"The administrator and the operator attempting to access P\"}},{\"unit\":\"40_flows.md:`flow:administer_viewer_access`\",\"subject\":\"viewer regrant after revocation\",\"kind\":\"contradiction\",\"text\":\"The flow says `grant_viewer_project` requires \\\"no active grant for the pair\\\" and reports only a duplicate active grant, while M04 says one grant record per pair, a revoked grant is terminal, and every second grant is refused as a persistence conflict.\",\"question\":\"Can a viewer be granted the same project again after the earlier grant was revoked?\",\"options\":[\"No; refuse every second grant for the pair as a conflict\",\"Yes; create a new grant when the existing record is revoked\"],\"default_guess\":\"No; keep the terminal one-record-per-pair rule.\",\"witness\":{\"initial\":\"Viewer V has a revoked grant for project P.\",\"events\":[\"An administrator requests a new grant from V to P.\",\"Registry reports P active.\"],\"outcomes\":[\"The request is refused because the pair already has a terminal grant record.\",\"A new active grant is created because there is no active grant.\"],\"observer\":\"The administrator and viewer V\"}},{\"unit\":\"40_flows.md:`flow:administer_viewer_access`\",\"subject\":\"new viewer-grant Registry failures\",\"kind\":\"contradiction\",\"text\":\"Step 5 says an unknown project is not found and an inactive project is refused as archived, but the Errors section says \\\"project not known or not active for a new grant: Registry boundary failure (502).\\\"\",\"question\":\"Which HTTP outcomes apply when Registry successfully reports that the project is unknown or archived?\",\"options\":[\"Unknown project 404 and archived project 409\",\"Both cases 502\",\"Unknown project 502 and archived project 409\"],\"default_guess\":\"Unknown project 404 and archived project 409, reserving 502 for Registry transport or decoding failures.\",\"witness\":{\"initial\":\"An administrator has access-management authority and requests a viewer grant for project P.\",\"events\":[\"The portal calls Registry validation.\",\"Registry successfully answers that P does not exist.\"],\"outcomes\":[\"The portal returns 404 not found.\",\"The portal returns 502 Registry boundary failure.\"],\"observer\":\"The administrator\"}},{\"unit\":\"40_flows.md:`flow:viewer_reads_projects`\",\"subject\":\"Registry failure while listing viewer projects\",\"kind\":\"contradiction\",\"text\":\"The flow says a grant whose context cannot be obtained \\\"is left out\\\" and may therefore yield an empty list, while the global failure convention says \\\"No failure becomes a success, an empty list or a zero.\\\"\",\"question\":\"Is failure to fetch one granted project's Registry context suppressed for this list, or does it fail the list operation?\",\"options\":[\"Omit only the failed project and return the remaining list\",\"Fail the entire list with the translated Registry failure\",\"Return a per-item availability or error representation\"],\"default_guess\":\"Omit the failed project, following the explicitly recorded accepted viewer-list behavior.\",\"witness\":{\"initial\":\"A viewer has exactly one active grant, for project P.\",\"events\":[\"The viewer requests the project list.\",\"Registry context lookup for P times out.\"],\"outcomes\":[\"The request succeeds with an empty list because P is omitted.\",\"The request fails, because a dependency failure may not become an empty successful result.\"],\"observer\":\"The viewer\"}},{\"unit\":\"40_flows.md:`flow:import_estimate_snapshot`\",\"subject\":\"producer-scope authorization call\",\"kind\":\"module dependency contradiction\",\"text\":\"Step 2 says `authorization_guard.authorize_snapshot_import` checks scope by calling `service_identity.authorize_producer_scope`, but State 3 places `authorization_guard` before `service_identity`, does not allow it to know that module, and `snapshot_import` also does not know `service_identity`.\",\"question\":\"Which permitted module owns and performs the producer-scope check without violating the declared dependency direction?\",\"options\":[\"`authorization_guard` implements the scope check directly from persistence and rules\",\"`api` calls `service_identity.authorize_producer_scope` before invoking snapshot import\",\"Change the dependency graph so `authorization_guard` may call `service_identity`\"],\"default_guess\":\"Have `authorization_guard` implement the scope check directly, consistent with its stated ownership of the guard part of A12.\"},{\"unit\":\"40_flows.md:`flow:expense_intake_and_management`\",\"subject\":\"section validation during expense intake\",\"kind\":\"unavailable module operation\",\"text\":\"The flow requires `expense_intake.create_expense_from_recognition` to call `budget_management.validate_project_section`, but State 3 says `expense_intake` knows `expense_management` and not `budget_management`; no permitted intermediary capability is named.\",\"question\":\"How does expense intake validate that every allocation section belongs to the project without violating the module dependency graph?\",\"options\":[\"Permit `expense_intake` to depend on `budget_management`\",\"Expose section validation through an already permitted dependency\",\"Have `expense_intake` query the section repository through its transaction and own this check\"],\"default_guess\":\"Permit an explicit dependency on the section-validation owner, `budget_management`.\"},{\"unit\":\"40_flows.md:`flow:maintain_and_activate_budget`\",\"subject\":\"unknown supplied manual section id\",\"kind\":\"unstated failure outcome\",\"text\":\"`upsert_manual_section_plan` \\\"creates or renames the stable section or reuses a given one of the project\\\", but no outcome is stated when the caller supplies a `section_id` that does not exist or belongs to another project.\",\"question\":\"What happens when a manual-plan upsert supplies an unknown or cross-project `section_id`?\",\"options\":[\"Return concealed/not-found 404\",\"Return input rejection 422\",\"Treat it as a request to create a new portal-minted section\"],\"default_guess\":\"Return not found without creating a section.\",\"witness\":{\"initial\":\"Project P is active and has no section with id S; S is either unknown or belongs to project Q.\",\"events\":[\"Authorized staff upserts a manual plan for P while supplying S.\"],\"outcomes\":[\"The request is refused as not found.\",\"The request is refused as invalid input.\"],\"observer\":\"The staff caller\"}},{\"unit\":\"40_flows.md:`flow:track_progress_payments_and_photos`\",\"subject\":\"progress-photo replay classification\",\"kind\":\"contradictory and underspecified replay rule\",\"text\":\"A8 defines ProgressPhoto idempotency solely by `intake_id` with \\\"return existing photo\\\", while this flow says \\\"replay with different content: 409\\\" without defining photo content equality or a canonical fingerprint; `intake_source` is accepted but not persisted.\",\"question\":\"Does reuse of an `intake_id` always return the existing photo, or only when selected fields match, and exactly which fields participate in that comparison?\",\"options\":[\"Always return the existing photo for the same `intake_id`\",\"Compare all publication fields, including `intake_source`\",\"Compare only persisted photo fields and ignore discarded `intake_source`\"],\"default_guess\":\"Compare persisted photo fields and ignore `intake_source`; equal content replays and different persisted content conflicts.\",\"witness\":{\"initial\":\"A photo exists for `intake_id` I with given file, date, project, caption, section and visibility.\",\"events\":[\"Staff republishes I with all persisted fields unchanged but a different `intake_source` label.\"],\"outcomes\":[\"The existing photo is returned as an idempotent replay.\",\"The request conflicts because the incoming publication differs.\"],\"observer\":\"The staff caller\"}},{\"unit\":\"40_flows.md:`flow:track_progress_payments_and_photos`\",\"subject\":\"photo section validation ownership\",\"kind\":\"unavailable module operation\",\"text\":\"The boundary says `budget_management` resolves sections and photo publication/update resolves an optional section, but State 3 says `photo_management` does not know `budget_management`; no other operation for this validation is named.\",\"question\":\"Which permitted capability validates that a photo's optional section belongs to its project?\",\"options\":[\"Allow `photo_management` to call `budget_management.validate_project_section`\",\"Move or expose the check through a module `photo_management` already knows\",\"Make `photo_management` own the repository-level same-project check\"],\"default_guess\":\"Allow `photo_management` to use the explicit section-validation capability.\"},{\"unit\":\"40_flows.md:`flow:viewer_reads_projects`\",\"subject\":\"viewer progress-photo binary storage failure\",\"kind\":\"contradiction\",\"text\":\"The flow says an oversize or unlisted binary receives the concealed 404 used for unknown and hidden records, while R0-12 and State 3 say a photo whose stored content cannot be delivered produces an explicit storage-unavailable error and `photo_management` passes `binary_storage` failures through.\",\"question\":\"After a viewer is authorized for a visible photo, are missing, oversize, unreadable, or unlisted photo bytes concealed as 404 or exposed as storage-unavailable 500?\",\"options\":[\"Return explicit storage-unavailable for authorized visible photos\",\"Conceal every photo delivery failure as 404\",\"Use different outcomes for missing, oversize, unreadable and unlisted content\"],\"default_guess\":\"Return explicit storage-unavailable for an authorized visible photo, as R0-12 requires.\",\"witness\":{\"initial\":\"A viewer has an active grant and requests a client-visible photo whose stored bytes have an unlisted media signature.\",\"events\":[\"The project and photo visibility checks succeed.\",\"`binary_storage` rejects the content signature.\"],\"outcomes\":[\"The endpoint returns concealed 404.\",\"The endpoint returns explicit storage-unavailable 500.\"],\"observer\":\"The viewer\"}},{\"unit\":\"40_flows.md:`flow:staff_reads_protected_binary`\",\"subject\":\"staff progress-photo binary storage failure\",\"kind\":\"contradiction\",\"text\":\"The flow groups documents and photos together and says \\\"missing object, oversize or unlisted media type: one concealed not-found answer (404)\\\", while R0-12 distinguishes them: refused document delivery is concealed, but an authorized photo whose content cannot be delivered fails explicitly as storage unavailable.\",\"question\":\"Does an authorized staff read of an undeliverable progress photo return concealed 404 or explicit storage-unavailable 500?\",\"options\":[\"Explicit storage-unavailable for photos; concealed 404 for documents\",\"Concealed 404 for both object kinds\"],\"default_guess\":\"Preserve the R0-12 split: explicit storage-unavailable for photos and concealed 404 for documents.\",\"witness\":{\"initial\":\"Staff may read project P, and P contains a photo record whose file is missing.\",\"events\":[\"Staff requests that photo.\",\"Authorization and record/project checks succeed.\",\"Binary storage cannot read the file.\"],\"outcomes\":[\"The endpoint returns concealed 404.\",\"The endpoint returns explicit storage-unavailable 500.\"],\"observer\":\"The staff caller\"}}]}",
+ "set_aside": []
+}

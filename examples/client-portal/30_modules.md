@@ -655,7 +655,7 @@ SqliteServiceIdentityRepository
 
 ### Owns
 
-The portal's one database connection and its transactions: open, commit,
+The portal's database connections (a new one per transaction) and its transactions: open, commit,
 rollback and close, schema creation through the repositories, the
 `PortalTransaction` that hands out one repository per port, and translation of
 every storage failure to `PersistenceError` without SQL or driver detail;

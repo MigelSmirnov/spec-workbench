@@ -347,9 +347,10 @@ refused for being empty or for repeating a `source_section_id` (State 1
 M18; Factory code `application/snapshot_import.py`
 `_validate_snapshot_publication`).
 
-An expense creation from a confirmed recognition is checked in this order:
+An expense creation from a confirmed recognition, once the route's project
+guard of A4 has passed, is checked by the operation in this order:
 recognition status `confirmed`, a supported contract version, the
-`portal.expense.manage` capability, an active project, a valid positive
+authorized context's `portal.expense.manage` capability, its active project, a valid positive
 `EUR` total, then the allocation instructions (shape, then sum equal to the
 total, then each section belonging to the project), then replay by
 `recognized_document_id`. Every refusal among these answers HTTP 422 with an
@@ -382,8 +383,8 @@ The table is rules data: `rules.supported_external_contract_versions` (SPEC_STAN
 | Fact | Identity | Replay behavior |
 | --- | --- | --- |
 | Expense | `recognized_document_id` + canonical `intake_fingerprint` | same fingerprint → existing Expense/Document; different fingerprint → integrity conflict, nothing changed |
-| ProgressPhoto | `intake_id` | return existing photo |
-| WorkPayment | `payment_id` (command-supplied UUID) | return existing payment |
+| ProgressPhoto | `intake_id` | equal content → return existing photo; different content → conflict, nothing changed |
+| WorkPayment | `payment_id` (command-supplied UUID) | equal content → return existing payment; different content → conflict, nothing changed |
 | ApprovedEstimateSnapshot | `(project_id, estimate_id, estimate_version)` + `content_fingerprint` | same fingerprint → existing snapshot (`idempotent_replay`); different → `integrity_conflict`, nothing stored |
 
 A fingerprint is a deterministic digest of the content it covers, computed
