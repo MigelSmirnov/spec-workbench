@@ -147,7 +147,6 @@ def _sync_module_topology(
             "global_spec.module_paths keys must match global_spec.module_order exactly"
         )
 
-    parents: set[str] = set()
     result_paths: dict[str, str] = {}
     for module in current_order:
         path = current_paths.get(module)
@@ -155,24 +154,32 @@ def _sync_module_topology(
             raise SpecProjectionError(
                 f"global_spec.module_paths[{module!r}] must be a non-empty string"
             )
+        result_paths[module] = path
+
+    # Existing paths are taken as given (SPEC_STANDARD §10 allows several
+    # roots, root-level modules and a leaf that differs from the module name).
+    # A deterministic root is needed only to place a module the handoff adds.
+    new_modules = [m for m in _handoff_modules(handoff_contracts) if m not in result_paths]
+    result_order = list(current_order)
+    if not new_modules:
+        return result_order, result_paths
+    parents: set[str] = set()
+    for module, path in result_paths.items():
         parent, separator, leaf = path.rpartition("/")
         if not separator or not parent or leaf != module:
             raise SpecProjectionError(
-                f"global_spec.module_paths[{module!r}] must end with '/{module}'"
+                f"global_spec.module_paths[{module!r}] must end with '/{module}' "
+                f"before new modules ({', '.join(new_modules)}) can be projected"
             )
         parents.add(parent)
-        result_paths[module] = path
     if len(parents) != 1:
         raise SpecProjectionError(
             "global_spec.module_paths must share one deterministic module root before new modules can be projected"
         )
     module_root = next(iter(parents))
-
-    result_order = list(current_order)
-    for module in _handoff_modules(handoff_contracts):
-        if module not in result_paths:
-            result_order.append(module)
-            result_paths[module] = f"{module_root}/{module}"
+    for module in new_modules:
+        result_order.append(module)
+        result_paths[module] = f"{module_root}/{module}"
     return result_order, result_paths
 
 
