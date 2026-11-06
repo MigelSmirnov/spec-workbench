@@ -35,7 +35,9 @@ text" at the end.
   actor context and a `project_id` into an `AuthorizedProjectContext` by the
   order `valid_session`, `active_principal`, `project_access`,
   `required_capability`, `registry_lifecycle`, first failure winning and
-  concealed. Use cases receive that context, never an unchecked `project_id`.
+  concealed. Project-scoped use cases receive that context, never an
+  unchecked `project_id`; access management and the snapshot import take a
+  `project_id` and authorize it themselves, as their flows say.
 - **Transactions and network.** The use case that owns an operation opens its
   portal transaction, closes it exactly once and guards it as A22 requires.
   An authorization check that opens its own transaction closes it before the
@@ -370,8 +372,10 @@ grant. `module:credential_security` issues the link secret.
    the viewer's sessions and appends `viewer.credential_revoke`.
 5. `capability:viewer_access.grant_viewer_project` requires the project known
    and active (`capability:registry_gateway.validate_project_reference`,
-   before the transaction; an unknown or inactive project is the Registry
-   boundary failure here, unlike a staff assignment), an active viewer and no active grant for the pair,
+   before the transaction; the operation itself reads the answer's `exists`
+   and `is_active` as A5 says and refuses an unknown or inactive project by
+   raising the Registry boundary error, unlike a staff assignment; the
+   gateway raises nothing for such an answer), an active viewer and no active grant for the pair,
    and appends `grant.create`.
 6. `capability:viewer_access.revoke_viewer_project` revokes the addressed
    active grant without consulting the Registry and appends `grant.revoke`;

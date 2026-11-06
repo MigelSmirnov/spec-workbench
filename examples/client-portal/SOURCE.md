@@ -287,6 +287,38 @@ decided in States 3–7.
 | dependency vulnerability policy | `deploy/requirements.txt` pins | was unresolved; decided under the owner decision of 2026-11-06 (technical decisions delegated) | A32, Q17 |
 | persistence, router and three backend IRs; `rules.role`, `rules.schema_version` | `8387e0a3`, `d1280708`, `300bd11d`…`a6916180314d` | later deterministic closures | "Carried to later closures" |
 
+### States 3–4 question rounds (in progress, 2026-11-06)
+
+State 3 rounds 01–05 (blocking 6, 5, 1, 0, 0) closed State 3 at `cded5541`;
+repairs (commits `1f338005`, `a5e9eeef`, `9c18621c`) reconciled ownership
+wording to 459ac96c and its code and reopened States 0–2 for the touched
+units, which were re-closed by their own rounds (`--since cd7d465c`). The
+State 4 round-01 repairs (`48cecaa2`) reopened State 2 (A7, A8) and State 3
+(`portal_store`); round-02 of State 4 and the re-asks (State 2 round-18,
+State 3 round-06) left these blocking topics:
+
+- A8 photo replay: which fields compare and against which baseline —
+  repaired in the A8 row (kept fields against the photo as now stored,
+  `domain/photo_management.py` `_classify_photo_replay`); to be re-asked.
+- viewer grant Registry outcome and the use-case context convention —
+  repaired in `40_flows.md`; to be re-asked.
+- **Open, not repaired — needs the coordinator:** the running import route
+  (Factory code `api/router.py` `publish_snapshot_endpoint`) calls
+  `authorize_producer_scope` (answer unused) and `authorize_snapshot_import`
+  before `import_snapshot`; a scope, unknown or archived refusal there raises
+  and records nothing, while State 0 R0-25, State 2 A7/A12 and the accepted
+  notes of `import_snapshot` say such an attempt is recorded
+  (`unknown_project`, `scope_denied`, `archived_project`). The State 4 flow
+  `flow:import_estimate_snapshot` also has `authorization_guard` call
+  `service_identity.authorize_producer_scope`, which `authorization_guard`
+  does not import. Whether the route's pre-checks are a Factory defect or
+  the accepted behaviour is a meaning decision, not a wording repair.
+- **Open, not repaired:** `flow:expense_intake_and_management` names
+  `budget_management.validate_project_section` for the allocation sections,
+  which `expense_intake` does not import; the code reads the section
+  repository (`application/expense_intake.py`). The fix needs the State 4
+  plan and the State 5 flow evidence of that operation changed together.
+
 ### Classification of what State 3 carries
 
 The former `spec/30_modules.md` is replaced by `30_modules.md` and

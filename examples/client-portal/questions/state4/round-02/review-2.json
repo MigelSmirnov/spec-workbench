@@ -1,0 +1,263 @@
+{
+ "open_points": [
+  {
+   "unit": "40_flows.md:Conventions every flow follows",
+   "subject": "HTTP route delegation",
+   "kind": "contradictory call ownership",
+   "text": "“A route handler … calls exactly one owning use case” contradicts flows in which the handler first calls an authorization capability and then calls the business use case, for example `viewer_project_overview_endpoint` calls `authorize_viewer_project_read` and then `build_project_overview`.",
+   "question": "Must a route call the authorization guard and business use case separately, or must one owning use case encapsulate both so the route makes exactly one call?",
+   "options": [
+    "The route calls the guard and then the business use case",
+    "A single owning use case performs authorization and the operation"
+   ],
+   "default_guess": "Let the route resolve authentication, then call one owning use case that performs project authorization and the operation.",
+   "witness": {
+    "initial": "A viewer has a valid session and an active grant to project P.",
+    "events": [
+     "The viewer requests the overview for P.",
+     "`api_irregular` resolves the cookie.",
+     "The handler must continue from the two conflicting delegation rules."
+    ],
+    "outcomes": [
+     "The handler calls `authorize_viewer_project_read` and `build_project_overview` as two application calls.",
+     "The handler calls one overview use case, which performs authorization internally."
+    ],
+    "observer": "The State 5 operation author and module-dependency tests see different call graphs and ownership."
+   }
+  },
+  {
+   "unit": "40_flows.md:Conventions every flow follows",
+   "subject": "AuthorizedProjectContext production",
+   "kind": "contradictory context ownership",
+   "text": "“Use cases receive that context, never an unchecked `project_id`” conflicts with administration and import flows where the owning use case receives a request-supplied project id and performs Registry or project authorization itself, such as `grant_viewer_project` and `import_snapshot`.",
+   "question": "Which operations must receive an already-built `AuthorizedProjectContext`, and which operations are allowed to receive a raw typed `project_id` and validate or authorize it internally?",
+   "options": [
+    "Every project-bearing use case receives `AuthorizedProjectContext`",
+    "Access-management and import use cases receive `project_id` and perform their own checks",
+    "Only project-record operations require `AuthorizedProjectContext`; access-management operations use a separately named trusted input"
+   ],
+   "default_guess": "Require `AuthorizedProjectContext` only for project-record reads and mutations, and explicitly exempt access-management creation and snapshot import, which perform their specified checks internally.",
+   "witness": {
+    "initial": "An administrator has a valid session and submits a new viewer grant for active project P.",
+    "events": [
+     "The route performs `authorize_access_management`.",
+     "The request body supplies P.",
+     "The route must call `grant_viewer_project`."
+    ],
+    "outcomes": [
+     "The route additionally turns P into an `AuthorizedProjectContext` before calling the use case.",
+     "The use case receives P directly and calls `validate_project_reference`, as the administration flow states."
+    ],
+    "observer": "The State 5 signature author sees a different input type and a different owner for Registry validation."
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:start_service_and_answer_health`",
+   "subject": "API mount paths",
+   "kind": "contradictory routing boundary",
+   "text": "Step 2 says the runtime “mounts the inner application under `/api` and at the root,” while A25 says “The public API lives under `/api`, stripped by the deployment proxy.”",
+   "question": "After proxy prefix stripping, is the inner application reachable only at root paths, or also under an additional `/api` prefix?",
+   "options": [
+    "Mount only at root internally; the proxy supplies the public `/api` prefix",
+    "Mount at both root and `/api`, exposing two effective prefixes",
+    "Mount only at `/api` and configure the proxy not to strip it"
+   ],
+   "default_guess": "Mount the inner application only at root and let the deployment proxy own the public `/api` prefix.",
+   "witness": {
+    "initial": "The proxy strips one leading `/api` before forwarding to the service.",
+    "events": [
+     "A client requests public `/api/login`; the service receives `/login`.",
+     "A client requests public `/api/api/login`; the service receives `/api/login`."
+    ],
+    "outcomes": [
+     "With both mounts, both public paths reach the login route.",
+     "With a root-only inner mount, `/api/login` works and `/api/api/login` is not found."
+    ],
+    "observer": "An HTTP client and the router contract tests see the extra reachable route."
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:bootstrap_first_administrator`",
+   "subject": "Bootstrap infrastructure failures",
+   "kind": "unstated failure outcome",
+   "text": "The flow calls `load_runtime_settings`, schema creation, password hashing and the bootstrap store, but its Errors section assigns exit codes only to confirmation mismatch, rejected identity input and an already-completed bootstrap; A29 nevertheless calls the exit-code contract closed.",
+   "question": "What does the CLI return when configuration loading, hashing, opening the database, schema creation, insertion or commit fails?",
+   "options": [
+    "Add a distinct closed infrastructure-failure exit code",
+    "Map infrastructure failures to one of exit codes 1–3",
+    "Let the exception escape and accept a runtime-defined nonzero process status"
+   ],
+   "default_guess": "Add a distinct documented infrastructure-failure exit code without exposing sensitive exception details.",
+   "witness": {
+    "initial": "No staff account exists, but the configured SQLite database cannot be opened.",
+    "events": [
+     "The host operator enters matching valid credentials.",
+     "The CLI loads settings and invokes the bootstrap store.",
+     "The store fails while opening the database."
+    ],
+    "outcomes": [
+     "The CLI exits with one of the documented codes 1–3, requiring an unstated mapping.",
+     "The exception escapes and the process exits with an implementation-dependent status outside the closed contract."
+    ],
+    "observer": "The host operator and deployment script see different exit codes."
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:administer_staff_accounts`",
+   "subject": "Missing target staff account",
+   "kind": "unstated failure outcome",
+   "text": "The flow defines status changes, assignment, session revocation and recovery override for a target account, but its Errors section states outcomes for unknown projects and assignments and says nothing about an unknown `staff_id`.",
+   "question": "What declared failure and HTTP outcome apply when the target staff account does not exist?",
+   "options": [
+    "Not found (404)",
+    "Input rejection (422)",
+    "Concealed authorization rejection (403)"
+   ],
+   "default_guess": "Return not found (404) after the administrator has passed access-management authorization.",
+   "witness": {
+    "initial": "Administrator A is authenticated; no account exists with staff id S.",
+    "events": [
+     "A requests `change_staff_status` for S.",
+     "Access-management authorization succeeds.",
+     "`staff_identity` looks up S and finds nothing."
+    ],
+    "outcomes": [
+     "The operation raises a not-found failure mapped to 404.",
+     "The missing target is treated as invalid input mapped to 422."
+    ],
+    "observer": "Administrator A sees a different HTTP status."
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:administer_viewer_access`",
+   "subject": "Unknown Registry project during viewer grant",
+   "kind": "cross-state contradiction",
+   "text": "The flow says an unknown project for a new viewer grant is a “Registry boundary failure (502),” but A5–A6 say `exists=false` is read by the caller as `not_found`, not a gateway failure; the general error policy maps not found to 404.",
+   "question": "Does a successful Registry response reporting `exists=false` produce 404 or 502 when creating a viewer grant?",
+   "options": [
+    "404 not found, following A5–A6",
+    "502 Registry boundary failure, following this flow"
+   ],
+   "default_guess": "Return 404 because the Registry answered successfully and reported that the project does not exist.",
+   "witness": {
+    "initial": "Administrator A and active viewer V exist; Registry is reachable and returns `exists=false` for project P.",
+    "events": [
+     "A requests a grant from V to P.",
+     "Access-management authorization succeeds.",
+     "`validate_project_reference(P)` returns the decoded `exists=false` result."
+    ],
+    "outcomes": [
+     "A5–A6 produce a caller-level not-found response (404).",
+     "The State 4 viewer-administration flow produces a Registry boundary response (502)."
+    ],
+    "observer": "Administrator A sees 404 versus 502."
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:administer_viewer_access`",
+   "subject": "Archived Registry project during viewer grant",
+   "kind": "cross-state contradiction",
+   "text": "The flow says a project that is “not active” for a new viewer grant is a “Registry boundary failure (502),” while the conventions, R0-24 and A5–A6 say creation for an archived project is refused as archived and the error policy maps archived project to 409.",
+   "question": "Does an archived project produce 409 or 502 when creating a viewer grant?",
+   "options": [
+    "409 archived-project conflict, following R0-24 and A5–A6",
+    "502 Registry boundary failure, following this flow"
+   ],
+   "default_guess": "Return 409 for an archived project.",
+   "witness": {
+    "initial": "Administrator A and active viewer V exist; Registry is reachable and reports project P as existing but archived.",
+    "events": [
+     "A requests a grant from V to P.",
+     "Access-management authorization succeeds.",
+     "`validate_project_reference(P)` returns `exists=true`, `is_active=false`, status `archived`."
+    ],
+    "outcomes": [
+     "The archival policy refuses the new grant with 409.",
+     "The viewer-administration flow treats the answer as a Registry boundary failure and returns 502."
+    ],
+    "observer": "Administrator A sees 409 versus 502."
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:import_estimate_snapshot`",
+   "subject": "Producer-scope authorization",
+   "kind": "owner and dependency contradiction",
+   "text": "Step 2 says `authorization_guard.authorize_snapshot_import` checks scope by calling `service_identity.authorize_producer_scope`, but State 3 gives producer-scope ownership to `service_identity`, gives the project guard to `authorization_guard`, and `authorization_guard` does not know or import `service_identity` under the declared dependency direction.",
+   "question": "Does `authorization_guard` implement the producer-scope check directly, or delegate it to `service_identity`; and which module performs the Registry-active check for `all_projects` scope?",
+   "options": [
+    "`authorization_guard` reads current producer scope and grant state directly and performs one Registry lifecycle check",
+    "`authorization_guard` calls `service_identity.authorize_producer_scope`, which checks scope, followed by a separate Registry lifecycle check",
+    "`service_identity` performs the complete scope-plus-Registry decision and returns it to the guard through a new allowed dependency"
+   ],
+   "default_guess": "Have `authorization_guard` perform the current grant/scope and Registry lifecycle checks directly, without importing the later `service_identity` module.",
+   "witness": {
+    "initial": "An authenticated `all_projects` producer submits an import for P; Registry initially reports P active.",
+    "events": [
+     "Import authorization begins.",
+     "Registry answers active to the first validation.",
+     "Registry becomes unavailable before any possible second validation."
+    ],
+    "outcomes": [
+     "An implementation following State 3 performs the guard's single Registry lifecycle check and proceeds to accept or validate the import.",
+     "An implementation following the literal delegation can let `service_identity` establish all-project scope from Registry and then perform the guard's separate lifecycle call, which fails with a Registry error."
+    ],
+    "observer": "The producer sees an import result in one implementation and a 502 with no import result in the other."
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:expense_intake_and_management`",
+   "subject": "Expense section validation",
+   "kind": "unavailable module operation",
+   "text": "The Boundary says `expense_intake` and `expense_management` “resolve sections of the project itself, through `portal_store`'s section repository,” but step 2 calls `budget_management.validate_project_section`; State 3 does not allow `expense_intake` to know `budget_management`.",
+   "question": "Which module and capability validate an initial expense allocation's section ownership?",
+   "options": [
+    "`expense_intake` reads the section repository directly and validates ownership itself",
+    "`expense_intake` calls a capability exposed by `expense_management`",
+    "Add `budget_management` as an allowed dependency and call `validate_project_section`"
+   ],
+   "default_guess": "Keep the declared dependency graph and have `expense_intake` validate section ownership through its transaction's section repository.",
+   "witness": {
+    "initial": "Operator O submits a confirmed expense for project P allocated to section S.",
+    "events": [
+     "The guard authorizes O for P.",
+     "`expense_intake` must verify that S belongs to P.",
+     "The implementation follows one of the conflicting ownership passages."
+    ],
+    "outcomes": [
+     "`expense_intake` queries the section repository and owns the check, as the Boundary states.",
+     "`expense_intake` imports and calls `budget_management.validate_project_section`, violating its State 3 `Knows` set."
+    ],
+    "observer": "The module dependency checker and the State 5 capability author see different dependencies and calls."
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:build_project_overview`",
+   "subject": "Per-component read failure",
+   "kind": "failure-policy contradiction",
+   "text": "The conventions say “No failure becomes a success … with one exception: the viewer's project list,” but this flow says “a failed part is `temporarily_unavailable` with no value” and “A part that cannot be read is marked unavailable,” returning the rest of the overview.",
+   "question": "Which failures are converted into component-level `temporarily_unavailable`, and which fail the entire overview according to the general 500/502 policy?",
+   "options": [
+    "Only post-guard Registry context failure becomes component-unavailable, as the State 1 carried change explicitly states",
+    "Any dependency or persistence failure affecting one component becomes `temporarily_unavailable`",
+    "Registry failures become unavailable, while persistence failures fail the whole request"
+   ],
+   "default_guess": "Convert only explicitly recoverable post-guard dependency failures to `temporarily_unavailable`; propagate persistence and invariant failures as whole-request errors.",
+   "witness": {
+    "initial": "The caller is authorized for P; Registry context succeeds; reading the budget repository raises a persistence failure while the other component data is readable.",
+    "events": [
+     "`build_project_overview` starts composing its six parts.",
+     "The budget read fails.",
+     "The flow must apply either the general failure convention or its per-part availability rule."
+    ],
+    "outcomes": [
+     "The persistence failure maps to HTTP 500 and no overview is returned.",
+     "The endpoint returns a successful `ProjectOverview` with `budget_availability=temporarily_unavailable` and the other components present."
+    ],
+    "observer": "The staff member or viewer sees a 500 versus a successful partial overview."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"40_flows.md:Conventions every flow follows\",\"subject\":\"HTTP route delegation\",\"kind\":\"contradictory call ownership\",\"text\":\"“A route handler … calls exactly one owning use case” contradicts flows in which the handler first calls an authorization capability and then calls the business use case, for example `viewer_project_overview_endpoint` calls `authorize_viewer_project_read` and then `build_project_overview`.\",\"question\":\"Must a route call the authorization guard and business use case separately, or must one owning use case encapsulate both so the route makes exactly one call?\",\"options\":[\"The route calls the guard and then the business use case\",\"A single owning use case performs authorization and the operation\"],\"default_guess\":\"Let the route resolve authentication, then call one owning use case that performs project authorization and the operation.\",\"witness\":{\"initial\":\"A viewer has a valid session and an active grant to project P.\",\"events\":[\"The viewer requests the overview for P.\",\"`api_irregular` resolves the cookie.\",\"The handler must continue from the two conflicting delegation rules.\"],\"outcomes\":[\"The handler calls `authorize_viewer_project_read` and `build_project_overview` as two application calls.\",\"The handler calls one overview use case, which performs authorization internally.\"],\"observer\":\"The State 5 operation author and module-dependency tests see different call graphs and ownership.\"}},{\"unit\":\"40_flows.md:Conventions every flow follows\",\"subject\":\"AuthorizedProjectContext production\",\"kind\":\"contradictory context ownership\",\"text\":\"“Use cases receive that context, never an unchecked `project_id`” conflicts with administration and import flows where the owning use case receives a request-supplied project id and performs Registry or project authorization itself, such as `grant_viewer_project` and `import_snapshot`.\",\"question\":\"Which operations must receive an already-built `AuthorizedProjectContext`, and which operations are allowed to receive a raw typed `project_id` and validate or authorize it internally?\",\"options\":[\"Every project-bearing use case receives `AuthorizedProjectContext`\",\"Access-management and import use cases receive `project_id` and perform their own checks\",\"Only project-record operations require `AuthorizedProjectContext`; access-management operations use a separately named trusted input\"],\"default_guess\":\"Require `AuthorizedProjectContext` only for project-record reads and mutations, and explicitly exempt access-management creation and snapshot import, which perform their specified checks internally.\",\"witness\":{\"initial\":\"An administrator has a valid session and submits a new viewer grant for active project P.\",\"events\":[\"The route performs `authorize_access_management`.\",\"The request body supplies P.\",\"The route must call `grant_viewer_project`.\"],\"outcomes\":[\"The route additionally turns P into an `AuthorizedProjectContext` before calling the use case.\",\"The use case receives P directly and calls `validate_project_reference`, as the administration flow states.\"],\"observer\":\"The State 5 signature author sees a different input type and a different owner for Registry validation.\"}},{\"unit\":\"40_flows.md:`flow:start_service_and_answer_health`\",\"subject\":\"API mount paths\",\"kind\":\"contradictory routing boundary\",\"text\":\"Step 2 says the runtime “mounts the inner application under `/api` and at the root,” while A25 says “The public API lives under `/api`, stripped by the deployment proxy.”\",\"question\":\"After proxy prefix stripping, is the inner application reachable only at root paths, or also under an additional `/api` prefix?\",\"options\":[\"Mount only at root internally; the proxy supplies the public `/api` prefix\",\"Mount at both root and `/api`, exposing two effective prefixes\",\"Mount only at `/api` and configure the proxy not to strip it\"],\"default_guess\":\"Mount the inner application only at root and let the deployment proxy own the public `/api` prefix.\",\"witness\":{\"initial\":\"The proxy strips one leading `/api` before forwarding to the service.\",\"events\":[\"A client requests public `/api/login`; the service receives `/login`.\",\"A client requests public `/api/api/login`; the service receives `/api/login`.\"],\"outcomes\":[\"With both mounts, both public paths reach the login route.\",\"With a root-only inner mount, `/api/login` works and `/api/api/login` is not found.\"],\"observer\":\"An HTTP client and the router contract tests see the extra reachable route.\"}},{\"unit\":\"40_flows.md:`flow:bootstrap_first_administrator`\",\"subject\":\"Bootstrap infrastructure failures\",\"kind\":\"unstated failure outcome\",\"text\":\"The flow calls `load_runtime_settings`, schema creation, password hashing and the bootstrap store, but its Errors section assigns exit codes only to confirmation mismatch, rejected identity input and an already-completed bootstrap; A29 nevertheless calls the exit-code contract closed.\",\"question\":\"What does the CLI return when configuration loading, hashing, opening the database, schema creation, insertion or commit fails?\",\"options\":[\"Add a distinct closed infrastructure-failure exit code\",\"Map infrastructure failures to one of exit codes 1–3\",\"Let the exception escape and accept a runtime-defined nonzero process status\"],\"default_guess\":\"Add a distinct documented infrastructure-failure exit code without exposing sensitive exception details.\",\"witness\":{\"initial\":\"No staff account exists, but the configured SQLite database cannot be opened.\",\"events\":[\"The host operator enters matching valid credentials.\",\"The CLI loads settings and invokes the bootstrap store.\",\"The store fails while opening the database.\"],\"outcomes\":[\"The CLI exits with one of the documented codes 1–3, requiring an unstated mapping.\",\"The exception escapes and the process exits with an implementation-dependent status outside the closed contract.\"],\"observer\":\"The host operator and deployment script see different exit codes.\"}},{\"unit\":\"40_flows.md:`flow:administer_staff_accounts`\",\"subject\":\"Missing target staff account\",\"kind\":\"unstated failure outcome\",\"text\":\"The flow defines status changes, assignment, session revocation and recovery override for a target account, but its Errors section states outcomes for unknown projects and assignments and says nothing about an unknown `staff_id`.\",\"question\":\"What declared failure and HTTP outcome apply when the target staff account does not exist?\",\"options\":[\"Not found (404)\",\"Input rejection (422)\",\"Concealed authorization rejection (403)\"],\"default_guess\":\"Return not found (404) after the administrator has passed access-management authorization.\",\"witness\":{\"initial\":\"Administrator A is authenticated; no account exists with staff id S.\",\"events\":[\"A requests `change_staff_status` for S.\",\"Access-management authorization succeeds.\",\"`staff_identity` looks up S and finds nothing.\"],\"outcomes\":[\"The operation raises a not-found failure mapped to 404.\",\"The missing target is treated as invalid input mapped to 422.\"],\"observer\":\"Administrator A sees a different HTTP status.\"}},{\"unit\":\"40_flows.md:`flow:administer_viewer_access`\",\"subject\":\"Unknown Registry project during viewer grant\",\"kind\":\"cross-state contradiction\",\"text\":\"The flow says an unknown project for a new viewer grant is a “Registry boundary failure (502),” but A5–A6 say `exists=false` is read by the caller as `not_found`, not a gateway failure; the general error policy maps not found to 404.\",\"question\":\"Does a successful Registry response reporting `exists=false` produce 404 or 502 when creating a viewer grant?\",\"options\":[\"404 not found, following A5–A6\",\"502 Registry boundary failure, following this flow\"],\"default_guess\":\"Return 404 because the Registry answered successfully and reported that the project does not exist.\",\"witness\":{\"initial\":\"Administrator A and active viewer V exist; Registry is reachable and returns `exists=false` for project P.\",\"events\":[\"A requests a grant from V to P.\",\"Access-management authorization succeeds.\",\"`validate_project_reference(P)` returns the decoded `exists=false` result.\"],\"outcomes\":[\"A5–A6 produce a caller-level not-found response (404).\",\"The State 4 viewer-administration flow produces a Registry boundary response (502).\"],\"observer\":\"Administrator A sees 404 versus 502.\"}},{\"unit\":\"40_flows.md:`flow:administer_viewer_access`\",\"subject\":\"Archived Registry project during viewer grant\",\"kind\":\"cross-state contradiction\",\"text\":\"The flow says a project that is “not active” for a new viewer grant is a “Registry boundary failure (502),” while the conventions, R0-24 and A5–A6 say creation for an archived project is refused as archived and the error policy maps archived project to 409.\",\"question\":\"Does an archived project produce 409 or 502 when creating a viewer grant?\",\"options\":[\"409 archived-project conflict, following R0-24 and A5–A6\",\"502 Registry boundary failure, following this flow\"],\"default_guess\":\"Return 409 for an archived project.\",\"witness\":{\"initial\":\"Administrator A and active viewer V exist; Registry is reachable and reports project P as existing but archived.\",\"events\":[\"A requests a grant from V to P.\",\"Access-management authorization succeeds.\",\"`validate_project_reference(P)` returns `exists=true`, `is_active=false`, status `archived`.\"],\"outcomes\":[\"The archival policy refuses the new grant with 409.\",\"The viewer-administration flow treats the answer as a Registry boundary failure and returns 502.\"],\"observer\":\"Administrator A sees 409 versus 502.\"}},{\"unit\":\"40_flows.md:`flow:import_estimate_snapshot`\",\"subject\":\"Producer-scope authorization\",\"kind\":\"owner and dependency contradiction\",\"text\":\"Step 2 says `authorization_guard.authorize_snapshot_import` checks scope by calling `service_identity.authorize_producer_scope`, but State 3 gives producer-scope ownership to `service_identity`, gives the project guard to `authorization_guard`, and `authorization_guard` does not know or import `service_identity` under the declared dependency direction.\",\"question\":\"Does `authorization_guard` implement the producer-scope check directly, or delegate it to `service_identity`; and which module performs the Registry-active check for `all_projects` scope?\",\"options\":[\"`authorization_guard` reads current producer scope and grant state directly and performs one Registry lifecycle check\",\"`authorization_guard` calls `service_identity.authorize_producer_scope`, which checks scope, followed by a separate Registry lifecycle check\",\"`service_identity` performs the complete scope-plus-Registry decision and returns it to the guard through a new allowed dependency\"],\"default_guess\":\"Have `authorization_guard` perform the current grant/scope and Registry lifecycle checks directly, without importing the later `service_identity` module.\",\"witness\":{\"initial\":\"An authenticated `all_projects` producer submits an import for P; Registry initially reports P active.\",\"events\":[\"Import authorization begins.\",\"Registry answers active to the first validation.\",\"Registry becomes unavailable before any possible second validation.\"],\"outcomes\":[\"An implementation following State 3 performs the guard's single Registry lifecycle check and proceeds to accept or validate the import.\",\"An implementation following the literal delegation can let `service_identity` establish all-project scope from Registry and then perform the guard's separate lifecycle call, which fails with a Registry error.\"],\"observer\":\"The producer sees an import result in one implementation and a 502 with no import result in the other.\"}},{\"unit\":\"40_flows.md:`flow:expense_intake_and_management`\",\"subject\":\"Expense section validation\",\"kind\":\"unavailable module operation\",\"text\":\"The Boundary says `expense_intake` and `expense_management` “resolve sections of the project itself, through `portal_store`'s section repository,” but step 2 calls `budget_management.validate_project_section`; State 3 does not allow `expense_intake` to know `budget_management`.\",\"question\":\"Which module and capability validate an initial expense allocation's section ownership?\",\"options\":[\"`expense_intake` reads the section repository directly and validates ownership itself\",\"`expense_intake` calls a capability exposed by `expense_management`\",\"Add `budget_management` as an allowed dependency and call `validate_project_section`\"],\"default_guess\":\"Keep the declared dependency graph and have `expense_intake` validate section ownership through its transaction's section repository.\",\"witness\":{\"initial\":\"Operator O submits a confirmed expense for project P allocated to section S.\",\"events\":[\"The guard authorizes O for P.\",\"`expense_intake` must verify that S belongs to P.\",\"The implementation follows one of the conflicting ownership passages.\"],\"outcomes\":[\"`expense_intake` queries the section repository and owns the check, as the Boundary states.\",\"`expense_intake` imports and calls `budget_management.validate_project_section`, violating its State 3 `Knows` set.\"],\"observer\":\"The module dependency checker and the State 5 capability author see different dependencies and calls.\"}},{\"unit\":\"40_flows.md:`flow:build_project_overview`\",\"subject\":\"Per-component read failure\",\"kind\":\"failure-policy contradiction\",\"text\":\"The conventions say “No failure becomes a success … with one exception: the viewer's project list,” but this flow says “a failed part is `temporarily_unavailable` with no value” and “A part that cannot be read is marked unavailable,” returning the rest of the overview.\",\"question\":\"Which failures are converted into component-level `temporarily_unavailable`, and which fail the entire overview according to the general 500/502 policy?\",\"options\":[\"Only post-guard Registry context failure becomes component-unavailable, as the State 1 carried change explicitly states\",\"Any dependency or persistence failure affecting one component becomes `temporarily_unavailable`\",\"Registry failures become unavailable, while persistence failures fail the whole request\"],\"default_guess\":\"Convert only explicitly recoverable post-guard dependency failures to `temporarily_unavailable`; propagate persistence and invariant failures as whole-request errors.\",\"witness\":{\"initial\":\"The caller is authorized for P; Registry context succeeds; reading the budget repository raises a persistence failure while the other component data is readable.\",\"events\":[\"`build_project_overview` starts composing its six parts.\",\"The budget read fails.\",\"The flow must apply either the general failure convention or its per-part availability rule.\"],\"outcomes\":[\"The persistence failure maps to HTTP 500 and no overview is returned.\",\"The endpoint returns a successful `ProjectOverview` with `budget_availability=temporarily_unavailable` and the other components present.\"],\"observer\":\"The staff member or viewer sees a 500 versus a successful partial overview.\"}}]}",
+ "set_aside": []
+}

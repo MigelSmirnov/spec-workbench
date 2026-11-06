@@ -1,0 +1,130 @@
+{
+ "open_points": [
+  {
+   "unit": "A7",
+   "subject": "expense-recognition status validation",
+   "kind": "check-order contradiction",
+   "text": "“An expense creation from a confirmed recognition, once the route's project guard of A4 has passed, is checked by the operation in this order: recognition status `confirmed`…” conflicts with M25, where `RecognitionStatus` is a closed enum containing only `confirmed`, so another status may be rejected during request decoding before the guard.",
+   "question": "Must a present but non-`confirmed` recognition status survive request decoding and be rejected by the operation after the A4 guard, or is it an invalid enum value rejected before authentication and authorization?",
+   "options": [
+    "Decode `recognition_status` as a broader wire value and check `confirmed` only after the project guard",
+    "Decode it as the closed `RecognitionStatus` enum and reject any other value before the project guard"
+   ],
+   "default_guess": "Accept it as a wire string and perform the specified operation check after the guard.",
+   "witness": {
+    "initial": "A request reaches the expense route with `recognition_status=\"pending\"`, a validly shaped remaining body, and an invalid or expired staff session.",
+    "events": [
+     "The caller submits the expense-creation request."
+    ],
+    "outcomes": [
+     "Closed-enum decoding refuses HTTP 422 before authentication or any project guard.",
+     "Decoding accepts the wire value; the A4 guard runs first and the invalid session wins, so the status check is never reached."
+    ],
+    "observer": "The caller and request/Registry telemetry see which stage refused the request."
+   }
+  },
+  {
+   "unit": "A8",
+   "subject": "ProgressPhoto replay content",
+   "kind": "undefined equality",
+   "text": "“ProgressPhoto | `intake_id` | equal content → return existing photo; different content → conflict, nothing changed” does not define the content covered by equality, while M34 includes `project_id`, `file_ref`, `photo_date`, `section_id`, `caption`, `client_visible`, and `intake_source`, and M35 does not retain `intake_source`.",
+   "question": "Which exact publication, context, and provenance fields participate in ProgressPhoto replay equality, and how can equality be verified for any participating field that is not persisted?",
+   "options": [
+    "Compare all PhotoPublication fields, including `intake_source`",
+    "Compare only fields retained by ProgressPhoto",
+    "Compare only immutable intake facts and exclude mutable presentation fields, actor provenance, and `intake_source`",
+    "Persist an original-content fingerprint covering a specified field set"
+   ],
+   "default_guess": "Compare `project_id`, `file_ref`, `photo_date`, initial `section_id`, initial `caption`, and initial `client_visible`; exclude `intake_source` and authenticated actor provenance, and retain an original-content fingerprint.",
+   "witness": {
+    "initial": "Project P has no photo with intake identity I.",
+    "events": [
+     "Staff A publishes I with file F and `intake_source=\"telegram\"`; the photo is committed but the response is lost.",
+     "Staff A retries the same persisted photo facts and I but supplies `intake_source=\"operator\"`."
+    ],
+    "outcomes": [
+     "If every PhotoPublication field is content, the retry conflicts.",
+     "If equality covers only retained ProgressPhoto facts, the retry returns the existing photo."
+    ],
+    "observer": "Staff A sees conflict versus successful replay."
+   }
+  },
+  {
+   "unit": "A8",
+   "subject": "ProgressPhoto replay after edits",
+   "kind": "undefined comparison baseline",
+   "text": "“equal content → return existing photo; different content → conflict” does not say whether equality is against the original accepted publication or the photo's current mutable caption, section, and visibility; M35 permits those fields to change and retains no original-publication fingerprint.",
+   "question": "After a photo has been edited, is a retry compared with its original accepted content or its current state, and where is the chosen comparison state retained?",
+   "options": [
+    "Compare against the original publication, requiring retained original content or a fingerprint",
+    "Compare against the current ProgressPhoto state",
+    "Treat any retry after a relevant edit as a conflict"
+   ],
+   "default_guess": "Compare against the original accepted publication using an immutable fingerprint.",
+   "witness": {
+    "initial": "Photo intake I was published with caption “before” and is currently stored.",
+    "events": [
+     "An authorized staff member changes the photo caption to “after”.",
+     "The original publisher retries the original request for I with caption “before” after losing the first response."
+    ],
+    "outcomes": [
+     "Comparison with original accepted content classifies the request as an equal replay and returns the edited existing photo.",
+     "Comparison with current state classifies the request as different content and returns a conflict."
+    ],
+    "observer": "The retrying staff member sees replay success versus conflict."
+   }
+  },
+  {
+   "unit": "A8",
+   "subject": "WorkPayment replay across projects",
+   "kind": "cross-text contradiction",
+   "text": "A8 says “equal content → return existing payment; different content → conflict,” while M33 defines equality as equal amount, date, and description, omitting `project_id`; the common authorization rule requires project-scoped results to remain bounded by the authorized project.",
+   "question": "When an existing `payment_id` belongs to another project, does differing `project_id` make the registration a conflict, or does M33's amount/date/description equality require returning that other project's payment?",
+   "options": [
+    "Include `project_id` in replay equality and return a conflict",
+    "Follow M33 literally and return the existing payment when amount, date, and description match",
+    "Use payment identity scoped by project rather than globally"
+   ],
+   "default_guess": "Include `project_id` in equality and return a conflict for a cross-project collision.",
+   "witness": {
+    "initial": "Payment X exists in project P1 with amount 100 EUR, date D, and description “advance”; staff B has payment-management access to P2 but no access to P1.",
+    "events": [
+     "Staff B registers payment X for P2 with the same amount, date, and description."
+    ],
+    "outcomes": [
+     "Following M33's stated equality returns the existing P1 payment or reports a replay of it.",
+     "Treating project as content returns a conflict and reveals no P1 record."
+    ],
+    "observer": "Staff B sees replay success and possibly P1-derived identifiers versus conflict; P2's payment view also differs."
+   }
+  },
+  {
+   "unit": "A31",
+   "subject": "security-review resolution of replay concurrency",
+   "kind": "review contradiction",
+   "text": "A31 states “Every category resolves to an accepted decision or an open question” and marks concurrency applicable with references including A8, but changed A8 leaves ProgressPhoto content equality and cross-project WorkPayment equality unresolved.",
+   "question": "Is the concurrency/security category resolved despite the unspecified replay equality, or must A31 identify these replay questions as unresolved until the equality contracts are closed?",
+   "options": [
+    "Keep the category resolved and state the missing equality semantics in A8",
+    "Mark concurrency unresolved",
+    "List the replay questions as explicit later-state open questions"
+   ],
+   "default_guess": "Mark the category unresolved until A8 defines the equality field sets and comparison baseline.",
+   "witness": {
+    "initial": "A photo has been edited after its first publication, and a payment identity used in P1 is submitted for P2.",
+    "events": [
+     "A caller retries the photo's original publication.",
+     "An authorized P2 caller registers the reused payment identity with otherwise equal values."
+    ],
+    "outcomes": [
+     "One implementation accepts the photo replay and conflicts the payment because it compares original photo content and includes project in payment content.",
+     "Another conflicts the photo and returns the P1 payment because it compares current photo state and follows M33's project-omitting equality."
+    ],
+    "observer": "The callers observe different replay decisions, and the second payment outcome crosses the authorized project boundary."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A7\",\"subject\":\"expense-recognition status validation\",\"kind\":\"check-order contradiction\",\"text\":\"“An expense creation from a confirmed recognition, once the route's project guard of A4 has passed, is checked by the operation in this order: recognition status `confirmed`…” conflicts with M25, where `RecognitionStatus` is a closed enum containing only `confirmed`, so another status may be rejected during request decoding before the guard.\",\"question\":\"Must a present but non-`confirmed` recognition status survive request decoding and be rejected by the operation after the A4 guard, or is it an invalid enum value rejected before authentication and authorization?\",\"options\":[\"Decode `recognition_status` as a broader wire value and check `confirmed` only after the project guard\",\"Decode it as the closed `RecognitionStatus` enum and reject any other value before the project guard\"],\"default_guess\":\"Accept it as a wire string and perform the specified operation check after the guard.\",\"witness\":{\"initial\":\"A request reaches the expense route with `recognition_status=\\\"pending\\\"`, a validly shaped remaining body, and an invalid or expired staff session.\",\"events\":[\"The caller submits the expense-creation request.\"],\"outcomes\":[\"Closed-enum decoding refuses HTTP 422 before authentication or any project guard.\",\"Decoding accepts the wire value; the A4 guard runs first and the invalid session wins, so the status check is never reached.\"],\"observer\":\"The caller and request/Registry telemetry see which stage refused the request.\"}},{\"unit\":\"A8\",\"subject\":\"ProgressPhoto replay content\",\"kind\":\"undefined equality\",\"text\":\"“ProgressPhoto | `intake_id` | equal content → return existing photo; different content → conflict, nothing changed” does not define the content covered by equality, while M34 includes `project_id`, `file_ref`, `photo_date`, `section_id`, `caption`, `client_visible`, and `intake_source`, and M35 does not retain `intake_source`.\",\"question\":\"Which exact publication, context, and provenance fields participate in ProgressPhoto replay equality, and how can equality be verified for any participating field that is not persisted?\",\"options\":[\"Compare all PhotoPublication fields, including `intake_source`\",\"Compare only fields retained by ProgressPhoto\",\"Compare only immutable intake facts and exclude mutable presentation fields, actor provenance, and `intake_source`\",\"Persist an original-content fingerprint covering a specified field set\"],\"default_guess\":\"Compare `project_id`, `file_ref`, `photo_date`, initial `section_id`, initial `caption`, and initial `client_visible`; exclude `intake_source` and authenticated actor provenance, and retain an original-content fingerprint.\",\"witness\":{\"initial\":\"Project P has no photo with intake identity I.\",\"events\":[\"Staff A publishes I with file F and `intake_source=\\\"telegram\\\"`; the photo is committed but the response is lost.\",\"Staff A retries the same persisted photo facts and I but supplies `intake_source=\\\"operator\\\"`.\"],\"outcomes\":[\"If every PhotoPublication field is content, the retry conflicts.\",\"If equality covers only retained ProgressPhoto facts, the retry returns the existing photo.\"],\"observer\":\"Staff A sees conflict versus successful replay.\"}},{\"unit\":\"A8\",\"subject\":\"ProgressPhoto replay after edits\",\"kind\":\"undefined comparison baseline\",\"text\":\"“equal content → return existing photo; different content → conflict” does not say whether equality is against the original accepted publication or the photo's current mutable caption, section, and visibility; M35 permits those fields to change and retains no original-publication fingerprint.\",\"question\":\"After a photo has been edited, is a retry compared with its original accepted content or its current state, and where is the chosen comparison state retained?\",\"options\":[\"Compare against the original publication, requiring retained original content or a fingerprint\",\"Compare against the current ProgressPhoto state\",\"Treat any retry after a relevant edit as a conflict\"],\"default_guess\":\"Compare against the original accepted publication using an immutable fingerprint.\",\"witness\":{\"initial\":\"Photo intake I was published with caption “before” and is currently stored.\",\"events\":[\"An authorized staff member changes the photo caption to “after”.\",\"The original publisher retries the original request for I with caption “before” after losing the first response.\"],\"outcomes\":[\"Comparison with original accepted content classifies the request as an equal replay and returns the edited existing photo.\",\"Comparison with current state classifies the request as different content and returns a conflict.\"],\"observer\":\"The retrying staff member sees replay success versus conflict.\"}},{\"unit\":\"A8\",\"subject\":\"WorkPayment replay across projects\",\"kind\":\"cross-text contradiction\",\"text\":\"A8 says “equal content → return existing payment; different content → conflict,” while M33 defines equality as equal amount, date, and description, omitting `project_id`; the common authorization rule requires project-scoped results to remain bounded by the authorized project.\",\"question\":\"When an existing `payment_id` belongs to another project, does differing `project_id` make the registration a conflict, or does M33's amount/date/description equality require returning that other project's payment?\",\"options\":[\"Include `project_id` in replay equality and return a conflict\",\"Follow M33 literally and return the existing payment when amount, date, and description match\",\"Use payment identity scoped by project rather than globally\"],\"default_guess\":\"Include `project_id` in equality and return a conflict for a cross-project collision.\",\"witness\":{\"initial\":\"Payment X exists in project P1 with amount 100 EUR, date D, and description “advance”; staff B has payment-management access to P2 but no access to P1.\",\"events\":[\"Staff B registers payment X for P2 with the same amount, date, and description.\"],\"outcomes\":[\"Following M33's stated equality returns the existing P1 payment or reports a replay of it.\",\"Treating project as content returns a conflict and reveals no P1 record.\"],\"observer\":\"Staff B sees replay success and possibly P1-derived identifiers versus conflict; P2's payment view also differs.\"}},{\"unit\":\"A31\",\"subject\":\"security-review resolution of replay concurrency\",\"kind\":\"review contradiction\",\"text\":\"A31 states “Every category resolves to an accepted decision or an open question” and marks concurrency applicable with references including A8, but changed A8 leaves ProgressPhoto content equality and cross-project WorkPayment equality unresolved.\",\"question\":\"Is the concurrency/security category resolved despite the unspecified replay equality, or must A31 identify these replay questions as unresolved until the equality contracts are closed?\",\"options\":[\"Keep the category resolved and state the missing equality semantics in A8\",\"Mark concurrency unresolved\",\"List the replay questions as explicit later-state open questions\"],\"default_guess\":\"Mark the category unresolved until A8 defines the equality field sets and comparison baseline.\",\"witness\":{\"initial\":\"A photo has been edited after its first publication, and a payment identity used in P1 is submitted for P2.\",\"events\":[\"A caller retries the photo's original publication.\",\"An authorized P2 caller registers the reused payment identity with otherwise equal values.\"],\"outcomes\":[\"One implementation accepts the photo replay and conflicts the payment because it compares original photo content and includes project in payment content.\",\"Another conflicts the photo and returns the P1 payment because it compares current photo state and follows M33's project-omitting equality.\"],\"observer\":\"The callers observe different replay decisions, and the second payment outcome crosses the authorized project boundary.\"}}]}",
+ "set_aside": []
+}

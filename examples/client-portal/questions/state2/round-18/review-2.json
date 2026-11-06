@@ -1,0 +1,108 @@
+{
+ "open_points": [
+  {
+   "subject": "ProgressPhoto replay equality",
+   "kind": "undefined content identity",
+   "text": "A8 says “equal content → return existing photo; different content → conflict”, but does not define which PhotoPublication or ProgressPhoto fields constitute content; in particular `intake_source` is accepted but not persisted, and `published_by` comes from the authorized context rather than the request.",
+   "question": "Which fields, and which equality or canonicalization rules, determine whether a repeated `intake_id` has equal content?",
+   "options": [
+    "Compare every supplied PhotoPublication field other than `intake_id`, including `intake_source`, but exclude authenticated actor provenance.",
+    "Compare only fields retained on ProgressPhoto: project, file reference, photo date, section, caption and visibility.",
+    "Also include authenticated `published_by` in equality, making a retry by another authorized operator conflict."
+   ],
+   "default_guess": "Compare project_id, file_ref, photo_date, section_id, caption and client_visible; exclude intake_source and authenticated actor provenance.",
+   "witness": {
+    "initial": "Active project P has no photo with intake_id I; operators O1 and O2 are both authorized for P.",
+    "events": [
+     "O1 publishes I with intake_source `telegram`; the photo is stored, but intake_source is discarded.",
+     "O1 retries the otherwise identical publication with intake_source `manual`, or O2 retries the identical request."
+    ],
+    "outcomes": [
+     "The existing photo is returned because discarded source labels and actor provenance are outside replay content.",
+     "The retry conflicts because either intake_source or published_by differs."
+    ],
+    "observer": "The retrying operator sees replay success or conflict."
+   },
+   "unit": "A8"
+  },
+  {
+   "subject": "ProgressPhoto replay after photo edits",
+   "kind": "missing comparison baseline",
+   "text": "A8 requires equal-content replay, while M35 permits later changes to caption, section and visibility and stores no creation fingerprint or immutable copy of their initially published values.",
+   "question": "Is replay content compared with the photo's original publication or with its current mutable state, and how can original equality be verified after an edit?",
+   "options": [
+    "Compare against current ProgressPhoto fields, so retrying the original publication after an edit conflicts.",
+    "Compare against immutable original publication content, requiring retained replay evidence not named by the models.",
+    "Ignore mutable caption, section and visibility when classifying replay."
+   ],
+   "default_guess": "Retain and compare an immutable canonical fingerprint of the original publication, separate from the mutable current photo state.",
+   "witness": {
+    "initial": "Active project P contains no photo with intake_id I.",
+    "events": [
+     "Operator O publishes I with caption `before` and client_visible=true.",
+     "O updates the stored photo to caption `after` and client_visible=false.",
+     "O retries the original publication with caption `before` and client_visible=true."
+    ],
+    "outcomes": [
+     "The existing photo is returned because the retry equals the original publication.",
+     "The retry conflicts because it differs from the photo's current mutable fields."
+    ],
+    "observer": "Operator O sees replay success or conflict."
+   },
+   "unit": "A8"
+  },
+  {
+   "subject": "WorkPayment replay across projects",
+   "kind": "conflicting identity dimensions",
+   "text": "A8 says WorkPayment replay depends on `payment_id` and “equal content”, while M33 says equality is amount, payment date and description; `project_id` is a persisted payment field and every project-scoped result must remain bounded to the authorized project.",
+   "question": "Does `project_id` participate in WorkPayment replay equality, and what happens when the same payment_id and equal amount/date/description are submitted through another authorized project?",
+   "options": [
+    "Project_id is content, so the second registration conflicts and reveals no payment from the first project.",
+    "Project_id is not content, following M33's stated equality tuple, so the existing payment from the first project is returned.",
+    "Payment identity is scoped by project despite A8 naming payment_id alone, allowing one payment per `(project_id, payment_id)`."
+   ],
+   "default_guess": "Treat payment_id as globally unique but include project_id in replay equality, so cross-project reuse conflicts without returning the other project's record.",
+   "witness": {
+    "initial": "Operator O is authorized for active projects P1 and P2; neither has payments.",
+    "events": [
+     "O registers payment_id X on P1 for EUR 100, date D, description `advance`.",
+     "O registers payment_id X on P2 with the same amount, date and description."
+    ],
+    "outcomes": [
+     "M33's listed equality fields match, so the existing P1 payment is returned on the P2 operation.",
+     "The project differs, so A8 classifies different content and refuses the P2 operation without exposing P1's payment."
+    ],
+    "observer": "Operator O sees an existing payment result or a conflict; a project-scoped client may consequently see different payment ownership."
+   },
+   "unit": "A8"
+  },
+  {
+   "subject": "A31 concurrency review for differential replay",
+   "kind": "unresolved race semantics",
+   "text": "A31 says concurrency is resolved by A8 and affects replay identities, but changed A8 adds different-content conflicts without stating how a concurrent loser is reloaded and classified when both calls initially observe no record.",
+   "question": "When two concurrent first submissions use the same ProgressPhoto intake_id or WorkPayment payment_id with different content, what exact outcome must the losing transaction produce?",
+   "options": [
+    "One commits and the loser reloads the winner, classifies different content and returns the specified conflict.",
+    "One commits and the loser exposes a persistence/uniqueness conflict without content classification.",
+    "The operation serializes identity classification so callers can observe only creation or the A8 replay outcomes."
+   ],
+   "default_guess": "Linearize on the identity: one transaction creates, and every uniqueness loser reloads the winner and returns equal-content replay or different-content conflict.",
+   "witness": {
+    "initial": "No ProgressPhoto with intake_id I exists in active project P; two authorized requests are ready concurrently.",
+    "events": [
+     "Operator O1 submits I with caption A.",
+     "Operator O2 concurrently submits I with caption B before either transaction observes a stored photo."
+    ],
+    "outcomes": [
+     "One photo commits and the losing request returns A8's different-content conflict.",
+     "One photo commits and the losing request returns an unclassified persistence error because its pre-insert replay check found nothing."
+    ],
+    "observer": "O1 or O2 sees a defined content conflict or a storage-dependent failure."
+   },
+   "unit": "A31"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"ProgressPhoto replay equality\",\"kind\":\"undefined content identity\",\"text\":\"A8 says “equal content → return existing photo; different content → conflict”, but does not define which PhotoPublication or ProgressPhoto fields constitute content; in particular `intake_source` is accepted but not persisted, and `published_by` comes from the authorized context rather than the request.\",\"question\":\"Which fields, and which equality or canonicalization rules, determine whether a repeated `intake_id` has equal content?\",\"options\":[\"Compare every supplied PhotoPublication field other than `intake_id`, including `intake_source`, but exclude authenticated actor provenance.\",\"Compare only fields retained on ProgressPhoto: project, file reference, photo date, section, caption and visibility.\",\"Also include authenticated `published_by` in equality, making a retry by another authorized operator conflict.\"],\"default_guess\":\"Compare project_id, file_ref, photo_date, section_id, caption and client_visible; exclude intake_source and authenticated actor provenance.\",\"witness\":{\"initial\":\"Active project P has no photo with intake_id I; operators O1 and O2 are both authorized for P.\",\"events\":[\"O1 publishes I with intake_source `telegram`; the photo is stored, but intake_source is discarded.\",\"O1 retries the otherwise identical publication with intake_source `manual`, or O2 retries the identical request.\"],\"outcomes\":[\"The existing photo is returned because discarded source labels and actor provenance are outside replay content.\",\"The retry conflicts because either intake_source or published_by differs.\"],\"observer\":\"The retrying operator sees replay success or conflict.\"},\"unit\":\"A8\"},{\"subject\":\"ProgressPhoto replay after photo edits\",\"kind\":\"missing comparison baseline\",\"text\":\"A8 requires equal-content replay, while M35 permits later changes to caption, section and visibility and stores no creation fingerprint or immutable copy of their initially published values.\",\"question\":\"Is replay content compared with the photo's original publication or with its current mutable state, and how can original equality be verified after an edit?\",\"options\":[\"Compare against current ProgressPhoto fields, so retrying the original publication after an edit conflicts.\",\"Compare against immutable original publication content, requiring retained replay evidence not named by the models.\",\"Ignore mutable caption, section and visibility when classifying replay.\"],\"default_guess\":\"Retain and compare an immutable canonical fingerprint of the original publication, separate from the mutable current photo state.\",\"witness\":{\"initial\":\"Active project P contains no photo with intake_id I.\",\"events\":[\"Operator O publishes I with caption `before` and client_visible=true.\",\"O updates the stored photo to caption `after` and client_visible=false.\",\"O retries the original publication with caption `before` and client_visible=true.\"],\"outcomes\":[\"The existing photo is returned because the retry equals the original publication.\",\"The retry conflicts because it differs from the photo's current mutable fields.\"],\"observer\":\"Operator O sees replay success or conflict.\"},\"unit\":\"A8\"},{\"subject\":\"WorkPayment replay across projects\",\"kind\":\"conflicting identity dimensions\",\"text\":\"A8 says WorkPayment replay depends on `payment_id` and “equal content”, while M33 says equality is amount, payment date and description; `project_id` is a persisted payment field and every project-scoped result must remain bounded to the authorized project.\",\"question\":\"Does `project_id` participate in WorkPayment replay equality, and what happens when the same payment_id and equal amount/date/description are submitted through another authorized project?\",\"options\":[\"Project_id is content, so the second registration conflicts and reveals no payment from the first project.\",\"Project_id is not content, following M33's stated equality tuple, so the existing payment from the first project is returned.\",\"Payment identity is scoped by project despite A8 naming payment_id alone, allowing one payment per `(project_id, payment_id)`.\"],\"default_guess\":\"Treat payment_id as globally unique but include project_id in replay equality, so cross-project reuse conflicts without returning the other project's record.\",\"witness\":{\"initial\":\"Operator O is authorized for active projects P1 and P2; neither has payments.\",\"events\":[\"O registers payment_id X on P1 for EUR 100, date D, description `advance`.\",\"O registers payment_id X on P2 with the same amount, date and description.\"],\"outcomes\":[\"M33's listed equality fields match, so the existing P1 payment is returned on the P2 operation.\",\"The project differs, so A8 classifies different content and refuses the P2 operation without exposing P1's payment.\"],\"observer\":\"Operator O sees an existing payment result or a conflict; a project-scoped client may consequently see different payment ownership.\"},\"unit\":\"A8\"},{\"subject\":\"A31 concurrency review for differential replay\",\"kind\":\"unresolved race semantics\",\"text\":\"A31 says concurrency is resolved by A8 and affects replay identities, but changed A8 adds different-content conflicts without stating how a concurrent loser is reloaded and classified when both calls initially observe no record.\",\"question\":\"When two concurrent first submissions use the same ProgressPhoto intake_id or WorkPayment payment_id with different content, what exact outcome must the losing transaction produce?\",\"options\":[\"One commits and the loser reloads the winner, classifies different content and returns the specified conflict.\",\"One commits and the loser exposes a persistence/uniqueness conflict without content classification.\",\"The operation serializes identity classification so callers can observe only creation or the A8 replay outcomes.\"],\"default_guess\":\"Linearize on the identity: one transaction creates, and every uniqueness loser reloads the winner and returns equal-content replay or different-content conflict.\",\"witness\":{\"initial\":\"No ProgressPhoto with intake_id I exists in active project P; two authorized requests are ready concurrently.\",\"events\":[\"Operator O1 submits I with caption A.\",\"Operator O2 concurrently submits I with caption B before either transaction observes a stored photo.\"],\"outcomes\":[\"One photo commits and the losing request returns A8's different-content conflict.\",\"One photo commits and the losing request returns an unclassified persistence error because its pre-insert replay check found nothing.\"],\"observer\":\"O1 or O2 sees a defined content conflict or a storage-dependent failure.\"},\"unit\":\"A31\"}]}",
+ "set_aside": []
+}

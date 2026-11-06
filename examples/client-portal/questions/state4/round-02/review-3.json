@@ -1,0 +1,168 @@
+{
+ "open_points": [
+  {
+   "unit": "40_flows.md:`flow:bootstrap_first_administrator`",
+   "subject": "bootstrap infrastructure failures and CLI exit contract",
+   "kind": "unstated failure outcome",
+   "text": "The flow assigns exit codes only to confirmation mismatch, rejected identity input, and an already-completed bootstrap; it gives no outcome for failure of `load_runtime_settings`, password hashing, opening or initializing the database, inserting the records, or committing, although A29 calls the exit codes a closed external contract.",
+   "question": "What exit code and observable output must the bootstrap command produce when configuration, credential security, or persistence fails?",
+   "options": [
+    "Add a distinct closed exit code for an internal/configuration/storage failure.",
+    "Let the command terminate outside the closed exit-code contract.",
+    "Map such failures to one of exit codes 1–3."
+   ],
+   "default_guess": "Add one non-secret internal-failure exit code and emit no implementation detail.",
+   "witness": {
+    "initial": "The staff table is empty, but the configured SQLite location cannot be opened.",
+    "events": [
+     "The host operator supplies matching valid email and password input.",
+     "`staff_bootstrap_cli` loads settings and invokes the bootstrap store.",
+     "`staff_bootstrap_store` fails while opening its connection."
+    ],
+    "outcomes": [
+     "The command exits with a new dedicated infrastructure-failure code.",
+     "The uncaught storage failure terminates the command with an implementation-dependent exit code despite the stated closed contract."
+    ],
+    "observer": "The host operator and deployment automation branching on the exit code."
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:staff_session_lifecycle`",
+   "subject": "wrong current password during password change",
+   "kind": "unstated failure outcome",
+   "text": "`change_staff_password` verifies the current password, but the flow's Errors section states no outcome for a valid active session presenting the wrong current password; the shared policy separately permits authentication failures as 401 and input rejections as 422.",
+   "question": "Is a wrong current password on the authenticated password-change operation a concealed authentication failure or an input rejection?",
+   "options": [
+    "Concealed authentication failure (401).",
+    "Input rejection (422)."
+   ],
+   "default_guess": "Concealed authentication failure (401).",
+   "witness": {
+    "initial": "An active verified staff account has a valid session and password P.",
+    "events": [
+     "The staff member calls the password-change route with the valid bearer session, current password Q where Q differs from P, and a valid new password."
+    ],
+    "outcomes": [
+     "The route answers the concealed authentication failure with 401.",
+     "The route treats the supplied current password as invalid command input and answers 422."
+    ],
+    "observer": "The staff member and any client handling reauthentication differently from form validation."
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:administer_viewer_access`",
+   "subject": "Registry result for a new viewer project grant",
+   "kind": "contradiction",
+   "text": "This flow says an unknown or inactive project is “the Registry boundary failure here” and answers 502, while State 2 A6 says `exists=false` and `is_active=false` are read by the caller and are “not a gateway failure”; R0-24 also distinguishes an archived project from Registry unavailability.",
+   "question": "What must `grant_viewer_project` return when Registry successfully reports that the project is unknown or archived?",
+   "options": [
+    "Unknown project is 404 and archived project is 409, reserving 502 for an actual Registry boundary failure.",
+    "Both successful negative validation results are translated to Registry boundary failure 502."
+   ],
+   "default_guess": "Return 404 for unknown and 409 for archived; use 502 only when the Registry call itself fails.",
+   "witness": {
+    "initial": "An authenticated administrator and active viewer exist; Registry is reachable.",
+    "events": [
+     "The administrator requests a viewer grant for project X.",
+     "Registry successfully returns `exists=false` for X."
+    ],
+    "outcomes": [
+     "A6 is applied: the caller reads the negative validation and the route answers not found (404).",
+     "The State 4 viewer-administration flow is applied: the negative validation is treated as a Registry boundary failure and the route answers 502."
+    ],
+    "observer": "The administrator and an API client deciding whether to correct the project id or retry Registry."
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:administer_service_principals`",
+   "subject": "duplicate or re-created producer project grant",
+   "kind": "unstated failure outcome",
+   "text": "`grant_producer_project` is listed without any duplicate-grant failure, while M15 permits only one grant record per `(service_principal_id, project_id)`, makes revocation terminal, and says a second grant is refused as a persistence conflict.",
+   "question": "What declared failure and HTTP outcome does `grant_producer_project` produce when the pair already has an active grant, and when its sole grant has been revoked?",
+   "options": [
+    "Both cases surface as persistence conflict (500).",
+    "An active duplicate is rejected before insertion, while a post-revocation attempt surfaces as persistence conflict.",
+    "Both cases use a declared domain conflict (409)."
+   ],
+   "default_guess": "Reject an active duplicate as a domain conflict and a post-revocation attempt as the specified persistence conflict, matching the analogous staff/viewer flows.",
+   "witness": {
+    "initial": "An active `granted_projects` service principal already has an active grant for project X.",
+    "events": [
+     "An administrator repeats `grant_producer_project` for the same principal and X."
+    ],
+    "outcomes": [
+     "The operation detects the active grant and returns a declared refusal before writing.",
+     "The operation attempts insertion, hits the one-record-per-pair constraint, and returns the persistence failure mapped to 500."
+    ],
+    "observer": "The administrator and automation deciding whether the request is invalid or the service is unhealthy."
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:import_estimate_snapshot`",
+   "subject": "module ownership of producer-scope authorization",
+   "kind": "contradictory call ownership",
+   "text": "The flow says `authorization_guard.authorize_snapshot_import` checks producer scope by calling `service_identity.authorize_producer_scope`, but State 3 says `authorization_guard` knows only `models`, `registry_gateway`, and `portal_store`; `snapshot_import` also does not know `service_identity`. State 3 simultaneously assigns A12 primarily to `service_identity` and its guard part to `authorization_guard`.",
+   "question": "Which module invokes the producer-scope capability, and at what point is its grant decision made relative to the rest of the authorization guard?",
+   "options": [
+    "`authorization_guard` owns and performs the producer-grant lookup directly; remove the call to `service_identity.authorize_producer_scope`.",
+    "Allow `authorization_guard` to depend on and call `service_identity.authorize_producer_scope`.",
+    "Have `snapshot_import` call `service_identity.authorize_producer_scope` before invoking the guard."
+   ],
+   "default_guess": "Keep authorization atomic in `authorization_guard` and have it perform the scope lookup directly.",
+   "witness": {
+    "initial": "A `granted_projects` producer has an active credential and active grant for project X; an administrator can revoke that grant concurrently.",
+    "events": [
+     "The producer's import request authenticates successfully.",
+     "The producer import and the administrator's grant-revocation request overlap.",
+     "The revocation commits after a separately delegated scope check could have read the active grant but before a guard-owned scope lookup could read it."
+    ],
+    "outcomes": [
+     "If `service_identity.authorize_producer_scope` is a completed prerequisite, the import retains its authorized context and can be accepted.",
+     "If scope is read by `authorization_guard` at that later point, the revoked grant produces the scoped-not-found classification and an `unknown_project` import result."
+    ],
+    "observer": "The producer reading the import result and the audit trail recording accepted versus rejected."
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:expense_intake_and_management`",
+   "subject": "section validation during expense intake",
+   "kind": "module dependency contradiction",
+   "text": "The Boundary says expense intake resolves sections itself through `portal_store`'s section repository, but step 2 says it calls `budget_management.validate_project_section`; State 3 does not list `budget_management` among `expense_intake`'s dependencies.",
+   "question": "Does `expense_intake` validate section ownership directly through its transaction repository, or must its declared module dependencies be changed so it can call `budget_management.validate_project_section`?",
+   "options": [
+    "Validate directly through the section repository in the intake transaction.",
+    "Add `budget_management` as a dependency and call its capability.",
+    "Move section validation to an existing dependency that can offer it without violating the module order."
+   ],
+   "default_guess": "Validate directly through the section repository in the intake transaction, as the Boundary and State 3 dependency graph imply."
+  },
+  {
+   "unit": "40_flows.md:`flow:build_project_overview`",
+   "subject": "persistence failure while composing an overview component",
+   "kind": "contradiction",
+   "text": "The shared convention maps persistence failures to 500 and says no failure becomes a success, but this flow says “A failed part is `temporarily_unavailable`” and “A part that cannot be read is marked unavailable,” without excluding persistence failures.",
+   "question": "When a repository/persistence failure occurs while reading one overview component, does the whole request fail with 500 or succeed with that component marked `temporarily_unavailable`?",
+   "options": [
+    "Fail the whole overview with 500 for persistence failures; use availability only for designated external/read-dependency failures.",
+    "Return the overview successfully with the failed component marked `temporarily_unavailable`."
+   ],
+   "default_guess": "Fail with 500 on portal persistence failures and reserve `temporarily_unavailable` for explicitly recoverable dependency reads such as the post-guard Registry context fetch.",
+   "witness": {
+    "initial": "A caller is authorized for project X; its budget and other records exist, but the expense repository raises a storage failure while the overview is being composed.",
+    "events": [
+     "The caller requests the project overview.",
+     "The authorization guard succeeds.",
+     "`build_project_overview` reads the budget successfully and encounters the persistence failure while reading expenses."
+    ],
+    "outcomes": [
+     "The shared failure convention is applied and the route answers 500.",
+     "The overview flow catches the component failure and answers a successful `ProjectOverview` with `expenses_availability=temporarily_unavailable`."
+    ],
+    "observer": "The staff member or viewer, and clients deciding whether a partial overview is usable or the request must be retried."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"40_flows.md:`flow:bootstrap_first_administrator`\",\"subject\":\"bootstrap infrastructure failures and CLI exit contract\",\"kind\":\"unstated failure outcome\",\"text\":\"The flow assigns exit codes only to confirmation mismatch, rejected identity input, and an already-completed bootstrap; it gives no outcome for failure of `load_runtime_settings`, password hashing, opening or initializing the database, inserting the records, or committing, although A29 calls the exit codes a closed external contract.\",\"question\":\"What exit code and observable output must the bootstrap command produce when configuration, credential security, or persistence fails?\",\"options\":[\"Add a distinct closed exit code for an internal/configuration/storage failure.\",\"Let the command terminate outside the closed exit-code contract.\",\"Map such failures to one of exit codes 1–3.\"],\"default_guess\":\"Add one non-secret internal-failure exit code and emit no implementation detail.\",\"witness\":{\"initial\":\"The staff table is empty, but the configured SQLite location cannot be opened.\",\"events\":[\"The host operator supplies matching valid email and password input.\",\"`staff_bootstrap_cli` loads settings and invokes the bootstrap store.\",\"`staff_bootstrap_store` fails while opening its connection.\"],\"outcomes\":[\"The command exits with a new dedicated infrastructure-failure code.\",\"The uncaught storage failure terminates the command with an implementation-dependent exit code despite the stated closed contract.\"],\"observer\":\"The host operator and deployment automation branching on the exit code.\"}},{\"unit\":\"40_flows.md:`flow:staff_session_lifecycle`\",\"subject\":\"wrong current password during password change\",\"kind\":\"unstated failure outcome\",\"text\":\"`change_staff_password` verifies the current password, but the flow's Errors section states no outcome for a valid active session presenting the wrong current password; the shared policy separately permits authentication failures as 401 and input rejections as 422.\",\"question\":\"Is a wrong current password on the authenticated password-change operation a concealed authentication failure or an input rejection?\",\"options\":[\"Concealed authentication failure (401).\",\"Input rejection (422).\"],\"default_guess\":\"Concealed authentication failure (401).\",\"witness\":{\"initial\":\"An active verified staff account has a valid session and password P.\",\"events\":[\"The staff member calls the password-change route with the valid bearer session, current password Q where Q differs from P, and a valid new password.\"],\"outcomes\":[\"The route answers the concealed authentication failure with 401.\",\"The route treats the supplied current password as invalid command input and answers 422.\"],\"observer\":\"The staff member and any client handling reauthentication differently from form validation.\"}},{\"unit\":\"40_flows.md:`flow:administer_viewer_access`\",\"subject\":\"Registry result for a new viewer project grant\",\"kind\":\"contradiction\",\"text\":\"This flow says an unknown or inactive project is “the Registry boundary failure here” and answers 502, while State 2 A6 says `exists=false` and `is_active=false` are read by the caller and are “not a gateway failure”; R0-24 also distinguishes an archived project from Registry unavailability.\",\"question\":\"What must `grant_viewer_project` return when Registry successfully reports that the project is unknown or archived?\",\"options\":[\"Unknown project is 404 and archived project is 409, reserving 502 for an actual Registry boundary failure.\",\"Both successful negative validation results are translated to Registry boundary failure 502.\"],\"default_guess\":\"Return 404 for unknown and 409 for archived; use 502 only when the Registry call itself fails.\",\"witness\":{\"initial\":\"An authenticated administrator and active viewer exist; Registry is reachable.\",\"events\":[\"The administrator requests a viewer grant for project X.\",\"Registry successfully returns `exists=false` for X.\"],\"outcomes\":[\"A6 is applied: the caller reads the negative validation and the route answers not found (404).\",\"The State 4 viewer-administration flow is applied: the negative validation is treated as a Registry boundary failure and the route answers 502.\"],\"observer\":\"The administrator and an API client deciding whether to correct the project id or retry Registry.\"}},{\"unit\":\"40_flows.md:`flow:administer_service_principals`\",\"subject\":\"duplicate or re-created producer project grant\",\"kind\":\"unstated failure outcome\",\"text\":\"`grant_producer_project` is listed without any duplicate-grant failure, while M15 permits only one grant record per `(service_principal_id, project_id)`, makes revocation terminal, and says a second grant is refused as a persistence conflict.\",\"question\":\"What declared failure and HTTP outcome does `grant_producer_project` produce when the pair already has an active grant, and when its sole grant has been revoked?\",\"options\":[\"Both cases surface as persistence conflict (500).\",\"An active duplicate is rejected before insertion, while a post-revocation attempt surfaces as persistence conflict.\",\"Both cases use a declared domain conflict (409).\"],\"default_guess\":\"Reject an active duplicate as a domain conflict and a post-revocation attempt as the specified persistence conflict, matching the analogous staff/viewer flows.\",\"witness\":{\"initial\":\"An active `granted_projects` service principal already has an active grant for project X.\",\"events\":[\"An administrator repeats `grant_producer_project` for the same principal and X.\"],\"outcomes\":[\"The operation detects the active grant and returns a declared refusal before writing.\",\"The operation attempts insertion, hits the one-record-per-pair constraint, and returns the persistence failure mapped to 500.\"],\"observer\":\"The administrator and automation deciding whether the request is invalid or the service is unhealthy.\"}},{\"unit\":\"40_flows.md:`flow:import_estimate_snapshot`\",\"subject\":\"module ownership of producer-scope authorization\",\"kind\":\"contradictory call ownership\",\"text\":\"The flow says `authorization_guard.authorize_snapshot_import` checks producer scope by calling `service_identity.authorize_producer_scope`, but State 3 says `authorization_guard` knows only `models`, `registry_gateway`, and `portal_store`; `snapshot_import` also does not know `service_identity`. State 3 simultaneously assigns A12 primarily to `service_identity` and its guard part to `authorization_guard`.\",\"question\":\"Which module invokes the producer-scope capability, and at what point is its grant decision made relative to the rest of the authorization guard?\",\"options\":[\"`authorization_guard` owns and performs the producer-grant lookup directly; remove the call to `service_identity.authorize_producer_scope`.\",\"Allow `authorization_guard` to depend on and call `service_identity.authorize_producer_scope`.\",\"Have `snapshot_import` call `service_identity.authorize_producer_scope` before invoking the guard.\"],\"default_guess\":\"Keep authorization atomic in `authorization_guard` and have it perform the scope lookup directly.\",\"witness\":{\"initial\":\"A `granted_projects` producer has an active credential and active grant for project X; an administrator can revoke that grant concurrently.\",\"events\":[\"The producer's import request authenticates successfully.\",\"The producer import and the administrator's grant-revocation request overlap.\",\"The revocation commits after a separately delegated scope check could have read the active grant but before a guard-owned scope lookup could read it.\"],\"outcomes\":[\"If `service_identity.authorize_producer_scope` is a completed prerequisite, the import retains its authorized context and can be accepted.\",\"If scope is read by `authorization_guard` at that later point, the revoked grant produces the scoped-not-found classification and an `unknown_project` import result.\"],\"observer\":\"The producer reading the import result and the audit trail recording accepted versus rejected.\"}},{\"unit\":\"40_flows.md:`flow:expense_intake_and_management`\",\"subject\":\"section validation during expense intake\",\"kind\":\"module dependency contradiction\",\"text\":\"The Boundary says expense intake resolves sections itself through `portal_store`'s section repository, but step 2 says it calls `budget_management.validate_project_section`; State 3 does not list `budget_management` among `expense_intake`'s dependencies.\",\"question\":\"Does `expense_intake` validate section ownership directly through its transaction repository, or must its declared module dependencies be changed so it can call `budget_management.validate_project_section`?\",\"options\":[\"Validate directly through the section repository in the intake transaction.\",\"Add `budget_management` as a dependency and call its capability.\",\"Move section validation to an existing dependency that can offer it without violating the module order.\"],\"default_guess\":\"Validate directly through the section repository in the intake transaction, as the Boundary and State 3 dependency graph imply.\"},{\"unit\":\"40_flows.md:`flow:build_project_overview`\",\"subject\":\"persistence failure while composing an overview component\",\"kind\":\"contradiction\",\"text\":\"The shared convention maps persistence failures to 500 and says no failure becomes a success, but this flow says “A failed part is `temporarily_unavailable`” and “A part that cannot be read is marked unavailable,” without excluding persistence failures.\",\"question\":\"When a repository/persistence failure occurs while reading one overview component, does the whole request fail with 500 or succeed with that component marked `temporarily_unavailable`?\",\"options\":[\"Fail the whole overview with 500 for persistence failures; use availability only for designated external/read-dependency failures.\",\"Return the overview successfully with the failed component marked `temporarily_unavailable`.\"],\"default_guess\":\"Fail with 500 on portal persistence failures and reserve `temporarily_unavailable` for explicitly recoverable dependency reads such as the post-guard Registry context fetch.\",\"witness\":{\"initial\":\"A caller is authorized for project X; its budget and other records exist, but the expense repository raises a storage failure while the overview is being composed.\",\"events\":[\"The caller requests the project overview.\",\"The authorization guard succeeds.\",\"`build_project_overview` reads the budget successfully and encounters the persistence failure while reading expenses.\"],\"outcomes\":[\"The shared failure convention is applied and the route answers 500.\",\"The overview flow catches the component failure and answers a successful `ProjectOverview` with `expenses_availability=temporarily_unavailable`.\"],\"observer\":\"The staff member or viewer, and clients deciding whether a partial overview is usable or the request must be retried.\"}}]}",
+ "set_aside": []
+}

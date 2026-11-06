@@ -383,8 +383,8 @@ The table is rules data: `rules.supported_external_contract_versions` (SPEC_STAN
 | Fact | Identity | Replay behavior |
 | --- | --- | --- |
 | Expense | `recognized_document_id` + canonical `intake_fingerprint` | same fingerprint → existing Expense/Document; different fingerprint → integrity conflict, nothing changed |
-| ProgressPhoto | `intake_id` | equal content → return existing photo; different content → conflict, nothing changed |
-| WorkPayment | `payment_id` (command-supplied UUID) | equal content → return existing payment; different content → conflict, nothing changed |
+| ProgressPhoto | `intake_id` | a publication whose kept fields (project, section, caption, visibility, `file_ref`, `photo_date`) equal the photo as now stored → return it; otherwise conflict, nothing changed; `intake_source`, never kept, is not compared |
+| WorkPayment | `payment_id` (command-supplied UUID) | a registration equal to the stored payment → return it; otherwise conflict, nothing changed |
 | ApprovedEstimateSnapshot | `(project_id, estimate_id, estimate_version)` + `content_fingerprint` | same fingerprint → existing snapshot (`idempotent_replay`); different → `integrity_conflict`, nothing stored |
 
 A fingerprint is a deterministic digest of the content it covers, computed

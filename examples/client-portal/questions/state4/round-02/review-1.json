@@ -1,0 +1,267 @@
+{
+ "open_points": [
+  {
+   "subject": "viewer-route composition at service startup",
+   "kind": "missing composition capability",
+   "text": "`module:runtime` ... builds the inner application with `capability:api.create_app` ... and mounts the inner application under `/api` and at the root.",
+   "question": "Which module installs the viewer endpoints owned by `api_irregular`, given that `runtime` knows only `api` and `api.create_app` neither owns nor may import `api_irregular`?",
+   "options": [
+    "`api.create_app` also installs `api_irregular` routes despite its stated ownership and Knows list",
+    "`runtime` installs `api_irregular` routes through an additional dependency/capability",
+    "Only staff, administrator and producer routes are installed"
+   ],
+   "default_guess": "Make `api.create_app` compose both route groups.",
+   "witness": {
+    "initial": "The service starts successfully and a viewer has a valid access credential.",
+    "events": [
+     "The host starts the runtime through `create_runtime_app`.",
+     "The viewer sends a valid request to the documented viewer-entry route."
+    ],
+    "outcomes": [
+     "The viewer route was composed somewhere and entry creates a session.",
+     "No named composition path installed the viewer route, so the request receives a route-level 404."
+    ],
+    "observer": "The viewer and deployment operator"
+   },
+   "unit": "40_flows.md:`flow:start_service_and_answer_health`"
+  },
+  {
+   "subject": "bootstrap failures outside the four exit-code cases",
+   "kind": "unstated failure outcome",
+   "text": "It resolves the database through `capability:runtime_settings.load_runtime_settings` and builds the bootstrap store.",
+   "question": "What closed CLI outcome and exit code apply when runtime settings cannot be loaded, the database cannot be opened, schema creation fails, or the bootstrap transaction has another storage failure?",
+   "options": [
+    "Map every such failure to one of exit codes 1–3",
+    "Add a distinct closed exit code",
+    "Let the command terminate with an uncaught failure and a platform-selected exit code"
+   ],
+   "default_guess": "Add a distinct non-secret storage/configuration failure exit code.",
+   "witness": {
+    "initial": "No staff account exists, but the configured SQLite location cannot be opened.",
+    "events": [
+     "The host operator enters a valid matching email and password.",
+     "The CLI loads settings and attempts to construct or use the bootstrap store.",
+     "Opening the database fails."
+    ],
+    "outcomes": [
+     "The CLI maps the failure to one of the documented exit codes 0–3.",
+     "The failure escapes and the process uses an undocumented exit code, despite the exit-code contract being closed."
+    ],
+    "observer": "The host operator and deployment script"
+   },
+   "unit": "40_flows.md:`flow:bootstrap_first_administrator`"
+  },
+  {
+   "subject": "administration operations targeting a missing staff account",
+   "kind": "unstated failure outcome",
+   "text": "An administrator creates a staff account, changes its status, assigns it to a project or revokes an assignment, performs the recovery override, or lists the active Registry projects to choose from.",
+   "question": "What outcome applies when status change, session revocation, project assignment, or recovery override names a nonexistent staff account?",
+   "options": [
+    "Not found (404)",
+    "Input rejection (422)",
+    "A concealed authorization failure (403)",
+    "For session revocation only, succeed with a zero count"
+   ],
+   "default_guess": "Return not found (404).",
+   "witness": {
+    "initial": "An administrator has a valid session; no account exists for staff id S.",
+    "events": [
+     "The administrator requests the recovery override for S with a valid new email."
+    ],
+    "outcomes": [
+     "The operation returns not found because S does not exist.",
+     "The identity module treats the target as invalid input and returns 422."
+    ],
+    "observer": "The administrator"
+   },
+   "unit": "40_flows.md:`flow:administer_staff_accounts`"
+  },
+  {
+   "subject": "new viewer grant when Registry reports an unknown or archived project",
+   "kind": "contradictory failure classification",
+   "text": "`grant_viewer_project` requires the project known and active ... an unknown or inactive project is the Registry boundary failure here ... Project not known or not active for a new grant: Registry boundary failure (502).",
+   "question": "Should a decoded validation result saying the project is unknown or archived produce 404/409 under A5–A6 and R0-24, or 502 as this flow states?",
+   "options": [
+    "Unknown project is 404 and archived project is 409",
+    "Both are Registry boundary failures mapped to 502"
+   ],
+   "default_guess": "Use 404 for unknown and 409 for archived; reserve 502 for an actual Registry call failure.",
+   "witness": {
+    "initial": "An administrator and active viewer exist; Registry is reachable and returns a valid validation body with `exists=false` for project P.",
+    "events": [
+     "The administrator requests a viewer grant for P.",
+     "`registry_gateway.validate_project_reference` successfully decodes the Registry answer."
+    ],
+    "outcomes": [
+     "A5–A6 treat `exists=false` as a caller-level unknown project, producing 404.",
+     "The viewer-access flow calls the same condition a Registry boundary failure, producing 502."
+    ],
+    "observer": "The administrator"
+   },
+   "unit": "40_flows.md:`flow:administer_viewer_access`"
+  },
+  {
+   "subject": "new producer grant when Registry reports an unknown project",
+   "kind": "unstated contradictory classification",
+   "text": "`grant_producer_project` requires the project known and active (`capability:registry_gateway.validate_project_reference`) ... Archived project for a new grant: 409. Registry failure: 502.",
+   "question": "What response applies when Registry successfully reports `exists=false` for the project of a new producer grant?",
+   "options": [
+    "Not found (404), as A5–A6 classify a decoded unknown project",
+    "Registry failure (502)",
+    "Input rejection (422)"
+   ],
+   "default_guess": "Return not found (404).",
+   "witness": {
+    "initial": "An administrator and service principal exist; Registry is reachable and returns a valid validation result with `exists=false` for P.",
+    "events": [
+     "The administrator requests a producer grant for P.",
+     "The Registry call succeeds and returns the decoded unknown-project result."
+    ],
+    "outcomes": [
+     "The operation returns 404 because the project is unknown.",
+     "The operation returns 502 by grouping every unsuccessful Registry validation under `Registry failure`."
+    ],
+    "observer": "The administrator"
+   },
+   "unit": "40_flows.md:`flow:administer_service_principals`"
+  },
+  {
+   "subject": "producer-scope authorization during snapshot import",
+   "kind": "ownership and dependency contradiction",
+   "text": "`authorize_snapshot_import`, which checks producer scope (`capability:service_identity.authorize_producer_scope`)",
+   "question": "Who performs the authoritative producer-grant check, given that State 3 says `authorization_guard` owns that check but cannot know or call the later `service_identity` module, while this flow makes it call `service_identity.authorize_producer_scope`?",
+   "options": [
+    "`authorization_guard` reads producer scope directly through `portal_store`",
+    "`snapshot_import` calls `service_identity.authorize_producer_scope` before calling the guard",
+    "Reverse or relax the module dependency so the guard calls `service_identity`"
+   ],
+   "default_guess": "Keep scope authorization inside `authorization_guard` and remove the call to `service_identity.authorize_producer_scope`.",
+   "witness": {
+    "initial": "Producer S has a valid credential and an active grant for active project P.",
+    "events": [
+     "S begins an import and a separate administrator revokes S's grant for P.",
+     "The revocation commits before the import's final authorization decision."
+    ],
+    "outcomes": [
+     "If an earlier `service_identity` scope result is authoritative, the import can proceed and be accepted.",
+     "If `authorization_guard` owns and performs the current persisted-scope check, the import records `unknown_project`."
+    ],
+    "observer": "The producer, administrator and audit reader"
+   },
+   "unit": "40_flows.md:`flow:import_estimate_snapshot`"
+  },
+  {
+   "subject": "activation capability enforcement",
+   "kind": "authorization contradiction",
+   "text": "The activation capability is checked by `activate_budget_version` itself on the authorized context and refused as its input rejection (422), not by the guard.",
+   "question": "Is `portal.estimate_snapshot.activate` enforced by the authorization guard as A4 and the trusted-context convention require, or by `budget_management` as an input condition?",
+   "options": [
+    "The guard requires the activation capability and refusal is authorization failure (403)",
+    "The guard supplies a context authorized for another mutation capability and `activate_budget_version` rejects it as input (422)",
+    "Both check it, with one designated authoritative failure"
+   ],
+   "default_guess": "Have the guard require `portal.estimate_snapshot.activate` and return 403 on failure.",
+   "witness": {
+    "initial": "A caller presents a valid staff session and requests activation, but the context reaching the use case names `portal.budget.manage` rather than `portal.estimate_snapshot.activate`.",
+    "events": [
+     "The route invokes the project mutation authorization path.",
+     "The route calls `activate_budget_version` with the resulting context."
+    ],
+    "outcomes": [
+     "A4 rejects before the use case because the required activation capability was not authorized, producing 403.",
+     "The flow lets the context reach `activate_budget_version`, which treats the mismatch as input rejection and produces 422."
+    ],
+    "observer": "The staff caller and API tests"
+   },
+   "unit": "40_flows.md:`flow:maintain_and_activate_budget`"
+  },
+  {
+   "subject": "reading an absent or cross-project budget version",
+   "kind": "unstated failure outcome",
+   "text": "`capability:budget_management.get_budget_version` returns one version of the project with its ordered plans.",
+   "question": "What outcome applies when the requested version does not exist or belongs to another project?",
+   "options": [
+    "Concealed not found (404)",
+    "Input rejection (422)",
+    "Authorization failure (403) for a cross-project version"
+   ],
+   "default_guess": "Return the same not-found response for absent and cross-project versions.",
+   "witness": {
+    "initial": "Operator O is authorized for project P1; budget version V belongs to P2.",
+    "events": [
+     "O requests V through the P1 budget-version read route."
+    ],
+    "outcomes": [
+     "The operation conceals the cross-project record as not found (404).",
+     "The operation treats the project/version mismatch as invalid input (422) or forbidden access (403)."
+    ],
+    "observer": "Operator O"
+   },
+   "unit": "40_flows.md:`flow:maintain_and_activate_budget`"
+  },
+  {
+   "subject": "section validation during expense intake",
+   "kind": "module dependency contradiction",
+   "text": "Each of them resolves sections of the project itself, through `module:portal_store`'s section repository ... every section of the project (`capability:budget_management.validate_project_section`)",
+   "question": "Does `expense_intake` validate sections directly through its transaction's repository, or call `budget_management.validate_project_section`, which it does not know according to State 3 and which would introduce a separate use-case transaction?",
+   "options": [
+    "Validate directly through the section repository in the expense-intake transaction",
+    "Add `budget_management` as a dependency and call `validate_project_section` before opening the expense transaction",
+    "Move section validation to `expense_management`, which `expense_intake` already knows"
+   ],
+   "default_guess": "Validate directly through the section repository in the expense-intake transaction.",
+   "unit": "40_flows.md:`flow:expense_intake_and_management`"
+  },
+  {
+   "subject": "expense and document mutations naming absent or cross-project records",
+   "kind": "unstated failure outcome",
+   "text": "`correct_expense`, `set_expense_inclusion`, `replace_expense_allocations` ... `update_expense_document` changes only the description and visibility",
+   "question": "What response applies when the addressed expense or document is absent or belongs to a different project than the authorized context?",
+   "options": [
+    "Use one concealed not-found response (404) for absent and cross-project records",
+    "Treat the mismatch as input rejection (422)",
+    "Return authorization failure (403) for a cross-project record"
+   ],
+   "default_guess": "Use the same 404 response for absent and cross-project records.",
+   "witness": {
+    "initial": "Operator O is authorized for P1; expense E and its document belong to P2.",
+    "events": [
+     "O sends a correction for E through the P1 route."
+    ],
+    "outcomes": [
+     "The operation conceals E as not found (404).",
+     "The operation reports an invalid project/entity relationship as 422 or forbidden access as 403."
+    ],
+    "observer": "Operator O"
+   },
+   "unit": "40_flows.md:`flow:expense_intake_and_management`"
+  },
+  {
+   "subject": "photo update naming an absent or cross-project photo",
+   "kind": "unstated failure outcome",
+   "text": "`capability:photo_management.update_progress_photo` changes caption, section and visibility only and appends `photo.update`.",
+   "question": "What outcome applies when the requested photo does not exist or belongs to another project?",
+   "options": [
+    "One concealed not-found response (404)",
+    "Validation rejection (422), consistent with this flow's broad invalid-project error",
+    "Authorization failure (403) for a cross-project photo"
+   ],
+   "default_guess": "Use the same not-found response for absent and cross-project photos.",
+   "witness": {
+    "initial": "Operator O is authorized for P1; photo F belongs to P2.",
+    "events": [
+     "O requests a caption change for F through the P1 route."
+    ],
+    "outcomes": [
+     "The operation conceals F as not found (404).",
+     "The operation treats the project mismatch as validation failure (422)."
+    ],
+    "observer": "Operator O"
+   },
+   "unit": "40_flows.md:`flow:track_progress_payments_and_photos`"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"viewer-route composition at service startup\",\"kind\":\"missing composition capability\",\"text\":\"`module:runtime` ... builds the inner application with `capability:api.create_app` ... and mounts the inner application under `/api` and at the root.\",\"question\":\"Which module installs the viewer endpoints owned by `api_irregular`, given that `runtime` knows only `api` and `api.create_app` neither owns nor may import `api_irregular`?\",\"options\":[\"`api.create_app` also installs `api_irregular` routes despite its stated ownership and Knows list\",\"`runtime` installs `api_irregular` routes through an additional dependency/capability\",\"Only staff, administrator and producer routes are installed\"],\"default_guess\":\"Make `api.create_app` compose both route groups.\",\"witness\":{\"initial\":\"The service starts successfully and a viewer has a valid access credential.\",\"events\":[\"The host starts the runtime through `create_runtime_app`.\",\"The viewer sends a valid request to the documented viewer-entry route.\"],\"outcomes\":[\"The viewer route was composed somewhere and entry creates a session.\",\"No named composition path installed the viewer route, so the request receives a route-level 404.\"],\"observer\":\"The viewer and deployment operator\"},\"unit\":\"40_flows.md:`flow:start_service_and_answer_health`\"},{\"subject\":\"bootstrap failures outside the four exit-code cases\",\"kind\":\"unstated failure outcome\",\"text\":\"It resolves the database through `capability:runtime_settings.load_runtime_settings` and builds the bootstrap store.\",\"question\":\"What closed CLI outcome and exit code apply when runtime settings cannot be loaded, the database cannot be opened, schema creation fails, or the bootstrap transaction has another storage failure?\",\"options\":[\"Map every such failure to one of exit codes 1–3\",\"Add a distinct closed exit code\",\"Let the command terminate with an uncaught failure and a platform-selected exit code\"],\"default_guess\":\"Add a distinct non-secret storage/configuration failure exit code.\",\"witness\":{\"initial\":\"No staff account exists, but the configured SQLite location cannot be opened.\",\"events\":[\"The host operator enters a valid matching email and password.\",\"The CLI loads settings and attempts to construct or use the bootstrap store.\",\"Opening the database fails.\"],\"outcomes\":[\"The CLI maps the failure to one of the documented exit codes 0–3.\",\"The failure escapes and the process uses an undocumented exit code, despite the exit-code contract being closed.\"],\"observer\":\"The host operator and deployment script\"},\"unit\":\"40_flows.md:`flow:bootstrap_first_administrator`\"},{\"subject\":\"administration operations targeting a missing staff account\",\"kind\":\"unstated failure outcome\",\"text\":\"An administrator creates a staff account, changes its status, assigns it to a project or revokes an assignment, performs the recovery override, or lists the active Registry projects to choose from.\",\"question\":\"What outcome applies when status change, session revocation, project assignment, or recovery override names a nonexistent staff account?\",\"options\":[\"Not found (404)\",\"Input rejection (422)\",\"A concealed authorization failure (403)\",\"For session revocation only, succeed with a zero count\"],\"default_guess\":\"Return not found (404).\",\"witness\":{\"initial\":\"An administrator has a valid session; no account exists for staff id S.\",\"events\":[\"The administrator requests the recovery override for S with a valid new email.\"],\"outcomes\":[\"The operation returns not found because S does not exist.\",\"The identity module treats the target as invalid input and returns 422.\"],\"observer\":\"The administrator\"},\"unit\":\"40_flows.md:`flow:administer_staff_accounts`\"},{\"subject\":\"new viewer grant when Registry reports an unknown or archived project\",\"kind\":\"contradictory failure classification\",\"text\":\"`grant_viewer_project` requires the project known and active ... an unknown or inactive project is the Registry boundary failure here ... Project not known or not active for a new grant: Registry boundary failure (502).\",\"question\":\"Should a decoded validation result saying the project is unknown or archived produce 404/409 under A5–A6 and R0-24, or 502 as this flow states?\",\"options\":[\"Unknown project is 404 and archived project is 409\",\"Both are Registry boundary failures mapped to 502\"],\"default_guess\":\"Use 404 for unknown and 409 for archived; reserve 502 for an actual Registry call failure.\",\"witness\":{\"initial\":\"An administrator and active viewer exist; Registry is reachable and returns a valid validation body with `exists=false` for project P.\",\"events\":[\"The administrator requests a viewer grant for P.\",\"`registry_gateway.validate_project_reference` successfully decodes the Registry answer.\"],\"outcomes\":[\"A5–A6 treat `exists=false` as a caller-level unknown project, producing 404.\",\"The viewer-access flow calls the same condition a Registry boundary failure, producing 502.\"],\"observer\":\"The administrator\"},\"unit\":\"40_flows.md:`flow:administer_viewer_access`\"},{\"subject\":\"new producer grant when Registry reports an unknown project\",\"kind\":\"unstated contradictory classification\",\"text\":\"`grant_producer_project` requires the project known and active (`capability:registry_gateway.validate_project_reference`) ... Archived project for a new grant: 409. Registry failure: 502.\",\"question\":\"What response applies when Registry successfully reports `exists=false` for the project of a new producer grant?\",\"options\":[\"Not found (404), as A5–A6 classify a decoded unknown project\",\"Registry failure (502)\",\"Input rejection (422)\"],\"default_guess\":\"Return not found (404).\",\"witness\":{\"initial\":\"An administrator and service principal exist; Registry is reachable and returns a valid validation result with `exists=false` for P.\",\"events\":[\"The administrator requests a producer grant for P.\",\"The Registry call succeeds and returns the decoded unknown-project result.\"],\"outcomes\":[\"The operation returns 404 because the project is unknown.\",\"The operation returns 502 by grouping every unsuccessful Registry validation under `Registry failure`.\"],\"observer\":\"The administrator\"},\"unit\":\"40_flows.md:`flow:administer_service_principals`\"},{\"subject\":\"producer-scope authorization during snapshot import\",\"kind\":\"ownership and dependency contradiction\",\"text\":\"`authorize_snapshot_import`, which checks producer scope (`capability:service_identity.authorize_producer_scope`)\",\"question\":\"Who performs the authoritative producer-grant check, given that State 3 says `authorization_guard` owns that check but cannot know or call the later `service_identity` module, while this flow makes it call `service_identity.authorize_producer_scope`?\",\"options\":[\"`authorization_guard` reads producer scope directly through `portal_store`\",\"`snapshot_import` calls `service_identity.authorize_producer_scope` before calling the guard\",\"Reverse or relax the module dependency so the guard calls `service_identity`\"],\"default_guess\":\"Keep scope authorization inside `authorization_guard` and remove the call to `service_identity.authorize_producer_scope`.\",\"witness\":{\"initial\":\"Producer S has a valid credential and an active grant for active project P.\",\"events\":[\"S begins an import and a separate administrator revokes S's grant for P.\",\"The revocation commits before the import's final authorization decision.\"],\"outcomes\":[\"If an earlier `service_identity` scope result is authoritative, the import can proceed and be accepted.\",\"If `authorization_guard` owns and performs the current persisted-scope check, the import records `unknown_project`.\"],\"observer\":\"The producer, administrator and audit reader\"},\"unit\":\"40_flows.md:`flow:import_estimate_snapshot`\"},{\"subject\":\"activation capability enforcement\",\"kind\":\"authorization contradiction\",\"text\":\"The activation capability is checked by `activate_budget_version` itself on the authorized context and refused as its input rejection (422), not by the guard.\",\"question\":\"Is `portal.estimate_snapshot.activate` enforced by the authorization guard as A4 and the trusted-context convention require, or by `budget_management` as an input condition?\",\"options\":[\"The guard requires the activation capability and refusal is authorization failure (403)\",\"The guard supplies a context authorized for another mutation capability and `activate_budget_version` rejects it as input (422)\",\"Both check it, with one designated authoritative failure\"],\"default_guess\":\"Have the guard require `portal.estimate_snapshot.activate` and return 403 on failure.\",\"witness\":{\"initial\":\"A caller presents a valid staff session and requests activation, but the context reaching the use case names `portal.budget.manage` rather than `portal.estimate_snapshot.activate`.\",\"events\":[\"The route invokes the project mutation authorization path.\",\"The route calls `activate_budget_version` with the resulting context.\"],\"outcomes\":[\"A4 rejects before the use case because the required activation capability was not authorized, producing 403.\",\"The flow lets the context reach `activate_budget_version`, which treats the mismatch as input rejection and produces 422.\"],\"observer\":\"The staff caller and API tests\"},\"unit\":\"40_flows.md:`flow:maintain_and_activate_budget`\"},{\"subject\":\"reading an absent or cross-project budget version\",\"kind\":\"unstated failure outcome\",\"text\":\"`capability:budget_management.get_budget_version` returns one version of the project with its ordered plans.\",\"question\":\"What outcome applies when the requested version does not exist or belongs to another project?\",\"options\":[\"Concealed not found (404)\",\"Input rejection (422)\",\"Authorization failure (403) for a cross-project version\"],\"default_guess\":\"Return the same not-found response for absent and cross-project versions.\",\"witness\":{\"initial\":\"Operator O is authorized for project P1; budget version V belongs to P2.\",\"events\":[\"O requests V through the P1 budget-version read route.\"],\"outcomes\":[\"The operation conceals the cross-project record as not found (404).\",\"The operation treats the project/version mismatch as invalid input (422) or forbidden access (403).\"],\"observer\":\"Operator O\"},\"unit\":\"40_flows.md:`flow:maintain_and_activate_budget`\"},{\"subject\":\"section validation during expense intake\",\"kind\":\"module dependency contradiction\",\"text\":\"Each of them resolves sections of the project itself, through `module:portal_store`'s section repository ... every section of the project (`capability:budget_management.validate_project_section`)\",\"question\":\"Does `expense_intake` validate sections directly through its transaction's repository, or call `budget_management.validate_project_section`, which it does not know according to State 3 and which would introduce a separate use-case transaction?\",\"options\":[\"Validate directly through the section repository in the expense-intake transaction\",\"Add `budget_management` as a dependency and call `validate_project_section` before opening the expense transaction\",\"Move section validation to `expense_management`, which `expense_intake` already knows\"],\"default_guess\":\"Validate directly through the section repository in the expense-intake transaction.\",\"unit\":\"40_flows.md:`flow:expense_intake_and_management`\"},{\"subject\":\"expense and document mutations naming absent or cross-project records\",\"kind\":\"unstated failure outcome\",\"text\":\"`correct_expense`, `set_expense_inclusion`, `replace_expense_allocations` ... `update_expense_document` changes only the description and visibility\",\"question\":\"What response applies when the addressed expense or document is absent or belongs to a different project than the authorized context?\",\"options\":[\"Use one concealed not-found response (404) for absent and cross-project records\",\"Treat the mismatch as input rejection (422)\",\"Return authorization failure (403) for a cross-project record\"],\"default_guess\":\"Use the same 404 response for absent and cross-project records.\",\"witness\":{\"initial\":\"Operator O is authorized for P1; expense E and its document belong to P2.\",\"events\":[\"O sends a correction for E through the P1 route.\"],\"outcomes\":[\"The operation conceals E as not found (404).\",\"The operation reports an invalid project/entity relationship as 422 or forbidden access as 403.\"],\"observer\":\"Operator O\"},\"unit\":\"40_flows.md:`flow:expense_intake_and_management`\"},{\"subject\":\"photo update naming an absent or cross-project photo\",\"kind\":\"unstated failure outcome\",\"text\":\"`capability:photo_management.update_progress_photo` changes caption, section and visibility only and appends `photo.update`.\",\"question\":\"What outcome applies when the requested photo does not exist or belongs to another project?\",\"options\":[\"One concealed not-found response (404)\",\"Validation rejection (422), consistent with this flow's broad invalid-project error\",\"Authorization failure (403) for a cross-project photo\"],\"default_guess\":\"Use the same not-found response for absent and cross-project photos.\",\"witness\":{\"initial\":\"Operator O is authorized for P1; photo F belongs to P2.\",\"events\":[\"O requests a caption change for F through the P1 route.\"],\"outcomes\":[\"The operation conceals F as not found (404).\",\"The operation treats the project mismatch as validation failure (422).\"],\"observer\":\"Operator O\"},\"unit\":\"40_flows.md:`flow:track_progress_payments_and_photos`\"}]}",
+ "set_aside": []
+}
