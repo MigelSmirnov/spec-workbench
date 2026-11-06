@@ -264,3 +264,48 @@ def test_assembled_note_of_another_scope_added_since_base_is_left_alone(tmp_path
 
     assert report["status"] == "in_sync"
     assert report["findings"] == []
+
+
+def _gate_ready(monkeypatch, ready: bool):
+    from notes_workbench import gate
+
+    monkeypatch.setattr(gate, "handoff", lambda project: {"ready": ready})
+
+
+def test_replace_all_makes_assembled_notes_exactly_the_canonical_source(tmp_path, monkeypatch):
+    _gate_ready(monkeypatch, True)
+    source = (
+        "first: [BEHAVIOR] MUST keep the first value.\n"
+        "second: [BEHAVIOR] MUST keep the second value.\n"
+    )
+    project = _project(
+        tmp_path,
+        source=source,
+        notes=[
+            "first: [BEHAVIOR] Keep the first value.",
+            "first: [RULE_REFERENCE] = rules.old_policy.leaf",
+            "Gone.method: [BEHAVIOR] MUST vanish.",
+        ],
+    )
+
+    report = propagation.propagate(project, replace_all=True)
+
+    assert report["status"] == "applied"
+    assert report["mode"] == "replace_all"
+    assert report["summary"]["deletions"] == 3
+    assert report["summary"]["insertions"] == 2
+    assert _assembled_notes(project) == [
+        "first: [BEHAVIOR] MUST keep the first value.",
+        "second: [BEHAVIOR] MUST keep the second value.",
+    ]
+
+
+def test_replace_all_refuses_an_incomplete_note_source(tmp_path, monkeypatch):
+    import pytest
+
+    _gate_ready(monkeypatch, False)
+    project = _project(tmp_path, source="first: [BEHAVIOR] MUST keep it.\n", notes=["x: [BEHAVIOR] MUST stay."])
+
+    with pytest.raises(propagation.NotesPropagationError, match="handoff-ready"):
+        propagation.propagate(project, replace_all=True)
+    assert _assembled_notes(project) == ["x: [BEHAVIOR] MUST stay."]
