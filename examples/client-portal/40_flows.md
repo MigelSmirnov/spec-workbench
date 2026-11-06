@@ -689,9 +689,10 @@ through `module:portal_store`'s section repository (Factory code
    `capability:authorization_guard.authorize_staff_project_mutation`.
 2. `capability:expense_intake.create_expense_from_recognition` accepts only a
    confirmed complete result of a supported contract version, validates the
-   total and the explicit allocations — every section of the project
-   (`capability:budget_management.validate_project_section`), positive amounts,
-   exact sum, no proportional split — then in one transaction looks up the
+   total (`capability:financial_policy.validate_eur_amount`) and the explicit
+   allocations — shape, exact sum, no proportional split, then every section
+   of the project, read through `module:portal_store`'s section repository in
+   a read-only transaction it closes first — then in one transaction looks up the
    `recognized_document_id`: absent — insert the expense, its allocations and
    one client-visible document and append `expense.create`; same fingerprint —
    return the existing expense as replay; different — conflict.

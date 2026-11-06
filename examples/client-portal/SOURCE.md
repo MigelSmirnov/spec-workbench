@@ -313,11 +313,11 @@ State 3 round-06) left these blocking topics:
   calls `service_identity.authorize_producer_scope`) and
   `public_op:snapshot_import.import_snapshot` are rewritten to it. Recording
   access-refused attempts is the missing feature Q20.
-- **Open, not repaired:** `flow:expense_intake_and_management` names
-  `budget_management.validate_project_section` for the allocation sections,
-  which `expense_intake` does not import; the code reads the section
-  repository (`application/expense_intake.py`). The fix needs the State 4
-  plan and the State 5 flow evidence of that operation changed together.
+- Expense section check — **decided by the coordinator 2026-11-06**: expense
+  intake validates allocation sections through the section repository it
+  reads (`application/expense_intake.py` `_validate_initial_allocations`),
+  not through `budget_management.validate_project_section`; State 4 flow,
+  its plan and the State 5 flow evidence of that operation changed together.
 
 #### Factory-internal inconsistency of 459ac96c
 
