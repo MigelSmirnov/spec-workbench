@@ -1,0 +1,84 @@
+{
+ "open_points": [
+  {
+   "unit": "30_modules.md:Facts several modules touch, and their one owner",
+   "subject": "Registry endpoint configuration ownership and startup validation",
+   "kind": "contradictory owner and lifecycle",
+   "text": "“Environment values are read once, by `runtime_settings`, into `RuntimeSettings`” and `runtime_settings` owns loading and validating “the closed table `config.runtime_environment_variables` … once at start”; but `registry_gateway` “reads `REGISTRY_BASE_URL` at each Registry call,” while R0-10 says environment configuration “is validated when it starts.”",
+   "question": "Is `REGISTRY_BASE_URL` owned and validated by `runtime_settings` at startup, or owned and validated dynamically by `registry_gateway` for each call; specifically, may the service start when it is missing or unusable?",
+   "options": [
+    "Exclude `REGISTRY_BASE_URL` from startup-owned `RuntimeSettings`; start successfully and let each Registry call read and validate the current environment value",
+    "Include it in startup validation and retain the startup snapshot for Registry calls",
+    "Validate it at startup but also reread and revalidate it for every call"
+   ],
+   "default_guess": "Treat the newer, variable-specific rule as authoritative: `registry_gateway` owns the live value, startup does not require it, and each Registry call validates it.",
+   "witness": {
+    "initial": "The process environment has no `REGISTRY_BASE_URL` when the service starts.",
+    "events": [
+     "The host operator starts the portal.",
+     "After startup, a caller invokes a project operation requiring Registry validation."
+    ],
+    "outcomes": [
+     "Under the per-call exception and A6/A30, startup succeeds and only the project operation fails with `transport_error`.",
+     "Under R0-10 and `runtime_settings` ownership of the closed environment table, startup is refused because configuration validation fails."
+    ],
+    "observer": "The host operator sees whether the service starts; the API caller sees whether a running service can answer non-Registry routes."
+   }
+  },
+  {
+   "unit": "30_modules.md:Facts several modules touch, and their one owner",
+   "subject": "Binary storage root and read-limit configuration ownership",
+   "kind": "two owners and contradictory lifecycle",
+   "text": "“Environment values are read once, by `runtime_settings`, into `RuntimeSettings`” and `runtime_settings` owns startup validation “including the startup consistency of the binary bounds”; but `binary_storage` “reads `BINARY_STORAGE_ROOT` and `BINARY_MAX_READ_BYTES` at each binary read, each refusing that call when its value is missing or unusable.” A30 also declares `BINARY_MAX_READ_BYTES` a required positive integer and says a missing required variable stops startup.",
+   "question": "Which module owns validation and the effective values of `BINARY_STORAGE_ROOT` and `BINARY_MAX_READ_BYTES`, and does a missing or invalid value stop startup or only refuse an attempted binary read?",
+   "options": [
+    "`runtime_settings` validates and owns immutable startup values handed to `binary_storage`",
+    "`binary_storage` exclusively reads and validates both values per read, so startup does not require them",
+    "Startup validates them, but `binary_storage` rereads them per read and may use values different from the startup snapshot"
+   ],
+   "default_guess": "Follow the newer specific exception: let `binary_storage` own and validate the live values per read, despite the unreconciled startup requirements.",
+   "witness": {
+    "initial": "`BINARY_STORAGE_ROOT` exists but `BINARY_MAX_READ_BYTES` is missing when the process starts.",
+    "events": [
+     "The host operator starts the portal.",
+     "A staff caller uses JSON-only routes successfully.",
+     "The caller requests an authorized expense document binary."
+    ],
+    "outcomes": [
+     "Under the per-read exception, the service starts, JSON routes work, and the binary request is refused when `binary_storage` reads the missing value.",
+     "Under A30's required-variable rule and `runtime_settings` startup ownership, the service never starts."
+    ],
+    "observer": "The host operator and the staff caller see whether the whole service is unavailable or only the binary call is refused."
+   }
+  },
+  {
+   "unit": "30_modules.md:Facts several modules touch, and their one owner",
+   "subject": "Dynamic binary read bound versus startup response ceiling",
+   "kind": "missing dependency direction",
+   "text": "A14 requires “The storage read bound is checked to be no larger than the declared response ceiling at start,” while the changed ownership text makes `binary_storage` reread `BINARY_MAX_READ_BYTES` on every read. `binary_storage` knows only `models`; the response/body ceiling and startup consistency belong to `runtime_settings` and `transport_guard`.",
+   "question": "After startup, who enforces the relation between a newly read `BINARY_MAX_READ_BYTES` value and the response ceiling, and how may `binary_storage` learn the ceiling without violating the declared dependency graph?",
+   "options": [
+    "Only the startup value is constrained; later environment changes may exceed the response ceiling",
+    "Every binary read rechecks the live value against a ceiling supplied to `binary_storage`",
+    "A post-start value inconsistent with startup settings is unusable and the binary call is refused",
+    "Environment changes after startup are ignored for this bound"
+   ],
+   "default_guess": "Treat a live value above the startup response ceiling as unusable and refuse the binary call, which requires the ceiling to be passed into `binary_storage`.",
+   "witness": {
+    "initial": "The service starts with `BINARY_MAX_READ_BYTES=1048576`, equal to or below the configured response ceiling.",
+    "events": [
+     "The host operator changes `BINARY_MAX_READ_BYTES` to `10485760` without restarting the service.",
+     "An authorized viewer requests a stored 5 MiB photo."
+    ],
+    "outcomes": [
+     "A per-read implementation that validates only positivity accepts and returns the 5 MiB object, exceeding the startup-checked response ceiling.",
+     "An implementation that preserves or rechecks the startup consistency rule refuses the read as an unusable bound."
+    ],
+    "observer": "The viewer sees either the photo bytes or a storage-unavailable failure; the transport operator sees whether the declared response ceiling is enforced."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"30_modules.md:Facts several modules touch, and their one owner\",\"subject\":\"Registry endpoint configuration ownership and startup validation\",\"kind\":\"contradictory owner and lifecycle\",\"text\":\"“Environment values are read once, by `runtime_settings`, into `RuntimeSettings`” and `runtime_settings` owns loading and validating “the closed table `config.runtime_environment_variables` … once at start”; but `registry_gateway` “reads `REGISTRY_BASE_URL` at each Registry call,” while R0-10 says environment configuration “is validated when it starts.”\",\"question\":\"Is `REGISTRY_BASE_URL` owned and validated by `runtime_settings` at startup, or owned and validated dynamically by `registry_gateway` for each call; specifically, may the service start when it is missing or unusable?\",\"options\":[\"Exclude `REGISTRY_BASE_URL` from startup-owned `RuntimeSettings`; start successfully and let each Registry call read and validate the current environment value\",\"Include it in startup validation and retain the startup snapshot for Registry calls\",\"Validate it at startup but also reread and revalidate it for every call\"],\"default_guess\":\"Treat the newer, variable-specific rule as authoritative: `registry_gateway` owns the live value, startup does not require it, and each Registry call validates it.\",\"witness\":{\"initial\":\"The process environment has no `REGISTRY_BASE_URL` when the service starts.\",\"events\":[\"The host operator starts the portal.\",\"After startup, a caller invokes a project operation requiring Registry validation.\"],\"outcomes\":[\"Under the per-call exception and A6/A30, startup succeeds and only the project operation fails with `transport_error`.\",\"Under R0-10 and `runtime_settings` ownership of the closed environment table, startup is refused because configuration validation fails.\"],\"observer\":\"The host operator sees whether the service starts; the API caller sees whether a running service can answer non-Registry routes.\"}},{\"unit\":\"30_modules.md:Facts several modules touch, and their one owner\",\"subject\":\"Binary storage root and read-limit configuration ownership\",\"kind\":\"two owners and contradictory lifecycle\",\"text\":\"“Environment values are read once, by `runtime_settings`, into `RuntimeSettings`” and `runtime_settings` owns startup validation “including the startup consistency of the binary bounds”; but `binary_storage` “reads `BINARY_STORAGE_ROOT` and `BINARY_MAX_READ_BYTES` at each binary read, each refusing that call when its value is missing or unusable.” A30 also declares `BINARY_MAX_READ_BYTES` a required positive integer and says a missing required variable stops startup.\",\"question\":\"Which module owns validation and the effective values of `BINARY_STORAGE_ROOT` and `BINARY_MAX_READ_BYTES`, and does a missing or invalid value stop startup or only refuse an attempted binary read?\",\"options\":[\"`runtime_settings` validates and owns immutable startup values handed to `binary_storage`\",\"`binary_storage` exclusively reads and validates both values per read, so startup does not require them\",\"Startup validates them, but `binary_storage` rereads them per read and may use values different from the startup snapshot\"],\"default_guess\":\"Follow the newer specific exception: let `binary_storage` own and validate the live values per read, despite the unreconciled startup requirements.\",\"witness\":{\"initial\":\"`BINARY_STORAGE_ROOT` exists but `BINARY_MAX_READ_BYTES` is missing when the process starts.\",\"events\":[\"The host operator starts the portal.\",\"A staff caller uses JSON-only routes successfully.\",\"The caller requests an authorized expense document binary.\"],\"outcomes\":[\"Under the per-read exception, the service starts, JSON routes work, and the binary request is refused when `binary_storage` reads the missing value.\",\"Under A30's required-variable rule and `runtime_settings` startup ownership, the service never starts.\"],\"observer\":\"The host operator and the staff caller see whether the whole service is unavailable or only the binary call is refused.\"}},{\"unit\":\"30_modules.md:Facts several modules touch, and their one owner\",\"subject\":\"Dynamic binary read bound versus startup response ceiling\",\"kind\":\"missing dependency direction\",\"text\":\"A14 requires “The storage read bound is checked to be no larger than the declared response ceiling at start,” while the changed ownership text makes `binary_storage` reread `BINARY_MAX_READ_BYTES` on every read. `binary_storage` knows only `models`; the response/body ceiling and startup consistency belong to `runtime_settings` and `transport_guard`.\",\"question\":\"After startup, who enforces the relation between a newly read `BINARY_MAX_READ_BYTES` value and the response ceiling, and how may `binary_storage` learn the ceiling without violating the declared dependency graph?\",\"options\":[\"Only the startup value is constrained; later environment changes may exceed the response ceiling\",\"Every binary read rechecks the live value against a ceiling supplied to `binary_storage`\",\"A post-start value inconsistent with startup settings is unusable and the binary call is refused\",\"Environment changes after startup are ignored for this bound\"],\"default_guess\":\"Treat a live value above the startup response ceiling as unusable and refuse the binary call, which requires the ceiling to be passed into `binary_storage`.\",\"witness\":{\"initial\":\"The service starts with `BINARY_MAX_READ_BYTES=1048576`, equal to or below the configured response ceiling.\",\"events\":[\"The host operator changes `BINARY_MAX_READ_BYTES` to `10485760` without restarting the service.\",\"An authorized viewer requests a stored 5 MiB photo.\"],\"outcomes\":[\"A per-read implementation that validates only positivity accepts and returns the 5 MiB object, exceeding the startup-checked response ceiling.\",\"An implementation that preserves or rechecks the startup consistency rule refuses the read as an unusable bound.\"],\"observer\":\"The viewer sees either the photo bytes or a storage-unavailable failure; the transport operator sees whether the declared response ceiling is enforced.\"}}]}",
+ "set_aside": []
+}
