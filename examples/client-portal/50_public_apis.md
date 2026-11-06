@@ -2665,3 +2665,1034 @@ Never answers false by swallowing a failure: persistence and
 ### State impact
 
 Read-only.
+
+## `public_op:snapshot_import.import_snapshot`
+
+### Owner
+
+`module:snapshot_import`. Classify and record one estimate-snapshot publication from a producer.
+
+### Callers
+
+`module:api`.
+
+### Inputs
+
+The `PortalStore`, the `ServiceActorContext` and one `SnapshotPublication`.
+
+### Outputs
+
+The fresh `SnapshotImportRecord` of this attempt, with its portal-assigned
+`import_id` and `ImportOutcome`: `accepted`, `idempotent_replay`,
+`integrity_conflict` or `rejected` with an `ImportRejectReason`.
+
+### Observable effect
+
+None beyond the records; the import never touches budgets, sections or plans
+(A18: a snapshot becomes a candidate only by activation, and Q11 stays
+deferred).
+
+### Enforces
+
+R0-04 and R0-25: one fingerprint and one `occurred_at` per attempt; every
+classified attempt — archived, unknown or scope-denied project (classified
+from `authorize_snapshot_import`, called once before the transaction), a
+content rejection (A7 contract version, A9 currency, completeness,
+sections), acceptance, equal replay, differing replay — appends exactly one
+fresh record and one `snapshot.import` audit in one transaction. A new
+acceptance inserts one `ApprovedEstimateSnapshot` before its record; an equal
+replay references the existing snapshot (A8, A21). Rejection reasons come from
+the exception's field, never its message (A26).
+
+### Errors
+
+`AuthenticationRejected` and infrastructure failures outside the catalogue
+re-raise with nothing written; every business rejection is an answered
+record, not an exception.
+
+### State impact
+
+Appends one `SnapshotImportRecord`, at most one `ApprovedEstimateSnapshot`
+and one `AuditRecord`, together or not at all.
+
+## `public_op:snapshot_import.get_snapshot_import_result`
+
+### Owner
+
+`module:snapshot_import`. Return one of the acting producer's own import results.
+
+### Callers
+
+`module:api`.
+
+### Inputs
+
+The `PortalStore`, the `ServiceActorContext` and the `import_id`.
+
+### Outputs
+
+Exactly the immutable `SnapshotImportRecord` of that `import_id`.
+
+### Observable effect
+
+None.
+
+### Enforces
+
+R0-21: the record's `service_principal_id` must be the actor's; the producer
+grant and the Registry are not re-checked.
+
+### Errors
+
+`ScopedNotFoundError` for an unknown id or another principal's record,
+indistinguishably.
+
+### State impact
+
+Read-only.
+
+## `public_op:budget_management.ensure_manual_budget`
+
+### Owner
+
+`module:budget_management`. Return the project's one manual budget version, creating it empty when absent.
+
+### Callers
+
+`module:api`, `module:project_tracking`.
+
+### Inputs
+
+The `PortalStore` and an `AuthorizedProjectContext`.
+
+### Outputs
+
+`BudgetVersionDetail`: the manual `BudgetVersion`, its plans by
+`sort_order` then `section_id`, and the count of allocations whose section is
+outside the active plan.
+
+### Observable effect
+
+None.
+
+### Enforces
+
+A18: at most one manual version per project; a new one is `inactive` and is
+never activated implicitly; A13 (`budget.manual_version_create` only when it
+is created).
+
+### Errors
+
+A persistence failure propagates.
+
+### State impact
+
+Writes one `BudgetVersion` and one `AuditRecord` when none exists; otherwise
+read-only.
+
+## `public_op:budget_management.upsert_manual_section_plan`
+
+### Owner
+
+`module:budget_management`. Create or edit one section plan of the manual budget.
+
+### Callers
+
+`module:api`.
+
+### Inputs
+
+The `PortalStore`, an `AuthorizedProjectContext`, an optional `section_id`,
+the display name, the sort order and the planned material and work amounts.
+
+### Outputs
+
+The `BudgetVersionDetail` of the manual version after the change.
+
+### Observable effect
+
+None.
+
+### Enforces
+
+A9 (both amounts validated before the transaction), A18 (stable
+`PortalSection` identity; imported plans never change; a missing manual
+version is created as `ensure_manual_budget` does), R0-24 (active project
+only), A13 (`budget.section_plan_edit`, and `budget.manual_version_create`
+when created). An existing plan of the section keeps its `plan_id`.
+
+### Errors
+
+`FinancialValidationError` for an amount; `BudgetValidationError` for an
+inactive project or a `section_id` not in this project, with nothing written.
+
+### State impact
+
+Writes or updates the manual version, a new `PortalSection` when
+`section_id` is absent, one `SectionPlan`, and their audits, in one
+transaction.
+
+## `public_op:budget_management.get_budget_version`
+
+### Owner
+
+`module:budget_management`. Return one budget version of the project with its plans.
+
+### Callers
+
+`module:api`.
+
+### Inputs
+
+The `PortalStore`, an `AuthorizedProjectContext` and the `version_id`.
+
+### Outputs
+
+`BudgetVersionDetail` for exactly that version: plans by `sort_order` then
+`section_id` and the count of allocations outside the active plan.
+
+### Observable effect
+
+None.
+
+### Enforces
+
+A18, A4 (project-scoped read).
+
+### Errors
+
+`ScopedNotFoundError` for a version of no or another project.
+
+### State impact
+
+Read-only.
+
+## `public_op:budget_management.activate_budget_version`
+
+### Owner
+
+`module:budget_management`. Make one budget version of the project the active one.
+
+### Callers
+
+`module:api`.
+
+### Inputs
+
+The `PortalStore`, an `AuthorizedProjectContext` carrying the activate
+capability, and the `version_id`.
+
+### Outputs
+
+`BudgetActivationResult`: the activated version, its ordered plans and the
+pre-update count of allocations outside the active plan (zero, since a
+positive count refuses).
+
+### Observable effect
+
+None.
+
+### Enforces
+
+A18 and A1: only `portal.estimate_snapshot.activate`, never a producer; the
+prior active version becomes `inactive` and the requested one `active` at one
+captured time in one transaction; A13 (`snapshot.activate`). Activation is
+refused while any allocation would lose its section.
+
+### Errors
+
+`BudgetValidationError` for another capability, before any transaction;
+`ScopedNotFoundError` for a version of no or another project;
+`BudgetConflictError` while allocations would lose their section, with
+nothing changed.
+
+### State impact
+
+Updates two `BudgetVersion` rows at most; appends one `AuditRecord`.
+
+## `public_op:budget_management.validate_project_section`
+
+### Owner
+
+`module:budget_management`. Confirm that a section id belongs to a project.
+
+### Callers
+
+`module:api`, `module:project_tracking`.
+
+### Inputs
+
+The `PortalStore`, a `project_id` and a `section_id`.
+
+### Outputs
+
+The `PortalSection` of that project.
+
+### Observable effect
+
+None.
+
+### Enforces
+
+A18 stable section identity; another project's section is never disclosed.
+
+### Errors
+
+`BudgetValidationError` for a missing or cross-project section.
+
+### State impact
+
+Read-only.
+
+## `public_op:expense_intake.create_expense_from_recognition`
+
+### Owner
+
+`module:expense_intake`. Create one expense with its document and allocations from a confirmed OCR recognition.
+
+### Callers
+
+`module:api`.
+
+### Inputs
+
+The `PortalStore`, an `AuthorizedProjectContext`, one
+`ConfirmedRecognitionPublication` and the operator's `AllocationInstruction`
+list.
+
+### Outputs
+
+`ExpenseOperationOutcome`: the `ExpenseAggregate` and whether it was a
+replay (the route answers its safe projection).
+
+### Observable effect
+
+None.
+
+### Enforces
+
+R0-05 and R0-17 (expenses only from confirmed OCR intake, decided by the
+authenticated operator), A7 (`rules.supported_external_contract_versions.ocr`),
+A9, A19 (allocations sum exactly to the total, sections of this project),
+A8 (replay by `recognized_document_id`: an equal fingerprint returns the
+existing aggregate with no audit), R0-18 (the new document is client-visible),
+A13 (`expense.create`).
+
+### Errors
+
+`ExpenseValidationError` or `FinancialValidationError` for unsupported or
+incomplete input, a currency or an allocation mismatch;
+`ExpenseConflictError` for a replay with a different fingerprint.
+
+### State impact
+
+Writes one `Expense`, one `ExpenseDocument`, its `ExpenseAllocation` rows and
+one `AuditRecord`; a replay writes nothing.
+
+## `public_op:expense_management.correct_expense`
+
+### Owner
+
+`module:expense_management`. Correct an expense's facts and replace all its allocations.
+
+### Callers
+
+`module:api`.
+
+### Inputs
+
+The `PortalStore`, an `AuthorizedProjectContext`, the `expense_id`, the
+supplier, the document date, the total, the inclusion flag and the complete
+`AllocationInstruction` list.
+
+### Outputs
+
+`ExpenseOperationOutcome` with the corrected aggregate, not a replay.
+
+### Observable effect
+
+None.
+
+### Enforces
+
+A9 (the total in EUR, non-negative), A19 (every section target of this
+project, exact sum), A24, A13 (`expense.correct`); no intermediate state
+commits.
+
+### Errors
+
+`ExpenseConflictError` for an expense of no or another project;
+`ExpenseValidationError` or `FinancialValidationError` for an amount, a
+section target or a sum.
+
+### State impact
+
+Updates the `Expense` and replaces its allocations; appends one
+`AuditRecord`.
+
+## `public_op:expense_management.set_expense_inclusion`
+
+### Owner
+
+`module:expense_management`. Include an expense in, or exclude it from, the project totals.
+
+### Callers
+
+`module:api`.
+
+### Inputs
+
+The `PortalStore`, an `AuthorizedProjectContext`, the `expense_id` and the
+inclusion flag.
+
+### Outputs
+
+`ExpenseOperationOutcome` with the updated aggregate, not a replay.
+
+### Observable effect
+
+None.
+
+### Enforces
+
+A19: an excluded expense is kept, never deleted; only `included` and
+`updated_at` change; A13 (`expense.include` or `expense.exclude`).
+
+### Errors
+
+`ExpenseConflictError` for an expense of no or another project.
+
+### State impact
+
+Updates one `Expense`; appends one `AuditRecord`.
+
+## `public_op:expense_management.replace_expense_allocations`
+
+### Owner
+
+`module:expense_management`. Replace all allocations of an expense with the operator's instructions.
+
+### Callers
+
+`module:api`.
+
+### Inputs
+
+The `PortalStore`, an `AuthorizedProjectContext`, the `expense_id` and the
+`AllocationInstruction` list.
+
+### Outputs
+
+`ExpenseOperationOutcome` with the updated aggregate, not a replay.
+
+### Observable effect
+
+None.
+
+### Enforces
+
+A19: the sum equals the unchanged total; every section target belongs to this
+project; A13 (`expense.allocate`).
+
+### Errors
+
+`ExpenseConflictError` for an expense of no or another project;
+`ExpenseValidationError` for an empty list, a mismatched sum or a section
+target outside the project.
+
+### State impact
+
+Replaces the expense's allocations; appends one `AuditRecord`.
+
+## `public_op:expense_management.update_expense_document`
+
+### Owner
+
+`module:expense_management`. Change the description and client visibility of an expense document.
+
+### Callers
+
+`module:api`.
+
+### Inputs
+
+The `PortalStore`, an `AuthorizedProjectContext`, the `document_id`, an
+optional description and the client-visibility flag.
+
+### Outputs
+
+The updated `ExpenseDocument` (the route answers its safe projection).
+
+### Observable effect
+
+None.
+
+### Enforces
+
+A14 and R0-13: metadata only, `file_ref` unchanged; A13 (`document.update`
+with the document's own id).
+
+### Errors
+
+`ExpenseConflictError` for a document of no or another project.
+
+### State impact
+
+Updates one `ExpenseDocument`; appends one `AuditRecord`.
+
+## `public_op:expense_management.read_expense_document`
+
+### Owner
+
+`module:expense_management`. Return the exact bytes of an expense document to a reader allowed to see it.
+
+### Callers
+
+`module:api`, `module:api_irregular`.
+
+### Inputs
+
+The `PortalStore`, an `AuthorizedProjectContext` and the `document_id`.
+
+### Outputs
+
+`BinaryPayload` of the document (staff answer as attachment; the viewer
+route by its own projection).
+
+### Observable effect
+
+None.
+
+### Enforces
+
+A14 and R0-12: the document and its expense belong to the context's project
+and, for a viewer, the document is client-visible; only then is an
+`AuthorizedBinaryReference` built and `binary_storage.read_binary` called,
+with no transaction open.
+
+### Errors
+
+`BinaryAccessRejected` for a missing record, another project's or an
+invisible one, and an unreadable object alike.
+
+### State impact
+
+Read-only.
+
+## `public_op:project_tracking.set_section_progress`
+
+### Owner
+
+`module:project_tracking`. Record the manual completion percent of one section.
+
+### Callers
+
+`module:api`.
+
+### Inputs
+
+The `PortalStore`, an `AuthorizedProjectContext`, the `section_id` and the
+completion percent.
+
+### Outputs
+
+The upserted `SectionProgress`.
+
+### Observable effect
+
+None.
+
+### Enforces
+
+A20: an integer 0–100, never clamped, set by staff and never by photographs;
+the section is this project's (`budget_management.validate_project_section`,
+before the transaction); A13 (`progress.update`).
+
+### Errors
+
+`TrackingValidationError` for a percent out of range or not an integer;
+`BudgetValidationError` for a section outside the project.
+
+### State impact
+
+Upserts one `SectionProgress`; appends one `AuditRecord`.
+
+## `public_op:project_tracking.register_work_payment`
+
+### Owner
+
+`module:project_tracking`. Register one payment for work, idempotently by its payment id.
+
+### Callers
+
+`module:api`.
+
+### Inputs
+
+The `PortalStore`, an `AuthorizedProjectContext`, the `payment_id`, the
+amount, the payment date and the description.
+
+### Outputs
+
+The `WorkPayment`, new or the existing equal one.
+
+### Observable effect
+
+None: no invoice or accounting posting is created.
+
+### Enforces
+
+A9 (positive EUR, the validated amount stored and compared), A8
+(`rules.idempotency_identities`: an equal replay returns the existing payment
+with no audit), A13 (`payment.register`).
+
+### Errors
+
+`FinancialValidationError` for the amount; `TrackingConflictError` for a
+replay of the id with other content or of another project, changing nothing.
+
+### State impact
+
+Writes one `WorkPayment` and one `AuditRecord` when new.
+
+## `public_op:project_tracking.list_project_progress`
+
+### Owner
+
+`module:project_tracking`. List the project's recorded section progress in plan order.
+
+### Callers
+
+`module:api`.
+
+### Inputs
+
+The `PortalStore` and an `AuthorizedProjectContext`.
+
+### Outputs
+
+Every `SectionProgress` of the project, by the manual budget's plan
+`sort_order`, `section_id` breaking ties; empty when none is recorded.
+
+### Observable effect
+
+None.
+
+### Enforces
+
+A27; the tracking read transaction closes before
+`budget_management.ensure_manual_budget` is called for the order.
+
+### Errors
+
+A persistence failure propagates.
+
+### State impact
+
+Read-only, except the empty manual version `ensure_manual_budget` creates
+when the project has none.
+
+## `public_op:project_tracking.list_project_payments`
+
+### Owner
+
+`module:project_tracking`. List the project's payments, newest first.
+
+### Callers
+
+`module:api`.
+
+### Inputs
+
+The `PortalStore` and an `AuthorizedProjectContext`.
+
+### Outputs
+
+Every `WorkPayment` of the project by `payment_date` then `payment_id`,
+descending; empty when none.
+
+### Observable effect
+
+None.
+
+### Enforces
+
+A27.
+
+### Errors
+
+A persistence failure propagates.
+
+### State impact
+
+Read-only.
+
+## `public_op:photo_management.publish_progress_photo`
+
+### Owner
+
+`module:photo_management`. Publish one progress photo, idempotently by its intake id.
+
+### Callers
+
+`module:api`.
+
+### Inputs
+
+The `PortalStore`, an `AuthorizedProjectContext` and one `PhotoPublication`.
+
+### Outputs
+
+`PhotoMutationResult`: photo id, whether it was a replay, client visibility
+and `updated_at`; no `file_ref`.
+
+### Observable effect
+
+None: the binary already exists under the root (R0-13).
+
+### Enforces
+
+A8 (`rules.idempotency_identities.progress_photo`: `intake_id` is the one
+replay identity; a fresh `photo_id`), A20 (no progress or financial value is
+set), the optional section is this project's, A13 (`photo.publish`).
+
+### Errors
+
+`PhotoValidationError` for a publication of another project or a section
+outside it; `PhotoConflictError` for a replay that differs or belongs to
+another project.
+
+### State impact
+
+Writes one `ProgressPhoto` and one `AuditRecord` when new.
+
+## `public_op:photo_management.update_progress_photo`
+
+### Owner
+
+`module:photo_management`. Change a photo's caption, section and client visibility.
+
+### Callers
+
+`module:api`.
+
+### Inputs
+
+The `PortalStore`, an `AuthorizedProjectContext`, the `photo_id`, an optional
+caption, an optional `section_id` and the client-visibility flag.
+
+### Outputs
+
+`PhotoMutationResult` of the updated photo, not a replay.
+
+### Observable effect
+
+None.
+
+### Enforces
+
+A20 and A14: never `file_ref`, progress or finance; A24 (a replacement
+photo); A13 (`photo.update`).
+
+### Errors
+
+`PhotoValidationError` for a photo of no or another project or a section
+outside the project.
+
+### State impact
+
+Updates one `ProgressPhoto`; appends one `AuditRecord`.
+
+## `public_op:photo_management.list_progress_photos`
+
+### Owner
+
+`module:photo_management`. List the project's photos a reader may see.
+
+### Callers
+
+`module:api`.
+
+### Inputs
+
+The `PortalStore` and an `AuthorizedProjectContext`.
+
+### Outputs
+
+`ProgressPhotoView` list by `photo_date` then `photo_id`, ascending; for a
+viewer only client-visible photos; never `file_ref` or `intake_id`; empty
+when none.
+
+### Observable effect
+
+None.
+
+### Enforces
+
+A14, A27.
+
+### Errors
+
+A persistence failure propagates.
+
+### State impact
+
+Read-only.
+
+## `public_op:photo_management.read_progress_photo`
+
+### Owner
+
+`module:photo_management`. Return the exact bytes of a progress photo to a reader allowed to see it.
+
+### Callers
+
+`module:api`, `module:api_irregular`.
+
+### Inputs
+
+The `PortalStore`, an `AuthorizedProjectContext` and the `photo_id`.
+
+### Outputs
+
+`BinaryPayload` of the photo (answered inline).
+
+### Observable effect
+
+None.
+
+### Enforces
+
+A14 and R0-12: the photo belongs to the context's project and, for a viewer,
+is client-visible; the read transaction closes before
+`binary_storage.read_binary` is called.
+
+### Errors
+
+`PhotoValidationError` for a missing, another project's or an invisible
+photo; `BinaryStorageError` for an unreadable object. Unlike documents, the
+accepted service does not fold these into one answer.
+
+### State impact
+
+Read-only.
+
+## `public_op:derived_views.list_viewer_projects`
+
+### Owner
+
+`module:derived_views`. List the projects the acting viewer can open, with live Registry names.
+
+### Callers
+
+`module:api`, `module:api_irregular`.
+
+### Inputs
+
+The `PortalStore` and the `ViewerActorContext`.
+
+### Outputs
+
+`ProjectListItem` list (project, display name, address, Registry status,
+grant) in the A15 order (`rules.project_list_ordering.viewer`: display name
+case-folded, then `project_id`); empty when none.
+
+### Observable effect
+
+One Registry context request per active grant.
+
+### Enforces
+
+A15 and Factory `00ac72f18d9c`: a grant whose context cannot be read is left
+out, each grant independently, instead of failing the list.
+
+### Errors
+
+A persistence failure propagates; Registry failures only omit items.
+
+### State impact
+
+Read-only.
+
+## `public_op:derived_views.build_project_overview`
+
+### Owner
+
+`module:derived_views`. Build the one-page overview of a project with an availability for each part.
+
+### Callers
+
+`module:api`, `module:api_irregular`.
+
+### Inputs
+
+The `PortalStore` and an `AuthorizedProjectContext`.
+
+### Outputs
+
+`ProjectOverview`: six pairs — project, budget, expenses, progress, payments,
+photos — each a `ViewAvailability` and a value present only when available.
+
+### Observable effect
+
+One Registry context request.
+
+### Enforces
+
+A21 (derived at read time, nothing persisted), A27 and Factory
+`d2c4511ea119`: a part whose builder answers `ScopedNotFoundError` is
+`not_configured`, a persistence or Registry failure `temporarily_unavailable`;
+no zero is fabricated; viewer photos are client-visible only.
+
+### Errors
+
+None of its own: every part's failure becomes its availability.
+
+### State impact
+
+Read-only.
+
+## `public_op:derived_views.build_budget_view`
+
+### Owner
+
+`module:derived_views`. Derive the budget view of the active or a named version.
+
+### Callers
+
+`module:api`.
+
+### Inputs
+
+The `PortalStore`, an `AuthorizedProjectContext` and an optional
+`version_id`.
+
+### Outputs
+
+`BudgetView`: the version, sections, planned and actual material, planned and
+completed work, other expenses and the count of allocations outside the
+active plan.
+
+### Observable effect
+
+None.
+
+### Enforces
+
+A9, A19, A21: totals use included expenses only; the integrity count counts
+every expense, included or not; nothing is persisted.
+
+### Errors
+
+`ScopedNotFoundError` when no active version exists or the named one is not
+this project's.
+
+### State impact
+
+Read-only.
+
+## `public_op:derived_views.build_expense_view`
+
+### Owner
+
+`module:derived_views`. Derive the expense summary of a project.
+
+### Callers
+
+`module:api`.
+
+### Inputs
+
+The `PortalStore` and an `AuthorizedProjectContext`.
+
+### Outputs
+
+`ExpenseSummaryView`: every confirmed expense, excluded ones visible,
+included, excluded and other totals; no `file_ref`.
+
+### Observable effect
+
+None.
+
+### Enforces
+
+A19, A21, A27 (`rules.derived_view_ordering` for expenses and allocations).
+
+### Errors
+
+A persistence failure propagates.
+
+### State impact
+
+Read-only.
+
+## `public_op:derived_views.build_progress_view`
+
+### Owner
+
+`module:derived_views`. Derive the progress view of the active budget's sections.
+
+### Callers
+
+`module:api`.
+
+### Inputs
+
+The `PortalStore` and an `AuthorizedProjectContext`.
+
+### Outputs
+
+`ProgressView`: sections with their percent (absent when none is recorded),
+completed work per section and in total, and the weighted overall percent or
+`None`.
+
+### Observable effect
+
+None.
+
+### Enforces
+
+A9 and A20 through `financial_policy`; an absent measurement is never zero.
+
+### Errors
+
+`ScopedNotFoundError` when the project has no active version.
+
+### State impact
+
+Read-only.
+
+## `public_op:derived_views.build_payment_view`
+
+### Owner
+
+`module:derived_views`. Derive the payment summary and work balance of a project.
+
+### Callers
+
+`module:api`.
+
+### Inputs
+
+The `PortalStore` and an `AuthorizedProjectContext`.
+
+### Outputs
+
+`PaymentSummaryView`: payments in A27 order, their total and the
+`WorkBalanceResult` against completed work.
+
+### Observable effect
+
+None.
+
+### Enforces
+
+A9, A21, A27.
+
+### Errors
+
+`ScopedNotFoundError` when the project has no active version.
+
+### State impact
+
+Read-only.
