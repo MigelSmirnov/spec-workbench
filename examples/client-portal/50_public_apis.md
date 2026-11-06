@@ -50,7 +50,8 @@ text" at the end.
   replay writes no second creation audit. The audited action, result, reason
   and `entity_id` are the operation's to build.
 - **Time.** Every timestamp an operation writes is the persisted UTC time of
-  A28, taken when the change is made.
+  A28, taken when the change is made; an audit record's `occurred_at` is
+  taken by `audit_writer.append_audit` when it appends (A28).
 - **Refusal.** An operation returns its output or raises one declared
   exception; a refusal is decided before the first write, so it writes
   nothing, except where its Errors say the rejection is itself recorded.
@@ -1086,8 +1087,9 @@ None outside the caller's transaction.
 ### Enforces
 
 A13 (closed catalogue `rules.audit_action_catalog`, reason policy
-`rules.audit_result_reason_policy`), A23 (`entity_id`), A21 (append-only):
-exactly one insert; a service actor keeps its `key_version`; no secret or
+`rules.audit_result_reason_policy`), A23 (`entity_id`), A21 (append-only),
+A28 (`occurred_at` from its own clock read at append, not the caller's
+instant): exactly one insert; a service actor keeps its `key_version`; no secret or
 `file_ref` enters the details.
 
 ### Errors
@@ -1328,8 +1330,9 @@ active grant for the project. The authorization check of an import request
 starts with the authentication of its bearer credential
 (`service_identity.authenticate_service_principal`) and ends with this
 guard; the credential's revocation and expiry are observed in that first
-step (A11), so any request after a revocation is refused. This guard then
-re-reads the principal and the grant.
+step (A11), so any request authenticated after a revocation is refused; a
+revocation committed after this request's authentication is observed from
+the next request on. This guard then re-reads the principal and the grant.
 
 ### Errors
 
@@ -1375,7 +1378,8 @@ normalized, exactly one audit on every outcome — `staff.login` success or
 `staff.login_failed` rejected with no reason code. A rejection audit names the
 account the normalized address matched as both actor and entity, also when
 the account is not active, not verified or the password is wrong; actor and
-entity are empty only when no account matched. Only an active, verified
+entity are empty only when no account matched, and the actor kind is staff
+in every case. Only an active, verified
 account with a matching password signs in.
 
 ### Errors
@@ -2492,8 +2496,8 @@ per change.
 ### Inputs
 
 The `PortalStore`, the administrator's `StaffActorContext`, the principal id
-and an optional `expires_at`. Any expiry is accepted and stored, a past
-one included; no expiry means the credential does not expire. A
+and an optional `expires_at`. Any expiry is accepted and stored as
+supplied, a past one included, never converted (A28 keeps a supplied time); no expiry means the credential does not expire. A
 credential is usable only before its expiry, so one issued with an expiry
 already reached is stored but never authenticates.
 

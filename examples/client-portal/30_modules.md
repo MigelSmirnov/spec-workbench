@@ -889,7 +889,8 @@ session validity, active principal, project scope (assignment, viewer grant
 or producer grant), required capability and Registry lifecycle — in the
 declared order, with existence-hiding first failure. It reads the persisted
 role and binds a session to its identity (Factory `efd08476a436`). "Immediate"
-revocation (A11) is this module's: the next check observes it.
+revocation (A11) is this module's: every request authenticated after it
+observes it.
 
 ### Knows
 

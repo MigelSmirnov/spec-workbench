@@ -1900,7 +1900,8 @@ None.
 - **Kind:** persisted append-only entity.
 - **Fields:** `audit_id: UUID`, `occurred_at: datetime`,
   `actor_kind: ActorKind (staff | viewer | service | system)`,
-  `actor_id: UUID | None` `[closed-choice: required unless system]`,
+  `actor_id: UUID | None` `[closed-choice: required unless system, except a
+  staff.login_failed whose address matched no account]`,
   `key_version: int | None` (service actors only),
   `action: AuditAction` (closed catalog),
   `project_id: UUID | None`,

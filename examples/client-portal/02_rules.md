@@ -539,8 +539,8 @@ The table is rules data: `rules.email_challenge_policy` (SPEC_STANDARD 15.3.1, a
 | ServicePrincipal disabled | all its credentials unusable |
 | ServiceCredential | that credential unusable; other credentials of the principal unaffected (rotation overlap) |
 
-"Immediate" means the next authorization check observes the revocation; no
-grace period.
+"Immediate" means every request authenticated after the revocation commits
+observes it; no grace period.
 
 ### Carried changes
 
@@ -1102,7 +1102,8 @@ instant supplies every portal-owned timestamp it writes (event times such as
 `created_at`, `received_at`, `revoked_at`) and every current-time comparison
 that decides the validity of those writes or of persisted records. Times a
 source supplies — `approved_at`, `published_at` of a snapshot, `confirmed_at`
-and `document_date` of a recognition, `photo_date`, `payment_date` — are
+and `document_date` of a recognition, `photo_date`, `payment_date`, a service
+credential's `expires_at` — are
 validated and kept as supplied, never replaced by the clock (State 1
 Modeling conventions). An expiry is valid strictly before its instant: a
 session, credential or token is usable while `now < expires_at` and expired

@@ -343,6 +343,7 @@ The six topics were:
 |---|---|---|
 | reading the progress of a project without a budget creates its empty manual budget version and `budget.manual_version_create` audit, also for an archived project | `domain/project_tracking.py` 50–60 (`ensure_manual_budget`), `domain/budget_management.py` 170–217 | R0-24 named exception; invariant 5 |
 | the audit record's `occurred_at` is read by the audit writer at append time, not taken from the operation's one instant | `application/audit_writer.py` 136 | A28 exception |
+| a service credential's `expires_at` is stored as supplied; an offset-aware value is not converted, and comparing it with the offset-naive clock fails the later authentication as a server error | `application/service_identity.py` 19, 301; `adapters/service_identity_repository.py` 81, 217 | A28 source-supplied list; State 5 `issue_service_credential` |
 
 #### Factory-internal inconsistency: the `api` → `api_irregular` import
 
