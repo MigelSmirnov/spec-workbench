@@ -1,0 +1,226 @@
+{
+ "open_points": [
+  {
+   "unit": "40_flows.md:Conventions every flow follows",
+   "subject": "HTTP route orchestration",
+   "kind": "capability contradiction",
+   "text": "“A route handler … calls exactly one owning use case” conflicts with flows in which the route separately calls authentication, authorization and business capabilities, for example import steps 1–3 and viewer-read steps 2–3. No composite use-case capability offering those sequences is named.",
+   "question": "Must each handler call one composite use case, or may it orchestrate several identity, guard and business capabilities directly?",
+   "options": [
+    "One composite use case per route",
+    "The handler may call several capabilities in the stated order"
+   ],
+   "default_guess": "Allow the handler to orchestrate the explicitly stated capabilities."
+  },
+  {
+   "unit": "40_flows.md:Conventions every flow follows",
+   "subject": "Failure-to-availability conversion in project overview",
+   "kind": "contradiction",
+   "text": "“No failure becomes a success, an empty list or a zero, with one exception: the viewer's project list” conflicts with `flow:build_project_overview`, where “A part that cannot be read is marked unavailable” and the overview still succeeds.",
+   "question": "When a dependency fails while reading one overview component, does the request fail or return a successful overview with that component temporarily unavailable?",
+   "options": [
+    "Fail the whole request according to error_policy",
+    "Return the overview with that component temporarily_unavailable"
+   ],
+   "default_guess": "Return the overview with the failed component marked temporarily_unavailable.",
+   "witness": {
+    "initial": "A viewer is authorized for a project; its budget is readable, but the expense read dependency fails after authorization.",
+    "events": [
+     "The viewer requests the project overview.",
+     "The authorization guard succeeds.",
+     "derived_views reads the budget successfully and encounters the dependency failure while reading expenses."
+    ],
+    "outcomes": [
+     "The route returns the mapped failure, such as 500, because the conventions allow only the viewer-list exception.",
+     "The route returns ProjectOverview with the budget available and expenses_availability=temporarily_unavailable."
+    ],
+    "observer": "The viewer receives either an error response or a successful partial overview."
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:staff_session_lifecycle`",
+   "subject": "Revoking sessions for a nonexistent staff account",
+   "kind": "unstated failure outcome",
+   "text": "“An administrator … calls `revoke_staff_sessions` for one account” states no outcome when that account does not exist; the listed errors cover only a non-administrator, authentication failures and storage failures.",
+   "question": "What happens when an authorized administrator requests session revocation for an unknown staff_id?",
+   "options": [
+    "Return not found",
+    "Return a successful SessionRevocationResult with revoked_session_count=0",
+    "Reject as input"
+   ],
+   "default_guess": "Return not found.",
+   "witness": {
+    "initial": "An active administrator session exists, and no StaffAccount has staff_id X.",
+    "events": [
+     "The administrator submits the revoke-all-sessions operation for X.",
+     "Authorization for access management succeeds.",
+     "staff_identity looks for X."
+    ],
+    "outcomes": [
+     "The operation returns 404 because the target account does not exist.",
+     "The operation succeeds with revoked_session_count=0 because there are no active sessions."
+    ],
+    "observer": "The administrator sees either failure or a successful zero-count result."
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:administer_staff_accounts`",
+   "subject": "Assignment to an unknown staff account",
+   "kind": "unstated failure outcome",
+   "text": "The flow says `assign_staff_project` validates the project and lists outcomes for an unknown project or assignment, but it gives no outcome when the staff account named by the assignment does not exist, although State 1 requires an existing staff account.",
+   "question": "What response does assignment creation produce for an unknown staff_id after project validation succeeds?",
+   "options": [
+    "Not found",
+    "Input rejection",
+    "Persistence failure"
+   ],
+   "default_guess": "Return not found.",
+   "witness": {
+    "initial": "An administrator is active, project P is active in Registry, and staff_id X does not exist.",
+    "events": [
+     "The administrator requests assignment of X to P.",
+     "Access-management authorization succeeds.",
+     "Registry validation reports P active.",
+     "staff_identity attempts to create the assignment."
+    ],
+    "outcomes": [
+     "The operation returns 404 for the missing staff account.",
+     "The operation returns 422 or reaches persistence and returns 500 because only the project-side failure is specified."
+    ],
+    "observer": "The administrator sees different status codes and failure classifications."
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:administer_viewer_access`",
+   "subject": "Registry validation result for a new viewer grant",
+   "kind": "cross-state contradiction",
+   "text": "The flow says an unknown or inactive project is refused “by raising the Registry boundary error” and answers 502, while A5–A6 say decoded `exists=false` and `is_active=false` validation results are read by the caller and are not Registry gateway failures.",
+   "question": "For a successfully decoded validation answer reporting an unknown or archived project, should viewer-grant creation return a Registry boundary failure or the ordinary unknown/archived project outcome?",
+   "options": [
+    "502 Registry boundary failure for both",
+    "404 for unknown and 409 for archived"
+   ],
+   "default_guess": "Use 404 for unknown and 409 for archived, reserving 502 for an actual Registry call failure.",
+   "witness": {
+    "initial": "An administrator and active viewer exist; Registry is reachable and returns a valid ProjectValidationResult with exists=false for project P.",
+    "events": [
+     "The administrator requests a viewer grant for P.",
+     "Access-management authorization succeeds.",
+     "registry_gateway successfully decodes the validation answer.",
+     "viewer_access evaluates exists=false."
+    ],
+    "outcomes": [
+     "The flow returns 502 by raising RegistryBoundaryError.",
+     "A5–A6 return the caller-level unknown-project outcome, mapped to 404."
+    ],
+    "observer": "The administrator sees 502 or 404 for the same healthy Registry response."
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:import_estimate_snapshot`",
+   "subject": "SnapshotImportRecord reason on replay and integrity conflict",
+   "kind": "field contradiction",
+   "text": "The flow says “Content rejections, replays and conflicts are results with a reason” and describes an output record with “outcome, reason and snapshot id,” while M20 requires `reject_reason = None` for both `idempotent_replay` and `integrity_conflict`.",
+   "question": "What value does the import result's reason field carry for an idempotent replay and an integrity conflict?",
+   "options": [
+    "None for replay and conflict",
+    "The outcome name as the reason",
+    "A separate non-null reason value"
+   ],
+   "default_guess": "Use reject_reason=null for replay and integrity conflict; use the outcome and audit reason_code to distinguish them.",
+   "witness": {
+    "initial": "Snapshot identity K is already stored with fingerprint F.",
+    "events": [
+     "The producer republishes K with the same content and receives an idempotent replay.",
+     "The producer later publishes K with different content and receives an integrity conflict."
+    ],
+    "outcomes": [
+     "Both records carry reject_reason=null as required by M20.",
+     "Each record carries a non-null reason as stated by the flow."
+    ],
+    "observer": "The producer sees different serialized import-result fields."
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:maintain_and_activate_budget`",
+   "subject": "Unknown or wrong-project budget and section identifiers",
+   "kind": "unstated failure outcome",
+   "text": "The steps require `get_budget_version`, `activate_budget_version` and section reuse to operate on records of the authorized project, but the Errors section states no outcome for an unknown version_id, a version belonging to another project, or an unknown supplied section_id.",
+   "question": "How are unknown and cross-project budget-version or section identifiers classified?",
+   "options": [
+    "Concealed not found",
+    "Input rejection",
+    "Conflict"
+   ],
+   "default_guess": "Return concealed not found for unknown or cross-project versions, and input rejection for an invalid supplied section reference.",
+   "witness": {
+    "initial": "An operator is authorized for project A; version V belongs to project B.",
+    "events": [
+     "The operator requests activation of V under project A.",
+     "The guard authorizes mutation of A.",
+     "budget_management resolves V and discovers it belongs to B."
+    ],
+    "outcomes": [
+     "The operation conceals the cross-project record as 404.",
+     "The operation treats the mismatch as 422 or 409 because the flow specifies no lookup failure."
+    ],
+    "observer": "The operator sees a different status and can receive different information about V."
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:expense_intake_and_management`",
+   "subject": "Unknown and cross-project expense or document targets",
+   "kind": "unstated failure outcome",
+   "text": "The flow defines correction, inclusion, allocation replacement and document update, but its Errors section gives no outcome when the addressed expense or document is absent or belongs to another project.",
+   "question": "How do expense-management mutations classify an unknown or cross-project expense_id/document_id?",
+   "options": [
+    "Concealed not found",
+    "Input rejection",
+    "Authorization rejection"
+   ],
+   "default_guess": "Return concealed not found.",
+   "witness": {
+    "initial": "A staff member may mutate project A; expense E and its document belong to project B.",
+    "events": [
+     "The staff member submits a document update for E under project A.",
+     "The project-A guard succeeds.",
+     "expense_management loads E and detects the project mismatch."
+    ],
+    "outcomes": [
+     "The operation returns 404, concealing whether E exists elsewhere.",
+     "The operation returns 422 or 403 because no target-lookup outcome is specified."
+    ],
+    "observer": "The staff caller sees different status codes and potentially learns whether E exists."
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:track_progress_payments_and_photos`",
+   "subject": "Updating an unknown progress photo",
+   "kind": "unstated failure outcome",
+   "text": "`update_progress_photo` is said to change caption, section and visibility, but the Errors section covers invalid section, range, amount or project and does not state the outcome when photo_id is unknown.",
+   "question": "What does photo update return when the addressed photo does not exist?",
+   "options": [
+    "Not found",
+    "Input rejection",
+    "Successful no-op"
+   ],
+   "default_guess": "Return not found.",
+   "witness": {
+    "initial": "A staff member has mutation access to project P, and no photo has id X.",
+    "events": [
+     "The staff member requests an update of photo X in P.",
+     "The project guard succeeds.",
+     "photo_management cannot load X."
+    ],
+    "outcomes": [
+     "The operation returns 404.",
+     "The operation returns 422 or succeeds without change because the missing-target case is unspecified."
+    ],
+    "observer": "The staff caller sees failure classification or a successful response."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"40_flows.md:Conventions every flow follows\",\"subject\":\"HTTP route orchestration\",\"kind\":\"capability contradiction\",\"text\":\"“A route handler … calls exactly one owning use case” conflicts with flows in which the route separately calls authentication, authorization and business capabilities, for example import steps 1–3 and viewer-read steps 2–3. No composite use-case capability offering those sequences is named.\",\"question\":\"Must each handler call one composite use case, or may it orchestrate several identity, guard and business capabilities directly?\",\"options\":[\"One composite use case per route\",\"The handler may call several capabilities in the stated order\"],\"default_guess\":\"Allow the handler to orchestrate the explicitly stated capabilities.\"},{\"unit\":\"40_flows.md:Conventions every flow follows\",\"subject\":\"Failure-to-availability conversion in project overview\",\"kind\":\"contradiction\",\"text\":\"“No failure becomes a success, an empty list or a zero, with one exception: the viewer's project list” conflicts with `flow:build_project_overview`, where “A part that cannot be read is marked unavailable” and the overview still succeeds.\",\"question\":\"When a dependency fails while reading one overview component, does the request fail or return a successful overview with that component temporarily unavailable?\",\"options\":[\"Fail the whole request according to error_policy\",\"Return the overview with that component temporarily_unavailable\"],\"default_guess\":\"Return the overview with the failed component marked temporarily_unavailable.\",\"witness\":{\"initial\":\"A viewer is authorized for a project; its budget is readable, but the expense read dependency fails after authorization.\",\"events\":[\"The viewer requests the project overview.\",\"The authorization guard succeeds.\",\"derived_views reads the budget successfully and encounters the dependency failure while reading expenses.\"],\"outcomes\":[\"The route returns the mapped failure, such as 500, because the conventions allow only the viewer-list exception.\",\"The route returns ProjectOverview with the budget available and expenses_availability=temporarily_unavailable.\"],\"observer\":\"The viewer receives either an error response or a successful partial overview.\"}},{\"unit\":\"40_flows.md:`flow:staff_session_lifecycle`\",\"subject\":\"Revoking sessions for a nonexistent staff account\",\"kind\":\"unstated failure outcome\",\"text\":\"“An administrator … calls `revoke_staff_sessions` for one account” states no outcome when that account does not exist; the listed errors cover only a non-administrator, authentication failures and storage failures.\",\"question\":\"What happens when an authorized administrator requests session revocation for an unknown staff_id?\",\"options\":[\"Return not found\",\"Return a successful SessionRevocationResult with revoked_session_count=0\",\"Reject as input\"],\"default_guess\":\"Return not found.\",\"witness\":{\"initial\":\"An active administrator session exists, and no StaffAccount has staff_id X.\",\"events\":[\"The administrator submits the revoke-all-sessions operation for X.\",\"Authorization for access management succeeds.\",\"staff_identity looks for X.\"],\"outcomes\":[\"The operation returns 404 because the target account does not exist.\",\"The operation succeeds with revoked_session_count=0 because there are no active sessions.\"],\"observer\":\"The administrator sees either failure or a successful zero-count result.\"}},{\"unit\":\"40_flows.md:`flow:administer_staff_accounts`\",\"subject\":\"Assignment to an unknown staff account\",\"kind\":\"unstated failure outcome\",\"text\":\"The flow says `assign_staff_project` validates the project and lists outcomes for an unknown project or assignment, but it gives no outcome when the staff account named by the assignment does not exist, although State 1 requires an existing staff account.\",\"question\":\"What response does assignment creation produce for an unknown staff_id after project validation succeeds?\",\"options\":[\"Not found\",\"Input rejection\",\"Persistence failure\"],\"default_guess\":\"Return not found.\",\"witness\":{\"initial\":\"An administrator is active, project P is active in Registry, and staff_id X does not exist.\",\"events\":[\"The administrator requests assignment of X to P.\",\"Access-management authorization succeeds.\",\"Registry validation reports P active.\",\"staff_identity attempts to create the assignment.\"],\"outcomes\":[\"The operation returns 404 for the missing staff account.\",\"The operation returns 422 or reaches persistence and returns 500 because only the project-side failure is specified.\"],\"observer\":\"The administrator sees different status codes and failure classifications.\"}},{\"unit\":\"40_flows.md:`flow:administer_viewer_access`\",\"subject\":\"Registry validation result for a new viewer grant\",\"kind\":\"cross-state contradiction\",\"text\":\"The flow says an unknown or inactive project is refused “by raising the Registry boundary error” and answers 502, while A5–A6 say decoded `exists=false` and `is_active=false` validation results are read by the caller and are not Registry gateway failures.\",\"question\":\"For a successfully decoded validation answer reporting an unknown or archived project, should viewer-grant creation return a Registry boundary failure or the ordinary unknown/archived project outcome?\",\"options\":[\"502 Registry boundary failure for both\",\"404 for unknown and 409 for archived\"],\"default_guess\":\"Use 404 for unknown and 409 for archived, reserving 502 for an actual Registry call failure.\",\"witness\":{\"initial\":\"An administrator and active viewer exist; Registry is reachable and returns a valid ProjectValidationResult with exists=false for project P.\",\"events\":[\"The administrator requests a viewer grant for P.\",\"Access-management authorization succeeds.\",\"registry_gateway successfully decodes the validation answer.\",\"viewer_access evaluates exists=false.\"],\"outcomes\":[\"The flow returns 502 by raising RegistryBoundaryError.\",\"A5–A6 return the caller-level unknown-project outcome, mapped to 404.\"],\"observer\":\"The administrator sees 502 or 404 for the same healthy Registry response.\"}},{\"unit\":\"40_flows.md:`flow:import_estimate_snapshot`\",\"subject\":\"SnapshotImportRecord reason on replay and integrity conflict\",\"kind\":\"field contradiction\",\"text\":\"The flow says “Content rejections, replays and conflicts are results with a reason” and describes an output record with “outcome, reason and snapshot id,” while M20 requires `reject_reason = None` for both `idempotent_replay` and `integrity_conflict`.\",\"question\":\"What value does the import result's reason field carry for an idempotent replay and an integrity conflict?\",\"options\":[\"None for replay and conflict\",\"The outcome name as the reason\",\"A separate non-null reason value\"],\"default_guess\":\"Use reject_reason=null for replay and integrity conflict; use the outcome and audit reason_code to distinguish them.\",\"witness\":{\"initial\":\"Snapshot identity K is already stored with fingerprint F.\",\"events\":[\"The producer republishes K with the same content and receives an idempotent replay.\",\"The producer later publishes K with different content and receives an integrity conflict.\"],\"outcomes\":[\"Both records carry reject_reason=null as required by M20.\",\"Each record carries a non-null reason as stated by the flow.\"],\"observer\":\"The producer sees different serialized import-result fields.\"}},{\"unit\":\"40_flows.md:`flow:maintain_and_activate_budget`\",\"subject\":\"Unknown or wrong-project budget and section identifiers\",\"kind\":\"unstated failure outcome\",\"text\":\"The steps require `get_budget_version`, `activate_budget_version` and section reuse to operate on records of the authorized project, but the Errors section states no outcome for an unknown version_id, a version belonging to another project, or an unknown supplied section_id.\",\"question\":\"How are unknown and cross-project budget-version or section identifiers classified?\",\"options\":[\"Concealed not found\",\"Input rejection\",\"Conflict\"],\"default_guess\":\"Return concealed not found for unknown or cross-project versions, and input rejection for an invalid supplied section reference.\",\"witness\":{\"initial\":\"An operator is authorized for project A; version V belongs to project B.\",\"events\":[\"The operator requests activation of V under project A.\",\"The guard authorizes mutation of A.\",\"budget_management resolves V and discovers it belongs to B.\"],\"outcomes\":[\"The operation conceals the cross-project record as 404.\",\"The operation treats the mismatch as 422 or 409 because the flow specifies no lookup failure.\"],\"observer\":\"The operator sees a different status and can receive different information about V.\"}},{\"unit\":\"40_flows.md:`flow:expense_intake_and_management`\",\"subject\":\"Unknown and cross-project expense or document targets\",\"kind\":\"unstated failure outcome\",\"text\":\"The flow defines correction, inclusion, allocation replacement and document update, but its Errors section gives no outcome when the addressed expense or document is absent or belongs to another project.\",\"question\":\"How do expense-management mutations classify an unknown or cross-project expense_id/document_id?\",\"options\":[\"Concealed not found\",\"Input rejection\",\"Authorization rejection\"],\"default_guess\":\"Return concealed not found.\",\"witness\":{\"initial\":\"A staff member may mutate project A; expense E and its document belong to project B.\",\"events\":[\"The staff member submits a document update for E under project A.\",\"The project-A guard succeeds.\",\"expense_management loads E and detects the project mismatch.\"],\"outcomes\":[\"The operation returns 404, concealing whether E exists elsewhere.\",\"The operation returns 422 or 403 because no target-lookup outcome is specified.\"],\"observer\":\"The staff caller sees different status codes and potentially learns whether E exists.\"}},{\"unit\":\"40_flows.md:`flow:track_progress_payments_and_photos`\",\"subject\":\"Updating an unknown progress photo\",\"kind\":\"unstated failure outcome\",\"text\":\"`update_progress_photo` is said to change caption, section and visibility, but the Errors section covers invalid section, range, amount or project and does not state the outcome when photo_id is unknown.\",\"question\":\"What does photo update return when the addressed photo does not exist?\",\"options\":[\"Not found\",\"Input rejection\",\"Successful no-op\"],\"default_guess\":\"Return not found.\",\"witness\":{\"initial\":\"A staff member has mutation access to project P, and no photo has id X.\",\"events\":[\"The staff member requests an update of photo X in P.\",\"The project guard succeeds.\",\"photo_management cannot load X.\"],\"outcomes\":[\"The operation returns 404.\",\"The operation returns 422 or succeeds without change because the missing-target case is unspecified.\"],\"observer\":\"The staff caller sees failure classification or a successful response.\"}}]}",
+ "set_aside": []
+}

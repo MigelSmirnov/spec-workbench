@@ -220,7 +220,14 @@ Only `active` and `archived` are status literals the portal acts on (State 1
 M16). The project guard of A4 reads the validation answer's `exists`
 (false → not found) and, for a mutation, its `status` (anything other than
 `active` → `archived_project`); the grant and assignment operations of
-access management read `exists` and `is_active` instead (A6); the
+access management read `exists` and `is_active` instead (A6) and refuse an
+unknown or inactive project, each with its own operation's error (the
+table's labels name the refusal, not the error: a new viewer grant answers
+it as a Registry boundary failure, a staff assignment or producer grant as
+the not-found or archived rejection; Factory code
+`application/viewer_access.py`, `application/staff_identity.py`,
+`application/service_identity.py`; owner 2026-11-06: current service
+behaviour accepted); the
 active-project list keeps only references whose status is `active`; a
 status outside the two is never treated as active: a mutation is refused
 as `archived_project` by the guard, and a read whose project context would

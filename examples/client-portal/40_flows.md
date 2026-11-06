@@ -610,8 +610,10 @@ audit (A7, A8). `module:financial_policy` validates amounts.
 - Access refusals of step 2: unknown or ungranted project 404, refused
   capability 403, archived project 409, Registry failure 502; nothing
   recorded (Q20).
-- Content rejections, replays and conflicts are results with a reason,
-  recorded and audited, not errors.
+- Content rejections, replays and conflicts are recorded and audited
+  results, not errors; only a `rejected` record carries a `reject_reason`
+  (M20), and a conflict's audit carries `integrity_conflict` as its reason
+  code (A13).
 - A record of another principal or an unknown `import_id`: not found (404).
 - A storage failure rolls back snapshot, record and audit together (500).
 
