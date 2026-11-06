@@ -591,15 +591,39 @@ Each of the four modules is selected by the Factory `repository` emitter, so the
 generation-closure rule `local_implementation_requires_deterministic_backend`
 passes for them.
 
-Held, coordinator decision needed: `AuditRepositoryContext` and
-`StaffBootstrapPort`. The code implements them by `PortalTransaction`
-(`adapters/portal_store.py:55`, passed as `self` to every repository at 59–69)
-and `SqliteStaffBootstrapStore` (`adapters/staff_bootstrap_store.py:12`, passed
-as `self` at 39–40; created by the bootstrap command `cli/staff_bootstrap.py:22`).
-`local` is the code-backed disposition, but no Factory emitter selects
-`portal_store` or `staff_bootstrap_store`, and the normalizer then blocks with
-`local_implementation_requires_deterministic_backend` (three findings; also
-`design_emitter_binding.py --coverage` with the Factory root: unbound 3).
-`policy` does not fit (`PortalTransaction.__init__` takes `connection: object`;
-the bootstrap store opens SQLite connections itself), and `external` would
-state a composition boundary the code does not have.
+Rows added once the unit-of-work emitter existed (2026-11-06):
+
+| interface | disposition | implementation | code |
+|---|---|---|---|
+| `AuditRepositoryContext` | local | `PortalTransaction`, `SqliteStaffBootstrapStore` | `adapters/portal_store.py:55` (passed as `self` to every repository at 59–69); `adapters/staff_bootstrap_store.py:12` (passed as `self` at 39–40) |
+| `StaffBootstrapPort` | local | `SqliteStaffBootstrapStore` | `adapters/staff_bootstrap_store.py:12`; created by the bootstrap command `cli/staff_bootstrap.py:22` |
+
+They were held earlier because no Factory emitter selected `portal_store` or
+`staff_bootstrap_store` (`local_implementation_requires_deterministic_backend`).
+The Factory emitter `python_sqlite_unit_of_work_v1` (Factory PR #181, added
+2026-11-06; Workbench registration and SPEC_STANDARD §6.12
+`sqlite_unit_of_work_backend/v1`, Workbench PR #146) now owns both modules. The
+case declares it in `70_sqlite_unit_of_work_closure.json`; the projection
+carries the IR into `rules.sqlite_unit_of_work_backend`. The IR is the running
+code's shape: store `PortalStore`, transaction `PortalTransaction`, error
+`PersistenceError` in `portal_store`; eleven accessors in the order
+`PortalStore.begin` creates schemas and builds repositories; bootstrap store
+`SqliteStaffBootstrapStore.create_if_empty` in `staff_bootstrap_store`, guarded
+by the staff account table, writing the account then the audit record.
+
+The twelve challenge methods of `PortalTransaction` (`get_`, `insert_`,
+`list_`, `update_` for email changes, email verifications and password resets)
+are declared `unbacked_methods`: in the running code they raise
+`PersistenceError` (`adapters/portal_store.py:131–594`), because no challenge
+repository exists — the deferral of `00_product.md` R0-23 and
+`open_questions.md` Q19.
+
+Consequence at the next Route B: the emitted repositories inherit their port
+interfaces (`class SqliteAuditRepository(AuditRepository)`, where the running
+`adapters/audit_repository.py:27` declares no base). This is a code-shape change
+with no behaviour change.
+
+Checks after the change: `design_emitter_binding.py --coverage` with the
+Factory root unbound 0; `design_factory_slices.py` ready; admission FA010
+(obligations cover every interface-typed dependency), FA017 (every lowered
+repository is reachable) and FA005 (Factory validator) pass.
