@@ -1315,3 +1315,1353 @@ not know; `AuthorizationRejected` without the capability;
 ### State impact
 
 Read-only.
+
+## `public_op:staff_identity.authenticate_staff`
+
+### Owner
+
+`module:staff_identity`. Sign a staff member in with email and password and issue a session.
+
+### Callers
+
+`module:api`.
+
+### Inputs
+
+The `PortalStore`, the presented email and password (request body
+`StaffLoginRequest`).
+
+### Outputs
+
+`StaffSessionGrant`: session id, staff id, role, the session token in
+plaintext (returned once) and `expires_at`.
+
+### Observable effect
+
+None beyond the session and the audit.
+
+### Enforces
+
+A16 (normalized email), A17 (the session secret is issued for the new
+`session_id`; only its hash is stored), R0-06 (fixed expiry of
+`config.staff_session_ttl_hours`, twelve hours), A13: exactly one audit on
+every outcome — `staff.login` success or `staff.login_failed` rejected with
+no reason code, actor and entity empty when no account matched. Only an
+active, verified account with a matching password signs in.
+
+### Errors
+
+`IdentityInputRejected` for an address that does not normalize under A16,
+before any read or audit; it says nothing about any account.
+`AuthenticationRejected` for every other failed check, without saying which;
+the rejection audit is committed before it is raised.
+
+### State impact
+
+Writes one `StaffSession` and one `AuditRecord` per success; one
+`AuditRecord` per rejection.
+
+## `public_op:staff_identity.resolve_staff_session`
+
+### Owner
+
+`module:staff_identity`. Turn a presented staff bearer token into the trusted staff actor context.
+
+### Callers
+
+`module:api`.
+
+### Inputs
+
+The `PortalStore` and the bearer token.
+
+### Outputs
+
+Exactly one `StaffActorContext` (session id, staff id, role) from the
+persisted session and account; never `None`.
+
+### Observable effect
+
+None.
+
+### Enforces
+
+A17: the parsed secret, not the envelope, is verified against the stored
+hash; A4 `valid_session` and `active_principal`: the session exists, is not
+revoked or expired, and its account is active with a verified email. One read
+transaction, rolled back after the two reads (A22).
+
+### Errors
+
+`AuthenticationRejected` for every authentication outcome, an unparsable
+token included; a persistence failure stays visible.
+
+### State impact
+
+Read-only.
+
+## `public_op:staff_identity.sign_out_staff`
+
+### Owner
+
+`module:staff_identity`. End the staff session the actor is acting through.
+
+### Callers
+
+`module:api`.
+
+### Inputs
+
+The `PortalStore` and the `StaffActorContext`.
+
+### Outputs
+
+The revoked `StaffSession`.
+
+### Observable effect
+
+None beyond the revocation and the audit.
+
+### Enforces
+
+A11, A24 (a replacement session carries `revoked_at`), A13 (`staff.logout`).
+
+### Errors
+
+`AuthenticationRejected` for a missing, already revoked or expired session;
+never a successful sign-out.
+
+### State impact
+
+Updates one `StaffSession`; appends one `AuditRecord`.
+
+## `public_op:staff_identity.revoke_staff_sessions`
+
+### Owner
+
+`module:staff_identity`. Revoke every live session of one staff account on an administrator's request.
+
+### Callers
+
+`module:api`.
+
+### Inputs
+
+The `PortalStore`, the administrator's `StaffActorContext` and the target
+`staff_id`.
+
+### Outputs
+
+`SessionRevocationResult`: the staff id, the number of sessions revoked and
+the one `revoked_at` the operation captured, also when none was live.
+
+### Observable effect
+
+None beyond the revocations and the audit.
+
+### Enforces
+
+R0-14 (access management checked before the transaction opens), A11, A24,
+A13 (`staff.sessions_revoke`).
+
+### Errors
+
+`AuthenticationRejected`, `AuthorizationRejected` from the access-management
+check.
+
+### State impact
+
+Updates each live `StaffSession` of the account; appends one `AuditRecord`.
+
+## `public_op:staff_identity.change_staff_status`
+
+### Owner
+
+`module:staff_identity`. Suspend, disable, reinstate or activate one staff account.
+
+### Callers
+
+`module:api`.
+
+### Inputs
+
+The `PortalStore`, the administrator's `StaffActorContext`, the `staff_id`
+and the new `StaffStatus`.
+
+### Outputs
+
+The hash-free `StaffAccountView` of the changed account.
+
+### Observable effect
+
+None beyond the change and the audit.
+
+### Enforces
+
+A3 (`rules.status_transitions`) from the persisted status; A11
+(`rules.revocation_cascades`): suspension and disabling revoke every live
+session at the same timestamp; challenges have no storage while deferred
+(R0-23). R0-19: activation from `pending_verification` records
+`email_verified_at`; reinstatement from `suspended` keeps it. A13: one
+`staff.suspend`, `staff.disable` or `staff.reinstate`.
+
+### Errors
+
+Access-management failures; `IdentityInputRejected` for a transition the table
+does not list; `ScopedNotFoundError` for an unknown account.
+
+### State impact
+
+Updates one `StaffAccount` and the revoked sessions; appends one
+`AuditRecord`.
+
+## `public_op:staff_identity.change_staff_password`
+
+### Owner
+
+`module:staff_identity`. Replace the acting staff member's own password.
+
+### Callers
+
+`module:api`.
+
+### Inputs
+
+The `PortalStore`, the `StaffActorContext`, the current and the new password.
+
+### Outputs
+
+The hash-free `StaffAccountView`.
+
+### Observable effect
+
+None.
+
+### Enforces
+
+A16 for the new password, A17 for the hash; every other live session of the
+account is revoked, the actor's own is kept. `rules.audit_action_catalog`
+has no action for a password change, so none is appended. Neither plaintext
+is persisted or audited.
+
+### Errors
+
+`AuthenticationRejected` for a wrong current password;
+`IdentityInputRejected` for a new password outside A16.
+
+### State impact
+
+Updates the `StaffAccount` hash and the other live sessions.
+
+## `public_op:staff_identity.create_staff_account`
+
+### Owner
+
+`module:staff_identity`. Create a staff account with an initial password on an administrator's request.
+
+### Callers
+
+`module:api`.
+
+### Inputs
+
+The `PortalStore`, the administrator's `StaffActorContext`, the email, the
+initial password and the `StaffRole`.
+
+### Outputs
+
+The hash-free `StaffAccountView` of the new account, `pending_verification`
+with no verified email.
+
+### Observable effect
+
+None: the administrator hands the password over outside the portal and
+activates the account (R0-19); no message is sent (R0-23).
+
+### Enforces
+
+R0-14, A16 (normalized unique email), A17 (only the hash of the exact
+password is stored), A13 (`staff.create` in the same transaction).
+
+### Errors
+
+Access-management failures; `IdentityInputRejected` for an invalid or taken
+email or a password outside A16, before any insert.
+
+### State impact
+
+Writes one `StaffAccount` and one `AuditRecord`.
+
+## `public_op:staff_identity.assign_staff_project`
+
+### Owner
+
+`module:staff_identity`. Give one operator access to one Registry project.
+
+### Callers
+
+`module:api`.
+
+### Inputs
+
+The `PortalStore`, the administrator's `StaffActorContext`, the operator's
+`staff_id` and the `project_id`.
+
+### Outputs
+
+The new active `StaffProjectAssignment`.
+
+### Observable effect
+
+One Registry validation before the transaction opens.
+
+### Enforces
+
+R0-14, A5 and R0-24 (no new access to an unknown or archived project), A13
+(`staff_assignment.create` with the project).
+
+### Errors
+
+Access-management failures; `ScopedNotFoundError` for a project the Registry
+does not know or an unknown operator; `ArchivedProjectRejected` for an
+inactive project; `AuthorizationRejected` for an existing active assignment;
+`RegistryBoundaryError`.
+
+### State impact
+
+Writes one `StaffProjectAssignment` and one `AuditRecord`.
+
+## `public_op:staff_identity.revoke_staff_project_assignment`
+
+### Owner
+
+`module:staff_identity`. Revoke one operator's project assignment.
+
+### Callers
+
+`module:api`.
+
+### Inputs
+
+The `PortalStore`, the administrator's `StaffActorContext` and the
+`assignment_id`.
+
+### Outputs
+
+The revoked `StaffProjectAssignment`.
+
+### Observable effect
+
+None; the next guard check sees the revocation.
+
+### Enforces
+
+R0-14, R0-24 (no Registry call), A24, A13 (`staff_assignment.revoke`).
+
+### Errors
+
+Access-management failures; `ScopedNotFoundError` for an unknown or already
+revoked assignment, indistinguishably.
+
+### State impact
+
+Updates one `StaffProjectAssignment`; appends one `AuditRecord`.
+
+## `public_op:staff_identity.perform_recovery_override`
+
+### Owner
+
+`module:staff_identity`. Replace a staff member's login email by administrator recovery.
+
+### Callers
+
+`module:api`.
+
+### Inputs
+
+The `PortalStore`, the administrator's `StaffActorContext`, the `staff_id`
+and the replacement email.
+
+### Outputs
+
+The hash-free `StaffAccountView` with the replacement email, verified.
+
+### Observable effect
+
+None.
+
+### Enforces
+
+R0-20 (administrator-only, not the ordinary email change), A16 for the
+replacement, A13 (enhanced `staff.recovery_override` audit in the same
+transaction).
+
+### Errors
+
+Access-management failures; `IdentityInputRejected` for the replacement email;
+`ScopedNotFoundError` for an unknown account.
+
+### State impact
+
+Updates one `StaffAccount`; appends one `AuditRecord`.
+
+## `public_op:staff_bootstrap.bootstrap_first_administrator`
+
+### Owner
+
+`module:staff_bootstrap`. Create the first active, verified administrator of an empty deployment.
+
+### Callers
+
+`module:staff_bootstrap_cli`.
+
+### Inputs
+
+The `StaffBootstrapPort` (the bootstrap store), the email and the initial
+password.
+
+### Outputs
+
+The hash-free `StaffAccountView` of the new administrator.
+
+### Observable effect
+
+None.
+
+### Enforces
+
+R0-07 and A29 (`rules.staff_bootstrap_policy`): the A16 input rules through
+the staff identity input boundary, the A17 hash, an account with no creator
+and its `staff.create` audit with the system actor, handed to the port in one
+call; no transaction, query or authorization of its own. The password or its
+hash reaches no sink the policy forbids.
+
+### Errors
+
+`IdentityInputRejected` for the email or password;
+`BootstrapAlreadyCompleted` when any staff account exists, with nothing
+written; a storage failure propagates unchanged.
+
+### State impact
+
+Through the port: one `StaffAccount` and one `AuditRecord`, both or neither.
+
+## `public_op:staff_challenges.issue_email_verification`
+
+### Owner
+
+`module:staff_challenges`. Refuse, while challenges are deferred, an administrator's request for an email-verification challenge.
+
+### Callers
+
+`module:api`.
+
+### Inputs
+
+The `PortalStore`, the administrator's `StaffActorContext` and the
+`staff_id`.
+
+### Outputs
+
+None while deferred: no `ChallengeIssueView` is fabricated.
+
+### Observable effect
+
+None.
+
+### Enforces
+
+R0-23 and Q19: the operation is inert until a challenge repository exists;
+the A10 policy is the design it follows once built.
+
+### Errors
+
+`AuthenticationRejected`, before authorization or any input check.
+
+### State impact
+
+None: no transaction, read, write, audit or delivery.
+
+## `public_op:staff_challenges.confirm_email_verification`
+
+### Owner
+
+`module:staff_challenges`. Refuse, while challenges are deferred, a presented email-verification token.
+
+### Callers
+
+`module:api`.
+
+### Inputs
+
+The `PortalStore` and the token.
+
+### Outputs
+
+None while deferred.
+
+### Observable effect
+
+None.
+
+### Enforces
+
+R0-23, Q19; no email is verified by this route (R0-19).
+
+### Errors
+
+`AuthenticationRejected`, before the token is parsed.
+
+### State impact
+
+None.
+
+## `public_op:staff_challenges.request_email_change`
+
+### Owner
+
+`module:staff_challenges`. Refuse, while challenges are deferred, a staff member's request to change their email.
+
+### Callers
+
+`module:api`.
+
+### Inputs
+
+The `PortalStore`, the `StaffActorContext` and the new email.
+
+### Outputs
+
+None while deferred.
+
+### Observable effect
+
+None.
+
+### Enforces
+
+R0-23, Q19.
+
+### Errors
+
+`AuthenticationRejected`, before authorization or normalization.
+
+### State impact
+
+None.
+
+## `public_op:staff_challenges.confirm_email_change`
+
+### Owner
+
+`module:staff_challenges`. Refuse, while challenges are deferred, a presented email-change token.
+
+### Callers
+
+`module:api`.
+
+### Inputs
+
+The `PortalStore` and the token.
+
+### Outputs
+
+None while deferred.
+
+### Observable effect
+
+None.
+
+### Enforces
+
+R0-23, Q19.
+
+### Errors
+
+`AuthenticationRejected`, before the token is parsed.
+
+### State impact
+
+None.
+
+## `public_op:staff_challenges.request_password_reset`
+
+### Owner
+
+`module:staff_challenges`. Accept a password-reset request with one identical answer for every address.
+
+### Callers
+
+`module:api`.
+
+### Inputs
+
+The `PortalStore` and the presented email.
+
+### Outputs
+
+None, on every path (202 with no body).
+
+### Observable effect
+
+None while deferred: no challenge is issued and nothing is sent.
+
+### Enforces
+
+R0-06 and R0-15 (an unauthenticated surface that discloses no existence):
+the address is normalized and a rejected normalization is swallowed, so a
+malformed, unknown and known address are answered alike. R0-23.
+
+### Errors
+
+None for any presented value.
+
+### State impact
+
+None.
+
+## `public_op:staff_challenges.complete_password_reset`
+
+### Owner
+
+`module:staff_challenges`. Refuse, while challenges are deferred, a password-reset completion.
+
+### Callers
+
+`module:api`.
+
+### Inputs
+
+The `PortalStore`, the token and the new password.
+
+### Outputs
+
+None while deferred.
+
+### Observable effect
+
+None.
+
+### Enforces
+
+R0-23, Q19: no password is hashed or changed.
+
+### Errors
+
+`AuthenticationRejected`, before the token or the password is examined.
+
+### State impact
+
+None.
+
+## `public_op:viewer_access.create_viewer`
+
+### Owner
+
+`module:viewer_access`. Create a client viewer with a portal-owned display name.
+
+### Callers
+
+`module:api`.
+
+### Inputs
+
+The `PortalStore`, the administrator's `StaffActorContext` and the display
+name.
+
+### Outputs
+
+The new active `ClientViewer` (the route answers its safe view).
+
+### Observable effect
+
+None.
+
+### Enforces
+
+R0-14 (access management), M02: the display name is the portal's, independent
+of any Registry customer reference, and the viewer holds no contact data; A13
+(`viewer.create` in the same transaction).
+
+### Errors
+
+Access-management failures; a display name the model rejects.
+
+### State impact
+
+Writes one `ClientViewer` and one `AuditRecord`.
+
+## `public_op:viewer_access.revoke_viewer`
+
+### Owner
+
+`module:viewer_access`. Revoke a client viewer for good, with its credentials and sessions.
+
+### Callers
+
+`module:api`.
+
+### Inputs
+
+The `PortalStore`, the administrator's `StaffActorContext` and the
+`viewer_id`.
+
+### Outputs
+
+The revoked `ClientViewer`.
+
+### Observable effect
+
+None.
+
+### Enforces
+
+R0-14, A3 (terminal), A11 (`rules.revocation_cascades`: credentials and
+sessions revoked in the same transaction), R0-24 (no Registry call), A24,
+A13 (`viewer.revoke`).
+
+### Errors
+
+Access-management failures; `ScopedNotFoundError` for an unknown or already
+revoked viewer.
+
+### State impact
+
+Updates the viewer, its credentials and sessions; appends one `AuditRecord`.
+
+## `public_op:viewer_access.issue_viewer_access`
+
+### Owner
+
+`module:viewer_access`. Issue a new access code for a viewer, revoking every earlier one.
+
+### Callers
+
+`module:api`.
+
+### Inputs
+
+The `PortalStore`, the administrator's `StaffActorContext` and the
+`viewer_id`.
+
+### Outputs
+
+`ViewerCredentialIssue`: the new `ViewerAccessCredential` and the secret in
+plaintext, returned once.
+
+### Observable effect
+
+None: the owner passes the code to the client outside the portal.
+
+### Enforces
+
+M02 and A11: every non-revoked prior credential and every live session of the
+viewer is revoked in the same transaction — the behaviour the owner's
+observation Q13 is about, which stays the owner's; A17 (only the hash is
+stored), A13 (`viewer.credential_issue`).
+
+### Errors
+
+Access-management failures; `ScopedNotFoundError` for an unknown or
+non-active viewer.
+
+### State impact
+
+Writes one credential, updates the prior credentials and live sessions;
+appends one `AuditRecord`.
+
+## `public_op:viewer_access.revoke_viewer_access`
+
+### Owner
+
+`module:viewer_access`. Revoke one viewer access code and the viewer's sessions.
+
+### Callers
+
+`module:api`.
+
+### Inputs
+
+The `PortalStore`, the administrator's `StaffActorContext` and the
+`credential_id`.
+
+### Outputs
+
+The revoked `ViewerAccessCredential` (the route answers 204).
+
+### Observable effect
+
+None.
+
+### Enforces
+
+A11, R0-24, A24, A13 (`viewer.credential_revoke`).
+
+### Errors
+
+Access-management failures; `ScopedNotFoundError` for an unknown or already
+revoked credential.
+
+### State impact
+
+Updates the credential and every session of its viewer; appends one
+`AuditRecord`.
+
+## `public_op:viewer_access.enter_viewer_access`
+
+### Owner
+
+`module:viewer_access`. Exchange a viewer access code for a viewer session.
+
+### Callers
+
+`module:api`, `module:api_irregular`.
+
+### Inputs
+
+The `PortalStore` and the presented access code.
+
+### Outputs
+
+`ViewerSessionGrant`: session id, viewer id, the session token (returned
+once, carried only in the cookie of R0-09) and `expires_at`.
+
+### Observable effect
+
+None.
+
+### Enforces
+
+A17: the parsed selector locates the credential and its secret is verified
+against the stored hash; the viewer must be active and the credential
+usable; the session secret is issued for a fresh `session_id`; expiry is
+`config.viewer_session_ttl_days` after one captured time (R0-06).
+
+### Errors
+
+`AuthenticationRejected` for an unknown selector, a wrong secret, a revoked
+credential or viewer, without saying which.
+
+### State impact
+
+Writes one `ViewerSession`.
+
+## `public_op:viewer_access.resolve_viewer_session`
+
+### Owner
+
+`module:viewer_access`. Turn a presented viewer session token into the trusted viewer actor context.
+
+### Callers
+
+`module:api`, `module:api_irregular`.
+
+### Inputs
+
+The `PortalStore` and the session token from the viewer cookie.
+
+### Outputs
+
+Exactly one `ViewerActorContext` (session id, viewer id); never `None`.
+
+### Observable effect
+
+None.
+
+### Enforces
+
+A17, A4 `valid_session` and `active_principal`: hash, expiry, revocation,
+viewer status and credential usability.
+
+### Errors
+
+`AuthenticationRejected` only for a genuine authentication outcome; a
+persistence or programming failure stays visible.
+
+### State impact
+
+Read-only.
+
+## `public_op:viewer_access.describe_viewer_session`
+
+### Owner
+
+`module:viewer_access`. Describe the viewer's current session for a browser that restores it.
+
+### Callers
+
+`module:api`, `module:api_irregular`.
+
+### Inputs
+
+The `PortalStore` and the `ViewerActorContext`.
+
+### Outputs
+
+`ViewerSessionView`: session id, viewer id and `expires_at`; no token or hash.
+
+### Observable effect
+
+None.
+
+### Enforces
+
+R0-09: the session still exists, belongs to the viewer and is neither revoked
+nor expired at one captured time; one read transaction closed by one
+rollback.
+
+### Errors
+
+`AuthenticationRejected` for any authentication outcome; persistence failures
+stay visible.
+
+### State impact
+
+Read-only.
+
+## `public_op:viewer_access.sign_out_viewer`
+
+### Owner
+
+`module:viewer_access`. End the viewer session the browser presents.
+
+### Callers
+
+`module:api`, `module:api_irregular`.
+
+### Inputs
+
+The `PortalStore` and the `ViewerActorContext`.
+
+### Outputs
+
+None (204); the persisted session is not returned.
+
+### Observable effect
+
+None beyond the revocation.
+
+### Enforces
+
+R0-09: only the session the context names, owned by its viewer, is revoked;
+the viewer's other sessions stay. A24. `rules.audit_action_catalog` has no
+viewer logout action, so none is appended.
+
+### Errors
+
+`AuthenticationRejected` for a missing, revoked or mismatched session; never a
+successful sign-out.
+
+### State impact
+
+Updates one `ViewerSession`.
+
+## `public_op:viewer_access.grant_viewer_project`
+
+### Owner
+
+`module:viewer_access`. Let one viewer see one active Registry project.
+
+### Callers
+
+`module:api`.
+
+### Inputs
+
+The `PortalStore`, the administrator's `StaffActorContext`, the `viewer_id`
+and the `project_id`.
+
+### Outputs
+
+The new active `ProjectViewerGrant`.
+
+### Observable effect
+
+One Registry validation before the transaction opens.
+
+### Enforces
+
+R0-14, A5 and R0-24 (only an existing active project receives a new grant),
+A13 (`grant.create`).
+
+### Errors
+
+Access-management failures; `RegistryBoundaryError` carrying the validation's
+failure kind for a project the Registry does not know or does not report
+active, and for a failed Registry call; `ScopedNotFoundError` for an unknown
+or non-active viewer; `AuthorizationRejected` for an existing active grant.
+
+### State impact
+
+Writes one `ProjectViewerGrant` and one `AuditRecord`.
+
+## `public_op:viewer_access.revoke_viewer_project`
+
+### Owner
+
+`module:viewer_access`. Withdraw one viewer's access to one project.
+
+### Callers
+
+`module:api`.
+
+### Inputs
+
+The `PortalStore`, the administrator's `StaffActorContext` and the
+`grant_id`.
+
+### Outputs
+
+The revoked `ProjectViewerGrant`.
+
+### Observable effect
+
+None; the next guard check sees the revocation.
+
+### Enforces
+
+R0-24 (no Registry call), A24, A13 (`grant.revoke`); no other grant changes.
+
+### Errors
+
+Access-management failures; `ScopedNotFoundError` for an unknown or already
+revoked grant.
+
+### State impact
+
+Updates one `ProjectViewerGrant`; appends one `AuditRecord`.
+
+## `public_op:viewer_access.list_viewer_project_grants`
+
+### Owner
+
+`module:viewer_access`. List the active project grants of the acting viewer.
+
+### Callers
+
+`module:api`, `module:derived_views`.
+
+### Inputs
+
+The `PortalStore` and the `ViewerActorContext`.
+
+### Outputs
+
+Every active `ProjectViewerGrant` of that viewer and no other; possibly empty.
+
+### Observable effect
+
+None.
+
+### Enforces
+
+A4: the viewer comes from the trusted context, never from request data; no
+Registry context is read here.
+
+### Errors
+
+A persistence failure propagates.
+
+### State impact
+
+Read-only.
+
+## `public_op:service_identity.create_service_principal`
+
+### Owner
+
+`module:service_identity`. Register a named producer service principal.
+
+### Callers
+
+`module:api`.
+
+### Inputs
+
+The `PortalStore`, the administrator's `StaffActorContext`, the name, the
+`ProducerSourceType` and the `ProducerScopeMode`.
+
+### Outputs
+
+The new active `ServicePrincipal` (the route answers its safe view).
+
+### Observable effect
+
+None.
+
+### Enforces
+
+R0-14, A12 (closed source type and scope mode), A13 (`principal.create`).
+
+### Errors
+
+Access-management failures.
+
+### State impact
+
+Writes one `ServicePrincipal` and one `AuditRecord`.
+
+## `public_op:service_identity.change_service_principal_status`
+
+### Owner
+
+`module:service_identity`. Disable or re-enable one service principal.
+
+### Callers
+
+`module:api`.
+
+### Inputs
+
+The `PortalStore`, the administrator's `StaffActorContext`, the principal id
+and the new `PrincipalStatus`.
+
+### Outputs
+
+The `ServicePrincipal` in its new status (the route answers its safe view).
+
+### Observable effect
+
+None.
+
+### Enforces
+
+A3 (`rules.status_transitions`), A11 (`rules.revocation_cascades`), A24, A13
+(`principal.disable` or `principal.enable`). A request for the status the
+principal already holds changes nothing and appends no audit.
+
+### Errors
+
+Access-management failures; `ScopedNotFoundError` for an unknown principal;
+`AuthorizationRejected` for a transition the table does not list.
+
+### State impact
+
+Updates the principal and what its cascade names; appends one `AuditRecord`
+per change.
+
+## `public_op:service_identity.issue_service_credential`
+
+### Owner
+
+`module:service_identity`. Issue a new bearer credential for an active service principal.
+
+### Callers
+
+`module:api`.
+
+### Inputs
+
+The `PortalStore`, the administrator's `StaffActorContext`, the principal id
+and an optional `expires_at`.
+
+### Outputs
+
+`ServiceCredentialIssue`: the new `ServiceCredential` with the next
+`key_version` and the secret in plaintext, returned once.
+
+### Observable effect
+
+None.
+
+### Enforces
+
+A12, A17 (secret issued for the fresh `credential_id`; only the hash
+stored); earlier credentials stay valid until revoked; A13
+(`principal.credential_issue` with the key version).
+
+### Errors
+
+Access-management failures; `ScopedNotFoundError` for an unknown principal;
+`AuthorizationRejected` for a non-active one, with nothing generated.
+
+### State impact
+
+Writes one `ServiceCredential` and one `AuditRecord`.
+
+## `public_op:service_identity.revoke_service_credential`
+
+### Owner
+
+`module:service_identity`. Revoke one service credential, leaving the principal's other credentials.
+
+### Callers
+
+`module:api`.
+
+### Inputs
+
+The `PortalStore`, the administrator's `StaffActorContext` and the
+`credential_id`.
+
+### Outputs
+
+The revoked `ServiceCredential` (the route answers 204).
+
+### Observable effect
+
+None.
+
+### Enforces
+
+A11, A24, A13 (`principal.credential_revoke` with the key version).
+
+### Errors
+
+Access-management failures; `ScopedNotFoundError` for an unknown or already
+revoked credential, indistinguishably.
+
+### State impact
+
+Updates one `ServiceCredential`; appends one `AuditRecord`.
+
+## `public_op:service_identity.grant_producer_project`
+
+### Owner
+
+`module:service_identity`. Let one service principal publish for one active Registry project.
+
+### Callers
+
+`module:api`.
+
+### Inputs
+
+The `PortalStore`, the administrator's `StaffActorContext`, the principal id
+and the `project_id`.
+
+### Outputs
+
+The new active `ProducerProjectGrant`.
+
+### Observable effect
+
+One Registry validation before the transaction opens.
+
+### Enforces
+
+R0-14, A12, A5 and R0-24, A13 (`producer_grant.create` with the project).
+
+### Errors
+
+Access-management failures; `ScopedNotFoundError` for a project the Registry
+does not know or an unknown principal; `ArchivedProjectRejected` for an
+inactive project; `AuthorizationRejected` for an existing active grant;
+`RegistryBoundaryError`.
+
+### State impact
+
+Writes one `ProducerProjectGrant` and one `AuditRecord`.
+
+## `public_op:service_identity.revoke_producer_project`
+
+### Owner
+
+`module:service_identity`. Withdraw one producer grant.
+
+### Callers
+
+`module:api`.
+
+### Inputs
+
+The `PortalStore`, the administrator's `StaffActorContext` and the
+`grant_id`.
+
+### Outputs
+
+The revoked `ProducerProjectGrant`.
+
+### Observable effect
+
+None.
+
+### Enforces
+
+R0-24 (no Registry call), A24, A13 (`producer_grant.revoke` with the
+project); only an active, unrevoked grant is revocable.
+
+### Errors
+
+Access-management failures; `ScopedNotFoundError` for an unknown or
+non-revocable grant, indistinguishably.
+
+### State impact
+
+Updates one `ProducerProjectGrant`; appends one `AuditRecord`.
+
+## `public_op:service_identity.authenticate_service_principal`
+
+### Owner
+
+`module:service_identity`. Turn a presented producer bearer credential into the trusted service actor context.
+
+### Callers
+
+`module:api`.
+
+### Inputs
+
+The `PortalStore` and the bearer secret.
+
+### Outputs
+
+`ServiceActorContext`: principal id, source type, scope mode and key version
+from persistence.
+
+### Observable effect
+
+None.
+
+### Enforces
+
+R0-09 (bearer only), A17 (parsed before any transaction opens; the secret
+part verified), A28 for usability: the credential is not revoked or expired
+and its principal is active.
+
+### Errors
+
+`AuthenticationRejected` for every authentication outcome, a malformed
+envelope included, revealing no selector state.
+
+### State impact
+
+Read-only.
+
+## `public_op:service_identity.authorize_producer_scope`
+
+### Owner
+
+`module:service_identity`. Decide whether a service principal's scope covers one project.
+
+### Callers
+
+`module:api`.
+
+### Inputs
+
+The `PortalStore`, the `ServiceActorContext` and the `project_id`.
+
+### Outputs
+
+The decision of `rules.producer_scope_policy`: for an all-projects scope,
+whether the Registry reports the project active; for a granted-projects
+scope, whether an active unrevoked grant exists for this principal and
+project.
+
+### Observable effect
+
+One Registry validation for an all-projects scope.
+
+### Enforces
+
+A12; the scope comes from the trusted context and persisted grants only.
+
+### Errors
+
+Never answers false by swallowing a failure: persistence and
+`RegistryBoundaryError` propagate unchanged.
+
+### State impact
+
+Read-only.
