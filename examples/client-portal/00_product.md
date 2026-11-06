@@ -16,6 +16,14 @@ this case was not updated (`SOURCE.md`, "Divergence"). A migration changes form,
 meaning: nothing in "Decisions" is new to the product; every entry names the
 document or the accepted Factory spec change it comes from.
 
+State 0 is not closed by question rounds: round-01 (2026-11-06,
+`questions/state0/round-01/summary.json`) judged 10 topics blocking, most of
+them about the text of 2026-07-18 (for example operators managing viewers and
+grants against the access-management capability of R2 and R0-08; the
+project-scoped common authorization rule against the unauthenticated reset
+and health answers). They stay open for the owner (`SOURCE.md`, "State 0
+question round").
+
 ## Product statement
 
 Client Portal is a backend service with an HTTP JSON API that gives a
@@ -414,7 +422,8 @@ Decisions of 2026-07-18 close `open_questions.md` Q1–Q9 as follows:
 - Boundaries of an administrative area when more than one administrator
   exists.
 - Concrete transport between PresuPro and the portal (bearer / signed
-  request / mTLS) — does not affect domain semantics.
+  request / mTLS) — does not affect domain semantics. Decided by R0-09: a
+  bearer header.
 - External binary deletion/retention policy after source intake; portal reads
   authorized objects but never deletes them as a side effect of business
   visibility or archival.

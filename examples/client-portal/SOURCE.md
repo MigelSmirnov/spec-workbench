@@ -109,6 +109,26 @@ All Factory references are to `code-factory` `main` at `23a17dc8`
 
 Findings of later states are classified in those states' migrations.
 
+### State 0 question round
+
+Round-01 (2026-11-06, `questions/state0/round-01/`, Codex CLI provider) on the
+migrated `00_product.md`: 45 topics, 10 blocking. None is decided by the
+migration; each needs either the owner or a repair of State 0 from a later
+state's accepted text, which is a meaning decision for the owner to confirm.
+
+| topic | kind | where the answer may already be | note |
+|---|---|---|---|
+| T1 tax modes and non-gross amounts | answered_later, quote unverified | former `spec/20_rules.md` R9 ("All amounts gross … `tax_mode` is provenance only") | the judge's quote did not match verbatim; re-ask after State 2 migrates |
+| T7 unauthenticated reset and health against "every operation checks … valid active session" | contradiction | R4 says "Every project-scoped operation"; R0-06, R0-11 | State 0 wording of 2026-07-18 is wider than R4 |
+| T8 intake decisions "operator-supplied" against "from the operator or intake process" | contradiction | accepted spec: expense creation is a staff route (`POST /staff/projects/{project_id}/expenses/from-recognition`) | pre-existing in the text of 2026-07-18; Q12 question 3 is related and not designed |
+| T10 document visibility default | consequential_gap | M30 `client_visible`; State 4/5 texts | pre-existing |
+| T12 operators manage viewers and grants against access-management capability | contradiction | R2 (operator lacks `access.manage`), accepted routes `/admin/viewers…` are administrator-only | pre-existing; R0-08 repeats the accepted spec |
+| T17 "every portal record belongs to exactly one project_id" against staff, viewer, audit and bootstrap records | contradiction | M01–M15, M36 have no or optional `project_id` | pre-existing; R0-07 adds one more instance |
+| T32 staff-account creation and initial credential | consequential_gap | former States 4–6 (`create_staff_account`, `issue_email_verification`) | pre-existing |
+| T33 bearer-only producer authentication against the open transport binding | contradiction | R0-09 (accepted spec); the open item is now annotated "Decided by R0-09" | closed in the text after the round; to be confirmed by the next round |
+| T34 recovery override operation | consequential_gap | accepted route `POST /admin/staff/{staff_id}/recovery-override` (`3080ef0d`) | pre-existing |
+| T41 read-import-result action | consequential_gap | accepted route `GET /integrations/snapshot-imports/{import_id}` | pre-existing |
+
 ### Classification of what State 1 carries
 
 The former `spec/10_models.md` moved into `01_models.md` line for line (every
