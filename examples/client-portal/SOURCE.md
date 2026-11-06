@@ -512,7 +512,7 @@ are written.
 | topic | evidence | decision |
 |---|---|---|
 | time source of the operations (revised 2026-11-06, replaces the clock-policy address) | the accepted contracts (459ac96c) have no clock port; the running modules read the time with `datetime.utcnow()` (`application/*.py` call sites); SPEC_STANDARD §15.3.1 (rev 2) and the Factory resolver refuse `= rules.clock_policy.*` in a note (`rules_address_outside_backend_ir`) | the contracts stay unchanged and no clock backend (§6.9) is added; a note that needs the current time states the behaviour: the operation reads the current UTC time once and uses that single instant for every timestamp it writes and every current-time comparison it makes |
-| addresses in notes | SPEC_STANDARD §15.3.1 (rev 2); Factory `resolve_data_address` refuses every non-backend `= rules.*` and every non-persistence `= config.*`, even where the Workbench gate and `check_note_draft` pass them | a note carries only addresses of registered deterministic backend IR and `config.persistence.*_table_name` / `storage_schema_revision`, each checked with the Factory resolver; the 186 carried notes with another address are rewritten: a behaviour rule in words (154), a closed value by its model symbol (5: `AuditAction`, `Capability`, `RegistryFailureKind`, `StaffRole`/`StaffStatus`/`ActorKind`/`AuditEntityKind`/`AuditResult` members), a literal without a models home left out and requested from a data provider (27 notes, requests below) |
+| addresses in notes | SPEC_STANDARD §15.3.1 (rev 2); Factory `resolve_data_address` refuses every non-backend `= rules.*` and every non-persistence `= config.*`, even where the Workbench gate and `check_note_draft` pass them | a note carries only addresses of registered deterministic backend IR and `config.persistence.*_table_name` / `storage_schema_revision`, each checked with the Factory resolver; the 186 carried notes with another address are rewritten: a behaviour rule in words (154), a closed value by its model symbol (5: `AuditAction`, `Capability`, `RegistryFailureKind`, `StaffRole`/`StaffStatus`/`ActorKind`/`AuditEntityKind`/`AuditResult` members), a literal without a models home first left out (27 notes); revised below: the value is written back in plain words |
 | module- and class-level notes | the gate knows only `module:<name>` tokens of `30_modules.md` (closed at State 3) and no class scope | moved onto the callables they constrain, repeated per callable; the gate behaviour is reported to the coordinator as a tool/document discrepancy (SPEC_STANDARD §2 allows `module_name:`) |
 | `design_closure_gaps.py` `fresh_timestamp_without_source` (36) and `ambient_time_note` (4 after the State 7 notes) | report-only fuse; the time source is the operation's own UTC read stated as behaviour, not a contract parameter | accepted, report-only; no contract or model change |
 | `design_closure_gaps.py` `orphan_read_entity` (17: `BinaryPayload`, `BudgetActivationResult`, `ChallengeIssueView`, `ClientViewerView`, `DocumentMutationResult`, `ExpenseMutationResult`, `PhotoMutationResult`, `PresentedSecret`, `ProjectOverview`, `ServiceCredentialIssueResponse`, `ServicePrincipalView`, `SessionRevocationResult`, `StaffAccountView`, `StaffSessionGrant`, `ViewerCredentialIssueResponse`, `ViewerSessionGrant`, `WorkBalanceResult`) | result and view models built by the operations that return them (accepted contracts and notes of 459ac96c) | accepted, report-only; the State 7 notes of the returning operations state the construction |
@@ -520,13 +520,22 @@ are written.
 If the State 7 gate itself blocks on either class, the notes stop and the
 finding goes back to the coordinator.
 
-### State 7 data-provider structure requests (open, 2026-11-06)
+#### Values in notes restored (coordinator, 2026-11-06)
 
-Literal values the accepted code (Factory `23a17dc84205`) contains, with no
-models home and no address legal in a note (§15.3.1, §6.10). The notes of
-the consuming callables state the behaviour and leave the value out; each
-value waits for a data-provider constant (`data_provider_backend`,
-`70_data_provider_closure.json`), not built in this session.
+| topic | evidence | decision |
+|---|---|---|
+| literals left out of the notes | non-backend `rules.*` and non-persistence `config.*` never reach the generating model (§15.3.1); a note that states the behaviour without the value makes Route B guess, and the regenerated service would differ from the accepted one | the value is written back in plain words exactly as 459ac96c `rules`/`config` and its notes hold it, cross-checked with the code at the lines of the table below; 30 notes of the 26 consuming callables (the table rows 1–16; members of `AuditAction` and `Capability` by their model symbol); `design_notes --gate` stays 0 blocks |
+| notes lint L2/L3 on the restored values | `design_notes_lint.py`: +10 L2 `literal_with_home` (the numbers 0, 1, 5, 12, 30 coincide with other declared config values) and +19 L3 `uncovered_data_signal` (2, 3, 128, the Registry and auth paths); L2–L5 run only in the notes-authoring acceptance environment, not in Factory admission v2; 459ac96c itself carries 150 such findings | accepted like those of 459ac96c, report-only; they close with the data-provider upgrade below |
+
+### State 7 data-provider upgrade (deferred follow-up, after migration)
+
+Decided by the coordinator 2026-11-06: not part of this migration. A data
+provider (§6.10, `data_provider_backend`, `70_data_provider_closure.json`)
+adds a module, row models and constants and would reopen States 1, 3 and 6:
+a standard upgrade, not the reproduction of the service. The literal values
+below (accepted code, Factory `23a17dc84205`) have no models home and no
+address legal in a note (§15.3.1); until the upgrade the notes of the
+consuming callables carry each value in plain words (above).
 
 | # | leaf (accepted spec) | value | consumers (module.callable) | code |
 |---|---|---|---|---|
