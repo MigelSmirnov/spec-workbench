@@ -341,6 +341,12 @@ The six topics were:
   (`cli/staff_bootstrap.py` 33, `application/staff_bootstrap.py` 88–96),
   against A29 "never written to output … return values".
 
+Closing pass of 2026-11-06 (`--since 0ca1488f9c99`), after the allocation
+decision: State 1 rounds 30–38 (blocking 2, 1, 0, 0, 1, 0, 0, 0, 0), State 2
+rounds 49–58 (1, 4, 2, 0, 1, 2, 0, 1, 0, 0), State 3 rounds 18–19 and State 4
+rounds 18–19 (0, 0), State 5 rounds 05–09 (5, 2, 1, 0, 0); State 0 stayed
+closed (its text is unchanged). All of States 0–5 are closed.
+
 #### Accepted service quirks (candidates for a later Factory change, not migration scope)
 
 | quirk | running code | case text |
