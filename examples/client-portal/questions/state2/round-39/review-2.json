@@ -1,0 +1,151 @@
+{
+ "open_points": [
+  {
+   "unit": "02_rules.md:Status",
+   "subject": "configuration mutability",
+   "kind": "contradiction",
+   "text": "The Status says, “They remain runtime knobs, not architecture,” while changed A30 says, “the running service fixes them in source (`config.*`), and only the values named by an `_env_name` are read from the deployment environment.”",
+   "question": "For configuration entries without an `_env_name`, may a deployment override the confirmed default, or is the value fixed in source?",
+   "options": [
+    "All listed defaults remain deployment-overridable runtime knobs.",
+    "Only entries represented by an `_env_name` are deployment-overridable; all others are fixed in source."
+   ],
+   "default_guess": "Treat only `_env_name` entries as deployment-overridable and repair the stale Status statement.",
+   "witness": {
+    "initial": "The source default for `staff_session_ttl_hours` is 12.",
+    "events": [
+     "A deployer supplies a deployment value of 1 hour and starts the service.",
+     "A staff member logs in and uses the session after 2 hours."
+    ],
+    "outcomes": [
+     "The deployment override applies, so the session is expired.",
+     "The setting is fixed in source because it has no `_env_name`, so the session remains valid for 12 hours."
+    ],
+    "observer": "The staff member and deployment operator"
+   }
+  },
+  {
+   "unit": "A30",
+   "subject": "environment-only service configuration",
+   "kind": "contradiction",
+   "text": "A30 says, “only the values named by an `_env_name` are read from the deployment environment,” but State 0 R0-10 says, “The service is configured only by environment variables,” including its SQLite database file, local binary root and trusted hosts.",
+   "question": "Are persistence paths, trusted hosts, origins and the other `RuntimeSettings` values read from deployment environment variables even though their configuration keys are not shown as `_env_name` entries, or are they fixed in source?",
+   "options": [
+    "Every deployment setting named by R0-10 and `config.runtime_environment_variables` is environment-supplied; `_env_name` is only explicit indirection for selected entries.",
+    "Only values whose A30 configuration key ends in `_env_name` are environment-supplied; the other settings are source-fixed."
+   ],
+   "default_guess": "Treat the closed `config.runtime_environment_variables` table as the complete environment boundary and limit the new `_env_name` wording to explicit environment-name indirections.",
+   "witness": {
+    "initial": "One built service artifact has a source-configured trusted host and database path.",
+    "events": [
+     "A deployment supplies different trusted-host and database-path environment values.",
+     "A request arrives on the deployment-supplied host and an account is created."
+    ],
+    "outcomes": [
+     "R0-10 applies: the supplied host is accepted and the account is stored in the deployment-selected database.",
+     "The new A30 sentence applies literally: those values are ignored unless named by `_env_name`; the host is refused or the account is stored in the source-fixed database."
+    ],
+    "observer": "The deployment operator and API caller"
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "persisted service-credential expiry representation",
+   "kind": "contradiction",
+   "text": "A28 says both “Persisted timestamps are UTC, stored as offset-naive datetimes” and “an offset-aware credential expiry is stored with its offset.”",
+   "question": "Is an offset-aware `ServiceCredential.expires_at` the sole persisted offset-aware exception, or must it be converted to the general offset-naive UTC representation?",
+   "options": [
+    "Store the credential expiry exactly as supplied, including its offset, as a specific exception.",
+    "Convert it to UTC and store it offset-naive under the general persisted-timestamp rule."
+   ],
+   "default_guess": "Treat the later, specific credential-expiry sentence as an exception to the general storage rule.",
+   "witness": {
+    "initial": "An administrator issues a service credential with `expires_at` equal to `2026-11-07T12:00:00+02:00`.",
+    "events": [
+     "The credential is committed.",
+     "A repository reader returns the persisted credential."
+    ],
+    "outcomes": [
+     "`expires_at` remains `2026-11-07T12:00:00+02:00`.",
+     "`expires_at` is stored and returned as the equivalent offset-naive UTC value `2026-11-07T10:00:00`."
+    ],
+    "observer": "Repository consumers and any API exposing the credential expiry"
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "credential-expiry validity comparison",
+   "kind": "undefined comparison",
+   "text": "The operation clock is an offset-naive UTC datetime, an offset-aware credential expiry may be stored with its offset, and the rule only says the credential is usable while `now < expires_at`; it does not define how those differently represented values are compared.",
+   "question": "How must authentication compare the offset-naive operation instant with an offset-aware credential expiry without converting the supplied stored value?",
+   "options": [
+    "Compare them as instants by applying UTC semantics to the naive operation clock while leaving the persisted expiry unchanged.",
+    "Reject offset-aware expiry at issuance despite the stated accepted quirk.",
+    "Use a representation-specific comparison, which may fail when awareness differs."
+   ],
+   "default_guess": "Interpret the naive operation clock as UTC for comparison and compare absolute instants without changing the stored expiry.",
+   "witness": {
+    "initial": "A valid active service credential has `expires_at = 2026-11-07T12:00:00+02:00`; the operation reads naive UTC `now = 2026-11-07T10:30:00`.",
+    "events": [
+     "The service principal presents the credential for an import."
+    ],
+    "outcomes": [
+     "Instant-aware comparison finds the credential expired at 10:00 UTC and refuses authentication.",
+     "A direct naive/aware comparison cannot be performed, producing an implementation error or a different representation-based decision."
+    ],
+    "observer": "The service principal calling the import route"
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "scope of supplied-time offset preservation",
+   "kind": "ambiguous exception",
+   "text": "A28 states generally, “A supplied time kept as supplied is not converted,” but identifies only “an offset-aware credential expiry” as the accepted service quirk.",
+   "question": "Does non-conversion preserve offsets for every source-supplied datetime (`approved_at`, `published_at`, `confirmed_at`, `photo_date` and credential expiry), or only for credential expiry?",
+   "options": [
+    "Every source-supplied offset-aware datetime is persisted with its supplied offset.",
+    "Only service-credential expiry keeps its offset; other supplied datetimes use the general offset-naive UTC storage form."
+   ],
+   "default_guess": "Apply the explicit exception only to service-credential expiry and store other supplied instants as offset-naive UTC.",
+   "witness": {
+    "initial": "A snapshot publication contains `published_at = 2026-11-07T12:00:00+02:00`.",
+    "events": [
+     "An authorized producer imports the snapshot.",
+     "The accepted snapshot is later read from persistence."
+    ],
+    "outcomes": [
+     "The snapshot retains `2026-11-07T12:00:00+02:00` exactly because supplied times are not converted.",
+     "The snapshot stores the equivalent offset-naive UTC value `2026-11-07T10:00:00`; only credential expiry receives the offset-preserving exception."
+    ],
+    "observer": "The producer and repository consumers"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "AuditRecord key_version presence rule",
+   "kind": "missing cardinality rule",
+   "text": "`key_version: int | None` is described as “a service actor's, or the affected credential's on `principal.credential_issue` and `principal.credential_revoke`,” but the text does not say that the affected credential's version is required on those two actions or forbidden on every other non-service action.",
+   "question": "What are the exact required/forbidden conditions for `AuditRecord.key_version` after adding affected-credential provenance?",
+   "options": [
+    "Require it when `actor_kind = service` or action is `principal.credential_issue`/`principal.credential_revoke`, and forbid it otherwise.",
+    "Require it only for service actors; permit but do not require it for credential issue/revoke by staff.",
+    "Permit it whenever a caller has a relevant key version, including other actions."
+   ],
+   "default_guess": "Require it for service actors and for the two credential actions, and forbid it otherwise.",
+   "witness": {
+    "initial": "An administrator issues service credential key version 4 for a service principal.",
+    "events": [
+     "The successful operation appends `principal.credential_issue` with the administrator as the staff actor."
+    ],
+    "outcomes": [
+     "The audit writer requires and stores `key_version = 4` as affected-credential provenance.",
+     "Because the field remains nullable and only service actors are elsewhere required to carry it, the audit writer accepts `key_version = null`."
+    ],
+    "observer": "An administrator or auditor inspecting the credential-issuance audit record"
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"02_rules.md:Status\",\"subject\":\"configuration mutability\",\"kind\":\"contradiction\",\"text\":\"The Status says, “They remain runtime knobs, not architecture,” while changed A30 says, “the running service fixes them in source (`config.*`), and only the values named by an `_env_name` are read from the deployment environment.”\",\"question\":\"For configuration entries without an `_env_name`, may a deployment override the confirmed default, or is the value fixed in source?\",\"options\":[\"All listed defaults remain deployment-overridable runtime knobs.\",\"Only entries represented by an `_env_name` are deployment-overridable; all others are fixed in source.\"],\"default_guess\":\"Treat only `_env_name` entries as deployment-overridable and repair the stale Status statement.\",\"witness\":{\"initial\":\"The source default for `staff_session_ttl_hours` is 12.\",\"events\":[\"A deployer supplies a deployment value of 1 hour and starts the service.\",\"A staff member logs in and uses the session after 2 hours.\"],\"outcomes\":[\"The deployment override applies, so the session is expired.\",\"The setting is fixed in source because it has no `_env_name`, so the session remains valid for 12 hours.\"],\"observer\":\"The staff member and deployment operator\"}},{\"unit\":\"A30\",\"subject\":\"environment-only service configuration\",\"kind\":\"contradiction\",\"text\":\"A30 says, “only the values named by an `_env_name` are read from the deployment environment,” but State 0 R0-10 says, “The service is configured only by environment variables,” including its SQLite database file, local binary root and trusted hosts.\",\"question\":\"Are persistence paths, trusted hosts, origins and the other `RuntimeSettings` values read from deployment environment variables even though their configuration keys are not shown as `_env_name` entries, or are they fixed in source?\",\"options\":[\"Every deployment setting named by R0-10 and `config.runtime_environment_variables` is environment-supplied; `_env_name` is only explicit indirection for selected entries.\",\"Only values whose A30 configuration key ends in `_env_name` are environment-supplied; the other settings are source-fixed.\"],\"default_guess\":\"Treat the closed `config.runtime_environment_variables` table as the complete environment boundary and limit the new `_env_name` wording to explicit environment-name indirections.\",\"witness\":{\"initial\":\"One built service artifact has a source-configured trusted host and database path.\",\"events\":[\"A deployment supplies different trusted-host and database-path environment values.\",\"A request arrives on the deployment-supplied host and an account is created.\"],\"outcomes\":[\"R0-10 applies: the supplied host is accepted and the account is stored in the deployment-selected database.\",\"The new A30 sentence applies literally: those values are ignored unless named by `_env_name`; the host is refused or the account is stored in the source-fixed database.\"],\"observer\":\"The deployment operator and API caller\"}},{\"unit\":\"A28\",\"subject\":\"persisted service-credential expiry representation\",\"kind\":\"contradiction\",\"text\":\"A28 says both “Persisted timestamps are UTC, stored as offset-naive datetimes” and “an offset-aware credential expiry is stored with its offset.”\",\"question\":\"Is an offset-aware `ServiceCredential.expires_at` the sole persisted offset-aware exception, or must it be converted to the general offset-naive UTC representation?\",\"options\":[\"Store the credential expiry exactly as supplied, including its offset, as a specific exception.\",\"Convert it to UTC and store it offset-naive under the general persisted-timestamp rule.\"],\"default_guess\":\"Treat the later, specific credential-expiry sentence as an exception to the general storage rule.\",\"witness\":{\"initial\":\"An administrator issues a service credential with `expires_at` equal to `2026-11-07T12:00:00+02:00`.\",\"events\":[\"The credential is committed.\",\"A repository reader returns the persisted credential.\"],\"outcomes\":[\"`expires_at` remains `2026-11-07T12:00:00+02:00`.\",\"`expires_at` is stored and returned as the equivalent offset-naive UTC value `2026-11-07T10:00:00`.\"],\"observer\":\"Repository consumers and any API exposing the credential expiry\"}},{\"unit\":\"A28\",\"subject\":\"credential-expiry validity comparison\",\"kind\":\"undefined comparison\",\"text\":\"The operation clock is an offset-naive UTC datetime, an offset-aware credential expiry may be stored with its offset, and the rule only says the credential is usable while `now < expires_at`; it does not define how those differently represented values are compared.\",\"question\":\"How must authentication compare the offset-naive operation instant with an offset-aware credential expiry without converting the supplied stored value?\",\"options\":[\"Compare them as instants by applying UTC semantics to the naive operation clock while leaving the persisted expiry unchanged.\",\"Reject offset-aware expiry at issuance despite the stated accepted quirk.\",\"Use a representation-specific comparison, which may fail when awareness differs.\"],\"default_guess\":\"Interpret the naive operation clock as UTC for comparison and compare absolute instants without changing the stored expiry.\",\"witness\":{\"initial\":\"A valid active service credential has `expires_at = 2026-11-07T12:00:00+02:00`; the operation reads naive UTC `now = 2026-11-07T10:30:00`.\",\"events\":[\"The service principal presents the credential for an import.\"],\"outcomes\":[\"Instant-aware comparison finds the credential expired at 10:00 UTC and refuses authentication.\",\"A direct naive/aware comparison cannot be performed, producing an implementation error or a different representation-based decision.\"],\"observer\":\"The service principal calling the import route\"}},{\"unit\":\"A28\",\"subject\":\"scope of supplied-time offset preservation\",\"kind\":\"ambiguous exception\",\"text\":\"A28 states generally, “A supplied time kept as supplied is not converted,” but identifies only “an offset-aware credential expiry” as the accepted service quirk.\",\"question\":\"Does non-conversion preserve offsets for every source-supplied datetime (`approved_at`, `published_at`, `confirmed_at`, `photo_date` and credential expiry), or only for credential expiry?\",\"options\":[\"Every source-supplied offset-aware datetime is persisted with its supplied offset.\",\"Only service-credential expiry keeps its offset; other supplied datetimes use the general offset-naive UTC storage form.\"],\"default_guess\":\"Apply the explicit exception only to service-credential expiry and store other supplied instants as offset-naive UTC.\",\"witness\":{\"initial\":\"A snapshot publication contains `published_at = 2026-11-07T12:00:00+02:00`.\",\"events\":[\"An authorized producer imports the snapshot.\",\"The accepted snapshot is later read from persistence.\"],\"outcomes\":[\"The snapshot retains `2026-11-07T12:00:00+02:00` exactly because supplied times are not converted.\",\"The snapshot stores the equivalent offset-naive UTC value `2026-11-07T10:00:00`; only credential expiry receives the offset-preserving exception.\"],\"observer\":\"The producer and repository consumers\"}},{\"unit\":\"context\",\"subject\":\"AuditRecord key_version presence rule\",\"kind\":\"missing cardinality rule\",\"text\":\"`key_version: int | None` is described as “a service actor's, or the affected credential's on `principal.credential_issue` and `principal.credential_revoke`,” but the text does not say that the affected credential's version is required on those two actions or forbidden on every other non-service action.\",\"question\":\"What are the exact required/forbidden conditions for `AuditRecord.key_version` after adding affected-credential provenance?\",\"options\":[\"Require it when `actor_kind = service` or action is `principal.credential_issue`/`principal.credential_revoke`, and forbid it otherwise.\",\"Require it only for service actors; permit but do not require it for credential issue/revoke by staff.\",\"Permit it whenever a caller has a relevant key version, including other actions.\"],\"default_guess\":\"Require it for service actors and for the two credential actions, and forbid it otherwise.\",\"witness\":{\"initial\":\"An administrator issues service credential key version 4 for a service principal.\",\"events\":[\"The successful operation appends `principal.credential_issue` with the administrator as the staff actor.\"],\"outcomes\":[\"The audit writer requires and stores `key_version = 4` as affected-credential provenance.\",\"Because the field remains nullable and only service actors are elsewhere required to carry it, the audit writer accepts `key_version = null`.\"],\"observer\":\"An administrator or auditor inspecting the credential-issuance audit record\"}}]}",
+ "set_aside": []
+}

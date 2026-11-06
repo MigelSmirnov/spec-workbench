@@ -1,0 +1,160 @@
+{
+ "open_points": [
+  {
+   "unit": "A28",
+   "subject": "ServiceCredential.expires_at",
+   "kind": "contradiction",
+   "text": "“a service credential's expires_at — are validated and kept as supplied” conflicts with the formal invariant “an expiry it writes is that instant plus its TTL”",
+   "question": "Is a service credential’s optional expires_at the administrator-supplied instant, or must the operation derive it from its single clock instant and a TTL?",
+   "options": [
+    "Keep the administrator-supplied expires_at unchanged",
+    "Derive expires_at as operation_now plus a configured TTL",
+    "Treat source-supplied expiries as an explicit exception to the formal invariant"
+   ],
+   "default_guess": "Treat ServiceCredential.expires_at as an explicit source-supplied exception and keep it after UTC normalization.",
+   "witness": {
+    "initial": "An active service principal has no credential; the clock reads 2026-11-06 10:00 UTC and an administrator requests a credential expiring at 2026-11-07 15:00 UTC.",
+    "events": [
+     "The administrator issues the credential with the requested expires_at.",
+     "The operation persists the new ServiceCredential."
+    ],
+    "outcomes": [
+     "The credential expires at the supplied 15:00 instant.",
+     "The credential expires at operation_now plus an implementer-selected or configured TTL, so the supplied instant is replaced or refused."
+    ],
+    "observer": "The administrator and producer when the credential remains usable after the differing expiry instants."
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "Persisted source-supplied timestamps",
+   "kind": "contradiction",
+   "text": "“Persisted timestamps are UTC, stored as offset-naive datetimes” and “Times a source supplies … are validated and kept as supplied, never replaced by the clock” do not say whether an offset-aware supplied value is preserved or converted to offset-naive UTC.",
+   "question": "For a source-supplied timestamp with an offset, must persistence preserve its representation, reject it unless already UTC, or convert its instant to offset-naive UTC?",
+   "options": [
+    "Accept any offset-aware instant and convert it to offset-naive UTC",
+    "Accept only UTC-offset-aware input and remove the UTC offset for persistence",
+    "Keep the offset-aware value exactly as supplied",
+    "Reject every offset-aware value and require offset-naive UTC input"
+   ],
+   "default_guess": "Require an aware instant, convert it to UTC, then persist the same instant as offset-naive UTC.",
+   "witness": {
+    "initial": "A producer publishes approved_at as 2026-11-06T11:00:00+01:00, representing 10:00 UTC.",
+    "events": [
+     "The authenticated producer imports an otherwise valid snapshot.",
+     "The accepted snapshot is persisted."
+    ],
+    "outcomes": [
+     "approved_at is stored as offset-naive 2026-11-06 10:00:00.",
+     "approved_at is kept exactly as supplied with +01:00, or the import is rejected because the persisted form must be offset-naive."
+    ],
+    "observer": "A later snapshot reader or fingerprint/replay classifier."
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "Validation of source-supplied times",
+   "kind": "undefined refusal conditions",
+   "text": "“Times a source supplies … are validated and kept as supplied” names no validation rules for approved_at, published_at, confirmed_at, document_date, photo_date, payment_date, or ServiceCredential.expires_at.",
+   "question": "Which temporal conditions make each source-supplied time invalid—for example missing timezone, non-UTC offset, future value, past credential expiry, or inconsistent ordering between approved_at and published_at?",
+   "options": [
+    "Validate only type and UTC representability",
+    "Also reject source event times later than the operation clock",
+    "Apply field-specific ordering and past/future constraints",
+    "Accept already decoded values without semantic time validation"
+   ],
+   "default_guess": "Validate type and UTC representability only, except reject a credential expires_at that is not strictly after operation_now.",
+   "witness": {
+    "initial": "At operation_now 2026-11-06 10:00 UTC, an administrator requests a service credential with expires_at 09:00 UTC that day.",
+    "events": [
+     "The administrator submits the otherwise valid issuance request."
+    ],
+    "outcomes": [
+     "The credential is accepted and persisted already expired.",
+     "The issuance is refused because expires_at is not strictly after operation_now."
+    ],
+    "observer": "The administrator receiving success or refusal."
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "Meaning and propagation of an operation’s single clock instant",
+   "kind": "ambiguous scope",
+   "text": "“An operation reads the clock once for its own timestamps … and every current-time comparison” does not define whether “operation” is the HTTP request, the owning use case, each called module, or each transaction.",
+   "question": "When one request calls authentication/authorization and then a domain use case, must every layer receive one shared now value, or may each called operation read its own clock once?",
+   "options": [
+    "One instant for the entire public request and all nested work except audit_writer",
+    "One instant per owning use case, allowing authentication and domain work to use different instants",
+    "One instant per transaction or module call"
+   ],
+   "default_guess": "Capture one instant at the owning public use-case boundary and pass it through authentication, authorization, comparisons, and writes; allow only audit_writer its stated separate read.",
+   "witness": {
+    "initial": "A valid staff session expires at 10:00:00.500 UTC; request handling begins at 10:00:00.400 UTC.",
+    "events": [
+     "The route invokes session resolution.",
+     "The route then invokes a mutation use case at 10:00:00.600 UTC."
+    ],
+    "outcomes": [
+     "A request-wide instant of 10:00:00.400 is used, so authentication and the mutation proceed.",
+     "Session resolution and the mutation use separate instants; the later check sees the session expired and refuses the mutation."
+    ],
+    "observer": "The staff caller, who sees success or authentication refusal."
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "Clock capture point",
+   "kind": "unspecified precedence",
+   "text": "“An operation reads the clock once” does not state at what point in the operation that read occurs.",
+   "question": "Is now captured at operation entry, after request decoding, after records are loaded, immediately before validity checks, or when the transaction begins?",
+   "options": [
+    "Capture at the first instruction of the owning operation",
+    "Capture after decoding but before authentication and repository reads",
+    "Capture immediately before the first time comparison or timestamped write",
+    "Capture when the transaction begins"
+   ],
+   "default_guess": "Capture after input decoding and immediately before authentication/transactional work begins.",
+   "witness": {
+    "initial": "A session expires at 10:00:01.000 UTC; request decoding starts at 10:00:00.900 and finishes at 10:00:01.100.",
+    "events": [
+     "A staff caller submits a valid project mutation just before expiry.",
+     "The operation performs its single permitted clock read."
+    ],
+    "outcomes": [
+     "Reading at operation/request entry yields now before expiry, so the session is usable.",
+     "Reading after decoding yields now at or after expiry, so the request is refused."
+    ],
+    "observer": "The staff caller."
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "Offset-aware timestamps encountered in persistence",
+   "kind": "undefined failure handling",
+   "text": "“Reading … an offset-aware persisted timestamp … [is] forbidden” does not specify how a repository or operation responds if such a value exists.",
+   "question": "If persistence contains an offset-aware timestamp, must the repository reject it as corrupt data, normalize it, or fail the affected operation with a particular boundary/domain error?",
+   "options": [
+    "Reject the persisted record as invalid/corrupt and fail the operation",
+    "Normalize the value to offset-naive UTC on read without rewriting it",
+    "Normalize and repair the stored value",
+    "Permit it for compatibility despite the prohibition"
+   ],
+   "default_guess": "Reject the record at the persistence boundary and fail the operation without mutation.",
+   "witness": {
+    "initial": "A pre-existing StaffSession row contains expires_at=2026-11-06T12:00:00+00:00 rather than an offset-naive value.",
+    "events": [
+     "The staff member presents that session token.",
+     "The session repository reads the row and authorization compares its expiry."
+    ],
+    "outcomes": [
+     "The repository rejects the row and authentication fails because persisted data violates the clock policy.",
+     "The repository converts the timestamp to offset-naive UTC and the session authenticates normally."
+    ],
+    "observer": "The staff member attempting to use the session."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A28\",\"subject\":\"ServiceCredential.expires_at\",\"kind\":\"contradiction\",\"text\":\"“a service credential's expires_at — are validated and kept as supplied” conflicts with the formal invariant “an expiry it writes is that instant plus its TTL”\",\"question\":\"Is a service credential’s optional expires_at the administrator-supplied instant, or must the operation derive it from its single clock instant and a TTL?\",\"options\":[\"Keep the administrator-supplied expires_at unchanged\",\"Derive expires_at as operation_now plus a configured TTL\",\"Treat source-supplied expiries as an explicit exception to the formal invariant\"],\"default_guess\":\"Treat ServiceCredential.expires_at as an explicit source-supplied exception and keep it after UTC normalization.\",\"witness\":{\"initial\":\"An active service principal has no credential; the clock reads 2026-11-06 10:00 UTC and an administrator requests a credential expiring at 2026-11-07 15:00 UTC.\",\"events\":[\"The administrator issues the credential with the requested expires_at.\",\"The operation persists the new ServiceCredential.\"],\"outcomes\":[\"The credential expires at the supplied 15:00 instant.\",\"The credential expires at operation_now plus an implementer-selected or configured TTL, so the supplied instant is replaced or refused.\"],\"observer\":\"The administrator and producer when the credential remains usable after the differing expiry instants.\"}},{\"unit\":\"A28\",\"subject\":\"Persisted source-supplied timestamps\",\"kind\":\"contradiction\",\"text\":\"“Persisted timestamps are UTC, stored as offset-naive datetimes” and “Times a source supplies … are validated and kept as supplied, never replaced by the clock” do not say whether an offset-aware supplied value is preserved or converted to offset-naive UTC.\",\"question\":\"For a source-supplied timestamp with an offset, must persistence preserve its representation, reject it unless already UTC, or convert its instant to offset-naive UTC?\",\"options\":[\"Accept any offset-aware instant and convert it to offset-naive UTC\",\"Accept only UTC-offset-aware input and remove the UTC offset for persistence\",\"Keep the offset-aware value exactly as supplied\",\"Reject every offset-aware value and require offset-naive UTC input\"],\"default_guess\":\"Require an aware instant, convert it to UTC, then persist the same instant as offset-naive UTC.\",\"witness\":{\"initial\":\"A producer publishes approved_at as 2026-11-06T11:00:00+01:00, representing 10:00 UTC.\",\"events\":[\"The authenticated producer imports an otherwise valid snapshot.\",\"The accepted snapshot is persisted.\"],\"outcomes\":[\"approved_at is stored as offset-naive 2026-11-06 10:00:00.\",\"approved_at is kept exactly as supplied with +01:00, or the import is rejected because the persisted form must be offset-naive.\"],\"observer\":\"A later snapshot reader or fingerprint/replay classifier.\"}},{\"unit\":\"A28\",\"subject\":\"Validation of source-supplied times\",\"kind\":\"undefined refusal conditions\",\"text\":\"“Times a source supplies … are validated and kept as supplied” names no validation rules for approved_at, published_at, confirmed_at, document_date, photo_date, payment_date, or ServiceCredential.expires_at.\",\"question\":\"Which temporal conditions make each source-supplied time invalid—for example missing timezone, non-UTC offset, future value, past credential expiry, or inconsistent ordering between approved_at and published_at?\",\"options\":[\"Validate only type and UTC representability\",\"Also reject source event times later than the operation clock\",\"Apply field-specific ordering and past/future constraints\",\"Accept already decoded values without semantic time validation\"],\"default_guess\":\"Validate type and UTC representability only, except reject a credential expires_at that is not strictly after operation_now.\",\"witness\":{\"initial\":\"At operation_now 2026-11-06 10:00 UTC, an administrator requests a service credential with expires_at 09:00 UTC that day.\",\"events\":[\"The administrator submits the otherwise valid issuance request.\"],\"outcomes\":[\"The credential is accepted and persisted already expired.\",\"The issuance is refused because expires_at is not strictly after operation_now.\"],\"observer\":\"The administrator receiving success or refusal.\"}},{\"unit\":\"A28\",\"subject\":\"Meaning and propagation of an operation’s single clock instant\",\"kind\":\"ambiguous scope\",\"text\":\"“An operation reads the clock once for its own timestamps … and every current-time comparison” does not define whether “operation” is the HTTP request, the owning use case, each called module, or each transaction.\",\"question\":\"When one request calls authentication/authorization and then a domain use case, must every layer receive one shared now value, or may each called operation read its own clock once?\",\"options\":[\"One instant for the entire public request and all nested work except audit_writer\",\"One instant per owning use case, allowing authentication and domain work to use different instants\",\"One instant per transaction or module call\"],\"default_guess\":\"Capture one instant at the owning public use-case boundary and pass it through authentication, authorization, comparisons, and writes; allow only audit_writer its stated separate read.\",\"witness\":{\"initial\":\"A valid staff session expires at 10:00:00.500 UTC; request handling begins at 10:00:00.400 UTC.\",\"events\":[\"The route invokes session resolution.\",\"The route then invokes a mutation use case at 10:00:00.600 UTC.\"],\"outcomes\":[\"A request-wide instant of 10:00:00.400 is used, so authentication and the mutation proceed.\",\"Session resolution and the mutation use separate instants; the later check sees the session expired and refuses the mutation.\"],\"observer\":\"The staff caller, who sees success or authentication refusal.\"}},{\"unit\":\"A28\",\"subject\":\"Clock capture point\",\"kind\":\"unspecified precedence\",\"text\":\"“An operation reads the clock once” does not state at what point in the operation that read occurs.\",\"question\":\"Is now captured at operation entry, after request decoding, after records are loaded, immediately before validity checks, or when the transaction begins?\",\"options\":[\"Capture at the first instruction of the owning operation\",\"Capture after decoding but before authentication and repository reads\",\"Capture immediately before the first time comparison or timestamped write\",\"Capture when the transaction begins\"],\"default_guess\":\"Capture after input decoding and immediately before authentication/transactional work begins.\",\"witness\":{\"initial\":\"A session expires at 10:00:01.000 UTC; request decoding starts at 10:00:00.900 and finishes at 10:00:01.100.\",\"events\":[\"A staff caller submits a valid project mutation just before expiry.\",\"The operation performs its single permitted clock read.\"],\"outcomes\":[\"Reading at operation/request entry yields now before expiry, so the session is usable.\",\"Reading after decoding yields now at or after expiry, so the request is refused.\"],\"observer\":\"The staff caller.\"}},{\"unit\":\"A28\",\"subject\":\"Offset-aware timestamps encountered in persistence\",\"kind\":\"undefined failure handling\",\"text\":\"“Reading … an offset-aware persisted timestamp … [is] forbidden” does not specify how a repository or operation responds if such a value exists.\",\"question\":\"If persistence contains an offset-aware timestamp, must the repository reject it as corrupt data, normalize it, or fail the affected operation with a particular boundary/domain error?\",\"options\":[\"Reject the persisted record as invalid/corrupt and fail the operation\",\"Normalize the value to offset-naive UTC on read without rewriting it\",\"Normalize and repair the stored value\",\"Permit it for compatibility despite the prohibition\"],\"default_guess\":\"Reject the record at the persistence boundary and fail the operation without mutation.\",\"witness\":{\"initial\":\"A pre-existing StaffSession row contains expires_at=2026-11-06T12:00:00+00:00 rather than an offset-naive value.\",\"events\":[\"The staff member presents that session token.\",\"The session repository reads the row and authorization compares its expiry.\"],\"outcomes\":[\"The repository rejects the row and authentication fails because persisted data violates the clock policy.\",\"The repository converts the timestamp to offset-naive UTC and the session authenticates normally.\"],\"observer\":\"The staff member attempting to use the session.\"}}]}",
+ "set_aside": []
+}

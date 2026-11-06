@@ -1,0 +1,178 @@
+{
+ "open_points": [
+  {
+   "unit": "02_rules.md:Status",
+   "subject": "configuration classification",
+   "kind": "contradiction",
+   "text": "The retained Status says, “They remain runtime knobs, not architecture,” while changed A30 says, “the running service fixes them in source (`config.*`), and only the values named by an `_env_name` are read from the deployment environment.”",
+   "question": "Are configuration entries without an `_env_name` deployment/runtime knobs, or source-fixed constants that require a source change?",
+   "options": [
+    "Every listed value remains deployment-configurable.",
+    "Only `_env_name` entries are deployment-configurable; all others are source-fixed."
+   ],
+   "default_guess": "Treat only `_env_name` entries as deployment-configurable because that is the newer, more specific rule.",
+   "witness": {
+    "initial": "The source contains the confirmed default `staff_session_ttl_hours = 12`.",
+    "events": [
+     "A deployer supplies a different staff-session TTL without changing source.",
+     "A staff member logs in."
+    ],
+    "outcomes": [
+     "The deployment value is accepted and the session uses the changed TTL because the Status calls it a runtime knob.",
+     "The supplied value is ignored or refused and the session lasts 12 hours because A30 fixes this value in source."
+    ],
+    "observer": "The deployer and the logged-in staff member"
+   }
+  },
+  {
+   "unit": "A30",
+   "subject": "environment-only service configuration",
+   "kind": "contradiction",
+   "text": "State 0 R0-10 says, “The service is configured only by environment variables,” while A30 now says only values named by an `_env_name` are read from the deployment environment and fixes the other `config.*` values in source.",
+   "question": "Does R0-10 still require every deployment setting—including persistence paths, trusted hosts, origins, timeouts and TTLs—to come from the environment, or are all settings without `_env_name` source-fixed?",
+   "options": [
+    "R0-10 governs: all service configuration is supplied through environment variables.",
+    "Changed A30 governs: only explicitly `_env_name`-named values come from the environment.",
+    "R0-10 applies only to an unstated subset of deployment settings."
+   ],
+   "default_guess": "Apply changed A30 and treat only explicitly `_env_name`-named values as environment inputs.",
+   "witness": {
+    "initial": "The service source has one fixed SQLite database location, while a deployment needs another location.",
+    "events": [
+     "The deployer supplies an environment value selecting the deployment's database file.",
+     "The service starts and writes a staff account."
+    ],
+    "outcomes": [
+     "R0-10 makes the environment-selected database authoritative, so the account is written there.",
+     "A30 makes the database location source-fixed unless an unlisted `_env_name` exists, so the environment value is ignored or rejected and another database is used."
+    ],
+    "observer": "The deployer and any later caller expecting the account in the selected database"
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "source-supplied datetime validation",
+   "kind": "underspecified validation",
+   "text": "Source times are “validated and kept as supplied, an offset included, never converted,” but the text does not say whether an offset is required, whether only UTC is accepted, or whether any valid offset is accepted.",
+   "question": "Exactly which naive and offset-aware source-supplied datetimes are valid?",
+   "options": [
+    "Require an offset and require UTC.",
+    "Require an offset but accept any valid offset unchanged.",
+    "Accept both naive and offset-aware values, preserving either form."
+   ],
+   "default_guess": "Require an offset but accept any valid offset unchanged.",
+   "witness": {
+    "initial": "No snapshot exists for the publication identity.",
+    "events": [
+     "A producer submits a valid snapshot whose `published_at` is the naive datetime `2026-11-06T10:00:00`."
+    ],
+    "outcomes": [
+     "The request is rejected because source instants must include an offset.",
+     "The request is accepted and the naive value is stored because offsets are preserved when included but are not required."
+    ],
+    "observer": "The producer"
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "stored representation of source-supplied timestamps",
+   "kind": "contradiction",
+   "text": "A28 says source-supplied times keep an included offset and are “never converted,” but its concluding narrowing says, “the instants are UTC, their stored form is offset-naive.”",
+   "question": "Must an offset-aware source datetime be persisted exactly as supplied, or converted to an offset-naive UTC datetime?",
+   "options": [
+    "Persist the original aware datetime and its supplied offset.",
+    "Convert the instant to UTC and remove the offset before persistence."
+   ],
+   "default_guess": "Persist it exactly as supplied because the changed source-time rule explicitly forbids conversion.",
+   "witness": {
+    "initial": "No snapshot exists for the publication identity.",
+    "events": [
+     "A producer publishes `approved_at = 2026-11-06T12:00:00+02:00`.",
+     "The portal accepts and stores the snapshot.",
+     "A later read returns the stored timestamp."
+    ],
+    "outcomes": [
+     "The read returns `2026-11-06T12:00:00+02:00`, preserving the supplied representation.",
+     "The read returns the equivalent offset-naive UTC value `2026-11-06T10:00:00`."
+    ],
+    "observer": "The producer or staff reader"
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "service-credential expiry creation",
+   "kind": "contradictory invariant",
+   "text": "The source-time rule says a service credential's supplied `expires_at` is kept as supplied and never replaced by the clock, while the formal invariant says “an expiry it writes is that instant plus its TTL.”",
+   "question": "When issuing a service credential with caller-supplied `expires_at`, must the stored expiry equal the supplied value or the operation's clock instant plus a configured TTL?",
+   "options": [
+    "Store the supplied `expires_at` unchanged.",
+    "Ignore or replace the supplied value with `now + TTL`.",
+    "The formal invariant applies only to portal-calculated expiries and must explicitly exclude service credentials."
+   ],
+   "default_guess": "Store the supplied expiry unchanged and interpret the invariant as applying only to portal-calculated expiries.",
+   "witness": {
+    "initial": "At `10:00`, an active administrator issues a credential with `expires_at = 18:00`; an applicable default TTL would end at `22:00`.",
+    "events": [
+     "The issue operation reads its clock once at `10:00`.",
+     "The credential is authenticated at `20:00`."
+    ],
+    "outcomes": [
+     "Authentication fails because the supplied expiry of `18:00` was preserved.",
+     "Authentication succeeds because the stored expiry was calculated as `10:00 + TTL = 22:00`."
+    ],
+    "observer": "The service principal"
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "credential-authentication failure precedence",
+   "kind": "unspecified precedence",
+   "text": "A28 says an offset-aware credential expiry makes authentication fail as a server error, but it does not order that comparison against checks that the credential is revoked or that its principal is disabled.",
+   "question": "For an offset-aware credential that is also revoked or belongs to a disabled principal, does the lifecycle rejection short-circuit the expiry comparison, or must the offset mismatch still surface as a server error?",
+   "options": [
+    "Check revocation and principal state first, producing the concealed authentication rejection.",
+    "Attempt the expiry comparison first, producing the server error.",
+    "Credential revocation precedes expiry, but principal status follows successful expiry validation."
+   ],
+   "default_guess": "Reject a revoked credential before comparing its expiry; check principal status after credential validation.",
+   "witness": {
+    "initial": "A service credential has an offset-aware future `expires_at` and is then revoked.",
+    "events": [
+     "The service principal presents that revoked bearer credential."
+    ],
+    "outcomes": [
+     "Authentication returns the ordinary concealed rejection because revocation is checked first.",
+     "Authentication fails as a server error because the offset-aware expiry comparison is attempted first."
+    ],
+    "observer": "The service caller and service operator monitoring server errors"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "AuditRecord.key_version for credential administration",
+   "kind": "missing closed-choice rule",
+   "text": "`key_version: int | None` is described as “a service actor's, or the affected credential's on `principal.credential_issue` and `principal.credential_revoke`,” but the text does not say whether it is required in those cases, whether it must equal the affected credential's version, or when it is forbidden.",
+   "question": "What is the exact presence and equality rule for `AuditRecord.key_version` and `AuditIntent.key_version`?",
+   "options": [
+    "Require it for every service actor and for credential issue/revoke, equal respectively to the authenticating or affected credential's version; forbid it otherwise.",
+    "Permit it in those cases but allow `None`.",
+    "Require it only for service actors; credential administration by staff may leave it `None`."
+   ],
+   "default_guess": "Require the matching version for service actors and credential issue/revoke, and forbid it for all other audit records.",
+   "witness": {
+    "initial": "An administrator is issuing key version 3 for an active service principal.",
+    "events": [
+     "The issue succeeds and writes `principal.credential_issue` with the administrator as the staff actor."
+    ],
+    "outcomes": [
+     "The audit record has `key_version = 3`, treating the field as required affected-credential provenance.",
+     "The audit record has `key_version = null`, treating the new parenthetical as permission rather than a requirement."
+    ],
+    "observer": "An administrator or auditor reading the audit trail"
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"02_rules.md:Status\",\"subject\":\"configuration classification\",\"kind\":\"contradiction\",\"text\":\"The retained Status says, “They remain runtime knobs, not architecture,” while changed A30 says, “the running service fixes them in source (`config.*`), and only the values named by an `_env_name` are read from the deployment environment.”\",\"question\":\"Are configuration entries without an `_env_name` deployment/runtime knobs, or source-fixed constants that require a source change?\",\"options\":[\"Every listed value remains deployment-configurable.\",\"Only `_env_name` entries are deployment-configurable; all others are source-fixed.\"],\"default_guess\":\"Treat only `_env_name` entries as deployment-configurable because that is the newer, more specific rule.\",\"witness\":{\"initial\":\"The source contains the confirmed default `staff_session_ttl_hours = 12`.\",\"events\":[\"A deployer supplies a different staff-session TTL without changing source.\",\"A staff member logs in.\"],\"outcomes\":[\"The deployment value is accepted and the session uses the changed TTL because the Status calls it a runtime knob.\",\"The supplied value is ignored or refused and the session lasts 12 hours because A30 fixes this value in source.\"],\"observer\":\"The deployer and the logged-in staff member\"}},{\"unit\":\"A30\",\"subject\":\"environment-only service configuration\",\"kind\":\"contradiction\",\"text\":\"State 0 R0-10 says, “The service is configured only by environment variables,” while A30 now says only values named by an `_env_name` are read from the deployment environment and fixes the other `config.*` values in source.\",\"question\":\"Does R0-10 still require every deployment setting—including persistence paths, trusted hosts, origins, timeouts and TTLs—to come from the environment, or are all settings without `_env_name` source-fixed?\",\"options\":[\"R0-10 governs: all service configuration is supplied through environment variables.\",\"Changed A30 governs: only explicitly `_env_name`-named values come from the environment.\",\"R0-10 applies only to an unstated subset of deployment settings.\"],\"default_guess\":\"Apply changed A30 and treat only explicitly `_env_name`-named values as environment inputs.\",\"witness\":{\"initial\":\"The service source has one fixed SQLite database location, while a deployment needs another location.\",\"events\":[\"The deployer supplies an environment value selecting the deployment's database file.\",\"The service starts and writes a staff account.\"],\"outcomes\":[\"R0-10 makes the environment-selected database authoritative, so the account is written there.\",\"A30 makes the database location source-fixed unless an unlisted `_env_name` exists, so the environment value is ignored or rejected and another database is used.\"],\"observer\":\"The deployer and any later caller expecting the account in the selected database\"}},{\"unit\":\"A28\",\"subject\":\"source-supplied datetime validation\",\"kind\":\"underspecified validation\",\"text\":\"Source times are “validated and kept as supplied, an offset included, never converted,” but the text does not say whether an offset is required, whether only UTC is accepted, or whether any valid offset is accepted.\",\"question\":\"Exactly which naive and offset-aware source-supplied datetimes are valid?\",\"options\":[\"Require an offset and require UTC.\",\"Require an offset but accept any valid offset unchanged.\",\"Accept both naive and offset-aware values, preserving either form.\"],\"default_guess\":\"Require an offset but accept any valid offset unchanged.\",\"witness\":{\"initial\":\"No snapshot exists for the publication identity.\",\"events\":[\"A producer submits a valid snapshot whose `published_at` is the naive datetime `2026-11-06T10:00:00`.\"],\"outcomes\":[\"The request is rejected because source instants must include an offset.\",\"The request is accepted and the naive value is stored because offsets are preserved when included but are not required.\"],\"observer\":\"The producer\"}},{\"unit\":\"A28\",\"subject\":\"stored representation of source-supplied timestamps\",\"kind\":\"contradiction\",\"text\":\"A28 says source-supplied times keep an included offset and are “never converted,” but its concluding narrowing says, “the instants are UTC, their stored form is offset-naive.”\",\"question\":\"Must an offset-aware source datetime be persisted exactly as supplied, or converted to an offset-naive UTC datetime?\",\"options\":[\"Persist the original aware datetime and its supplied offset.\",\"Convert the instant to UTC and remove the offset before persistence.\"],\"default_guess\":\"Persist it exactly as supplied because the changed source-time rule explicitly forbids conversion.\",\"witness\":{\"initial\":\"No snapshot exists for the publication identity.\",\"events\":[\"A producer publishes `approved_at = 2026-11-06T12:00:00+02:00`.\",\"The portal accepts and stores the snapshot.\",\"A later read returns the stored timestamp.\"],\"outcomes\":[\"The read returns `2026-11-06T12:00:00+02:00`, preserving the supplied representation.\",\"The read returns the equivalent offset-naive UTC value `2026-11-06T10:00:00`.\"],\"observer\":\"The producer or staff reader\"}},{\"unit\":\"A28\",\"subject\":\"service-credential expiry creation\",\"kind\":\"contradictory invariant\",\"text\":\"The source-time rule says a service credential's supplied `expires_at` is kept as supplied and never replaced by the clock, while the formal invariant says “an expiry it writes is that instant plus its TTL.”\",\"question\":\"When issuing a service credential with caller-supplied `expires_at`, must the stored expiry equal the supplied value or the operation's clock instant plus a configured TTL?\",\"options\":[\"Store the supplied `expires_at` unchanged.\",\"Ignore or replace the supplied value with `now + TTL`.\",\"The formal invariant applies only to portal-calculated expiries and must explicitly exclude service credentials.\"],\"default_guess\":\"Store the supplied expiry unchanged and interpret the invariant as applying only to portal-calculated expiries.\",\"witness\":{\"initial\":\"At `10:00`, an active administrator issues a credential with `expires_at = 18:00`; an applicable default TTL would end at `22:00`.\",\"events\":[\"The issue operation reads its clock once at `10:00`.\",\"The credential is authenticated at `20:00`.\"],\"outcomes\":[\"Authentication fails because the supplied expiry of `18:00` was preserved.\",\"Authentication succeeds because the stored expiry was calculated as `10:00 + TTL = 22:00`.\"],\"observer\":\"The service principal\"}},{\"unit\":\"A28\",\"subject\":\"credential-authentication failure precedence\",\"kind\":\"unspecified precedence\",\"text\":\"A28 says an offset-aware credential expiry makes authentication fail as a server error, but it does not order that comparison against checks that the credential is revoked or that its principal is disabled.\",\"question\":\"For an offset-aware credential that is also revoked or belongs to a disabled principal, does the lifecycle rejection short-circuit the expiry comparison, or must the offset mismatch still surface as a server error?\",\"options\":[\"Check revocation and principal state first, producing the concealed authentication rejection.\",\"Attempt the expiry comparison first, producing the server error.\",\"Credential revocation precedes expiry, but principal status follows successful expiry validation.\"],\"default_guess\":\"Reject a revoked credential before comparing its expiry; check principal status after credential validation.\",\"witness\":{\"initial\":\"A service credential has an offset-aware future `expires_at` and is then revoked.\",\"events\":[\"The service principal presents that revoked bearer credential.\"],\"outcomes\":[\"Authentication returns the ordinary concealed rejection because revocation is checked first.\",\"Authentication fails as a server error because the offset-aware expiry comparison is attempted first.\"],\"observer\":\"The service caller and service operator monitoring server errors\"}},{\"unit\":\"context\",\"subject\":\"AuditRecord.key_version for credential administration\",\"kind\":\"missing closed-choice rule\",\"text\":\"`key_version: int | None` is described as “a service actor's, or the affected credential's on `principal.credential_issue` and `principal.credential_revoke`,” but the text does not say whether it is required in those cases, whether it must equal the affected credential's version, or when it is forbidden.\",\"question\":\"What is the exact presence and equality rule for `AuditRecord.key_version` and `AuditIntent.key_version`?\",\"options\":[\"Require it for every service actor and for credential issue/revoke, equal respectively to the authenticating or affected credential's version; forbid it otherwise.\",\"Permit it in those cases but allow `None`.\",\"Require it only for service actors; credential administration by staff may leave it `None`.\"],\"default_guess\":\"Require the matching version for service actors and credential issue/revoke, and forbid it for all other audit records.\",\"witness\":{\"initial\":\"An administrator is issuing key version 3 for an active service principal.\",\"events\":[\"The issue succeeds and writes `principal.credential_issue` with the administrator as the staff actor.\"],\"outcomes\":[\"The audit record has `key_version = 3`, treating the field as required affected-credential provenance.\",\"The audit record has `key_version = null`, treating the new parenthetical as permission rather than a requirement.\"],\"observer\":\"An administrator or auditor reading the audit trail\"}}]}",
+ "set_aside": []
+}

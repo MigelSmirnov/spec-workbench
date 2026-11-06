@@ -1,0 +1,203 @@
+{
+ "open_points": [
+  {
+   "unit": "02_rules.md:Status",
+   "subject": "State 2 configuration status",
+   "kind": "contradiction",
+   "text": "“They remain runtime knobs, not architecture.” conflicts with A30’s changed rule: “the running service fixes them in source (`config.*`), and only the values named by an `_env_name` are read from the deployment environment.”",
+   "question": "Are the TTLs, timeouts, rate limit and entropy size deployment/runtime knobs, or source-fixed constants?",
+   "options": [
+    "They remain deployment-adjustable runtime knobs.",
+    "They are source-fixed constants; only explicitly named `_env_name` values are deployment-adjustable."
+   ],
+   "default_guess": "Treat non-`_env_name` values as source-fixed constants.",
+   "witness": {
+    "initial": "The source contains the confirmed 12-hour staff-session TTL, and an operator wants a 24-hour deployment value without changing source.",
+    "events": [
+     "The operator supplies a deployment setting for a 24-hour staff-session TTL.",
+     "A staff member logs in and makes another request 13 hours later."
+    ],
+    "outcomes": [
+     "Following the Status text, the runtime knob is applied and the session remains valid.",
+     "Following changed A30, the setting is ignored or refused because no `_env_name` is named, and the session is expired."
+    ],
+    "observer": "The staff member and deployment operator."
+   }
+  },
+  {
+   "unit": "A30",
+   "subject": "Configuration authority",
+   "kind": "contradiction",
+   "text": "A30 says “only the values named by an `_env_name` are read from the deployment environment,” while State 0 R0-10 says “The service is configured only by environment variables” and State 1 names `RuntimeSettings` as “a value read from the environment.”",
+   "question": "For configuration values without an `_env_name`, which text governs: are they read from environment configuration or fixed in source?",
+   "options": [
+    "All service configuration is environment-supplied, requiring environment names for the remaining values.",
+    "Only the three explicitly named environment entries are environment-supplied; all other values are fixed in source.",
+    "Additional `_env_name` mappings exist but must be enumerated in these texts."
+   ],
+   "default_guess": "Use only the explicitly named environment entries and fix all other listed values in source.",
+   "witness": {
+    "initial": "A deployment uses the source default `viewer_session_ttl_days = 30`.",
+    "events": [
+     "The deployment operator supplies an environment value of 7 days.",
+     "A viewer enters and restores the session after 8 days."
+    ],
+    "outcomes": [
+     "Under R0-10, the environment configures the service and the session is expired.",
+     "Under changed A30, the TTL is source-fixed because it has no `_env_name`, and the session remains valid."
+    ],
+    "observer": "The viewer and deployment operator."
+   }
+  },
+  {
+   "unit": "A25",
+   "subject": "HTTP transport settings governed by A30",
+   "kind": "missing configuration authority",
+   "text": "A25 calls trusted hosts, CORS allowlists, request bounds and viewer-entry limits “runtime settings” and says the entry limiter uses “the values of A30,” but changed A30 permits environment reads only for values named by an `_env_name`; it names no `_env_name` for those transport settings.",
+   "question": "Are trusted hosts, allowed origins, request-size bounds and viewer-entry limiter values source-fixed or deployment-environment settings, and what exact `_env_name` entries apply if they are environmental?",
+   "options": [
+    "They are fixed in source.",
+    "They are deployment settings, and their environment-variable names must be specified.",
+    "Some are fixed and some environmental, with the partition specified explicitly."
+   ],
+   "default_guess": "Treat them as source-fixed unless an `_env_name` is explicitly added.",
+   "witness": {
+    "initial": "The source allowlist does not contain `portal.example.test`.",
+    "events": [
+     "The operator supplies a deployment trusted-host allowlist containing `portal.example.test`.",
+     "A client sends a request with that Host header."
+    ],
+    "outcomes": [
+     "Treating trusted hosts as a runtime environment setting, the request reaches the handler.",
+     "Treating it as source-fixed under changed A30, the transport guard refuses the request."
+    ],
+    "observer": "The API client and deployment operator."
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "Storage form of source-supplied datetimes",
+   "kind": "contradiction",
+   "text": "A28 says source-supplied times are “kept as supplied, an offset included, never converted,” while State 1’s accepted A28 correction says “the instants are UTC, stored offset-naive.”",
+   "question": "Must source-supplied datetimes preserve their supplied offset, or be converted to UTC and stored offset-naive?",
+   "options": [
+    "Preserve the original offset-aware value exactly.",
+    "Convert the instant to UTC and remove its offset before storage.",
+    "Require UTC input but preserve its explicit UTC offset."
+   ],
+   "default_guess": "Preserve source-supplied offset-aware values exactly and use offset-naive UTC only for portal-owned timestamps.",
+   "witness": {
+    "initial": "An active project has no photos with intake id `photo-1`.",
+    "events": [
+     "A staff member publishes `photo-1` with `photo_date` equal to `2026-11-06T10:00:00+02:00`.",
+     "A staff member or viewer later lists the gallery."
+    ],
+    "outcomes": [
+     "Following changed A28, the stored and returned date remains `2026-11-06T10:00:00+02:00`.",
+     "Following State 1’s accepted correction, it is stored as offset-naive UTC, representing `2026-11-06T08:00:00`."
+    ],
+    "observer": "The gallery reader and any later module reading the persisted photo."
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "Validation of source-supplied datetime offsets",
+   "kind": "undefined refusal condition",
+   "text": "“Times a source supplies … are validated and kept as supplied, an offset included, never converted” does not define what the validation accepts, while the same decision says the instants are UTC.",
+   "question": "Must a source-supplied datetime contain an offset, must that offset be UTC, and are offset-naive or non-UTC-offset values refused?",
+   "options": [
+    "Require an explicit UTC offset only.",
+    "Require an explicit offset but accept any offset.",
+    "Accept both offset-aware and offset-naive datetimes.",
+    "Accept any offset-aware value and normalize only for comparisons, without changing storage."
+   ],
+   "default_guess": "Require an explicit offset and accept any offset while preserving it.",
+   "witness": {
+    "initial": "An authorized producer may import a snapshot for an active project.",
+    "events": [
+     "The producer submits `approved_at = 2026-11-06T10:00:00+02:00` with otherwise valid content."
+    ],
+    "outcomes": [
+     "An implementation reading “kept as supplied” accepts and stores the `+02:00` value.",
+     "An implementation reading “the instants are UTC” refuses the non-UTC offset during validation."
+    ],
+    "observer": "The producer, through whether the import is accepted or refused."
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "Offset rule applied to date-only fields",
+   "kind": "type contradiction",
+   "text": "A28 includes `document_date` and `payment_date` among values kept with “an offset included,” but State 1 defines both fields as `date`, which has no time or offset.",
+   "question": "Does the offset requirement exclude date-only fields, or must those models become offset-bearing datetime values?",
+   "options": [
+    "The offset clause applies only to datetime fields; `document_date` and `payment_date` remain dates.",
+    "The two fields must become offset-aware datetimes.",
+    "Date-only inputs are invalid because they cannot carry the required offset."
+   ],
+   "default_guess": "Exclude date-only fields from the offset clause and retain their `date` types.",
+   "witness": {
+    "initial": "An operator is authorized to register a payment for an active project.",
+    "events": [
+     "The operator submits a valid payment with `payment_date = 2026-11-06`."
+    ],
+    "outcomes": [
+     "Following M33’s `date` field, the payment is accepted and the date is stored.",
+     "Applying A28’s offset wording literally, the value is refused because it contains no offset."
+    ],
+    "observer": "The operator registering the payment."
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "Service-credential authentication check precedence",
+   "kind": "undefined check order",
+   "text": "A28 says “An offset-aware credential expiry cannot be compared with the offset-naive clock: authenticating with that credential fails as a server error,” while A17 requires malformed, unknown, wrong-secret, expired, revoked and inactive cases to converge on an existence-hiding rejection; neither text orders secret verification against the incompatible-expiry comparison.",
+   "question": "For a bearer envelope selecting a credential with an offset-aware expiry, is the secret verified before examining the expiry, or may the expiry comparison produce a server error even when the supplied secret is wrong?",
+   "options": [
+    "Verify the secret first; only a correctly presented credential can reach the server error.",
+    "Check lifecycle fields first; any selector for such a record produces the server error.",
+    "Convert or reject the expiry at credential issuance so authentication never encounters this case."
+   ],
+   "default_guess": "Verify the secret before checking expiry, preserving the concealed rejection for a wrong secret.",
+   "witness": {
+    "initial": "A service credential record exists with an offset-aware future `expires_at`; an attacker knows its public record selector but not its random secret.",
+    "events": [
+     "The attacker presents the selector with an incorrect secret."
+    ],
+    "outcomes": [
+     "If the secret is checked first, authentication returns the ordinary concealed rejection.",
+     "If expiry is examined first, authentication returns the A28 server error, revealing that the selector names a specially shaped credential record."
+    ],
+    "observer": "The bearer caller."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "AuditRecord.key_version condition",
+   "kind": "undefined requiredness",
+   "text": "`key_version: int | None` is described as “a service actor's, or the affected credential's on `principal.credential_issue` and `principal.credential_revoke`,” but the field rule does not say whether it is required or merely permitted in the two newly added action cases, nor state the complete forbidden cases.",
+   "question": "What is the exact closed-choice rule for `AuditRecord.key_version` and `AuditIntent.key_version`?",
+   "options": [
+    "Required for every service actor and for every successful `principal.credential_issue` or `principal.credential_revoke`; forbidden otherwise.",
+    "Required for service actors but optional for credential issue/revoke actions.",
+    "Optional in every listed case and forbidden otherwise."
+   ],
+   "default_guess": "Require the service actor’s version for service actors, require the affected credential’s version for the two credential actions, and forbid it otherwise.",
+   "witness": {
+    "initial": "An administrator issues key version 2 for an active service principal.",
+    "events": [
+     "The issuance commits and appends its required `principal.credential_issue` audit record."
+    ],
+    "outcomes": [
+     "One implementation requires and stores `key_version = 2`.",
+     "Another treats `int | None` and the parenthetical as permissive, storing `key_version = null` while still accepting the audit record."
+    ],
+    "observer": "An administrator or auditor inspecting credential provenance."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"02_rules.md:Status\",\"subject\":\"State 2 configuration status\",\"kind\":\"contradiction\",\"text\":\"“They remain runtime knobs, not architecture.” conflicts with A30’s changed rule: “the running service fixes them in source (`config.*`), and only the values named by an `_env_name` are read from the deployment environment.”\",\"question\":\"Are the TTLs, timeouts, rate limit and entropy size deployment/runtime knobs, or source-fixed constants?\",\"options\":[\"They remain deployment-adjustable runtime knobs.\",\"They are source-fixed constants; only explicitly named `_env_name` values are deployment-adjustable.\"],\"default_guess\":\"Treat non-`_env_name` values as source-fixed constants.\",\"witness\":{\"initial\":\"The source contains the confirmed 12-hour staff-session TTL, and an operator wants a 24-hour deployment value without changing source.\",\"events\":[\"The operator supplies a deployment setting for a 24-hour staff-session TTL.\",\"A staff member logs in and makes another request 13 hours later.\"],\"outcomes\":[\"Following the Status text, the runtime knob is applied and the session remains valid.\",\"Following changed A30, the setting is ignored or refused because no `_env_name` is named, and the session is expired.\"],\"observer\":\"The staff member and deployment operator.\"}},{\"unit\":\"A30\",\"subject\":\"Configuration authority\",\"kind\":\"contradiction\",\"text\":\"A30 says “only the values named by an `_env_name` are read from the deployment environment,” while State 0 R0-10 says “The service is configured only by environment variables” and State 1 names `RuntimeSettings` as “a value read from the environment.”\",\"question\":\"For configuration values without an `_env_name`, which text governs: are they read from environment configuration or fixed in source?\",\"options\":[\"All service configuration is environment-supplied, requiring environment names for the remaining values.\",\"Only the three explicitly named environment entries are environment-supplied; all other values are fixed in source.\",\"Additional `_env_name` mappings exist but must be enumerated in these texts.\"],\"default_guess\":\"Use only the explicitly named environment entries and fix all other listed values in source.\",\"witness\":{\"initial\":\"A deployment uses the source default `viewer_session_ttl_days = 30`.\",\"events\":[\"The deployment operator supplies an environment value of 7 days.\",\"A viewer enters and restores the session after 8 days.\"],\"outcomes\":[\"Under R0-10, the environment configures the service and the session is expired.\",\"Under changed A30, the TTL is source-fixed because it has no `_env_name`, and the session remains valid.\"],\"observer\":\"The viewer and deployment operator.\"}},{\"unit\":\"A25\",\"subject\":\"HTTP transport settings governed by A30\",\"kind\":\"missing configuration authority\",\"text\":\"A25 calls trusted hosts, CORS allowlists, request bounds and viewer-entry limits “runtime settings” and says the entry limiter uses “the values of A30,” but changed A30 permits environment reads only for values named by an `_env_name`; it names no `_env_name` for those transport settings.\",\"question\":\"Are trusted hosts, allowed origins, request-size bounds and viewer-entry limiter values source-fixed or deployment-environment settings, and what exact `_env_name` entries apply if they are environmental?\",\"options\":[\"They are fixed in source.\",\"They are deployment settings, and their environment-variable names must be specified.\",\"Some are fixed and some environmental, with the partition specified explicitly.\"],\"default_guess\":\"Treat them as source-fixed unless an `_env_name` is explicitly added.\",\"witness\":{\"initial\":\"The source allowlist does not contain `portal.example.test`.\",\"events\":[\"The operator supplies a deployment trusted-host allowlist containing `portal.example.test`.\",\"A client sends a request with that Host header.\"],\"outcomes\":[\"Treating trusted hosts as a runtime environment setting, the request reaches the handler.\",\"Treating it as source-fixed under changed A30, the transport guard refuses the request.\"],\"observer\":\"The API client and deployment operator.\"}},{\"unit\":\"A28\",\"subject\":\"Storage form of source-supplied datetimes\",\"kind\":\"contradiction\",\"text\":\"A28 says source-supplied times are “kept as supplied, an offset included, never converted,” while State 1’s accepted A28 correction says “the instants are UTC, stored offset-naive.”\",\"question\":\"Must source-supplied datetimes preserve their supplied offset, or be converted to UTC and stored offset-naive?\",\"options\":[\"Preserve the original offset-aware value exactly.\",\"Convert the instant to UTC and remove its offset before storage.\",\"Require UTC input but preserve its explicit UTC offset.\"],\"default_guess\":\"Preserve source-supplied offset-aware values exactly and use offset-naive UTC only for portal-owned timestamps.\",\"witness\":{\"initial\":\"An active project has no photos with intake id `photo-1`.\",\"events\":[\"A staff member publishes `photo-1` with `photo_date` equal to `2026-11-06T10:00:00+02:00`.\",\"A staff member or viewer later lists the gallery.\"],\"outcomes\":[\"Following changed A28, the stored and returned date remains `2026-11-06T10:00:00+02:00`.\",\"Following State 1’s accepted correction, it is stored as offset-naive UTC, representing `2026-11-06T08:00:00`.\"],\"observer\":\"The gallery reader and any later module reading the persisted photo.\"}},{\"unit\":\"A28\",\"subject\":\"Validation of source-supplied datetime offsets\",\"kind\":\"undefined refusal condition\",\"text\":\"“Times a source supplies … are validated and kept as supplied, an offset included, never converted” does not define what the validation accepts, while the same decision says the instants are UTC.\",\"question\":\"Must a source-supplied datetime contain an offset, must that offset be UTC, and are offset-naive or non-UTC-offset values refused?\",\"options\":[\"Require an explicit UTC offset only.\",\"Require an explicit offset but accept any offset.\",\"Accept both offset-aware and offset-naive datetimes.\",\"Accept any offset-aware value and normalize only for comparisons, without changing storage.\"],\"default_guess\":\"Require an explicit offset and accept any offset while preserving it.\",\"witness\":{\"initial\":\"An authorized producer may import a snapshot for an active project.\",\"events\":[\"The producer submits `approved_at = 2026-11-06T10:00:00+02:00` with otherwise valid content.\"],\"outcomes\":[\"An implementation reading “kept as supplied” accepts and stores the `+02:00` value.\",\"An implementation reading “the instants are UTC” refuses the non-UTC offset during validation.\"],\"observer\":\"The producer, through whether the import is accepted or refused.\"}},{\"unit\":\"A28\",\"subject\":\"Offset rule applied to date-only fields\",\"kind\":\"type contradiction\",\"text\":\"A28 includes `document_date` and `payment_date` among values kept with “an offset included,” but State 1 defines both fields as `date`, which has no time or offset.\",\"question\":\"Does the offset requirement exclude date-only fields, or must those models become offset-bearing datetime values?\",\"options\":[\"The offset clause applies only to datetime fields; `document_date` and `payment_date` remain dates.\",\"The two fields must become offset-aware datetimes.\",\"Date-only inputs are invalid because they cannot carry the required offset.\"],\"default_guess\":\"Exclude date-only fields from the offset clause and retain their `date` types.\",\"witness\":{\"initial\":\"An operator is authorized to register a payment for an active project.\",\"events\":[\"The operator submits a valid payment with `payment_date = 2026-11-06`.\"],\"outcomes\":[\"Following M33’s `date` field, the payment is accepted and the date is stored.\",\"Applying A28’s offset wording literally, the value is refused because it contains no offset.\"],\"observer\":\"The operator registering the payment.\"}},{\"unit\":\"A28\",\"subject\":\"Service-credential authentication check precedence\",\"kind\":\"undefined check order\",\"text\":\"A28 says “An offset-aware credential expiry cannot be compared with the offset-naive clock: authenticating with that credential fails as a server error,” while A17 requires malformed, unknown, wrong-secret, expired, revoked and inactive cases to converge on an existence-hiding rejection; neither text orders secret verification against the incompatible-expiry comparison.\",\"question\":\"For a bearer envelope selecting a credential with an offset-aware expiry, is the secret verified before examining the expiry, or may the expiry comparison produce a server error even when the supplied secret is wrong?\",\"options\":[\"Verify the secret first; only a correctly presented credential can reach the server error.\",\"Check lifecycle fields first; any selector for such a record produces the server error.\",\"Convert or reject the expiry at credential issuance so authentication never encounters this case.\"],\"default_guess\":\"Verify the secret before checking expiry, preserving the concealed rejection for a wrong secret.\",\"witness\":{\"initial\":\"A service credential record exists with an offset-aware future `expires_at`; an attacker knows its public record selector but not its random secret.\",\"events\":[\"The attacker presents the selector with an incorrect secret.\"],\"outcomes\":[\"If the secret is checked first, authentication returns the ordinary concealed rejection.\",\"If expiry is examined first, authentication returns the A28 server error, revealing that the selector names a specially shaped credential record.\"],\"observer\":\"The bearer caller.\"}},{\"unit\":\"context\",\"subject\":\"AuditRecord.key_version condition\",\"kind\":\"undefined requiredness\",\"text\":\"`key_version: int | None` is described as “a service actor's, or the affected credential's on `principal.credential_issue` and `principal.credential_revoke`,” but the field rule does not say whether it is required or merely permitted in the two newly added action cases, nor state the complete forbidden cases.\",\"question\":\"What is the exact closed-choice rule for `AuditRecord.key_version` and `AuditIntent.key_version`?\",\"options\":[\"Required for every service actor and for every successful `principal.credential_issue` or `principal.credential_revoke`; forbidden otherwise.\",\"Required for service actors but optional for credential issue/revoke actions.\",\"Optional in every listed case and forbidden otherwise.\"],\"default_guess\":\"Require the service actor’s version for service actors, require the affected credential’s version for the two credential actions, and forbid it otherwise.\",\"witness\":{\"initial\":\"An administrator issues key version 2 for an active service principal.\",\"events\":[\"The issuance commits and appends its required `principal.credential_issue` audit record.\"],\"outcomes\":[\"One implementation requires and stores `key_version = 2`.\",\"Another treats `int | None` and the parenthetical as permissive, storing `key_version = null` while still accepting the audit record.\"],\"observer\":\"An administrator or auditor inspecting credential provenance.\"}}]}",
+ "set_aside": []
+}

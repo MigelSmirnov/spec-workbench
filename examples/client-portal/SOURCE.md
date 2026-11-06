@@ -276,6 +276,7 @@ decisions delegated).
 | how the pre-deploy vulnerability check is run | A32 | — (no Factory tool; the trimmed text had prescribed `pip-audit`, which the service does not have) | — |
 | process status after a bootstrap configuration or storage failure (uncaught exception, interpreter status and traceback) | State 5 `run_bootstrap_cli` | note `run_bootstrap_cli`; `rules.staff_bootstrap_policy.command_outcomes` | `cli/staff_bootstrap.py`; `deploy/README.md` (command line) |
 | readiness answer body when the store cannot open (outer application without the inner error handlers) | State 5 `create_runtime_app` | notes `create_runtime_app`, `readiness_endpoint` | `runtime/app.py`; `adapters/portal_store.py` `PortalStore.begin` |
+| source-supplied times: accepted forms (offsets, precision), their checks, and the point of an operation's one clock read | A28 (round-41) | `rules.clock_policy`; notes of the operations that read the clock (e.g. `authenticate_staff`, `issue_service_credential`) | `application/*.py` `datetime.utcnow()` call sites; `core/models.py` |
 | non-finite amounts: request-model refusal and the decimal failure of a direct call | State 5 `validate_eur_amount` | `rules.money_policy`; note `validate_eur_amount` | `domain/financial_policy.py`; `core/models.py` `_FrozenModel` |
 
 ### Classification of what State 2 carries
@@ -343,7 +344,7 @@ The six topics were:
 |---|---|---|
 | reading the progress of a project without a budget creates its empty manual budget version and `budget.manual_version_create` audit, also for an archived project | `domain/project_tracking.py` 50–60 (`ensure_manual_budget`), `domain/budget_management.py` 170–217 | R0-24 named exception; invariant 5 |
 | the audit record's `occurred_at` is read by the audit writer at append time, not taken from the operation's one instant | `application/audit_writer.py` 136 | A28 exception |
-| a service credential's `expires_at` is stored as supplied; an offset-aware value is not converted, and comparing it with the offset-naive clock fails the later authentication as a server error | `application/service_identity.py` 19, 301; `adapters/service_identity_repository.py` 81, 217 | A28 source-supplied list; State 5 `issue_service_credential` |
+| a service credential's `expires_at` is stored as supplied; an offset-aware value is not converted, and comparing it with the offset-naive clock fails the later authentication as a server error | `application/service_identity.py` 19, 301; `adapters/service_identity_repository.py` 81, 217 | A28 source-supplied list; State 5 `issue_service_credential`; the offset-aware case is carried to States 6–7 (note `issue_service_credential`, `_credential_is_usable` of 459ac96c) |
 
 State 5 round-04 found one more contradiction with a closed earlier
 state, left for the coordinator: State 1 M26 and M27 require each

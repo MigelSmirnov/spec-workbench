@@ -1,0 +1,135 @@
+{
+ "open_points": [
+  {
+   "unit": "A28",
+   "subject": "Clock sampling for an operation",
+   "kind": "ambiguous order and scope",
+   "text": "“An operation reads the clock once for its own timestamps … and every current-time comparison” does not define what constitutes the operation or when during it the single read occurs.",
+   "question": "Is `now` sampled at request/use-case entry, at the first expiry check, or at another specified point, and must authentication and the ensuing use case share that instant?",
+   "options": [
+    "Sample once at request or use-case entry and pass that instant through authentication and all nested work.",
+    "Sample when the first timestamp or expiry comparison is needed.",
+    "Treat authentication and the authorized use case as separate operations, each with its own single clock read."
+   ],
+   "default_guess": "Treat one top-level use-case invocation, including its authorization guard, as the operation and sample once at its entry.",
+   "witness": {
+    "initial": "A staff session expires at 12:00:00 UTC; a project mutation request arrives just before 12:00:00 and processing crosses the expiry instant before the session check.",
+    "events": [
+     "The staff member submits the mutation.",
+     "The handler or use case performs request decoding and repository work.",
+     "The authorization guard checks the session."
+    ],
+    "outcomes": [
+     "If the operation samples at entry, `now < expires_at`; authorization succeeds and the mutation may commit.",
+     "If it samples at the first expiry check, `now >= expires_at`; authorization is refused and nothing changes."
+    ],
+    "observer": "The staff caller sees success versus an authentication refusal, and project data differs."
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "Representation of source-supplied timestamps",
+   "kind": "contradictory representation",
+   "text": "“Persisted timestamps are UTC, stored as offset-naive datetimes” conflicts or is incomplete beside source times being “validated and kept as supplied” when a supplied datetime is offset-aware or carries a non-UTC offset.",
+   "question": "Must source-supplied datetimes be supplied as UTC, may other offsets be normalized to offset-naive UTC, or must their original offset-bearing representation be persisted?",
+   "options": [
+    "Require an offset-aware UTC input and persist the same instant as offset-naive UTC.",
+    "Accept any explicit offset, convert the instant to UTC, remove the offset, and persist it.",
+    "Reject every source datetime that is not already offset-naive UTC.",
+    "Keep the supplied offset-aware representation, making source timestamps an exception to the persisted representation rule."
+   ],
+   "default_guess": "Accept offset-aware instants, normalize them to UTC, and persist offset-naive values while preserving the instant.",
+   "witness": {
+    "initial": "An authorized producer publishes a valid snapshot with `published_at = 2026-08-09T14:00:00+02:00`.",
+    "events": [
+     "The producer submits the publication.",
+     "The portal validates and accepts the snapshot."
+    ],
+    "outcomes": [
+     "The portal persists `published_at` as offset-naive `2026-08-09T12:00:00`, applying the UTC-storage rule.",
+     "The portal either persists `2026-08-09T14:00:00+02:00` because it must be kept as supplied, or rejects it because only offset-naive UTC storage is permitted."
+    ],
+    "observer": "The producer sees acceptance versus rejection, or later readers see a different stored timestamp representation/value."
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "Validation of source-supplied times",
+   "kind": "undefined refusal conditions",
+   "text": "“Times a source supplies … are validated and kept as supplied” names no validation rules beyond preservation.",
+   "question": "Which source-time values are refused: missing timezone information, non-UTC offsets, future event times, implausibly old times, or a service-credential expiry that is already past or equal to the operation's `now`?",
+   "options": [
+    "Validate only datetime/date type and representability, accepting past or future values.",
+    "Require an explicit timezone/UTC instant but impose no temporal window.",
+    "Also require event times not to be in the future and credential expiry strictly after `now`.",
+    "Define separate bounds for each source field."
+   ],
+   "default_guess": "Validate type and an unambiguous UTC instant only; impose no unstated past/future bounds.",
+   "witness": {
+    "initial": "An administrator issues a service credential with a supplied `expires_at` equal to or earlier than the operation's clock instant.",
+    "events": [
+     "The administrator submits the credential-issue command.",
+     "The operation validates the supplied expiry."
+    ],
+    "outcomes": [
+     "The issue succeeds and creates a credential that is immediately unusable under `now < expires_at`.",
+     "The issue is refused because a newly issued credential must expire strictly after the operation instant."
+    ],
+    "observer": "The administrator sees a credential response versus a validation refusal, and the credential record exists only in the first outcome."
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "ServiceCredential expiry ownership",
+   "kind": "direct contradiction",
+   "text": "The normative rules say a service credential's `expires_at` is source-supplied and “kept as supplied,” while the formal invariant says “an expiry it writes is that instant plus its TTL.”",
+   "question": "For an issued service credential, is `expires_at` the administrator-supplied value or a portal-derived value equal to the operation instant plus a configured TTL?",
+   "options": [
+    "Persist the supplied `expires_at`; the instant-plus-TTL invariant applies only to portal-derived expiries.",
+    "Ignore or forbid a supplied expiry and derive it from a service-credential TTL.",
+    "Require the supplied expiry to equal `now + TTL`."
+   ],
+   "default_guess": "Persist the administrator-supplied expiry and narrow the formal invariant to expiries the portal derives from configured TTLs.",
+   "witness": {
+    "initial": "At 10:00 UTC an administrator requests a service credential expiring at 18:00 UTC; no service-credential TTL is defined in A30.",
+    "events": [
+     "The credential-issue operation reads its clock as 10:00.",
+     "The administrator supplies `expires_at = 18:00`."
+    ],
+    "outcomes": [
+     "The credential stores 18:00 because source-supplied expiry is kept as supplied.",
+     "The operation must derive an expiry from `now + TTL`, but the relevant TTL and resulting timestamp are unspecified, or it refuses the supplied value."
+    ],
+    "observer": "The administrator and service principal observe a different expiry or an inability to issue the credential."
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "Optional ServiceCredential expiry",
+   "kind": "undefined validity case",
+   "text": "A28 defines validity as `now < expires_at`, but M14 permits `expires_at: datetime | None` and A28 does not define the comparison or validity semantics when it is `None`.",
+   "question": "Does `expires_at = None` mean the service credential never expires, or is such a credential unusable or invalid to issue?",
+   "options": [
+    "`None` means no time-based expiry; validity depends on revocation and principal status.",
+    "`None` is permitted in storage but the credential is unusable until an expiry is set.",
+    "Credential issuance must reject `None` despite the optional model field."
+   ],
+   "default_guess": "Treat `None` as no time-based expiry.",
+   "witness": {
+    "initial": "An active service principal has a non-revoked credential stored with `expires_at = None`.",
+    "events": [
+     "The service principal presents the correct bearer credential for an allowed snapshot import.",
+     "The authorization code applies the clock and expiry policy."
+    ],
+    "outcomes": [
+     "The credential has no expiry and authentication continues.",
+     "The credential fails because `now < expires_at` cannot be satisfied when `expires_at` is absent."
+    ],
+    "observer": "The service principal sees an authorized import path versus authentication refusal."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A28\",\"subject\":\"Clock sampling for an operation\",\"kind\":\"ambiguous order and scope\",\"text\":\"“An operation reads the clock once for its own timestamps … and every current-time comparison” does not define what constitutes the operation or when during it the single read occurs.\",\"question\":\"Is `now` sampled at request/use-case entry, at the first expiry check, or at another specified point, and must authentication and the ensuing use case share that instant?\",\"options\":[\"Sample once at request or use-case entry and pass that instant through authentication and all nested work.\",\"Sample when the first timestamp or expiry comparison is needed.\",\"Treat authentication and the authorized use case as separate operations, each with its own single clock read.\"],\"default_guess\":\"Treat one top-level use-case invocation, including its authorization guard, as the operation and sample once at its entry.\",\"witness\":{\"initial\":\"A staff session expires at 12:00:00 UTC; a project mutation request arrives just before 12:00:00 and processing crosses the expiry instant before the session check.\",\"events\":[\"The staff member submits the mutation.\",\"The handler or use case performs request decoding and repository work.\",\"The authorization guard checks the session.\"],\"outcomes\":[\"If the operation samples at entry, `now < expires_at`; authorization succeeds and the mutation may commit.\",\"If it samples at the first expiry check, `now >= expires_at`; authorization is refused and nothing changes.\"],\"observer\":\"The staff caller sees success versus an authentication refusal, and project data differs.\"}},{\"unit\":\"A28\",\"subject\":\"Representation of source-supplied timestamps\",\"kind\":\"contradictory representation\",\"text\":\"“Persisted timestamps are UTC, stored as offset-naive datetimes” conflicts or is incomplete beside source times being “validated and kept as supplied” when a supplied datetime is offset-aware or carries a non-UTC offset.\",\"question\":\"Must source-supplied datetimes be supplied as UTC, may other offsets be normalized to offset-naive UTC, or must their original offset-bearing representation be persisted?\",\"options\":[\"Require an offset-aware UTC input and persist the same instant as offset-naive UTC.\",\"Accept any explicit offset, convert the instant to UTC, remove the offset, and persist it.\",\"Reject every source datetime that is not already offset-naive UTC.\",\"Keep the supplied offset-aware representation, making source timestamps an exception to the persisted representation rule.\"],\"default_guess\":\"Accept offset-aware instants, normalize them to UTC, and persist offset-naive values while preserving the instant.\",\"witness\":{\"initial\":\"An authorized producer publishes a valid snapshot with `published_at = 2026-08-09T14:00:00+02:00`.\",\"events\":[\"The producer submits the publication.\",\"The portal validates and accepts the snapshot.\"],\"outcomes\":[\"The portal persists `published_at` as offset-naive `2026-08-09T12:00:00`, applying the UTC-storage rule.\",\"The portal either persists `2026-08-09T14:00:00+02:00` because it must be kept as supplied, or rejects it because only offset-naive UTC storage is permitted.\"],\"observer\":\"The producer sees acceptance versus rejection, or later readers see a different stored timestamp representation/value.\"}},{\"unit\":\"A28\",\"subject\":\"Validation of source-supplied times\",\"kind\":\"undefined refusal conditions\",\"text\":\"“Times a source supplies … are validated and kept as supplied” names no validation rules beyond preservation.\",\"question\":\"Which source-time values are refused: missing timezone information, non-UTC offsets, future event times, implausibly old times, or a service-credential expiry that is already past or equal to the operation's `now`?\",\"options\":[\"Validate only datetime/date type and representability, accepting past or future values.\",\"Require an explicit timezone/UTC instant but impose no temporal window.\",\"Also require event times not to be in the future and credential expiry strictly after `now`.\",\"Define separate bounds for each source field.\"],\"default_guess\":\"Validate type and an unambiguous UTC instant only; impose no unstated past/future bounds.\",\"witness\":{\"initial\":\"An administrator issues a service credential with a supplied `expires_at` equal to or earlier than the operation's clock instant.\",\"events\":[\"The administrator submits the credential-issue command.\",\"The operation validates the supplied expiry.\"],\"outcomes\":[\"The issue succeeds and creates a credential that is immediately unusable under `now < expires_at`.\",\"The issue is refused because a newly issued credential must expire strictly after the operation instant.\"],\"observer\":\"The administrator sees a credential response versus a validation refusal, and the credential record exists only in the first outcome.\"}},{\"unit\":\"A28\",\"subject\":\"ServiceCredential expiry ownership\",\"kind\":\"direct contradiction\",\"text\":\"The normative rules say a service credential's `expires_at` is source-supplied and “kept as supplied,” while the formal invariant says “an expiry it writes is that instant plus its TTL.”\",\"question\":\"For an issued service credential, is `expires_at` the administrator-supplied value or a portal-derived value equal to the operation instant plus a configured TTL?\",\"options\":[\"Persist the supplied `expires_at`; the instant-plus-TTL invariant applies only to portal-derived expiries.\",\"Ignore or forbid a supplied expiry and derive it from a service-credential TTL.\",\"Require the supplied expiry to equal `now + TTL`.\"],\"default_guess\":\"Persist the administrator-supplied expiry and narrow the formal invariant to expiries the portal derives from configured TTLs.\",\"witness\":{\"initial\":\"At 10:00 UTC an administrator requests a service credential expiring at 18:00 UTC; no service-credential TTL is defined in A30.\",\"events\":[\"The credential-issue operation reads its clock as 10:00.\",\"The administrator supplies `expires_at = 18:00`.\"],\"outcomes\":[\"The credential stores 18:00 because source-supplied expiry is kept as supplied.\",\"The operation must derive an expiry from `now + TTL`, but the relevant TTL and resulting timestamp are unspecified, or it refuses the supplied value.\"],\"observer\":\"The administrator and service principal observe a different expiry or an inability to issue the credential.\"}},{\"unit\":\"A28\",\"subject\":\"Optional ServiceCredential expiry\",\"kind\":\"undefined validity case\",\"text\":\"A28 defines validity as `now < expires_at`, but M14 permits `expires_at: datetime | None` and A28 does not define the comparison or validity semantics when it is `None`.\",\"question\":\"Does `expires_at = None` mean the service credential never expires, or is such a credential unusable or invalid to issue?\",\"options\":[\"`None` means no time-based expiry; validity depends on revocation and principal status.\",\"`None` is permitted in storage but the credential is unusable until an expiry is set.\",\"Credential issuance must reject `None` despite the optional model field.\"],\"default_guess\":\"Treat `None` as no time-based expiry.\",\"witness\":{\"initial\":\"An active service principal has a non-revoked credential stored with `expires_at = None`.\",\"events\":[\"The service principal presents the correct bearer credential for an allowed snapshot import.\",\"The authorization code applies the clock and expiry policy.\"],\"outcomes\":[\"The credential has no expiry and authentication continues.\",\"The credential fails because `now < expires_at` cannot be satisfied when `expires_at` is absent.\"],\"observer\":\"The service principal sees an authorized import path versus authentication refusal.\"}}]}",
+ "set_aside": []
+}

@@ -1109,14 +1109,14 @@ that decides the validity of those writes or of persisted records. Times a
 source supplies — `approved_at`, `published_at` of a snapshot, `confirmed_at`
 and `document_date` of a recognition, `photo_date`, `payment_date`, a service
 credential's `expires_at` — are
-validated and kept as supplied, never replaced by the clock (State 1
-Modeling conventions). An expiry is valid strictly before its instant: a
+kept as supplied, never replaced by the clock (State 1 Modeling
+conventions); their accepted forms and checks, and where in an operation
+its one clock read happens, are the accepted spec's, carried to States 6–7. An expiry is valid strictly before its instant: a
 session, credential or token is usable while `now < expires_at` and expired
 from `now = expires_at` on (Factory code `application/authorization_guard.py`,
-`application/service_identity.py`). Reading local time and a second clock read by the operation itself are
-forbidden, and no portal-owned timestamp is offset-aware. A supplied time
-kept as supplied is not converted: an offset-aware credential expiry is
-stored with its offset (accepted service quirk, `SOURCE.md`). The one exception is the `occurred_at` of an audit record appended
+`application/service_identity.py`). Reading local time, an offset-aware
+persisted timestamp and a second clock read by the operation itself are
+forbidden. The one exception is the `occurred_at` of an audit record appended
 through the audit writer: the writer takes it when it appends (Factory
 code `application/audit_writer.py` 136); the bootstrap, which builds its
 own audit, keeps its one instant. Normative value: `rules.clock_policy` (Factory `c92b6878`). This

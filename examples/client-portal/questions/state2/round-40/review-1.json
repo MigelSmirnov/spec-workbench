@@ -1,0 +1,231 @@
+{
+ "open_points": [
+  {
+   "unit": "A28",
+   "subject": "Storage form of source-supplied timestamps",
+   "kind": "contradiction",
+   "text": "A28 says source-supplied times are “kept as supplied, an offset included, never converted”, but later says the former timestamp convention is narrowed so that “their stored form is offset-naive”; State 1 likewise says A28 makes stored timestamps offset-naive.",
+   "question": "Are source-supplied datetime values persisted with their supplied offsets, or converted/rejected so that persisted values are offset-naive?",
+   "options": [
+    "Persist source-supplied datetimes as offset-aware values exactly as supplied.",
+    "Require an offset but strip it without converting the represented wall time.",
+    "Convert to UTC and strip the offset.",
+    "Reject offset-aware source values despite the new wording."
+   ],
+   "default_guess": "Keep source-supplied datetimes offset-aware exactly as supplied, treating the offset-naive rule as applying only to portal-owned timestamps.",
+   "witness": {
+    "initial": "No snapshot exists for a project.",
+    "events": [
+     "A producer publishes a snapshot whose approved_at is 2026-11-06T10:00:00+02:00.",
+     "The portal accepts and persists the snapshot."
+    ],
+    "outcomes": [
+     "approved_at is stored as 2026-11-06T10:00:00+02:00 because source values are kept as supplied.",
+     "approved_at is stored as an offset-naive value because the stored-form rule says timestamps are offset-naive."
+    ],
+    "observer": "A later snapshot reader or persistence adapter sees a different value and type."
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "Offsets on date-valued source fields",
+   "kind": "type contradiction",
+   "text": "The source-supplied list includes `document_date` and `payment_date`, which State 1 types as `date`, and then requires the supplied values to have “an offset included”.",
+   "question": "Does the offset requirement exclude date-only fields, or must those models and inputs change to offset-bearing datetimes?",
+   "options": [
+    "Apply the offset requirement only to source fields typed as datetime; keep document_date and payment_date as dates.",
+    "Change document_date and payment_date to offset-aware datetimes.",
+    "Reject date-only inputs because they cannot include an offset."
+   ],
+   "default_guess": "Apply the offset requirement only to datetime fields and keep the two date fields unchanged.",
+   "witness": {
+    "initial": "An active project accepts expense intake and work payments.",
+    "events": [
+     "A staff member submits a recognition with document_date 2026-11-06.",
+     "The staff member registers a payment with payment_date 2026-11-06."
+    ],
+    "outcomes": [
+     "Both date-only values are valid because offsets apply only to datetimes.",
+     "Both requests are refused, or their fields must be changed to datetimes, because A28 says every listed source time includes an offset."
+    ],
+    "observer": "The staff caller sees acceptance versus refusal or a different request schema."
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "Service-credential authentication check precedence",
+   "kind": "rule conflict",
+   "text": "A17 says an unknown selector or wrong secret must converge on the existence-hiding rejection, while A28 says an offset-aware credential expiry cannot be compared with the clock and “authenticating with that credential fails as a server error”. The order of secret verification and expiry comparison is not stated.",
+   "question": "When a presented envelope selects an offset-aware expiring credential but carries the wrong secret, does secret failure conceal the credential or does the expiry comparison produce the server error?",
+   "options": [
+    "Verify the secret first and return the concealed authentication rejection without comparing expiry.",
+    "Evaluate expiry first and return the server error.",
+    "Always return the server error for any presentation selecting such a credential, even when the secret is wrong."
+   ],
+   "default_guess": "Verify the secret before lifecycle checks and return the concealed authentication rejection for a wrong secret.",
+   "witness": {
+    "initial": "A service principal has an expiring credential stored with an offset-aware expires_at; an attacker knows its public record UUID but not its secret.",
+    "events": [
+     "The attacker sends a bearer envelope containing that UUID and a wrong random secret."
+    ],
+    "outcomes": [
+     "A17 yields the ordinary concealed authentication rejection.",
+     "A28's incompatible expiry comparison yields a server error, revealing that the selector reached a real affected credential."
+    ],
+    "observer": "The unauthenticated caller can distinguish the responses."
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "Revoked or otherwise unusable offset-aware service credential",
+   "kind": "check-order gap",
+   "text": "A28 specifies a server error when an offset-aware credential expiry is compared with the offset-naive clock, but does not say whether expiry is compared before or after non-time lifecycle checks such as `revoked_at` and principal status.",
+   "question": "If the credential is already revoked or its principal is disabled, must authentication refuse it normally without comparing expiry, or must the offset mismatch still win as a server error?",
+   "options": [
+    "Check revocation and principal usability first; return the concealed authentication rejection.",
+    "Compare expiry first; return the server error.",
+    "Use A4's principal-status ordering but define a separate fixed order among credential checks."
+   ],
+   "default_guess": "Verify the secret, then reject revoked credentials before comparing expiry; only an otherwise usable credential reaches the incompatible comparison.",
+   "witness": {
+    "initial": "A service credential has an offset-aware expires_at and has subsequently been revoked.",
+    "events": [
+     "The service presents the credential's correct bearer secret."
+    ],
+    "outcomes": [
+     "Authentication returns the concealed rejection because revocation is checked first.",
+     "Authentication returns a server error because expiry comparison is attempted first."
+    ],
+    "observer": "The service caller and server monitoring see different failure classes."
+   }
+  },
+  {
+   "unit": "02_rules.md:Status",
+   "subject": "State 2 classification of configuration defaults",
+   "kind": "contradiction",
+   "text": "The retained status says confirmed defaults “remain runtime knobs”, while changed A30 says the running service fixes values in source and reads only values named by an `_env_name` from the deployment environment.",
+   "question": "For a listed value without an `_env_name`, is the confirmed number a deployment-overridable runtime default or an immutable source constant?",
+   "options": [
+    "It is a runtime setting that deployment may override.",
+    "It is fixed in source and deployment cannot override it.",
+    "Only an additional explicitly enumerated subset is overridable."
+   ],
+   "default_guess": "Treat values without `_env_name` as fixed source constants and revise the retained status accordingly.",
+   "witness": {
+    "initial": "The source value of staff_session_ttl_hours is 12.",
+    "events": [
+     "An operator deploys the service with an environment value intended to set the staff session TTL to 24 hours.",
+     "A staff member logs in."
+    ],
+    "outcomes": [
+     "The session expires after 24 hours because the value remains a runtime knob.",
+     "The environment value is ignored and the session expires after 12 hours because the value is fixed in source."
+    ],
+    "observer": "The staff member and deployment operator see the different expiry."
+   }
+  },
+  {
+   "unit": "A30",
+   "subject": "Meaning and completeness of configuration knobs",
+   "kind": "internal contradiction",
+   "text": "A30 first says the running service “fixes them in source” except values named by an `_env_name`, but later retains “Values are knobs” and says each value is configuration.",
+   "question": "Does changing a non-`_env_name` value require a source/Factory change, or is there an unspecified runtime configuration channel for it?",
+   "options": [
+    "Every non-`_env_name` value can change only through a source change.",
+    "All listed values are runtime knobs through an unstated configuration mechanism.",
+    "Some are source constants and some are runtime knobs, with the exact partition still to be listed."
+   ],
+   "default_guess": "Require a source change for every value not explicitly associated with an `_env_name`.",
+   "witness": {
+    "initial": "The fixed registry timeout is 5 seconds.",
+    "events": [
+     "A deployment needs a 15-second Registry timeout without changing application source.",
+     "The deployment supplies a runtime override by its available configuration mechanism."
+    ],
+    "outcomes": [
+     "The service uses 15 seconds because the value is a configuration knob.",
+     "The service continues using 5 seconds because no `_env_name` exists and the value is fixed in source."
+    ],
+    "observer": "The deployment operator sees Registry calls time out at different times."
+   }
+  },
+  {
+   "unit": "A30",
+   "subject": "Environment configuration promised by R0-10",
+   "kind": "contradiction",
+   "text": "R0-10 says the SQLite database file, local binary root and trusted hosts are configured only by environment variables and validated at startup, while changed A30 says only values named by an `_env_name` are read from the environment; A30 names `_env_name` values only for Registry URL, email gateway URL and binary read limit and merely references an unexpanded `config.runtime_environment_variables` table.",
+   "question": "Which database-path, binary-root, trusted-host, origin and other runtime values are environment-read, under what environment names, and which are instead fixed in source?",
+   "options": [
+    "The referenced closed runtime-environment table supplies additional environment names and must be reproduced in State 2.",
+    "Only the three explicitly named `_env_name` entries are environment-read, contradicting R0-10.",
+    "Every runtime setting has an inferred environment name even without an `_env_name` entry."
+   ],
+   "default_guess": "Treat the referenced runtime-environment table as containing additional explicit environment names, but require those names and rules to be stated before implementation.",
+   "witness": {
+    "initial": "The source build has one database path and trusted-host list; deployment supplies different database and host values in its environment.",
+    "events": [
+     "The service starts.",
+     "A request uses the deployment's trusted host and a staff account is created."
+    ],
+    "outcomes": [
+     "Startup reads and validates the deployment values, accepts the host and writes to the deployment database as R0-10 requires.",
+     "The values are fixed in source or the unknown environment names are ignored, so the host is refused or data is written to the source-fixed database."
+    ],
+    "observer": "The deployment operator and HTTP caller see the difference."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "AuditRecord key_version requirement for credential management",
+   "kind": "cardinality gap",
+   "text": "M36 changes `key_version` to `int | None` described as “a service actor's, or the affected credential's on `principal.credential_issue` and `principal.credential_revoke`”, but does not say whether the affected credential's version is required or merely permitted on those two actions.",
+   "question": "Must every successful credential-issue and credential-revoke audit record carry the affected credential's key_version, including when the actor is staff?",
+   "options": [
+    "Require key_version for service actors and for both credential-management actions.",
+    "Permit but do not require key_version for credential-management actions.",
+    "Require it only for issue, or only when the affected credential can still be read."
+   ],
+   "default_guess": "Require the affected credential's key_version for both successful issue and revoke records.",
+   "witness": {
+    "initial": "An administrator manages an active service principal whose next credential version is 4.",
+    "events": [
+     "The administrator issues credential version 4.",
+     "The operation appends `principal.credential_issue` audit."
+    ],
+    "outcomes": [
+     "The audit record must contain key_version 4.",
+     "The audit record may contain key_version null because the actor is staff and the field remains nullable."
+    ],
+    "observer": "An auditor inspecting credential provenance sees complete versus missing version information."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "AuditIntent validation after key_version expansion",
+   "kind": "model propagation gap",
+   "text": "M37 still describes `key_version: int | None` without the new affected-credential rule and says only that it applies “the same closed-choice actor/result conditions as AuditRecord”. It does not state whether a staff actor's credential-issue or credential-revoke intent may or must carry key_version.",
+   "question": "How must AuditIntent validate key_version for staff-performed `principal.credential_issue` and `principal.credential_revoke` actions?",
+   "options": [
+    "Allow and require the affected credential's version for those actions.",
+    "Allow it but leave it optional.",
+    "Continue allowing key_version only for service actors, making the new AuditRecord value impossible to produce through AuditIntent."
+   ],
+   "default_guess": "Update AuditIntent validation to require the affected credential's version for those two actions even when actor_kind is staff.",
+   "witness": {
+    "initial": "An administrator revokes service credential key version 7 through an owning use case that writes audit via AuditIntent.",
+    "events": [
+     "The use case constructs an AuditIntent with actor_kind staff, action principal.credential_revoke and key_version 7.",
+     "The audit writer validates the intent."
+    ],
+    "outcomes": [
+     "The intent is accepted and AuditRecord stores key_version 7 under the new M36 rule.",
+     "The intent is rejected, or the caller must omit key_version, because M37's validation still treats it as service-actor provenance only."
+    ],
+    "observer": "The administrator sees operation success versus audit failure, or an auditor sees version 7 versus null."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A28\",\"subject\":\"Storage form of source-supplied timestamps\",\"kind\":\"contradiction\",\"text\":\"A28 says source-supplied times are “kept as supplied, an offset included, never converted”, but later says the former timestamp convention is narrowed so that “their stored form is offset-naive”; State 1 likewise says A28 makes stored timestamps offset-naive.\",\"question\":\"Are source-supplied datetime values persisted with their supplied offsets, or converted/rejected so that persisted values are offset-naive?\",\"options\":[\"Persist source-supplied datetimes as offset-aware values exactly as supplied.\",\"Require an offset but strip it without converting the represented wall time.\",\"Convert to UTC and strip the offset.\",\"Reject offset-aware source values despite the new wording.\"],\"default_guess\":\"Keep source-supplied datetimes offset-aware exactly as supplied, treating the offset-naive rule as applying only to portal-owned timestamps.\",\"witness\":{\"initial\":\"No snapshot exists for a project.\",\"events\":[\"A producer publishes a snapshot whose approved_at is 2026-11-06T10:00:00+02:00.\",\"The portal accepts and persists the snapshot.\"],\"outcomes\":[\"approved_at is stored as 2026-11-06T10:00:00+02:00 because source values are kept as supplied.\",\"approved_at is stored as an offset-naive value because the stored-form rule says timestamps are offset-naive.\"],\"observer\":\"A later snapshot reader or persistence adapter sees a different value and type.\"}},{\"unit\":\"A28\",\"subject\":\"Offsets on date-valued source fields\",\"kind\":\"type contradiction\",\"text\":\"The source-supplied list includes `document_date` and `payment_date`, which State 1 types as `date`, and then requires the supplied values to have “an offset included”.\",\"question\":\"Does the offset requirement exclude date-only fields, or must those models and inputs change to offset-bearing datetimes?\",\"options\":[\"Apply the offset requirement only to source fields typed as datetime; keep document_date and payment_date as dates.\",\"Change document_date and payment_date to offset-aware datetimes.\",\"Reject date-only inputs because they cannot include an offset.\"],\"default_guess\":\"Apply the offset requirement only to datetime fields and keep the two date fields unchanged.\",\"witness\":{\"initial\":\"An active project accepts expense intake and work payments.\",\"events\":[\"A staff member submits a recognition with document_date 2026-11-06.\",\"The staff member registers a payment with payment_date 2026-11-06.\"],\"outcomes\":[\"Both date-only values are valid because offsets apply only to datetimes.\",\"Both requests are refused, or their fields must be changed to datetimes, because A28 says every listed source time includes an offset.\"],\"observer\":\"The staff caller sees acceptance versus refusal or a different request schema.\"}},{\"unit\":\"A28\",\"subject\":\"Service-credential authentication check precedence\",\"kind\":\"rule conflict\",\"text\":\"A17 says an unknown selector or wrong secret must converge on the existence-hiding rejection, while A28 says an offset-aware credential expiry cannot be compared with the clock and “authenticating with that credential fails as a server error”. The order of secret verification and expiry comparison is not stated.\",\"question\":\"When a presented envelope selects an offset-aware expiring credential but carries the wrong secret, does secret failure conceal the credential or does the expiry comparison produce the server error?\",\"options\":[\"Verify the secret first and return the concealed authentication rejection without comparing expiry.\",\"Evaluate expiry first and return the server error.\",\"Always return the server error for any presentation selecting such a credential, even when the secret is wrong.\"],\"default_guess\":\"Verify the secret before lifecycle checks and return the concealed authentication rejection for a wrong secret.\",\"witness\":{\"initial\":\"A service principal has an expiring credential stored with an offset-aware expires_at; an attacker knows its public record UUID but not its secret.\",\"events\":[\"The attacker sends a bearer envelope containing that UUID and a wrong random secret.\"],\"outcomes\":[\"A17 yields the ordinary concealed authentication rejection.\",\"A28's incompatible expiry comparison yields a server error, revealing that the selector reached a real affected credential.\"],\"observer\":\"The unauthenticated caller can distinguish the responses.\"}},{\"unit\":\"A28\",\"subject\":\"Revoked or otherwise unusable offset-aware service credential\",\"kind\":\"check-order gap\",\"text\":\"A28 specifies a server error when an offset-aware credential expiry is compared with the offset-naive clock, but does not say whether expiry is compared before or after non-time lifecycle checks such as `revoked_at` and principal status.\",\"question\":\"If the credential is already revoked or its principal is disabled, must authentication refuse it normally without comparing expiry, or must the offset mismatch still win as a server error?\",\"options\":[\"Check revocation and principal usability first; return the concealed authentication rejection.\",\"Compare expiry first; return the server error.\",\"Use A4's principal-status ordering but define a separate fixed order among credential checks.\"],\"default_guess\":\"Verify the secret, then reject revoked credentials before comparing expiry; only an otherwise usable credential reaches the incompatible comparison.\",\"witness\":{\"initial\":\"A service credential has an offset-aware expires_at and has subsequently been revoked.\",\"events\":[\"The service presents the credential's correct bearer secret.\"],\"outcomes\":[\"Authentication returns the concealed rejection because revocation is checked first.\",\"Authentication returns a server error because expiry comparison is attempted first.\"],\"observer\":\"The service caller and server monitoring see different failure classes.\"}},{\"unit\":\"02_rules.md:Status\",\"subject\":\"State 2 classification of configuration defaults\",\"kind\":\"contradiction\",\"text\":\"The retained status says confirmed defaults “remain runtime knobs”, while changed A30 says the running service fixes values in source and reads only values named by an `_env_name` from the deployment environment.\",\"question\":\"For a listed value without an `_env_name`, is the confirmed number a deployment-overridable runtime default or an immutable source constant?\",\"options\":[\"It is a runtime setting that deployment may override.\",\"It is fixed in source and deployment cannot override it.\",\"Only an additional explicitly enumerated subset is overridable.\"],\"default_guess\":\"Treat values without `_env_name` as fixed source constants and revise the retained status accordingly.\",\"witness\":{\"initial\":\"The source value of staff_session_ttl_hours is 12.\",\"events\":[\"An operator deploys the service with an environment value intended to set the staff session TTL to 24 hours.\",\"A staff member logs in.\"],\"outcomes\":[\"The session expires after 24 hours because the value remains a runtime knob.\",\"The environment value is ignored and the session expires after 12 hours because the value is fixed in source.\"],\"observer\":\"The staff member and deployment operator see the different expiry.\"}},{\"unit\":\"A30\",\"subject\":\"Meaning and completeness of configuration knobs\",\"kind\":\"internal contradiction\",\"text\":\"A30 first says the running service “fixes them in source” except values named by an `_env_name`, but later retains “Values are knobs” and says each value is configuration.\",\"question\":\"Does changing a non-`_env_name` value require a source/Factory change, or is there an unspecified runtime configuration channel for it?\",\"options\":[\"Every non-`_env_name` value can change only through a source change.\",\"All listed values are runtime knobs through an unstated configuration mechanism.\",\"Some are source constants and some are runtime knobs, with the exact partition still to be listed.\"],\"default_guess\":\"Require a source change for every value not explicitly associated with an `_env_name`.\",\"witness\":{\"initial\":\"The fixed registry timeout is 5 seconds.\",\"events\":[\"A deployment needs a 15-second Registry timeout without changing application source.\",\"The deployment supplies a runtime override by its available configuration mechanism.\"],\"outcomes\":[\"The service uses 15 seconds because the value is a configuration knob.\",\"The service continues using 5 seconds because no `_env_name` exists and the value is fixed in source.\"],\"observer\":\"The deployment operator sees Registry calls time out at different times.\"}},{\"unit\":\"A30\",\"subject\":\"Environment configuration promised by R0-10\",\"kind\":\"contradiction\",\"text\":\"R0-10 says the SQLite database file, local binary root and trusted hosts are configured only by environment variables and validated at startup, while changed A30 says only values named by an `_env_name` are read from the environment; A30 names `_env_name` values only for Registry URL, email gateway URL and binary read limit and merely references an unexpanded `config.runtime_environment_variables` table.\",\"question\":\"Which database-path, binary-root, trusted-host, origin and other runtime values are environment-read, under what environment names, and which are instead fixed in source?\",\"options\":[\"The referenced closed runtime-environment table supplies additional environment names and must be reproduced in State 2.\",\"Only the three explicitly named `_env_name` entries are environment-read, contradicting R0-10.\",\"Every runtime setting has an inferred environment name even without an `_env_name` entry.\"],\"default_guess\":\"Treat the referenced runtime-environment table as containing additional explicit environment names, but require those names and rules to be stated before implementation.\",\"witness\":{\"initial\":\"The source build has one database path and trusted-host list; deployment supplies different database and host values in its environment.\",\"events\":[\"The service starts.\",\"A request uses the deployment's trusted host and a staff account is created.\"],\"outcomes\":[\"Startup reads and validates the deployment values, accepts the host and writes to the deployment database as R0-10 requires.\",\"The values are fixed in source or the unknown environment names are ignored, so the host is refused or data is written to the source-fixed database.\"],\"observer\":\"The deployment operator and HTTP caller see the difference.\"}},{\"unit\":\"context\",\"subject\":\"AuditRecord key_version requirement for credential management\",\"kind\":\"cardinality gap\",\"text\":\"M36 changes `key_version` to `int | None` described as “a service actor's, or the affected credential's on `principal.credential_issue` and `principal.credential_revoke`”, but does not say whether the affected credential's version is required or merely permitted on those two actions.\",\"question\":\"Must every successful credential-issue and credential-revoke audit record carry the affected credential's key_version, including when the actor is staff?\",\"options\":[\"Require key_version for service actors and for both credential-management actions.\",\"Permit but do not require key_version for credential-management actions.\",\"Require it only for issue, or only when the affected credential can still be read.\"],\"default_guess\":\"Require the affected credential's key_version for both successful issue and revoke records.\",\"witness\":{\"initial\":\"An administrator manages an active service principal whose next credential version is 4.\",\"events\":[\"The administrator issues credential version 4.\",\"The operation appends `principal.credential_issue` audit.\"],\"outcomes\":[\"The audit record must contain key_version 4.\",\"The audit record may contain key_version null because the actor is staff and the field remains nullable.\"],\"observer\":\"An auditor inspecting credential provenance sees complete versus missing version information.\"}},{\"unit\":\"context\",\"subject\":\"AuditIntent validation after key_version expansion\",\"kind\":\"model propagation gap\",\"text\":\"M37 still describes `key_version: int | None` without the new affected-credential rule and says only that it applies “the same closed-choice actor/result conditions as AuditRecord”. It does not state whether a staff actor's credential-issue or credential-revoke intent may or must carry key_version.\",\"question\":\"How must AuditIntent validate key_version for staff-performed `principal.credential_issue` and `principal.credential_revoke` actions?\",\"options\":[\"Allow and require the affected credential's version for those actions.\",\"Allow it but leave it optional.\",\"Continue allowing key_version only for service actors, making the new AuditRecord value impossible to produce through AuditIntent.\"],\"default_guess\":\"Update AuditIntent validation to require the affected credential's version for those two actions even when actor_kind is staff.\",\"witness\":{\"initial\":\"An administrator revokes service credential key version 7 through an owning use case that writes audit via AuditIntent.\",\"events\":[\"The use case constructs an AuditIntent with actor_kind staff, action principal.credential_revoke and key_version 7.\",\"The audit writer validates the intent.\"],\"outcomes\":[\"The intent is accepted and AuditRecord stores key_version 7 under the new M36 rule.\",\"The intent is rejected, or the caller must omit key_version, because M37's validation still treats it as service-actor provenance only.\"],\"observer\":\"The administrator sees operation success versus audit failure, or an auditor sees version 7 versus null.\"}}]}",
+ "set_aside": []
+}
