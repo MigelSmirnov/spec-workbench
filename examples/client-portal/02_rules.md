@@ -366,9 +366,10 @@ recognition status `confirmed`, a supported contract version, the
 authorized context's `portal.expense.manage` capability, its active project, a valid positive
 `EUR` total, then the allocation instructions (shape, then sum equal to the
 total, then each section belonging to the project), then replay by
-`recognized_document_id`. Every refusal among these answers HTTP 422 with an
-empty body (`rules.http_router_backend.error_policy`), so which check failed
-first is not observable to the caller.
+`recognized_document_id`. Every refusal before the replay check answers
+HTTP 422 with an empty body (`rules.http_router_backend.error_policy`), so
+which of them failed first is not observable to the caller; a replay with
+other content is the conflict of A8 (409).
 
 ### Carried changes
 
@@ -1184,7 +1185,9 @@ binary_read_limit_env_name             = BINARY_MAX_READ_BYTES (required positiv
 ```
 
 Values are knobs; the *existence* of a timeout/TTL/rate limit is an
-invariant, its value is config.
+invariant, its value is config. `REGISTRY_BASE_URL` is read by the Registry
+gateway at each call, not at start-up: it is no required start-up variable,
+and its absence fails only Registry calls (A6).
 
 ### Carried changes
 

@@ -1,0 +1,132 @@
+{
+ "open_points": [
+  {
+   "unit": "A5",
+   "subject": "access-management creation check order",
+   "kind": "missing precedence",
+   "text": "“the grant and assignment creation operations of access management … read `exists` and `is_active` … and proceed only when both are true” does not place that Registry check relative to administrator-session, principal-status and `portal.access.manage` checks.",
+   "question": "For viewer-grant, staff-assignment and producer-grant creation, which failure wins, and is Registry called, when authorization and Registry validation would both fail?",
+   "options": [
+    "Complete administrator authentication/authorization first, then call Registry.",
+    "Call Registry before completing administrator authorization.",
+    "Use a different order for one or more of the three creation operations."
+   ],
+   "default_guess": "Complete administrator authentication and authorization first, then call Registry.",
+   "witness": {
+    "initial": "A caller has an expired administrator session and asks to create a grant for a project while Registry is unavailable.",
+    "events": [
+     "The caller submits the grant-creation request.",
+     "The portal evaluates authorization and Registry validation in an unspecified order."
+    ],
+    "outcomes": [
+     "The request is refused as an authentication/access error and Registry is never called.",
+     "The request is refused as a Registry transport failure."
+    ],
+    "observer": "The caller and Registry operator see the different error and whether Registry was contacted."
+   }
+  },
+  {
+   "unit": "A6",
+   "subject": "viewer-grant translation of a decoded negative validation answer",
+   "kind": "contradictory ownership",
+   "text": "A5 says “a new viewer grant answers it as a Registry boundary failure”, while A6 says “`exists=false` … (read by the caller, A5; not a gateway failure)” and likewise treats `is_active=false` as caller-read rather than a gateway failure.",
+   "question": "Does viewer-grant creation translate `exists=false` or `is_active=false` into a Registry boundary error, or into a caller-owned unknown/archived rejection?",
+   "options": [
+    "Return a Registry boundary error carrying `not_found` or `archived`.",
+    "Return the viewer-grant operation's own unknown-project or archived-project rejection.",
+    "Use boundary errors only for viewer grants and caller-owned rejections for staff assignments and producer grants, with A6 explicitly excepting viewer grants."
+   ],
+   "default_guess": "Preserve A5's stated service behavior: viewer grants return Registry boundary errors, and A6 explicitly names that caller-level exception.",
+   "witness": {
+    "initial": "An authenticated administrator may create viewer grants; Registry returns a decoded validation result with `exists=false`.",
+    "events": [
+     "The administrator requests a new viewer grant.",
+     "The gateway successfully decodes and returns the negative validation result."
+    ],
+    "outcomes": [
+     "A5 yields a Registry boundary failure.",
+     "A6 treats the result as a caller-read not-found condition, not a gateway failure."
+    ],
+    "observer": "The administrator sees a different error type/translation."
+   }
+  },
+  {
+   "unit": "A6",
+   "subject": "inconsistent Registry validation fields",
+   "kind": "contradictory classification",
+   "text": "A6's table classifies “`is_active=false`, `exists=true`” as `archived` and says it is read by the caller under A5, but changed A5 says the ordinary project mutation guard reads `status`, not `is_active`; A6 also says the portal does not check the fields against each other and each caller acts on its named field “whatever the others say”.",
+   "question": "For an inconsistent decoded answer, does A6's `is_active=false` classification govern every mutation, or does an ordinary project mutation ignore it and follow `status`?",
+   "options": [
+    "The ordinary mutation follows `status`; `is_active` classification applies only to access-management creation.",
+    "The `is_active=false` classification makes every mutation archived despite `status=active`.",
+    "Reject inconsistent validation answers as `schema_mismatch`."
+   ],
+   "default_guess": "Follow the field assigned to each caller: ordinary mutations use `status`, while access-management creation uses `exists` and `is_active`; narrow A6's table accordingly.",
+   "witness": {
+    "initial": "Registry returns a successfully decoded validation answer with the requested UUID, `exists=true`, `status=\"active\"`, and `is_active=false`.",
+    "events": [
+     "An authorized operator submits an expense mutation for that project.",
+     "The project guard evaluates the validation answer."
+    ],
+    "outcomes": [
+     "Changed A5 follows `status=\"active\"` and permits the mutation.",
+     "A6's condition classifies the answer as archived and the mutation is refused."
+    ],
+    "observer": "The operator sees success versus an archived-project refusal."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "viewer project list with an unusable Registry status",
+   "kind": "ambiguous exception boundary",
+   "text": "The changed client-view rule omits a granted project “whose Registry context cannot be obtained”, while A5 says “a read whose project context would carry [a status outside `active` and `archived`] is refused as an invalid Registry answer.” It does not say whether a decoded context with such a status counts as context that cannot be obtained for this list exception.",
+   "question": "When one granted project's context is decoded but has an unsupported status, does the viewer project list omit only that project or fail the whole list with the invalid-Registry-answer error?",
+   "options": [
+    "Treat unusable context as unobtainable and omit that project.",
+    "Treat the context as obtained and fail the entire list under A5.",
+    "Omit only transport/not-found failures, but fail on malformed or unsupported context."
+   ],
+   "default_guess": "Treat any context that cannot produce a valid `ProjectListItem`, including an unsupported status, as unobtainable and omit that project.",
+   "witness": {
+    "initial": "A viewer has two active grants. Registry returns valid active context for project A and context with status `paused` for project B.",
+    "events": [
+     "The viewer requests their project list.",
+     "The list builder resolves both grants."
+    ],
+    "outcomes": [
+     "The response contains only project A under the new omission exception.",
+     "The entire request is refused as an invalid Registry answer under A5."
+    ],
+    "observer": "The viewer sees a partial list versus an error."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "snapshot-import classification followed by persistence failure",
+   "kind": "contradictory audit boundary",
+   "text": "The changed text says an action is recorded “for a snapshot import, when the attempt is classified” and A13 says “every classified import attempt writes exactly one”, while it also says “an operation that fails on storage … before [completion] is not recorded”; R0-25 only exempts an import that fails “before it classifies”. No rule covers a storage/commit failure after classification but before the import result and audit are durably committed.",
+   "question": "Is an import considered classified only after its result and audit commit, or can classification occur before persistence, and what invariant applies if that commit fails?",
+   "options": [
+    "Classification is a durable transactional event: it counts only when the import result and audit commit together.",
+    "Classification occurs in memory before persistence; a later storage failure returns an error and leaves no records despite having been classified.",
+    "A classified attempt must be recorded through a separate recovery/retry mechanism after the main commit fails."
+   ],
+   "default_guess": "Define classification as complete only when the import result and its audit record commit atomically; a failed commit leaves the attempt unclassified and unrecorded.",
+   "witness": {
+    "initial": "A valid new snapshot passes route authorization and all content checks; no matching snapshot exists.",
+    "events": [
+     "The import logic determines the outcome is `accepted`.",
+     "Storage fails while committing the snapshot, import result and audit record."
+    ],
+    "outcomes": [
+     "Because the attempt was already classified, A13/R0-25 require one immutable import result and audit record.",
+     "Because the operation failed on storage before completion, the transaction rolls back and records nothing."
+    ],
+    "observer": "The producer sees whether an `import_id` exists after retry, and operators see whether an audit/import record exists."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A5\",\"subject\":\"access-management creation check order\",\"kind\":\"missing precedence\",\"text\":\"“the grant and assignment creation operations of access management … read `exists` and `is_active` … and proceed only when both are true” does not place that Registry check relative to administrator-session, principal-status and `portal.access.manage` checks.\",\"question\":\"For viewer-grant, staff-assignment and producer-grant creation, which failure wins, and is Registry called, when authorization and Registry validation would both fail?\",\"options\":[\"Complete administrator authentication/authorization first, then call Registry.\",\"Call Registry before completing administrator authorization.\",\"Use a different order for one or more of the three creation operations.\"],\"default_guess\":\"Complete administrator authentication and authorization first, then call Registry.\",\"witness\":{\"initial\":\"A caller has an expired administrator session and asks to create a grant for a project while Registry is unavailable.\",\"events\":[\"The caller submits the grant-creation request.\",\"The portal evaluates authorization and Registry validation in an unspecified order.\"],\"outcomes\":[\"The request is refused as an authentication/access error and Registry is never called.\",\"The request is refused as a Registry transport failure.\"],\"observer\":\"The caller and Registry operator see the different error and whether Registry was contacted.\"}},{\"unit\":\"A6\",\"subject\":\"viewer-grant translation of a decoded negative validation answer\",\"kind\":\"contradictory ownership\",\"text\":\"A5 says “a new viewer grant answers it as a Registry boundary failure”, while A6 says “`exists=false` … (read by the caller, A5; not a gateway failure)” and likewise treats `is_active=false` as caller-read rather than a gateway failure.\",\"question\":\"Does viewer-grant creation translate `exists=false` or `is_active=false` into a Registry boundary error, or into a caller-owned unknown/archived rejection?\",\"options\":[\"Return a Registry boundary error carrying `not_found` or `archived`.\",\"Return the viewer-grant operation's own unknown-project or archived-project rejection.\",\"Use boundary errors only for viewer grants and caller-owned rejections for staff assignments and producer grants, with A6 explicitly excepting viewer grants.\"],\"default_guess\":\"Preserve A5's stated service behavior: viewer grants return Registry boundary errors, and A6 explicitly names that caller-level exception.\",\"witness\":{\"initial\":\"An authenticated administrator may create viewer grants; Registry returns a decoded validation result with `exists=false`.\",\"events\":[\"The administrator requests a new viewer grant.\",\"The gateway successfully decodes and returns the negative validation result.\"],\"outcomes\":[\"A5 yields a Registry boundary failure.\",\"A6 treats the result as a caller-read not-found condition, not a gateway failure.\"],\"observer\":\"The administrator sees a different error type/translation.\"}},{\"unit\":\"A6\",\"subject\":\"inconsistent Registry validation fields\",\"kind\":\"contradictory classification\",\"text\":\"A6's table classifies “`is_active=false`, `exists=true`” as `archived` and says it is read by the caller under A5, but changed A5 says the ordinary project mutation guard reads `status`, not `is_active`; A6 also says the portal does not check the fields against each other and each caller acts on its named field “whatever the others say”.\",\"question\":\"For an inconsistent decoded answer, does A6's `is_active=false` classification govern every mutation, or does an ordinary project mutation ignore it and follow `status`?\",\"options\":[\"The ordinary mutation follows `status`; `is_active` classification applies only to access-management creation.\",\"The `is_active=false` classification makes every mutation archived despite `status=active`.\",\"Reject inconsistent validation answers as `schema_mismatch`.\"],\"default_guess\":\"Follow the field assigned to each caller: ordinary mutations use `status`, while access-management creation uses `exists` and `is_active`; narrow A6's table accordingly.\",\"witness\":{\"initial\":\"Registry returns a successfully decoded validation answer with the requested UUID, `exists=true`, `status=\\\"active\\\"`, and `is_active=false`.\",\"events\":[\"An authorized operator submits an expense mutation for that project.\",\"The project guard evaluates the validation answer.\"],\"outcomes\":[\"Changed A5 follows `status=\\\"active\\\"` and permits the mutation.\",\"A6's condition classifies the answer as archived and the mutation is refused.\"],\"observer\":\"The operator sees success versus an archived-project refusal.\"}},{\"unit\":\"context\",\"subject\":\"viewer project list with an unusable Registry status\",\"kind\":\"ambiguous exception boundary\",\"text\":\"The changed client-view rule omits a granted project “whose Registry context cannot be obtained”, while A5 says “a read whose project context would carry [a status outside `active` and `archived`] is refused as an invalid Registry answer.” It does not say whether a decoded context with such a status counts as context that cannot be obtained for this list exception.\",\"question\":\"When one granted project's context is decoded but has an unsupported status, does the viewer project list omit only that project or fail the whole list with the invalid-Registry-answer error?\",\"options\":[\"Treat unusable context as unobtainable and omit that project.\",\"Treat the context as obtained and fail the entire list under A5.\",\"Omit only transport/not-found failures, but fail on malformed or unsupported context.\"],\"default_guess\":\"Treat any context that cannot produce a valid `ProjectListItem`, including an unsupported status, as unobtainable and omit that project.\",\"witness\":{\"initial\":\"A viewer has two active grants. Registry returns valid active context for project A and context with status `paused` for project B.\",\"events\":[\"The viewer requests their project list.\",\"The list builder resolves both grants.\"],\"outcomes\":[\"The response contains only project A under the new omission exception.\",\"The entire request is refused as an invalid Registry answer under A5.\"],\"observer\":\"The viewer sees a partial list versus an error.\"}},{\"unit\":\"context\",\"subject\":\"snapshot-import classification followed by persistence failure\",\"kind\":\"contradictory audit boundary\",\"text\":\"The changed text says an action is recorded “for a snapshot import, when the attempt is classified” and A13 says “every classified import attempt writes exactly one”, while it also says “an operation that fails on storage … before [completion] is not recorded”; R0-25 only exempts an import that fails “before it classifies”. No rule covers a storage/commit failure after classification but before the import result and audit are durably committed.\",\"question\":\"Is an import considered classified only after its result and audit commit, or can classification occur before persistence, and what invariant applies if that commit fails?\",\"options\":[\"Classification is a durable transactional event: it counts only when the import result and audit commit together.\",\"Classification occurs in memory before persistence; a later storage failure returns an error and leaves no records despite having been classified.\",\"A classified attempt must be recorded through a separate recovery/retry mechanism after the main commit fails.\"],\"default_guess\":\"Define classification as complete only when the import result and its audit record commit atomically; a failed commit leaves the attempt unclassified and unrecorded.\",\"witness\":{\"initial\":\"A valid new snapshot passes route authorization and all content checks; no matching snapshot exists.\",\"events\":[\"The import logic determines the outcome is `accepted`.\",\"Storage fails while committing the snapshot, import result and audit record.\"],\"outcomes\":[\"Because the attempt was already classified, A13/R0-25 require one immutable import result and audit record.\",\"Because the operation failed on storage before completion, the transaction rolls back and records nothing.\"],\"observer\":\"The producer sees whether an `import_id` exists after retry, and operators see whether an audit/import record exists.\"}}]}",
+ "set_aside": []
+}

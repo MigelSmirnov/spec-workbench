@@ -1,0 +1,82 @@
+{
+ "open_points": [
+  {
+   "unit": "A6",
+   "subject": "Registry failure classification for access-management creation",
+   "kind": "contradiction",
+   "text": "A5 says that when `exists` or `is_active` refuses a new viewer grant, it “answers it as a Registry boundary failure”; A6 says `exists=false` and `is_active=false, exists=true` are “read by the caller, A5; not a gateway failure.”",
+   "question": "For a viewer-grant creation refused by decoded `exists`/`is_active` flags, is the outcome a `RegistryBoundaryError` carrying `not_found`/`archived`, or an application-level unknown/archived-project rejection rather than a Registry boundary failure?",
+   "options": [
+    "Return a Registry boundary failure with kind `not_found` or `archived`",
+    "Return the grant operation's application-level unknown-project or archived-project rejection"
+   ],
+   "default_guess": "Return a Registry boundary failure with the corresponding `RegistryFailureKind`, because A5 specifically distinguishes the viewer-grant operation from staff assignments and producer grants.",
+   "witness": {
+    "initial": "An authenticated administrator may create viewer grants; project P has no grant for viewer V.",
+    "events": [
+     "The administrator requests a grant of P to V.",
+     "Registry validation returns `exists=false`, `is_active=false` in a successfully decoded response."
+    ],
+    "outcomes": [
+     "A5: the viewer-grant operation answers a Registry boundary failure.",
+     "A6: the response is not a gateway failure; the caller interprets `exists=false` and returns its application-level not-found rejection."
+    ],
+    "observer": "The administrator and HTTP error translator see different error types and potentially different response mappings."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "Viewer project-list handling of unavailable Registry context",
+   "kind": "precedence gap",
+   "text": "The changed client-view rule says a granted project “whose Registry context cannot be obtained at that moment is left out” of the project list, while A5 says an unknown project is rejected and A6 translates an HTTP 404 as `not_found`. The text does not define which context failures count as temporary omission or whether A5/A6 instead fail the whole list.",
+   "question": "For each granted project in the viewer list, which Registry outcomes cause only that item to be omitted, and which outcomes fail the entire list operation?",
+   "options": [
+    "Omit the item for every context failure, including 404, timeout, transport, schema and identity mismatch",
+    "Omit only transient timeout/transport failures; reject the list for not-found or invalid answers",
+    "Apply A5/A6 normally and fail the whole list on any failed context lookup"
+   ],
+   "default_guess": "Omit the affected item for every failure that prevents construction of a valid typed `ProjectContext`, and continue building the list from the remaining grants.",
+   "witness": {
+    "initial": "Viewer V has active grants for projects P1 and P2; P1 has obtainable active context.",
+    "events": [
+     "V requests the project list.",
+     "P1 context succeeds.",
+     "P2 context answers HTTP 404."
+    ],
+    "outcomes": [
+     "Treat 404 as context that cannot be obtained: omit P2 and return P1.",
+     "Apply A5/A6's unknown-project rejection: fail the whole project-list request as not found."
+    ],
+    "observer": "Viewer V either receives a partial list or receives an error and no list."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "Snapshot-import storage failure after classification",
+   "kind": "uncovered failure phase",
+   "text": "The changed text says every attempt the import classifies “is recorded as a fresh immutable import result” and that an import failing “before it classifies the attempt” records nothing. It does not say what happens when content/replay classification has completed but storage fails while persisting the snapshot, import result, or audit record.",
+   "question": "Is an import considered classified before persistence, or only after the snapshot/import-result/audit transaction commits, and what response and records result from a storage failure between those points?",
+   "options": [
+    "Classification occurs before persistence; retry internally until its import result and audit can be committed",
+    "Classification becomes effective only on successful commit; return the storage failure and leave no records",
+    "Return the storage failure but preserve any classification record that was successfully written"
+   ],
+   "default_guess": "Treat classification as effective only when its atomic transaction commits; on any storage failure return that failure and leave neither snapshot, import result nor audit record.",
+   "witness": {
+    "initial": "An active authorized producer submits a valid, previously unseen snapshot; Registry checks have succeeded.",
+    "events": [
+     "The import validates the content and determines the outcome would be `accepted`.",
+     "Storage fails while the operation attempts to persist the snapshot/import result/audit transaction."
+    ],
+    "outcomes": [
+     "Treat the attempt as already classified and retry or otherwise ensure a fresh import result and audit are returned.",
+     "Treat the failed commit as pre-classification, return a storage failure, and persist nothing."
+    ],
+    "observer": "The producer sees either a classified import result with an `import_id` or a storage failure with no `import_id`; a later retry also observes different replay state."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A6\",\"subject\":\"Registry failure classification for access-management creation\",\"kind\":\"contradiction\",\"text\":\"A5 says that when `exists` or `is_active` refuses a new viewer grant, it “answers it as a Registry boundary failure”; A6 says `exists=false` and `is_active=false, exists=true` are “read by the caller, A5; not a gateway failure.”\",\"question\":\"For a viewer-grant creation refused by decoded `exists`/`is_active` flags, is the outcome a `RegistryBoundaryError` carrying `not_found`/`archived`, or an application-level unknown/archived-project rejection rather than a Registry boundary failure?\",\"options\":[\"Return a Registry boundary failure with kind `not_found` or `archived`\",\"Return the grant operation's application-level unknown-project or archived-project rejection\"],\"default_guess\":\"Return a Registry boundary failure with the corresponding `RegistryFailureKind`, because A5 specifically distinguishes the viewer-grant operation from staff assignments and producer grants.\",\"witness\":{\"initial\":\"An authenticated administrator may create viewer grants; project P has no grant for viewer V.\",\"events\":[\"The administrator requests a grant of P to V.\",\"Registry validation returns `exists=false`, `is_active=false` in a successfully decoded response.\"],\"outcomes\":[\"A5: the viewer-grant operation answers a Registry boundary failure.\",\"A6: the response is not a gateway failure; the caller interprets `exists=false` and returns its application-level not-found rejection.\"],\"observer\":\"The administrator and HTTP error translator see different error types and potentially different response mappings.\"}},{\"unit\":\"context\",\"subject\":\"Viewer project-list handling of unavailable Registry context\",\"kind\":\"precedence gap\",\"text\":\"The changed client-view rule says a granted project “whose Registry context cannot be obtained at that moment is left out” of the project list, while A5 says an unknown project is rejected and A6 translates an HTTP 404 as `not_found`. The text does not define which context failures count as temporary omission or whether A5/A6 instead fail the whole list.\",\"question\":\"For each granted project in the viewer list, which Registry outcomes cause only that item to be omitted, and which outcomes fail the entire list operation?\",\"options\":[\"Omit the item for every context failure, including 404, timeout, transport, schema and identity mismatch\",\"Omit only transient timeout/transport failures; reject the list for not-found or invalid answers\",\"Apply A5/A6 normally and fail the whole list on any failed context lookup\"],\"default_guess\":\"Omit the affected item for every failure that prevents construction of a valid typed `ProjectContext`, and continue building the list from the remaining grants.\",\"witness\":{\"initial\":\"Viewer V has active grants for projects P1 and P2; P1 has obtainable active context.\",\"events\":[\"V requests the project list.\",\"P1 context succeeds.\",\"P2 context answers HTTP 404.\"],\"outcomes\":[\"Treat 404 as context that cannot be obtained: omit P2 and return P1.\",\"Apply A5/A6's unknown-project rejection: fail the whole project-list request as not found.\"],\"observer\":\"Viewer V either receives a partial list or receives an error and no list.\"}},{\"unit\":\"context\",\"subject\":\"Snapshot-import storage failure after classification\",\"kind\":\"uncovered failure phase\",\"text\":\"The changed text says every attempt the import classifies “is recorded as a fresh immutable import result” and that an import failing “before it classifies the attempt” records nothing. It does not say what happens when content/replay classification has completed but storage fails while persisting the snapshot, import result, or audit record.\",\"question\":\"Is an import considered classified before persistence, or only after the snapshot/import-result/audit transaction commits, and what response and records result from a storage failure between those points?\",\"options\":[\"Classification occurs before persistence; retry internally until its import result and audit can be committed\",\"Classification becomes effective only on successful commit; return the storage failure and leave no records\",\"Return the storage failure but preserve any classification record that was successfully written\"],\"default_guess\":\"Treat classification as effective only when its atomic transaction commits; on any storage failure return that failure and leave neither snapshot, import result nor audit record.\",\"witness\":{\"initial\":\"An active authorized producer submits a valid, previously unseen snapshot; Registry checks have succeeded.\",\"events\":[\"The import validates the content and determines the outcome would be `accepted`.\",\"Storage fails while the operation attempts to persist the snapshot/import result/audit transaction.\"],\"outcomes\":[\"Treat the attempt as already classified and retry or otherwise ensure a fresh import result and audit are returned.\",\"Treat the failed commit as pre-classification, return a storage failure, and persist nothing.\"],\"observer\":\"The producer sees either a classified import result with an `import_id` or a storage failure with no `import_id`; a later retry also observes different replay state.\"}}]}",
+ "set_aside": []
+}

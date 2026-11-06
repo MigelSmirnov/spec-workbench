@@ -1,0 +1,140 @@
+{
+ "open_points": [
+  {
+   "subject": "runtime HTTP route composition",
+   "kind": "missing owner/capability",
+   "text": "`module:runtime` builds the inner application only with `capability:api.create_app`, but viewer routes are owned by `module:api_irregular`; `runtime` does not know `api_irregular`, and `api` does not know it either.",
+   "question": "Which module registers the `api_irregular` viewer routes in the runtime application, and through which capability?",
+   "options": [
+    "`api.create_app` composes `api_irregular`, requiring `api` to know it",
+    "`runtime.create_runtime_app` composes both API modules, requiring `runtime` to know `api_irregular`",
+    "A new composition module/capability owns route registration"
+   ],
+   "default_guess": "Have `runtime` compose both route modules.",
+   "witness": {
+    "initial": "The service starts successfully with the module dependencies exactly as stated.",
+    "events": [
+     "A client opens a valid viewer access link and sends the viewer-entry request."
+    ],
+    "outcomes": [
+     "The viewer route was registered somehow and creates a viewer session.",
+     "No permitted composition path registered the viewer route, so the request is unmatched."
+    ],
+    "observer": "The client and API conformance tests"
+   },
+   "unit": "context"
+  },
+  {
+   "subject": "public API mount path",
+   "kind": "contradiction",
+   "text": "State 2 says, \"The public API lives under `/api`, stripped by the deployment proxy.\" State 4 says runtime \"mounts the inner application under `/api` and at the root.\"",
+   "question": "Is the runtime API reachable at both root and `/api`, or only through the public `/api` path?",
+   "options": [
+    "Expose both route prefixes",
+    "Expose only `/api` externally and use root only behind a path-stripping proxy",
+    "Expose only root in the service and let the proxy provide `/api`"
+   ],
+   "default_guess": "Expose root only behind the proxy and `/api` only to public callers.",
+   "witness": {
+    "initial": "A running runtime application is reachable directly on a trusted host.",
+    "events": [
+     "An API tester sends the same valid staff request once under `/api/...` and once under the corresponding root path."
+    ],
+    "outcomes": [
+     "State 2 permits only the public `/api/...` request.",
+     "State 4's two mounts permit both requests."
+    ],
+    "observer": "The API caller and route-conformance tests"
+   },
+   "unit": "context"
+  },
+  {
+   "subject": "bootstrap infrastructure failures",
+   "kind": "unstated failure outcome",
+   "text": "The bootstrap flow can fail while loading runtime settings, opening or creating the database, hashing, inserting, or committing, but its Errors list gives exit codes only for confirmation mismatch, rejected identity input, and an existing account; A29 calls exit codes 0–3 a closed external contract.",
+   "question": "What exit result and disclosure behavior apply to configuration, cryptographic, schema, database, or commit failures during bootstrap?",
+   "options": [
+    "Add a distinct closed exit code for operational failure",
+    "Let an uncaught failure produce the platform's generic nonzero exit",
+    "Map operational failures onto one of exit codes 1–3"
+   ],
+   "default_guess": "Use a distinct sanitized operational-failure exit code.",
+   "witness": {
+    "initial": "An empty deployment has malformed database configuration or an unwritable SQLite location.",
+    "events": [
+     "The host operator runs the bootstrap command with matching, valid email and password input.",
+     "Runtime settings or `staff_bootstrap_store` fails before commit."
+    ],
+    "outcomes": [
+     "The process exits through an unspecified generic failure outside the declared closed contract.",
+     "The implementation overloads one of exit codes 1–3, changing that code's declared meaning."
+    ],
+    "observer": "The host operator and deployment script"
+   },
+   "unit": "context"
+  },
+  {
+   "subject": "bootstrap identity validation",
+   "kind": "missing capability",
+   "text": "`staff_bootstrap` must \"normalize and validate the input through `staff_identity`'s input boundary,\" but `staff_identity` offers no normalization or new-password-validation capability; `bootstrap_first_administrator` cannot call `create_staff_account` because that is an authorized administrator operation using the portal transaction path.",
+   "question": "How does bootstrap reuse the single owner of staff email and password validation without duplicating A16 or invoking the ordinary account-creation flow?",
+   "options": [
+    "Expose reusable validation capabilities from `staff_identity`",
+    "Move the pure staff-input policy to a lower module both flows may call",
+    "Authorize `staff_bootstrap` to duplicate the validation logic"
+   ],
+   "default_guess": "Expose pure normalization and password-validation capabilities from the A16 owner.",
+   "unit": "context"
+  },
+  {
+   "subject": "conflicting expense replay HTTP outcome",
+   "kind": "contradiction",
+   "text": "State 2 A7 places replay by `recognized_document_id` in the expense checks and says, \"Every refusal among these answers HTTP 422 with an empty body\"; State 4 says, \"Same recognized document with different content: conflict (409).\"",
+   "question": "What HTTP status is returned when an existing `recognized_document_id` is submitted with a different intake fingerprint?",
+   "options": [
+    "409 conflict",
+    "422 input rejection"
+   ],
+   "default_guess": "409 conflict.",
+   "witness": {
+    "initial": "An Expense already exists for `recognized_document_id = R` with fingerprint F1.",
+    "events": [
+     "Authorized staff submits a confirmed recognition using R but content producing fingerprint F2."
+    ],
+    "outcomes": [
+     "State 2 yields HTTP 422 with an empty body.",
+     "State 4 yields HTTP 409 conflict."
+    ],
+    "observer": "The staff API caller"
+   },
+   "unit": "context"
+  },
+  {
+   "subject": "duplicate producer-project grant",
+   "kind": "unstated failure outcome",
+   "text": "M15 says a second grant for an active pair is refused by the operation itself \"State 4,\" but `flow:administer_service_principals` neither states that check nor gives an outcome for a duplicate producer grant.",
+   "question": "What declared failure and HTTP outcome does `grant_producer_project` produce when an active grant already exists for the principal-project pair?",
+   "options": [
+    "Authorization rejection mapped to 403, matching the viewer and staff duplicate flows",
+    "Conflict mapped to 409",
+    "Idempotently return the existing grant"
+   ],
+   "default_guess": "Refuse with 403 to match the other active duplicate access grants.",
+   "witness": {
+    "initial": "An active `ProducerProjectGrant` already exists for principal S and project P.",
+    "events": [
+     "An authorized administrator repeats `grant_producer_project(S, P)`."
+    ],
+    "outcomes": [
+     "The implementation follows the analogous viewer/staff flows and returns 403 without writing.",
+     "The implementation treats duplicate creation as a domain conflict and returns 409 without writing."
+    ],
+    "observer": "The administrator API caller"
+   },
+   "unit": "context"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"runtime HTTP route composition\",\"kind\":\"missing owner/capability\",\"text\":\"`module:runtime` builds the inner application only with `capability:api.create_app`, but viewer routes are owned by `module:api_irregular`; `runtime` does not know `api_irregular`, and `api` does not know it either.\",\"question\":\"Which module registers the `api_irregular` viewer routes in the runtime application, and through which capability?\",\"options\":[\"`api.create_app` composes `api_irregular`, requiring `api` to know it\",\"`runtime.create_runtime_app` composes both API modules, requiring `runtime` to know `api_irregular`\",\"A new composition module/capability owns route registration\"],\"default_guess\":\"Have `runtime` compose both route modules.\",\"witness\":{\"initial\":\"The service starts successfully with the module dependencies exactly as stated.\",\"events\":[\"A client opens a valid viewer access link and sends the viewer-entry request.\"],\"outcomes\":[\"The viewer route was registered somehow and creates a viewer session.\",\"No permitted composition path registered the viewer route, so the request is unmatched.\"],\"observer\":\"The client and API conformance tests\"},\"unit\":\"context\"},{\"subject\":\"public API mount path\",\"kind\":\"contradiction\",\"text\":\"State 2 says, \\\"The public API lives under `/api`, stripped by the deployment proxy.\\\" State 4 says runtime \\\"mounts the inner application under `/api` and at the root.\\\"\",\"question\":\"Is the runtime API reachable at both root and `/api`, or only through the public `/api` path?\",\"options\":[\"Expose both route prefixes\",\"Expose only `/api` externally and use root only behind a path-stripping proxy\",\"Expose only root in the service and let the proxy provide `/api`\"],\"default_guess\":\"Expose root only behind the proxy and `/api` only to public callers.\",\"witness\":{\"initial\":\"A running runtime application is reachable directly on a trusted host.\",\"events\":[\"An API tester sends the same valid staff request once under `/api/...` and once under the corresponding root path.\"],\"outcomes\":[\"State 2 permits only the public `/api/...` request.\",\"State 4's two mounts permit both requests.\"],\"observer\":\"The API caller and route-conformance tests\"},\"unit\":\"context\"},{\"subject\":\"bootstrap infrastructure failures\",\"kind\":\"unstated failure outcome\",\"text\":\"The bootstrap flow can fail while loading runtime settings, opening or creating the database, hashing, inserting, or committing, but its Errors list gives exit codes only for confirmation mismatch, rejected identity input, and an existing account; A29 calls exit codes 0–3 a closed external contract.\",\"question\":\"What exit result and disclosure behavior apply to configuration, cryptographic, schema, database, or commit failures during bootstrap?\",\"options\":[\"Add a distinct closed exit code for operational failure\",\"Let an uncaught failure produce the platform's generic nonzero exit\",\"Map operational failures onto one of exit codes 1–3\"],\"default_guess\":\"Use a distinct sanitized operational-failure exit code.\",\"witness\":{\"initial\":\"An empty deployment has malformed database configuration or an unwritable SQLite location.\",\"events\":[\"The host operator runs the bootstrap command with matching, valid email and password input.\",\"Runtime settings or `staff_bootstrap_store` fails before commit.\"],\"outcomes\":[\"The process exits through an unspecified generic failure outside the declared closed contract.\",\"The implementation overloads one of exit codes 1–3, changing that code's declared meaning.\"],\"observer\":\"The host operator and deployment script\"},\"unit\":\"context\"},{\"subject\":\"bootstrap identity validation\",\"kind\":\"missing capability\",\"text\":\"`staff_bootstrap` must \\\"normalize and validate the input through `staff_identity`'s input boundary,\\\" but `staff_identity` offers no normalization or new-password-validation capability; `bootstrap_first_administrator` cannot call `create_staff_account` because that is an authorized administrator operation using the portal transaction path.\",\"question\":\"How does bootstrap reuse the single owner of staff email and password validation without duplicating A16 or invoking the ordinary account-creation flow?\",\"options\":[\"Expose reusable validation capabilities from `staff_identity`\",\"Move the pure staff-input policy to a lower module both flows may call\",\"Authorize `staff_bootstrap` to duplicate the validation logic\"],\"default_guess\":\"Expose pure normalization and password-validation capabilities from the A16 owner.\",\"unit\":\"context\"},{\"subject\":\"conflicting expense replay HTTP outcome\",\"kind\":\"contradiction\",\"text\":\"State 2 A7 places replay by `recognized_document_id` in the expense checks and says, \\\"Every refusal among these answers HTTP 422 with an empty body\\\"; State 4 says, \\\"Same recognized document with different content: conflict (409).\\\"\",\"question\":\"What HTTP status is returned when an existing `recognized_document_id` is submitted with a different intake fingerprint?\",\"options\":[\"409 conflict\",\"422 input rejection\"],\"default_guess\":\"409 conflict.\",\"witness\":{\"initial\":\"An Expense already exists for `recognized_document_id = R` with fingerprint F1.\",\"events\":[\"Authorized staff submits a confirmed recognition using R but content producing fingerprint F2.\"],\"outcomes\":[\"State 2 yields HTTP 422 with an empty body.\",\"State 4 yields HTTP 409 conflict.\"],\"observer\":\"The staff API caller\"},\"unit\":\"context\"},{\"subject\":\"duplicate producer-project grant\",\"kind\":\"unstated failure outcome\",\"text\":\"M15 says a second grant for an active pair is refused by the operation itself \\\"State 4,\\\" but `flow:administer_service_principals` neither states that check nor gives an outcome for a duplicate producer grant.\",\"question\":\"What declared failure and HTTP outcome does `grant_producer_project` produce when an active grant already exists for the principal-project pair?\",\"options\":[\"Authorization rejection mapped to 403, matching the viewer and staff duplicate flows\",\"Conflict mapped to 409\",\"Idempotently return the existing grant\"],\"default_guess\":\"Refuse with 403 to match the other active duplicate access grants.\",\"witness\":{\"initial\":\"An active `ProducerProjectGrant` already exists for principal S and project P.\",\"events\":[\"An authorized administrator repeats `grant_producer_project(S, P)`.\"],\"outcomes\":[\"The implementation follows the analogous viewer/staff flows and returns 403 without writing.\",\"The implementation treats duplicate creation as a domain conflict and returns 409 without writing.\"],\"observer\":\"The administrator API caller\"},\"unit\":\"context\"}]}",
+ "set_aside": []
+}

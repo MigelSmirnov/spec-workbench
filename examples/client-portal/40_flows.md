@@ -52,9 +52,11 @@ text" at the end.
   (authentication 401, authorization 403, not found and concealed binary 404,
   archived project and conflicts 409, input 422, challenge 400 and 429,
   Registry 502, persistence and storage 500). No failure becomes a success,
-  an empty list or a zero, with one exception: the viewer's project list
+  an empty list or a zero, with two exceptions: the viewer's project list
   leaves out a project whose context cannot be obtained
-  (`flow:viewer_reads_projects`).
+  (`flow:viewer_reads_projects`), and the project overview answers a failed
+  part as `temporarily_unavailable` with no value
+  (`flow:build_project_overview`).
 - **Archived projects.** Reads of an archived project succeed; every mutation
   of its records and every new grant or assignment for it is refused;
   revocation of existing access does not consult the Registry (R0-24).
