@@ -75,14 +75,22 @@ text" at the end.
   | `BinaryStorageError` | `binary_storage` | 500 |
 
   Any other failure is 500. No failure becomes a success, an empty list or a
-  zero.
+  zero, except in the two reads whose Errors say so:
+  `derived_views.build_project_overview` turns a part's failure into that
+  part's availability, and `derived_views.list_viewer_projects` leaves out a
+  project whose Registry context fails.
 - **Concealment.** An unknown, revoked or expired credential or session and a
   non-active principal are one `AuthenticationRejected`; an inaccessible
   project or record is `ScopedNotFoundError` or `AuthorizationRejected` as the
   operation says, never a disclosure of what exists (A4, A11).
 - **Archived projects.** Reads of an archived project succeed; every mutation
-  of its records and every new grant or assignment for it is
-  `ArchivedProjectRejected`; revocation consults no Registry (R0-24).
+  of its records and every new staff assignment for it is
+  `ArchivedProjectRejected`; a new viewer grant for it is refused with the
+  `RegistryBoundaryError` its operation names; revocation consults no
+  Registry (R0-24). The one write that is not refused for an archived project
+  is the empty manual budget version (with its audit) that
+  `ensure_manual_budget` creates, also when `list_project_progress` reads a
+  project that has none.
 - **Order.** Every list in an output is in the order A15 or A27 names for it.
 
 ## `public_op:credential_security.hash_password`
@@ -281,7 +289,9 @@ positive (default: non-negative).
 
 ### Outputs
 
-The amount quantized to two digits, ROUND_HALF_UP.
+The amount quantized to two digits, ROUND_HALF_UP. An amount with more
+fraction digits is rounded, never refused, and the sign rule is applied to
+the rounded amount.
 
 ### Observable effect
 
@@ -290,7 +300,10 @@ None.
 ### Enforces
 
 A9 and `rules.money_policy`: EUR only, no conversion, the sign rule the caller
-names.
+names. Only finite amounts are amounts: the request models refuse a
+non-finite value before any operation is called, and a non-finite value
+passed directly is no declared refusal but an unclassified failure (500
+under the conventions).
 
 ### Errors
 
@@ -351,7 +364,8 @@ The `ProgressSectionView` list of one project.
 ### Outputs
 
 The weighted R9 progress over sections with positive planned work and a
-reported percent, or `None` when that denominator is zero.
+reported percent, rounded to two fraction digits as money is (A9), or `None`
+when that denominator is zero.
 
 ### Observable effect
 
@@ -1157,7 +1171,10 @@ A2, A5).
 non-active account; `ScopedNotFoundError` for an operator without an active
 assignment or a project the Registry does not know; `AuthorizationRejected`
 for a role outside the scope rule or without the capability;
-`RegistryBoundaryError`.
+`RegistryBoundaryError`. A Registry answer whose project status is neither
+`active` nor `archived` is an invalid Registry answer: no context is built
+and the read ends as an unclassified failure, 500 under the conventions,
+never a success or a not-found.
 
 ### State impact
 
@@ -1195,7 +1212,9 @@ from persistence; archived projects are readable (A5).
 
 `AuthenticationRejected`; `ScopedNotFoundError` for a missing or revoked
 grant, indistinguishably, or a project the Registry does not know;
-`AuthorizationRejected` without the capability; `RegistryBoundaryError`.
+`AuthorizationRejected` without the capability; `RegistryBoundaryError`. A
+project status other than `active` or `archived` ends the read as for staff
+reads: an unclassified failure, 500 under the conventions.
 
 ### State impact
 
@@ -1303,7 +1322,10 @@ One Registry validation, after its own transaction closed.
 A12 producer scope before any content validation, then the A4 sequence with
 the service principal's bearer credential standing in for a session: the
 stored principal must be active and, for a granted-projects scope, hold an
-active grant for the project.
+active grant for the project. The credential itself is checked only by the
+authentication that produced the `ServiceActorContext`; this guard re-reads
+the principal and the grant, not the credential, so a credential revoked or
+expired after that authentication is not noticed here.
 
 ### Errors
 
@@ -1344,10 +1366,13 @@ None beyond the session and the audit.
 
 A16 (normalized email), A17 (the session secret is issued for the new
 `session_id`; only its hash is stored), R0-06 (fixed expiry of
-`config.staff_session_ttl_hours`, twelve hours), A13: exactly one audit on
-every outcome — `staff.login` success or `staff.login_failed` rejected with
-no reason code, actor and entity empty when no account matched. Only an
-active, verified account with a matching password signs in.
+`config.staff_session_ttl_hours`, twelve hours), A13: once the address has
+normalized, exactly one audit on every outcome — `staff.login` success or
+`staff.login_failed` rejected with no reason code. A rejection audit names the
+account the normalized address matched as both actor and entity, also when
+the account is not active, not verified or the password is wrong; actor and
+entity are empty only when no account matched. Only an active, verified
+account with a matching password signs in.
 
 ### Errors
 
@@ -1453,7 +1478,9 @@ The `PortalStore`, the administrator's `StaffActorContext` and the target
 ### Outputs
 
 `SessionRevocationResult`: the staff id, the number of sessions revoked and
-the one `revoked_at` the operation captured, also when none was live.
+the one `revoked_at` the operation captured, also when none was live. The
+target id is not checked against the staff accounts: an id no account has
+succeeds with zero sessions revoked and is audited like any other.
 
 ### Observable effect
 
@@ -1503,7 +1530,9 @@ A3 (`rules.status_transitions`) from the persisted status; A11
 session at the same timestamp; challenges have no storage while deferred
 (R0-23). R0-19: activation from `pending_verification` records
 `email_verified_at`; reinstatement from `suspended` keeps it. A13: one
-`staff.suspend`, `staff.disable` or `staff.reinstate`.
+`staff.suspend` for suspension, `staff.disable` for disabling, and
+`staff.reinstate` for every change to `active`, the activation of a
+`pending_verification` account included.
 
 ### Errors
 
@@ -1604,8 +1633,10 @@ Writes one `StaffAccount` and one `AuditRecord`.
 
 ### Inputs
 
-The `PortalStore`, the administrator's `StaffActorContext`, the operator's
-`staff_id` and the `project_id`.
+The `PortalStore`, the administrator's `StaffActorContext`, the target
+account's `staff_id` and the `project_id`. Any existing staff account is
+accepted as the target, an administrator included; such an assignment is
+stored and audited but changes no administrator's access.
 
 ### Outputs
 
@@ -1623,7 +1654,7 @@ R0-14, A5 and R0-24 (no new access to an unknown or archived project), A13
 ### Errors
 
 Access-management failures; `ScopedNotFoundError` for a project the Registry
-does not know or an unknown operator; `ArchivedProjectRejected` for an
+does not know or an unknown staff account; `ArchivedProjectRejected` for an
 inactive project; `AuthorizationRejected` for an existing active assignment;
 `RegistryBoundaryError`.
 
@@ -1986,7 +2017,8 @@ Registry customer data; A13
 
 ### Errors
 
-Access-management failures; a display name the model rejects.
+Access-management failures only: any text, the empty one included, is
+accepted as the display name.
 
 ### State impact
 
@@ -2429,7 +2461,9 @@ None.
 
 A3 (`rules.status_transitions`), A11 (`rules.revocation_cascades`), A24, A13
 (`principal.disable` or `principal.enable`). A request for the status the
-principal already holds changes nothing and appends no audit.
+principal already holds is no transition, so A3's refusal of unlisted
+transitions does not apply to it: the operation returns the principal
+unchanged, writes nothing and appends no audit.
 
 ### Errors
 
@@ -2454,7 +2488,10 @@ per change.
 ### Inputs
 
 The `PortalStore`, the administrator's `StaffActorContext`, the principal id
-and an optional `expires_at`.
+and an optional `expires_at`. Any expiry is accepted and stored as given, a
+past one included; no expiry means the credential does not expire. A
+credential is usable only before its expiry, so one issued with an expiry
+already reached is stored but never authenticates.
 
 ### Outputs
 
@@ -2645,10 +2682,13 @@ The `PortalStore`, the `ServiceActorContext` and the `project_id`.
 
 ### Outputs
 
-The decision of `rules.producer_scope_policy`: for an all-projects scope,
-whether the Registry reports the project active; for a granted-projects
-scope, whether an active unrevoked grant exists for this principal and
-project.
+A yes-or-no answer, the decision of `rules.producer_scope_policy`: for an
+all-projects scope, yes exactly when the Registry reports the project
+active; for a granted-projects scope, yes exactly when an active unrevoked
+grant exists for this principal and project. A project the scope does not
+cover is the answer no, not an exception. The import route that calls it
+does not act on the answer: the refusal comes from
+`authorization_guard.authorize_snapshot_import`, called next.
 
 ### Observable effect
 
@@ -2773,8 +2813,9 @@ The `PortalStore` and an `AuthorizedProjectContext`.
 ### Outputs
 
 `BudgetVersionDetail`: the manual `BudgetVersion`, its plans by
-`sort_order` then `section_id`, and the count of allocations whose section is
-outside the active plan.
+`sort_order` then `section_id`, and the count of section allocations whose
+section has no plan in this manual version; zero when this call creates the
+version. Whether another version is active does not change the count.
 
 ### Observable effect
 
@@ -2809,6 +2850,8 @@ read-only.
 
 The `PortalStore`, an `AuthorizedProjectContext`, an optional `section_id`,
 the display name, the sort order and the planned material and work amounts.
+Any text is accepted as the display name, the empty one included, and any
+whole number as the sort order; neither is refused.
 
 ### Outputs
 
@@ -2854,7 +2897,8 @@ The `PortalStore`, an `AuthorizedProjectContext` and the `version_id`.
 ### Outputs
 
 `BudgetVersionDetail` for exactly that version: plans by `sort_order` then
-`section_id` and the count of allocations outside the active plan.
+`section_id` and the count of section allocations whose section has no plan
+in that version, active or not.
 
 ### Observable effect
 
@@ -2890,8 +2934,8 @@ capability, and the `version_id`.
 ### Outputs
 
 `BudgetActivationResult`: the activated version, its ordered plans and the
-pre-update count of allocations outside the active plan (zero, since a
-positive count refuses).
+count of section allocations whose section has no plan in the requested
+version (zero, since a positive count refuses).
 
 ### Observable effect
 
@@ -2902,7 +2946,11 @@ None.
 A18 and A1: only `portal.estimate_snapshot.activate`, never a producer; the
 prior active version becomes `inactive` and the requested one `active` at one
 captured time in one transaction; A13 (`snapshot.activate`). Activation is
-refused while any allocation would lose its section.
+refused while any section allocation of the project names a section the
+requested version has no plan for. Activating the version that is already
+active is no status transition (its status stays `active`) and is not
+refused: it records a new activation time and actor for it, deactivates
+nothing and is audited like any activation.
 
 ### Errors
 
@@ -3022,13 +3070,15 @@ None.
 
 A9 (the total in EUR, non-negative), A19 (every section target of this
 project, exact sum), A24, A13 (`expense.correct`); no intermediate state
-commits.
+commits. The allocation list must hold at least one instruction, also for a
+zero total: a correction to zero carries allocations that sum to zero, and
+an empty list is refused.
 
 ### Errors
 
 `ExpenseConflictError` for an expense of no or another project;
-`ExpenseValidationError` or `FinancialValidationError` for an amount, a
-section target or a sum.
+`ExpenseValidationError` for an empty allocation list, a section target or
+a sum; `FinancialValidationError` for the total.
 
 ### State impact
 
@@ -3060,8 +3110,11 @@ None.
 
 ### Enforces
 
-A19: an excluded expense is kept, never deleted; only `included` and
-`updated_at` change; A13 (`expense.include` or `expense.exclude`).
+A19: an excluded expense is kept, never deleted; only `included`,
+`updated_at` and `updated_by` change; A13 (`expense.include` for the flag
+set, `expense.exclude` for it cleared). A request for the flag the expense
+already has is not a no-op and not refused: it is applied like any change,
+with a new `updated_at` and the audit of the requested value.
 
 ### Errors
 
@@ -3135,7 +3188,9 @@ None.
 ### Enforces
 
 A14 and R0-13: metadata only, `file_ref` unchanged; A13 (`document.update`
-with the document's own id).
+with the document's own id). A request equal to the stored description and
+visibility is not a no-op: it is applied like any update, with a new
+`updated_at`, the caller as `updated_by` and its audit.
 
 ### Errors
 
@@ -3277,7 +3332,8 @@ The `PortalStore` and an `AuthorizedProjectContext`.
 ### Outputs
 
 Every `SectionProgress` of the project, by the manual budget's plan
-`sort_order`, `section_id` breaking ties; empty when none is recorded.
+`sort_order`, `section_id` breaking ties, the progress of a section without
+a manual plan after all others; empty when none is recorded.
 
 ### Observable effect
 
@@ -3285,7 +3341,7 @@ None.
 
 ### Enforces
 
-A27; the tracking read transaction closes before
+The tracking read transaction closes before
 `budget_management.ensure_manual_budget` is called for the order.
 
 ### Errors
@@ -3294,8 +3350,10 @@ A persistence failure propagates.
 
 ### State impact
 
-Read-only, except the empty manual version `ensure_manual_budget` creates
-when the project has none.
+Not a pure read: when the project has no manual budget version, this list
+creates it empty with its `budget.manual_version_create` audit, exactly as
+`ensure_manual_budget` does, an archived project included; otherwise
+read-only.
 
 ## `public_op:project_tracking.list_project_payments`
 
@@ -3314,7 +3372,9 @@ The `PortalStore` and an `AuthorizedProjectContext`.
 ### Outputs
 
 Every `WorkPayment` of the project by `payment_date` then `payment_id`,
-descending; empty when none.
+descending; empty when none. This staff record list does not use the
+recording time; the A27 order with recording time is that of the derived
+payment view (`derived_views.build_payment_view`).
 
 ### Observable effect
 
@@ -3322,7 +3382,7 @@ None.
 
 ### Enforces
 
-A27.
+A4 (project-scoped read).
 
 ### Errors
 
@@ -3397,7 +3457,10 @@ None.
 ### Enforces
 
 A20 and A14: never `file_ref`, progress or finance; A24 (a replacement
-photo); A13 (`photo.update`).
+photo); A13 (`photo.update`). Caption, section and visibility are all
+replaced by the request, an absent caption or section clearing it. A request
+equal to the stored values is not a no-op: it is applied like any update,
+with a new `updated_at`, the caller as `updated_by` and its audit.
 
 ### Errors
 
@@ -3426,7 +3489,9 @@ The `PortalStore` and an `AuthorizedProjectContext`.
 
 `ProgressPhotoView` list by `photo_date` then `photo_id`, ascending; for a
 viewer only client-visible photos; never `file_ref` or `intake_id`; empty
-when none.
+when none. This list does not use the publication time; the A27 order with
+publication time is that of the overview's photo part
+(`derived_views.build_project_overview`).
 
 ### Observable effect
 
@@ -3434,7 +3499,7 @@ None.
 
 ### Enforces
 
-A14, A27.
+A14.
 
 ### Errors
 
@@ -3547,11 +3612,17 @@ One Registry context request.
 A21 (derived at read time, nothing persisted), A27 and Factory
 `d2c4511ea119`: a part whose builder answers `ScopedNotFoundError` is
 `not_configured`, a persistence or Registry failure `temporarily_unavailable`;
-no zero is fabricated; viewer photos are client-visible only.
+no zero is fabricated; the photo part holds client-visible photos only, for
+every reader.
 
 ### Errors
 
-None of its own: every part's failure becomes its availability.
+The project part turns a `RegistryBoundaryError` into
+`temporarily_unavailable`; any other failure of the Registry context request
+propagates. Each portal part (budget, expenses, progress, payments, photos)
+turns `ScopedNotFoundError` into `not_configured` and every other failure of
+its builder, an unexpected one included, into `temporarily_unavailable`, so
+the overview itself then still succeeds.
 
 ### State impact
 
@@ -3575,8 +3646,11 @@ The `PortalStore`, an `AuthorizedProjectContext` and an optional
 ### Outputs
 
 `BudgetView`: the version, sections, planned and actual material, planned and
-completed work, other expenses and the count of allocations outside the
-active plan.
+completed work, other expenses and the count of section allocations whose
+section has no plan in the viewed version. Everything is computed against
+the viewed version: the named one when `version_id` is given, active or not,
+otherwise the active one; no other version is consulted. A section row of
+the view never carries an unresolved mark, since its section has a plan.
 
 ### Observable effect
 
@@ -4024,7 +4098,10 @@ body over `max_request_body_bytes`; 429 for viewer entries over the
 monotonic-clock rate limit, before any credential is parsed; then the route,
 called once. Every answer carries the security headers, `no-store` where the
 policy names it, CORS headers only for a listed origin, and in production one
-redacted log line.
+redacted log line. The origin check covers the one viewer mutation the viewer
+session cookie authenticates, the viewer logout. Viewer entry presents an
+access code rather than that cookie: it is limited by the entry rate limit,
+not by origin, so an entry from another origin reaches the route.
 
 ### Enforces
 
@@ -4108,8 +4185,10 @@ transport guard installed before mounting; the inner application mounted at
 
 ### Errors
 
-A store or application construction failure propagates; readiness answers
-the storage failure without disclosing internals.
+A store or application construction failure propagates. Readiness opens and
+closes one portal transaction; when that cannot be opened it answers 500
+with no `HealthStatus` body and no internal detail, never `ok`. Liveness does
+not touch the store.
 
 ### State impact
 
@@ -4147,7 +4226,10 @@ from arguments, environment or a file.
 
 ### Errors
 
-Each refusal is its exit code; a storage failure propagates.
+Each refusal is its exit code. A configuration or storage failure is none of
+the four outcomes: the operation raises it and returns no exit code, and the
+failure status the host process then ends with is outside the closed
+contract of A29.
 
 ### State impact
 

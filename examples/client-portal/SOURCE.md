@@ -274,6 +274,9 @@ decisions delegated).
 | Registry endpoint value accepted at each call (scheme, host, no user info, path prefix kept) | A30 | note `_registry_url`; `config.registry_endpoint_env_name`, `config.registry_request_paths` | `adapters/registry_gateway.py` `_registry_url` |
 | exact dependency pins | A32 | — (deployment file) | `deploy/requirements.txt` |
 | how the pre-deploy vulnerability check is run | A32 | — (no Factory tool; the trimmed text had prescribed `pip-audit`, which the service does not have) | — |
+| process status after a bootstrap configuration or storage failure (uncaught exception, interpreter status and traceback) | State 5 `run_bootstrap_cli` | note `run_bootstrap_cli`; `rules.staff_bootstrap_policy.command_outcomes` | `cli/staff_bootstrap.py`; `deploy/README.md` (command line) |
+| readiness answer body when the store cannot open (outer application without the inner error handlers) | State 5 `create_runtime_app` | notes `create_runtime_app`, `readiness_endpoint` | `runtime/app.py`; `adapters/portal_store.py` `PortalStore.begin` |
+| non-finite amounts: request-model refusal and the decimal failure of a direct call | State 5 `validate_eur_amount` | `rules.money_policy`; note `validate_eur_amount` | `domain/financial_policy.py`; `core/models.py` `_FrozenModel` |
 
 ### Classification of what State 2 carries
 
