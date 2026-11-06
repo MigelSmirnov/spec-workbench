@@ -266,8 +266,10 @@ None.
 "operator or administrator" narrowed by R0-14. "At most one active grant"
 is narrowed to one grant record per pair, as the accepted spec stores it
 (note of `create_client_access_schema`: a UNIQUE constraint on the
-`(viewer_id, project_id)` pair; note of the grant insert: a second grant for
-a pair that already has one surfaces as a persistence error; Factory code
+`(viewer_id, project_id)` pair; note of the grant insert: a second insert for
+a pair that already has one surfaces as a persistence error, reached only
+when that record is revoked, since the grant operation refuses an active
+duplicate itself, State 4; Factory code
 `adapters/viewer_access_repository.py`). Owner 2026-11-06: current service
 behaviour accepted; technical decisions delegated.
 
@@ -447,7 +449,9 @@ None.
 
 Repaired to the accepted spec: one assignment per pair (note of
 `create_staff_access_schema`: UNIQUE `(staff_id, project_id)`; the insert
-note: a second assignment for a pair surfaces as a persistence error);
+note: a second insert for a pair surfaces as a persistence error, reached
+only when that record is revoked, since the operation refuses an active
+duplicate itself, State 4);
 `assign_staff_project` checks only that the account exists (Factory code
 `application/staff_identity.py`), and `_require_staff_scope` returns for an
 administrator before reading assignments (`application/authorization_guard.py`).
@@ -863,7 +867,9 @@ None.
 Narrowed from "at most one active grant" to the accepted storage (note of
 `create_producer_identity_schema`: UNIQUE `(service_principal_id,
 project_id)` "so one producer cannot hold two grants for one project"; the
-insert note: a second grant for a pair surfaces as a persistence error).
+insert note: a second insert for a pair surfaces as a persistence error,
+reached only when that record is revoked, since the operation refuses an
+active duplicate itself, State 4).
 Owner 2026-11-06: current service behaviour accepted; technical decisions
 delegated.
 
@@ -963,9 +969,10 @@ None.
   http_error | schema_mismatch | identity_mismatch`. Owned by the Registry
   gateway; State 2 lands the translation table in `rules`.
 
-Portal mutation policy admits the grant and assignment operations of
-access management only on an answer whose `exists` and `is_active` are
-both true (State 2 A5) and uses only `status` (`active` or not) in the
+Portal mutation policy admits the grant and assignment creation
+operations of access management only on an answer whose `exists` and
+`is_active` are both true (State 2 A5; revocation consults no Registry,
+R0-24) and uses only `status` (`active` or not) in the
 project guard of State 2 A4/A5; archived context remains readable.
 (Running service: Factory code `application/authorization_guard.py`,
 `application/staff_identity.py`; owner 2026-11-06: current service

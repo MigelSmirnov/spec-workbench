@@ -1,0 +1,84 @@
+{
+ "open_points": [
+  {
+   "unit": "context",
+   "subject": "snapshot import-result read path",
+   "kind": "ambiguous branch contradicts authorization exception",
+   "text": "The trigger combines publishing and reading an earlier result, but steps 2–5 are written unconditionally before step 6: “The route calls capability:service_identity.authorize_producer_scope … then capability:authorization_guard.authorize_snapshot_import” and only later “capability:snapshot_import.get_snapshot_import_result returns a record only to the principal that made it.” Earlier texts require the read to recheck neither producer grant nor Registry (R0-21, A4).",
+   "question": "Does an import-result read proceed directly from bearer authentication to ownership checking, or must it also execute the scope, capability, project-grant and Registry checks in steps 2–5?",
+   "options": [
+    "Authenticate bearer, then check only that the import record belongs to that principal",
+    "Run the publication authorization steps before returning the owned import result"
+   ],
+   "default_guess": "Treat steps 2–5 as publication-only and let result reads check only bearer authentication and record ownership.",
+   "witness": {
+    "initial": "A producer created an import result, then its project grant was revoked while its principal and credential remained active.",
+    "events": [
+     "The producer presents the same bearer credential and requests its own import result by import_id.",
+     "The Registry is unavailable during the request."
+    ],
+    "outcomes": [
+     "The result is returned because ownership and bearer authentication suffice, as R0-21 and A4 state.",
+     "The request fails during the flow's scope or Registry authorization step, with 404 or 502."
+    ],
+    "observer": "The producer reading the import result"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "bootstrap command failure contract",
+   "kind": "unstated failure outcome and closed-code contradiction",
+   "text": "A29 says “Exit codes are a closed external contract: 0 account created, 1 confirmation did not match, 2 identity input rejected, 3 bootstrap already completed,” while the State 4 flow additionally loads runtime settings, opens the database, creates schemas and commits, but its Errors section states no outcome for configuration or storage failure.",
+   "question": "What externally observable exit outcome applies when runtime-settings loading, database opening, schema creation, insertion or commit fails?",
+   "options": [
+    "Map infrastructure failures to one of exit codes 0–3",
+    "Add a distinct documented exit code for infrastructure failure",
+    "Allow an uncaught failure and an implementation-dependent process exit status"
+   ],
+   "default_guess": "Use a distinct nonzero infrastructure-failure exit code, although that would expand the stated closed contract.",
+   "witness": {
+    "initial": "No staff account exists, the entered email and matching password are valid, but the configured SQLite file cannot be opened.",
+    "events": [
+     "The host operator runs the bootstrap command.",
+     "The CLI accepts the terminal input and loads settings.",
+     "staff_bootstrap_store attempts to open its connection."
+    ],
+    "outcomes": [
+     "The command maps the failure to one of the four documented exit codes.",
+     "The command terminates with a different or implementation-dependent exit status because no documented mapping exists."
+    ],
+    "observer": "The host operator and deployment script"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "snapshot import authorization handoff",
+   "kind": "authorization race left open",
+   "text": "R0-25 delegates “How the import treats access that changes after the route's check” to this flow. State 4 adds a second authorization “before its transaction” and describes changes only “since step 2”; it does not state what happens if access changes after that second check but before the import transaction commits.",
+   "question": "What is the authorization linearization point for an import, and what happens when the principal, credential, scope, grant or Registry lifecycle changes after step 3 but before the snapshot/import/audit commit?",
+   "options": [
+    "The successful second guard check authorizes the in-flight import even if access is revoked immediately afterward",
+    "Recheck or lock authorization state as part of the import commit and classify/refuse a change",
+    "Abort the import with an unrecorded access error if a later change is detected"
+   ],
+   "default_guess": "Treat the successful second guard check as the authorization point for that in-flight request.",
+   "witness": {
+    "initial": "A granted-project producer has an active credential and the Registry project is active.",
+    "events": [
+     "The producer passes the route authorization in step 2.",
+     "The producer passes the repeated authorization in step 3.",
+     "An administrator revokes the producer grant before snapshot_import commits.",
+     "snapshot_import validates otherwise acceptable new content."
+    ],
+    "outcomes": [
+     "The snapshot, import record and audit commit because the request was authorized at step 3.",
+     "The import is refused or recorded as scope_denied because revocation must be observed before commit."
+    ],
+    "observer": "The producer, the administrator, and later readers of snapshot/import history"
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"context\",\"subject\":\"snapshot import-result read path\",\"kind\":\"ambiguous branch contradicts authorization exception\",\"text\":\"The trigger combines publishing and reading an earlier result, but steps 2–5 are written unconditionally before step 6: “The route calls capability:service_identity.authorize_producer_scope … then capability:authorization_guard.authorize_snapshot_import” and only later “capability:snapshot_import.get_snapshot_import_result returns a record only to the principal that made it.” Earlier texts require the read to recheck neither producer grant nor Registry (R0-21, A4).\",\"question\":\"Does an import-result read proceed directly from bearer authentication to ownership checking, or must it also execute the scope, capability, project-grant and Registry checks in steps 2–5?\",\"options\":[\"Authenticate bearer, then check only that the import record belongs to that principal\",\"Run the publication authorization steps before returning the owned import result\"],\"default_guess\":\"Treat steps 2–5 as publication-only and let result reads check only bearer authentication and record ownership.\",\"witness\":{\"initial\":\"A producer created an import result, then its project grant was revoked while its principal and credential remained active.\",\"events\":[\"The producer presents the same bearer credential and requests its own import result by import_id.\",\"The Registry is unavailable during the request.\"],\"outcomes\":[\"The result is returned because ownership and bearer authentication suffice, as R0-21 and A4 state.\",\"The request fails during the flow's scope or Registry authorization step, with 404 or 502.\"],\"observer\":\"The producer reading the import result\"}},{\"unit\":\"context\",\"subject\":\"bootstrap command failure contract\",\"kind\":\"unstated failure outcome and closed-code contradiction\",\"text\":\"A29 says “Exit codes are a closed external contract: 0 account created, 1 confirmation did not match, 2 identity input rejected, 3 bootstrap already completed,” while the State 4 flow additionally loads runtime settings, opens the database, creates schemas and commits, but its Errors section states no outcome for configuration or storage failure.\",\"question\":\"What externally observable exit outcome applies when runtime-settings loading, database opening, schema creation, insertion or commit fails?\",\"options\":[\"Map infrastructure failures to one of exit codes 0–3\",\"Add a distinct documented exit code for infrastructure failure\",\"Allow an uncaught failure and an implementation-dependent process exit status\"],\"default_guess\":\"Use a distinct nonzero infrastructure-failure exit code, although that would expand the stated closed contract.\",\"witness\":{\"initial\":\"No staff account exists, the entered email and matching password are valid, but the configured SQLite file cannot be opened.\",\"events\":[\"The host operator runs the bootstrap command.\",\"The CLI accepts the terminal input and loads settings.\",\"staff_bootstrap_store attempts to open its connection.\"],\"outcomes\":[\"The command maps the failure to one of the four documented exit codes.\",\"The command terminates with a different or implementation-dependent exit status because no documented mapping exists.\"],\"observer\":\"The host operator and deployment script\"}},{\"unit\":\"context\",\"subject\":\"snapshot import authorization handoff\",\"kind\":\"authorization race left open\",\"text\":\"R0-25 delegates “How the import treats access that changes after the route's check” to this flow. State 4 adds a second authorization “before its transaction” and describes changes only “since step 2”; it does not state what happens if access changes after that second check but before the import transaction commits.\",\"question\":\"What is the authorization linearization point for an import, and what happens when the principal, credential, scope, grant or Registry lifecycle changes after step 3 but before the snapshot/import/audit commit?\",\"options\":[\"The successful second guard check authorizes the in-flight import even if access is revoked immediately afterward\",\"Recheck or lock authorization state as part of the import commit and classify/refuse a change\",\"Abort the import with an unrecorded access error if a later change is detected\"],\"default_guess\":\"Treat the successful second guard check as the authorization point for that in-flight request.\",\"witness\":{\"initial\":\"A granted-project producer has an active credential and the Registry project is active.\",\"events\":[\"The producer passes the route authorization in step 2.\",\"The producer passes the repeated authorization in step 3.\",\"An administrator revokes the producer grant before snapshot_import commits.\",\"snapshot_import validates otherwise acceptable new content.\"],\"outcomes\":[\"The snapshot, import record and audit commit because the request was authorized at step 3.\",\"The import is refused or recorded as scope_denied because revocation must be observed before commit.\"],\"observer\":\"The producer, the administrator, and later readers of snapshot/import history\"}}]}",
+ "set_aside": []
+}
