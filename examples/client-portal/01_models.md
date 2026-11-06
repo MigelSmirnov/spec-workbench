@@ -1435,9 +1435,12 @@ None.
 
 - **Kind:** operator input DTO.
 - **Fields:** `target: AllocationTargetKind`, `section_id: UUID | None`
-  `[closed-choice: required iff target = section]`, `amount: Decimal (> 0)`.
+  `[closed-choice: required iff target = section]`, `amount: Decimal`.
 - Every instruction is explicit; order is irrelevant to equality and
   fingerprinting, which use canonical `(target, section_id, amount)` order.
+- An expense's instruction list must be non-empty and sum to the expense
+  total; an individual amount is not otherwise constrained (zero and
+  negative amounts are accepted).
 
 ### Identity
 
@@ -1447,6 +1450,17 @@ value
 
 - Substitution: Two equal instructions allocate the same amount to the same target.
 - Continuity: No independent continuity: it exists for the one action that carries it.
+
+### Carried changes
+
+The former `amount (> 0)` is not a rule of the accepted spec 459ac96c or its
+code (`core/models.py` `AllocationInstruction`: unbounded `Decimal`;
+`domain/expense_management.py` `_validate_allocation_sum` and
+`application/expense_intake.py` `_validate_initial_allocations` check only
+the sum and, on correction and re-allocation, a non-empty list). Owner
+2026-11-06: current service behaviour accepted; technical decisions
+delegated. Requiring a positive amount is a candidate Factory change
+(SOURCE.md "Accepted service quirks").
 
 ### Source of truth
 
@@ -1477,7 +1491,8 @@ None.
   `provenance_ref: str` (portable OCR provenance),
   `project_id: UUID`, `confirmed_by: UUID` (staff),
   `allocations: list[AllocationInstruction]` (may target sections or
-  `other_expenses`; sum must equal `total_amount`).
+  `other_expenses`; sum must equal `total_amount`; amounts otherwise
+  unconstrained, M26).
 - `intake_fingerprint` is computed canonically by `expense_intake` over the
   accepted projected source facts, project, `file_ref`, and sorted initial
   allocation instructions; authenticated actor identity is provenance and is
@@ -1565,7 +1580,7 @@ None.
 - **Fields:** `allocation_id: UUID`, `expense_id: UUID`,
   `target: AllocationTargetKind (section | other_expenses)`,
   `section_id: UUID | None` `[closed-choice: required iff target =
-  section]`, `amount: Decimal (> 0)`, `created_at`, `created_by`,
+  section]`, `amount: Decimal` (as instructed, M26), `created_at`, `created_by`,
   `updated_at | None`, `updated_by | None`.
 - **Rules:** the sum of an expense's allocations equals `total_amount`
   exactly; automatic proportional split is forbidden — every allocation is

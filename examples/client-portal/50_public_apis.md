@@ -3082,7 +3082,9 @@ None.
 A9 (the total in EUR, non-negative), A19 (every section target of this
 project, exact sum), A24, A13 (`expense.correct`); no intermediate state
 commits. The allocation list must hold at least one instruction whatever
-the total; an empty list is refused, a zero total included.
+the total; an empty list is refused, a zero total included. An individual
+amount is not otherwise checked (State 1 M26), so a zero total is corrected
+with, for example, one zero allocation.
 
 ### Errors
 
