@@ -1,0 +1,106 @@
+{
+ "open_points": [
+  {
+   "unit": "50_public_apis.md:`public_op:staff_identity.authenticate_staff`",
+   "subject": "staff session lifetime",
+   "kind": "configuration contradiction",
+   "text": "`authenticate_staff` uses a \"fixed expiry of `config.staff_session_ttl_hours`, twelve hours\"; A30 says `staff_session_ttl_hours = 12` is a runtime knob whose deployment value may differ, while `create_runtime_app` says session lifetimes are fixed in source and a deployment cannot change them.",
+   "question": "Does authentication calculate `expires_at` from the deployment-configured staff-session TTL or always from the source-fixed twelve-hour value?",
+   "options": [
+    "Use the deployment-configured `staff_session_ttl_hours`.",
+    "Always use twelve hours from source."
+   ],
+   "default_guess": "Use the deployment-configured TTL because A30 classifies it as a runtime knob.",
+   "witness": {
+    "initial": "A deployment configures the staff-session TTL to one hour, and an active verified staff account exists.",
+    "events": [
+     "The deployment starts the service with that configuration.",
+     "The staff member successfully authenticates."
+    ],
+    "outcomes": [
+     "The returned `StaffSessionGrant.expires_at` is one hour after creation.",
+     "The returned `StaffSessionGrant.expires_at` is twelve hours after creation."
+    ],
+    "observer": "The authenticated staff member and any caller inspecting the session grant."
+   }
+  },
+  {
+   "unit": "50_public_apis.md:`public_op:service_identity.issue_service_credential`",
+   "subject": "service credential entropy setting",
+   "kind": "missing configuration source",
+   "text": "A30 defines `credential_entropy_bytes` as a deployment runtime knob, but `issue_service_credential` receives no entropy or settings input; `service_identity` does not know `runtime_settings`, and `create_runtime_app` says settings reach only the store and transport guard.",
+   "question": "Where does `issue_service_credential` obtain the entropy byte count it must pass to `credential_security.issue_verification_secret`?",
+   "options": [
+    "Use the deployment-configured `credential_entropy_bytes`, requiring configuration to be wired to the operation.",
+    "Use the fixed default of 32 bytes from rules/source.",
+    "Read the environment directly inside the operation or credential module."
+   ],
+   "default_guess": "Inject or otherwise wire the validated deployment value to the operation.",
+   "witness": {
+    "initial": "An active service principal exists and the deployment configures credential entropy to 64 bytes instead of the default 32.",
+    "events": [
+     "An administrator requests a new service credential."
+    ],
+    "outcomes": [
+     "The issued secret contains 64 bytes of random entropy.",
+     "The issued secret contains the source-fixed default of 32 bytes of random entropy."
+    ],
+    "observer": "The administrator receiving the one-time plaintext credential, and security tests measuring its decoded size."
+   }
+  },
+  {
+   "unit": "50_public_apis.md:`public_op:service_identity.issue_service_credential`",
+   "subject": "service credential expiry representation",
+   "kind": "timestamp contradiction",
+   "text": "The operation says \"Any expiry is accepted and stored as supplied ... never converted\"; A28 says persisted timestamps are UTC and stored offset-naive, while also saying a service credential's source-supplied `expires_at` is kept as supplied and that its accepted forms and checks are carried later.",
+   "question": "What happens when `expires_at` is offset-aware, non-UTC, or otherwise not already an offset-naive UTC datetime?",
+   "options": [
+    "Reject any value not already represented as offset-naive UTC.",
+    "Convert an accepted instant to offset-naive UTC before storing it.",
+    "Store the supplied representation unchanged, including its offset."
+   ],
+   "default_guess": "Require an offset-naive UTC value at the request boundary and otherwise reject it.",
+   "witness": {
+    "initial": "An active service principal exists.",
+    "events": [
+     "An administrator requests a credential with `expires_at` equal to `2026-11-06T13:00:00+01:00`."
+    ],
+    "outcomes": [
+     "The request is rejected because the value is not offset-naive UTC.",
+     "The credential is stored after conversion as `2026-11-06T12:00:00`.",
+     "The credential is stored unchanged as `2026-11-06T13:00:00+01:00`."
+    ],
+    "observer": "The administrator and later authentication code comparing the credential expiry with the portal's offset-naive UTC clock."
+   }
+  },
+  {
+   "unit": "50_public_apis.md:`public_op:runtime.create_runtime_app`",
+   "subject": "runtime configuration propagation",
+   "kind": "composition contradiction",
+   "text": "A30 classifies session lifetimes, credential entropy and other values as runtime knobs whose deployment values may differ, but `create_runtime_app` says \"The settings handed here reach only the store and the transport guard\" and that staff and viewer session lifetimes are fixed in source so a deployment cannot change them.",
+   "question": "Which `RuntimeSettings` values must `create_runtime_app` propagate to identity and credential operations, and which are intentionally source-fixed exceptions to A30?",
+   "options": [
+    "Propagate all A30 runtime knobs to their owning modules.",
+    "Propagate only store and transport settings; use source-fixed values for every use-case setting.",
+    "Keep session TTLs source-fixed but propagate credential entropy and any other non-lifetime knobs."
+   ],
+   "default_guess": "Propagate every A30 value classified as a runtime knob unless A30 is amended to remove it.",
+   "witness": {
+    "initial": "Runtime settings contain a one-hour staff TTL, a seven-day viewer TTL and 64-byte credential entropy.",
+    "events": [
+     "The deployment calls `create_runtime_app` with those settings.",
+     "A staff member logs in, a viewer enters, and an administrator issues a service credential."
+    ],
+    "outcomes": [
+     "The resulting sessions and credential use the configured one-hour, seven-day and 64-byte values.",
+     "They use source-fixed twelve-hour, thirty-day and 32-byte values.",
+     "The sessions use source-fixed lifetimes while the credential uses configured entropy."
+    ],
+    "observer": "The deployment operator, authenticated principals, and integration tests of the composed application."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"50_public_apis.md:`public_op:staff_identity.authenticate_staff`\",\"subject\":\"staff session lifetime\",\"kind\":\"configuration contradiction\",\"text\":\"`authenticate_staff` uses a \\\"fixed expiry of `config.staff_session_ttl_hours`, twelve hours\\\"; A30 says `staff_session_ttl_hours = 12` is a runtime knob whose deployment value may differ, while `create_runtime_app` says session lifetimes are fixed in source and a deployment cannot change them.\",\"question\":\"Does authentication calculate `expires_at` from the deployment-configured staff-session TTL or always from the source-fixed twelve-hour value?\",\"options\":[\"Use the deployment-configured `staff_session_ttl_hours`.\",\"Always use twelve hours from source.\"],\"default_guess\":\"Use the deployment-configured TTL because A30 classifies it as a runtime knob.\",\"witness\":{\"initial\":\"A deployment configures the staff-session TTL to one hour, and an active verified staff account exists.\",\"events\":[\"The deployment starts the service with that configuration.\",\"The staff member successfully authenticates.\"],\"outcomes\":[\"The returned `StaffSessionGrant.expires_at` is one hour after creation.\",\"The returned `StaffSessionGrant.expires_at` is twelve hours after creation.\"],\"observer\":\"The authenticated staff member and any caller inspecting the session grant.\"}},{\"unit\":\"50_public_apis.md:`public_op:service_identity.issue_service_credential`\",\"subject\":\"service credential entropy setting\",\"kind\":\"missing configuration source\",\"text\":\"A30 defines `credential_entropy_bytes` as a deployment runtime knob, but `issue_service_credential` receives no entropy or settings input; `service_identity` does not know `runtime_settings`, and `create_runtime_app` says settings reach only the store and transport guard.\",\"question\":\"Where does `issue_service_credential` obtain the entropy byte count it must pass to `credential_security.issue_verification_secret`?\",\"options\":[\"Use the deployment-configured `credential_entropy_bytes`, requiring configuration to be wired to the operation.\",\"Use the fixed default of 32 bytes from rules/source.\",\"Read the environment directly inside the operation or credential module.\"],\"default_guess\":\"Inject or otherwise wire the validated deployment value to the operation.\",\"witness\":{\"initial\":\"An active service principal exists and the deployment configures credential entropy to 64 bytes instead of the default 32.\",\"events\":[\"An administrator requests a new service credential.\"],\"outcomes\":[\"The issued secret contains 64 bytes of random entropy.\",\"The issued secret contains the source-fixed default of 32 bytes of random entropy.\"],\"observer\":\"The administrator receiving the one-time plaintext credential, and security tests measuring its decoded size.\"}},{\"unit\":\"50_public_apis.md:`public_op:service_identity.issue_service_credential`\",\"subject\":\"service credential expiry representation\",\"kind\":\"timestamp contradiction\",\"text\":\"The operation says \\\"Any expiry is accepted and stored as supplied ... never converted\\\"; A28 says persisted timestamps are UTC and stored offset-naive, while also saying a service credential's source-supplied `expires_at` is kept as supplied and that its accepted forms and checks are carried later.\",\"question\":\"What happens when `expires_at` is offset-aware, non-UTC, or otherwise not already an offset-naive UTC datetime?\",\"options\":[\"Reject any value not already represented as offset-naive UTC.\",\"Convert an accepted instant to offset-naive UTC before storing it.\",\"Store the supplied representation unchanged, including its offset.\"],\"default_guess\":\"Require an offset-naive UTC value at the request boundary and otherwise reject it.\",\"witness\":{\"initial\":\"An active service principal exists.\",\"events\":[\"An administrator requests a credential with `expires_at` equal to `2026-11-06T13:00:00+01:00`.\"],\"outcomes\":[\"The request is rejected because the value is not offset-naive UTC.\",\"The credential is stored after conversion as `2026-11-06T12:00:00`.\",\"The credential is stored unchanged as `2026-11-06T13:00:00+01:00`.\"],\"observer\":\"The administrator and later authentication code comparing the credential expiry with the portal's offset-naive UTC clock.\"}},{\"unit\":\"50_public_apis.md:`public_op:runtime.create_runtime_app`\",\"subject\":\"runtime configuration propagation\",\"kind\":\"composition contradiction\",\"text\":\"A30 classifies session lifetimes, credential entropy and other values as runtime knobs whose deployment values may differ, but `create_runtime_app` says \\\"The settings handed here reach only the store and the transport guard\\\" and that staff and viewer session lifetimes are fixed in source so a deployment cannot change them.\",\"question\":\"Which `RuntimeSettings` values must `create_runtime_app` propagate to identity and credential operations, and which are intentionally source-fixed exceptions to A30?\",\"options\":[\"Propagate all A30 runtime knobs to their owning modules.\",\"Propagate only store and transport settings; use source-fixed values for every use-case setting.\",\"Keep session TTLs source-fixed but propagate credential entropy and any other non-lifetime knobs.\"],\"default_guess\":\"Propagate every A30 value classified as a runtime knob unless A30 is amended to remove it.\",\"witness\":{\"initial\":\"Runtime settings contain a one-hour staff TTL, a seven-day viewer TTL and 64-byte credential entropy.\",\"events\":[\"The deployment calls `create_runtime_app` with those settings.\",\"A staff member logs in, a viewer enters, and an administrator issues a service credential.\"],\"outcomes\":[\"The resulting sessions and credential use the configured one-hour, seven-day and 64-byte values.\",\"They use source-fixed twelve-hour, thirty-day and 32-byte values.\",\"The sessions use source-fixed lifetimes while the credential uses configured entropy.\"],\"observer\":\"The deployment operator, authenticated principals, and integration tests of the composed application.\"}}]}",
+ "set_aside": []
+}

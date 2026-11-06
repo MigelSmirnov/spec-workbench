@@ -1375,7 +1375,8 @@ A16 (normalized email), A17 (the session secret is issued for the new
 `session_id`; only its hash is stored), R0-06 (fixed expiry of
 `config.staff_session_ttl_hours`, twelve hours), A13: once the address has
 normalized, exactly one audit on every outcome — `staff.login` success or
-`staff.login_failed` rejected with no reason code. A rejection audit names the
+`staff.login_failed` rejected with no reason code. The success audit names
+the signed-in account as both actor and entity. A rejection audit names the
 account the normalized address matched as both actor and entity, also when
 the account is not active, not verified or the password is wrong; actor and
 entity are empty only when no account matched, and the actor kind is staff
@@ -2504,7 +2505,8 @@ already reached is stored but never authenticates.
 ### Outputs
 
 `ServiceCredentialIssue`: the new `ServiceCredential` with the next
-`key_version` and the secret in plaintext, returned once. Of two
+`key_version` (1 for the principal's first credential, otherwise the
+greatest it has had plus one) and the secret in plaintext, returned once. Of two
 concurrent issuances for one principal that pick the same key version, the
 uniqueness of (`service_principal_id`, `key_version`) lets one commit; the
 other fails as a persistence failure and writes nothing.
@@ -2515,9 +2517,11 @@ None.
 
 ### Enforces
 
-A12, A17 (secret issued for the fresh `credential_id`; only the hash
+A12, A17 (a 32-byte secret, the source-fixed A30 entropy of
+`create_runtime_app`, issued for the fresh `credential_id`; only the hash
 stored); earlier credentials stay valid until revoked; A13
-(`principal.credential_issue` with the key version).
+(`principal.credential_issue` naming the new credential as entity, with
+its key version).
 
 ### Errors
 
@@ -2840,7 +2844,9 @@ is created).
 
 ### Errors
 
-A persistence failure propagates.
+A persistence failure propagates. Of two concurrent first calls that both
+find no manual version, the one-manual-version uniqueness lets one commit;
+the other fails as a persistence failure and writes nothing.
 
 ### State impact
 
@@ -3071,7 +3077,8 @@ supplier, the document date, the total, the inclusion flag and the complete
 
 ### Outputs
 
-`ExpenseOperationOutcome` with the corrected aggregate, not a replay.
+`ExpenseOperationOutcome` with the corrected aggregate, not a replay; its
+new allocations are in the caller's instruction order.
 
 ### Observable effect
 
@@ -3082,9 +3089,9 @@ None.
 A9 (the total in EUR, non-negative), A19 (every section target of this
 project, exact sum), A24, A13 (`expense.correct`); no intermediate state
 commits. The allocation list must hold at least one instruction whatever
-the total; an empty list is refused, a zero total included. An individual
-amount is not otherwise checked (State 1 M26), so a zero total is corrected
-with, for example, one zero allocation.
+the total; an empty list is refused, a zero total included. An amount's
+sign is not checked (State 1 M26), so a zero total is corrected with, for
+example, one zero allocation.
 
 ### Errors
 
@@ -3153,7 +3160,8 @@ The `PortalStore`, an `AuthorizedProjectContext`, the `expense_id` and the
 
 ### Outputs
 
-`ExpenseOperationOutcome` with the updated aggregate, not a replay.
+`ExpenseOperationOutcome` with the updated aggregate, not a replay; its new
+allocations are in the caller's instruction order.
 
 ### Observable effect
 
@@ -4195,8 +4203,13 @@ readiness at `/health/ready`, each answering exactly `HealthStatus`; the
 transport guard installed before mounting; the inner application mounted at
 `/api` and then at `/`. It implements no transport policy itself. The
 settings handed here reach only the store and the transport guard: the
-inner application and the use cases receive no `RuntimeSettings`; which
-knobs a deployment can change is carried to States 6–7 (`SOURCE.md`). The
+inner application and the use cases receive no `RuntimeSettings`. In the
+running service every A30 value without an `_env_name` (the staff and
+viewer session lifetimes, the other TTLs and limits, and the 32-byte
+credential entropy) is fixed in the use cases' source, so a deployment
+cannot change it; nothing beyond the store and transport settings is
+propagated, a named exception to A30's "deployment
+values may differ" (`SOURCE.md` "Accepted service quirks"). The
 inner application answers at both prefixes, so a route is reached whether
 or not the proxy has stripped `/api`; behind the stripping proxy a path that
 repeats the prefix (`/api/api/…`) reaches the same route, and no route

@@ -1,0 +1,106 @@
+{
+ "open_points": [
+  {
+   "unit": "50_public_apis.md:`public_op:audit_writer.append_audit`",
+   "subject": "append_audit validation failure",
+   "kind": "unspecified error",
+   "text": "“A closed-choice violation of the intent is rejected” does not name the exception raised, while the conventions require each operation to raise a declared exception.",
+   "question": "What exception must append_audit raise when an AuditIntent violates its actor, key-version, result/reason, entity-id, or catalog constraints?",
+   "options": [
+    "Raise a built-in validation exception such as ValueError",
+    "Define and raise an audit-writer validation exception",
+    "Treat the violation as PersistenceError",
+    "Assume a valid AuditIntent cannot violate these constraints and remove this error path"
+   ],
+   "default_guess": "Raise ValueError before attempting the repository insert.",
+   "witness": {
+    "initial": "A caller owns an open transaction and has an AuditRepository port.",
+    "events": [
+     "The caller invokes append_audit with a success AuditIntent that incorrectly carries a reason_code."
+    ],
+    "outcomes": [
+     "The writer raises ValueError and the caller's transaction guard rolls back.",
+     "The writer raises a module-specific audit validation exception and the caller must classify or propagate that different error."
+    ],
+    "observer": "The calling use-case module and its tests see the exception type."
+   }
+  },
+  {
+   "unit": "50_public_apis.md:`public_op:budget_management.ensure_manual_budget`",
+   "subject": "concurrent first manual-budget creation",
+   "kind": "unspecified concurrency outcome",
+   "text": "“Return the project's one manual budget version, creating it empty when absent” and “at most one manual version per project” do not say what the losing operation does when two calls both observe absence and contend on the unique constraint.",
+   "question": "When concurrent ensure_manual_budget calls race to create the first manual version, must the loser re-read and return the winner's version, or fail with PersistenceError?",
+   "options": [
+    "One creates and the other re-reads and returns the same version",
+    "One creates and the other fails with PersistenceError",
+    "Serialize creation so the second observes the existing version before inserting"
+   ],
+   "default_guess": "After the uniqueness collision, re-read and return the version created by the winner.",
+   "witness": {
+    "initial": "An active or archived project has no manual BudgetVersion, and two authorized staff progress-list requests are in flight.",
+    "events": [
+     "Staff A calls list_project_progress, which calls ensure_manual_budget after observing no manual version.",
+     "Staff B concurrently does the same before A commits."
+    ],
+    "outcomes": [
+     "A creates the version; B handles the uniqueness race by reading and returning that same version, so both progress reads succeed.",
+     "A creates the version; B's insert hits the unique constraint and its progress read fails with PersistenceError/HTTP 500."
+    ],
+    "observer": "Staff B sees either a successful progress list or a 500 response."
+   }
+  },
+  {
+   "unit": "50_public_apis.md:`public_op:expense_management.correct_expense`",
+   "subject": "fractional precision of allocation amounts",
+   "kind": "contradiction",
+   "text": "The modeling convention says stored money has exactly two fraction digits, but correct_expense says “An individual amount is not otherwise checked,” while AllocationInstruction permits any-sign Decimal amounts.",
+   "question": "How must correct_expense handle allocation amounts with more than two fraction digits: reject them, quantize them, or store them exactly despite the two-digit stored-money rule?",
+   "options": [
+    "Reject an allocation amount that is not already two-digit exact",
+    "Quantize every allocation ROUND_HALF_UP before checking the sum and storing it",
+    "Check and store allocation amounts exactly as supplied, allowing more than two fraction digits"
+   ],
+   "default_guess": "Follow the operation-specific accepted behavior and store allocation amounts exactly as supplied.",
+   "witness": {
+    "initial": "An active project contains an expense that staff may correct.",
+    "events": [
+     "Staff submits a corrected total of 10.00 EUR with two allocations: -0.001 and 10.001; their exact sum is 10.00."
+    ],
+    "outcomes": [
+     "The correction succeeds and stores the two three-decimal allocation amounts because individual amounts are not otherwise checked.",
+     "The correction is refused with 422 because stored money must have exactly two fraction digits."
+    ],
+    "observer": "The staff caller sees success versus 422, and later expense views expose different allocation data."
+   }
+  },
+  {
+   "unit": "50_public_apis.md:`public_op:runtime.create_runtime_app`",
+   "subject": "runtime settings propagation to use cases",
+   "kind": "contradictory composition",
+   "text": "create_runtime_app says “The settings handed here reach only the store and the transport guard: the inner application and the use cases receive no RuntimeSettings,” while A30 makes staff/viewer session TTLs, credential entropy and other identity values deployment knobs consumed by those use cases.",
+   "question": "How do identity and other use-case operations receive the configured values when runtime passes settings only to PortalStore and transport_guard?",
+   "options": [
+    "Inject the relevant settings into the inner application and its use-case dependencies",
+    "Publish the loaded settings through process-global state",
+    "Have use cases re-read environment variables",
+    "Ignore deployment overrides and use source defaults"
+   ],
+   "default_guess": "Inject immutable settings-derived dependencies into the inner application and use cases.",
+   "witness": {
+    "initial": "The deployment sets the staff-session TTL to 1 hour instead of its 12-hour default and starts the service through create_runtime_app.",
+    "events": [
+     "A staff member successfully authenticates immediately after startup."
+    ],
+    "outcomes": [
+     "The issued StaffSessionGrant expires one hour after creation because the configured TTL reaches staff_identity.",
+     "The issued grant expires twelve hours after creation because staff_identity receives no runtime settings and uses the default."
+    ],
+    "observer": "The staff client sees the differing expires_at value and session lifetime."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"50_public_apis.md:`public_op:audit_writer.append_audit`\",\"subject\":\"append_audit validation failure\",\"kind\":\"unspecified error\",\"text\":\"“A closed-choice violation of the intent is rejected” does not name the exception raised, while the conventions require each operation to raise a declared exception.\",\"question\":\"What exception must append_audit raise when an AuditIntent violates its actor, key-version, result/reason, entity-id, or catalog constraints?\",\"options\":[\"Raise a built-in validation exception such as ValueError\",\"Define and raise an audit-writer validation exception\",\"Treat the violation as PersistenceError\",\"Assume a valid AuditIntent cannot violate these constraints and remove this error path\"],\"default_guess\":\"Raise ValueError before attempting the repository insert.\",\"witness\":{\"initial\":\"A caller owns an open transaction and has an AuditRepository port.\",\"events\":[\"The caller invokes append_audit with a success AuditIntent that incorrectly carries a reason_code.\"],\"outcomes\":[\"The writer raises ValueError and the caller's transaction guard rolls back.\",\"The writer raises a module-specific audit validation exception and the caller must classify or propagate that different error.\"],\"observer\":\"The calling use-case module and its tests see the exception type.\"}},{\"unit\":\"50_public_apis.md:`public_op:budget_management.ensure_manual_budget`\",\"subject\":\"concurrent first manual-budget creation\",\"kind\":\"unspecified concurrency outcome\",\"text\":\"“Return the project's one manual budget version, creating it empty when absent” and “at most one manual version per project” do not say what the losing operation does when two calls both observe absence and contend on the unique constraint.\",\"question\":\"When concurrent ensure_manual_budget calls race to create the first manual version, must the loser re-read and return the winner's version, or fail with PersistenceError?\",\"options\":[\"One creates and the other re-reads and returns the same version\",\"One creates and the other fails with PersistenceError\",\"Serialize creation so the second observes the existing version before inserting\"],\"default_guess\":\"After the uniqueness collision, re-read and return the version created by the winner.\",\"witness\":{\"initial\":\"An active or archived project has no manual BudgetVersion, and two authorized staff progress-list requests are in flight.\",\"events\":[\"Staff A calls list_project_progress, which calls ensure_manual_budget after observing no manual version.\",\"Staff B concurrently does the same before A commits.\"],\"outcomes\":[\"A creates the version; B handles the uniqueness race by reading and returning that same version, so both progress reads succeed.\",\"A creates the version; B's insert hits the unique constraint and its progress read fails with PersistenceError/HTTP 500.\"],\"observer\":\"Staff B sees either a successful progress list or a 500 response.\"}},{\"unit\":\"50_public_apis.md:`public_op:expense_management.correct_expense`\",\"subject\":\"fractional precision of allocation amounts\",\"kind\":\"contradiction\",\"text\":\"The modeling convention says stored money has exactly two fraction digits, but correct_expense says “An individual amount is not otherwise checked,” while AllocationInstruction permits any-sign Decimal amounts.\",\"question\":\"How must correct_expense handle allocation amounts with more than two fraction digits: reject them, quantize them, or store them exactly despite the two-digit stored-money rule?\",\"options\":[\"Reject an allocation amount that is not already two-digit exact\",\"Quantize every allocation ROUND_HALF_UP before checking the sum and storing it\",\"Check and store allocation amounts exactly as supplied, allowing more than two fraction digits\"],\"default_guess\":\"Follow the operation-specific accepted behavior and store allocation amounts exactly as supplied.\",\"witness\":{\"initial\":\"An active project contains an expense that staff may correct.\",\"events\":[\"Staff submits a corrected total of 10.00 EUR with two allocations: -0.001 and 10.001; their exact sum is 10.00.\"],\"outcomes\":[\"The correction succeeds and stores the two three-decimal allocation amounts because individual amounts are not otherwise checked.\",\"The correction is refused with 422 because stored money must have exactly two fraction digits.\"],\"observer\":\"The staff caller sees success versus 422, and later expense views expose different allocation data.\"}},{\"unit\":\"50_public_apis.md:`public_op:runtime.create_runtime_app`\",\"subject\":\"runtime settings propagation to use cases\",\"kind\":\"contradictory composition\",\"text\":\"create_runtime_app says “The settings handed here reach only the store and the transport guard: the inner application and the use cases receive no RuntimeSettings,” while A30 makes staff/viewer session TTLs, credential entropy and other identity values deployment knobs consumed by those use cases.\",\"question\":\"How do identity and other use-case operations receive the configured values when runtime passes settings only to PortalStore and transport_guard?\",\"options\":[\"Inject the relevant settings into the inner application and its use-case dependencies\",\"Publish the loaded settings through process-global state\",\"Have use cases re-read environment variables\",\"Ignore deployment overrides and use source defaults\"],\"default_guess\":\"Inject immutable settings-derived dependencies into the inner application and use cases.\",\"witness\":{\"initial\":\"The deployment sets the staff-session TTL to 1 hour instead of its 12-hour default and starts the service through create_runtime_app.\",\"events\":[\"A staff member successfully authenticates immediately after startup.\"],\"outcomes\":[\"The issued StaffSessionGrant expires one hour after creation because the configured TTL reaches staff_identity.\",\"The issued grant expires twelve hours after creation because staff_identity receives no runtime settings and uses the default.\"],\"observer\":\"The staff client sees the differing expires_at value and session lifetime.\"}}]}",
+ "set_aside": []
+}

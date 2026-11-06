@@ -1,0 +1,104 @@
+{
+ "open_points": [
+  {
+   "subject": "public_op:audit_writer.append_audit",
+   "kind": "unspecified error",
+   "text": "“A closed-choice violation of the intent is rejected” does not name the exception raised, although the conventions require declared exceptions and map undeclared failures to 500.",
+   "question": "Which exception type and payload must append_audit raise when an AuditIntent violates the catalog, reason, key-version, actor, or canonical entity-id rules?",
+   "options": [
+    "Raise a dedicated audit-validation exception",
+    "Raise a generic model/value validation exception",
+    "Treat the violation as an unclassified internal failure"
+   ],
+   "default_guess": "Raise a dedicated audit-validation exception before inserting anything.",
+   "witness": {
+    "initial": "A caller has an open transaction and an AuditIntent whose entity_id is an uppercase UUID string, forbidden by A23.",
+    "events": [
+     "The owning use case calls audit_writer.append_audit with that intent."
+    ],
+    "outcomes": [
+     "The writer raises a validation exception that the caller can distinguish from persistence failure.",
+     "The writer raises ValueError or another undeclared exception, which an HTTP path exposes only as the default 500."
+    ],
+    "observer": "The calling use case and, if uncaught, its HTTP caller."
+   },
+   "unit": "50_public_apis.md:`public_op:audit_writer.append_audit`"
+  },
+  {
+   "subject": "public_op:budget_management.ensure_manual_budget",
+   "kind": "concurrency outcome unspecified",
+   "text": "“Return the project's one manual budget version, creating it empty when absent” and “at most one manual version per project” do not fix the result of two calls that both observe the version as absent.",
+   "question": "When concurrent ensure_manual_budget calls race to create the first manual version, must both succeed and return the same version, or may one fail with PersistenceError?",
+   "options": [
+    "Serialize or recover the uniqueness race so both calls return the one version",
+    "Allow one call to commit and the other to fail with PersistenceError"
+   ],
+   "default_guess": "Recover the uniqueness race and return the version committed by the winning call.",
+   "witness": {
+    "initial": "An active project has no manual BudgetVersion.",
+    "events": [
+     "Staff member A calls ensure_manual_budget.",
+     "Before A commits, staff member B calls ensure_manual_budget for the same project."
+    ],
+    "outcomes": [
+     "Exactly one version and audit are created, and both calls return that version.",
+     "Exactly one version and audit are created, but one caller receives PersistenceError from the unique constraint."
+    ],
+    "observer": "Staff member A or B through the corresponding API request."
+   },
+   "unit": "50_public_apis.md:`public_op:budget_management.ensure_manual_budget`"
+  },
+  {
+   "subject": "public_op:expense_management.correct_expense",
+   "kind": "precision contradiction",
+   "text": "The operation says “An individual amount is not otherwise checked,” while A9 and the State 1 modeling convention require stored monetary amounts to have exactly two fraction digits.",
+   "question": "How must correction allocation amounts with more than two fraction digits be handled: stored unchanged, rounded, or rejected?",
+   "options": [
+    "Accept and store the exact arbitrary-scale Decimal",
+    "Round every allocation amount to two digits before checking the sum",
+    "Reject allocation amounts that are not already exact two-digit EUR values"
+   ],
+   "default_guess": "Reject allocation amounts that are not already exact two-digit EUR values.",
+   "witness": {
+    "initial": "An expense has total_amount EUR 10.00.",
+    "events": [
+     "Staff corrects it with allocation amounts 10.005 and -0.005, whose exact sum is 10.000."
+    ],
+    "outcomes": [
+     "Following correct_expense literally, the correction succeeds and stores allocation amounts with three fraction digits.",
+     "Following A9, the operation rejects the amounts or rounds them, potentially making the submitted allocation sum invalid."
+    ],
+    "observer": "The staff caller reading the corrected aggregate and later financial views."
+   },
+   "unit": "50_public_apis.md:`public_op:expense_management.correct_expense`"
+  },
+  {
+   "subject": "public_op:runtime.create_runtime_app",
+   "kind": "configuration wiring contradiction",
+   "text": "The operation says “The settings handed here reach only the store and the transport guard,” while State 3 says other modules use runtime settings handed to them and A30 makes staff/viewer TTLs and other values deployment knobs.",
+   "question": "How do use cases receive deployment-specific settings such as staff_session_ttl_hours and viewer_session_ttl_days if create_runtime_app passes RuntimeSettings only to the store and transport guard and api.create_app accepts only PortalStore?",
+   "options": [
+    "Pass RuntimeSettings or selected configuration values through application construction to the use cases",
+    "Install the loaded settings in process-global configuration read by use cases",
+    "Ignore deployment overrides outside the store and transport guard and use source defaults"
+   ],
+   "default_guess": "Pass the required immutable settings explicitly through application construction.",
+   "witness": {
+    "initial": "A deployment sets staff_session_ttl_hours to 24 instead of the default 12 and load_runtime_settings returns 24.",
+    "events": [
+     "The deployment calls runtime.create_runtime_app with those settings.",
+     "A staff member authenticates successfully."
+    ],
+    "outcomes": [
+     "The issued session expires after 24 hours because the loaded setting reaches staff_identity.",
+     "The issued session expires after 12 hours because staff_identity receives only the store and uses the source default."
+    ],
+    "observer": "The staff member and deployment operator."
+   },
+   "unit": "50_public_apis.md:`public_op:runtime.create_runtime_app`"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"public_op:audit_writer.append_audit\",\"kind\":\"unspecified error\",\"text\":\"“A closed-choice violation of the intent is rejected” does not name the exception raised, although the conventions require declared exceptions and map undeclared failures to 500.\",\"question\":\"Which exception type and payload must append_audit raise when an AuditIntent violates the catalog, reason, key-version, actor, or canonical entity-id rules?\",\"options\":[\"Raise a dedicated audit-validation exception\",\"Raise a generic model/value validation exception\",\"Treat the violation as an unclassified internal failure\"],\"default_guess\":\"Raise a dedicated audit-validation exception before inserting anything.\",\"witness\":{\"initial\":\"A caller has an open transaction and an AuditIntent whose entity_id is an uppercase UUID string, forbidden by A23.\",\"events\":[\"The owning use case calls audit_writer.append_audit with that intent.\"],\"outcomes\":[\"The writer raises a validation exception that the caller can distinguish from persistence failure.\",\"The writer raises ValueError or another undeclared exception, which an HTTP path exposes only as the default 500.\"],\"observer\":\"The calling use case and, if uncaught, its HTTP caller.\"},\"unit\":\"50_public_apis.md:`public_op:audit_writer.append_audit`\"},{\"subject\":\"public_op:budget_management.ensure_manual_budget\",\"kind\":\"concurrency outcome unspecified\",\"text\":\"“Return the project's one manual budget version, creating it empty when absent” and “at most one manual version per project” do not fix the result of two calls that both observe the version as absent.\",\"question\":\"When concurrent ensure_manual_budget calls race to create the first manual version, must both succeed and return the same version, or may one fail with PersistenceError?\",\"options\":[\"Serialize or recover the uniqueness race so both calls return the one version\",\"Allow one call to commit and the other to fail with PersistenceError\"],\"default_guess\":\"Recover the uniqueness race and return the version committed by the winning call.\",\"witness\":{\"initial\":\"An active project has no manual BudgetVersion.\",\"events\":[\"Staff member A calls ensure_manual_budget.\",\"Before A commits, staff member B calls ensure_manual_budget for the same project.\"],\"outcomes\":[\"Exactly one version and audit are created, and both calls return that version.\",\"Exactly one version and audit are created, but one caller receives PersistenceError from the unique constraint.\"],\"observer\":\"Staff member A or B through the corresponding API request.\"},\"unit\":\"50_public_apis.md:`public_op:budget_management.ensure_manual_budget`\"},{\"subject\":\"public_op:expense_management.correct_expense\",\"kind\":\"precision contradiction\",\"text\":\"The operation says “An individual amount is not otherwise checked,” while A9 and the State 1 modeling convention require stored monetary amounts to have exactly two fraction digits.\",\"question\":\"How must correction allocation amounts with more than two fraction digits be handled: stored unchanged, rounded, or rejected?\",\"options\":[\"Accept and store the exact arbitrary-scale Decimal\",\"Round every allocation amount to two digits before checking the sum\",\"Reject allocation amounts that are not already exact two-digit EUR values\"],\"default_guess\":\"Reject allocation amounts that are not already exact two-digit EUR values.\",\"witness\":{\"initial\":\"An expense has total_amount EUR 10.00.\",\"events\":[\"Staff corrects it with allocation amounts 10.005 and -0.005, whose exact sum is 10.000.\"],\"outcomes\":[\"Following correct_expense literally, the correction succeeds and stores allocation amounts with three fraction digits.\",\"Following A9, the operation rejects the amounts or rounds them, potentially making the submitted allocation sum invalid.\"],\"observer\":\"The staff caller reading the corrected aggregate and later financial views.\"},\"unit\":\"50_public_apis.md:`public_op:expense_management.correct_expense`\"},{\"subject\":\"public_op:runtime.create_runtime_app\",\"kind\":\"configuration wiring contradiction\",\"text\":\"The operation says “The settings handed here reach only the store and the transport guard,” while State 3 says other modules use runtime settings handed to them and A30 makes staff/viewer TTLs and other values deployment knobs.\",\"question\":\"How do use cases receive deployment-specific settings such as staff_session_ttl_hours and viewer_session_ttl_days if create_runtime_app passes RuntimeSettings only to the store and transport guard and api.create_app accepts only PortalStore?\",\"options\":[\"Pass RuntimeSettings or selected configuration values through application construction to the use cases\",\"Install the loaded settings in process-global configuration read by use cases\",\"Ignore deployment overrides outside the store and transport guard and use source defaults\"],\"default_guess\":\"Pass the required immutable settings explicitly through application construction.\",\"witness\":{\"initial\":\"A deployment sets staff_session_ttl_hours to 24 instead of the default 12 and load_runtime_settings returns 24.\",\"events\":[\"The deployment calls runtime.create_runtime_app with those settings.\",\"A staff member authenticates successfully.\"],\"outcomes\":[\"The issued session expires after 24 hours because the loaded setting reaches staff_identity.\",\"The issued session expires after 12 hours because staff_identity receives only the store and uses the source default.\"],\"observer\":\"The staff member and deployment operator.\"},\"unit\":\"50_public_apis.md:`public_op:runtime.create_runtime_app`\"}]}",
+ "set_aside": []
+}
