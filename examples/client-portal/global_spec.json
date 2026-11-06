@@ -256,6 +256,7 @@
     "PortalTransaction._translate_persistence_error": "(self, error: BaseException) -> PersistenceError",
     "PortalTransaction._assert_open": "(self) -> None",
     "create_app": "(store: PortalStore) -> FastAPI",
+    "_bearer_token": "(request: Request) -> str",
     "staff_login_endpoint": "(request: Request, payload: StaffLoginRequest) -> StaffSessionGrant",
     "staff_logout_endpoint": "(request: Request) -> None",
     "confirm_staff_email_endpoint": "(request: Request, payload: StaffEmailConfirmationRequest) -> StaffAccountView",
@@ -309,7 +310,6 @@
     "_service_credential_response": "(issue: ServiceCredentialIssue) -> ServiceCredentialIssueResponse",
     "_expense_mutation_result": "(outcome: ExpenseOperationOutcome) -> ExpenseMutationResult",
     "_document_mutation_result": "(document: ExpenseDocument) -> DocumentMutationResult",
-    "_bearer_token": "(request: Request) -> str",
     "StaffAccessRepository.get_staff_by_email": "(self, normalized_email: str) -> StaffAccount | None",
     "StaffAccessRepository.get_staff": "(self, staff_id: UUID) -> StaffAccount | None",
     "StaffAccessRepository.get_staff_session": "(self, session_id: UUID) -> StaffSession | None",
@@ -1422,54 +1422,57 @@
   "config": {
     "role": "data",
     "schema_version": 1,
-    "registry_endpoint_env_name": "REGISTRY_BASE_URL",
-    "registry_timeout_seconds": 5,
-    "email_gateway_url_env_name": "EMAIL_GATEWAY_URL",
-    "email_gateway_timeout_seconds": 10,
-    "staff_session_ttl_hours": 12,
-    "viewer_session_ttl_days": 30,
-    "email_verification_ttl_hours": 72,
-    "email_change_ttl_hours": 24,
-    "password_reset_ttl_minutes": 60,
-    "email_challenge_rate_limit_per_hour": 5,
+    "binary_read_limit_env_name": "= config.runtime_environment_variables.variables.BINARY_MAX_READ_BYTES",
     "credential_entropy_bytes": 32,
     "credential_hash_scheme": "argon2id",
-    "binary_read_limit_env_name": "= config.runtime_environment_variables.variables.BINARY_MAX_READ_BYTES",
+    "email_challenge_rate_limit_per_hour": 5,
+    "email_change_ttl_hours": 24,
+    "email_gateway_timeout_seconds": 10,
+    "email_gateway_url_env_name": "EMAIL_GATEWAY_URL",
+    "email_verification_ttl_hours": 72,
+    "password_reset_ttl_minutes": 60,
     "persistence": {
-      "storage_schema_revision": 13,
-      "audit_table_name": "audit_records",
-      "section_progress_table_name": "section_progress",
-      "work_payment_table_name": "work_payments",
-      "project_section_table_name": "portal_sections",
-      "budget_version_table_name": "budget_versions",
-      "section_plan_table_name": "section_plans",
       "approved_snapshot_table_name": "approved_estimate_snapshots",
-      "snapshot_import_table_name": "snapshot_import_records",
-      "expense_table_name": "expenses",
+      "audit_table_name": "audit_records",
+      "budget_version_table_name": "budget_versions",
+      "email_delivery_table_name": "email_deliveries",
       "expense_allocation_table_name": "expense_allocations",
       "expense_document_table_name": "expense_documents",
+      "expense_table_name": "expenses",
+      "producer_grant_table_name": "producer_project_grants",
       "progress_photo_table_name": "progress_photos",
-      "email_delivery_table_name": "email_deliveries",
-      "staff_account_table_name": "staff_accounts",
-      "staff_session_table_name": "staff_sessions",
-      "staff_assignment_table_name": "staff_project_assignments",
-      "viewer_table_name": "client_viewers",
-      "viewer_credential_table_name": "viewer_access_credentials",
-      "viewer_session_table_name": "viewer_sessions",
-      "viewer_grant_table_name": "project_viewer_grants",
-      "service_principal_table_name": "service_principals",
+      "project_section_table_name": "portal_sections",
+      "section_plan_table_name": "section_plans",
+      "section_progress_table_name": "section_progress",
       "service_credential_table_name": "service_credentials",
-      "producer_grant_table_name": "producer_project_grants"
+      "service_principal_table_name": "service_principals",
+      "snapshot_import_table_name": "snapshot_import_records",
+      "staff_account_table_name": "staff_accounts",
+      "staff_assignment_table_name": "staff_project_assignments",
+      "staff_session_table_name": "staff_sessions",
+      "storage_schema_revision": 13,
+      "viewer_credential_table_name": "viewer_access_credentials",
+      "viewer_grant_table_name": "project_viewer_grants",
+      "viewer_session_table_name": "viewer_sessions",
+      "viewer_table_name": "client_viewers",
+      "work_payment_table_name": "work_payments"
     },
+    "registry_endpoint_env_name": "REGISTRY_BASE_URL",
     "registry_request_paths": {
       "active_projects": "projects",
-      "project_validate": "projects/{project_id}/validate",
-      "project_context": "projects/{project_id}/context"
+      "project_context": "projects/{project_id}/context",
+      "project_validate": "projects/{project_id}/validate"
     },
+    "registry_timeout_seconds": 5,
     "runtime_environment_variables": {
       "kind": "runtime_environment_variables",
       "schema": {
         "closed": true,
+        "default_environments": [
+          "development",
+          "test",
+          "production"
+        ],
         "entry_fields": [
           "target",
           "value_type",
@@ -1479,19 +1482,6 @@
           "accepted_values",
           "validation_reference"
         ],
-        "value_types": [
-          "string",
-          "runtime_environment",
-          "origin",
-          "comma_separated_list",
-          "positive_integer",
-          "boolean"
-        ],
-        "requiredness_values": [
-          "required",
-          "optional",
-          "required_in_production"
-        ],
         "normalization_values": [
           "none",
           "trim_lowercase",
@@ -1499,184 +1489,194 @@
           "split_comma_trim",
           "base10_integer"
         ],
-        "default_environments": [
-          "development",
-          "test",
-          "production"
+        "requiredness_values": [
+          "required",
+          "optional",
+          "required_in_production"
+        ],
+        "value_types": [
+          "string",
+          "runtime_environment",
+          "origin",
+          "comma_separated_list",
+          "positive_integer",
+          "boolean"
         ]
       },
       "variables": {
-        "DATABASE_URL": {
-          "target": "RuntimeSettings.database_url",
-          "value_type": "string",
-          "requiredness": "required",
-          "normalization": "none",
-          "default_when_absent": {
-            "development": null,
-            "test": null,
-            "production": null
-          },
-          "accepted_values": null,
-          "validation_reference": null
-        },
-        "ENVIRONMENT": {
-          "target": "RuntimeSettings.environment",
-          "value_type": "runtime_environment",
-          "requiredness": "required",
-          "normalization": "trim_lowercase",
-          "default_when_absent": {
-            "development": null,
-            "test": null,
-            "production": null
-          },
-          "accepted_values": "= models.RuntimeEnvironment",
-          "validation_reference": "= models.RuntimeEnvironment"
-        },
-        "PUBLIC_ORIGIN": {
-          "target": "RuntimeSettings.public_origin",
-          "value_type": "origin",
-          "requiredness": "required",
-          "normalization": "canonical_origin",
-          "default_when_absent": {
-            "development": null,
-            "test": null,
-            "production": null
-          },
-          "accepted_values": null,
-          "validation_reference": "= rules.http_transport_policy.browser_session.mutation_origin_policy"
-        },
-        "TRUSTED_HOSTS": {
-          "target": "RuntimeSettings.trusted_hosts",
-          "value_type": "comma_separated_list",
-          "requiredness": "required",
-          "normalization": "split_comma_trim",
-          "default_when_absent": {
-            "development": null,
-            "test": null,
-            "production": null
-          },
-          "accepted_values": null,
-          "validation_reference": "= rules.http_transport_policy.trusted_hosts"
-        },
         "ALLOWED_ORIGINS": {
-          "target": "RuntimeSettings.allowed_origins",
-          "value_type": "comma_separated_list",
-          "requiredness": "optional",
-          "normalization": "split_comma_trim",
+          "accepted_values": null,
           "default_when_absent": {
             "development": [],
-            "test": [],
-            "production": []
+            "production": [],
+            "test": []
           },
-          "accepted_values": null,
-          "validation_reference": "= rules.http_transport_policy.cors"
-        },
-        "MAX_REQUEST_BODY_BYTES": {
-          "target": "RuntimeSettings.max_request_body_bytes",
-          "value_type": "positive_integer",
-          "requiredness": "required",
-          "normalization": "base10_integer",
-          "default_when_absent": {
-            "development": null,
-            "test": null,
-            "production": null
-          },
-          "accepted_values": null,
-          "validation_reference": "= rules.http_transport_policy.limits.request_body_bytes"
-        },
-        "MAX_BINARY_RESPONSE_BYTES": {
-          "target": "RuntimeSettings.max_binary_response_bytes",
-          "value_type": "positive_integer",
-          "requiredness": "required",
-          "normalization": "base10_integer",
-          "default_when_absent": {
-            "development": null,
-            "test": null,
-            "production": null
-          },
-          "accepted_values": null,
-          "validation_reference": "= rules.binary_delivery_policy.size_bounds"
+          "normalization": "split_comma_trim",
+          "requiredness": "optional",
+          "target": "RuntimeSettings.allowed_origins",
+          "validation_reference": "= rules.http_transport_policy.cors",
+          "value_type": "comma_separated_list"
         },
         "BINARY_MAX_READ_BYTES": {
-          "target": "validation_only",
-          "value_type": "positive_integer",
-          "requiredness": "required",
-          "normalization": "base10_integer",
+          "accepted_values": null,
           "default_when_absent": {
             "development": null,
-            "test": null,
-            "production": null
+            "production": null,
+            "test": null
           },
+          "normalization": "base10_integer",
+          "requiredness": "required",
+          "target": "validation_only",
+          "validation_reference": "= rules.binary_delivery_policy.size_bounds",
+          "value_type": "positive_integer"
+        },
+        "BINARY_STORAGE_ROOT": {
           "accepted_values": null,
-          "validation_reference": "= rules.binary_delivery_policy.size_bounds"
+          "default_when_absent": {
+            "development": null,
+            "production": null,
+            "test": null
+          },
+          "normalization": "none",
+          "requiredness": "required",
+          "target": "validation_only",
+          "validation_reference": "= rules.binary_storage_backend",
+          "value_type": "string"
+        },
+        "DATABASE_URL": {
+          "accepted_values": null,
+          "default_when_absent": {
+            "development": null,
+            "production": null,
+            "test": null
+          },
+          "normalization": "none",
+          "requiredness": "required",
+          "target": "RuntimeSettings.database_url",
+          "validation_reference": null,
+          "value_type": "string"
+        },
+        "ENVIRONMENT": {
+          "accepted_values": "= models.RuntimeEnvironment",
+          "default_when_absent": {
+            "development": null,
+            "production": null,
+            "test": null
+          },
+          "normalization": "trim_lowercase",
+          "requiredness": "required",
+          "target": "RuntimeSettings.environment",
+          "validation_reference": "= models.RuntimeEnvironment",
+          "value_type": "runtime_environment"
+        },
+        "MAX_BINARY_RESPONSE_BYTES": {
+          "accepted_values": null,
+          "default_when_absent": {
+            "development": null,
+            "production": null,
+            "test": null
+          },
+          "normalization": "base10_integer",
+          "requiredness": "required",
+          "target": "RuntimeSettings.max_binary_response_bytes",
+          "validation_reference": "= rules.binary_delivery_policy.size_bounds",
+          "value_type": "positive_integer"
+        },
+        "MAX_REQUEST_BODY_BYTES": {
+          "accepted_values": null,
+          "default_when_absent": {
+            "development": null,
+            "production": null,
+            "test": null
+          },
+          "normalization": "base10_integer",
+          "requiredness": "required",
+          "target": "RuntimeSettings.max_request_body_bytes",
+          "validation_reference": "= rules.http_transport_policy.limits.request_body_bytes",
+          "value_type": "positive_integer"
         },
         "PRODUCTION_LOGGING": {
-          "target": "RuntimeSettings.production_logging",
-          "value_type": "boolean",
-          "requiredness": "required",
-          "normalization": "trim_lowercase",
-          "default_when_absent": {
-            "development": null,
-            "test": null,
-            "production": null
-          },
           "accepted_values": {
-            "true": [
-              "true",
-              "1",
-              "yes",
-              "on"
-            ],
             "false": [
               "false",
               "0",
               "no",
               "off"
+            ],
+            "true": [
+              "true",
+              "1",
+              "yes",
+              "on"
             ]
           },
-          "validation_reference": null
-        },
-        "VIEWER_ENTRY_RATE_LIMIT_ATTEMPTS": {
-          "target": "RuntimeSettings.viewer_entry_rate_limit_attempts",
-          "value_type": "positive_integer",
-          "requiredness": "required_in_production",
-          "normalization": "base10_integer",
-          "default_when_absent": {
-            "development": 10,
-            "test": 10,
-            "production": null
-          },
-          "accepted_values": null,
-          "validation_reference": "= rules.http_transport_policy.limits.viewer_entry.attempts"
-        },
-        "VIEWER_ENTRY_RATE_LIMIT_WINDOW_SECONDS": {
-          "target": "RuntimeSettings.viewer_entry_rate_limit_window_seconds",
-          "value_type": "positive_integer",
-          "requiredness": "required_in_production",
-          "normalization": "base10_integer",
-          "default_when_absent": {
-            "development": 60,
-            "test": 60,
-            "production": null
-          },
-          "accepted_values": null,
-          "validation_reference": "= rules.http_transport_policy.limits.viewer_entry.window_seconds"
-        },
-        "BINARY_STORAGE_ROOT": {
-          "target": "validation_only",
-          "value_type": "string",
-          "requiredness": "required",
-          "normalization": "none",
           "default_when_absent": {
             "development": null,
-            "test": null,
-            "production": null
+            "production": null,
+            "test": null
           },
+          "normalization": "trim_lowercase",
+          "requiredness": "required",
+          "target": "RuntimeSettings.production_logging",
+          "validation_reference": null,
+          "value_type": "boolean"
+        },
+        "PUBLIC_ORIGIN": {
           "accepted_values": null,
-          "validation_reference": "= rules.binary_storage_backend"
+          "default_when_absent": {
+            "development": null,
+            "production": null,
+            "test": null
+          },
+          "normalization": "canonical_origin",
+          "requiredness": "required",
+          "target": "RuntimeSettings.public_origin",
+          "validation_reference": "= rules.http_transport_policy.browser_session.mutation_origin_policy",
+          "value_type": "origin"
+        },
+        "TRUSTED_HOSTS": {
+          "accepted_values": null,
+          "default_when_absent": {
+            "development": null,
+            "production": null,
+            "test": null
+          },
+          "normalization": "split_comma_trim",
+          "requiredness": "required",
+          "target": "RuntimeSettings.trusted_hosts",
+          "validation_reference": "= rules.http_transport_policy.trusted_hosts",
+          "value_type": "comma_separated_list"
+        },
+        "VIEWER_ENTRY_RATE_LIMIT_ATTEMPTS": {
+          "accepted_values": null,
+          "default_when_absent": {
+            "development": 10,
+            "production": null,
+            "test": 10
+          },
+          "normalization": "base10_integer",
+          "requiredness": "required_in_production",
+          "target": "RuntimeSettings.viewer_entry_rate_limit_attempts",
+          "validation_reference": "= rules.http_transport_policy.limits.viewer_entry.attempts",
+          "value_type": "positive_integer"
+        },
+        "VIEWER_ENTRY_RATE_LIMIT_WINDOW_SECONDS": {
+          "accepted_values": null,
+          "default_when_absent": {
+            "development": 60,
+            "production": null,
+            "test": 60
+          },
+          "normalization": "base10_integer",
+          "requiredness": "required_in_production",
+          "target": "RuntimeSettings.viewer_entry_rate_limit_window_seconds",
+          "validation_reference": "= rules.http_transport_policy.limits.viewer_entry.window_seconds",
+          "value_type": "positive_integer"
         }
       }
-    }
+    },
+    "staff_session_ttl_hours": 12,
+    "viewer_session_ttl_days": 30
   },
   "models": {
     "ViewerStatus": {
@@ -3164,13 +3164,12 @@
       "portal.estimate_snapshot.activate"
     ],
     "principal_capability_sets": {
-      "viewer": [
-        "portal.project.read",
-        "portal.budget.read",
-        "portal.expense.read",
-        "portal.progress.read",
-        "portal.payment.read",
-        "portal.photo.read"
+      "administrator_additions": [
+        "portal.access.manage"
+      ],
+      "estimate_producer": [
+        "portal.estimate_snapshot.import",
+        "portal.estimate_snapshot.read_import_result"
       ],
       "operator": [
         "portal.project.read",
@@ -3186,30 +3185,25 @@
         "portal.photo.manage",
         "portal.estimate_snapshot.activate"
       ],
-      "administrator_additions": [
-        "portal.access.manage"
-      ],
-      "estimate_producer": [
-        "portal.estimate_snapshot.import",
-        "portal.estimate_snapshot.read_import_result"
+      "viewer": [
+        "portal.project.read",
+        "portal.budget.read",
+        "portal.expense.read",
+        "portal.progress.read",
+        "portal.payment.read",
+        "portal.photo.read"
       ]
     },
     "status_transitions": {
-      "staff": {
-        "pending_verification": [
-          "active"
-        ],
+      "budget_version": {
         "active": [
-          "suspended",
-          "disabled"
+          "inactive"
         ],
-        "suspended": [
-          "active",
-          "disabled"
-        ],
-        "disabled": []
+        "inactive": [
+          "active"
+        ]
       },
-      "viewer": {
+      "grant": {
         "active": [
           "revoked"
         ],
@@ -3223,19 +3217,25 @@
           "active"
         ]
       },
-      "grant": {
+      "staff": {
+        "active": [
+          "suspended",
+          "disabled"
+        ],
+        "disabled": [],
+        "pending_verification": [
+          "active"
+        ],
+        "suspended": [
+          "active",
+          "disabled"
+        ]
+      },
+      "viewer": {
         "active": [
           "revoked"
         ],
         "revoked": []
-      },
-      "budget_version": {
-        "inactive": [
-          "active"
-        ],
-        "active": [
-          "inactive"
-        ]
       }
     },
     "project_guard_sequence": [
@@ -3247,27 +3247,27 @@
     ],
     "registry_status_policy": {
       "active": {
-        "read": true,
-        "mutate": true
+        "mutate": true,
+        "read": true
       },
       "archived": {
-        "read": true,
-        "mutate": false
+        "mutate": false,
+        "read": true
       },
       "unknown": {
-        "read": false,
-        "mutate": false
+        "mutate": false,
+        "read": false
       }
     },
     "registry_failure_translation": {
-      "invalid_uuid": "invalid_uuid",
-      "not_found": "not_found",
+      "identity_mismatch": "identity_mismatch",
       "inactive": "archived",
-      "timeout": "timeout",
-      "transport": "transport_error",
-      "non_success_http": "http_error",
       "invalid_body": "schema_mismatch",
-      "identity_mismatch": "identity_mismatch"
+      "invalid_uuid": "invalid_uuid",
+      "non_success_http": "http_error",
+      "not_found": "not_found",
+      "timeout": "timeout",
+      "transport": "transport_error"
     },
     "supported_external_contract_versions": {
       "ocr": [
@@ -3278,6 +3278,12 @@
       ]
     },
     "idempotency_identities": {
+      "approved_snapshot": [
+        "project_id",
+        "estimate_id",
+        "estimate_version",
+        "content_fingerprint"
+      ],
       "expense": [
         "recognized_document_id",
         "intake_fingerprint"
@@ -3287,32 +3293,39 @@
       ],
       "work_payment": [
         "payment_id"
-      ],
-      "approved_snapshot": [
-        "project_id",
-        "estimate_id",
-        "estimate_version",
-        "content_fingerprint"
       ]
     },
     "money_policy": {
-      "currency": "EUR",
-      "fraction_digits": 2,
-      "rounding": "ROUND_HALF_UP",
       "amounts_are_gross": true,
       "completed_work_formula": "work_planned * completion_percent / 100",
+      "currency": "EUR",
+      "fraction_digits": 2,
       "overall_progress_formula": "sum(work_planned * completion_percent) / sum(work_planned) for work_planned > 0",
-      "zero_progress_denominator": "unavailable",
-      "work_balance_formula": "completed_work_total - payments_total"
+      "rounding": "ROUND_HALF_UP",
+      "work_balance_formula": "completed_work_total - payments_total",
+      "zero_progress_denominator": "unavailable"
     },
     "email_challenge_policy": {
-      "purpose_bound": true,
-      "single_use": true,
-      "same_purpose_reissue_revokes": true,
       "delivery_does_not_validate": true,
-      "existence_hiding": true
+      "existence_hiding": true,
+      "purpose_bound": true,
+      "same_purpose_reissue_revokes": true,
+      "single_use": true
     },
     "revocation_cascades": {
+      "service_credential": [
+        "that_credential"
+      ],
+      "service_principal_disabled": [
+        "service_credentials"
+      ],
+      "staff_assignment": [
+        "project_scope"
+      ],
+      "staff_suspended_or_disabled": [
+        "staff_sessions",
+        "outstanding_challenges"
+      ],
       "viewer": [
         "viewer_sessions",
         "viewer_credential"
@@ -3322,25 +3335,12 @@
       ],
       "viewer_grant": [
         "project_scope"
-      ],
-      "staff_assignment": [
-        "project_scope"
-      ],
-      "staff_suspended_or_disabled": [
-        "staff_sessions",
-        "outstanding_challenges"
-      ],
-      "service_principal_disabled": [
-        "service_credentials"
-      ],
-      "service_credential": [
-        "that_credential"
       ]
     },
     "producer_scope_policy": {
       "all_projects": "any_active_project",
-      "granted_projects": "active_grant_required",
-      "check_before_content_validation": true
+      "check_before_content_validation": true,
+      "granted_projects": "active_grant_required"
     },
     "audit_action_catalog": [
       "viewer.create",
@@ -3389,23 +3389,45 @@
       "photo.update"
     ],
     "binary_delivery_policy": {
-      "public_selectors": [
-        "document_id",
-        "photo_id"
-      ],
+      "download_name": {
+        "charset": "lowercase ascii letters, digits, hyphen and underscore, and a single dot before the extension",
+        "derived_from": [
+          "object_kind",
+          "object_id",
+          "extension of the resolved media type"
+        ],
+        "extensions": [
+          {
+            "extension": ".pdf",
+            "id": "pdf",
+            "media_type": "application/pdf"
+          },
+          {
+            "extension": ".jpg",
+            "id": "jpeg",
+            "media_type": "image/jpeg"
+          },
+          {
+            "extension": ".png",
+            "id": "png",
+            "media_type": "image/png"
+          },
+          {
+            "extension": ".webp",
+            "id": "webp",
+            "media_type": "image/webp"
+          }
+        ],
+        "format": "the object kind value, a hyphen, the object id, then the extension",
+        "stored_name_caption_or_file_ref_used": false
+      },
       "forbidden_public_values": [
         "file_ref",
         "path",
         "provider_url"
       ],
       "guard_before_read": true,
-      "oversize": "reject",
-      "missing": "explicit_failure",
-      "read_mutates_retention": false,
       "media_type_resolution": {
-        "resolved_from": "leading signature bytes of the stored object content",
-        "stored_name_or_extension_trusted": false,
-        "client_supplied_media_type_accepted": false,
         "allowlist": {
           "expense_document": [
             "application/pdf",
@@ -3418,16 +3440,17 @@
             "image/webp"
           ]
         },
-        "unrecognized_or_unlisted": "reject",
+        "client_supplied_media_type_accepted": false,
         "octet_stream_fallback": false,
+        "resolved_from": "leading signature bytes of the stored object content",
         "signatures": [
           {
             "id": "pdf",
             "media_type": "application/pdf",
             "probes": [
               {
-                "offset": 0,
-                "hex": "25 50 44 46 2D"
+                "hex": "25 50 44 46 2D",
+                "offset": 0
               }
             ]
           },
@@ -3436,8 +3459,8 @@
             "media_type": "image/jpeg",
             "probes": [
               {
-                "offset": 0,
-                "hex": "FF D8 FF"
+                "hex": "FF D8 FF",
+                "offset": 0
               }
             ]
           },
@@ -3446,8 +3469,8 @@
             "media_type": "image/png",
             "probes": [
               {
-                "offset": 0,
-                "hex": "89 50 4E 47 0D 0A 1A 0A"
+                "hex": "89 50 4E 47 0D 0A 1A 0A",
+                "offset": 0
               }
             ]
           },
@@ -3456,85 +3479,66 @@
             "media_type": "image/webp",
             "probes": [
               {
-                "offset": 0,
-                "hex": "52 49 46 46"
+                "hex": "52 49 46 46",
+                "offset": 0
               },
               {
-                "offset": 8,
-                "hex": "57 45 42 50"
+                "hex": "57 45 42 50",
+                "offset": 8
               }
             ]
           }
-        ]
-      },
-      "download_name": {
-        "derived_from": [
-          "object_kind",
-          "object_id",
-          "extension of the resolved media type"
         ],
-        "stored_name_caption_or_file_ref_used": false,
-        "charset": "lowercase ascii letters, digits, hyphen and underscore, and a single dot before the extension",
-        "format": "the object kind value, a hyphen, the object id, then the extension",
-        "extensions": [
-          {
-            "id": "pdf",
-            "media_type": "application/pdf",
-            "extension": ".pdf"
-          },
-          {
-            "id": "jpeg",
-            "media_type": "image/jpeg",
-            "extension": ".jpg"
-          },
-          {
-            "id": "png",
-            "media_type": "image/png",
-            "extension": ".png"
-          },
-          {
-            "id": "webp",
-            "media_type": "image/webp",
-            "extension": ".webp"
-          }
-        ]
+        "stored_name_or_extension_trusted": false,
+        "unrecognized_or_unlisted": "reject"
       },
+      "missing": "explicit_failure",
+      "oversize": "reject",
+      "public_selectors": [
+        "document_id",
+        "photo_id"
+      ],
+      "read_mutates_retention": false,
       "response": {
         "body": "the exact stored bytes",
-        "json_envelope_base64_or_redirect": "forbidden",
-        "content_type": "the resolved media type only",
-        "content_length": "the exact byte length of the emitted body",
+        "cache_control": "no-store",
         "content_disposition": {
           "expense_document": "attachment",
           "progress_photo": "inline"
         },
+        "content_length": "the exact byte length of the emitted body",
+        "content_type": "the resolved media type only",
         "filename_parameter": "the derived download name",
-        "cache_control": "no-store",
+        "json_envelope_base64_or_redirect": "forbidden",
         "x_content_type_options": "nosniff"
       },
       "size_bounds": {
-        "storage_read_limit": "config.binary_read_limit_env_name",
         "declared_response_ceiling": "RuntimeSettings.max_binary_response_bytes",
         "runtime_rejection_point": "storage read validation, before response emission",
         "startup_consistency": {
           "kind": "less_than_or_equal",
           "left": "= config.runtime_environment_variables.variables.BINARY_MAX_READ_BYTES",
           "right": "= config.runtime_environment_variables.variables.MAX_BINARY_RESPONSE_BYTES"
-        }
+        },
+        "storage_read_limit": "config.binary_read_limit_env_name"
       }
     },
     "project_list_ordering": {
+      "mutates_display_name": false,
+      "pagination": false,
       "registry": [
         "project_id_ascending"
       ],
       "viewer": [
         "display_name_casefold_ascending",
         "project_id_ascending"
-      ],
-      "mutates_display_name": false,
-      "pagination": false
+      ]
     },
     "staff_identity_input_policy": {
+      "credential_allows_control_characters": false,
+      "credential_max_codepoints": 128,
+      "credential_min_codepoints": 12,
+      "credential_normalization": false,
       "email": [
         "strip",
         "syntax_validate",
@@ -3544,16 +3548,12 @@
         "dot_removal",
         "plus_tag_removal",
         "domain_rewrite"
-      ],
-      "credential_min_codepoints": 12,
-      "credential_max_codepoints": 128,
-      "credential_allows_control_characters": false,
-      "credential_normalization": false
+      ]
     },
     "verification_envelope_policy": {
-      "record_selector": "record_uuid",
       "authority_component": "random_secret",
       "lookup_by_hash": false,
+      "record_selector": "record_uuid",
       "verification_hash_salted": true
     },
     "audit_significant_mutation_actions": [
@@ -3597,103 +3597,178 @@
       "photo.update"
     ],
     "audit_result_reason_policy": {
-      "success": {
-        "reason_code": "forbidden"
+      "rejected_non_significant_action": {
+        "reason_code": "optional"
       },
       "rejected_significant_mutation": {
         "reason_code": "required_non_blank"
       },
-      "rejected_non_significant_action": {
-        "reason_code": "optional"
+      "success": {
+        "reason_code": "forbidden"
       }
     },
     "transaction_guard_policy": {
-      "kind": "transaction_policy",
       "close_exactly_once": true,
-      "open_state_tracking": "required_local_boolean_flag",
-      "read_path": "rollback once immediately after the last read, set the local flag to closed, then evaluate results and raise any domain error",
-      "write_path": "commit once on success and set the local flag to closed",
-      "guard_exception_scope": "BaseException",
-      "guard_action": "rollback only while the local flag still marks the transaction open, then re-raise the original exception unchanged",
       "forbidden": [
         "a second rollback on an already closed transaction",
         "rollback after a successful commit",
         "catching only Exception instead of BaseException",
         "probing open state through assert_open, _assert_open, or a caught PersistenceError"
-      ]
+      ],
+      "guard_action": "rollback only while the local flag still marks the transaction open, then re-raise the original exception unchanged",
+      "guard_exception_scope": "BaseException",
+      "kind": "transaction_policy",
+      "open_state_tracking": "required_local_boolean_flag",
+      "read_path": "rollback once immediately after the last read, set the local flag to closed, then evaluate results and raise any domain error",
+      "write_path": "commit once on success and set the local flag to closed"
     },
     "audit_entity_id_policy": {
-      "kind": "audit_field_policy",
-      "field": "AuditIntent.entity_id",
       "declared_model_type": "str | None",
-      "value_form": "canonical string form of the audited entity identifier",
-      "uuid_serialization": "required_str_call",
-      "none_allowed_when": "the audited entity has no identifier of its own",
+      "field": "AuditIntent.entity_id",
       "forbidden": [
         "passing a UUID object where the model declares str | None",
         "passing a hyphen-stripped, truncated, or upper-cased UUID form",
         "substituting a different entity's identifier for the audited one"
-      ]
+      ],
+      "kind": "audit_field_policy",
+      "none_allowed_when": "the audited entity has no identifier of its own",
+      "uuid_serialization": "required_str_call",
+      "value_form": "canonical string form of the audited entity identifier"
     },
     "model_immutability_policy": {
-      "kind": "model_policy",
-      "instances_are_frozen": true,
       "assignment_to_argument_field": "forbidden",
       "derive_instead": "compute the value where it is needed, or return it, rather than writing it back onto an input",
-      "replacement_shape": "construct a new instance when a changed value must be carried",
       "forbidden": [
         "assigning to any field of an argument",
         "assigning to any field of a value read from a repository",
         "carrying a computed result to the caller through a mutated input"
-      ]
+      ],
+      "instances_are_frozen": true,
+      "kind": "model_policy",
+      "replacement_shape": "construct a new instance when a changed value must be carried"
     },
     "http_transport_policy": {
-      "kind": "http_transport_policy",
-      "public_api_prefix": "/api",
-      "inner_fastapi_prefix": "",
-      "deployment_proxy_strips_public_prefix": true,
-      "same_origin_default": true,
-      "trusted_hosts": {
-        "required": true,
-        "minimum_entries": 1,
-        "empty_allowlist_permitted": false,
-        "wildcard_forbidden": true,
-        "wildcard_forbidden_at_any_position": true,
-        "source": "RuntimeSettings.trusted_hosts"
+      "browser_auth_boundary": "viewer browser routes use only the accepted cookie session; staff/admin remain Bearer until a separate browser shell slice",
+      "browser_session": {
+        "clear_cookie_attributes_match_issue": true,
+        "cookie_attributes": {
+          "domain": null,
+          "http_only": true,
+          "path": "/",
+          "same_site": "strict",
+          "secure": true
+        },
+        "cookie_extraction": {
+          "authorization_header": "reject_if_present",
+          "failure": "AuthenticationRejected",
+          "leading_ows_before_first_pair": "reject",
+          "name_value_separator": {
+            "character": "=",
+            "occurrence": "first"
+          },
+          "name_whitespace": "reject",
+          "output": "decoded_opaque_token",
+          "pair_separator": ";",
+          "quoted_form": "allow_one_complete_dquote_pair",
+          "remaining_dquote": "reject",
+          "segment_without_separator": "ignore",
+          "separator_ows": {
+            "cardinality": "zero_or_more",
+            "characters": [
+              "SP",
+              "HTAB"
+            ]
+          },
+          "target_cardinality": {
+            "maximum": 1,
+            "minimum": 1
+          },
+          "target_edge_ows": "reject",
+          "target_empty": "reject",
+          "transport_codec": {
+            "canonical_reencode": true,
+            "charset": "utf-8",
+            "kind": "rfc3986_percent_encoding",
+            "safe_characters": ""
+          }
+        },
+        "cookie_name": "__Host-portal_viewer_session",
+        "javascript_visible_credential_storage": "forbidden",
+        "logout_path": "/auth/viewer/logout",
+        "logout_revokes_selected_session": true,
+        "mutation_origin_policy": {
+          "canonical_origin_triple": {
+            "host": "lowercased",
+            "port": "the explicit port when the value carries one, otherwise 443 for https and 80 for http",
+            "scheme": "lowercased"
+          },
+          "equal_when": "the scheme, the host and the port of both canonical origins are equal",
+          "equality": "canonical_origin_triple",
+          "missing_or_mismatch": "reject_before_mutation",
+          "pattern_matching_forbidden": true,
+          "source": "RuntimeSettings.public_origin",
+          "unequal_when": [
+            "the schemes differ",
+            "the hosts differ",
+            "one host carries an additional prefix",
+            "one host carries an additional suffix",
+            "the effective ports differ",
+            "either value has no canonical origin"
+          ]
+        },
+        "principal": "viewer",
+        "restore_path": "/auth/viewer/session"
       },
       "cors": {
         "disabled_when_allowlist_empty": true,
+        "headers": "explicit",
+        "methods": "explicit",
         "origins_source": "RuntimeSettings.allowed_origins",
         "wildcard_forbidden": true,
         "wildcard_forbidden_at_any_position": true,
-        "wildcard_with_credentials_forbidden": true,
-        "methods": "explicit",
-        "headers": "explicit"
+        "wildcard_with_credentials_forbidden": true
       },
+      "deployment_proxy_strips_public_prefix": true,
+      "health": {
+        "detail_exposure_forbidden": [
+          "paths",
+          "credentials",
+          "schema",
+          "dependency_versions",
+          "configuration",
+          "exceptions"
+        ],
+        "liveness_path": "/health/live",
+        "public": true,
+        "readiness_mutates_product_state": false,
+        "readiness_path": "/health/ready"
+      },
+      "inner_fastapi_prefix": "",
+      "kind": "http_transport_policy",
       "limits": {
-        "request_body_bytes": "RuntimeSettings.max_request_body_bytes",
         "binary_response_bytes": "RuntimeSettings.max_binary_response_bytes",
         "enforce_before_expensive_work": true,
+        "request_body_bytes": "RuntimeSettings.max_request_body_bytes",
         "viewer_entry": {
           "attempts": "RuntimeSettings.viewer_entry_rate_limit_attempts",
-          "window_seconds": "RuntimeSettings.viewer_entry_rate_limit_window_seconds",
-          "key": "client network identity plus route, never only attacker-controlled selector",
-          "enforce_before_expensive_verification": true,
           "bounded_memory": true,
-          "concealed_response": true,
           "client_network_identity": {
-            "source": "request.client.host",
-            "unknown_placeholder": "unknown",
-            "maximum_characters": 128,
-            "overlength_behavior": "keep_prefix",
             "forbidden_sources": [
               "X-Forwarded-For",
               "client-supplied identity header",
               "cookie",
               "capability secret",
               "other request-controlled value"
-            ]
-          }
+            ],
+            "maximum_characters": 128,
+            "overlength_behavior": "keep_prefix",
+            "source": "request.client.host",
+            "unknown_placeholder": "unknown"
+          },
+          "concealed_response": true,
+          "enforce_before_expensive_verification": true,
+          "key": "client network identity plus route, never only attacker-controlled selector",
+          "window_seconds": "RuntimeSettings.viewer_entry_rate_limit_window_seconds"
         }
       },
       "logging": {
@@ -3710,98 +3785,23 @@
         ],
         "request_ids_contain_identity_or_credentials": false
       },
+      "public_api_prefix": "/api",
+      "same_origin_default": true,
       "security_headers": {
-        "x_content_type_options": "nosniff",
-        "referrer_policy": "no-referrer",
-        "x_frame_options": "DENY",
+        "credential_and_session_cache_control": "no-store",
         "permissions_policy": "geolocation=(), microphone=(), camera=()",
-        "credential_and_session_cache_control": "no-store"
+        "referrer_policy": "no-referrer",
+        "x_content_type_options": "nosniff",
+        "x_frame_options": "DENY"
       },
-      "health": {
-        "liveness_path": "/health/live",
-        "readiness_path": "/health/ready",
-        "public": true,
-        "readiness_mutates_product_state": false,
-        "detail_exposure_forbidden": [
-          "paths",
-          "credentials",
-          "schema",
-          "dependency_versions",
-          "configuration",
-          "exceptions"
-        ]
-      },
-      "browser_session": {
-        "principal": "viewer",
-        "cookie_name": "__Host-portal_viewer_session",
-        "cookie_attributes": {
-          "http_only": true,
-          "secure": true,
-          "same_site": "strict",
-          "path": "/",
-          "domain": null
-        },
-        "javascript_visible_credential_storage": "forbidden",
-        "mutation_origin_policy": {
-          "source": "RuntimeSettings.public_origin",
-          "equality": "canonical_origin_triple",
-          "canonical_origin_triple": {
-            "scheme": "lowercased",
-            "host": "lowercased",
-            "port": "the explicit port when the value carries one, otherwise 443 for https and 80 for http"
-          },
-          "equal_when": "the scheme, the host and the port of both canonical origins are equal",
-          "unequal_when": [
-            "the schemes differ",
-            "the hosts differ",
-            "one host carries an additional prefix",
-            "one host carries an additional suffix",
-            "the effective ports differ",
-            "either value has no canonical origin"
-          ],
-          "pattern_matching_forbidden": true,
-          "missing_or_mismatch": "reject_before_mutation"
-        },
-        "restore_path": "/auth/viewer/session",
-        "logout_path": "/auth/viewer/logout",
-        "logout_revokes_selected_session": true,
-        "clear_cookie_attributes_match_issue": true,
-        "cookie_extraction": {
-          "authorization_header": "reject_if_present",
-          "pair_separator": ";",
-          "leading_ows_before_first_pair": "reject",
-          "separator_ows": {
-            "characters": [
-              "SP",
-              "HTAB"
-            ],
-            "cardinality": "zero_or_more"
-          },
-          "name_value_separator": {
-            "character": "=",
-            "occurrence": "first"
-          },
-          "name_whitespace": "reject",
-          "segment_without_separator": "ignore",
-          "target_cardinality": {
-            "minimum": 1,
-            "maximum": 1
-          },
-          "target_edge_ows": "reject",
-          "target_empty": "reject",
-          "quoted_form": "allow_one_complete_dquote_pair",
-          "remaining_dquote": "reject",
-          "transport_codec": {
-            "kind": "rfc3986_percent_encoding",
-            "charset": "utf-8",
-            "safe_characters": "",
-            "canonical_reencode": true
-          },
-          "output": "decoded_opaque_token",
-          "failure": "AuthenticationRejected"
-        }
-      },
-      "browser_auth_boundary": "viewer browser routes use only the accepted cookie session; staff/admin remain Bearer until a separate browser shell slice"
+      "trusted_hosts": {
+        "empty_allowlist_permitted": false,
+        "minimum_entries": 1,
+        "required": true,
+        "source": "RuntimeSettings.trusted_hosts",
+        "wildcard_forbidden": true,
+        "wildcard_forbidden_at_any_position": true
+      }
     },
     "exception_payload_policy": {
       "kind": "exception_policy",
@@ -3828,14 +3828,14 @@
       ]
     },
     "derived_view_ordering": {
+      "expense_allocations": [
+        "created_at_ascending",
+        "allocation_id_ascending"
+      ],
       "expenses": [
         "document_date_descending",
         "created_at_descending",
         "expense_id_descending"
-      ],
-      "expense_allocations": [
-        "created_at_ascending",
-        "allocation_id_ascending"
       ],
       "payments": [
         "payment_date_descending",
@@ -3849,17 +3849,17 @@
       ]
     },
     "clock_policy": {
-      "kind": "clock_policy",
-      "persisted_timestamp_timezone": "UTC",
-      "persisted_timestamp_representation": "offset_naive_datetime",
       "capture_count_per_operation": 1,
       "capture_source": "datetime.utcnow()",
-      "reuse": "the single captured operation timestamp supplies every persisted timestamp written by that operation and every current-time comparison that decides the validity of those writes or persisted records",
       "forbidden": [
         "datetime.now() for a persisted timestamp or a current-time comparison against a persisted timestamp",
         "an offset-aware datetime for a persisted timestamp",
         "more than one current-time capture within one operation"
-      ]
+      ],
+      "kind": "clock_policy",
+      "persisted_timestamp_representation": "offset_naive_datetime",
+      "persisted_timestamp_timezone": "UTC",
+      "reuse": "the single captured operation timestamp supplies every persisted timestamp written by that operation and every current-time comparison that decides the validity of those writes or persisted records"
     },
     "http_router_backend": {
       "kind": "http_router_backend",
@@ -3886,23 +3886,6 @@
             "scheme": "Bearer",
             "reject_with": "AuthenticationRejected"
           }
-        }
-      },
-      "auth_policies": {
-        "administrator_bearer": {
-          "principal": "staff"
-        },
-        "public": {
-          "principal": null
-        },
-        "service_bearer": {
-          "principal": "service"
-        },
-        "staff_bearer": {
-          "principal": "staff"
-        },
-        "viewer_cookie": {
-          "principal": null
         }
       },
       "principals": {
@@ -3933,6 +3916,347 @@
           ]
         }
       },
+      "auth_policies": {
+        "administrator_bearer": {
+          "principal": "staff"
+        },
+        "public": {
+          "principal": null
+        },
+        "service_bearer": {
+          "principal": "service"
+        },
+        "staff_bearer": {
+          "principal": "staff"
+        },
+        "viewer_cookie": {
+          "principal": null
+        }
+      },
+      "projections": [
+        {
+          "function": "_document_mutation_result",
+          "fields": [
+            {
+              "field": "document_id",
+              "value": {
+                "ref": "parameter",
+                "path": [
+                  "document",
+                  "document_id"
+                ]
+              }
+            },
+            {
+              "field": "client_visible",
+              "value": {
+                "ref": "parameter",
+                "path": [
+                  "document",
+                  "client_visible"
+                ]
+              }
+            },
+            {
+              "field": "updated_at",
+              "value": {
+                "ref": "parameter",
+                "path": [
+                  "document",
+                  "updated_at"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "function": "_expense_mutation_result",
+          "fields": [
+            {
+              "field": "expense_id",
+              "value": {
+                "ref": "parameter",
+                "path": [
+                  "outcome",
+                  "aggregate",
+                  "expense",
+                  "expense_id"
+                ]
+              }
+            },
+            {
+              "field": "document_id",
+              "value": {
+                "ref": "parameter",
+                "path": [
+                  "outcome",
+                  "aggregate",
+                  "document",
+                  "document_id"
+                ]
+              }
+            },
+            {
+              "field": "replayed",
+              "value": {
+                "ref": "parameter",
+                "path": [
+                  "outcome",
+                  "replayed"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "function": "_service_credential_response",
+          "fields": [
+            {
+              "field": "credential_id",
+              "value": {
+                "ref": "parameter",
+                "path": [
+                  "issue",
+                  "credential",
+                  "credential_id"
+                ]
+              }
+            },
+            {
+              "field": "service_principal_id",
+              "value": {
+                "ref": "parameter",
+                "path": [
+                  "issue",
+                  "credential",
+                  "service_principal_id"
+                ]
+              }
+            },
+            {
+              "field": "key_version",
+              "value": {
+                "ref": "parameter",
+                "path": [
+                  "issue",
+                  "credential",
+                  "key_version"
+                ]
+              }
+            },
+            {
+              "field": "secret",
+              "value": {
+                "ref": "parameter",
+                "path": [
+                  "issue",
+                  "secret"
+                ]
+              }
+            },
+            {
+              "field": "created_at",
+              "value": {
+                "ref": "parameter",
+                "path": [
+                  "issue",
+                  "credential",
+                  "created_at"
+                ]
+              }
+            },
+            {
+              "field": "expires_at",
+              "value": {
+                "ref": "parameter",
+                "path": [
+                  "issue",
+                  "credential",
+                  "expires_at"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "function": "_service_principal_view",
+          "fields": [
+            {
+              "field": "service_principal_id",
+              "value": {
+                "ref": "parameter",
+                "path": [
+                  "principal",
+                  "service_principal_id"
+                ]
+              }
+            },
+            {
+              "field": "name",
+              "value": {
+                "ref": "parameter",
+                "path": [
+                  "principal",
+                  "name"
+                ]
+              }
+            },
+            {
+              "field": "source_type",
+              "value": {
+                "ref": "parameter",
+                "path": [
+                  "principal",
+                  "source_type"
+                ]
+              }
+            },
+            {
+              "field": "status",
+              "value": {
+                "ref": "parameter",
+                "path": [
+                  "principal",
+                  "status"
+                ]
+              }
+            },
+            {
+              "field": "scope_mode",
+              "value": {
+                "ref": "parameter",
+                "path": [
+                  "principal",
+                  "scope_mode"
+                ]
+              }
+            },
+            {
+              "field": "created_at",
+              "value": {
+                "ref": "parameter",
+                "path": [
+                  "principal",
+                  "created_at"
+                ]
+              }
+            },
+            {
+              "field": "disabled_at",
+              "value": {
+                "ref": "parameter",
+                "path": [
+                  "principal",
+                  "disabled_at"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "function": "_viewer_credential_response",
+          "fields": [
+            {
+              "field": "credential_id",
+              "value": {
+                "ref": "parameter",
+                "path": [
+                  "issue",
+                  "credential",
+                  "credential_id"
+                ]
+              }
+            },
+            {
+              "field": "viewer_id",
+              "value": {
+                "ref": "parameter",
+                "path": [
+                  "issue",
+                  "credential",
+                  "viewer_id"
+                ]
+              }
+            },
+            {
+              "field": "secret",
+              "value": {
+                "ref": "parameter",
+                "path": [
+                  "issue",
+                  "secret"
+                ]
+              }
+            },
+            {
+              "field": "created_at",
+              "value": {
+                "ref": "parameter",
+                "path": [
+                  "issue",
+                  "credential",
+                  "created_at"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "function": "_viewer_view",
+          "fields": [
+            {
+              "field": "viewer_id",
+              "value": {
+                "ref": "parameter",
+                "path": [
+                  "viewer",
+                  "viewer_id"
+                ]
+              }
+            },
+            {
+              "field": "display_name",
+              "value": {
+                "ref": "parameter",
+                "path": [
+                  "viewer",
+                  "display_name"
+                ]
+              }
+            },
+            {
+              "field": "status",
+              "value": {
+                "ref": "parameter",
+                "path": [
+                  "viewer",
+                  "status"
+                ]
+              }
+            },
+            {
+              "field": "created_at",
+              "value": {
+                "ref": "parameter",
+                "path": [
+                  "viewer",
+                  "created_at"
+                ]
+              }
+            },
+            {
+              "field": "revoked_at",
+              "value": {
+                "ref": "parameter",
+                "path": [
+                  "viewer",
+                  "revoked_at"
+                ]
+              }
+            }
+          ]
+        }
+      ],
       "routes": [
         {
           "handler": "staff_login_endpoint",
@@ -6655,330 +6979,6 @@
           },
           "projection": null,
           "returns": "delegate"
-        }
-      ],
-      "projections": [
-        {
-          "function": "_document_mutation_result",
-          "fields": [
-            {
-              "field": "document_id",
-              "value": {
-                "ref": "parameter",
-                "path": [
-                  "document",
-                  "document_id"
-                ]
-              }
-            },
-            {
-              "field": "client_visible",
-              "value": {
-                "ref": "parameter",
-                "path": [
-                  "document",
-                  "client_visible"
-                ]
-              }
-            },
-            {
-              "field": "updated_at",
-              "value": {
-                "ref": "parameter",
-                "path": [
-                  "document",
-                  "updated_at"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "function": "_expense_mutation_result",
-          "fields": [
-            {
-              "field": "expense_id",
-              "value": {
-                "ref": "parameter",
-                "path": [
-                  "outcome",
-                  "aggregate",
-                  "expense",
-                  "expense_id"
-                ]
-              }
-            },
-            {
-              "field": "document_id",
-              "value": {
-                "ref": "parameter",
-                "path": [
-                  "outcome",
-                  "aggregate",
-                  "document",
-                  "document_id"
-                ]
-              }
-            },
-            {
-              "field": "replayed",
-              "value": {
-                "ref": "parameter",
-                "path": [
-                  "outcome",
-                  "replayed"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "function": "_service_credential_response",
-          "fields": [
-            {
-              "field": "credential_id",
-              "value": {
-                "ref": "parameter",
-                "path": [
-                  "issue",
-                  "credential",
-                  "credential_id"
-                ]
-              }
-            },
-            {
-              "field": "service_principal_id",
-              "value": {
-                "ref": "parameter",
-                "path": [
-                  "issue",
-                  "credential",
-                  "service_principal_id"
-                ]
-              }
-            },
-            {
-              "field": "key_version",
-              "value": {
-                "ref": "parameter",
-                "path": [
-                  "issue",
-                  "credential",
-                  "key_version"
-                ]
-              }
-            },
-            {
-              "field": "secret",
-              "value": {
-                "ref": "parameter",
-                "path": [
-                  "issue",
-                  "secret"
-                ]
-              }
-            },
-            {
-              "field": "created_at",
-              "value": {
-                "ref": "parameter",
-                "path": [
-                  "issue",
-                  "credential",
-                  "created_at"
-                ]
-              }
-            },
-            {
-              "field": "expires_at",
-              "value": {
-                "ref": "parameter",
-                "path": [
-                  "issue",
-                  "credential",
-                  "expires_at"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "function": "_service_principal_view",
-          "fields": [
-            {
-              "field": "service_principal_id",
-              "value": {
-                "ref": "parameter",
-                "path": [
-                  "principal",
-                  "service_principal_id"
-                ]
-              }
-            },
-            {
-              "field": "name",
-              "value": {
-                "ref": "parameter",
-                "path": [
-                  "principal",
-                  "name"
-                ]
-              }
-            },
-            {
-              "field": "source_type",
-              "value": {
-                "ref": "parameter",
-                "path": [
-                  "principal",
-                  "source_type"
-                ]
-              }
-            },
-            {
-              "field": "status",
-              "value": {
-                "ref": "parameter",
-                "path": [
-                  "principal",
-                  "status"
-                ]
-              }
-            },
-            {
-              "field": "scope_mode",
-              "value": {
-                "ref": "parameter",
-                "path": [
-                  "principal",
-                  "scope_mode"
-                ]
-              }
-            },
-            {
-              "field": "created_at",
-              "value": {
-                "ref": "parameter",
-                "path": [
-                  "principal",
-                  "created_at"
-                ]
-              }
-            },
-            {
-              "field": "disabled_at",
-              "value": {
-                "ref": "parameter",
-                "path": [
-                  "principal",
-                  "disabled_at"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "function": "_viewer_credential_response",
-          "fields": [
-            {
-              "field": "credential_id",
-              "value": {
-                "ref": "parameter",
-                "path": [
-                  "issue",
-                  "credential",
-                  "credential_id"
-                ]
-              }
-            },
-            {
-              "field": "viewer_id",
-              "value": {
-                "ref": "parameter",
-                "path": [
-                  "issue",
-                  "credential",
-                  "viewer_id"
-                ]
-              }
-            },
-            {
-              "field": "secret",
-              "value": {
-                "ref": "parameter",
-                "path": [
-                  "issue",
-                  "secret"
-                ]
-              }
-            },
-            {
-              "field": "created_at",
-              "value": {
-                "ref": "parameter",
-                "path": [
-                  "issue",
-                  "credential",
-                  "created_at"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "function": "_viewer_view",
-          "fields": [
-            {
-              "field": "viewer_id",
-              "value": {
-                "ref": "parameter",
-                "path": [
-                  "viewer",
-                  "viewer_id"
-                ]
-              }
-            },
-            {
-              "field": "display_name",
-              "value": {
-                "ref": "parameter",
-                "path": [
-                  "viewer",
-                  "display_name"
-                ]
-              }
-            },
-            {
-              "field": "status",
-              "value": {
-                "ref": "parameter",
-                "path": [
-                  "viewer",
-                  "status"
-                ]
-              }
-            },
-            {
-              "field": "created_at",
-              "value": {
-                "ref": "parameter",
-                "path": [
-                  "viewer",
-                  "created_at"
-                ]
-              }
-            },
-            {
-              "field": "revoked_at",
-              "value": {
-                "ref": "parameter",
-                "path": [
-                  "viewer",
-                  "revoked_at"
-                ]
-              }
-            }
-          ]
         }
       ],
       "error_policy": {
@@ -10721,47 +10721,54 @@
       ]
     },
     "staff_bootstrap_policy": {
-      "kind": "initial_account_policy",
-      "scope": "the single first staff account created on an empty staff table by a local administrative command",
       "account": {
+        "created_by": null,
+        "email_verified": true,
         "initial_role": "administrator",
         "initial_status": "active",
-        "email_verified": true,
-        "created_by": null,
         "rationale": "no earlier administrator exists to authorize, verify or reinstate this account, and authenticate_staff admits only an active verified account"
       },
-      "creator_semantics": {
-        "actor_kind": "system",
-        "actor_id": null,
-        "key_version": null,
-        "project_id": null
-      },
-      "audit": {
-        "action": "staff.create",
-        "entity_kind": "staff_account",
-        "entity_id_source": "the created staff_id, serialized as = rules.audit_entity_id_policy requires",
-        "result": "success",
-        "reason_code": null
-      },
-      "precondition": {
-        "staff_table_state": "empty",
-        "rejection_when_any_staff_exists": "BootstrapAlreadyCompleted",
-        "concurrent_attempts_resolve_to": "exactly_one_created_account"
-      },
       "atomicity": {
-        "transaction": "exclusive_write",
-        "isolation_acquisition": "the connection begins an immediate write transaction before the emptiness check, so that check and both inserts share one serialized write lock and a deferred transaction cannot let two callers both observe an empty table",
+        "commit": "once, and only after both inserts succeed",
         "driver_autocommit": "disabled_for_the_duration_of_the_transaction",
+        "isolation_acquisition": "the connection begins an immediate write transaction before the emptiness check, so that check and both inserts share one serialized write lock and a deferred transaction cannot let two callers both observe an empty table",
+        "on_rejection_or_failure": "neither write persists",
+        "transaction": "exclusive_write",
         "writes": [
           "staff_account",
           "audit_record"
-        ],
-        "commit": "once, and only after both inserts succeed",
-        "on_rejection_or_failure": "neither write persists"
+        ]
+      },
+      "audit": {
+        "action": "staff.create",
+        "entity_id_source": "the created staff_id, serialized as = rules.audit_entity_id_policy requires",
+        "entity_kind": "staff_account",
+        "reason_code": null,
+        "result": "success"
+      },
+      "command_outcomes": {
+        "contract_with": "the operator's shell and any deployment script that branches on the result",
+        "kind": "closed_exit_code_mapping",
+        "outcomes": {
+          "account_created": 0,
+          "bootstrap_already_completed": 3,
+          "confirmation_did_not_match": 1,
+          "identity_input_rejected": 2
+        },
+        "stability": "these codes are an external contract and are not renumbered by a regeneration"
+      },
+      "creator_semantics": {
+        "actor_id": null,
+        "actor_kind": "system",
+        "key_version": null,
+        "project_id": null
       },
       "disclosure": {
-        "retained_form": "hash_only",
-        "raw_input_retention": "forbidden",
+        "forbidden_inputs": [
+          "process_argument",
+          "environment_variable",
+          "configuration_file"
+        ],
         "forbidden_sinks": [
           "stdout",
           "stderr",
@@ -10770,66 +10777,77 @@
           "returned_value",
           "exception_message"
         ],
-        "forbidden_inputs": [
-          "process_argument",
-          "environment_variable",
-          "configuration_file"
-        ]
+        "raw_input_retention": "forbidden",
+        "retained_form": "hash_only"
+      },
+      "kind": "initial_account_policy",
+      "precondition": {
+        "concurrent_attempts_resolve_to": "exactly_one_created_account",
+        "rejection_when_any_staff_exists": "BootstrapAlreadyCompleted",
+        "staff_table_state": "empty"
       },
       "reachability": {
+        "entrypoint": "local_administrative_command_only",
         "http_route": "forbidden",
-        "openapi_document": "forbidden",
-        "entrypoint": "local_administrative_command_only"
+        "openapi_document": "forbidden"
       },
-      "command_outcomes": {
-        "kind": "closed_exit_code_mapping",
-        "contract_with": "the operator's shell and any deployment script that branches on the result",
-        "outcomes": {
-          "account_created": 0,
-          "confirmation_did_not_match": 1,
-          "identity_input_rejected": 2,
-          "bootstrap_already_completed": 3
-        },
-        "stability": "these codes are an external contract and are not renumbered by a regeneration"
-      }
+      "scope": "the single first staff account created on an empty staff table by a local administrative command"
     }
   },
   "properties": {
-    "_validate_reference_identity": [
-      "result.project_id == requested_id"
-    ],
-    "_validate_context_identity": [
-      "result.project.project_id == requested_id"
-    ],
     "_context_from_validation": [
       "result.actor_kind == actor_kind and result.actor_id == actor_id and result.key_version == key_version and result.capability == capability and result.project_id == validation.project_id"
     ],
+    "_document_mutation_result": [
+      "result.document_id == document.document_id and result.client_visible == document.client_visible and result.updated_at == document.updated_at"
+    ],
+    "_expense_mutation_result": [
+      "result.expense_id == outcome.aggregate.expense.expense_id and result.document_id == outcome.aggregate.document.document_id and result.replayed == outcome.replayed"
+    ],
     "_find_unresolved_allocation_count": [
       "result == sum(1 for allocation in allocations if allocation.target.value == 'section' and allocation.section_id not in active_section_ids)"
-    ],
-    "_ordered_plans": [
-      "len(result) == len(plans)",
-      "all(plan in result for plan in plans)",
-      "all((result[i].sort_order, str(result[i].section_id)) <= (result[i + 1].sort_order, str(result[i + 1].section_id)) for i in range(len(result) - 1))"
     ],
     "_ordered_photos": [
       "len(result) == len(photos)",
       "all(photo in result for photo in photos)",
       "all((result[i].photo_date, str(result[i].photo_id)) <= (result[i + 1].photo_date, str(result[i + 1].photo_id)) for i in range(len(result) - 1))"
     ],
+    "_ordered_plans": [
+      "len(result) == len(plans)",
+      "all(plan in result for plan in plans)",
+      "all((result[i].sort_order, str(result[i].section_id)) <= (result[i + 1].sort_order, str(result[i + 1].section_id)) for i in range(len(result) - 1))"
+    ],
     "_photo_mutation_result": [
       "result.photo_id == photo.photo_id and result.replayed == replayed and result.client_visible == photo.client_visible and result.updated_at == photo.updated_at"
+    ],
+    "_service_credential_response": [
+      "result.credential_id == issue.credential.credential_id and result.service_principal_id == issue.credential.service_principal_id and result.key_version == issue.credential.key_version and result.secret == issue.secret and result.created_at == issue.credential.created_at and result.expires_at == issue.credential.expires_at"
+    ],
+    "_service_principal_view": [
+      "result.service_principal_id == principal.service_principal_id and result.name == principal.name and result.source_type == principal.source_type and result.status == principal.status and result.scope_mode == principal.scope_mode and result.created_at == principal.created_at and result.disabled_at == principal.disabled_at"
+    ],
+    "_validate_context_identity": [
+      "result.project.project_id == requested_id"
+    ],
+    "_validate_reference_identity": [
+      "result.project_id == requested_id"
+    ],
+    "_viewer_credential_response": [
+      "result.credential_id == issue.credential.credential_id and result.viewer_id == issue.credential.viewer_id and result.secret == issue.secret and result.created_at == issue.credential.created_at"
+    ],
+    "_viewer_view": [
+      "result.viewer_id == viewer.viewer_id and result.display_name == viewer.display_name and result.status == viewer.status and result.created_at == viewer.created_at and result.revoked_at == viewer.revoked_at"
     ],
     "calculate_completed_work": [
       "completion_percent == 0 implies result == 0",
       "completion_percent == 100 implies result == work_planned"
     ],
+    "calculate_material_balance": [
+      "result == material_planned - material_actual"
+    ],
     "calculate_overall_progress": [
       "not any(section.work_planned > 0 and section.completion_percent != None for section in sections) implies result == None",
       "any(section.work_planned > 0 and section.completion_percent != None for section in sections) implies result != None"
-    ],
-    "calculate_material_balance": [
-      "result == material_planned - material_actual"
     ],
     "calculate_work_balance": [
       "result.balance == completed_work_total - payments_total"
@@ -10840,71 +10858,53 @@
     ],
     "read_binary": [
       "result.content_length == len(result.content)"
-    ],
-    "_viewer_view": [
-      "result.viewer_id == viewer.viewer_id and result.display_name == viewer.display_name and result.status == viewer.status and result.created_at == viewer.created_at and result.revoked_at == viewer.revoked_at"
-    ],
-    "_service_principal_view": [
-      "result.service_principal_id == principal.service_principal_id and result.name == principal.name and result.source_type == principal.source_type and result.status == principal.status and result.scope_mode == principal.scope_mode and result.created_at == principal.created_at and result.disabled_at == principal.disabled_at"
-    ],
-    "_viewer_credential_response": [
-      "result.credential_id == issue.credential.credential_id and result.viewer_id == issue.credential.viewer_id and result.secret == issue.secret and result.created_at == issue.credential.created_at"
-    ],
-    "_service_credential_response": [
-      "result.credential_id == issue.credential.credential_id and result.service_principal_id == issue.credential.service_principal_id and result.key_version == issue.credential.key_version and result.secret == issue.secret and result.created_at == issue.credential.created_at and result.expires_at == issue.credential.expires_at"
-    ],
-    "_expense_mutation_result": [
-      "result.expense_id == outcome.aggregate.expense.expense_id and result.document_id == outcome.aggregate.document.document_id and result.replayed == outcome.replayed"
-    ],
-    "_document_mutation_result": [
-      "result.document_id == document.document_id and result.client_visible == document.client_visible and result.updated_at == document.updated_at"
     ]
   },
   "determinism": {
-    "issue_verification_secret": false,
-    "_normalize_staff_email": true,
-    "_validate_new_password": true,
-    "_build_email_delivery_request": true,
     "_build_challenge_issue_view": true,
-    "_credential_is_usable": true,
-    "_require_capability": true,
-    "_context_from_validation": true,
-    "_registry_url": true,
-    "_validate_reference_identity": true,
-    "_validate_context_identity": true,
-    "_validate_snapshot_publication": true,
-    "_canonical_snapshot_fingerprint": true,
-    "_classify_snapshot_replay": true,
-    "_find_unresolved_allocation_count": true,
-    "_ordered_plans": true,
-    "_project_expense_intake": true,
+    "_build_email_delivery_request": true,
     "_canonical_intake_fingerprint": true,
+    "_canonical_snapshot_fingerprint": true,
     "_classify_expense_replay": true,
-    "_validate_allocation_sum": true,
-    "_validate_completion_percent": true,
     "_classify_payment_replay": true,
     "_classify_photo_replay": true,
+    "_classify_snapshot_replay": true,
+    "_context_from_validation": true,
+    "_credential_is_usable": true,
+    "_document_mutation_result": true,
+    "_expense_mutation_result": true,
+    "_find_unresolved_allocation_count": true,
+    "_normalize_staff_email": true,
     "_ordered_photos": true,
+    "_ordered_plans": true,
+    "_ordered_project_items": true,
     "_photo_mutation_result": true,
-    "validate_eur_amount": true,
-    "calculate_completed_work": true,
-    "calculate_overall_progress": true,
-    "calculate_material_balance": true,
-    "calculate_work_balance": true,
-    "_quantize_money": true,
     "_project_budget_sections": true,
+    "_project_expense_intake": true,
     "_project_expense_summary": true,
-    "_project_progress": true,
     "_project_payments": true,
     "_project_photos": true,
-    "_ordered_project_items": true,
-    "_validate_audit_intent": true,
-    "_viewer_view": true,
-    "_service_principal_view": true,
-    "_viewer_credential_response": true,
+    "_project_progress": true,
+    "_quantize_money": true,
+    "_registry_url": true,
+    "_require_capability": true,
     "_service_credential_response": true,
-    "_expense_mutation_result": true,
-    "_document_mutation_result": true
+    "_service_principal_view": true,
+    "_validate_allocation_sum": true,
+    "_validate_audit_intent": true,
+    "_validate_completion_percent": true,
+    "_validate_context_identity": true,
+    "_validate_new_password": true,
+    "_validate_reference_identity": true,
+    "_validate_snapshot_publication": true,
+    "_viewer_credential_response": true,
+    "_viewer_view": true,
+    "calculate_completed_work": true,
+    "calculate_material_balance": true,
+    "calculate_overall_progress": true,
+    "calculate_work_balance": true,
+    "issue_verification_secret": false,
+    "validate_eur_amount": true
   },
   "imports": {
     "stdlib": [
@@ -11315,671 +11315,11 @@
           "PresentedSecret"
         ]
       },
-      "staff_identity": {
-        "models": [
-          "StaffRole",
-          "StaffStatus",
-          "ActorKind",
-          "AuditAction",
-          "AuditEntityKind",
-          "StaffAccount",
-          "StaffSession",
-          "StaffProjectAssignment",
-          "IssuedSecret",
-          "StaffSessionGrant",
-          "StaffActorContext",
-          "AuditIntent",
-          "AuditResult",
-          "StaffAccessRepository",
-          "StaffAccountView",
-          "SessionRevocationResult",
-          "GrantStatus",
-          "ProjectValidationResult",
-          "PresentedSecret"
-        ],
-        "credential_security": [
-          "hash_password",
-          "verify_password",
-          "issue_verification_secret",
-          "parse_verification_secret",
-          "verify_secret"
-        ],
-        "authorization_guard": [
-          "AuthenticationRejected",
-          "AuthorizationRejected",
-          "ArchivedProjectRejected",
-          "ScopedNotFoundError",
-          "conceal_authentication_failure",
-          "authorize_access_management"
-        ],
-        "registry_gateway": [
-          "RegistryBoundaryError",
-          "validate_project_reference"
-        ],
-        "audit_writer": [
-          "append_audit"
-        ],
-        "portal_store": [
-          "PortalStore",
-          "PortalTransaction"
-        ]
-      },
-      "viewer_access": {
-        "models": [
-          "ViewerStatus",
-          "GrantStatus",
-          "ActorKind",
-          "AuditResult",
-          "AuditAction",
-          "AuditEntityKind",
-          "ClientViewer",
-          "ViewerAccessCredential",
-          "ViewerSession",
-          "ProjectViewerGrant",
-          "IssuedSecret",
-          "StaffActorContext",
-          "ViewerSessionGrant",
-          "ViewerActorContext",
-          "ViewerCredentialIssue",
-          "AuditIntent",
-          "ViewerAccessRepository",
-          "PresentedSecret",
-          "ViewerSessionView",
-          "ProjectValidationResult"
-        ],
-        "credential_security": [
-          "hash_password",
-          "verify_password",
-          "issue_verification_secret",
-          "parse_verification_secret",
-          "verify_secret"
-        ],
-        "authorization_guard": [
-          "AuthenticationRejected",
-          "AuthorizationRejected",
-          "ScopedNotFoundError",
-          "conceal_authentication_failure",
-          "authorize_access_management"
-        ],
-        "registry_gateway": [
-          "RegistryBoundaryError",
-          "validate_project_reference"
-        ],
-        "audit_writer": [
-          "append_audit"
-        ],
-        "portal_store": [
-          "PortalStore"
-        ]
-      },
-      "service_identity": {
-        "models": [
-          "GrantStatus",
-          "PrincipalStatus",
-          "ProducerScopeMode",
-          "ProducerSourceType",
-          "ActorKind",
-          "AuditResult",
-          "AuditAction",
-          "AuditEntityKind",
-          "ServicePrincipal",
-          "ServiceCredential",
-          "ProducerProjectGrant",
-          "StaffActorContext",
-          "ServiceCredentialIssue",
-          "ServiceActorContext",
-          "AuditIntent",
-          "ServiceIdentityRepository",
-          "IssuedSecret",
-          "ProjectValidationResult",
-          "PresentedSecret"
-        ],
-        "credential_security": [
-          "issue_verification_secret",
-          "parse_verification_secret",
-          "verify_secret"
-        ],
-        "authorization_guard": [
-          "AuthenticationRejected",
-          "AuthorizationRejected",
-          "ArchivedProjectRejected",
-          "ScopedNotFoundError",
-          "conceal_authentication_failure",
-          "authorize_access_management"
-        ],
-        "registry_gateway": [
-          "validate_project_reference"
-        ],
-        "audit_writer": [
-          "append_audit"
-        ],
-        "portal_store": [
-          "PortalStore",
-          "PortalTransaction"
-        ]
-      },
-      "authorization_guard": {
-        "models": [
-          "ViewerStatus",
-          "GrantStatus",
-          "StaffRole",
-          "StaffStatus",
-          "PrincipalStatus",
-          "ProducerScopeMode",
-          "ProducerSourceType",
-          "ActorKind",
-          "RegistryProjectStatus",
-          "AuthorizationPrincipalKind",
-          "Capability",
-          "ProjectViewerGrant",
-          "StaffProjectAssignment",
-          "StaffActorContext",
-          "ViewerActorContext",
-          "ServiceActorContext",
-          "AuthorizedProjectContext",
-          "ProjectAuthorizationRequest",
-          "ProjectValidationResult",
-          "StaffAccessRepository",
-          "ViewerAccessRepository",
-          "StaffAccount",
-          "StaffSession",
-          "ClientViewer",
-          "ViewerSession",
-          "ServicePrincipal",
-          "ProducerProjectGrant"
-        ],
-        "registry_gateway": [
-          "validate_project_reference"
-        ],
-        "portal_store": [
-          "PortalStore",
-          "PortalTransaction"
-        ]
-      },
-      "registry_gateway": {
-        "models": [
-          "RegistryFailureKind",
-          "RegistryProjectStatus",
-          "ProjectReference",
-          "ProjectValidationResult",
-          "ProjectContext"
-        ]
-      },
-      "email_delivery_gateway": {
-        "models": [
-          "DeliveryOutcome",
-          "EmailDeliveryRecord",
-          "EmailDeliveryRequest",
-          "EmailDeliveryRepository"
-        ],
-        "portal_store": [
-          "PersistenceError",
-          "PortalStore",
-          "PortalTransaction"
-        ]
-      },
-      "binary_storage": {
-        "models": [
-          "AuthorizedBinaryReference",
-          "BinaryPayload",
-          "BinaryObjectKind"
-        ]
-      },
-      "snapshot_import": {
-        "models": [
-          "ImportOutcome",
-          "ImportRejectReason",
-          "ActorKind",
-          "AuditResult",
-          "AuditAction",
-          "AuditEntityKind",
-          "ServiceActorContext",
-          "SnapshotPublication",
-          "ApprovedEstimateSnapshot",
-          "SnapshotImportRecord",
-          "AuditIntent",
-          "SnapshotImportRepository"
-        ],
-        "authorization_guard": [
-          "AuthorizationRejected",
-          "ArchivedProjectRejected",
-          "ScopedNotFoundError",
-          "authorize_snapshot_import"
-        ],
-        "financial_policy": [
-          "validate_eur_amount",
-          "FinancialValidationError"
-        ],
-        "audit_writer": [
-          "append_audit"
-        ],
-        "portal_store": [
-          "PortalStore"
-        ]
-      },
-      "budget_management": {
-        "models": [
-          "BudgetSource",
-          "BudgetVersionStatus",
-          "AllocationTargetKind",
-          "ActorKind",
-          "AuditResult",
-          "RegistryProjectStatus",
-          "Capability",
-          "AuditAction",
-          "AuditEntityKind",
-          "AuthorizedProjectContext",
-          "SnapshotSectionData",
-          "PortalSection",
-          "BudgetVersion",
-          "SectionPlan",
-          "BudgetActivationResult",
-          "BudgetVersionDetail",
-          "ExpenseAllocation",
-          "AuditIntent",
-          "BudgetRepository",
-          "ProjectSectionRepository",
-          "ExpenseAggregate"
-        ],
-        "financial_policy": [
-          "validate_eur_amount"
-        ],
-        "audit_writer": [
-          "append_audit"
-        ],
-        "portal_store": [
-          "PortalStore"
-        ]
-      },
-      "expense_intake": {
-        "models": [
-          "AllocationTargetKind",
-          "AuditResult",
-          "RecognitionStatus",
-          "AuditAction",
-          "AuditEntityKind",
-          "AuthorizedProjectContext",
-          "ConfirmedRecognitionPublication",
-          "AllocationInstruction",
-          "ExpenseIntake",
-          "Expense",
-          "ExpenseAllocation",
-          "ExpenseDocument",
-          "ExpenseAggregate",
-          "AuditIntent",
-          "ExpenseRepository",
-          "ProjectSectionRepository",
-          "ExpenseOperationOutcome"
-        ],
-        "financial_policy": [
-          "FinancialValidationError",
-          "validate_eur_amount"
-        ],
-        "audit_writer": [
-          "append_audit"
-        ],
-        "portal_store": [
-          "PortalStore"
-        ],
-        "expense_management": [
-          "ExpenseConflictError",
-          "ExpenseValidationError"
-        ]
-      },
-      "expense_management": {
-        "models": [
-          "AllocationTargetKind",
-          "ActorKind",
-          "AuditResult",
-          "BinaryObjectKind",
-          "AuditAction",
-          "AuditEntityKind",
-          "AuthorizedProjectContext",
-          "AuthorizedBinaryReference",
-          "AllocationInstruction",
-          "Expense",
-          "ExpenseAllocation",
-          "ExpenseDocument",
-          "ExpenseAggregate",
-          "AuditIntent",
-          "BinaryPayload",
-          "ExpenseRepository",
-          "ProjectSectionRepository",
-          "ExpenseOperationOutcome"
-        ],
-        "financial_policy": [
-          "validate_eur_amount"
-        ],
-        "binary_storage": [
-          "BinaryStorageError",
-          "read_binary"
-        ],
-        "audit_writer": [
-          "append_audit"
-        ],
-        "portal_store": [
-          "PortalStore"
-        ]
-      },
-      "project_tracking": {
-        "models": [
-          "AuditResult",
-          "AuditAction",
-          "AuditEntityKind",
-          "AuthorizedProjectContext",
-          "SectionProgress",
-          "WorkPayment",
-          "AuditIntent",
-          "BudgetVersionDetail"
-        ],
-        "financial_policy": [
-          "validate_eur_amount"
-        ],
-        "budget_management": [
-          "ensure_manual_budget",
-          "validate_project_section"
-        ],
-        "audit_writer": [
-          "append_audit"
-        ],
-        "portal_store": [
-          "PortalStore",
-          "PortalTransaction"
-        ]
-      },
-      "photo_management": {
-        "models": [
-          "ActorKind",
-          "AuditResult",
-          "BinaryObjectKind",
-          "AuditAction",
-          "AuditEntityKind",
-          "AuthorizedProjectContext",
-          "AuthorizedBinaryReference",
-          "PhotoMutationResult",
-          "PhotoPublication",
-          "ProgressPhoto",
-          "AuditIntent",
-          "BinaryPayload",
-          "ProgressPhotoRepository",
-          "ProjectSectionRepository",
-          "ProgressPhotoView"
-        ],
-        "binary_storage": [
-          "BinaryStorageError",
-          "read_binary"
-        ],
-        "audit_writer": [
-          "append_audit"
-        ],
-        "portal_store": [
-          "PortalStore"
-        ]
-      },
       "financial_policy": {
         "models": [
+          "ProgressSectionView",
           "WorkBalanceLabel",
-          "ProgressSectionView",
           "WorkBalanceResult"
-        ]
-      },
-      "derived_views": {
-        "models": [
-          "GrantStatus",
-          "AllocationTargetKind",
-          "ViewAvailability",
-          "ViewerActorContext",
-          "AuthorizedProjectContext",
-          "PortalSection",
-          "BudgetVersion",
-          "BudgetVersionDetail",
-          "ExpenseAggregate",
-          "SectionProgress",
-          "WorkPayment",
-          "ProgressPhoto",
-          "ProjectListItem",
-          "BudgetSectionView",
-          "BudgetView",
-          "ExpenseAllocationView",
-          "ExpenseDocumentView",
-          "ExpenseView",
-          "ExpenseSummaryView",
-          "ProgressSectionView",
-          "ProgressView",
-          "PaymentView",
-          "PaymentSummaryView",
-          "WorkBalanceResult",
-          "PhotoView",
-          "ProjectOverview",
-          "BudgetRepository",
-          "ExpenseRepository",
-          "ProjectTrackingRepository",
-          "ProgressPhotoRepository",
-          "ProjectSectionRepository",
-          "ProjectContext",
-          "ProjectViewerGrant"
-        ],
-        "viewer_access": [
-          "list_viewer_project_grants"
-        ],
-        "registry_gateway": [
-          "RegistryBoundaryError",
-          "get_project_context"
-        ],
-        "financial_policy": [
-          "calculate_completed_work",
-          "calculate_overall_progress",
-          "calculate_material_balance",
-          "calculate_work_balance"
-        ],
-        "portal_store": [
-          "PortalStore"
-        ],
-        "authorization_guard": [
-          "ScopedNotFoundError"
-        ]
-      },
-      "audit_writer": {
-        "models": [
-          "AuditResult",
-          "AuditAction",
-          "AuditRecord",
-          "AuditIntent",
-          "AuditRepository"
-        ]
-      },
-      "api": {
-        "models": [
-          "StaffRole",
-          "StaffStatus",
-          "PrincipalStatus",
-          "ProducerScopeMode",
-          "ProducerSourceType",
-          "Capability",
-          "ClientViewer",
-          "ViewerAccessCredential",
-          "ProjectViewerGrant",
-          "StaffAccount",
-          "StaffSession",
-          "StaffProjectAssignment",
-          "ServicePrincipal",
-          "ServiceCredential",
-          "ProducerProjectGrant",
-          "StaffSessionGrant",
-          "ViewerSessionGrant",
-          "ViewerCredentialIssue",
-          "ServiceCredentialIssue",
-          "StaffAccountView",
-          "ClientViewerView",
-          "ServicePrincipalView",
-          "SessionRevocationResult",
-          "ChallengeIssueView",
-          "ViewerCredentialIssueResponse",
-          "ServiceCredentialIssueResponse",
-          "ExpenseMutationResult",
-          "DocumentMutationResult",
-          "PhotoMutationResult",
-          "SnapshotPublication",
-          "SnapshotImportRecord",
-          "BudgetActivationResult",
-          "BudgetVersionDetail",
-          "ConfirmedRecognitionPublication",
-          "AllocationInstruction",
-          "ExpenseDocument",
-          "ExpenseAggregate",
-          "SectionProgress",
-          "WorkPayment",
-          "PhotoPublication",
-          "ProjectListItem",
-          "ProjectOverview",
-          "BinaryPayload",
-          "ViewerEnterRequest",
-          "StaffLoginRequest",
-          "StaffEmailConfirmationRequest",
-          "PasswordResetRequest",
-          "PasswordResetCompletionRequest",
-          "EmailChangeRequest",
-          "EmailChangeConfirmationRequest",
-          "StaffCreateRequest",
-          "StaffStatusChangeRequest",
-          "ViewerCreateRequest",
-          "ServicePrincipalCreateRequest",
-          "ServicePrincipalStatusChangeRequest",
-          "ServiceCredentialIssueRequest",
-          "ManualSectionPlanUpsertRequest",
-          "RecognitionExpenseCreateRequest",
-          "ExpenseCorrectionRequest",
-          "ExpenseInclusionRequest",
-          "ExpenseAllocationReplacementRequest",
-          "ExpenseDocumentUpdateRequest",
-          "SectionProgressUpdateRequest",
-          "WorkPaymentRegistrationRequest",
-          "ProgressPhotoUpdateRequest",
-          "ViewerSessionView",
-          "StaffPasswordChangeRequest",
-          "StaffRecoveryOverrideRequest",
-          "ProgressPhotoView",
-          "ProjectReference",
-          "ExpenseOperationOutcome"
-        ],
-        "staff_identity": [
-          "IdentityInputRejected",
-          "create_staff_account",
-          "authenticate_staff",
-          "resolve_staff_session",
-          "sign_out_staff",
-          "revoke_staff_sessions",
-          "change_staff_status",
-          "change_staff_password",
-          "assign_staff_project",
-          "revoke_staff_project_assignment",
-          "perform_recovery_override"
-        ],
-        "viewer_access": [
-          "create_viewer",
-          "revoke_viewer",
-          "issue_viewer_access",
-          "revoke_viewer_access",
-          "enter_viewer_access",
-          "resolve_viewer_session",
-          "grant_viewer_project",
-          "revoke_viewer_project",
-          "list_viewer_project_grants",
-          "describe_viewer_session",
-          "sign_out_viewer"
-        ],
-        "service_identity": [
-          "create_service_principal",
-          "change_service_principal_status",
-          "issue_service_credential",
-          "revoke_service_credential",
-          "grant_producer_project",
-          "revoke_producer_project",
-          "authenticate_service_principal",
-          "authorize_producer_scope"
-        ],
-        "authorization_guard": [
-          "AuthenticationRejected",
-          "AuthorizationRejected",
-          "ArchivedProjectRejected",
-          "ScopedNotFoundError",
-          "conceal_authentication_failure",
-          "authorize_staff_project_read",
-          "authorize_viewer_project_read",
-          "authorize_staff_project_mutation",
-          "authorize_access_management",
-          "authorize_snapshot_import"
-        ],
-        "snapshot_import": [
-          "import_snapshot",
-          "get_snapshot_import_result"
-        ],
-        "budget_management": [
-          "BudgetValidationError",
-          "BudgetConflictError",
-          "ensure_manual_budget",
-          "upsert_manual_section_plan",
-          "get_budget_version",
-          "activate_budget_version",
-          "validate_project_section"
-        ],
-        "expense_intake": [
-          "create_expense_from_recognition"
-        ],
-        "expense_management": [
-          "ExpenseValidationError",
-          "ExpenseConflictError",
-          "BinaryAccessRejected",
-          "correct_expense",
-          "set_expense_inclusion",
-          "replace_expense_allocations",
-          "update_expense_document",
-          "read_expense_document"
-        ],
-        "project_tracking": [
-          "TrackingValidationError",
-          "TrackingConflictError",
-          "set_section_progress",
-          "register_work_payment",
-          "list_project_progress",
-          "list_project_payments"
-        ],
-        "photo_management": [
-          "PhotoValidationError",
-          "PhotoConflictError",
-          "publish_progress_photo",
-          "update_progress_photo",
-          "list_progress_photos",
-          "read_progress_photo"
-        ],
-        "derived_views": [
-          "list_viewer_projects",
-          "build_project_overview",
-          "build_budget_view",
-          "build_expense_view",
-          "build_progress_view",
-          "build_payment_view"
-        ],
-        "portal_store": [
-          "PersistenceError",
-          "PortalStore"
-        ],
-        "staff_challenges": [
-          "ChallengeRejected",
-          "ChallengeRateLimited",
-          "issue_email_verification",
-          "confirm_email_verification",
-          "request_email_change",
-          "confirm_email_change",
-          "request_password_reset",
-          "complete_password_reset"
-        ],
-        "financial_policy": [
-          "FinancialValidationError"
-        ],
-        "registry_gateway": [
-          "RegistryBoundaryError",
-          "list_active_projects"
         ]
       },
       "audit_repository": {
@@ -11987,66 +11327,6 @@
           "AuditRecord",
           "AuditRepository",
           "AuditRepositoryContext"
-        ]
-      },
-      "portal_store": {
-        "models": [
-          "AuditRepository",
-          "AuditRepositoryContext",
-          "ProjectTrackingRepository",
-          "ProjectSectionRepository",
-          "BudgetRepository",
-          "SnapshotImportRepository",
-          "ExpenseRepository",
-          "ProgressPhotoRepository",
-          "EmailDeliveryRepository",
-          "StaffAccessRepository",
-          "ViewerAccessRepository",
-          "ServiceIdentityRepository"
-        ],
-        "audit_repository": [
-          "create_audit_schema",
-          "SqliteAuditRepository"
-        ],
-        "project_tracking_repository": [
-          "create_project_tracking_schema",
-          "SqliteProjectTrackingRepository"
-        ],
-        "project_section_repository": [
-          "create_project_section_schema",
-          "SqliteProjectSectionRepository"
-        ],
-        "budget_repository": [
-          "create_budget_schema",
-          "SqliteBudgetRepository"
-        ],
-        "snapshot_import_repository": [
-          "create_snapshot_import_schema",
-          "SqliteSnapshotImportRepository"
-        ],
-        "expense_repository": [
-          "create_expense_schema",
-          "SqliteExpenseRepository"
-        ],
-        "progress_photo_repository": [
-          "create_progress_photo_schema",
-          "SqliteProgressPhotoRepository"
-        ],
-        "email_delivery_repository": [
-          "create_email_delivery_schema",
-          "SqliteEmailDeliveryRepository"
-        ],
-        "staff_access_repository": [
-          "create_staff_access_schema",
-          "SqliteStaffAccessRepository"
-        ],
-        "viewer_access_repository": [
-          "SqliteViewerAccessRepository",
-          "create_client_access_schema"
-        ],
-        "service_identity_repository": [
-          "SqliteServiceIdentityRepository",
-          "create_producer_identity_schema"
         ]
       },
       "project_tracking_repository": {
@@ -12150,106 +11430,785 @@
           "ProducerScopeMode"
         ]
       },
-      "staff_challenges": {
+      "portal_store": {
+        "audit_repository": [
+          "SqliteAuditRepository",
+          "create_audit_schema"
+        ],
+        "budget_repository": [
+          "SqliteBudgetRepository",
+          "create_budget_schema"
+        ],
+        "email_delivery_repository": [
+          "SqliteEmailDeliveryRepository",
+          "create_email_delivery_schema"
+        ],
+        "expense_repository": [
+          "SqliteExpenseRepository",
+          "create_expense_schema"
+        ],
+        "models": [
+          "ApprovedEstimateSnapshot",
+          "AuditRecord",
+          "AuditRepository",
+          "AuditRepositoryContext",
+          "BudgetRepository",
+          "BudgetVersion",
+          "ClientViewer",
+          "EmailDeliveryRecord",
+          "EmailDeliveryRepository",
+          "EmailVerificationChallenge",
+          "Expense",
+          "ExpenseAggregate",
+          "ExpenseDocument",
+          "ExpenseRepository",
+          "PasswordResetToken",
+          "PendingEmailChange",
+          "PortalSection",
+          "ProducerProjectGrant",
+          "ProgressPhoto",
+          "ProgressPhotoRepository",
+          "ProjectSectionRepository",
+          "ProjectTrackingRepository",
+          "ProjectViewerGrant",
+          "SectionPlan",
+          "SectionProgress",
+          "ServiceCredential",
+          "ServiceIdentityRepository",
+          "ServicePrincipal",
+          "SnapshotImportRecord",
+          "SnapshotImportRepository",
+          "StaffAccessRepository",
+          "StaffAccount",
+          "StaffProjectAssignment",
+          "StaffSession",
+          "ViewerAccessCredential",
+          "ViewerAccessRepository",
+          "ViewerSession",
+          "WorkPayment"
+        ],
+        "progress_photo_repository": [
+          "SqliteProgressPhotoRepository",
+          "create_progress_photo_schema"
+        ],
+        "project_section_repository": [
+          "SqliteProjectSectionRepository",
+          "create_project_section_schema"
+        ],
+        "project_tracking_repository": [
+          "SqliteProjectTrackingRepository",
+          "create_project_tracking_schema"
+        ],
+        "service_identity_repository": [
+          "SqliteServiceIdentityRepository",
+          "create_producer_identity_schema"
+        ],
+        "snapshot_import_repository": [
+          "SqliteSnapshotImportRepository",
+          "create_snapshot_import_schema"
+        ],
+        "staff_access_repository": [
+          "SqliteStaffAccessRepository",
+          "create_staff_access_schema"
+        ],
+        "viewer_access_repository": [
+          "SqliteViewerAccessRepository",
+          "create_client_access_schema"
+        ]
+      },
+      "staff_bootstrap_store": {
+        "audit_repository": [
+          "SqliteAuditRepository",
+          "create_audit_schema"
+        ],
+        "models": [
+          "AuditRecord",
+          "AuditRepositoryContext",
+          "StaffAccount",
+          "StaffBootstrapPort"
+        ],
+        "portal_store": [
+          "PersistenceError"
+        ],
+        "staff_access_repository": [
+          "SqliteStaffAccessRepository",
+          "create_staff_access_schema"
+        ]
+      },
+      "registry_gateway": {
+        "models": [
+          "ProjectContext",
+          "ProjectReference",
+          "ProjectValidationResult",
+          "RegistryFailureKind",
+          "RegistryProjectStatus"
+        ]
+      },
+      "email_delivery_gateway": {
+        "models": [
+          "DeliveryOutcome",
+          "EmailDeliveryRecord",
+          "EmailDeliveryRequest"
+        ],
+        "portal_store": [
+          "PersistenceError",
+          "PortalStore"
+        ]
+      },
+      "binary_storage": {
+        "models": [
+          "AuthorizedBinaryReference",
+          "BinaryObjectKind",
+          "BinaryPayload"
+        ]
+      },
+      "audit_writer": {
+        "models": [
+          "AuditAction",
+          "AuditIntent",
+          "AuditRecord",
+          "AuditRepository",
+          "AuditResult"
+        ]
+      },
+      "authorization_guard": {
+        "models": [
+          "ActorKind",
+          "AuthorizationPrincipalKind",
+          "AuthorizedProjectContext",
+          "Capability",
+          "GrantStatus",
+          "PrincipalStatus",
+          "ProducerScopeMode",
+          "ProducerSourceType",
+          "ProjectAuthorizationRequest",
+          "ProjectValidationResult",
+          "RegistryProjectStatus",
+          "ServiceActorContext",
+          "StaffAccessRepository",
+          "StaffAccount",
+          "StaffActorContext",
+          "StaffRole",
+          "StaffStatus",
+          "ViewerAccessRepository",
+          "ViewerActorContext",
+          "ViewerStatus"
+        ],
+        "portal_store": [
+          "PortalStore",
+          "PortalTransaction"
+        ],
+        "registry_gateway": [
+          "validate_project_reference"
+        ]
+      },
+      "staff_identity": {
+        "audit_writer": [
+          "append_audit"
+        ],
+        "authorization_guard": [
+          "ArchivedProjectRejected",
+          "AuthorizationRejected",
+          "ScopedNotFoundError",
+          "authorize_access_management",
+          "conceal_authentication_failure"
+        ],
+        "credential_security": [
+          "hash_password",
+          "issue_verification_secret",
+          "parse_verification_secret",
+          "verify_password",
+          "verify_secret"
+        ],
         "models": [
           "ActorKind",
           "AuditAction",
           "AuditEntityKind",
           "AuditIntent",
           "AuditResult",
-          "ChallengeIssueView",
-          "DeliveryOutcome",
-          "EmailDeliveryRecord",
-          "EmailDeliveryRequest",
-          "EmailMessageKind",
+          "GrantStatus",
           "IssuedSecret",
-          "PresentedSecret",
-          "StaffAccessRepository",
+          "SessionRevocationResult",
           "StaffAccount",
           "StaffAccountView",
           "StaffActorContext",
-          "StaffChallengeRepository",
+          "StaffProjectAssignment",
+          "StaffRole",
+          "StaffSession",
+          "StaffSessionGrant",
           "StaffStatus"
         ],
-        "credential_security": [
-          "hash_password",
-          "issue_verification_secret",
-          "parse_verification_secret",
-          "verify_secret"
-        ],
-        "authorization_guard": [
-          "AuthenticationRejected",
-          "AuthorizationRejected",
-          "ScopedNotFoundError",
-          "conceal_authentication_failure",
-          "authorize_access_management"
-        ],
-        "audit_writer": [
-          "append_audit"
-        ],
         "portal_store": [
-          "PersistenceError",
-          "PortalStore",
-          "PortalTransaction"
+          "PortalStore"
         ],
-        "email_delivery_gateway": [
-          "EmailDeliveryError",
-          "deliver_email_message"
+        "registry_gateway": [
+          "validate_project_reference"
+        ]
+      },
+      "staff_bootstrap": {
+        "credential_security": [
+          "hash_password"
+        ],
+        "models": [
+          "ActorKind",
+          "AuditAction",
+          "AuditEntityKind",
+          "AuditRecord",
+          "AuditResult",
+          "StaffAccount",
+          "StaffAccountView",
+          "StaffBootstrapPort",
+          "StaffRole",
+          "StaffStatus"
         ],
         "staff_identity": [
           "_normalize_staff_email",
           "_validate_new_password"
         ]
       },
-      "runtime": {
+      "staff_challenges": {
+        "authorization_guard": [
+          "conceal_authentication_failure"
+        ],
+        "email_delivery_gateway": [
+          "deliver_email_message"
+        ],
         "models": [
-          "RuntimeSettings",
-          "HealthStatus"
+          "ChallengeIssueView",
+          "EmailDeliveryRecord",
+          "EmailDeliveryRequest",
+          "EmailMessageKind",
+          "StaffAccount",
+          "StaffAccountView",
+          "StaffActorContext"
+        ],
+        "portal_store": [
+          "PortalStore",
+          "PortalTransaction"
+        ],
+        "staff_identity": [
+          "_normalize_staff_email"
+        ]
+      },
+      "viewer_access": {
+        "audit_writer": [
+          "append_audit"
+        ],
+        "authorization_guard": [
+          "AuthenticationRejected",
+          "AuthorizationRejected",
+          "ScopedNotFoundError",
+          "authorize_access_management",
+          "conceal_authentication_failure"
+        ],
+        "credential_security": [
+          "issue_verification_secret",
+          "parse_verification_secret",
+          "verify_secret"
+        ],
+        "models": [
+          "ActorKind",
+          "AuditAction",
+          "AuditEntityKind",
+          "AuditIntent",
+          "AuditResult",
+          "ClientViewer",
+          "GrantStatus",
+          "IssuedSecret",
+          "ProjectViewerGrant",
+          "StaffActorContext",
+          "ViewerAccessCredential",
+          "ViewerActorContext",
+          "ViewerCredentialIssue",
+          "ViewerSession",
+          "ViewerSessionGrant",
+          "ViewerSessionView",
+          "ViewerStatus"
+        ],
+        "portal_store": [
+          "PortalStore",
+          "PortalTransaction"
+        ],
+        "registry_gateway": [
+          "RegistryBoundaryError",
+          "validate_project_reference"
+        ]
+      },
+      "service_identity": {
+        "audit_writer": [
+          "append_audit"
+        ],
+        "authorization_guard": [
+          "ArchivedProjectRejected",
+          "AuthorizationRejected",
+          "ScopedNotFoundError",
+          "authorize_access_management",
+          "conceal_authentication_failure"
+        ],
+        "credential_security": [
+          "issue_verification_secret",
+          "parse_verification_secret",
+          "verify_secret"
+        ],
+        "models": [
+          "ActorKind",
+          "AuditAction",
+          "AuditEntityKind",
+          "AuditIntent",
+          "AuditResult",
+          "GrantStatus",
+          "PrincipalStatus",
+          "ProducerProjectGrant",
+          "ProducerScopeMode",
+          "ProducerSourceType",
+          "ServiceActorContext",
+          "ServiceCredential",
+          "ServiceCredentialIssue",
+          "ServiceIdentityRepository",
+          "ServicePrincipal",
+          "StaffActorContext"
+        ],
+        "portal_store": [
+          "PortalStore",
+          "PortalTransaction"
+        ],
+        "registry_gateway": [
+          "validate_project_reference"
+        ]
+      },
+      "snapshot_import": {
+        "audit_writer": [
+          "append_audit"
+        ],
+        "authorization_guard": [
+          "ArchivedProjectRejected",
+          "AuthorizationRejected",
+          "ScopedNotFoundError",
+          "authorize_snapshot_import"
+        ],
+        "financial_policy": [
+          "FinancialValidationError",
+          "validate_eur_amount"
+        ],
+        "models": [
+          "ActorKind",
+          "ApprovedEstimateSnapshot",
+          "AuditAction",
+          "AuditEntityKind",
+          "AuditIntent",
+          "AuditResult",
+          "ImportOutcome",
+          "ImportRejectReason",
+          "ServiceActorContext",
+          "SnapshotImportRecord",
+          "SnapshotPublication"
+        ],
+        "portal_store": [
+          "PortalStore"
+        ]
+      },
+      "budget_management": {
+        "audit_writer": [
+          "append_audit"
+        ],
+        "authorization_guard": [
+          "ScopedNotFoundError"
+        ],
+        "financial_policy": [
+          "validate_eur_amount"
+        ],
+        "models": [
+          "ActorKind",
+          "AllocationTargetKind",
+          "AuditAction",
+          "AuditEntityKind",
+          "AuditIntent",
+          "AuditResult",
+          "AuthorizedProjectContext",
+          "BudgetActivationResult",
+          "BudgetSource",
+          "BudgetVersion",
+          "BudgetVersionDetail",
+          "BudgetVersionStatus",
+          "Capability",
+          "ExpenseAllocation",
+          "PortalSection",
+          "RegistryProjectStatus",
+          "SectionPlan",
+          "SnapshotSectionData"
+        ],
+        "portal_store": [
+          "PortalStore"
+        ]
+      },
+      "expense_management": {
+        "audit_writer": [
+          "append_audit"
+        ],
+        "binary_storage": [
+          "BinaryStorageError",
+          "read_binary"
+        ],
+        "financial_policy": [
+          "validate_eur_amount"
+        ],
+        "models": [
+          "ActorKind",
+          "AllocationInstruction",
+          "AllocationTargetKind",
+          "AuditAction",
+          "AuditEntityKind",
+          "AuditIntent",
+          "AuditResult",
+          "AuthorizedBinaryReference",
+          "AuthorizedProjectContext",
+          "BinaryObjectKind",
+          "BinaryPayload",
+          "Expense",
+          "ExpenseAggregate",
+          "ExpenseAllocation",
+          "ExpenseDocument",
+          "ExpenseOperationOutcome"
+        ],
+        "portal_store": [
+          "PortalStore"
+        ]
+      },
+      "expense_intake": {
+        "audit_writer": [
+          "append_audit"
+        ],
+        "expense_management": [
+          "ExpenseConflictError",
+          "ExpenseValidationError"
+        ],
+        "financial_policy": [
+          "FinancialValidationError",
+          "validate_eur_amount"
+        ],
+        "models": [
+          "AllocationInstruction",
+          "AllocationTargetKind",
+          "AuditAction",
+          "AuditEntityKind",
+          "AuditIntent",
+          "AuditResult",
+          "AuthorizedProjectContext",
+          "Capability",
+          "ConfirmedRecognitionPublication",
+          "Expense",
+          "ExpenseAggregate",
+          "ExpenseAllocation",
+          "ExpenseDocument",
+          "ExpenseIntake",
+          "ExpenseOperationOutcome",
+          "RecognitionStatus",
+          "RegistryProjectStatus"
+        ],
+        "portal_store": [
+          "PortalStore"
+        ]
+      },
+      "project_tracking": {
+        "audit_writer": [
+          "append_audit"
+        ],
+        "budget_management": [
+          "ensure_manual_budget",
+          "validate_project_section"
+        ],
+        "financial_policy": [
+          "validate_eur_amount"
+        ],
+        "models": [
+          "AuditAction",
+          "AuditEntityKind",
+          "AuditIntent",
+          "AuditResult",
+          "AuthorizedProjectContext",
+          "SectionProgress",
+          "WorkPayment"
+        ],
+        "portal_store": [
+          "PortalStore"
+        ]
+      },
+      "photo_management": {
+        "audit_writer": [
+          "append_audit"
+        ],
+        "binary_storage": [
+          "read_binary"
+        ],
+        "models": [
+          "ActorKind",
+          "AuditAction",
+          "AuditEntityKind",
+          "AuditIntent",
+          "AuditResult",
+          "AuthorizedBinaryReference",
+          "AuthorizedProjectContext",
+          "BinaryObjectKind",
+          "BinaryPayload",
+          "PhotoMutationResult",
+          "PhotoPublication",
+          "ProgressPhoto",
+          "ProgressPhotoView"
+        ],
+        "portal_store": [
+          "PortalStore"
+        ]
+      },
+      "derived_views": {
+        "authorization_guard": [
+          "ScopedNotFoundError"
+        ],
+        "financial_policy": [
+          "calculate_completed_work",
+          "calculate_material_balance",
+          "calculate_overall_progress",
+          "calculate_work_balance"
+        ],
+        "models": [
+          "AllocationTargetKind",
+          "AuthorizedProjectContext",
+          "BudgetSectionView",
+          "BudgetVersionDetail",
+          "BudgetView",
+          "ExpenseAggregate",
+          "ExpenseAllocationView",
+          "ExpenseDocumentView",
+          "ExpenseSummaryView",
+          "ExpenseView",
+          "GrantStatus",
+          "PaymentSummaryView",
+          "PaymentView",
+          "PhotoView",
+          "PortalSection",
+          "ProgressPhoto",
+          "ProgressSectionView",
+          "ProgressView",
+          "ProjectListItem",
+          "ProjectOverview",
+          "SectionProgress",
+          "ViewAvailability",
+          "ViewerActorContext",
+          "WorkPayment"
         ],
         "portal_store": [
           "PortalStore"
         ],
-        "api": [
-          "create_app"
+        "registry_gateway": [
+          "RegistryBoundaryError",
+          "get_project_context"
         ],
-        "transport_guard": [
-          "install_transport_guards"
-        ],
-        "runtime_settings": [
-          "load_runtime_settings"
+        "viewer_access": [
+          "list_viewer_project_grants"
         ]
       },
       "api_irregular": {
-        "models": [
-          "Capability",
-          "ViewerEnterRequest",
-          "ViewerSessionGrant",
-          "ViewerSessionView",
-          "ProjectListItem",
-          "ProjectOverview",
-          "BinaryPayload",
-          "AuthorizedProjectContext",
-          "ViewerActorContext"
-        ],
-        "viewer_access": [
-          "enter_viewer_access",
-          "resolve_viewer_session",
-          "describe_viewer_session",
-          "sign_out_viewer"
-        ],
         "authorization_guard": [
           "AuthenticationRejected",
           "authorize_viewer_project_read"
         ],
         "derived_views": [
-          "list_viewer_projects",
-          "build_project_overview"
+          "build_project_overview",
+          "list_viewer_projects"
         ],
         "expense_management": [
           "read_expense_document"
         ],
+        "models": [
+          "BinaryPayload",
+          "Capability",
+          "ProjectListItem",
+          "ProjectOverview",
+          "ViewerEnterRequest",
+          "ViewerSessionGrant",
+          "ViewerSessionView"
+        ],
         "photo_management": [
           "read_progress_photo"
+        ],
+        "viewer_access": [
+          "describe_viewer_session",
+          "enter_viewer_access",
+          "resolve_viewer_session",
+          "sign_out_viewer"
+        ]
+      },
+      "api": {
+        "api_irregular": [
+          "_binary_content_response",
+          "list_viewer_projects_endpoint",
+          "viewer_enter_endpoint",
+          "viewer_logout_endpoint",
+          "viewer_project_overview_endpoint",
+          "viewer_read_expense_document_endpoint",
+          "viewer_read_progress_photo_endpoint",
+          "viewer_restore_session_endpoint"
+        ],
+        "authorization_guard": [
+          "ArchivedProjectRejected",
+          "AuthenticationRejected",
+          "AuthorizationRejected",
+          "ScopedNotFoundError",
+          "authorize_access_management",
+          "authorize_snapshot_import",
+          "authorize_staff_project_mutation",
+          "authorize_staff_project_read"
+        ],
+        "budget_management": [
+          "BudgetConflictError",
+          "BudgetValidationError",
+          "activate_budget_version",
+          "ensure_manual_budget",
+          "get_budget_version",
+          "upsert_manual_section_plan"
+        ],
+        "derived_views": [
+          "build_project_overview"
+        ],
+        "expense_intake": [
+          "create_expense_from_recognition"
+        ],
+        "expense_management": [
+          "BinaryAccessRejected",
+          "ExpenseConflictError",
+          "ExpenseValidationError",
+          "correct_expense",
+          "read_expense_document",
+          "replace_expense_allocations",
+          "set_expense_inclusion",
+          "update_expense_document"
+        ],
+        "financial_policy": [
+          "FinancialValidationError"
+        ],
+        "models": [
+          "BudgetActivationResult",
+          "BudgetVersionDetail",
+          "Capability",
+          "ChallengeIssueView",
+          "ClientViewer",
+          "ClientViewerView",
+          "DocumentMutationResult",
+          "EmailChangeConfirmationRequest",
+          "EmailChangeRequest",
+          "ExpenseAllocationReplacementRequest",
+          "ExpenseCorrectionRequest",
+          "ExpenseDocument",
+          "ExpenseDocumentUpdateRequest",
+          "ExpenseInclusionRequest",
+          "ExpenseMutationResult",
+          "ExpenseOperationOutcome",
+          "ManualSectionPlanUpsertRequest",
+          "PasswordResetCompletionRequest",
+          "PasswordResetRequest",
+          "PhotoMutationResult",
+          "PhotoPublication",
+          "ProducerProjectGrant",
+          "ProgressPhotoUpdateRequest",
+          "ProgressPhotoView",
+          "ProjectOverview",
+          "ProjectReference",
+          "ProjectViewerGrant",
+          "RecognitionExpenseCreateRequest",
+          "SectionProgress",
+          "SectionProgressUpdateRequest",
+          "ServiceCredentialIssue",
+          "ServiceCredentialIssueRequest",
+          "ServiceCredentialIssueResponse",
+          "ServicePrincipal",
+          "ServicePrincipalCreateRequest",
+          "ServicePrincipalStatusChangeRequest",
+          "ServicePrincipalView",
+          "SessionRevocationResult",
+          "SnapshotImportRecord",
+          "SnapshotPublication",
+          "StaffAccountView",
+          "StaffCreateRequest",
+          "StaffEmailConfirmationRequest",
+          "StaffLoginRequest",
+          "StaffPasswordChangeRequest",
+          "StaffProjectAssignment",
+          "StaffRecoveryOverrideRequest",
+          "StaffSessionGrant",
+          "StaffStatusChangeRequest",
+          "ViewerCreateRequest",
+          "ViewerCredentialIssue",
+          "ViewerCredentialIssueResponse",
+          "WorkPayment",
+          "WorkPaymentRegistrationRequest"
+        ],
+        "photo_management": [
+          "PhotoConflictError",
+          "PhotoValidationError",
+          "list_progress_photos",
+          "publish_progress_photo",
+          "read_progress_photo",
+          "update_progress_photo"
+        ],
+        "portal_store": [
+          "PersistenceError",
+          "PortalStore"
+        ],
+        "project_tracking": [
+          "TrackingConflictError",
+          "TrackingValidationError",
+          "list_project_payments",
+          "list_project_progress",
+          "register_work_payment",
+          "set_section_progress"
+        ],
+        "registry_gateway": [
+          "RegistryBoundaryError",
+          "list_active_projects"
+        ],
+        "service_identity": [
+          "authenticate_service_principal",
+          "authorize_producer_scope",
+          "change_service_principal_status",
+          "create_service_principal",
+          "grant_producer_project",
+          "issue_service_credential",
+          "revoke_producer_project",
+          "revoke_service_credential"
+        ],
+        "snapshot_import": [
+          "get_snapshot_import_result",
+          "import_snapshot"
+        ],
+        "staff_challenges": [
+          "ChallengeRateLimited",
+          "ChallengeRejected",
+          "complete_password_reset",
+          "confirm_email_change",
+          "confirm_email_verification",
+          "issue_email_verification",
+          "request_email_change",
+          "request_password_reset"
+        ],
+        "staff_identity": [
+          "IdentityInputRejected",
+          "assign_staff_project",
+          "authenticate_staff",
+          "change_staff_password",
+          "change_staff_status",
+          "create_staff_account",
+          "perform_recovery_override",
+          "resolve_staff_session",
+          "revoke_staff_project_assignment",
+          "revoke_staff_sessions",
+          "sign_out_staff"
+        ],
+        "viewer_access": [
+          "create_viewer",
+          "grant_viewer_project",
+          "issue_viewer_access",
+          "revoke_viewer",
+          "revoke_viewer_access",
+          "revoke_viewer_project"
         ]
       },
       "transport_guard": {
@@ -12263,58 +12222,28 @@
           "RuntimeSettings"
         ]
       },
-      "staff_bootstrap": {
+      "runtime": {
+        "api": [
+          "create_app"
+        ],
         "models": [
-          "StaffBootstrapPort",
-          "StaffAccount",
-          "StaffAccountView",
-          "AuditRecord",
-          "StaffRole",
-          "StaffStatus",
-          "ActorKind",
-          "AuditAction",
-          "AuditEntityKind",
-          "AuditResult"
-        ],
-        "credential_security": [
-          "hash_password"
-        ],
-        "staff_identity": [
-          "IdentityInputRejected",
-          "_normalize_staff_email",
-          "_validate_new_password"
-        ]
-      },
-      "staff_bootstrap_store": {
-        "models": [
-          "StaffBootstrapPort",
-          "StaffAccount",
-          "AuditRecord",
-          "AuditRepositoryContext"
-        ],
-        "staff_access_repository": [
-          "create_staff_access_schema",
-          "SqliteStaffAccessRepository"
-        ],
-        "audit_repository": [
-          "create_audit_schema",
-          "SqliteAuditRepository"
+          "HealthStatus",
+          "RuntimeSettings"
         ],
         "portal_store": [
-          "PersistenceError"
+          "PortalStore"
+        ],
+        "transport_guard": [
+          "install_transport_guards"
         ]
       },
       "staff_bootstrap_cli": {
-        "models": [
-          "RuntimeSettings",
-          "StaffAccountView"
-        ],
         "runtime_settings": [
           "load_runtime_settings"
         ],
         "staff_bootstrap": [
-          "bootstrap_first_administrator",
-          "BootstrapAlreadyCompleted"
+          "BootstrapAlreadyCompleted",
+          "bootstrap_first_administrator"
         ],
         "staff_bootstrap_store": [
           "SqliteStaffBootstrapStore"
@@ -13177,29 +13106,267 @@
     "_viewer_credential_response",
     "_service_credential_response",
     "_expense_mutation_result",
-    "_document_mutation_result"
+    "_document_mutation_result",
+    "StaffAccessRepository.get_staff_by_email",
+    "StaffAccessRepository.get_staff",
+    "StaffAccessRepository.get_staff_session",
+    "StaffAccessRepository.list_staff_sessions",
+    "StaffAccessRepository.get_staff_assignment",
+    "StaffAccessRepository.get_staff_assignment_by_id",
+    "StaffAccessRepository.insert_staff_account",
+    "StaffAccessRepository.update_staff_account",
+    "StaffAccessRepository.insert_staff_session",
+    "StaffAccessRepository.update_staff_sessions",
+    "StaffAccessRepository.insert_staff_assignment",
+    "StaffAccessRepository.update_staff_assignment",
+    "StaffChallengeRepository.list_email_verifications",
+    "StaffChallengeRepository.get_email_verification",
+    "StaffChallengeRepository.list_email_changes",
+    "StaffChallengeRepository.get_email_change",
+    "StaffChallengeRepository.list_password_resets",
+    "StaffChallengeRepository.get_password_reset",
+    "StaffChallengeRepository.insert_email_verification",
+    "StaffChallengeRepository.update_email_verifications",
+    "StaffChallengeRepository.insert_email_change",
+    "StaffChallengeRepository.update_email_changes",
+    "StaffChallengeRepository.insert_password_reset",
+    "StaffChallengeRepository.update_password_resets",
+    "EmailDeliveryRepository.get_email_delivery",
+    "EmailDeliveryRepository.insert_email_delivery",
+    "EmailDeliveryRepository.update_email_delivery",
+    "ViewerAccessRepository.get_viewer",
+    "ViewerAccessRepository.get_viewer_credential",
+    "ViewerAccessRepository.get_viewer_session",
+    "ViewerAccessRepository.list_viewer_sessions",
+    "ViewerAccessRepository.list_viewer_credentials",
+    "ViewerAccessRepository.get_viewer_grant",
+    "ViewerAccessRepository.get_viewer_grant_by_id",
+    "ViewerAccessRepository.list_viewer_grants",
+    "ViewerAccessRepository.insert_viewer",
+    "ViewerAccessRepository.update_viewer",
+    "ViewerAccessRepository.insert_viewer_credential",
+    "ViewerAccessRepository.update_viewer_credentials",
+    "ViewerAccessRepository.insert_viewer_session",
+    "ViewerAccessRepository.update_viewer_sessions",
+    "ViewerAccessRepository.insert_viewer_grant",
+    "ViewerAccessRepository.update_viewer_grant",
+    "ServiceIdentityRepository.get_service_principal",
+    "ServiceIdentityRepository.get_service_credential",
+    "ServiceIdentityRepository.list_service_credentials",
+    "ServiceIdentityRepository.get_producer_grant",
+    "ServiceIdentityRepository.get_producer_grant_by_id",
+    "ServiceIdentityRepository.insert_service_principal",
+    "ServiceIdentityRepository.update_service_principal",
+    "ServiceIdentityRepository.insert_service_credential",
+    "ServiceIdentityRepository.update_service_credential",
+    "ServiceIdentityRepository.insert_producer_grant",
+    "ServiceIdentityRepository.update_producer_grant",
+    "SnapshotImportRepository.get_snapshot_by_identity",
+    "SnapshotImportRepository.get_snapshot_import",
+    "SnapshotImportRepository.insert_snapshot",
+    "SnapshotImportRepository.insert_snapshot_import",
+    "ProjectSectionRepository.list_project_sections",
+    "ProjectSectionRepository.get_project_section",
+    "ProjectSectionRepository.insert_project_sections",
+    "BudgetRepository.get_budget_version",
+    "BudgetRepository.get_active_budget_version",
+    "BudgetRepository.get_manual_budget_version",
+    "BudgetRepository.list_budget_plans",
+    "BudgetRepository.insert_budget_version",
+    "BudgetRepository.update_budget_versions",
+    "BudgetRepository.upsert_section_plan",
+    "BudgetRepository.insert_section_plans",
+    "ExpenseRepository.get_expense_aggregate",
+    "ExpenseRepository.get_expense_by_recognition_id",
+    "ExpenseRepository.get_expense_document",
+    "ExpenseRepository.list_project_expenses",
+    "ExpenseRepository.insert_expense_aggregate",
+    "ExpenseRepository.update_expense_aggregate",
+    "ExpenseRepository.update_expense",
+    "ExpenseRepository.update_expense_document",
+    "ProjectTrackingRepository.get_section_progress",
+    "ProjectTrackingRepository.list_project_progress",
+    "ProjectTrackingRepository.get_work_payment",
+    "ProjectTrackingRepository.list_project_payments",
+    "ProjectTrackingRepository.upsert_section_progress",
+    "ProjectTrackingRepository.insert_work_payment",
+    "ProgressPhotoRepository.get_progress_photo",
+    "ProgressPhotoRepository.get_progress_photo_by_intake_id",
+    "ProgressPhotoRepository.list_project_photos",
+    "ProgressPhotoRepository.insert_progress_photo",
+    "ProgressPhotoRepository.update_progress_photo",
+    "AuditRepository.insert_audit",
+    "PortalUnitOfWork.commit",
+    "PortalUnitOfWork.rollback",
+    "PortalUnitOfWork.staff_access",
+    "PortalUnitOfWork.staff_challenges",
+    "PortalUnitOfWork.email_deliveries",
+    "PortalUnitOfWork.viewer_access",
+    "PortalUnitOfWork.service_identity",
+    "PortalUnitOfWork.snapshot_imports",
+    "PortalUnitOfWork.project_sections",
+    "PortalUnitOfWork.budgets",
+    "PortalUnitOfWork.expenses",
+    "PortalUnitOfWork.project_tracking",
+    "PortalUnitOfWork.progress_photos",
+    "PortalUnitOfWork.audit",
+    "create_audit_schema",
+    "SqliteAuditRepository.__init__",
+    "SqliteAuditRepository.insert_audit",
+    "PortalTransaction.__init__",
+    "PortalTransaction.audit",
+    "AuditRepositoryContext.assert_open",
+    "AuditRepositoryContext.translate_error",
+    "PortalTransaction.assert_open",
+    "PortalTransaction.translate_error",
+    "create_project_tracking_schema",
+    "SqliteProjectTrackingRepository.__init__",
+    "SqliteProjectTrackingRepository.get_section_progress",
+    "SqliteProjectTrackingRepository.list_project_progress",
+    "SqliteProjectTrackingRepository.get_work_payment",
+    "SqliteProjectTrackingRepository.list_project_payments",
+    "SqliteProjectTrackingRepository.upsert_section_progress",
+    "SqliteProjectTrackingRepository.insert_work_payment",
+    "PortalTransaction.project_tracking",
+    "create_project_section_schema",
+    "SqliteProjectSectionRepository.__init__",
+    "SqliteProjectSectionRepository.list_project_sections",
+    "SqliteProjectSectionRepository.get_project_section",
+    "SqliteProjectSectionRepository.insert_project_sections",
+    "PortalTransaction.project_sections",
+    "create_budget_schema",
+    "SqliteBudgetRepository.__init__",
+    "SqliteBudgetRepository.get_budget_version",
+    "SqliteBudgetRepository.get_active_budget_version",
+    "SqliteBudgetRepository.get_manual_budget_version",
+    "SqliteBudgetRepository.list_budget_plans",
+    "SqliteBudgetRepository.insert_budget_version",
+    "SqliteBudgetRepository.update_budget_versions",
+    "SqliteBudgetRepository.upsert_section_plan",
+    "SqliteBudgetRepository.insert_section_plans",
+    "PortalTransaction.budgets",
+    "create_snapshot_import_schema",
+    "SqliteSnapshotImportRepository.__init__",
+    "SqliteSnapshotImportRepository.get_snapshot_by_identity",
+    "SqliteSnapshotImportRepository.get_snapshot_import",
+    "SqliteSnapshotImportRepository.insert_snapshot",
+    "SqliteSnapshotImportRepository.insert_snapshot_import",
+    "PortalTransaction.snapshot_imports",
+    "create_expense_schema",
+    "SqliteExpenseRepository.__init__",
+    "SqliteExpenseRepository.get_expense_aggregate",
+    "SqliteExpenseRepository.get_expense_by_recognition_id",
+    "SqliteExpenseRepository.get_expense_document",
+    "SqliteExpenseRepository.list_project_expenses",
+    "SqliteExpenseRepository.insert_expense_aggregate",
+    "SqliteExpenseRepository.update_expense_aggregate",
+    "SqliteExpenseRepository.update_expense",
+    "SqliteExpenseRepository.update_expense_document",
+    "PortalTransaction.expenses",
+    "create_progress_photo_schema",
+    "SqliteProgressPhotoRepository.__init__",
+    "SqliteProgressPhotoRepository.get_progress_photo",
+    "SqliteProgressPhotoRepository.get_progress_photo_by_intake_id",
+    "SqliteProgressPhotoRepository.list_project_photos",
+    "SqliteProgressPhotoRepository.insert_progress_photo",
+    "SqliteProgressPhotoRepository.update_progress_photo",
+    "PortalTransaction.progress_photos",
+    "create_email_delivery_schema",
+    "SqliteEmailDeliveryRepository.__init__",
+    "SqliteEmailDeliveryRepository.get_email_delivery",
+    "SqliteEmailDeliveryRepository.insert_email_delivery",
+    "SqliteEmailDeliveryRepository.update_email_delivery",
+    "PortalTransaction.email_deliveries",
+    "create_staff_access_schema",
+    "SqliteStaffAccessRepository.__init__",
+    "SqliteStaffAccessRepository.get_staff_by_email",
+    "SqliteStaffAccessRepository.get_staff",
+    "SqliteStaffAccessRepository.get_staff_session",
+    "SqliteStaffAccessRepository.list_staff_sessions",
+    "SqliteStaffAccessRepository.get_staff_assignment",
+    "SqliteStaffAccessRepository.get_staff_assignment_by_id",
+    "SqliteStaffAccessRepository.insert_staff_account",
+    "SqliteStaffAccessRepository.update_staff_account",
+    "SqliteStaffAccessRepository.insert_staff_session",
+    "SqliteStaffAccessRepository.update_staff_sessions",
+    "SqliteStaffAccessRepository.insert_staff_assignment",
+    "SqliteStaffAccessRepository.update_staff_assignment",
+    "PortalTransaction.staff_access",
+    "SqliteViewerAccessRepository.__init__",
+    "SqliteViewerAccessRepository.get_viewer",
+    "SqliteViewerAccessRepository.get_viewer_credential",
+    "SqliteViewerAccessRepository.get_viewer_session",
+    "SqliteViewerAccessRepository.list_viewer_sessions",
+    "SqliteViewerAccessRepository.list_viewer_credentials",
+    "SqliteViewerAccessRepository.get_viewer_grant",
+    "SqliteViewerAccessRepository.get_viewer_grant_by_id",
+    "SqliteViewerAccessRepository.list_viewer_grants",
+    "SqliteViewerAccessRepository.insert_viewer",
+    "SqliteViewerAccessRepository.update_viewer",
+    "SqliteViewerAccessRepository.insert_viewer_credential",
+    "SqliteViewerAccessRepository.update_viewer_credentials",
+    "SqliteViewerAccessRepository.insert_viewer_session",
+    "SqliteViewerAccessRepository.update_viewer_sessions",
+    "SqliteViewerAccessRepository.insert_viewer_grant",
+    "SqliteViewerAccessRepository.update_viewer_grant",
+    "PortalTransaction.viewer_access",
+    "create_client_access_schema",
+    "create_producer_identity_schema",
+    "SqliteServiceIdentityRepository.__init__",
+    "SqliteServiceIdentityRepository.get_service_principal",
+    "SqliteServiceIdentityRepository.get_service_credential",
+    "SqliteServiceIdentityRepository.list_service_credentials",
+    "SqliteServiceIdentityRepository.get_producer_grant",
+    "SqliteServiceIdentityRepository.get_producer_grant_by_id",
+    "SqliteServiceIdentityRepository.insert_service_principal",
+    "SqliteServiceIdentityRepository.update_service_principal",
+    "SqliteServiceIdentityRepository.insert_service_credential",
+    "SqliteServiceIdentityRepository.update_service_credential",
+    "SqliteServiceIdentityRepository.insert_producer_grant",
+    "SqliteServiceIdentityRepository.update_producer_grant",
+    "PortalTransaction.service_identity",
+    "load_runtime_settings",
+    "create_runtime_app",
+    "liveness_endpoint",
+    "readiness_endpoint",
+    "describe_viewer_session",
+    "sign_out_viewer",
+    "viewer_restore_session_endpoint",
+    "viewer_logout_endpoint",
+    "_viewer_cookie",
+    "_viewer_session_view",
+    "_binary_content_response",
+    "install_transport_guards",
+    "_canonical_path",
+    "_normalized_origin",
+    "_host_allowed",
+    "_requires_no_store",
+    "_body_within_limit",
+    "_client_bucket_key",
+    "_record_viewer_entry_attempt",
+    "_apply_security_headers",
+    "_transport_log_record",
+    "change_staff_password_endpoint",
+    "perform_recovery_override_endpoint",
+    "get_budget_version_endpoint",
+    "list_project_progress_endpoint",
+    "list_project_payments_endpoint",
+    "list_progress_photos_endpoint",
+    "SnapshotContentRejected.__init__",
+    "list_active_projects_endpoint",
+    "StaffBootstrapPort.create_if_empty",
+    "bootstrap_first_administrator",
+    "SqliteStaffBootstrapStore.__init__",
+    "SqliteStaffBootstrapStore.create_if_empty",
+    "SqliteStaffBootstrapStore.assert_open",
+    "SqliteStaffBootstrapStore.translate_error",
+    "run_bootstrap_cli",
+    "BootstrapAlreadyCompleted.__init__"
   ],
   "module_paths": {
     "models": "core/models",
     "credential_security": "security/credential_security",
     "financial_policy": "domain/financial_policy",
-    "portal_store": "adapters/portal_store",
-    "registry_gateway": "adapters/registry_gateway",
-    "email_delivery_gateway": "adapters/email_delivery_gateway",
-    "binary_storage": "adapters/binary_storage",
-    "audit_writer": "application/audit_writer",
-    "authorization_guard": "application/authorization_guard",
-    "staff_identity": "application/staff_identity",
-    "viewer_access": "application/viewer_access",
-    "service_identity": "application/service_identity",
-    "snapshot_import": "application/snapshot_import",
-    "budget_management": "domain/budget_management",
-    "expense_management": "domain/expense_management",
-    "expense_intake": "application/expense_intake",
-    "project_tracking": "domain/project_tracking",
-    "photo_management": "domain/photo_management",
-    "derived_views": "application/derived_views",
-    "api": "api/router",
     "audit_repository": "adapters/audit_repository",
     "project_tracking_repository": "adapters/project_tracking_repository",
     "project_section_repository": "adapters/project_section_repository",
@@ -13211,15 +13378,33 @@
     "staff_access_repository": "adapters/staff_access_repository",
     "viewer_access_repository": "adapters/viewer_access_repository",
     "service_identity_repository": "adapters/service_identity_repository",
+    "portal_store": "adapters/portal_store",
+    "staff_bootstrap_store": "adapters/staff_bootstrap_store",
+    "registry_gateway": "adapters/registry_gateway",
+    "email_delivery_gateway": "adapters/email_delivery_gateway",
+    "binary_storage": "adapters/binary_storage",
+    "audit_writer": "application/audit_writer",
+    "authorization_guard": "application/authorization_guard",
+    "staff_identity": "application/staff_identity",
+    "staff_bootstrap": "application/staff_bootstrap",
     "staff_challenges": "application/staff_challenges",
-    "runtime": "runtime/app",
+    "viewer_access": "application/viewer_access",
+    "service_identity": "application/service_identity",
+    "snapshot_import": "application/snapshot_import",
+    "budget_management": "domain/budget_management",
+    "expense_management": "domain/expense_management",
+    "expense_intake": "application/expense_intake",
+    "project_tracking": "domain/project_tracking",
+    "photo_management": "domain/photo_management",
+    "derived_views": "application/derived_views",
     "api_irregular": "api_irregular",
+    "api": "api/router",
     "transport_guard": "runtime/transport_guard",
     "runtime_settings": "runtime/settings",
-    "staff_bootstrap": "application/staff_bootstrap",
-    "staff_bootstrap_store": "adapters/staff_bootstrap_store",
+    "runtime": "runtime/app",
     "staff_bootstrap_cli": "cli/staff_bootstrap"
   },
   "default_module": "api",
-  "standard_version": 2
+  "standard_version": 2,
+  "persistence": {}
 }
