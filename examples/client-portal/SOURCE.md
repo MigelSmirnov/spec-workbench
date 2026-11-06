@@ -108,3 +108,18 @@ All Factory references are to `code-factory` `main` at `23a17dc8`
 | file boundary read-only | owner 2026-11-06, `open_questions.md` Q12 | owner decision | R0-13 |
 
 Findings of later states are classified in those states' migrations.
+
+### Classification of what State 1 carries
+
+The former `spec/10_models.md` moved into `01_models.md` line for line (every
+non-heading line is kept; checked mechanically on 2026-11-06).
+
+| finding | evidence | classification | owner |
+|---|---|---|---|
+| `identity` of 27 entities and the value models | Factory `3a72da32`; owner decision on ProjectReference / ProjectContext | accepted spec change | `01_models.md` M01–M37 `Identity` |
+| `ExpenseAggregate` loses `replayed`; `ExpenseOperationOutcome` carries it | `d1280708` | accepted spec change | M31, "Projections and answers" |
+| `ProjectOverview.project` optional with `project_availability` | `d2c4511e` | accepted spec change | "Projections and answers" |
+| `BinaryPayload.download_name` always present | `babd5e52` | accepted spec change | "Projections and answers" |
+| `ProgressPhotoView`, `ViewerSessionView`, `HealthStatus` | `9eab4d94`, `35a0a09c`, `21658368` | accepted spec change (projections) | "Projections and answers" |
+| 26 request models, 15 repository interfaces, `RuntimeSettings`, `RuntimeEnvironment` | `38626cc7`, `af686d73` … `6011ac93` | accepted spec change, not State 1 concepts | "Named in later states" (States 2, 3, 5, 6) |
+| Q13: older viewer codes stay valid after a new one is issued | `open_questions.md` Q13 (observation 2026-11-05) against M02, the accepted note `issue_viewer_access` ("MUST revoke every non-revoked prior credential") and Factory `application/viewer_access.py` `issue_viewer_access` (revokes every prior credential) | the probe disagrees with the observation; design and spec agree; nothing to carry | Q13 stays the owner's; "Evidence notes" of `01_models.md` |

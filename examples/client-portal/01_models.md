@@ -1,37 +1,52 @@
-# State 1 — Domain models
+# State 1 — Client Portal domain models
 
 ## Status
 
-**Authoring pass State 1. Builds on `00_product.md` (decisions of 2026-07-18)
-and the baseline `../03_domain_models.md`. Additional product decisions of
-2026-07-18 recorded here: the product owner is a sole-trader (autónomo)
-operating the portal for their own business — few parallel projects, operating
-simplicity is a first-class constraint.**
+Migrated on 2026-11-06 from the former `spec/10_models.md` (State 1 of
+2026-07-18/19; `SOURCE.md`) into the current form: one indexed
+`Model Mnn — Name` per runtime concept, with `Identity`, `Identity evidence`,
+source of truth, lifecycle and persistence candidates and `Open questions`
+(`skills/spec-authoring/MODEL_IDENTITY_EVIDENCE.md`). The text under each
+model's `Meaning` is the former text verbatim. Identities are those the
+accepted Factory spec declares (Factory `3a72da32`, 2026-08-15), whose
+one semantic choice — the Registry boundary — the product owner made.
+Changes the accepted Factory spec made to a concept after 2026-07-19 are
+written under the model, each with its Factory commit. The full field
+lists below are the facts of 2026-07-19; the closed field list of the
+case is the State 6 model closure.
 
-Decisions applied from that constraint:
+The former status, kept:
 
-1. **Email Delivery Gateway is a mandatory external boundary** (revision of
-   2026-07-18 replacing an earlier no-email deviation, which the product
-   owner rejected). Staff email is a verified login identifier: account
-   creation, email change, and password reset complete through single-use
-   purpose-bound challenges delivered by email, and security changes
-   (password changed, email changed, account suspended/disabled) produce
-   notifications. The portal owns challenge lifecycle, purpose binding,
-   expiry, revocation, rate limits, and audit; the gateway only delivers and
-   is never trusted with authorization or challenge validity. Administrative
-   recovery is an exceptional, heavily audited process, never the primary
-   email-change mechanism; recovery of the sole administrator stays a
-   deployment-level operation.
-2. **Administrator is a superset of operator.** Role and principal-type
-   capability sets are static catalog data (`rules`); there is no runtime
-   capability editing. Only assignments (grants, scopes) are mutable data.
-3. **All monetary amounts are gross (IVA included).** Receipts are gross;
-   clients see real money. The snapshot publication contract requires gross
-   planned aggregates per section; `tax_mode` is stored as source provenance
-   only and never triggers recalculation.
-4. **Expense creation happens only through the OCR intake boundary.**
-   Operators correct, include, exclude, and allocate; there is no manual
-   expense-creation path in the MVP.
+> **Authoring pass State 1. Builds on `00_product.md` (decisions of 2026-07-18)
+> and the baseline `../03_domain_models.md`. Additional product decisions of
+> 2026-07-18 recorded here: the product owner is a sole-trader (autónomo)
+> operating the portal for their own business — few parallel projects, operating
+> simplicity is a first-class constraint.**
+>
+> Decisions applied from that constraint:
+>
+> 1. **Email Delivery Gateway is a mandatory external boundary** (revision of
+>    2026-07-18 replacing an earlier no-email deviation, which the product
+>    owner rejected). Staff email is a verified login identifier: account
+>    creation, email change, and password reset complete through single-use
+>    purpose-bound challenges delivered by email, and security changes
+>    (password changed, email changed, account suspended/disabled) produce
+>    notifications. The portal owns challenge lifecycle, purpose binding,
+>    expiry, revocation, rate limits, and audit; the gateway only delivers and
+>    is never trusted with authorization or challenge validity. Administrative
+>    recovery is an exceptional, heavily audited process, never the primary
+>    email-change mechanism; recovery of the sole administrator stays a
+>    deployment-level operation.
+> 2. **Administrator is a superset of operator.** Role and principal-type
+>    capability sets are static catalog data (`rules`); there is no runtime
+>    capability editing. Only assignments (grants, scopes) are mutable data.
+> 3. **All monetary amounts are gross (IVA included).** Receipts are gross;
+>    clients see real money. The snapshot publication contract requires gross
+>    planned aggregates per section; `tax_mode` is stored as source provenance
+>    only and never triggers recalculation.
+> 4. **Expense creation happens only through the OCR intake boundary.**
+>    Operators correct, include, exclude, and allocate; there is no manual
+>    expense-creation path in the MVP.
 
 ## Modeling conventions
 
@@ -61,9 +76,9 @@ Decisions applied from that constraint:
   provenance timestamps; pure expirations (sessions, tokens) derive state
   from `expires_at` / `used_at` / `revoked_at`.
 
-## IAM models
+## Model M01 — ClientViewer
 
-### ClientViewer
+### Meaning
 
 - **Kind:** persisted entity.
 - **Purpose:** permanent read-only viewer identity of one client who may have
@@ -77,7 +92,34 @@ Decisions applied from that constraint:
 - **Must not contain:** email, password, registration state, profile data,
   Registry customer data.
 
-### ViewerAccessCredential
+### Identity
+
+entity
+
+### Identity evidence
+
+- Substitution: Two viewers with equal display names are two clients; grants, credentials and audit name one of them.
+- Continuity: The same client stays the same viewer while it moves from active to revoked.
+
+### Source of truth
+
+Backend-owned record of the portal.
+
+### Lifecycle candidate
+
+`active → revoked`, terminal (Meaning).
+
+### Persistence candidate
+
+Durable persistence candidate.
+
+### Open questions
+
+None.
+
+## Model M02 — ViewerAccessCredential
+
+### Meaning
 
 - **Kind:** persisted entity (secret in verification form).
 - **Purpose:** the capability link's secret that authenticates a viewer.
@@ -89,7 +131,34 @@ Decisions applied from that constraint:
   obligation (State 2 rule).
 - **Created/modified by:** operator or administrator.
 
-### ViewerSession
+### Identity
+
+entity
+
+### Identity evidence
+
+- Substitution: Each issued access link is revoked and audited on its own; two credentials of one viewer are not interchangeable.
+- Continuity: A credential stays the same record from issue to revocation.
+
+### Source of truth
+
+Backend-owned record of the portal.
+
+### Lifecycle candidate
+
+issued → revoked; re-issue revokes the previous one (Meaning).
+
+### Persistence candidate
+
+Durable persistence candidate.
+
+### Open questions
+
+None.
+
+## Model M03 — ViewerSession
+
+### Meaning
 
 - **Kind:** persisted entity.
 - **Purpose:** managed session opened by a successful capability-link entry.
@@ -100,7 +169,34 @@ Decisions applied from that constraint:
 - **Created by:** viewer authentication; revoked by viewer revocation,
   credential re-issue/revocation, or explicit staff action.
 
-### ProjectViewerGrant
+### Identity
+
+entity
+
+### Identity evidence
+
+- Substitution: A session is the one a token selects; revocation ends that session and no other.
+- Continuity: One session continues from entry to expiry or revocation.
+
+### Source of truth
+
+Backend-owned record of the portal.
+
+### Lifecycle candidate
+
+active while not expired and not revoked (Meaning).
+
+### Persistence candidate
+
+Durable persistence candidate.
+
+### Open questions
+
+None.
+
+## Model M04 — ProjectViewerGrant
+
+### Meaning
 
 - **Kind:** persisted entity.
 - **Purpose:** read-only access of one viewer to one Registry project.
@@ -112,7 +208,34 @@ Decisions applied from that constraint:
   changes grant status.
 - **Created/modified by:** operator or administrator.
 
-### StaffAccount
+### Identity
+
+entity
+
+### Identity evidence
+
+- Substitution: Revoking one grant closes one project for one viewer; grants are told apart and audited by id.
+- Continuity: A grant stays the same record from creation to revocation.
+
+### Source of truth
+
+Backend-owned record of the portal.
+
+### Lifecycle candidate
+
+`active → revoked` (Meaning).
+
+### Persistence candidate
+
+Durable persistence candidate.
+
+### Open questions
+
+None.
+
+## Model M05 — StaffAccount
+
+### Meaning
 
 - **Kind:** persisted entity.
 - **Purpose:** operator/administrator identity with account-based auth.
@@ -133,7 +256,34 @@ Decisions applied from that constraint:
 - **Must not contain:** plaintext credentials, capability lists (roles map to
   static capability sets in `rules`), Registry customer data.
 
-### StaffSession
+### Identity
+
+entity
+
+### Identity evidence
+
+- Substitution: Two staff members are never interchangeable; sessions, assignments and audit name one account.
+- Continuity: The account is the same staff member across verification, suspension, email change and disabling.
+
+### Source of truth
+
+Backend-owned record of the portal.
+
+### Lifecycle candidate
+
+`pending_verification → active ↔ suspended → disabled` (Meaning).
+
+### Persistence candidate
+
+Durable persistence candidate.
+
+### Open questions
+
+None.
+
+## Model M06 — StaffSession
+
+### Meaning
 
 - **Kind:** persisted entity.
 - **Fields:** `session_id: UUID`, `staff_id: UUID`, `token_hash: str`,
@@ -142,7 +292,34 @@ Decisions applied from that constraint:
 - **Created by:** staff login; revoked by logout, sign-out-everywhere,
   password reset, suspension/disabling.
 
-### StaffProjectAssignment
+### Identity
+
+entity
+
+### Identity evidence
+
+- Substitution: Sign-out and revocation end particular sessions.
+- Continuity: One session continues from login to expiry or revocation.
+
+### Source of truth
+
+Backend-owned record of the portal.
+
+### Lifecycle candidate
+
+active while not expired, not revoked and the account is active (Meaning).
+
+### Persistence candidate
+
+Durable persistence candidate.
+
+### Open questions
+
+None.
+
+## Model M07 — StaffProjectAssignment
+
+### Meaning
 
 - **Kind:** persisted entity.
 - **Purpose:** explicit operator scope for one Registry project; operator role
@@ -159,7 +336,34 @@ Decisions applied from that constraint:
   is not simulated with assignments.
 - **Created/modified by:** administrator only.
 
-### PasswordResetToken
+### Identity
+
+entity
+
+### Identity evidence
+
+- Substitution: Each assignment scopes one operator to one project and is revoked on its own.
+- Continuity: An assignment stays the same record from creation to revocation.
+
+### Source of truth
+
+Backend-owned record of the portal.
+
+### Lifecycle candidate
+
+`active → revoked` (Meaning).
+
+### Persistence candidate
+
+Durable persistence candidate.
+
+### Open questions
+
+None.
+
+## Model M08 — PasswordResetToken
+
+### Meaning
 
 - **Kind:** persisted entity (secret in verification form).
 - **Fields:** `token_id: UUID`, `staff_id: UUID`, `token_hash: str`,
@@ -175,7 +379,34 @@ Decisions applied from that constraint:
 - **Created by:** self-service request or administrator; delivered only
   through the email gateway.
 
-### EmailVerificationChallenge
+### Identity
+
+entity
+
+### Identity evidence
+
+- Substitution: Each reset token is consumed, expired or revoked on its own.
+- Continuity: A token stays the same record from issue to use, expiry or revocation.
+
+### Source of truth
+
+Backend-owned record of the portal.
+
+### Lifecycle candidate
+
+issued → used | expired | revoked (Meaning).
+
+### Persistence candidate
+
+Durable persistence candidate.
+
+### Open questions
+
+None.
+
+## Model M09 — EmailVerificationChallenge
+
+### Meaning
 
 - **Kind:** persisted entity (secret in verification form).
 - **Purpose:** confirm ownership of the initial account email before the
@@ -192,7 +423,34 @@ Decisions applied from that constraint:
   consumption.
 - **Created by:** administrator (at account creation or re-issue).
 
-### PendingEmailChange
+### Identity
+
+entity
+
+### Identity evidence
+
+- Substitution: Each challenge is consumed or revoked on its own; a new one revokes outstanding ones.
+- Continuity: A challenge stays the same record from issue to consumption, expiry or revocation.
+
+### Source of truth
+
+Backend-owned record of the portal.
+
+### Lifecycle candidate
+
+issued → consumed | expired | revoked (Meaning).
+
+### Persistence candidate
+
+Durable persistence candidate.
+
+### Open questions
+
+None.
+
+## Model M10 — PendingEmailChange
+
+### Meaning
 
 - **Kind:** persisted entity (secret in verification form).
 - **Purpose:** staged change of the login email, completed only by proving
@@ -209,7 +467,34 @@ Decisions applied from that constraint:
   after completion; delivery failure never confirms the address.
 - **Created by:** the staff account or an administrator.
 
-### EmailDeliveryRecord
+### Identity
+
+entity
+
+### Identity evidence
+
+- Substitution: Each staged change is consumed or revoked on its own; a new request revokes the previous one.
+- Continuity: A change stays the same record from request to consumption, expiry or revocation.
+
+### Source of truth
+
+Backend-owned record of the portal.
+
+### Lifecycle candidate
+
+requested → consumed | expired | revoked (Meaning).
+
+### Persistence candidate
+
+Durable persistence candidate.
+
+### Open questions
+
+None.
+
+## Model M11 — EmailDeliveryRecord
+
+### Meaning
 
 - **Kind:** persisted entity.
 - **Purpose:** operational visibility of outbound mail; never proof of
@@ -229,7 +514,34 @@ Decisions applied from that constraint:
 - **Created by:** the email challenge/notification flow. Modified by: the
   gateway-result handler only.
 
-### EmailDeliveryRequest
+### Identity
+
+entity
+
+### Identity evidence
+
+- Substitution: Each outbound message is one record; two messages to one address are two deliveries.
+- Continuity: A delivery stays the same record while its outcome moves from pending to accepted or failed.
+
+### Source of truth
+
+Backend-owned record of the portal.
+
+### Lifecycle candidate
+
+`pending → accepted | failed` (Meaning).
+
+### Persistence candidate
+
+Durable persistence candidate.
+
+### Open questions
+
+None.
+
+## Model M12 — EmailDeliveryRequest
+
+### Meaning
 
 - **Kind:** transient delivery-only DTO.
 - **Fields:** `delivery_id: UUID`, `message_kind: EmailMessageKind`,
@@ -238,7 +550,34 @@ Decisions applied from that constraint:
 - **Rules:** consumed only by `email_delivery_gateway`; plaintext token is
   never persisted/logged, and the DTO conveys no challenge validity.
 
-### ServicePrincipal
+### Identity
+
+value
+
+### Identity evidence
+
+- Substitution: Two requests with equal content ask the gateway for the same delivery; the delivery's identity is the EmailDeliveryRecord it names.
+- Continuity: No independent continuity: it exists for the one action that carries it.
+
+### Source of truth
+
+The portal's challenge and notification flow; it conveys no challenge validity.
+
+### Lifecycle candidate
+
+None; a value has no independent lifecycle.
+
+### Persistence candidate
+
+Transient, never persisted or logged.
+
+### Open questions
+
+None.
+
+## Model M13 — ServicePrincipal
+
+### Meaning
 
 - **Kind:** persisted entity.
 - **Purpose:** named machine identity for inter-service publication.
@@ -255,7 +594,34 @@ Decisions applied from that constraint:
   every import requires an active `ProducerProjectGrant`.
 - **Created/modified by:** administrator.
 
-### ServiceCredential
+### Identity
+
+entity
+
+### Identity evidence
+
+- Substitution: Each producer is its own machine identity; credentials, grants and audit name it.
+- Continuity: A principal is the same identity across credential rotation and disabling.
+
+### Source of truth
+
+Backend-owned record of the portal.
+
+### Lifecycle candidate
+
+`active → disabled` (Meaning).
+
+### Persistence candidate
+
+Durable persistence candidate.
+
+### Open questions
+
+None.
+
+## Model M14 — ServiceCredential
+
+### Meaning
 
 - **Kind:** persisted entity (secret in verification form).
 - **Fields:** `credential_id: UUID`, `service_principal_id: UUID`,
@@ -268,7 +634,34 @@ Decisions applied from that constraint:
   provenance.
 - **Created/modified by:** administrator.
 
-### ProducerProjectGrant
+### Identity
+
+entity
+
+### Identity evidence
+
+- Substitution: Several credentials of one principal may be valid at once and are revoked independently.
+- Continuity: A credential stays the same record from issue to expiry or revocation.
+
+### Source of truth
+
+Backend-owned record of the portal.
+
+### Lifecycle candidate
+
+issued → expired | revoked (Meaning).
+
+### Persistence candidate
+
+Durable persistence candidate.
+
+### Open questions
+
+None.
+
+## Model M15 — ProducerProjectGrant
+
+### Meaning
 
 - **Kind:** persisted entity.
 - **Fields:** `grant_id: UUID`, `service_principal_id: UUID`,
@@ -277,7 +670,956 @@ Decisions applied from that constraint:
 - **Rules:** at most one active grant per `(principal, project)`; consulted
   only when the principal's `scope_mode` is `granted_projects`.
 
-## Authentication and authorization context DTOs
+### Identity
+
+entity
+
+### Identity evidence
+
+- Substitution: Each grant scopes one principal to one project and is revoked on its own.
+- Continuity: A grant stays the same record from creation to revocation.
+
+### Source of truth
+
+Backend-owned record of the portal.
+
+### Lifecycle candidate
+
+`active → revoked` (Meaning).
+
+### Persistence candidate
+
+Durable persistence candidate.
+
+### Open questions
+
+None.
+
+## Model M16 — ProjectReference
+
+### Meaning
+
+Typed per the platform Registry contract; consumed, never persisted as
+current truth. Live reads only — the portal stores no Registry snapshot
+(the domain needs no historical Registry evidence; budgets and expenses
+carry their own provenance).
+
+- `ProjectReference` — `project_id: UUID`, `display_name: str`,
+  `status: str`.
+
+### Carried changes
+
+The product owner decided this boundary when the Factory declared identities (Factory `3a72da32`, 2026-08-15): ProjectReference is entity, ProjectContext is value; if the portal later mirrors project data, the mirror is `mirrored` and keeps entity identity.
+
+### Identity
+
+entity
+
+### Identity evidence
+
+- Substitution: A project reference stands for one Registry project; two references with equal display names are two projects.
+- Continuity: The project stays the same project while its display name or status changes in Registry.
+
+### Source of truth
+
+Registry — external authority. The portal mirrors nothing and stores no Registry snapshot (Meaning).
+
+### Lifecycle candidate
+
+Owned by Registry; the portal reads `active` and `archived`.
+
+### Persistence candidate
+
+Not persisted by the portal; read live.
+
+### Open questions
+
+None.
+
+## Model M17 — ProjectContext
+
+### Meaning
+
+- `ProjectContext` — `project: ProjectReference`, `address: str`,
+  `customer_ref: str | None`, `created_at: datetime`,
+  `registry_updated_at: datetime`.
+
+- `ProjectValidationResult` — `project_id: UUID`, `exists: bool`,
+  `status: str | None`, `is_active: bool`, `failure: str | None`.
+
+- `RegistryFailureKind` — closed enum for boundary error translation:
+  `invalid_uuid | not_found | archived | timeout | transport_error |
+  http_error | schema_mismatch | identity_mismatch`. Owned by the Registry
+  gateway; State 2 lands the translation table in `rules`.
+
+Portal mutation policy uses only `is_active`; archived context remains
+readable. Only `active` and `archived` are accepted status values.
+
+### Identity
+
+value
+
+### Identity evidence
+
+- Substitution: A context is one live answer of Registry; an equal answer replaces it everywhere.
+- Continuity: No continuity in the portal: each read is a fresh observation.
+
+### Source of truth
+
+Registry — external authority; owner decision recorded under ProjectReference (Factory `3a72da32`).
+
+### Lifecycle candidate
+
+None.
+
+### Persistence candidate
+
+Not persisted; read live.
+
+### Open questions
+
+None.
+
+## Model M18 — SnapshotPublication
+
+### Meaning
+
+- **Kind:** input DTO at the producer boundary; not persisted as-is.
+- **Fields:** `estimate_id: UUID`, `estimate_version: int`,
+  `project_id: UUID`, `approved_at: datetime`, `approved_by: str` (source
+  provenance, never a portal actor), `currency: str` (must be `EUR`),
+  `tax_mode: str` (source provenance; planned amounts must already be
+  gross), `sections: list[SnapshotSectionData]` (non-empty, unique
+  `source_section_id`), `source_system: str`, `published_at: datetime`,
+  `contract_version: int`.
+- `SnapshotSectionData` — `source_section_id: str`,
+  `source_section_code: str`, `display_name: str`, `sort_order: int`,
+  `material_planned: Decimal`, `work_planned: Decimal`.
+- **Created by:** authenticated `ServicePrincipal`. Unsupported
+  `contract_version`, non-EUR currency, incomplete content → typed
+  rejection.
+
+### Identity
+
+value
+
+### Identity evidence
+
+- Substitution: Two equal publications carry the same snapshot; the identity of what is kept is ApprovedEstimateSnapshot's.
+- Continuity: No independent continuity: it exists for the one action that carries it.
+
+### Source of truth
+
+The authenticated producer (`ServicePrincipal`); the portal owns the contract.
+
+### Lifecycle candidate
+
+None; a value has no independent lifecycle.
+
+### Persistence candidate
+
+Not persisted as such; accepted content becomes an ApprovedEstimateSnapshot.
+
+### Open questions
+
+None.
+
+## Model M19 — ApprovedEstimateSnapshot
+
+### Meaning
+
+- **Kind:** persisted immutable entity.
+- **Purpose:** exact accepted approved version, append-only history.
+- **Fields:** `snapshot_id: UUID`, all `SnapshotPublication` fields,
+  `content_fingerprint: str` (canonical content hash), `received_at:
+  datetime`, `received_from: UUID (service_principal_id)`,
+  `received_key_version: int`.
+- **Identity:** unique `(project_id, estimate_id, estimate_version)`.
+- **Rules:** never mutated after acceptance; same identity + same
+  fingerprint → idempotent success returning the existing record; same
+  identity + different fingerprint → integrity conflict, nothing stored.
+- **Created by:** snapshot import only. Modified by: no one.
+
+### Identity
+
+entity
+
+### Identity evidence
+
+- Substitution: Snapshots are addressed by `(project_id, estimate_id, estimate_version)`; two versions are never interchangeable.
+- Continuity: Issued: it never changes after acceptance; a later version is another snapshot.
+
+### Source of truth
+
+Backend-owned issued record of an external publication; PresuPro stays the authority of the estimate.
+
+### Lifecycle candidate
+
+None after acceptance; issued, immutable (Meaning).
+
+### Persistence candidate
+
+Durable persistence candidate.
+
+### Open questions
+
+None.
+
+## Model M20 — SnapshotImportRecord
+
+### Meaning
+
+- **Kind:** persisted entity (also serves as the producer-readable import
+  result and as the import audit detail).
+- **Fields:** `import_id: UUID`, `project_id`, `estimate_id`,
+  `estimate_version`, `contract_version`,
+  `outcome: ImportOutcome (accepted | idempotent_replay |
+  integrity_conflict | rejected)`, `reject_reason: ImportRejectReason | None`
+  (closed catalog: unsupported_contract_version, currency_mismatch,
+  incomplete_content, unknown_project, archived_project, scope_denied,
+  invalid_sections) `[closed-choice: reason required iff outcome ∈
+  {integrity_conflict, rejected}]`, `content_fingerprint: str`,
+  `snapshot_id: UUID | None` (set iff accepted/replay),
+  `occurred_at`, `service_principal_id`, `key_version`.
+- **Created by:** snapshot import. Modified by: no one (append-only).
+
+### Identity
+
+entity
+
+### Identity evidence
+
+- Substitution: Each import attempt is its own result the producer reads and audit cites.
+- Continuity: Issued: written once by the import, never modified.
+
+### Source of truth
+
+Backend-owned record of the portal.
+
+### Lifecycle candidate
+
+None; append-only (Meaning).
+
+### Persistence candidate
+
+Durable persistence candidate.
+
+### Open questions
+
+None.
+
+## Model M21 — PortalSection
+
+### Meaning
+
+- **Kind:** persisted entity.
+- **Purpose:** the stable client-facing section identity that survives
+  budget-version changes and renames. Expenses allocations and work
+  progress reference it, so history is never re-keyed by a version switch.
+- **Fields:** `section_id: UUID`, `project_id: UUID`,
+  `source_key: str | None` (stable `source_section_id` when the section was
+  born from an imported snapshot; None for manual-born sections),
+  `created_at`, `created_by_kind: ActorKind`, `created_by_id: UUID`.
+- **Rules:** `source_key` unique per project when present; automatic linking
+  of a new snapshot version to existing sections happens only through equal
+  `source_key`; display-name matching is forbidden; a section is never
+  deleted while any allocation or progress record references it.
+
+### Identity
+
+entity
+
+### Identity evidence
+
+- Substitution: A section is told apart by its stable identity, never by its display name.
+- Continuity: The same section continues across budget versions and renames (Meaning).
+
+### Source of truth
+
+Backend-owned record of the portal.
+
+### Lifecycle candidate
+
+Created, never deleted while referenced (Meaning).
+
+### Persistence candidate
+
+Durable persistence candidate.
+
+### Open questions
+
+None.
+
+## Model M22 — BudgetVersion
+
+### Meaning
+
+- **Kind:** persisted entity.
+- **Purpose:** one client-visible budget dataset for a project, from either
+  source.
+- **Fields:** `version_id: UUID`, `project_id: UUID`,
+  `source: BudgetSource (manual | approved_estimate_snapshot)`,
+  `snapshot_id: UUID | None` `[closed-choice: required iff source =
+  approved_estimate_snapshot]`, `status: BudgetVersionStatus (inactive |
+  active)`, `created_at`, `created_by_kind/id`, `activated_at | None`,
+  `activated_by: UUID | None` (staff only), `deactivated_at | None`.
+- **Rules:** at most one active version per project; at most one manual
+  version per project (mutable through its section plans while the project
+  is active); an imported version's plans are immutable copies of its
+  snapshot; activation is always an explicit staff action — a producer can
+  never activate; activation of one version deactivates the previous one in
+  the same operation; deactivated versions are never deleted.
+
+### Identity
+
+entity
+
+### Identity evidence
+
+- Substitution: Versions are activated, deactivated and audited individually.
+- Continuity: A version stays the same record from creation through activation and deactivation.
+
+### Source of truth
+
+Backend-owned record of the portal.
+
+### Lifecycle candidate
+
+`inactive → active → inactive`; at most one active per project (Meaning).
+
+### Persistence candidate
+
+Durable persistence candidate.
+
+### Open questions
+
+None.
+
+## Model M23 — SectionPlan
+
+### Meaning
+
+- **Kind:** persisted entity (child of BudgetVersion).
+- **Purpose:** planned values of one stable section inside one version.
+- **Fields:** `plan_id: UUID`, `version_id: UUID`, `section_id: UUID`
+  (PortalSection), `display_name: str`, `sort_order: int`,
+  `material_planned: Decimal`, `work_planned: Decimal`,
+  `source_section_code: str | None` (imported provenance),
+  `updated_at`, `updated_by | None` (manual plans only).
+- **Rules:** unique `(version_id, section_id)`; mutable only when its
+  version is the manual version and the project is active; budget totals
+  are always derived from plans, never stored.
+
+### Identity
+
+entity
+
+### Identity evidence
+
+- Substitution: A plan is the planned values of one section inside one version; a manual plan is edited in place.
+- Continuity: A manual plan stays the same record while its values are edited.
+
+### Source of truth
+
+Backend-owned record of the portal.
+
+### Lifecycle candidate
+
+Mutable only in the manual version of an active project (Meaning).
+
+### Persistence candidate
+
+Durable persistence candidate.
+
+### Open questions
+
+None.
+
+## Section linking at activation
+
+The former paragraph after SectionPlan, kept; it spans M21–M23 and the
+allocations, so it stands outside one model.
+
+Activation of an imported version creates plans by `source_key` linking:
+matched keys reuse the existing `PortalSection` (rename allowed), unmatched
+source sections create new `PortalSection` records. Sections of the previous
+version absent from the new one keep their identity and history; their
+allocations become *unresolved against the active version* (a derived state,
+not a stored flag) and must be explicitly re-allocated by an operator.
+`Other expenses` is not a section and is independent of versions.
+
+## Model M24 — NormalizedRecognitionItem
+
+### Meaning
+
+- `NormalizedRecognitionItem` is the portal-owned minimum OCR boundary item:
+  `line_id: str`, `description: str`, `quantity: Decimal (> 0)`,
+  `unit_price: Decimal (>= 0)`, `line_total: Decimal (>= 0)`.
+  Line IDs are unique within one publication. The portal validates presence
+  and decimal shape but does not recompute Expense total from items because
+  receipt-level taxes/discounts may not be itemized; items are discarded after
+  boundary validation in the MVP.
+
+### Identity
+
+value
+
+### Identity evidence
+
+- Substitution: Two equal items are the same line of a document.
+- Continuity: No independent continuity: it exists for the one action that carries it.
+
+### Source of truth
+
+The external OCR service; the portal owns only the boundary contract.
+
+### Lifecycle candidate
+
+None; a value has no independent lifecycle.
+
+### Persistence candidate
+
+Not persisted; discarded after boundary validation (Meaning).
+
+### Open questions
+
+None.
+
+## Model M25 — ConfirmedRecognitionPublication
+
+### Meaning
+
+- `ConfirmedRecognitionPublication` fields:
+  `recognized_document_id: str`, `document_reference: str`,
+  `file_ref: str` (opaque prepared source object), `document_type: str`,
+  `supplier: str`, `document_date: date`, `currency: str`,
+  `total_amount: Decimal`, `normalized_items: list[NormalizedRecognitionItem]`
+  (non-empty), `recognition_status: RecognitionStatus (confirmed only at this
+  boundary)`, `confirmed_at: datetime`, `contract_version: int`,
+  `provenance_ref: str`.
+- `RecognitionStatus` is a closed enum with `confirmed`; unconfirmed working
+  OCR shapes are not variants of the portal publication contract.
+
+### Identity
+
+value
+
+### Identity evidence
+
+- Substitution: Two equal publications carry the same confirmed recognition; what is kept has the Expense's identity.
+- Continuity: No independent continuity: it exists for the one action that carries it.
+
+### Source of truth
+
+The external OCR service; recognition, confidence and duplicate detection stay there.
+
+### Lifecycle candidate
+
+None; a value has no independent lifecycle.
+
+### Persistence candidate
+
+Not persisted as such; projected into ExpenseIntake.
+
+### Open questions
+
+None.
+
+## Model M26 — AllocationInstruction
+
+### Meaning
+
+- **Kind:** operator input DTO.
+- **Fields:** `target: AllocationTargetKind`, `section_id: UUID | None`
+  `[closed-choice: required iff target = section]`, `amount: Decimal (> 0)`.
+- Every instruction is explicit; order is irrelevant to equality and
+  fingerprinting, which use canonical `(target, section_id, amount)` order.
+
+### Identity
+
+value
+
+### Identity evidence
+
+- Substitution: Two equal instructions allocate the same amount to the same target.
+- Continuity: No independent continuity: it exists for the one action that carries it.
+
+### Source of truth
+
+The operator's input.
+
+### Lifecycle candidate
+
+None; a value has no independent lifecycle.
+
+### Persistence candidate
+
+Not persisted as such; becomes ExpenseAllocation.
+
+### Open questions
+
+None.
+
+## Model M27 — ExpenseIntake
+
+### Meaning
+
+- **Kind:** internal input DTO produced by the OCR adapter; not persisted.
+- **Fields:** `recognized_document_id: str`, `document_reference: str`,
+  `file_ref: str` (opaque prepared source-object reference),
+  `document_type: str`, `supplier: str`, `document_date: date`,
+  `currency: str` (must be EUR), `total_amount: Decimal`,
+  `confirmed_at: datetime`, `contract_version: int`,
+  `provenance_ref: str` (portable OCR provenance),
+  `project_id: UUID`, `confirmed_by: UUID` (staff),
+  `allocations: list[AllocationInstruction]` (may target sections or
+  `other_expenses`; sum must equal `total_amount`).
+- `intake_fingerprint` is computed canonically by `expense_intake` over the
+  accepted projected source facts, project, `file_ref`, and sorted initial
+  allocation instructions; authenticated actor identity is provenance and is
+  not part of content equality.
+- The external wire contract additionally carries `normalized_items` and
+  `recognition_status`; the adapter validates them (status must be
+  confirmed, items complete) and discards items — they are not persisted in
+  the MVP. Confidence and provider fields never cross the boundary.
+
+### Identity
+
+value
+
+### Identity evidence
+
+- Substitution: Two equal intakes are the same intake; replay is decided by `intake_fingerprint` (Meaning).
+- Continuity: No independent continuity: it exists for the one action that carries it.
+
+### Source of truth
+
+The OCR adapter and the operator's project and allocation choice.
+
+### Lifecycle candidate
+
+None; a value has no independent lifecycle.
+
+### Persistence candidate
+
+Not persisted; its accepted content becomes Expense, ExpenseAllocation and ExpenseDocument.
+
+### Open questions
+
+None.
+
+## Model M28 — Expense
+
+### Meaning
+
+- **Kind:** persisted entity.
+- **Fields:** `expense_id: UUID`, `project_id: UUID`,
+  `recognized_document_id: str` (unique), `supplier: str`,
+  `document_date: date`, `total_amount: Decimal`, `included: bool`
+  (default true), `created_at`, `confirmed_at`, `confirmed_by: UUID`,
+  `provenance_ref: str`, `intake_fingerprint: str`, `updated_at | None`,
+  `updated_by | None`.
+- **Rules:** created only from a valid `ExpenseIntake`; one
+  `recognized_document_id` → at most one Expense; equal fingerprint replay
+  returns the existing one, while a different fingerprint is an integrity
+  conflict storing nothing. Corrections (supplier, date, amount, included) are staff
+  actions on an active project; an amount correction and the matching
+  allocation adjustment are one atomic operation (sum invariant holds at
+  every commit point); exclusion removes the expense from totals but never
+  hides it.
+
+### Identity
+
+entity
+
+### Identity evidence
+
+- Substitution: Expenses are corrected, included, excluded and audited individually.
+- Continuity: The same expense continues through corrections and inclusion changes.
+
+### Source of truth
+
+Backend-owned record of the portal.
+
+### Lifecycle candidate
+
+created from intake; corrected, included, excluded; never deleted (Meaning).
+
+### Persistence candidate
+
+Durable persistence candidate.
+
+### Open questions
+
+None.
+
+## Model M29 — ExpenseAllocation
+
+### Meaning
+
+- **Kind:** persisted entity.
+- **Fields:** `allocation_id: UUID`, `expense_id: UUID`,
+  `target: AllocationTargetKind (section | other_expenses)`,
+  `section_id: UUID | None` `[closed-choice: required iff target =
+  section]`, `amount: Decimal (> 0)`, `created_at`, `created_by`,
+  `updated_at | None`, `updated_by | None`.
+- **Rules:** the sum of an expense's allocations equals `total_amount`
+  exactly; automatic proportional split is forbidden — every allocation is
+  an explicit operator value; `section_id` must belong to the expense's
+  project; re-allocation is a staff action on an active project.
+
+### Identity
+
+entity
+
+### Identity evidence
+
+- Substitution: Allocations are replaced and audited by id; two allocations of equal amount to one section are two records.
+- Continuity: An allocation stays the same record while it is re-allocated.
+
+### Source of truth
+
+Backend-owned record of the portal.
+
+### Lifecycle candidate
+
+created and replaced by staff actions (Meaning).
+
+### Persistence candidate
+
+Durable persistence candidate.
+
+### Open questions
+
+None.
+
+## Model M30 — ExpenseDocument
+
+### Meaning
+
+- **Kind:** persisted entity.
+- **Fields:** `document_id: UUID`, `expense_id: UUID` (unique — exactly one
+  document per expense), `document_reference: str` (stable source
+  reference), `file_ref: str` (external storage reference; binary stays
+  outside), `description: str | None`, `client_visible: bool`,
+  `created_at`, `updated_at | None`, `updated_by | None`.
+- **Rules:** one document regardless of allocation count; staff may correct
+  description/visibility on an active project; the record never embeds the
+  binary or OCR working data.
+
+### Identity
+
+entity
+
+### Identity evidence
+
+- Substitution: Exactly one document per expense, addressed by its own id for binary delivery.
+- Continuity: The same document continues while its description or visibility changes.
+
+### Source of truth
+
+Backend-owned record of the portal.
+
+### Lifecycle candidate
+
+created with the expense; description and visibility edited (Meaning).
+
+### Persistence candidate
+
+Durable persistence candidate.
+
+### Open questions
+
+None.
+
+## Model M31 — ExpenseAggregate
+
+### Meaning
+
+- **Kind:** transient domain result.
+- **Fields:** `expense: Expense`, `allocations: list[ExpenseAllocation]`,
+  `document: ExpenseDocument`, `replayed: bool`.
+- **Rules:** new creation returns all newly committed records with
+  `replayed=false`; equal-fingerprint replay returns the existing complete
+  aggregate with `replayed=true`; conflicting replay returns no aggregate.
+
+### Carried changes
+
+Carried from the accepted Factory spec (Factory `d1280708`, 2026-08-16): the aggregate no longer carries `replayed`; the replay outcome travels in a separate operation outcome beside the aggregate (`ExpenseOperationOutcome`, "Projections and answers"), so the stored aggregate stays clean. The Meaning above is the text of 2026-07-19.
+
+### Identity
+
+value
+
+### Identity evidence
+
+- Substitution: An aggregate is a composition around one Expense; equal compositions are interchangeable.
+- Continuity: No independent continuity: it exists for the one action that carries it.
+
+### Source of truth
+
+Composed from Expense, its allocations and its document.
+
+### Lifecycle candidate
+
+None; a value has no independent lifecycle.
+
+### Persistence candidate
+
+Not persisted as such; its parts are.
+
+### Open questions
+
+None.
+
+## Model M32 — SectionProgress
+
+### Meaning
+
+- **Kind:** persisted entity (current state, one row per section).
+- **Fields:** `project_id: UUID`, `section_id: UUID` (unique),
+  `completion_percent: int (0–100)`, `updated_at`, `updated_by: UUID`.
+- **Rules:** only sections with planned work in the active version
+  participate in derived progress; percent is manual staff input; no
+  photo-derived progress; history beyond audit records is not required.
+
+### Identity
+
+entity
+
+### Identity evidence
+
+- Substitution: One current progress record per section; it is updated, not replaced by an equal one.
+- Continuity: The same record continues while its percent changes.
+
+### Source of truth
+
+Backend-owned record of the portal.
+
+### Lifecycle candidate
+
+updated by staff; current state only (Meaning).
+
+### Persistence candidate
+
+Durable persistence candidate.
+
+### Open questions
+
+None.
+
+## Model M33 — WorkPayment
+
+### Meaning
+
+- **Kind:** persisted entity.
+- **Fields:** `payment_id: UUID` (client-generated idempotency identity,
+  supplied by the operator command), `project_id: UUID`,
+  `amount: Decimal (> 0)`, `payment_date: date`, `description: str`,
+  `recorded_at`, `recorded_by: UUID`.
+- **Rules:** replay of the same `payment_id` returns the existing record and
+  never double-counts; a payment is not a factura and creates no accounting
+  posting; payments are staff actions on an active project.
+
+### Identity
+
+entity
+
+### Identity evidence
+
+- Substitution: Payments are told apart by `payment_id`, even with equal amounts and dates.
+- Continuity: Issued: a registered payment does not change.
+
+### Source of truth
+
+Backend-owned record of the portal.
+
+### Lifecycle candidate
+
+None after registration (Meaning).
+
+### Persistence candidate
+
+Durable persistence candidate.
+
+### Open questions
+
+None.
+
+## Model M34 — PhotoPublication
+
+### Meaning
+
+- **Kind:** input DTO from Telegram intake; not persisted as-is.
+- **Fields:** `intake_id: str` (stable), `project_id: UUID`,
+  `file_ref: str`, `photo_date: datetime`, `section_id: UUID | None`,
+  `caption: str | None`, `client_visible: bool`, `intake_source: str`.
+- `published_by` is never accepted from intake/request data; ProgressPhoto
+  receives it from the AuthorizedProjectContext staff actor. The publication
+  project_id must equal that trusted context.
+
+### Identity
+
+value
+
+### Identity evidence
+
+- Substitution: Two equal publications are the same photo intake; replay is decided by `intake_id` (Meaning).
+- Continuity: No independent continuity: it exists for the one action that carries it.
+
+### Source of truth
+
+Telegram intake, or the operator placing binaries until the intake service exists (R0-13).
+
+### Lifecycle candidate
+
+None; a value has no independent lifecycle.
+
+### Persistence candidate
+
+Not persisted as such; becomes ProgressPhoto.
+
+### Open questions
+
+None.
+
+## Model M35 — ProgressPhoto
+
+### Meaning
+
+- **Kind:** persisted entity.
+- **Fields:** `photo_id: UUID`, `project_id: UUID`, `intake_id: str`
+  (unique), `file_ref: str`, `photo_date: datetime`, `published_at`,
+  `published_by: UUID`, `section_id: UUID | None`, `caption: str | None`,
+  `client_visible: bool`, `updated_at | None`, `updated_by | None`.
+- **Rules:** replay of one `intake_id` never duplicates; optional section
+  must belong to the same project; visibility/caption/section changes are
+  staff actions on an active project; hiding a photo never touches
+  financial data; gallery order is chronological by `photo_date`.
+
+### Identity
+
+entity
+
+### Identity evidence
+
+- Substitution: Photos are hidden, shown and captioned individually.
+- Continuity: The same photo continues while caption, section and visibility change.
+
+### Source of truth
+
+Backend-owned record of the portal.
+
+### Lifecycle candidate
+
+published; visibility, caption and section edited (Meaning).
+
+### Persistence candidate
+
+Durable persistence candidate.
+
+### Open questions
+
+None.
+
+## Model M36 — AuditRecord
+
+### Meaning
+
+- **Kind:** persisted append-only entity.
+- **Fields:** `audit_id: UUID`, `occurred_at: datetime`,
+  `actor_kind: ActorKind (staff | viewer | service | system)`,
+  `actor_id: UUID | None` `[closed-choice: required unless system]`,
+  `key_version: int | None` (service actors only),
+  `action: AuditAction` (closed catalog),
+  `project_id: UUID | None`,
+  `entity_kind: AuditEntityKind | None`, `entity_id: str | None`,
+  `result: AuditResult (success | rejected)`,
+  `reason_code: str | None` `[required iff rejected]`.
+- **Rules:** every significant action writes exactly one record —
+  viewer/grant/credential management, staff account and session security
+  events, expense create/correct/include/exclude/allocate, progress update,
+  payment registration, photo publication and visibility change, budget
+  edits, snapshot import, version activation, producer management.
+  Action-specific detail (fingerprints, estimate identity, contract
+  version) lives in the referenced entity (`SnapshotImportRecord`,
+  `ApprovedEstimateSnapshot`), not in generic audit payload fields — the
+  audit record links to it via `entity_kind`/`entity_id`. Audit failures
+  must not silently vanish; the owning-flow policy lands in State 2.
+- **Created by:** owning use cases. Modified by: no one.
+
+### Identity
+
+entity
+
+### Identity evidence
+
+- Substitution: Each audit entry is its own fact; two equal entries record two actions.
+- Continuity: Issued: append-only, never modified.
+
+### Source of truth
+
+Backend-owned record of the portal.
+
+### Lifecycle candidate
+
+None; append-only (Meaning).
+
+### Persistence candidate
+
+Durable persistence candidate.
+
+### Open questions
+
+None.
+
+## Model M37 — AuditIntent
+
+### Meaning
+
+- **Kind:** transient internal DTO supplied by an owning use case.
+- **Fields:** `actor_kind: ActorKind`, `actor_id: UUID | None`,
+  `key_version: int | None`, `action: AuditAction`,
+  `project_id: UUID | None`, `entity_kind: AuditEntityKind | None`,
+  `entity_id: str | None`, `result: AuditResult`,
+  `reason_code: str | None`.
+- **Local validation:** the same closed-choice actor/result conditions as
+  AuditRecord. `audit_writer` supplies `audit_id` and `occurred_at`; callers
+  cannot supply either.
+
+### Identity
+
+value
+
+### Identity evidence
+
+- Substitution: Two equal intents ask for the same entry; the entry's identity is the AuditRecord the writer mints.
+- Continuity: No independent continuity: it exists for the one action that carries it.
+
+### Source of truth
+
+The owning use case.
+
+### Lifecycle candidate
+
+None; a value has no independent lifecycle.
+
+### Persistence candidate
+
+Not persisted; becomes AuditRecord.
+
+### Open questions
+
+None.
+## Projections and answers
+
+Answers a caller reads and transient results between modules. They are values
+(Factory `3a72da32`: "inbound commands, read projections, operation outcomes,
+compositions around an entity, actor contexts, one-time secret responses"),
+named here and shaped in States 5 and 6. The text under each heading is the
+former State 1 text.
+
+### Authentication and authorization context
 
 Transient internal/boundary results; never persisted or logged as complete
 objects because session/credential plaintext may be present.
@@ -329,7 +1671,7 @@ or project ID fields supplied by a caller.
   Exactly the actor field selected by `principal_kind` is required; the other
   two are absent. Public actor-specific guards are the only producers.
 
-## Security-safe administration response DTOs
+### Security-safe administration responses
 
 These are the only IAM shapes serializable by HTTP handlers; persisted
 entities containing `password_hash`, `token_hash`, or `secret_hash` are never
@@ -366,134 +1708,9 @@ HTTP responses.
 Projection from persisted entities to these DTOs is owned by `api` only as a
 security allow-list; it may not compute business totals or authorization.
 
-## Registry boundary models
+### Budget results
 
-Typed per the platform Registry contract; consumed, never persisted as
-current truth. Live reads only — the portal stores no Registry snapshot
-(the domain needs no historical Registry evidence; budgets and expenses
-carry their own provenance).
-
-- `ProjectReference` — `project_id: UUID`, `display_name: str`,
-  `status: str`.
-- `ProjectValidationResult` — `project_id: UUID`, `exists: bool`,
-  `status: str | None`, `is_active: bool`, `failure: str | None`.
-- `ProjectContext` — `project: ProjectReference`, `address: str`,
-  `customer_ref: str | None`, `created_at: datetime`,
-  `registry_updated_at: datetime`.
-- `RegistryFailureKind` — closed enum for boundary error translation:
-  `invalid_uuid | not_found | archived | timeout | transport_error |
-  http_error | schema_mismatch | identity_mismatch`. Owned by the Registry
-  gateway; State 2 lands the translation table in `rules`.
-
-Portal mutation policy uses only `is_active`; archived context remains
-readable. Only `active` and `archived` are accepted status values.
-
-## Snapshot publication and import models
-
-### SnapshotPublication (inbound boundary DTO)
-
-- **Kind:** input DTO at the producer boundary; not persisted as-is.
-- **Fields:** `estimate_id: UUID`, `estimate_version: int`,
-  `project_id: UUID`, `approved_at: datetime`, `approved_by: str` (source
-  provenance, never a portal actor), `currency: str` (must be `EUR`),
-  `tax_mode: str` (source provenance; planned amounts must already be
-  gross), `sections: list[SnapshotSectionData]` (non-empty, unique
-  `source_section_id`), `source_system: str`, `published_at: datetime`,
-  `contract_version: int`.
-- `SnapshotSectionData` — `source_section_id: str`,
-  `source_section_code: str`, `display_name: str`, `sort_order: int`,
-  `material_planned: Decimal`, `work_planned: Decimal`.
-- **Created by:** authenticated `ServicePrincipal`. Unsupported
-  `contract_version`, non-EUR currency, incomplete content → typed
-  rejection.
-
-### ApprovedEstimateSnapshot
-
-- **Kind:** persisted immutable entity.
-- **Purpose:** exact accepted approved version, append-only history.
-- **Fields:** `snapshot_id: UUID`, all `SnapshotPublication` fields,
-  `content_fingerprint: str` (canonical content hash), `received_at:
-  datetime`, `received_from: UUID (service_principal_id)`,
-  `received_key_version: int`.
-- **Identity:** unique `(project_id, estimate_id, estimate_version)`.
-- **Rules:** never mutated after acceptance; same identity + same
-  fingerprint → idempotent success returning the existing record; same
-  identity + different fingerprint → integrity conflict, nothing stored.
-- **Created by:** snapshot import only. Modified by: no one.
-
-### SnapshotImportRecord
-
-- **Kind:** persisted entity (also serves as the producer-readable import
-  result and as the import audit detail).
-- **Fields:** `import_id: UUID`, `project_id`, `estimate_id`,
-  `estimate_version`, `contract_version`,
-  `outcome: ImportOutcome (accepted | idempotent_replay |
-  integrity_conflict | rejected)`, `reject_reason: ImportRejectReason | None`
-  (closed catalog: unsupported_contract_version, currency_mismatch,
-  incomplete_content, unknown_project, archived_project, scope_denied,
-  invalid_sections) `[closed-choice: reason required iff outcome ∈
-  {integrity_conflict, rejected}]`, `content_fingerprint: str`,
-  `snapshot_id: UUID | None` (set iff accepted/replay),
-  `occurred_at`, `service_principal_id`, `key_version`.
-- **Created by:** snapshot import. Modified by: no one (append-only).
-
-## Budget models
-
-### PortalSection
-
-- **Kind:** persisted entity.
-- **Purpose:** the stable client-facing section identity that survives
-  budget-version changes and renames. Expenses allocations and work
-  progress reference it, so history is never re-keyed by a version switch.
-- **Fields:** `section_id: UUID`, `project_id: UUID`,
-  `source_key: str | None` (stable `source_section_id` when the section was
-  born from an imported snapshot; None for manual-born sections),
-  `created_at`, `created_by_kind: ActorKind`, `created_by_id: UUID`.
-- **Rules:** `source_key` unique per project when present; automatic linking
-  of a new snapshot version to existing sections happens only through equal
-  `source_key`; display-name matching is forbidden; a section is never
-  deleted while any allocation or progress record references it.
-
-### BudgetVersion
-
-- **Kind:** persisted entity.
-- **Purpose:** one client-visible budget dataset for a project, from either
-  source.
-- **Fields:** `version_id: UUID`, `project_id: UUID`,
-  `source: BudgetSource (manual | approved_estimate_snapshot)`,
-  `snapshot_id: UUID | None` `[closed-choice: required iff source =
-  approved_estimate_snapshot]`, `status: BudgetVersionStatus (inactive |
-  active)`, `created_at`, `created_by_kind/id`, `activated_at | None`,
-  `activated_by: UUID | None` (staff only), `deactivated_at | None`.
-- **Rules:** at most one active version per project; at most one manual
-  version per project (mutable through its section plans while the project
-  is active); an imported version's plans are immutable copies of its
-  snapshot; activation is always an explicit staff action — a producer can
-  never activate; activation of one version deactivates the previous one in
-  the same operation; deactivated versions are never deleted.
-
-### SectionPlan
-
-- **Kind:** persisted entity (child of BudgetVersion).
-- **Purpose:** planned values of one stable section inside one version.
-- **Fields:** `plan_id: UUID`, `version_id: UUID`, `section_id: UUID`
-  (PortalSection), `display_name: str`, `sort_order: int`,
-  `material_planned: Decimal`, `work_planned: Decimal`,
-  `source_section_code: str | None` (imported provenance),
-  `updated_at`, `updated_by | None` (manual plans only).
-- **Rules:** unique `(version_id, section_id)`; mutable only when its
-  version is the manual version and the project is active; budget totals
-  are always derived from plans, never stored.
-
-Activation of an imported version creates plans by `source_key` linking:
-matched keys reuse the existing `PortalSection` (rename allowed), unmatched
-source sections create new `PortalSection` records. Sections of the previous
-version absent from the new one keep their identity and history; their
-allocations become *unresolved against the active version* (a derived state,
-not a stored flag) and must be explicitly re-allocated by an operator.
-`Other expenses` is not a section and is independent of versions.
-
-### BudgetActivationResult
+- `BudgetActivationResult`:
 
 - **Kind:** transient output DTO.
 - **Fields:** `version: BudgetVersion`, `plans: list[SectionPlan]`,
@@ -503,7 +1720,7 @@ not a stored flag) and must be explicitly re-allocated by an operator.
   stable `(sort_order, section_id)` order; a client BudgetView is a separate
   `derived_views` projection.
 
-### BudgetVersionDetail
+- `BudgetVersionDetail`:
 
 - **Kind:** transient read DTO.
 - **Fields:** `version: BudgetVersion`, `plans: list[SectionPlan]`,
@@ -511,194 +1728,7 @@ not a stored flag) and must be explicitly re-allocated by an operator.
 - Plans order by `(sort_order, section_id)`; the DTO contains no editable
   aggregate totals and may represent active or inactive history.
 
-## Expense models
-
-### NormalizedRecognitionItem and ConfirmedRecognitionPublication
-
-- `NormalizedRecognitionItem` is the portal-owned minimum OCR boundary item:
-  `line_id: str`, `description: str`, `quantity: Decimal (> 0)`,
-  `unit_price: Decimal (>= 0)`, `line_total: Decimal (>= 0)`.
-  Line IDs are unique within one publication. The portal validates presence
-  and decimal shape but does not recompute Expense total from items because
-  receipt-level taxes/discounts may not be itemized; items are discarded after
-  boundary validation in the MVP.
-- `ConfirmedRecognitionPublication` fields:
-  `recognized_document_id: str`, `document_reference: str`,
-  `file_ref: str` (opaque prepared source object), `document_type: str`,
-  `supplier: str`, `document_date: date`, `currency: str`,
-  `total_amount: Decimal`, `normalized_items: list[NormalizedRecognitionItem]`
-  (non-empty), `recognition_status: RecognitionStatus (confirmed only at this
-  boundary)`, `confirmed_at: datetime`, `contract_version: int`,
-  `provenance_ref: str`.
-- `RecognitionStatus` is a closed enum with `confirmed`; unconfirmed working
-  OCR shapes are not variants of the portal publication contract.
-
-### AllocationInstruction
-
-- **Kind:** operator input DTO.
-- **Fields:** `target: AllocationTargetKind`, `section_id: UUID | None`
-  `[closed-choice: required iff target = section]`, `amount: Decimal (> 0)`.
-- Every instruction is explicit; order is irrelevant to equality and
-  fingerprinting, which use canonical `(target, section_id, amount)` order.
-
-### ExpenseIntake (internal intake DTO)
-
-- **Kind:** internal input DTO produced by the OCR adapter; not persisted.
-- **Fields:** `recognized_document_id: str`, `document_reference: str`,
-  `file_ref: str` (opaque prepared source-object reference),
-  `document_type: str`, `supplier: str`, `document_date: date`,
-  `currency: str` (must be EUR), `total_amount: Decimal`,
-  `confirmed_at: datetime`, `contract_version: int`,
-  `provenance_ref: str` (portable OCR provenance),
-  `project_id: UUID`, `confirmed_by: UUID` (staff),
-  `allocations: list[AllocationInstruction]` (may target sections or
-  `other_expenses`; sum must equal `total_amount`).
-- `intake_fingerprint` is computed canonically by `expense_intake` over the
-  accepted projected source facts, project, `file_ref`, and sorted initial
-  allocation instructions; authenticated actor identity is provenance and is
-  not part of content equality.
-- The external wire contract additionally carries `normalized_items` and
-  `recognition_status`; the adapter validates them (status must be
-  confirmed, items complete) and discards items — they are not persisted in
-  the MVP. Confidence and provider fields never cross the boundary.
-
-### Expense
-
-- **Kind:** persisted entity.
-- **Fields:** `expense_id: UUID`, `project_id: UUID`,
-  `recognized_document_id: str` (unique), `supplier: str`,
-  `document_date: date`, `total_amount: Decimal`, `included: bool`
-  (default true), `created_at`, `confirmed_at`, `confirmed_by: UUID`,
-  `provenance_ref: str`, `intake_fingerprint: str`, `updated_at | None`,
-  `updated_by | None`.
-- **Rules:** created only from a valid `ExpenseIntake`; one
-  `recognized_document_id` → at most one Expense; equal fingerprint replay
-  returns the existing one, while a different fingerprint is an integrity
-  conflict storing nothing. Corrections (supplier, date, amount, included) are staff
-  actions on an active project; an amount correction and the matching
-  allocation adjustment are one atomic operation (sum invariant holds at
-  every commit point); exclusion removes the expense from totals but never
-  hides it.
-
-### ExpenseAllocation
-
-- **Kind:** persisted entity.
-- **Fields:** `allocation_id: UUID`, `expense_id: UUID`,
-  `target: AllocationTargetKind (section | other_expenses)`,
-  `section_id: UUID | None` `[closed-choice: required iff target =
-  section]`, `amount: Decimal (> 0)`, `created_at`, `created_by`,
-  `updated_at | None`, `updated_by | None`.
-- **Rules:** the sum of an expense's allocations equals `total_amount`
-  exactly; automatic proportional split is forbidden — every allocation is
-  an explicit operator value; `section_id` must belong to the expense's
-  project; re-allocation is a staff action on an active project.
-
-### ExpenseDocument
-
-- **Kind:** persisted entity.
-- **Fields:** `document_id: UUID`, `expense_id: UUID` (unique — exactly one
-  document per expense), `document_reference: str` (stable source
-  reference), `file_ref: str` (external storage reference; binary stays
-  outside), `description: str | None`, `client_visible: bool`,
-  `created_at`, `updated_at | None`, `updated_by | None`.
-- **Rules:** one document regardless of allocation count; staff may correct
-  description/visibility on an active project; the record never embeds the
-  binary or OCR working data.
-
-### ExpenseAggregate
-
-- **Kind:** transient domain result.
-- **Fields:** `expense: Expense`, `allocations: list[ExpenseAllocation]`,
-  `document: ExpenseDocument`, `replayed: bool`.
-- **Rules:** new creation returns all newly committed records with
-  `replayed=false`; equal-fingerprint replay returns the existing complete
-  aggregate with `replayed=true`; conflicting replay returns no aggregate.
-
-## Work and payment models
-
-### SectionProgress
-
-- **Kind:** persisted entity (current state, one row per section).
-- **Fields:** `project_id: UUID`, `section_id: UUID` (unique),
-  `completion_percent: int (0–100)`, `updated_at`, `updated_by: UUID`.
-- **Rules:** only sections with planned work in the active version
-  participate in derived progress; percent is manual staff input; no
-  photo-derived progress; history beyond audit records is not required.
-
-### WorkPayment
-
-- **Kind:** persisted entity.
-- **Fields:** `payment_id: UUID` (client-generated idempotency identity,
-  supplied by the operator command), `project_id: UUID`,
-  `amount: Decimal (> 0)`, `payment_date: date`, `description: str`,
-  `recorded_at`, `recorded_by: UUID`.
-- **Rules:** replay of the same `payment_id` returns the existing record and
-  never double-counts; a payment is not a factura and creates no accounting
-  posting; payments are staff actions on an active project.
-
-## Photo models
-
-### PhotoPublication (inbound intake DTO)
-
-- **Kind:** input DTO from Telegram intake; not persisted as-is.
-- **Fields:** `intake_id: str` (stable), `project_id: UUID`,
-  `file_ref: str`, `photo_date: datetime`, `section_id: UUID | None`,
-  `caption: str | None`, `client_visible: bool`, `intake_source: str`.
-- `published_by` is never accepted from intake/request data; ProgressPhoto
-  receives it from the AuthorizedProjectContext staff actor. The publication
-  project_id must equal that trusted context.
-
-### ProgressPhoto
-
-- **Kind:** persisted entity.
-- **Fields:** `photo_id: UUID`, `project_id: UUID`, `intake_id: str`
-  (unique), `file_ref: str`, `photo_date: datetime`, `published_at`,
-  `published_by: UUID`, `section_id: UUID | None`, `caption: str | None`,
-  `client_visible: bool`, `updated_at | None`, `updated_by | None`.
-- **Rules:** replay of one `intake_id` never duplicates; optional section
-  must belong to the same project; visibility/caption/section changes are
-  staff actions on an active project; hiding a photo never touches
-  financial data; gallery order is chronological by `photo_date`.
-
-## Audit model
-
-### AuditRecord
-
-- **Kind:** persisted append-only entity.
-- **Fields:** `audit_id: UUID`, `occurred_at: datetime`,
-  `actor_kind: ActorKind (staff | viewer | service | system)`,
-  `actor_id: UUID | None` `[closed-choice: required unless system]`,
-  `key_version: int | None` (service actors only),
-  `action: AuditAction` (closed catalog),
-  `project_id: UUID | None`,
-  `entity_kind: AuditEntityKind | None`, `entity_id: str | None`,
-  `result: AuditResult (success | rejected)`,
-  `reason_code: str | None` `[required iff rejected]`.
-- **Rules:** every significant action writes exactly one record —
-  viewer/grant/credential management, staff account and session security
-  events, expense create/correct/include/exclude/allocate, progress update,
-  payment registration, photo publication and visibility change, budget
-  edits, snapshot import, version activation, producer management.
-  Action-specific detail (fingerprints, estimate identity, contract
-  version) lives in the referenced entity (`SnapshotImportRecord`,
-  `ApprovedEstimateSnapshot`), not in generic audit payload fields — the
-  audit record links to it via `entity_kind`/`entity_id`. Audit failures
-  must not silently vanish; the owning-flow policy lands in State 2.
-- **Created by:** owning use cases. Modified by: no one.
-
-### AuditIntent
-
-- **Kind:** transient internal DTO supplied by an owning use case.
-- **Fields:** `actor_kind: ActorKind`, `actor_id: UUID | None`,
-  `key_version: int | None`, `action: AuditAction`,
-  `project_id: UUID | None`, `entity_kind: AuditEntityKind | None`,
-  `entity_id: str | None`, `result: AuditResult`,
-  `reason_code: str | None`.
-- **Local validation:** the same closed-choice actor/result conditions as
-  AuditRecord. `audit_writer` supplies `audit_id` and `occurred_at`; callers
-  cannot supply either.
-
-## Derived views (computed, never primary state)
+### Derived views (computed, never primary state)
 
 Recomputable at read time from owning records; no stored totals:
 
@@ -723,7 +1753,7 @@ State 4 exposed that these observable results need concrete boundary DTOs;
 they are added here as a backward correction before flow/API design. None is
 persisted, and none contains `file_ref`.
 
-### Read availability
+#### Read availability
 
 - `ViewAvailability` — closed enum: `available | not_configured |
   temporarily_unavailable`.
@@ -731,7 +1761,7 @@ persisted, and none contains `file_ref`.
   `temporarily_unavailable` means a required read dependency failed. Neither
   may be represented by fabricated zero values.
 
-### ProjectListItem
+#### ProjectListItem
 
 - **Kind:** output DTO.
 - **Fields:** `project_id: UUID`, `display_name: str`, `address: str`,
@@ -739,7 +1769,7 @@ persisted, and none contains `file_ref`.
 - **Source:** active viewer grant plus live typed Registry context. Ordering is
   applied by the view builder per R15, never inferred from Registry order.
 
-### BudgetSectionView and BudgetView
+#### BudgetSectionView and BudgetView
 
 - `BudgetSectionView` fields: `section_id: UUID`, `display_name: str`,
   `sort_order: int`, `material_planned: Decimal`,
@@ -753,7 +1783,7 @@ persisted, and none contains `file_ref`.
   `unresolved_allocation_count: int`.
 - Sections order by `(sort_order, section_id)` for deterministic ties.
 
-### ExpenseAllocationView, ExpenseDocumentView, and ExpenseView
+#### ExpenseAllocationView, ExpenseDocumentView, and ExpenseView
 
 - `ExpenseAllocationView` fields: `allocation_id: UUID`,
   `target: AllocationTargetKind`, `section_id: UUID | None`
@@ -773,7 +1803,7 @@ persisted, and none contains `file_ref`.
 - Expenses order by `(document_date, expense_id)` descending; allocations by
   `allocation_id` for a stable order.
 
-### ProgressSectionView and ProgressView
+#### ProgressSectionView and ProgressView
 
 - `ProgressSectionView` fields: `section_id: UUID`, `display_name: str`,
   `work_planned: Decimal`, `completion_percent: int | None`,
@@ -784,7 +1814,7 @@ persisted, and none contains `file_ref`.
 - `overall_progress_percent = None` means the R9 denominator is zero; it is
   never replaced with zero. Sections use the active budget order.
 
-### PaymentView and PaymentSummaryView
+#### PaymentView and PaymentSummaryView
 
 - `PaymentView` fields: `payment_id: UUID`, `amount: Decimal`,
   `payment_date: date`, `description: str`.
@@ -797,14 +1827,14 @@ persisted, and none contains `file_ref`.
   `label: WorkBalanceLabel`.
 - Payments order by `(payment_date, payment_id)` descending.
 
-### PhotoView
+#### PhotoView
 
 - **Fields:** `photo_id: UUID`, `photo_date: datetime`,
   `section_id: UUID | None`, `section_display_name: str | None`,
   `caption: str | None`.
 - `file_ref` is absent. Gallery order is `(photo_date, photo_id)` ascending.
 
-### ProjectOverview
+#### ProjectOverview
 
 - **Kind:** output DTO combining independently available read components.
 - **Fields:** `project: ProjectContext`,
@@ -820,7 +1850,7 @@ persisted, and none contains `file_ref`.
   expense/payment/photo collection is available with an empty list and exact
   zero totals, not `not_configured`.
 
-### BinaryPayload
+#### BinaryPayload
 
 - **Kind:** transient output DTO from the authenticated storage boundary.
 - **Fields:** `content: bytes`, `media_type: str`, `content_length: int`,
@@ -829,7 +1859,48 @@ persisted, and none contains `file_ref`.
   `content_length == len(content)`; size is bounded by runtime config; no
   `file_ref`, path, provider URL, bucket, or credential is returned.
 
-## Candidate constants and catalogs (→ State 2)
+
+### Changes the accepted Factory spec made to the projections
+
+Each is a value; none adds a fact to a model above.
+
+- `ProjectOverview` — the project context is absent when Registry cannot be
+  read, and a `project_availability` says so, like the other five pairs; a
+  Registry outage no longer fails the whole overview (Factory `d2c4511e`,
+  2026-08-09).
+- `BinaryPayload` — `download_name` is always present, derived from the object
+  kind and id (R0-12; Factory `babd5e52`, 2026-08-01).
+- `ExpenseOperationOutcome` — the aggregate together with `replayed`, the
+  outcome of an expense operation (Factory `d1280708`; M31).
+- `ProgressPhotoView` — the staff-side photo listing without `file_ref` or
+  `intake_id` (Factory `9eab4d94`, 2026-08-02).
+- `ViewerSessionView` — the viewer's restored session without its token
+  (R0-09; Factory `35a0a09c`).
+- `HealthStatus` — the liveness and readiness answer (R0-11; Factory
+  `21658368`).
+
+## Named in later states
+
+Concepts the accepted Factory spec added that are not domain concepts of
+State 1; each is carried by the state named.
+
+- Request bodies of the HTTP API (`StaffLoginRequest`, `ViewerEnterRequest`,
+  `ViewerCreateRequest`, `ServicePrincipalCreateRequest`,
+  `RecognitionExpenseCreateRequest`, `WorkPaymentRegistrationRequest` and
+  their siblings, 26 in all) — inbound commands, State 5 and the State 6
+  model closure (Factory `38626cc7`, `3080ef0d`, `9eab4d94`).
+- Repository ports and the unit of work (`AuditRepository`,
+  `ProjectTrackingRepository`, … `ViewerAccessRepository`,
+  `StaffBootstrapPort`, `PortalUnitOfWork`, `AuditRepositoryContext`) —
+  interfaces, State 3 and State 6 (Factory `af686d73` to `f12197b4`,
+  `6011ac93`).
+- `RuntimeSettings` and `RuntimeEnvironment` — the startup configuration of
+  R0-10, a value read from the environment; State 2 and the State 6 model
+  closure (Factory `38626cc7`, `51d19fdf`).
+
+## Catalogs carried to State 2
+
+The former "Candidate constants and catalogs (→ State 2)", kept:
 
 - Capability catalog `portal.*` (closed): project.read, budget.read,
   budget.manage, expense.read, expense.manage, progress.read,
@@ -866,6 +1937,9 @@ persisted, and none contains `file_ref`.
 
 ## Unresolved model questions
 
+The former list, kept. None of them changes a model's identity, so none is a
+`BLOCK:`.
+
 - Session TTL and renewal values (config values; State 2).
 - Administrative-area boundaries — with the sole-trader constraint one
   administrative area covers everything; the field stays out of the models
@@ -875,7 +1949,22 @@ persisted, and none contains `file_ref`.
 - Whether `SnapshotImportRecord` retention needs pruning (operational
   question; no model impact now).
 
+The session TTL item is closed by R0-06.
+
+## Evidence notes
+
+- Q13 (`open_questions.md`) records that issuing a new viewer access code
+  "leaves older codes valid until revoked". The design (M02: "re-issue revokes
+  the previous credential in the same operation"), the accepted Factory spec
+  (`issue_viewer_access`: "MUST revoke every non-revoked prior credential")
+  and the Factory code (`application/viewer_access.py`, `issue_viewer_access`,
+  which revokes every prior credential without `revoked_at`) agree with each
+  other and not with that observation. The migration keeps the design; Q13
+  stays the owner's question (`SOURCE.md`, State 1 findings).
+
 ## State 1 readiness assessment
+
+The former assessment, kept:
 
 - Every persisted field has a known producer; every secret has a
   verification-form storage rule.
