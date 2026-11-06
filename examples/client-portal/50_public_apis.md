@@ -4193,8 +4193,8 @@ readiness at `/health/ready`, each answering exactly `HealthStatus`; the
 transport guard installed before mounting; the inner application mounted at
 `/api` and then at `/`. It implements no transport policy itself. The
 settings handed here reach only the store and the transport guard: the
-inner application and the use cases receive no `RuntimeSettings` and use
-the `config.*` constants (the staff session lifetime among them). The
+inner application and the use cases receive no `RuntimeSettings`; which
+knobs a deployment can change is carried to States 6–7 (`SOURCE.md`). The
 inner application answers at both prefixes, so a route is reached whether
 or not the proxy has stripped `/api`; behind the stripping proxy a path that
 repeats the prefix (`/api/api/…`) reaches the same route, and no route

@@ -1022,7 +1022,9 @@ delegated). Liveness and readiness are public and change nothing (R0-11). The
 viewer browser session is the host-only cookie of R0-09; a viewer sign-out
 must come from the canonical public origin (viewer entry is not
 origin-checked), compared by scheme, host
-and effective port, with no pattern matching. Service principals use bearer
+and effective port, with no pattern matching. The trusted-host, CORS and public-origin
+settings and their checks are those of the accepted transport guard
+(`rules.http_transport_policy`), carried to States 6–7. Service principals use bearer
 headers only. Normative value: `rules.http_transport_policy` (Factory
 `38626cc7`, `21658368`, `e8a61895`, `35a0a09c`, `dc351917`, `51d19fdf`).
 
@@ -1183,9 +1185,7 @@ already completed. Normative value: `rules.staff_bootstrap_policy` (Factory
 
 The former configuration, kept (owner-confirmed defaults, R0-06):
 
-Configuration values with confirmed defaults; the running service fixes
-them in source (`config.*`), and only the values named by an `_env_name`
-are read from the deployment environment:
+Runtime knobs with confirmed defaults (deployment values may differ):
 
 ```text
 registry_endpoint_env_name            = REGISTRY_BASE_URL

@@ -1,0 +1,177 @@
+{
+ "open_points": [
+  {
+   "unit": "A30",
+   "subject": "deployment overrides for newly configurable runtime knobs",
+   "kind": "missing configuration binding",
+   "text": "“Runtime knobs with confirmed defaults (deployment values may differ)” replaces the rule that only values named by an `_env_name` are read from the deployment environment, but no environment-variable names or other override mechanism are given for the timeout, TTL, rate-limit, or entropy knobs; R0-10 says the service is configured only by environment variables.",
+   "question": "For each newly deployment-variable knob, what environment variable supplies it, and does absence select the stated default or stop startup?",
+   "options": [
+    "Each knob has a specified environment variable and falls back to its confirmed default.",
+    "Each knob has a specified required environment variable.",
+    "The values remain fixed in source despite being called deployment-variable."
+   ],
+   "default_guess": "Define one environment variable per knob and use the stated value when it is absent.",
+   "witness": {
+    "initial": "A deployment sets STAFF_SESSION_TTL_HOURS=24 and otherwise has a valid environment.",
+    "events": [
+     "The host operator starts the service.",
+     "A staff member logs in."
+    ],
+    "outcomes": [
+     "The service reads the new environment variable and issues a session expiring after 24 hours.",
+     "The service has no specified binding for that variable and issues the confirmed 12-hour default."
+    ],
+    "observer": "The staff member and the deployment operator."
+   }
+  },
+  {
+   "unit": "A30",
+   "subject": "validation of deployment-supplied knob values",
+   "kind": "missing refusal conditions",
+   "text": "“The existence of every timeout, TTL, rate limit and bound is invariant; its value is configuration” and “config.runtime_environment_variables” is described as containing types, requiredness, normalization and defaults, but that closed table and the allowed ranges are not present in the texts.",
+   "question": "Which deployment values are valid for each numeric knob, including whether zero, negative, fractional, extremely large, or syntactically malformed values stop startup?",
+   "options": [
+    "Require positive integers for TTLs, limits and entropy and a positive finite numeric value for timeouts.",
+    "Permit zero for selected limits or timeouts to disable their behavior.",
+    "Apply knob-specific ranges and maximums."
+   ],
+   "default_guess": "Require finite positive values of the declared numeric type and stop startup on any invalid value.",
+   "witness": {
+    "initial": "A deployment supplies `staff_session_ttl_hours=0`.",
+    "events": [
+     "The host operator starts the service.",
+     "A staff member attempts to log in if startup succeeds."
+    ],
+    "outcomes": [
+     "Startup is refused because a session TTL must be positive.",
+     "Startup succeeds and creates a session that is immediately expired, or treats zero as disabling expiry."
+    ],
+    "observer": "The deployment operator and staff member."
+   }
+  },
+  {
+   "unit": "A30",
+   "subject": "EMAIL_GATEWAY_URL startup requiredness while email is deferred",
+   "kind": "missing requiredness",
+   "text": "“email_gateway_url_env_name = EMAIL_GATEWAY_URL” gives no requiredness or default, while R0-23 says the gateway is called by no running operation and the required-variable test says a missing required variable stops startup.",
+   "question": "Must the running service refuse startup when `EMAIL_GATEWAY_URL` is absent even though all email operations are inert?",
+   "options": [
+    "It is optional while Q19 is deferred and absence does not stop startup.",
+    "It remains required at startup despite the gateway being unused.",
+    "It has a specified local/default value when absent."
+   ],
+   "default_guess": "Treat it as optional while no running operation can call the gateway.",
+   "witness": {
+    "initial": "All required storage and transport settings are valid, but `EMAIL_GATEWAY_URL` is absent.",
+    "events": [
+     "The host operator starts the accepted running service."
+    ],
+    "outcomes": [
+     "Startup succeeds because the deferred email boundary is unused.",
+     "Startup fails because `EMAIL_GATEWAY_URL` is a required runtime environment variable."
+    ],
+    "observer": "The deployment operator."
+   }
+  },
+  {
+   "unit": "A25",
+   "subject": "viewer-entry rate limit",
+   "kind": "missing policy values",
+   "text": "“the limiter's algorithm, its bound and its answer are those of the accepted transport guard (`rules.http_transport_policy.limits.viewer_entry`), with the values of A30” refers to A30, but A30 contains no viewer-entry rate, window, memory bound, or concealed over-limit answer.",
+   "question": "What are the viewer-entry attempt limit, time window, retained-client bound, and observable over-limit response?",
+   "options": [
+    "Use a fixed request count per fixed window, a fixed maximum client-address count, and a specified concealed HTTP response.",
+    "Use a token-bucket or sliding-window limit with separately specified capacity and refill rate.",
+    "Reuse another listed rate limit such as the email-challenge limit."
+   ],
+   "default_guess": "Use a fixed per-address, per-route window with an explicit bounded address table and return the same concealed rejection as an invalid viewer credential.",
+   "witness": {
+    "initial": "One client address has made repeated viewer-entry attempts and no valid viewer session exists.",
+    "events": [
+     "The client makes the next entry attempt with a valid access code."
+    ],
+    "outcomes": [
+     "The attempt is over the intended limit, is refused before verification, and creates no session.",
+     "The unspecified bound has not been reached, so the code is verified and a session is created."
+    ],
+    "observer": "The viewer and the operator monitoring session creation."
+   }
+  },
+  {
+   "unit": "A25",
+   "subject": "HTTP request-body and binary-response bounds",
+   "kind": "missing bound configuration",
+   "text": "“Request bodies and binary responses are bounded by runtime settings before expensive work” names runtime settings that A30 does not provide for request bodies, and does not say whether `BINARY_MAX_READ_BYTES` is also the binary response ceiling or is only the storage read bound.",
+   "question": "What is the request-body ceiling, and is the binary response ceiling identical to `BINARY_MAX_READ_BYTES` or a separate setting?",
+   "options": [
+    "Define one request-body setting and use `BINARY_MAX_READ_BYTES` as both storage-read and response ceiling.",
+    "Define separate request-body, storage-read, and binary-response settings with an ordering constraint.",
+    "Apply route-specific request-body bounds and a single binary bound."
+   ],
+   "default_guess": "Define a global request-body ceiling and use `BINARY_MAX_READ_BYTES` as the single binary read/response ceiling.",
+   "witness": {
+    "initial": "A syntactically valid JSON request has a body larger than one implementer's chosen limit but smaller than another's; all authentication data is valid.",
+    "events": [
+     "A caller submits the request to an authenticated mutation route."
+    ],
+    "outcomes": [
+     "The transport guard refuses it before authentication or body decoding.",
+     "The request reaches decoding and the handler because no specified ceiling was exceeded."
+    ],
+    "observer": "The caller and any handler-side instrumentation."
+   }
+  },
+  {
+   "unit": "A25",
+   "subject": "trusted hosts, CORS origins, and canonical public origin",
+   "kind": "missing configuration relationship",
+   "text": "“trusted hosts,” the CORS “allowlist,” and “the canonical public origin” are mandatory transport-policy inputs, but A30 supplies no settings, environment names, defaults, normalization rules, or rule relating the canonical origin to the CORS allowlist.",
+   "question": "How are trusted hosts, allowed CORS origins, and the one canonical public origin configured and validated, and must the canonical origin be a member of the CORS allowlist?",
+   "options": [
+    "Use three explicit environment settings and require the canonical origin to be an allowed origin when CORS is enabled.",
+    "Derive the canonical origin from one trusted host and scheme while configuring CORS separately.",
+    "Use one public-origin setting to derive the trusted host, canonical sign-out origin, and sole CORS origin."
+   ],
+   "default_guess": "Configure them explicitly, normalize origins by scheme/host/effective port, and require the canonical public origin to be present in a non-empty CORS allowlist.",
+   "witness": {
+    "initial": "The service is deployed on trusted host `portal.example`, CORS allows `https://app.example`, and a viewer has an active cookie session.",
+    "events": [
+     "The viewer submits sign-out with `Origin: https://app.example`."
+    ],
+    "outcomes": [
+     "Sign-out succeeds because the allowed frontend origin is treated as the canonical public origin.",
+     "Sign-out is refused because the canonical origin is derived as `https://portal.example`."
+    ],
+    "observer": "The viewer."
+   }
+  },
+  {
+   "unit": "A31",
+   "subject": "security-review closure after configuration became deployment-variable",
+   "kind": "closure contradiction",
+   "text": "A31 says “Every category resolves to an accepted decision or an open question” and marks `injection_interpreted_input` resolved by A30, but changed A30 permits deployment values to differ without supplying the closed environment-variable table or the acceptance and normalization rules for those values.",
+   "question": "Is the configuration-input security category actually closed, and if so, what complete validation table closes it?",
+   "options": [
+    "Include the complete closed environment-variable table and keep the category resolved.",
+    "Mark configuration-input validation unresolved until that table is supplied.",
+    "Narrow A30 so the unspecified values remain fixed in source and are not deployment input."
+   ],
+   "default_guess": "Include the complete closed table of variable names, types, requiredness, normalization, defaults, and refusal ranges before treating the category as resolved.",
+   "witness": {
+    "initial": "A deployment supplies a malformed or boundary-valued override for a newly variable timeout or TTL.",
+    "events": [
+     "The host operator starts the service."
+    ],
+    "outcomes": [
+     "Startup rejects the value under a strict validation policy, supporting A31's resolved assessment.",
+     "Startup accepts or coerces it under another reasonable policy because A30 supplies no closed validation rule."
+    ],
+    "observer": "The deployment operator and security reviewer."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A30\",\"subject\":\"deployment overrides for newly configurable runtime knobs\",\"kind\":\"missing configuration binding\",\"text\":\"“Runtime knobs with confirmed defaults (deployment values may differ)” replaces the rule that only values named by an `_env_name` are read from the deployment environment, but no environment-variable names or other override mechanism are given for the timeout, TTL, rate-limit, or entropy knobs; R0-10 says the service is configured only by environment variables.\",\"question\":\"For each newly deployment-variable knob, what environment variable supplies it, and does absence select the stated default or stop startup?\",\"options\":[\"Each knob has a specified environment variable and falls back to its confirmed default.\",\"Each knob has a specified required environment variable.\",\"The values remain fixed in source despite being called deployment-variable.\"],\"default_guess\":\"Define one environment variable per knob and use the stated value when it is absent.\",\"witness\":{\"initial\":\"A deployment sets STAFF_SESSION_TTL_HOURS=24 and otherwise has a valid environment.\",\"events\":[\"The host operator starts the service.\",\"A staff member logs in.\"],\"outcomes\":[\"The service reads the new environment variable and issues a session expiring after 24 hours.\",\"The service has no specified binding for that variable and issues the confirmed 12-hour default.\"],\"observer\":\"The staff member and the deployment operator.\"}},{\"unit\":\"A30\",\"subject\":\"validation of deployment-supplied knob values\",\"kind\":\"missing refusal conditions\",\"text\":\"“The existence of every timeout, TTL, rate limit and bound is invariant; its value is configuration” and “config.runtime_environment_variables” is described as containing types, requiredness, normalization and defaults, but that closed table and the allowed ranges are not present in the texts.\",\"question\":\"Which deployment values are valid for each numeric knob, including whether zero, negative, fractional, extremely large, or syntactically malformed values stop startup?\",\"options\":[\"Require positive integers for TTLs, limits and entropy and a positive finite numeric value for timeouts.\",\"Permit zero for selected limits or timeouts to disable their behavior.\",\"Apply knob-specific ranges and maximums.\"],\"default_guess\":\"Require finite positive values of the declared numeric type and stop startup on any invalid value.\",\"witness\":{\"initial\":\"A deployment supplies `staff_session_ttl_hours=0`.\",\"events\":[\"The host operator starts the service.\",\"A staff member attempts to log in if startup succeeds.\"],\"outcomes\":[\"Startup is refused because a session TTL must be positive.\",\"Startup succeeds and creates a session that is immediately expired, or treats zero as disabling expiry.\"],\"observer\":\"The deployment operator and staff member.\"}},{\"unit\":\"A30\",\"subject\":\"EMAIL_GATEWAY_URL startup requiredness while email is deferred\",\"kind\":\"missing requiredness\",\"text\":\"“email_gateway_url_env_name = EMAIL_GATEWAY_URL” gives no requiredness or default, while R0-23 says the gateway is called by no running operation and the required-variable test says a missing required variable stops startup.\",\"question\":\"Must the running service refuse startup when `EMAIL_GATEWAY_URL` is absent even though all email operations are inert?\",\"options\":[\"It is optional while Q19 is deferred and absence does not stop startup.\",\"It remains required at startup despite the gateway being unused.\",\"It has a specified local/default value when absent.\"],\"default_guess\":\"Treat it as optional while no running operation can call the gateway.\",\"witness\":{\"initial\":\"All required storage and transport settings are valid, but `EMAIL_GATEWAY_URL` is absent.\",\"events\":[\"The host operator starts the accepted running service.\"],\"outcomes\":[\"Startup succeeds because the deferred email boundary is unused.\",\"Startup fails because `EMAIL_GATEWAY_URL` is a required runtime environment variable.\"],\"observer\":\"The deployment operator.\"}},{\"unit\":\"A25\",\"subject\":\"viewer-entry rate limit\",\"kind\":\"missing policy values\",\"text\":\"“the limiter's algorithm, its bound and its answer are those of the accepted transport guard (`rules.http_transport_policy.limits.viewer_entry`), with the values of A30” refers to A30, but A30 contains no viewer-entry rate, window, memory bound, or concealed over-limit answer.\",\"question\":\"What are the viewer-entry attempt limit, time window, retained-client bound, and observable over-limit response?\",\"options\":[\"Use a fixed request count per fixed window, a fixed maximum client-address count, and a specified concealed HTTP response.\",\"Use a token-bucket or sliding-window limit with separately specified capacity and refill rate.\",\"Reuse another listed rate limit such as the email-challenge limit.\"],\"default_guess\":\"Use a fixed per-address, per-route window with an explicit bounded address table and return the same concealed rejection as an invalid viewer credential.\",\"witness\":{\"initial\":\"One client address has made repeated viewer-entry attempts and no valid viewer session exists.\",\"events\":[\"The client makes the next entry attempt with a valid access code.\"],\"outcomes\":[\"The attempt is over the intended limit, is refused before verification, and creates no session.\",\"The unspecified bound has not been reached, so the code is verified and a session is created.\"],\"observer\":\"The viewer and the operator monitoring session creation.\"}},{\"unit\":\"A25\",\"subject\":\"HTTP request-body and binary-response bounds\",\"kind\":\"missing bound configuration\",\"text\":\"“Request bodies and binary responses are bounded by runtime settings before expensive work” names runtime settings that A30 does not provide for request bodies, and does not say whether `BINARY_MAX_READ_BYTES` is also the binary response ceiling or is only the storage read bound.\",\"question\":\"What is the request-body ceiling, and is the binary response ceiling identical to `BINARY_MAX_READ_BYTES` or a separate setting?\",\"options\":[\"Define one request-body setting and use `BINARY_MAX_READ_BYTES` as both storage-read and response ceiling.\",\"Define separate request-body, storage-read, and binary-response settings with an ordering constraint.\",\"Apply route-specific request-body bounds and a single binary bound.\"],\"default_guess\":\"Define a global request-body ceiling and use `BINARY_MAX_READ_BYTES` as the single binary read/response ceiling.\",\"witness\":{\"initial\":\"A syntactically valid JSON request has a body larger than one implementer's chosen limit but smaller than another's; all authentication data is valid.\",\"events\":[\"A caller submits the request to an authenticated mutation route.\"],\"outcomes\":[\"The transport guard refuses it before authentication or body decoding.\",\"The request reaches decoding and the handler because no specified ceiling was exceeded.\"],\"observer\":\"The caller and any handler-side instrumentation.\"}},{\"unit\":\"A25\",\"subject\":\"trusted hosts, CORS origins, and canonical public origin\",\"kind\":\"missing configuration relationship\",\"text\":\"“trusted hosts,” the CORS “allowlist,” and “the canonical public origin” are mandatory transport-policy inputs, but A30 supplies no settings, environment names, defaults, normalization rules, or rule relating the canonical origin to the CORS allowlist.\",\"question\":\"How are trusted hosts, allowed CORS origins, and the one canonical public origin configured and validated, and must the canonical origin be a member of the CORS allowlist?\",\"options\":[\"Use three explicit environment settings and require the canonical origin to be an allowed origin when CORS is enabled.\",\"Derive the canonical origin from one trusted host and scheme while configuring CORS separately.\",\"Use one public-origin setting to derive the trusted host, canonical sign-out origin, and sole CORS origin.\"],\"default_guess\":\"Configure them explicitly, normalize origins by scheme/host/effective port, and require the canonical public origin to be present in a non-empty CORS allowlist.\",\"witness\":{\"initial\":\"The service is deployed on trusted host `portal.example`, CORS allows `https://app.example`, and a viewer has an active cookie session.\",\"events\":[\"The viewer submits sign-out with `Origin: https://app.example`.\"],\"outcomes\":[\"Sign-out succeeds because the allowed frontend origin is treated as the canonical public origin.\",\"Sign-out is refused because the canonical origin is derived as `https://portal.example`.\"],\"observer\":\"The viewer.\"}},{\"unit\":\"A31\",\"subject\":\"security-review closure after configuration became deployment-variable\",\"kind\":\"closure contradiction\",\"text\":\"A31 says “Every category resolves to an accepted decision or an open question” and marks `injection_interpreted_input` resolved by A30, but changed A30 permits deployment values to differ without supplying the closed environment-variable table or the acceptance and normalization rules for those values.\",\"question\":\"Is the configuration-input security category actually closed, and if so, what complete validation table closes it?\",\"options\":[\"Include the complete closed environment-variable table and keep the category resolved.\",\"Mark configuration-input validation unresolved until that table is supplied.\",\"Narrow A30 so the unspecified values remain fixed in source and are not deployment input.\"],\"default_guess\":\"Include the complete closed table of variable names, types, requiredness, normalization, defaults, and refusal ranges before treating the category as resolved.\",\"witness\":{\"initial\":\"A deployment supplies a malformed or boundary-valued override for a newly variable timeout or TTL.\",\"events\":[\"The host operator starts the service.\"],\"outcomes\":[\"Startup rejects the value under a strict validation policy, supporting A31's resolved assessment.\",\"Startup accepts or coerces it under another reasonable policy because A30 supplies no closed validation rule.\"],\"observer\":\"The deployment operator and security reviewer.\"}}]}",
+ "set_aside": []
+}

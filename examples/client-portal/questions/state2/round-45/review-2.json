@@ -1,0 +1,205 @@
+{
+ "open_points": [
+  {
+   "unit": "A30",
+   "subject": "Runtime configuration environment bindings",
+   "kind": "missing configuration contract",
+   "text": "“Runtime knobs with confirmed defaults (deployment values may differ)” and “config.runtime_environment_variables: the closed table of environment variables, their types, requiredness, normalization and per-environment defaults” name a table whose contents are not given; most listed knobs have no environment-variable name.",
+   "question": "For every deployment-variable knob, what is its exact environment-variable name, type, requiredness, normalization, and default or per-environment default?",
+   "options": [
+    "Each snake-case key maps mechanically to an upper-case environment variable.",
+    "Only entries ending in `_env_name` are environment-configurable and the other values remain fixed.",
+    "A separate explicit environment-variable table supplies mappings that cannot be inferred from these texts."
+   ],
+   "default_guess": "Use upper-case versions of the listed keys, parse them once at startup, and use the displayed values as defaults.",
+   "witness": {
+    "initial": "The service is deployed with `STAFF_SESSION_TTL_HOURS=24`; the source default is 12 hours.",
+    "events": [
+     "A staff member logs in.",
+     "Thirteen hours later the staff member makes an authenticated request."
+    ],
+    "outcomes": [
+     "The deployment value is recognized and the session remains valid for 24 hours.",
+     "No specified environment binding exists for this knob, so the 12-hour default remains in force and the request is refused."
+    ],
+    "observer": "The staff member and deployment operator"
+   }
+  },
+  {
+   "unit": "A30",
+   "subject": "Numeric runtime-knob validation",
+   "kind": "missing refusal conditions",
+   "text": "“deployment values may differ” and “an invalid or missing required variable stops start-up” do not define what values are invalid for the timeouts, TTLs, rate limit, or `credential_entropy_bytes`.",
+   "question": "What ranges are accepted for each numeric knob, and do zero or negative values mean disabled, immediate expiry, or invalid startup configuration?",
+   "options": [
+    "Require every timeout, TTL, rate limit and entropy length to be a positive integer within explicit bounds.",
+    "Allow zero for selected knobs to disable the associated behavior.",
+    "Accept any integer and apply its literal arithmetic meaning."
+   ],
+   "default_guess": "Require positive integers and impose a security minimum on credential entropy.",
+   "witness": {
+    "initial": "A deployment supplies `staff_session_ttl_hours=0`.",
+    "events": [
+     "The service starts.",
+     "A staff member successfully submits valid login credentials.",
+     "The returned session is used immediately."
+    ],
+    "outcomes": [
+     "Startup refuses the zero TTL as invalid.",
+     "Startup succeeds, creates a session expiring at its creation instant, and the authenticated request is refused."
+    ],
+    "observer": "The deployment operator and staff member"
+   }
+  },
+  {
+   "unit": "A30",
+   "subject": "Email gateway configuration requiredness",
+   "kind": "missing startup rule",
+   "text": "The list gives `email_gateway_url_env_name = EMAIL_GATEWAY_URL`, while the gateway operations are deferred, but it never says whether this variable is required; only `BINARY_MAX_READ_BYTES` is explicitly marked required and only `REGISTRY_BASE_URL` is explicitly allowed to be absent at startup.",
+   "question": "While all email operations are inert, must startup require and validate `EMAIL_GATEWAY_URL`, or may it be absent until Q19 is implemented?",
+   "options": [
+    "Require a valid email gateway URL at every startup because the gateway is a mandatory boundary.",
+    "Permit it to be absent while no running operation calls the gateway.",
+    "Require it only in deployment environments that enable the deferred email feature."
+   ],
+   "default_guess": "Permit it to be absent while the email feature is inert.",
+   "witness": {
+    "initial": "A deployment has every required storage and transport setting but no `EMAIL_GATEWAY_URL`.",
+    "events": [
+     "The deployment operator starts the service."
+    ],
+    "outcomes": [
+     "Startup succeeds because the running service cannot call the gateway.",
+     "Startup fails because the configured external boundary is mandatory."
+    ],
+    "observer": "The deployment operator"
+   }
+  },
+  {
+   "unit": "A25",
+   "subject": "Viewer-entry rate limiting",
+   "kind": "missing policy value",
+   "text": "“the limiter's algorithm, its bound and its answer are those of the accepted transport guard (`rules.http_transport_policy.limits.viewer_entry`), with the values of A30” refers to A30, but A30 contains no viewer-entry rate-limit value or configuration key.",
+   "question": "What exact viewer-entry limit, time window, memory bound, eviction algorithm, and concealed over-limit response apply, and which of them are configurable?",
+   "options": [
+    "Use a fixed-window limit per connection address and route.",
+    "Use a rolling/token-bucket limit per connection address and route.",
+    "Mistakenly reuse `email_challenge_rate_limit_per_hour`, the only displayed rate-limit value."
+   ],
+   "default_guess": "Define a separate bounded per-address-and-route limiter rather than reuse the email challenge limit.",
+   "witness": {
+    "initial": "One client network address has made several failed viewer-entry attempts within an hour.",
+    "events": [
+     "The same address submits another valid viewer credential."
+    ],
+    "outcomes": [
+     "The request is still within the intended viewer-entry bound, so verification runs and a session is created.",
+     "The request is over the independently chosen bound, so it is concealed and no session is created."
+    ],
+    "observer": "The viewer and an operator monitoring session creation"
+   }
+  },
+  {
+   "unit": "A25",
+   "subject": "Request-body size bound",
+   "kind": "missing runtime setting",
+   "text": "“Request bodies and binary responses are bounded by runtime settings before expensive work” provides no request-body setting, bound, unit, or treatment of requests without a trustworthy `Content-Length`; A30 lists only `BINARY_MAX_READ_BYTES`.",
+   "question": "What is the maximum request-body size, which requests it covers, how streamed or chunked bodies are counted, and what exact refusal occurs when the declared or actual size exceeds it?",
+   "options": [
+    "Apply one global byte ceiling to every request body and count bytes while reading.",
+    "Use route-specific ceilings.",
+    "Rely only on `Content-Length`, leaving bodies without it unbounded or proxy-dependent."
+   ],
+   "default_guess": "Apply a single explicit byte ceiling to all request bodies, reject an oversized declaration before reading, and enforce the same ceiling while streaming.",
+   "witness": {
+    "initial": "A producer is authenticated and sends a snapshot publication larger than an implementer-selected body ceiling using chunked transfer with no `Content-Length`.",
+    "events": [
+     "The request reaches the service."
+    ],
+    "outcomes": [
+     "The transport counts received bytes, refuses the request before snapshot decoding, and records no import attempt.",
+     "The transport checks only `Content-Length`, accepts the body, and the snapshot operation runs."
+    ],
+    "observer": "The producer and service operator"
+   }
+  },
+  {
+   "unit": "A25",
+   "subject": "Canonical public origin for viewer sign-out",
+   "kind": "missing configuration decision",
+   "text": "“a viewer sign-out must come from the canonical public origin … compared by scheme, host and effective port” does not identify how that canonical origin is configured or selected when the CORS allowlist or deployment contains more than one allowed origin; A30 supplies no corresponding setting.",
+   "question": "What exact value is the canonical public origin, where does it come from, and may it differ from or be one member of the CORS allowlist?",
+   "options": [
+    "Configure one dedicated canonical-origin environment variable.",
+    "Derive it from the request host and scheme.",
+    "Choose one origin from the CORS allowlist.",
+    "Require the CORS allowlist to contain at most one origin and use it."
+   ],
+   "default_guess": "Use a dedicated, startup-validated canonical public-origin setting.",
+   "witness": {
+    "initial": "The deployment allows `https://portal.example` and `https://www.portal.example`; a viewer has an active cookie session.",
+    "events": [
+     "The viewer submits sign-out from `https://www.portal.example` with that exact `Origin`."
+    ],
+    "outcomes": [
+     "That origin is canonical, so the session is revoked.",
+     "`https://portal.example` is canonical, so sign-out is refused and the session remains active."
+    ],
+    "observer": "The viewer"
+   }
+  },
+  {
+   "unit": "A25",
+   "subject": "Transport-check precedence and limiter side effects",
+   "kind": "unspecified check order",
+   "text": "The policy says untrusted hosts and oversized bodies do not reach a handler and an over-limit viewer entry is refused before code verification, but it gives no relative order among host validation, body bounding, rate limiting, sign-out origin validation, and authentication.",
+   "question": "In a request that violates more than one transport condition, which failure wins, and may an earlier failure consume viewer-entry rate-limit capacity?",
+   "options": [
+    "Check host, then size, then rate limit or origin, then authentication.",
+    "Check rate limit before size and host validation.",
+    "Use route-specific precedence, explicitly defining whether refused malformed requests affect limiter state."
+   ],
+   "default_guess": "Validate host and body bound before consuming rate-limit capacity, then enforce route-specific origin or rate checks before authentication.",
+   "witness": {
+    "initial": "A client address is one attempt below the viewer-entry limit.",
+    "events": [
+     "The client sends an oversized viewer-entry request containing an invalid credential.",
+     "The client then sends a normal-sized request containing a valid credential."
+    ],
+    "outcomes": [
+     "Size validation runs first, the oversized request does not consume capacity, and the valid request succeeds.",
+     "Rate limiting counts the oversized request first, so the later valid request is concealed as over limit."
+    ],
+    "observer": "The viewer"
+   }
+  },
+  {
+   "unit": "A31",
+   "subject": "Security closure after configurable credential entropy",
+   "kind": "contradictory security closure",
+   "text": "A31 says “Every category resolves to an accepted decision or an open question” and marks authentication/credential abuse and secrets resolved, while changed A30 now says deployment values may differ for `credential_entropy_bytes` without defining any security minimum or validation rule.",
+   "question": "How can the security review remain resolved if a deployment may select an arbitrarily small credential entropy value, and what minimum or fixed constraint closes that category?",
+   "options": [
+    "Declare an explicit minimum entropy and refuse startup below it.",
+    "Keep credential entropy fixed at 32 bytes rather than deployment-configurable.",
+    "Accept arbitrary positive deployment values and reopen the credential-abuse security category."
+   ],
+   "default_guess": "Require at least 32 bytes and fail startup for a smaller value.",
+   "witness": {
+    "initial": "A deployment sets `credential_entropy_bytes=1`.",
+    "events": [
+     "The service starts.",
+     "An administrator issues a viewer access credential."
+    ],
+    "outcomes": [
+     "Startup rejects the configuration under a security minimum needed for A31 to be resolved.",
+     "Startup accepts the deployment-variable value and issues a credential with only one byte of randomness despite A31 declaring credential abuse resolved."
+    ],
+    "observer": "The deployment operator, administrator, and any attacker attempting credential enumeration"
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A30\",\"subject\":\"Runtime configuration environment bindings\",\"kind\":\"missing configuration contract\",\"text\":\"“Runtime knobs with confirmed defaults (deployment values may differ)” and “config.runtime_environment_variables: the closed table of environment variables, their types, requiredness, normalization and per-environment defaults” name a table whose contents are not given; most listed knobs have no environment-variable name.\",\"question\":\"For every deployment-variable knob, what is its exact environment-variable name, type, requiredness, normalization, and default or per-environment default?\",\"options\":[\"Each snake-case key maps mechanically to an upper-case environment variable.\",\"Only entries ending in `_env_name` are environment-configurable and the other values remain fixed.\",\"A separate explicit environment-variable table supplies mappings that cannot be inferred from these texts.\"],\"default_guess\":\"Use upper-case versions of the listed keys, parse them once at startup, and use the displayed values as defaults.\",\"witness\":{\"initial\":\"The service is deployed with `STAFF_SESSION_TTL_HOURS=24`; the source default is 12 hours.\",\"events\":[\"A staff member logs in.\",\"Thirteen hours later the staff member makes an authenticated request.\"],\"outcomes\":[\"The deployment value is recognized and the session remains valid for 24 hours.\",\"No specified environment binding exists for this knob, so the 12-hour default remains in force and the request is refused.\"],\"observer\":\"The staff member and deployment operator\"}},{\"unit\":\"A30\",\"subject\":\"Numeric runtime-knob validation\",\"kind\":\"missing refusal conditions\",\"text\":\"“deployment values may differ” and “an invalid or missing required variable stops start-up” do not define what values are invalid for the timeouts, TTLs, rate limit, or `credential_entropy_bytes`.\",\"question\":\"What ranges are accepted for each numeric knob, and do zero or negative values mean disabled, immediate expiry, or invalid startup configuration?\",\"options\":[\"Require every timeout, TTL, rate limit and entropy length to be a positive integer within explicit bounds.\",\"Allow zero for selected knobs to disable the associated behavior.\",\"Accept any integer and apply its literal arithmetic meaning.\"],\"default_guess\":\"Require positive integers and impose a security minimum on credential entropy.\",\"witness\":{\"initial\":\"A deployment supplies `staff_session_ttl_hours=0`.\",\"events\":[\"The service starts.\",\"A staff member successfully submits valid login credentials.\",\"The returned session is used immediately.\"],\"outcomes\":[\"Startup refuses the zero TTL as invalid.\",\"Startup succeeds, creates a session expiring at its creation instant, and the authenticated request is refused.\"],\"observer\":\"The deployment operator and staff member\"}},{\"unit\":\"A30\",\"subject\":\"Email gateway configuration requiredness\",\"kind\":\"missing startup rule\",\"text\":\"The list gives `email_gateway_url_env_name = EMAIL_GATEWAY_URL`, while the gateway operations are deferred, but it never says whether this variable is required; only `BINARY_MAX_READ_BYTES` is explicitly marked required and only `REGISTRY_BASE_URL` is explicitly allowed to be absent at startup.\",\"question\":\"While all email operations are inert, must startup require and validate `EMAIL_GATEWAY_URL`, or may it be absent until Q19 is implemented?\",\"options\":[\"Require a valid email gateway URL at every startup because the gateway is a mandatory boundary.\",\"Permit it to be absent while no running operation calls the gateway.\",\"Require it only in deployment environments that enable the deferred email feature.\"],\"default_guess\":\"Permit it to be absent while the email feature is inert.\",\"witness\":{\"initial\":\"A deployment has every required storage and transport setting but no `EMAIL_GATEWAY_URL`.\",\"events\":[\"The deployment operator starts the service.\"],\"outcomes\":[\"Startup succeeds because the running service cannot call the gateway.\",\"Startup fails because the configured external boundary is mandatory.\"],\"observer\":\"The deployment operator\"}},{\"unit\":\"A25\",\"subject\":\"Viewer-entry rate limiting\",\"kind\":\"missing policy value\",\"text\":\"“the limiter's algorithm, its bound and its answer are those of the accepted transport guard (`rules.http_transport_policy.limits.viewer_entry`), with the values of A30” refers to A30, but A30 contains no viewer-entry rate-limit value or configuration key.\",\"question\":\"What exact viewer-entry limit, time window, memory bound, eviction algorithm, and concealed over-limit response apply, and which of them are configurable?\",\"options\":[\"Use a fixed-window limit per connection address and route.\",\"Use a rolling/token-bucket limit per connection address and route.\",\"Mistakenly reuse `email_challenge_rate_limit_per_hour`, the only displayed rate-limit value.\"],\"default_guess\":\"Define a separate bounded per-address-and-route limiter rather than reuse the email challenge limit.\",\"witness\":{\"initial\":\"One client network address has made several failed viewer-entry attempts within an hour.\",\"events\":[\"The same address submits another valid viewer credential.\"],\"outcomes\":[\"The request is still within the intended viewer-entry bound, so verification runs and a session is created.\",\"The request is over the independently chosen bound, so it is concealed and no session is created.\"],\"observer\":\"The viewer and an operator monitoring session creation\"}},{\"unit\":\"A25\",\"subject\":\"Request-body size bound\",\"kind\":\"missing runtime setting\",\"text\":\"“Request bodies and binary responses are bounded by runtime settings before expensive work” provides no request-body setting, bound, unit, or treatment of requests without a trustworthy `Content-Length`; A30 lists only `BINARY_MAX_READ_BYTES`.\",\"question\":\"What is the maximum request-body size, which requests it covers, how streamed or chunked bodies are counted, and what exact refusal occurs when the declared or actual size exceeds it?\",\"options\":[\"Apply one global byte ceiling to every request body and count bytes while reading.\",\"Use route-specific ceilings.\",\"Rely only on `Content-Length`, leaving bodies without it unbounded or proxy-dependent.\"],\"default_guess\":\"Apply a single explicit byte ceiling to all request bodies, reject an oversized declaration before reading, and enforce the same ceiling while streaming.\",\"witness\":{\"initial\":\"A producer is authenticated and sends a snapshot publication larger than an implementer-selected body ceiling using chunked transfer with no `Content-Length`.\",\"events\":[\"The request reaches the service.\"],\"outcomes\":[\"The transport counts received bytes, refuses the request before snapshot decoding, and records no import attempt.\",\"The transport checks only `Content-Length`, accepts the body, and the snapshot operation runs.\"],\"observer\":\"The producer and service operator\"}},{\"unit\":\"A25\",\"subject\":\"Canonical public origin for viewer sign-out\",\"kind\":\"missing configuration decision\",\"text\":\"“a viewer sign-out must come from the canonical public origin … compared by scheme, host and effective port” does not identify how that canonical origin is configured or selected when the CORS allowlist or deployment contains more than one allowed origin; A30 supplies no corresponding setting.\",\"question\":\"What exact value is the canonical public origin, where does it come from, and may it differ from or be one member of the CORS allowlist?\",\"options\":[\"Configure one dedicated canonical-origin environment variable.\",\"Derive it from the request host and scheme.\",\"Choose one origin from the CORS allowlist.\",\"Require the CORS allowlist to contain at most one origin and use it.\"],\"default_guess\":\"Use a dedicated, startup-validated canonical public-origin setting.\",\"witness\":{\"initial\":\"The deployment allows `https://portal.example` and `https://www.portal.example`; a viewer has an active cookie session.\",\"events\":[\"The viewer submits sign-out from `https://www.portal.example` with that exact `Origin`.\"],\"outcomes\":[\"That origin is canonical, so the session is revoked.\",\"`https://portal.example` is canonical, so sign-out is refused and the session remains active.\"],\"observer\":\"The viewer\"}},{\"unit\":\"A25\",\"subject\":\"Transport-check precedence and limiter side effects\",\"kind\":\"unspecified check order\",\"text\":\"The policy says untrusted hosts and oversized bodies do not reach a handler and an over-limit viewer entry is refused before code verification, but it gives no relative order among host validation, body bounding, rate limiting, sign-out origin validation, and authentication.\",\"question\":\"In a request that violates more than one transport condition, which failure wins, and may an earlier failure consume viewer-entry rate-limit capacity?\",\"options\":[\"Check host, then size, then rate limit or origin, then authentication.\",\"Check rate limit before size and host validation.\",\"Use route-specific precedence, explicitly defining whether refused malformed requests affect limiter state.\"],\"default_guess\":\"Validate host and body bound before consuming rate-limit capacity, then enforce route-specific origin or rate checks before authentication.\",\"witness\":{\"initial\":\"A client address is one attempt below the viewer-entry limit.\",\"events\":[\"The client sends an oversized viewer-entry request containing an invalid credential.\",\"The client then sends a normal-sized request containing a valid credential.\"],\"outcomes\":[\"Size validation runs first, the oversized request does not consume capacity, and the valid request succeeds.\",\"Rate limiting counts the oversized request first, so the later valid request is concealed as over limit.\"],\"observer\":\"The viewer\"}},{\"unit\":\"A31\",\"subject\":\"Security closure after configurable credential entropy\",\"kind\":\"contradictory security closure\",\"text\":\"A31 says “Every category resolves to an accepted decision or an open question” and marks authentication/credential abuse and secrets resolved, while changed A30 now says deployment values may differ for `credential_entropy_bytes` without defining any security minimum or validation rule.\",\"question\":\"How can the security review remain resolved if a deployment may select an arbitrarily small credential entropy value, and what minimum or fixed constraint closes that category?\",\"options\":[\"Declare an explicit minimum entropy and refuse startup below it.\",\"Keep credential entropy fixed at 32 bytes rather than deployment-configurable.\",\"Accept arbitrary positive deployment values and reopen the credential-abuse security category.\"],\"default_guess\":\"Require at least 32 bytes and fail startup for a smaller value.\",\"witness\":{\"initial\":\"A deployment sets `credential_entropy_bytes=1`.\",\"events\":[\"The service starts.\",\"An administrator issues a viewer access credential.\"],\"outcomes\":[\"Startup rejects the configuration under a security minimum needed for A31 to be resolved.\",\"Startup accepts the deployment-variable value and issues a credential with only one byte of randomness despite A31 declaring credential abuse resolved.\"],\"observer\":\"The deployment operator, administrator, and any attacker attempting credential enumeration\"}}]}",
+ "set_aside": []
+}
