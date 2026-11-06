@@ -199,6 +199,7 @@ def _prepare(
     base_text: str | None,
     base_assembled_notes: list[str] | None = None,
     prune_stale: bool = False,
+    replace_all: bool = False,
 ) -> tuple[dict[str, Any], dict[str, Any], list[str]]:
     source_path = project / DEFAULT_SOURCE
     try:
@@ -206,9 +207,12 @@ def _prepare(
     except FileNotFoundError as exc:
         raise NotesPropagationError(f"canonical notes source not found: {source_path}") from exc
 
-    old_text = base_text if base_text is not None else _read_base_source(project, base_ref)
-    old = _canonical_notes(old_text)
     current = _canonical_notes(current_text)
+    if replace_all:
+        old = list(current)
+    else:
+        old_text = base_text if base_text is not None else _read_base_source(project, base_ref)
+        old = _canonical_notes(old_text)
     old_set = set(old)
     current_set = set(current)
 
@@ -222,13 +226,35 @@ def _prepare(
     added = [note for note in current if note not in old_set]
     paired_removed: set[str] = set()
 
+    # Full replacement: 80_notes.md is the complete note source (the State 7
+    # gate is handoff-ready, so every callable is covered), and the assembled
+    # notes become exactly the canonical notes. Used when a case's notes were
+    # rewritten as a whole (a migration onto a new standard), where an
+    # incremental diff against a base has no base to diff from.
+    if replace_all:
+        from notes_workbench import gate as notes_gate
+
+        if not notes_gate.handoff(project).get("ready"):
+            raise NotesPropagationError(
+                "--replace-all needs a handoff-ready State 7 notes gate: 80_notes.md must be the complete note source"
+            )
+        for index, note in reversed(list(enumerate(before))):
+            if note not in current_set:
+                operations.append({"kind": "delete", "reason": "replace_all", "index": index, "old": note})
+        for note in current:
+            if note not in set(before):
+                operations.append({"kind": "insert", "reason": "replace_all", "note": note})
+        working = list(current)
+        removed, added = [], []
+        base_assembled_notes = None
+
     # A note an earlier, uncommitted propagation wrote is in neither the base
     # nor the current canonical source, so the diff above never removes it.
     # It is recognised against the assembled notes at the same base: added to
     # the assembled file since the base, gone from the canonical source, and
     # under a scope/class the canonical source owns. Without --prune-stale it
     # blocks (the module fails closed); with it, it is deleted.
-    if base_assembled_notes is None and base_text is None:
+    if base_assembled_notes is None and base_text is None and not replace_all:
         base_assembled_notes = _read_base_assembled_notes(project, base_ref)
     stale: list[str] = []
     if base_assembled_notes is not None:
@@ -468,7 +494,8 @@ def _prepare(
     report = {
         "schema_version": SCHEMA_VERSION,
         "project": project.name,
-        "base_ref": base_ref,
+        "base_ref": None if replace_all else base_ref,
+        "mode": "replace_all" if replace_all else "incremental",
         "status": "blocked" if findings else "drift" if changed else "in_sync",
         "ready": not findings,
         "changed": changed,
@@ -508,10 +535,12 @@ def plan(
     base_text: str | None = None,
     base_assembled_notes: list[str] | None = None,
     prune_stale: bool = False,
+    replace_all: bool = False,
 ) -> dict[str, Any]:
     report, _spec, _working = _prepare(
         project, base_ref=base_ref, base_text=base_text,
         base_assembled_notes=base_assembled_notes, prune_stale=prune_stale,
+        replace_all=replace_all,
     )
     return report
 
@@ -524,10 +553,12 @@ def propagate(
     base_text: str | None = None,
     base_assembled_notes: list[str] | None = None,
     prune_stale: bool = False,
+    replace_all: bool = False,
 ) -> dict[str, Any]:
     report, spec, working = _prepare(
         project, base_ref=base_ref, base_text=base_text,
         base_assembled_notes=base_assembled_notes, prune_stale=prune_stale,
+        replace_all=replace_all,
     )
     if not report["ready"] or not write or not report["changed"]:
         return report
