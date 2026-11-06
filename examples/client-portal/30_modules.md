@@ -104,7 +104,8 @@ staff_bootstrap_cli
 ```
 
 Each module's `Knows` section names exactly the modules it imports (the
-accepted `imports.module_internal`). Lines of the list are layers, not an
+accepted `imports.module_internal`, plus the one edge `api` → `api_irregular`
+of the running code). Lines of the list are layers, not an
 assertion that every module imports every earlier one.
 
 ## Facts several modules touch, and their one owner
@@ -1467,7 +1468,9 @@ version and the administrator project list are the accepted ones (Factory
 `authorization_guard`, `snapshot_import`, `budget_management`,
 `expense_intake`, `expense_management`, `project_tracking`,
 `photo_management`, `derived_views`, `portal_store`, `staff_challenges`,
-`financial_policy`, `registry_gateway`.
+`financial_policy`, `registry_gateway`, `api_irregular` (the running router
+mounts the seven viewer endpoints, Factory code `api/router.py` 22; the
+accepted `imports.module_internal` lacks this edge, see `SOURCE.md`).
 
 ### Must not own
 
@@ -1499,7 +1502,7 @@ create_app
 
 A25 at the request boundary: one middleware that reads each path without
 the `/api` prefix (stripped by the deployment proxy, A25; a path still
-carrying it is read the same way), admits only trusted hosts, checks the mutating viewer origin, bounds the
+carrying it is read the same way), admits only trusted hosts, checks the origin of viewer sign-out, bounds the
 body, rate-limits viewer entry per client address and route, sets the
 security and `no-store` headers and writes one redacted log line. Factory
 `babd5e5262d9`, `dc351917d376`, `51d19fdf035e`.

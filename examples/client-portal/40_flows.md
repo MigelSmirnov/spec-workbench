@@ -22,7 +22,7 @@ text" at the end.
 
 - **Entry.** Every HTTP request first passes the transport guard of A25 (one
   middleware installed by the runtime): trusted host, body bound, viewer-entry
-  rate limit, viewer mutation origin, security and `no-store` headers, one
+  rate limit, viewer sign-out origin, security and `no-store` headers, one
   redacted log line. A refusal there reaches no route. Staff, administrator and
   producer routes are the route table of `rules.http_router_backend`; viewer
   routes are the browser boundary of R0-09. A route handler extracts the
@@ -58,7 +58,8 @@ text" at the end.
   part as `temporarily_unavailable` with no value
   (`flow:build_project_overview`).
 - **Archived projects.** Reads of an archived project succeed; every mutation
-  of its records and every new grant or assignment for it is refused;
+  of its records (except the empty manual budget of R0-24) and every new
+  grant or assignment for it is refused;
   revocation of existing access does not consult the Registry (R0-24).
 
 ## `flow:start_service_and_answer_health`
@@ -204,7 +205,9 @@ authentication failure and the access-management check (A1, A11).
    its hash with a fixed expiry of `config` staff session TTL, and appends
    `staff.login` through `capability:audit_writer.append_audit` in the same
    transaction.
-2. On every rejection it appends `staff.login_failed` and raises the error of
+2. A malformed email is refused with `IdentityInputRejected` before any
+   lookup and appends no audit. On every other rejection it appends
+   `staff.login_failed` and raises the error of
    `capability:authorization_guard.conceal_authentication_failure`; the answer
    never says which check failed.
 3. Each later staff request presents the token as a bearer header;
@@ -232,6 +235,7 @@ authentication failure and the access-management check (A1, A11).
 
 ### Errors
 
+- Malformed login email: `IdentityInputRejected` (422), no audit.
 - Unknown email, wrong password, unverified, pending, suspended or disabled
   account, malformed, expired or revoked token: one concealed authentication
   failure (401).
@@ -418,7 +422,7 @@ host-only cookie, its reading and clearing; a viewer bearer header is refused.
 `module:viewer_access` owns entry, session resolution, description and
 sign-out. `module:credential_security` verifies the link secret and issues the
 session secret. `module:transport_guard` has already rate-limited entry per
-client address and checked the mutating origin.
+client address; it checks the origin of sign-out only.
 
 ### Steps
 

@@ -309,9 +309,13 @@ environment reads of `registry_gateway` and `binary_storage`; expense
 replay conflict 409; overview per-part availability) and kept the trimming
 rule: race and failure details of the import stay in the State 4 flow, not
 in R0-25. State 5 rounds 01–03 (blocking 32, 8, 6): the operation texts were
-repaired from the running code; State 5 stays open on topics where the
-running code contradicts a closed earlier state and only an owner decision
-can choose (code defect for the Factory, or an earlier-state change):
+repaired from the running code; State 5 stopped on six topics where the
+running code contradicted a closed earlier state. **Decided by the
+coordinator 2026-11-06** (owner 2026-11-06: current service behaviour
+accepted; technical decisions delegated): follow the code in all six, each
+by the narrowest edit of the earlier state (R0-24 and invariant 5, A28, the
+`flow:staff_session_lifecycle` login step, `api` Knows, R0-09/A25, R0-07/A29).
+The six topics were:
 
 - archived project: `project_tracking.list_project_progress` (a read) creates
   the empty manual budget version and its audit through
@@ -332,6 +336,21 @@ can choose (code defect for the Factory, or an earlier-state change):
 - the bootstrap command prints and returns the normalized email
   (`cli/staff_bootstrap.py` 33, `application/staff_bootstrap.py` 88–96),
   against A29 "never written to output … return values".
+
+#### Accepted service quirks (candidates for a later Factory change, not migration scope)
+
+| quirk | running code | case text |
+|---|---|---|
+| reading the progress of a project without a budget creates its empty manual budget version and `budget.manual_version_create` audit, also for an archived project | `domain/project_tracking.py` 50–60 (`ensure_manual_budget`), `domain/budget_management.py` 170–217 | R0-24 named exception; invariant 5 |
+| the audit record's `occurred_at` is read by the audit writer at append time, not taken from the operation's one instant | `application/audit_writer.py` 136 | A28 exception |
+
+#### Factory-internal inconsistency: the `api` → `api_irregular` import
+
+The accepted `imports.module_internal` of 459ac96c does not list `api` →
+`api_irregular`, while the accepted router code imports the seven viewer
+endpoints and `_binary_content_response` from it (`api/router.py` 22). The
+case follows the code (State 3 `api` Knows); the accepted import table is
+corrected by a later Factory change, not by the migration.
 
 History of the in-progress pass:
 

@@ -409,7 +409,8 @@ Detailed ownership is deferred to later states.
    account existence nor project data; all project-scoped queries are bounded
    by the permitted `project_id`.
 5. An archived project's budget, snapshot, expense, document, progress,
-   payment and photo records are readable and immutable in the portal; no new
+   payment and photo records are readable and immutable in the portal (the
+   one exception is the empty manual budget of R0-24); no new
    grant or assignment is created for it, while its existing grants and
    assignments keep giving access and can be revoked (R0-24). Archival never
    deletes history and never substitutes for access revocation.
@@ -530,7 +531,9 @@ runs a local administrative command that creates exactly one active, verified
 administrator when no staff account exists, and is refused once any exists. The
 command is not an HTTP route and does not appear in the API description; the
 email and password are its inputs, read neither from process arguments nor
-from the environment nor from a file, and never printed, logged or audited. Its
+from the environment nor from a file, and never printed, logged or audited,
+except that the success message shows the normalized email to the operator
+who supplied it (Factory code `cli/staff_bootstrap.py` 33). Its
 outcome is a closed set of exit codes that deployment scripts may branch on
 (Factory `6011ac93`, `rules.staff_bootstrap_policy`).
 
@@ -547,8 +550,9 @@ view" (Factory `fae77f99`).
 After a successful entry with the access link, the viewer's session is held in
 a host-only, HTTP-only, secure, same-site-strict cookie; no viewer credential is
 ever readable by page script. Viewer browser routes accept only that cookie, and
-mutating viewer requests are refused unless they come from the portal's own
-public origin. Viewers can restore and end their session explicitly. Service
+a viewer sign-out is refused unless it comes from the portal's own public
+origin (entry is rate limited, not origin-checked; Factory code
+`runtime/transport_guard.py` 136–146). Viewers can restore and end their session explicitly. Service
 principals authenticate only with a bearer header (Factory `35a0a09c`,
 `babd5e52`, `51d19fdf`; `rules.http_transport_policy.browser_session`).
 
@@ -711,7 +715,10 @@ are built.
 An archived Registry project is readable and refuses every mutation of its
 budget, snapshot import and activation, expense, document, progress, payment
 and photo records (accepted `rules.registry_status_policy`: archived reads,
-never mutates). Grants and assignments belong to the project (R0-16) but are
+never mutates), with one named exception: reading the progress of a project
+that has no budget yet creates its empty manual budget version, also for an
+archived project (Factory code `domain/project_tracking.py` 50–60); no other
+budget change is made on an archived project. Grants and assignments belong to the project (R0-16) but are
 access management, not these records: no new viewer grant, staff assignment
 or producer grant is created for an archived project, because each creation
 validates that the Registry reports the project as existing and active (the

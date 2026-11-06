@@ -1014,8 +1014,9 @@ session answers are not cached; the header list and the answers it covers
 are those of the accepted transport guard, carried to States 6–7 (owner
 2026-11-06: current service behaviour accepted; technical decisions
 delegated). Liveness and readiness are public and change nothing (R0-11). The
-viewer browser session is the host-only cookie of R0-09; mutating viewer
-requests must come from the canonical public origin, compared by scheme, host
+viewer browser session is the host-only cookie of R0-09; a viewer sign-out
+must come from the canonical public origin (viewer entry is not
+origin-checked), compared by scheme, host
 and effective port, with no pattern matching. Service principals use bearer
 headers only. Normative value: `rules.http_transport_policy` (Factory
 `38626cc7`, `21658368`, `e8a61895`, `35a0a09c`, `dc351917`, `51d19fdf`).
@@ -1023,7 +1024,8 @@ headers only. Normative value: `rules.http_transport_policy` (Factory
 ### Formal invariants
 
 - No request reaches a handler on an untrusted host or with an oversize body.
-- No viewer mutation succeeds from a foreign origin or without the cookie.
+- No viewer sign-out succeeds from a foreign origin, and no viewer project
+  read succeeds without the cookie.
 - No credential, cookie or secret appears in a log line.
 
 ### Required tests
@@ -1094,10 +1096,10 @@ records the replacement.
 
 ### Normative rules
 
-Persisted timestamps are UTC, stored as offset-naive datetimes. Each operation
-reads the clock once (`datetime.utcnow()`), and that one instant supplies every
-portal-owned timestamp it writes (event times such as `created_at`,
-`received_at`, `occurred_at`, `revoked_at`) and every current-time comparison
+Persisted timestamps are UTC, stored as offset-naive datetimes. An operation
+reads the clock once for its own timestamps (`datetime.utcnow()`), and that one
+instant supplies every portal-owned timestamp it writes (event times such as
+`created_at`, `received_at`, `revoked_at`) and every current-time comparison
 that decides the validity of those writes or of persisted records. Times a
 source supplies — `approved_at`, `published_at` of a snapshot, `confirmed_at`
 and `document_date` of a recognition, `photo_date`, `payment_date` — are
@@ -1106,14 +1108,17 @@ Modeling conventions). An expiry is valid strictly before its instant: a
 session, credential or token is usable while `now < expires_at` and expired
 from `now = expires_at` on (Factory code `application/authorization_guard.py`,
 `application/service_identity.py`). Reading local time, an offset-aware
-persisted timestamp and a second clock read within one operation are
-forbidden. Normative value: `rules.clock_policy` (Factory `c92b6878`). This
+persisted timestamp and a second clock read by the operation itself are
+forbidden. The one exception is the audit record's `occurred_at`: the audit
+writer takes it when it appends (Factory code `application/audit_writer.py`
+136). Normative value: `rules.clock_policy` (Factory `c92b6878`). This
 narrows the former convention "Timestamps are timezone-aware UTC" of State 1:
 the instants are UTC, their stored form is offset-naive.
 
 ### Formal invariants
 
-- All portal-owned event timestamps written by one operation are equal; an expiry it writes is that instant plus its TTL, and source-supplied times keep their supplied values.
+- All portal-owned event timestamps written by one operation, other than an
+  audit record's `occurred_at`, are equal; an expiry it writes is that instant plus its TTL, and source-supplied times keep their supplied values.
 
 ### Required tests
 
@@ -1139,7 +1144,10 @@ account; when any staff account exists the command refuses with
 `BootstrapAlreadyCompleted` and nothing persists. The password is kept only
 as its hash; email and password are read neither from process arguments nor
 the environment nor a file and are never written to output, logs, audit,
-return values or exception messages. There is no HTTP route and no API
+return values or exception messages, with one exception: the use case
+returns the created account view with the normalized email and the command
+prints that email to the operator who supplied it (Factory code
+`application/staff_bootstrap.py` 55, `cli/staff_bootstrap.py` 33). There is no HTTP route and no API
 description entry. Exit codes are a closed external contract: 0 account
 created, 1 confirmation did not match, 2 identity input rejected, 3 bootstrap
 already completed. Normative value: `rules.staff_bootstrap_policy` (Factory
