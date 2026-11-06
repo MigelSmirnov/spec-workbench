@@ -1902,7 +1902,8 @@ None.
   `actor_kind: ActorKind (staff | viewer | service | system)`,
   `actor_id: UUID | None` `[closed-choice: required unless system, except a
   staff.login_failed whose address matched no account]`,
-  `key_version: int | None` (service actors only),
+  `key_version: int | None` (a service actor's, or the affected credential's
+  on `principal.credential_issue` and `principal.credential_revoke`),
   `action: AuditAction` (closed catalog),
   `project_id: UUID | None`,
   `entity_kind: AuditEntityKind | None`, `entity_id: str | None`,

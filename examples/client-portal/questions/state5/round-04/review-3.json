@@ -1,0 +1,135 @@
+{
+ "open_points": [
+  {
+   "unit": "50_public_apis.md:`public_op:runtime.create_runtime_app`",
+   "subject": "Runtime delivery of configurable use-case settings",
+   "kind": "contradiction",
+   "text": "“The settings handed here reach only the store and the transport guard: the inner application and the use cases receive no `RuntimeSettings` and use the `config.*` constants (the staff session lifetime among them).” contradicts A30, where session TTLs and other values are runtime knobs whose deployment values may differ and environment values are read once into `RuntimeSettings`.",
+   "question": "How do staff/viewer session TTLs and other use-case runtime knobs reach the operations that use them when `RuntimeSettings` is passed only to the store and transport guard?",
+   "options": [
+    "Pass the relevant runtime settings through application construction to the use cases.",
+    "Make these values fixed source constants and cease treating them as deployment runtime knobs.",
+    "Install the loaded values into process-global configuration read by use cases."
+   ],
+   "default_guess": "Pass an immutable settings/config dependency to the operations that need runtime knobs.",
+   "witness": {
+    "initial": "A deployment sets the staff-session TTL to 1 hour instead of the 12-hour default.",
+    "events": [
+     "The deployment calls `load_runtime_settings`, which returns a staff-session TTL of 1 hour.",
+     "The deployment calls `create_runtime_app` with those settings.",
+     "A staff member successfully logs in."
+    ],
+    "outcomes": [
+     "Following A30, the issued session expires one hour after login.",
+     "Following `create_runtime_app`, the settings never reach `staff_identity`, which uses the source `config.*` value and issues a 12-hour session."
+    ],
+    "observer": "The staff member and any client inspecting `StaffSessionGrant.expires_at`."
+   }
+  },
+  {
+   "unit": "50_public_apis.md:`public_op:runtime.create_runtime_app`",
+   "subject": "Repeated `/api` prefix routing",
+   "kind": "contradiction",
+   "text": "“the inner application mounted at `/api` and then at `/`” together with “a path that repeats the prefix (`/api/api/…`) reaches the same route” and `api.create_app` binding every route row exactly once.",
+   "question": "What route, if any, handles `/api/api/...` after the first `/api` mount strips only one prefix?",
+   "options": [
+    "Only `/route` and `/api/route` work; `/api/api/route` is not found.",
+    "The runtime repeatedly strips `/api` prefixes before routing.",
+    "The inner application also registers `/api/...` aliases, despite the exactly-once route-binding statement."
+   ],
+   "default_guess": "Support the root and single-`/api` forms only; return 404 for a repeated prefix.",
+   "witness": {
+    "initial": "The service is running on a trusted host, and the viewer-entry route is registered once in the inner application.",
+    "events": [
+     "A browser sends `POST /api/api/auth/viewer/enter` with a well-formed body containing an invalid access code."
+    ],
+    "outcomes": [
+     "The repeated-prefix sentence says the request reaches viewer entry and returns the concealed authentication failure, 401.",
+     "With the stated mounts, the `/api` mount consumes one prefix, the inner application receives `/api/auth/viewer/enter`, finds no second registration, and returns 404."
+    ],
+    "observer": "The browser client."
+   }
+  },
+  {
+   "unit": "50_public_apis.md:`public_op:service_identity.issue_service_credential`",
+   "subject": "Accepted representation of `expires_at`",
+   "kind": "contradiction",
+   "text": "“Any expiry is accepted and stored as supplied, a past one included, never converted” conflicts with A28: “Persisted timestamps are UTC, stored as offset-naive datetimes” and “an offset-aware persisted timestamp ... [is] forbidden.”",
+   "question": "Must an offset-aware `expires_at` be rejected, converted to UTC-naive, or persisted unchanged?",
+   "options": [
+    "Reject offset-aware values and accept only UTC-naive datetimes.",
+    "Convert an offset-aware instant to UTC-naive before persistence.",
+    "Persist the supplied offset-aware value unchanged."
+   ],
+   "default_guess": "Require a UTC-naive value and reject an offset-aware value as invalid input.",
+   "witness": {
+    "initial": "An active service principal exists, and an administrator is authorized to issue its credential.",
+    "events": [
+     "The administrator requests a credential with `expires_at` equal to an offset-aware future datetime such as `2026-11-07T12:00:00+02:00`."
+    ],
+    "outcomes": [
+     "Following “any expiry” and “stored as supplied,” the credential is created with an offset-aware persisted timestamp.",
+     "Following A28, the request is rejected or the value is converted because an offset-aware persisted timestamp is forbidden."
+    ],
+    "observer": "The administrator, and later code reading the persisted credential."
+   }
+  },
+  {
+   "unit": "50_public_apis.md:`public_op:service_identity.issue_service_credential`",
+   "subject": "Concurrent key-version allocation",
+   "kind": "concurrency gap",
+   "text": "“the new `ServiceCredential` with the next `key_version`” and “Writes one `ServiceCredential` and one `AuditRecord`” do not specify the outcome when two issuances concurrently calculate the next version.",
+   "question": "When two authorized issuances overlap for the same principal, must both succeed with distinct consecutive key versions, or may one fail with a persistence conflict?",
+   "options": [
+    "Serialize allocation so both succeed with distinct consecutive versions.",
+    "Allow one issuance to fail with `PersistenceError` on the unique key-version constraint.",
+    "Retry the losing allocation after observing the committed version."
+   ],
+   "default_guess": "Allocate the version under a serialized write transaction so both successful calls receive distinct versions.",
+   "witness": {
+    "initial": "An active principal has latest `key_version` 4 and no version 5 credential.",
+    "events": [
+     "Administrator A starts issuing a credential and reads 4 as the latest version.",
+     "Before A commits, administrator B starts issuing another credential for the same principal.",
+     "A commits its credential as version 5.",
+     "B completes its operation."
+    ],
+    "outcomes": [
+     "A serialized implementation makes B observe version 5 and successfully creates version 6 with its audit.",
+     "A read-then-insert implementation makes B attempt version 5 and fail with a persistence error, creating no credential or audit."
+    ],
+    "observer": "Administrator B and operators examining the credential/audit records."
+   }
+  },
+  {
+   "unit": "50_public_apis.md:`public_op:budget_management.ensure_manual_budget`",
+   "subject": "Concurrent creation of the one manual budget",
+   "kind": "concurrency gap",
+   "text": "“Return the project's one manual budget version, creating it empty when absent” and “Writes one `BudgetVersion` and one `AuditRecord` when none exists” do not define the losing call when two calls concurrently observe absence.",
+   "question": "Must concurrent first calls both succeed and return the same newly created version, or may one fail at the single-manual-version constraint?",
+   "options": [
+    "Serialize or reload after the uniqueness race so both calls return the same version and only one creation audit exists.",
+    "Allow the losing call to raise `PersistenceError`.",
+    "Retry the entire losing operation until it reads the winner."
+   ],
+   "default_guess": "Treat concurrent creation as ensure semantics: one call creates and audits, and every concurrent caller returns that same version.",
+   "witness": {
+    "initial": "An active project has no manual budget version, and two staff actors hold valid authorized contexts.",
+    "events": [
+     "Staff A calls `ensure_manual_budget` and observes no manual version.",
+     "Before A commits, staff B calls `ensure_manual_budget` and also observes none.",
+     "A commits the new empty version and its creation audit.",
+     "B completes its call."
+    ],
+    "outcomes": [
+     "An atomic ensure implementation returns the same version successfully to both callers and writes one creation audit.",
+     "A plain check-then-insert implementation makes B violate the one-manual-version constraint and receive `PersistenceError`."
+    ],
+    "observer": "Staff B and clients retrying the ensure operation."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"50_public_apis.md:`public_op:runtime.create_runtime_app`\",\"subject\":\"Runtime delivery of configurable use-case settings\",\"kind\":\"contradiction\",\"text\":\"“The settings handed here reach only the store and the transport guard: the inner application and the use cases receive no `RuntimeSettings` and use the `config.*` constants (the staff session lifetime among them).” contradicts A30, where session TTLs and other values are runtime knobs whose deployment values may differ and environment values are read once into `RuntimeSettings`.\",\"question\":\"How do staff/viewer session TTLs and other use-case runtime knobs reach the operations that use them when `RuntimeSettings` is passed only to the store and transport guard?\",\"options\":[\"Pass the relevant runtime settings through application construction to the use cases.\",\"Make these values fixed source constants and cease treating them as deployment runtime knobs.\",\"Install the loaded values into process-global configuration read by use cases.\"],\"default_guess\":\"Pass an immutable settings/config dependency to the operations that need runtime knobs.\",\"witness\":{\"initial\":\"A deployment sets the staff-session TTL to 1 hour instead of the 12-hour default.\",\"events\":[\"The deployment calls `load_runtime_settings`, which returns a staff-session TTL of 1 hour.\",\"The deployment calls `create_runtime_app` with those settings.\",\"A staff member successfully logs in.\"],\"outcomes\":[\"Following A30, the issued session expires one hour after login.\",\"Following `create_runtime_app`, the settings never reach `staff_identity`, which uses the source `config.*` value and issues a 12-hour session.\"],\"observer\":\"The staff member and any client inspecting `StaffSessionGrant.expires_at`.\"}},{\"unit\":\"50_public_apis.md:`public_op:runtime.create_runtime_app`\",\"subject\":\"Repeated `/api` prefix routing\",\"kind\":\"contradiction\",\"text\":\"“the inner application mounted at `/api` and then at `/`” together with “a path that repeats the prefix (`/api/api/…`) reaches the same route” and `api.create_app` binding every route row exactly once.\",\"question\":\"What route, if any, handles `/api/api/...` after the first `/api` mount strips only one prefix?\",\"options\":[\"Only `/route` and `/api/route` work; `/api/api/route` is not found.\",\"The runtime repeatedly strips `/api` prefixes before routing.\",\"The inner application also registers `/api/...` aliases, despite the exactly-once route-binding statement.\"],\"default_guess\":\"Support the root and single-`/api` forms only; return 404 for a repeated prefix.\",\"witness\":{\"initial\":\"The service is running on a trusted host, and the viewer-entry route is registered once in the inner application.\",\"events\":[\"A browser sends `POST /api/api/auth/viewer/enter` with a well-formed body containing an invalid access code.\"],\"outcomes\":[\"The repeated-prefix sentence says the request reaches viewer entry and returns the concealed authentication failure, 401.\",\"With the stated mounts, the `/api` mount consumes one prefix, the inner application receives `/api/auth/viewer/enter`, finds no second registration, and returns 404.\"],\"observer\":\"The browser client.\"}},{\"unit\":\"50_public_apis.md:`public_op:service_identity.issue_service_credential`\",\"subject\":\"Accepted representation of `expires_at`\",\"kind\":\"contradiction\",\"text\":\"“Any expiry is accepted and stored as supplied, a past one included, never converted” conflicts with A28: “Persisted timestamps are UTC, stored as offset-naive datetimes” and “an offset-aware persisted timestamp ... [is] forbidden.”\",\"question\":\"Must an offset-aware `expires_at` be rejected, converted to UTC-naive, or persisted unchanged?\",\"options\":[\"Reject offset-aware values and accept only UTC-naive datetimes.\",\"Convert an offset-aware instant to UTC-naive before persistence.\",\"Persist the supplied offset-aware value unchanged.\"],\"default_guess\":\"Require a UTC-naive value and reject an offset-aware value as invalid input.\",\"witness\":{\"initial\":\"An active service principal exists, and an administrator is authorized to issue its credential.\",\"events\":[\"The administrator requests a credential with `expires_at` equal to an offset-aware future datetime such as `2026-11-07T12:00:00+02:00`.\"],\"outcomes\":[\"Following “any expiry” and “stored as supplied,” the credential is created with an offset-aware persisted timestamp.\",\"Following A28, the request is rejected or the value is converted because an offset-aware persisted timestamp is forbidden.\"],\"observer\":\"The administrator, and later code reading the persisted credential.\"}},{\"unit\":\"50_public_apis.md:`public_op:service_identity.issue_service_credential`\",\"subject\":\"Concurrent key-version allocation\",\"kind\":\"concurrency gap\",\"text\":\"“the new `ServiceCredential` with the next `key_version`” and “Writes one `ServiceCredential` and one `AuditRecord`” do not specify the outcome when two issuances concurrently calculate the next version.\",\"question\":\"When two authorized issuances overlap for the same principal, must both succeed with distinct consecutive key versions, or may one fail with a persistence conflict?\",\"options\":[\"Serialize allocation so both succeed with distinct consecutive versions.\",\"Allow one issuance to fail with `PersistenceError` on the unique key-version constraint.\",\"Retry the losing allocation after observing the committed version.\"],\"default_guess\":\"Allocate the version under a serialized write transaction so both successful calls receive distinct versions.\",\"witness\":{\"initial\":\"An active principal has latest `key_version` 4 and no version 5 credential.\",\"events\":[\"Administrator A starts issuing a credential and reads 4 as the latest version.\",\"Before A commits, administrator B starts issuing another credential for the same principal.\",\"A commits its credential as version 5.\",\"B completes its operation.\"],\"outcomes\":[\"A serialized implementation makes B observe version 5 and successfully creates version 6 with its audit.\",\"A read-then-insert implementation makes B attempt version 5 and fail with a persistence error, creating no credential or audit.\"],\"observer\":\"Administrator B and operators examining the credential/audit records.\"}},{\"unit\":\"50_public_apis.md:`public_op:budget_management.ensure_manual_budget`\",\"subject\":\"Concurrent creation of the one manual budget\",\"kind\":\"concurrency gap\",\"text\":\"“Return the project's one manual budget version, creating it empty when absent” and “Writes one `BudgetVersion` and one `AuditRecord` when none exists” do not define the losing call when two calls concurrently observe absence.\",\"question\":\"Must concurrent first calls both succeed and return the same newly created version, or may one fail at the single-manual-version constraint?\",\"options\":[\"Serialize or reload after the uniqueness race so both calls return the same version and only one creation audit exists.\",\"Allow the losing call to raise `PersistenceError`.\",\"Retry the entire losing operation until it reads the winner.\"],\"default_guess\":\"Treat concurrent creation as ensure semantics: one call creates and audits, and every concurrent caller returns that same version.\",\"witness\":{\"initial\":\"An active project has no manual budget version, and two staff actors hold valid authorized contexts.\",\"events\":[\"Staff A calls `ensure_manual_budget` and observes no manual version.\",\"Before A commits, staff B calls `ensure_manual_budget` and also observes none.\",\"A commits the new empty version and its creation audit.\",\"B completes its call.\"],\"outcomes\":[\"An atomic ensure implementation returns the same version successfully to both callers and writes one creation audit.\",\"A plain check-then-insert implementation makes B violate the one-manual-version constraint and receive `PersistenceError`.\"],\"observer\":\"Staff B and clients retrying the ensure operation.\"}}]}",
+ "set_aside": []
+}

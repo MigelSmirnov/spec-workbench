@@ -345,6 +345,14 @@ The six topics were:
 | the audit record's `occurred_at` is read by the audit writer at append time, not taken from the operation's one instant | `application/audit_writer.py` 136 | A28 exception |
 | a service credential's `expires_at` is stored as supplied; an offset-aware value is not converted, and comparing it with the offset-naive clock fails the later authentication as a server error | `application/service_identity.py` 19, 301; `adapters/service_identity_repository.py` 81, 217 | A28 source-supplied list; State 5 `issue_service_credential` |
 
+State 5 round-04 found one more contradiction with a closed earlier
+state, left for the coordinator: State 1 M26 and M27 require each
+allocation `amount` to be greater than zero, while the running code checks
+only that the allocations sum to the total (`domain/expense_management.py`
+77–82, `application/expense_intake.py` 130–145; `AllocationInstruction` in
+`core/models.py` 798–801 has no bound), so a zero or negative allocation is
+accepted on creation, correction and re-allocation.
+
 #### Factory-internal inconsistency: the `api` → `api_irregular` import
 
 The accepted `imports.module_internal` of 459ac96c does not list `api` →

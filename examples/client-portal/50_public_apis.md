@@ -2504,7 +2504,10 @@ already reached is stored but never authenticates.
 ### Outputs
 
 `ServiceCredentialIssue`: the new `ServiceCredential` with the next
-`key_version` and the secret in plaintext, returned once.
+`key_version` and the secret in plaintext, returned once. Of two
+concurrent issuances for one principal that pick the same key version, the
+uniqueness of (`service_principal_id`, `key_version`) lets one commit; the
+other fails as a persistence failure and writes nothing.
 
 ### Observable effect
 

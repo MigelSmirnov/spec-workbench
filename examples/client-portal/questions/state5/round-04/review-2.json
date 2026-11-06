@@ -1,0 +1,158 @@
+{
+ "open_points": [
+  {
+   "unit": "50_public_apis.md:`public_op:audit_writer.append_audit`",
+   "subject": "append_audit invalid-intent failure",
+   "kind": "unspecified error",
+   "text": "“A closed-choice violation of the intent is rejected” does not name the exception, while the conventions require an operation to “raise one declared exception.”",
+   "question": "What exact exception must append_audit raise when an AuditIntent violates the actor, result, reason-code, action-catalog, key-version, or entity-id rules?",
+   "options": [
+    "Raise a dedicated audit-validation exception",
+    "Raise a generic model/value validation exception",
+    "Treat the violation as PersistenceError"
+   ],
+   "default_guess": "Raise ValueError, which becomes an unclassified 500 at an HTTP boundary.",
+   "witness": {
+    "initial": "A caller has an open transaction and constructs a success AuditIntent with a non-null reason_code.",
+    "events": [
+     "The owning use case calls audit_writer.append_audit.",
+     "append_audit detects the closed-choice violation before inserting a row."
+    ],
+    "outcomes": [
+     "The caller receives a generic ValueError or model-validation exception.",
+     "The caller receives a dedicated audit-policy exception with a different type and handling contract."
+    ],
+    "observer": "The calling use-case module and its tests."
+   }
+  },
+  {
+   "unit": "50_public_apis.md:`public_op:service_identity.issue_service_credential`",
+   "subject": "service credential expiry representation",
+   "kind": "contradictory timestamp contract",
+   "text": "The operation says “Any expiry is accepted and stored as supplied ... never converted,” while A28 says persisted timestamps are UTC offset-naive and source-supplied expires_at values are “validated and kept as supplied.”",
+   "question": "What happens when expires_at is offset-aware or not expressed as an offset-naive UTC datetime?",
+   "options": [
+    "Reject any expiry that is not already offset-naive UTC",
+    "Convert the supplied instant to UTC and remove its offset before persistence",
+    "Store the aware value unchanged despite the persisted-timestamp rule"
+   ],
+   "default_guess": "Reject values that are not already offset-naive UTC.",
+   "witness": {
+    "initial": "An active service principal exists and an administrator is authorized to issue it a credential.",
+    "events": [
+     "The administrator supplies expires_at as 2030-01-01T12:00:00+02:00.",
+     "service_identity issues the credential."
+    ],
+    "outcomes": [
+     "The operation accepts the value and stores the offset-aware datetime unchanged because every expiry is accepted and never converted.",
+     "The operation rejects it, or converts it to 2030-01-01T10:00:00 without an offset, to satisfy A28."
+    ],
+    "observer": "The administrator and any repository or authentication code reading the credential."
+   }
+  },
+  {
+   "unit": "50_public_apis.md:`public_op:service_identity.issue_service_credential`",
+   "subject": "credential-issue audit key version",
+   "kind": "contradictory audit shape",
+   "text": "The operation requires “principal.credential_issue with the key version,” but AuditRecord permits key_version for “service actors only”; credential issuance is performed by an administrator, hence a staff actor.",
+   "question": "Where is the issued key version recorded in the credential-issue audit without violating the AuditRecord closed choice?",
+   "options": [
+    "Leave AuditRecord.key_version null and recover the version through a service_credential entity reference",
+    "Put the issued key version in AuditRecord.key_version despite the staff actor",
+    "Record the service principal as the actor instead of the administrator",
+    "Add another audit-detail field or representation"
+   ],
+   "default_guess": "Keep the administrator as actor, leave key_version null, and make the audit entity the issued ServiceCredential.",
+   "witness": {
+    "initial": "An administrator is authenticated and an active service principal's latest credential key_version is 3.",
+    "events": [
+     "The administrator issues another service credential.",
+     "The operation creates credential key_version 4 and builds principal.credential_issue audit intent."
+    ],
+    "outcomes": [
+     "The audit identifies the administrator and has key_version=null, satisfying M36 but not literally carrying the required key version.",
+     "The audit carries key_version=4, causing append_audit to violate or reject the staff-actor record."
+    ],
+    "observer": "An administrator or auditor reading the audit record, and the issuing caller if validation rolls the transaction back."
+   }
+  },
+  {
+   "unit": "50_public_apis.md:`public_op:expense_management.correct_expense`",
+   "subject": "zero-total expense correction",
+   "kind": "contradictory validation",
+   "text": "The operation allows a “non-negative” corrected total and explicitly says “a zero total included,” but also requires at least one AllocationInstruction, each of whose amounts is strictly positive, with their sum exactly equal to the total.",
+   "question": "Can an expense be corrected to a zero total, and if so, what allocation representation satisfies the invariant?",
+   "options": [
+    "Reject every zero-total correction because no valid nonempty positive allocation set exists",
+    "Allow an empty allocation list only when total is zero",
+    "Allow a zero-valued allocation despite AllocationInstruction.amount > 0"
+   ],
+   "default_guess": "Reject zero-total corrections until a zero-total allocation representation is explicitly defined.",
+   "witness": {
+    "initial": "An active project has an expense totaling EUR 10 with one EUR 10 allocation.",
+    "events": [
+     "Authorized staff corrects the expense total to EUR 0 and supplies an empty allocation list."
+    ],
+    "outcomes": [
+     "The correction succeeds because zero is a valid non-negative total, using no allocations.",
+     "The correction is rejected because the allocation list must be nonempty; supplying any permitted positive allocation is also rejected because its sum cannot equal zero."
+    ],
+    "observer": "The staff caller."
+   }
+  },
+  {
+   "unit": "50_public_apis.md:`public_op:transport_guard.install_transport_guards`",
+   "subject": "foreign-origin viewer entry with CORS preflight",
+   "kind": "contradictory transport outcome",
+   "text": "The middleware returns “CORS preflight 204 for a listed origin and 403 for another,” yet the same operation says viewer entry is not origin-checked and “an entry from another origin reaches the route.”",
+   "question": "Does a browser viewer-entry request from an unlisted foreign origin reach the entry route when its JSON POST requires a CORS preflight?",
+   "options": [
+    "Reject the preflight, so the browser never sends the entry POST",
+    "Exempt viewer-entry preflights from the CORS allowlist so the POST reaches the route",
+    "Reject only the browser's access to the response while still performing the credential exchange"
+   ],
+   "default_guess": "Apply the CORS allowlist normally; an unlisted browser origin is stopped at preflight, while a directly delivered POST is not origin-checked.",
+   "witness": {
+    "initial": "The portal public origin is https://portal.example, and https://foreign.example is absent from the CORS allowlist.",
+    "events": [
+     "A browser page at https://foreign.example attempts an application/json POST to /auth/viewer/enter.",
+     "The browser sends the required OPTIONS preflight first."
+    ],
+    "outcomes": [
+     "The transport guard returns 403 to the preflight, so the browser sends no POST and no viewer session is created.",
+     "Because viewer entry is declared not origin-checked and a foreign-origin entry is said to reach the route, the POST is allowed to exchange the access code and create a session."
+    ],
+    "observer": "The foreign-origin browser user and the server through the presence or absence of a ViewerSession."
+   }
+  },
+  {
+   "unit": "50_public_apis.md:`public_op:runtime.create_runtime_app`",
+   "subject": "runtime propagation of configurable session TTLs",
+   "kind": "configuration contradiction",
+   "text": "A30 calls staff and viewer session TTLs runtime knobs whose deployment values may differ, but create_runtime_app says RuntimeSettings reach “only the store and the transport guard” and use cases receive no RuntimeSettings, while authentication operations calculate expiry from config staff/viewer session TTLs.",
+   "question": "How do staff_identity and viewer_access observe deployment-specific session TTL values if runtime passes settings only to the store and transport guard and those modules may not read the environment?",
+   "options": [
+    "Pass the relevant RuntimeSettings values into the inner application and identity operations",
+    "Make session TTLs fixed source constants rather than deployment knobs",
+    "Install validated settings in an explicit process-wide configuration provider used by the identity modules"
+   ],
+   "default_guess": "Pass the configured TTL values through application construction to the identity operations.",
+   "witness": {
+    "initial": "A deployment configures staff_session_ttl_hours to 1 instead of its default 12.",
+    "events": [
+     "runtime_settings.load_runtime_settings returns settings containing the one-hour value.",
+     "runtime.create_runtime_app passes settings only to PortalStore and transport_guard.",
+     "A staff member logs in and staff_identity computes expires_at."
+    ],
+    "outcomes": [
+     "The session expires after one hour, as required for a deployment runtime knob.",
+     "The session expires after the source/default twelve hours because staff_identity received no runtime setting and uses a constant."
+    ],
+    "observer": "The logged-in staff member and deployment operator."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"50_public_apis.md:`public_op:audit_writer.append_audit`\",\"subject\":\"append_audit invalid-intent failure\",\"kind\":\"unspecified error\",\"text\":\"“A closed-choice violation of the intent is rejected” does not name the exception, while the conventions require an operation to “raise one declared exception.”\",\"question\":\"What exact exception must append_audit raise when an AuditIntent violates the actor, result, reason-code, action-catalog, key-version, or entity-id rules?\",\"options\":[\"Raise a dedicated audit-validation exception\",\"Raise a generic model/value validation exception\",\"Treat the violation as PersistenceError\"],\"default_guess\":\"Raise ValueError, which becomes an unclassified 500 at an HTTP boundary.\",\"witness\":{\"initial\":\"A caller has an open transaction and constructs a success AuditIntent with a non-null reason_code.\",\"events\":[\"The owning use case calls audit_writer.append_audit.\",\"append_audit detects the closed-choice violation before inserting a row.\"],\"outcomes\":[\"The caller receives a generic ValueError or model-validation exception.\",\"The caller receives a dedicated audit-policy exception with a different type and handling contract.\"],\"observer\":\"The calling use-case module and its tests.\"}},{\"unit\":\"50_public_apis.md:`public_op:service_identity.issue_service_credential`\",\"subject\":\"service credential expiry representation\",\"kind\":\"contradictory timestamp contract\",\"text\":\"The operation says “Any expiry is accepted and stored as supplied ... never converted,” while A28 says persisted timestamps are UTC offset-naive and source-supplied expires_at values are “validated and kept as supplied.”\",\"question\":\"What happens when expires_at is offset-aware or not expressed as an offset-naive UTC datetime?\",\"options\":[\"Reject any expiry that is not already offset-naive UTC\",\"Convert the supplied instant to UTC and remove its offset before persistence\",\"Store the aware value unchanged despite the persisted-timestamp rule\"],\"default_guess\":\"Reject values that are not already offset-naive UTC.\",\"witness\":{\"initial\":\"An active service principal exists and an administrator is authorized to issue it a credential.\",\"events\":[\"The administrator supplies expires_at as 2030-01-01T12:00:00+02:00.\",\"service_identity issues the credential.\"],\"outcomes\":[\"The operation accepts the value and stores the offset-aware datetime unchanged because every expiry is accepted and never converted.\",\"The operation rejects it, or converts it to 2030-01-01T10:00:00 without an offset, to satisfy A28.\"],\"observer\":\"The administrator and any repository or authentication code reading the credential.\"}},{\"unit\":\"50_public_apis.md:`public_op:service_identity.issue_service_credential`\",\"subject\":\"credential-issue audit key version\",\"kind\":\"contradictory audit shape\",\"text\":\"The operation requires “principal.credential_issue with the key version,” but AuditRecord permits key_version for “service actors only”; credential issuance is performed by an administrator, hence a staff actor.\",\"question\":\"Where is the issued key version recorded in the credential-issue audit without violating the AuditRecord closed choice?\",\"options\":[\"Leave AuditRecord.key_version null and recover the version through a service_credential entity reference\",\"Put the issued key version in AuditRecord.key_version despite the staff actor\",\"Record the service principal as the actor instead of the administrator\",\"Add another audit-detail field or representation\"],\"default_guess\":\"Keep the administrator as actor, leave key_version null, and make the audit entity the issued ServiceCredential.\",\"witness\":{\"initial\":\"An administrator is authenticated and an active service principal's latest credential key_version is 3.\",\"events\":[\"The administrator issues another service credential.\",\"The operation creates credential key_version 4 and builds principal.credential_issue audit intent.\"],\"outcomes\":[\"The audit identifies the administrator and has key_version=null, satisfying M36 but not literally carrying the required key version.\",\"The audit carries key_version=4, causing append_audit to violate or reject the staff-actor record.\"],\"observer\":\"An administrator or auditor reading the audit record, and the issuing caller if validation rolls the transaction back.\"}},{\"unit\":\"50_public_apis.md:`public_op:expense_management.correct_expense`\",\"subject\":\"zero-total expense correction\",\"kind\":\"contradictory validation\",\"text\":\"The operation allows a “non-negative” corrected total and explicitly says “a zero total included,” but also requires at least one AllocationInstruction, each of whose amounts is strictly positive, with their sum exactly equal to the total.\",\"question\":\"Can an expense be corrected to a zero total, and if so, what allocation representation satisfies the invariant?\",\"options\":[\"Reject every zero-total correction because no valid nonempty positive allocation set exists\",\"Allow an empty allocation list only when total is zero\",\"Allow a zero-valued allocation despite AllocationInstruction.amount > 0\"],\"default_guess\":\"Reject zero-total corrections until a zero-total allocation representation is explicitly defined.\",\"witness\":{\"initial\":\"An active project has an expense totaling EUR 10 with one EUR 10 allocation.\",\"events\":[\"Authorized staff corrects the expense total to EUR 0 and supplies an empty allocation list.\"],\"outcomes\":[\"The correction succeeds because zero is a valid non-negative total, using no allocations.\",\"The correction is rejected because the allocation list must be nonempty; supplying any permitted positive allocation is also rejected because its sum cannot equal zero.\"],\"observer\":\"The staff caller.\"}},{\"unit\":\"50_public_apis.md:`public_op:transport_guard.install_transport_guards`\",\"subject\":\"foreign-origin viewer entry with CORS preflight\",\"kind\":\"contradictory transport outcome\",\"text\":\"The middleware returns “CORS preflight 204 for a listed origin and 403 for another,” yet the same operation says viewer entry is not origin-checked and “an entry from another origin reaches the route.”\",\"question\":\"Does a browser viewer-entry request from an unlisted foreign origin reach the entry route when its JSON POST requires a CORS preflight?\",\"options\":[\"Reject the preflight, so the browser never sends the entry POST\",\"Exempt viewer-entry preflights from the CORS allowlist so the POST reaches the route\",\"Reject only the browser's access to the response while still performing the credential exchange\"],\"default_guess\":\"Apply the CORS allowlist normally; an unlisted browser origin is stopped at preflight, while a directly delivered POST is not origin-checked.\",\"witness\":{\"initial\":\"The portal public origin is https://portal.example, and https://foreign.example is absent from the CORS allowlist.\",\"events\":[\"A browser page at https://foreign.example attempts an application/json POST to /auth/viewer/enter.\",\"The browser sends the required OPTIONS preflight first.\"],\"outcomes\":[\"The transport guard returns 403 to the preflight, so the browser sends no POST and no viewer session is created.\",\"Because viewer entry is declared not origin-checked and a foreign-origin entry is said to reach the route, the POST is allowed to exchange the access code and create a session.\"],\"observer\":\"The foreign-origin browser user and the server through the presence or absence of a ViewerSession.\"}},{\"unit\":\"50_public_apis.md:`public_op:runtime.create_runtime_app`\",\"subject\":\"runtime propagation of configurable session TTLs\",\"kind\":\"configuration contradiction\",\"text\":\"A30 calls staff and viewer session TTLs runtime knobs whose deployment values may differ, but create_runtime_app says RuntimeSettings reach “only the store and the transport guard” and use cases receive no RuntimeSettings, while authentication operations calculate expiry from config staff/viewer session TTLs.\",\"question\":\"How do staff_identity and viewer_access observe deployment-specific session TTL values if runtime passes settings only to the store and transport guard and those modules may not read the environment?\",\"options\":[\"Pass the relevant RuntimeSettings values into the inner application and identity operations\",\"Make session TTLs fixed source constants rather than deployment knobs\",\"Install validated settings in an explicit process-wide configuration provider used by the identity modules\"],\"default_guess\":\"Pass the configured TTL values through application construction to the identity operations.\",\"witness\":{\"initial\":\"A deployment configures staff_session_ttl_hours to 1 instead of its default 12.\",\"events\":[\"runtime_settings.load_runtime_settings returns settings containing the one-hour value.\",\"runtime.create_runtime_app passes settings only to PortalStore and transport_guard.\",\"A staff member logs in and staff_identity computes expires_at.\"],\"outcomes\":[\"The session expires after one hour, as required for a deployment runtime knob.\",\"The session expires after the source/default twelve hours because staff_identity received no runtime setting and uses a constant.\"],\"observer\":\"The logged-in staff member and deployment operator.\"}}]}",
+ "set_aside": []
+}

@@ -1113,9 +1113,10 @@ validated and kept as supplied, never replaced by the clock (State 1
 Modeling conventions). An expiry is valid strictly before its instant: a
 session, credential or token is usable while `now < expires_at` and expired
 from `now = expires_at` on (Factory code `application/authorization_guard.py`,
-`application/service_identity.py`). Reading local time, an offset-aware
-persisted timestamp and a second clock read by the operation itself are
-forbidden. The one exception is the `occurred_at` of an audit record appended
+`application/service_identity.py`). Reading local time and a second clock read by the operation itself are
+forbidden, and no portal-owned timestamp is offset-aware. A supplied time
+kept as supplied is not converted: an offset-aware credential expiry is
+stored with its offset (accepted service quirk, `SOURCE.md`). The one exception is the `occurred_at` of an audit record appended
 through the audit writer: the writer takes it when it appends (Factory
 code `application/audit_writer.py` 136); the bootstrap, which builds its
 own audit, keeps its one instant. Normative value: `rules.clock_policy` (Factory `c92b6878`). This
@@ -1182,7 +1183,9 @@ already completed. Normative value: `rules.staff_bootstrap_policy` (Factory
 
 The former configuration, kept (owner-confirmed defaults, R0-06):
 
-Runtime knobs with confirmed defaults (deployment values may differ):
+Configuration values with confirmed defaults; the running service fixes
+them in source (`config.*`), and only the values named by an `_env_name`
+are read from the deployment environment:
 
 ```text
 registry_endpoint_env_name            = REGISTRY_BASE_URL
