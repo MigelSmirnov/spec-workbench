@@ -356,6 +356,7 @@ closed (its text is unchanged). All of States 0–5 are closed.
 | a service credential's `expires_at` is stored as supplied; an offset-aware value is not converted, and comparing it with the offset-naive clock fails the later authentication as a server error | `application/service_identity.py` 19, 301; `adapters/service_identity_repository.py` 81, 217 | A28 source-supplied list; State 5 `issue_service_credential`; the offset-aware case is carried to States 6–7 (note `issue_service_credential`, `_credential_is_usable` of 459ac96c) |
 | the A30 values without an `_env_name` (staff session 12 hours, viewer session 30 days, the other TTLs and limits, credential entropy 32 bytes) are source constants of the use cases; no deployment setting reaches them, against A30 "deployment values may differ" | `application/staff_identity.py` 140–141; `application/viewer_access.py` 117–119, 192; `application/service_identity.py` 292; `runtime/app.py` (settings to the store and transport guard only) | State 5 `create_runtime_app` named exception |
 | **HIGH priority.** Zero and negative allocation amounts are accepted on expense creation, correction and re-allocation as long as the allocations sum to the total (a correction to a zero total with one zero allocation included); a later Factory change should require each allocation `amount > 0` (and two fraction digits: amounts are stored as supplied) | `core/models.py` 798–801 (`AllocationInstruction.amount` unbounded); `domain/expense_management.py` 77–82; `application/expense_intake.py` 132–145 | State 1 M26, M27, M29; State 5 `correct_expense`, `replace_expense_allocations` |
+| modules import private helpers of other modules: `api` uses `api_irregular._binary_content_response`; `staff_bootstrap` uses `staff_identity._normalize_staff_email` and `_validate_new_password`; `staff_challenges` uses `staff_identity._normalize_staff_email` (and imports `_validate_new_password` without calling it); a later Factory cleanup should make them public or move them to a shared module | `api/router.py` 22; `application/staff_bootstrap.py` 6, 17–18; `application/staff_challenges.py` 9, 91 | `global_spec.json` `imports.internal` (exports carried from the assembly, see the inconsistency of 459ac96c below); `65_imports.json` |
 
 State 5 round-04 found one more contradiction with a closed earlier
 state: State 1 M26 and M27 required each allocation `amount` to be greater
@@ -421,6 +422,23 @@ accepted route table prevents: `rules.http_router_backend` route
 Those notes are reachable only when access changes between the two checks.
 The case follows the route; the inconsistency is resolved when Q20 is
 designed, not in the migration.
+
+The accepted import table of 459ac96c also disagrees with itself and with
+the code on three exports. Its `imports.module_internal.staff_bootstrap`
+lists `staff_identity: [_normalize_staff_email, _validate_new_password]` and
+its `imports.internal.api_irregular` already exports underscore names
+(`_viewer_cookie`, `_viewer_session_view`), but `imports.internal` omits
+`api_irregular._binary_content_response` and
+`staff_identity._normalize_staff_email`, `_validate_new_password` from their
+providers' exports, while the code imports them (`api/router.py` 22,
+`application/staff_bootstrap.py` 6, `application/staff_challenges.py` 9).
+Exports are carried from the assembly (no design artifact authors them; the
+projector reads `imports.internal` from `global_spec.json`), so the case's
+`global_spec.json` adds these three names to `imports.internal` and is no
+longer byte-for-byte 459ac96c there; nothing else differs.
+`imports.module_internal.staff_challenges` of 459ac96c lists
+`_validate_new_password`, which the code imports but never calls; the case
+keeps the accepted list. Listed under the accepted service quirks.
 
 ### Classification of what State 3 carries
 
