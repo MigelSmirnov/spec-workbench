@@ -232,8 +232,8 @@ expense; allocate or manually split it across sections or `Other expenses`
 forbidden); update manual work progress per section (0–100%); register work
 payments (idempotent by stable payment identity); publish progress photos and
 manage caption, section association, and visibility; maintain the manual
-budget; review and activate imported budget versions; manage client viewers,
-access links, and project grants.
+budget; review and activate imported budget versions. Client viewers, access
+links and project grants are managed by administrators (R0-14).
 
 ### Administration
 
@@ -581,7 +581,10 @@ project when its action has one. Resolves round-01 T17.
 An expense is created when an authenticated staff member with mutation
 capability on the project submits the confirmed recognition result with the
 project and the allocation; a progress photo is published the same way. The
-intake interface and OCR decide nothing. Which principal calls these
+intake interface and OCR decide nothing. The portal trusts that authenticated
+staff submission and records its `provenance_ref`; it does not verify
+independently that the content came from the OCR service, which has no
+principal of its own in the portal. Which principal calls these
 operations for binaries placed by the future intake service is Q12 question 3
 and is not designed here. Resolves round-01 T8.
 
@@ -607,8 +610,11 @@ The exceptional recovery override is an administrator action that replaces a
 staff account's login email with a given address, marks it verified, and is
 audited as `staff.recovery_override` atomically with the change; it is never
 the ordinary email-change path (accepted contract
-`perform_recovery_override`). Recovery of the sole administrator stays a
-deployment-level operation (R0-07). Resolves round-01 T34.
+`perform_recovery_override`). No product operation recovers a sole administrator who has lost both password
+and email: the bootstrap command of R0-07 refuses once any staff account
+exists, and such a recovery stays a host-level operation outside the product
+(owner 2026-11-06: current service behaviour accepted; technical decisions
+delegated). Resolves round-01 T34.
 
 ### R0-21 — A producer reads its own import results (owner 2026-11-06: current service behaviour accepted; technical decisions delegated)
 
@@ -638,8 +644,7 @@ Recorded in `open_questions.md`; none is designed by this migration (owner,
 - Q14 — replay-safe onboarding of a client.
 - Q16 — the estimate box for the client's own chat agent.
 - Still open from the authoring pass of 2026-07-19: staff MFA; administrative
-  area boundaries beyond the single current area; the PresuPro transport
-  binding; pagination beyond the few-project profile (R0-01); expense
+  area boundaries beyond the single current area; pagination beyond the few-project profile (R0-01); expense
   correction history beyond audit; `SnapshotImportRecord` retention; external
   binary deletion and retention.
 

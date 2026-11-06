@@ -1,0 +1,665 @@
+{
+ "open_points": [
+  {
+   "subject": "viewer access management authority",
+   "kind": "contradiction",
+   "text": "“created by an operator” and “re-issuable by an operator”; “manage client viewers, access links, and project grants”; but R0-14 says these actions “all require the access-management capability, which only administrators hold”",
+   "question": "Can an operator create or revoke viewers, re-issue access links, or manage viewer grants, or are all of those actions administrator-only?",
+   "options": [
+    "Operator and administrator may perform them",
+    "Administrator only"
+   ],
+   "default_guess": "Administrator only, following R0-14.",
+   "witness": {
+    "initial": "An operator is assigned to project P and a client needs access.",
+    "events": [
+     "The operator attempts to create a ClientViewer and issue an access link."
+    ],
+    "outcomes": [
+     "The operation succeeds because the Principals and Operator management passages authorize an operator.",
+     "The operation is denied because R0-14 reserves access management to administrators."
+    ],
+    "observer": "The operator and client"
+   },
+   "unit": "00_product.md:Principals"
+  },
+  {
+   "subject": "service-principal authorization",
+   "kind": "contradiction",
+   "text": "“Every project-scoped operation checks together: valid active session” but “Producer operations authenticate with the bearer credential of R0-09”",
+   "question": "Does a service-principal bearer credential itself satisfy project-scoped authentication, or must a ServicePrincipal also have a session?",
+   "options": [
+    "Bearer authentication replaces the session check for service principals",
+    "Every service principal also has a managed session"
+   ],
+   "default_guess": "Bearer authentication replaces the session check for service principals.",
+   "witness": {
+    "initial": "An active producer has a valid bearer credential and project scope but no session.",
+    "events": [
+     "The producer imports a snapshot for an allowed project."
+    ],
+    "outcomes": [
+     "The import succeeds under R0-09 and R0-15.",
+     "The import fails the common rule because there is no active session."
+    ],
+    "observer": "The producer"
+   },
+   "unit": "00_product.md:Principals"
+  },
+  {
+   "subject": "ClientViewer revocation state",
+   "kind": "unnamed stored fact",
+   "text": "“revoking the viewer or its access credential closes all of that client's projects”",
+   "question": "What concrete persisted state constitutes a revoked viewer, how does it differ from credential revocation, and can the viewer later be restored without creating a new identity?",
+   "options": [
+    "ClientViewer has an active/revoked lifecycle independent of credentials",
+    "‘Revoke viewer’ means revoke every credential and grant",
+    "Viewer revocation permanently retires the identity"
+   ],
+   "default_guess": "Give ClientViewer an independent active/revoked status and invalidate its sessions and credentials on revocation.",
+   "witness": {
+    "initial": "Viewer V has two grants, one credential, and an active session.",
+    "events": [
+     "An administrator revokes V.",
+     "Later an administrator issues a new credential for V."
+    ],
+    "outcomes": [
+     "V can be restored and regain the still-existing grants.",
+     "V is permanently retired, so re-issuance is refused or requires a new viewer."
+    ],
+    "observer": "The administrator and viewer"
+   },
+   "unit": "00_product.md:Principals"
+  },
+  {
+   "subject": "global producer scope",
+   "kind": "unnamed capability",
+   "text": "“a global producer exists only through an explicitly granted capability” while the closed capability set names only `portal.estimate_snapshot.import` and `portal.estimate_snapshot.read_import_result`",
+   "question": "What named authorization fact grants global project scope, and how is it represented separately from the two import capabilities?",
+   "options": [
+    "A third named global capability",
+    "A producer-scope record denoting all projects",
+    "An administrative-area scope that happens to cover every project"
+   ],
+   "default_guess": "Represent global reach as an explicit producer-scope fact, not as an unnamed capability.",
+   "witness": {
+    "initial": "A producer has `portal.estimate_snapshot.import` but no project list.",
+    "events": [
+     "It imports for a newly created Registry project."
+    ],
+    "outcomes": [
+     "The import succeeds because the import capability is treated as the global grant.",
+     "The import fails because no separately represented global scope exists."
+    ],
+    "observer": "The producer and administrator"
+   },
+   "unit": "00_product.md:Principals"
+  },
+  {
+   "subject": "manual budget mutation and versioning",
+   "kind": "contradictory lifecycle",
+   "text": "“An authorized operator maintains ordered client-facing Budget Sections” and “manual sections are never rewritten in place”",
+   "question": "How does an operator edit a manual budget without rewriting its sections: does every edit create a new immutable budget version, or are some fields mutable?",
+   "options": [
+    "Every manual edit creates and activates a new version",
+    "Manual sections are mutable until transition to an imported source",
+    "Section records are replaced while stable section identities persist"
+   ],
+   "default_guess": "Create a new manual budget version for each committed edit while preserving stable section identities.",
+   "witness": {
+    "initial": "Project P has an active manual section S with planned work of €10,000.",
+    "events": [
+     "An operator changes S to €12,000."
+    ],
+    "outcomes": [
+     "The existing section is updated in place.",
+     "A new manual budget version and new section record are created and activated."
+    ],
+    "observer": "The viewer, auditor, and later domain implementer"
+   },
+   "unit": "00_product.md:Budget sources"
+  },
+  {
+   "subject": "active manual budget identity",
+   "kind": "unnamed model",
+   "text": "“at most one budget version is active per project at any time” but manual budgets are described only as “manual budgets with ordered budget sections”",
+   "question": "Are manual budgets versioned members of the same activation model as imported snapshots, and may a project have no active budget version?",
+   "options": [
+    "Manual and imported budgets are both versions in one activation model",
+    "Only snapshots are versioned; manual budget is a separate mutable source",
+    "Every project must always have exactly one active budget",
+    "Zero or one active budget is allowed"
+   ],
+   "default_guess": "Use one version/activation model for both sources and allow no active budget before initial setup.",
+   "witness": {
+    "initial": "A new project has no budget; an operator creates a manual budget and later imports a snapshot.",
+    "events": [
+     "The manual budget is first exposed to the viewer.",
+     "The snapshot is activated."
+    ],
+    "outcomes": [
+     "Both are versions and activation moves from the manual version to the snapshot version.",
+     "The manual budget is not an active version, so snapshot activation coexists with it under separate rules."
+    ],
+    "observer": "The viewer and operator"
+   },
+   "unit": "00_product.md:Budget sources"
+  },
+  {
+   "subject": "activation with unmapped expenses",
+   "kind": "missing decision",
+   "text": "“existing allocations require explicit mapping to the sections of the newly activated version” and “unmapped expenses stay visible and must be resolved by an operator”",
+   "question": "May activation complete while allocations remain unmapped, or must all required mappings be resolved before activation succeeds?",
+   "options": [
+    "Activation is rejected until every allocation is mapped",
+    "Activation succeeds with an explicit unmapped state",
+    "Only affected allocations are excluded from totals until resolved"
+   ],
+   "default_guess": "Allow activation with an explicit unmapped state, because the text says unmapped expenses stay visible afterward.",
+   "witness": {
+    "initial": "The active budget has section A and an included expense allocated to A; a candidate snapshot has no corresponding stable section.",
+    "events": [
+     "An operator attempts to activate the snapshot without choosing a target section."
+    ],
+    "outcomes": [
+     "Activation fails until the operator maps the expense.",
+     "Activation succeeds and the expense remains visibly unmapped for later resolution."
+    ],
+    "observer": "The operator and viewer"
+   },
+   "unit": "00_product.md:Budget sources"
+  },
+  {
+   "subject": "automatic section correspondence",
+   "kind": "vague action",
+   "text": "“matching stable section identifiers may link automatically”",
+   "question": "Which identifiers must match, who initiates the automatic link, and is the link a persisted mapping decision that can be reviewed or overridden?",
+   "options": [
+    "Exact equality of a shared canonical section ID creates a persisted mapping automatically",
+    "A staff action proposes mappings for review",
+    "Automatic linking is optional implementation behavior"
+   ],
+   "default_guess": "Require exact equality of an explicitly shared stable identifier and persist the resulting mapping decision.",
+   "witness": {
+    "initial": "An old manual section has ID `A`; a new snapshot section has `source_section_id=A` but a different source code and name.",
+    "events": [
+     "The new version is activated."
+    ],
+    "outcomes": [
+     "The allocation is linked automatically because `A` matches.",
+     "No automatic link is made because manual IDs and source IDs are different namespaces."
+    ],
+    "observer": "The operator and viewer"
+   },
+   "unit": "00_product.md:Budget sources"
+  },
+  {
+   "subject": "Other expenses allocation target",
+   "kind": "unnamed stored fact",
+   "text": "“`Other expenses` persists independently of budget versions” but Persistent data names no record, identity, ownership, or lifecycle for it",
+   "question": "Is `Other expenses` a singleton project-owned allocation target, a real section, or a derived category, and what stable identifier is used in allocations?",
+   "options": [
+    "One permanent project-owned special allocation target",
+    "A section in every budget version connected by mapping",
+    "A derived category represented by a null section reference"
+   ],
+   "default_guess": "Use one permanent project-owned special allocation target with a stable reserved identity.",
+   "witness": {
+    "initial": "An expense is allocated to Other expenses while manual budget M is active.",
+    "events": [
+     "Snapshot S is activated.",
+     "The expense is read afterward."
+    ],
+    "outcomes": [
+     "Its allocation still targets a permanent project-level entity.",
+     "Its allocation is represented as null or recreated against the new version, producing different persistence and query behavior."
+    ],
+    "observer": "The operator, viewer, and auditor"
+   },
+   "unit": "00_product.md:Persistent data"
+  },
+  {
+   "subject": "expense replay conflict",
+   "kind": "missing failure",
+   "text": "“One recognized document creates at most one Expense with one Document; replay is idempotent”",
+   "question": "What happens when the same `recognized_document_id` is submitted again with different confirmed content, project, total, or allocation?",
+   "options": [
+    "Reject as an integrity conflict",
+    "Return the original Expense regardless of differences",
+    "Treat mutable operator allocation fields as an update while preserving recognized content"
+   ],
+   "default_guess": "Return the existing result only for an equivalent request and reject materially different replay as an integrity conflict.",
+   "witness": {
+    "initial": "Recognized document R created expense E in project P for €100.",
+    "events": [
+     "A staff member submits R again for project Q or with a total of €120."
+    ],
+    "outcomes": [
+     "The service idempotently returns E.",
+     "The service rejects the replay as conflicting content or ownership."
+    ],
+    "observer": "The staff caller and auditor"
+   },
+   "unit": "00_product.md:Primary outcomes"
+  },
+  {
+   "subject": "expense correction action",
+   "kind": "vague action",
+   "text": "“an operator can: correct, include, or exclude an expense”",
+   "question": "Which expense fields may be corrected, which provenance fields are immutable, and what observable failure occurs for forbidden corrections?",
+   "options": [
+    "Only a closed set of client-facing normalized fields is editable",
+    "All fields except identity and project are editable",
+    "Correction creates a replacement/version rather than mutating the Expense"
+   ],
+   "default_guess": "Permit a closed set of normalized business-field corrections while keeping identity, project, OCR provenance, and source document reference immutable.",
+   "witness": {
+    "initial": "Expense E was created from confirmed OCR content in project P.",
+    "events": [
+     "An operator attempts to change E's total, source reference, or project."
+    ],
+    "outcomes": [
+     "All requested changes are accepted as expense corrections.",
+     "Only business fields are changed; provenance/project changes are rejected."
+    ],
+    "observer": "The operator, viewer, and auditor"
+   },
+   "unit": "00_product.md:Primary outcomes"
+  },
+  {
+   "subject": "work progress across budget versions",
+   "kind": "missing transition rule",
+   "text": "“update manual work progress per section” while source transitions specify allocation mapping but do not say what happens to work progress",
+   "question": "When the active budget version changes, is section progress mapped, reset, retained against the old version, or made unavailable until entered again?",
+   "options": [
+    "Map progress through the same section mappings",
+    "Reset progress for the new version",
+    "Keep version-specific progress and expose only the active version's values",
+    "Block activation until progress is explicitly migrated"
+   ],
+   "default_guess": "Keep progress version-specific and explicitly map it when stable section correspondence exists.",
+   "witness": {
+    "initial": "Manual section A is 50% complete with €10,000 planned work.",
+    "events": [
+     "A snapshot with corresponding section B and €12,000 planned work is activated."
+    ],
+    "outcomes": [
+     "B becomes 50% complete and completed work becomes €6,000.",
+     "B starts with unavailable or 0% progress while A's historical progress remains attached to the old version."
+    ],
+    "observer": "The viewer and operator"
+   },
+   "unit": "00_product.md:Primary outcomes"
+  },
+  {
+   "subject": "payment replay conflict",
+   "kind": "missing failure",
+   "text": "“register work payments (idempotent by stable payment identity)”",
+   "question": "What happens when the same payment identity is replayed with a different amount, date, project, or payer information?",
+   "options": [
+    "Reject differing content as an integrity conflict",
+    "Return the existing payment and ignore differences",
+    "Update the existing payment"
+   ],
+   "default_guess": "Idempotently return an equivalent payment and reject differing content as an integrity conflict.",
+   "witness": {
+    "initial": "Payment X for €1,000 exists in project P.",
+    "events": [
+     "An operator submits X again for €1,500."
+    ],
+    "outcomes": [
+     "The existing €1,000 payment is returned without error.",
+     "The request is rejected as a conflicting replay."
+    ],
+    "observer": "The operator and auditor"
+   },
+   "unit": "00_product.md:Primary outcomes"
+  },
+  {
+   "subject": "unavailable client data",
+   "kind": "unspecified output",
+   "text": "“Unavailable data is shown explicitly, never fabricated or replaced by silent zeros”",
+   "question": "How does the JSON API represent unavailable values and distinguish unavailable, not applicable, not yet entered, and an external dependency failure?",
+   "options": [
+    "Null plus a closed reason code",
+    "Omitted field plus status metadata",
+    "A resource-level error response",
+    "One undifferentiated unavailable marker"
+   ],
+   "default_guess": "Return null with a closed machine-readable availability reason.",
+   "witness": {
+    "initial": "A project has no planned work cost and Registry context is temporarily unavailable.",
+    "events": [
+     "A viewer requests the project view."
+    ],
+    "outcomes": [
+     "The response succeeds with explicit field-level unavailable reason codes.",
+     "The request fails as a whole or returns null/omitted fields without distinguishing the causes."
+    ],
+    "observer": "The viewer-facing frontend"
+   },
+   "unit": "00_product.md:Primary outcomes"
+  },
+  {
+   "subject": "derived-money rounding order",
+   "kind": "underspecified calculation",
+   "text": "“Money uses decimal semantics with explicit currency and domain-defined rounding”; R0-05 says “rounded half up to two places” but does not define when intermediate and aggregate values are rounded",
+   "question": "For completed-work value, weighted progress, allocations, and totals, are values rounded per record/section before summing or only after the final calculation?",
+   "options": [
+    "Round each section or allocation, then sum",
+    "Sum exact decimal intermediates, then round the final value",
+    "Define a separate rounding stage for each derived value"
+   ],
+   "default_guess": "Define a separate deterministic rounding stage for each formula; absent that, retain exact decimals through aggregation and round the final monetary result.",
+   "witness": {
+    "initial": "Two sections each have planned work €0.05 at 50% completion.",
+    "events": [
+     "The portal computes total completed work."
+    ],
+    "outcomes": [
+     "Each €0.025 rounds to €0.03 and the total is €0.06.",
+     "The exact sum €0.05 is rounded once and the total is €0.05."
+    ],
+    "observer": "The viewer and operator"
+   },
+   "unit": "00_product.md:Currency policy"
+  },
+  {
+   "subject": "significant audit actions",
+   "kind": "open action set",
+   "text": "“Every significant action records actor provenance”",
+   "question": "What is the closed definition of a significant action, especially for successful reads, failed authorization, login attempts, challenge requests, session restoration/end, health checks, and local administrative operations?",
+   "options": [
+    "Audit every authenticated business command and every security-relevant success/failure",
+    "Audit only the actions explicitly enumerated",
+    "Define separate closed audit-event sets for business and security actions"
+   ],
+   "default_guess": "Define closed business and security audit-event sets, including failed security operations but excluding health checks and ordinary reads.",
+   "witness": {
+    "initial": "A user repeatedly fails login and another viewer downloads a protected document.",
+    "events": [
+     "The failed logins occur.",
+     "The authorized download succeeds."
+    ],
+    "outcomes": [
+     "Both are audit records because they are security-significant.",
+     "Neither is recorded because neither appears in the enumerated examples."
+    ],
+    "observer": "The administrator investigating an incident"
+   },
+   "unit": "00_product.md:Primary outcomes"
+  },
+  {
+   "subject": "Registry dependency failures",
+   "kind": "missing failure contract",
+   "text": "“server-side validation before linked writes” and “typed failure translation” without naming the failure types or behavior when Registry is unavailable",
+   "question": "What observable portal outcomes distinguish nonexistent, archived, forbidden, malformed, timed-out, and unavailable Registry responses for reads and writes?",
+   "options": [
+    "A closed mapping to portal error codes",
+    "Fail all project operations closed with one indistinguishable dependency error",
+    "Allow cached reads but reject writes during Registry failure"
+   ],
+   "default_guess": "Fail writes closed and define a closed mapping of Registry lifecycle/not-found failures separately from transient dependency failure.",
+   "witness": {
+    "initial": "Project P was active at the last successful check, but Registry is now unreachable.",
+    "events": [
+     "An operator submits an expense for P.",
+     "A viewer reads P."
+    ],
+    "outcomes": [
+     "Both operations fail because current Registry validation is required.",
+     "The write fails but the read succeeds from portal-owned data or cached context."
+    ],
+    "observer": "The operator and viewer"
+   },
+   "unit": "00_product.md:External systems"
+  },
+  {
+   "subject": "email delivery failure",
+   "kind": "missing action outcome",
+   "text": "“The gateway only delivers messages” and “delivery success or failure never counts as address confirmation”",
+   "question": "What does the portal do and return when challenge or security-notification delivery fails, and are retries automatic, staff-triggered, or absent?",
+   "options": [
+    "Persist the challenge and return a generic accepted result while recording delivery failure",
+    "Revoke the newly created challenge and return a delivery error",
+    "Retry according to a defined policy",
+    "Leave retry/manual reissue to a later explicit action"
+   ],
+   "default_guess": "Persist the challenge and delivery record, return a non-enumerating accepted response where required, and expose a controlled reissue action rather than treating delivery as confirmation.",
+   "witness": {
+    "initial": "An administrator issues email verification for a pending staff account.",
+    "events": [
+     "The portal creates the challenge.",
+     "The email gateway reports delivery failure."
+    ],
+    "outcomes": [
+     "The challenge remains valid and can be delivered by retry or reissue.",
+     "The challenge is revoked or the whole operation fails atomically."
+    ],
+    "observer": "The administrator and account holder"
+   },
+   "unit": "00_product.md:External systems"
+  },
+  {
+   "subject": "PresuPro transport binding",
+   "kind": "contradiction",
+   "text": "“Concrete transport between PresuPro and the portal … Decided by R0-09: a bearer header” but Open questions says “Still open … the PresuPro transport binding”",
+   "question": "Is bearer-header authentication settled for PresuPro, or is its transport binding still an open later-state decision?",
+   "options": [
+    "Settled: producer requests use only a bearer header",
+    "Still open among bearer, signed request, mTLS, or gateway"
+   ],
+   "default_guess": "Settled as bearer-only, following R0-09.",
+   "witness": {
+    "initial": "An implementer is defining the producer HTTP contract.",
+    "events": [
+     "They read R0-09 and the Open questions list."
+    ],
+    "outcomes": [
+     "They reject mTLS-only or signed-request authentication because bearer-only is decided.",
+     "They choose mTLS or signed requests because the binding is explicitly still open."
+    ],
+    "observer": "The producer integrator"
+   },
+   "unit": "00_product.md:Unresolved decisions for later states"
+  },
+  {
+   "subject": "bootstrap command outcomes",
+   "kind": "unnamed observable output",
+   "text": "“Its outcome is a closed set of exit codes that deployment scripts may branch on”",
+   "question": "What are the complete exit codes and their meanings, including success, existing staff account, invalid input, configuration failure, and persistence failure?",
+   "options": [
+    "Enumerate distinct stable exit codes for each actionable outcome",
+    "Use success plus one generic failure code",
+    "Use success, refused-because-staff-exists, invalid-input, and internal/configuration failure"
+   ],
+   "default_guess": "Define stable codes for success, precondition refusal, invalid input, configuration error, and persistence/internal failure.",
+   "witness": {
+    "initial": "A deployment script invokes bootstrap against a database that already contains a staff account.",
+    "events": [
+     "The command refuses creation and exits."
+    ],
+    "outcomes": [
+     "It returns a dedicated ‘staff already exists’ code that the script treats as an expected refusal.",
+     "It returns the same generic failure used for malformed input or database failure."
+    ],
+    "observer": "The host operator and deployment script"
+   },
+   "unit": "00_product.md:Decisions"
+  },
+  {
+   "subject": "runtime configuration contract",
+   "kind": "unnamed inputs and failure",
+   "text": "“configured only by environment variables, which it validates when it starts”",
+   "question": "What are the required environment-variable names, accepted formats and bounds, and the observable startup failure for missing, invalid, wildcard, or mutually inconsistent values?",
+   "options": [
+    "A closed configuration schema with stable startup error categories",
+    "Implementation-defined environment names and validation messages",
+    "One generic startup refusal for every invalid configuration"
+   ],
+   "default_guess": "Define a closed environment-variable schema and stable non-secret startup error categories.",
+   "witness": {
+    "initial": "A deployment supplies a wildcard trusted host and an invalid `binary_max_read_bytes`.",
+    "events": [
+     "The service starts and validates configuration."
+    ],
+    "outcomes": [
+     "Startup refuses with distinct actionable configuration errors.",
+     "Startup refuses generically or accepts one value because validation details are implementation-defined."
+    ],
+    "observer": "The host operator"
+   },
+   "unit": "00_product.md:Decisions"
+  },
+  {
+   "subject": "readiness semantics",
+   "kind": "missing observable state",
+   "text": "“The service answers an unauthenticated liveness and readiness check”",
+   "question": "Which conditions make liveness and readiness succeed or fail, and what stable status/body does each check return?",
+   "options": [
+    "Liveness means process loop is responsive; readiness checks validated configuration, database, binary root, and required dependencies",
+    "Both checks always report process availability",
+    "Readiness checks only local persistence and not external systems"
+   ],
+   "default_guess": "Make liveness process-local and readiness require valid configuration plus usable SQLite and binary storage, with stable minimal status responses.",
+   "witness": {
+    "initial": "The process is running, but its SQLite database cannot be opened.",
+    "events": [
+     "A monitor requests liveness.",
+     "The monitor requests readiness."
+    ],
+    "outcomes": [
+     "Liveness succeeds and readiness fails.",
+     "Both succeed because the HTTP process can answer."
+    ],
+    "observer": "The deployment orchestrator"
+   },
+   "unit": "00_product.md:Decisions"
+  },
+  {
+   "subject": "binary media allowlists",
+   "kind": "unnamed policy",
+   "text": "“its media type is recognized from the content and must be on a closed list per object kind”",
+   "question": "What exact media types are allowed for ExpenseDocument and ProgressPhoto, and what content-recognition authority determines them?",
+   "options": [
+    "Enumerated MIME allowlists plus a named content-sniffing rule/library contract",
+    "One shared allowlist for both kinds",
+    "Implementation-defined allowlists"
+   ],
+   "default_guess": "Define separate enumerated MIME allowlists and determine type from byte signatures, not extensions or stored metadata.",
+   "witness": {
+    "initial": "An authorized ExpenseDocument contains valid TIFF bytes.",
+    "events": [
+     "The viewer requests the document."
+    ],
+    "outcomes": [
+     "The download succeeds because TIFF is on the document allowlist.",
+     "The request receives the indistinguishable protected-binary failure because TIFF is not allowed."
+    ],
+    "observer": "The viewer"
+   },
+   "unit": "00_product.md:Decisions"
+  },
+  {
+   "subject": "protected-binary failure response",
+   "kind": "unspecified failure output",
+   "text": "“An unknown, cross-project, hidden, oversize or unlisted read is answered the same way”",
+   "question": "What exact HTTP status, headers, and body constitute the common indistinguishable failure, and does storage absence or read failure use that same response?",
+   "options": [
+    "A fixed not-found response for every concealed condition, including missing stored bytes",
+    "A fixed forbidden response",
+    "A generic binary-unavailable response, with operational storage failures distinguished only internally"
+   ],
+   "default_guess": "Use one fixed not-found response for all caller-concealed cases, while logging internal storage failures without exposing them.",
+   "witness": {
+    "initial": "Viewer V may access project P.",
+    "events": [
+     "V requests a hidden photo.",
+     "V requests a visible photo whose `file_ref` has no stored bytes."
+    ],
+    "outcomes": [
+     "Both requests return exactly the same fixed response.",
+     "The hidden photo is concealed as not found, while missing storage produces a server error."
+    ],
+    "observer": "The viewer"
+   },
+   "unit": "00_product.md:Decisions"
+  },
+  {
+   "subject": "prepared progress-photo facts",
+   "kind": "hidden abstraction",
+   "text": "“prepared photo facts” and “a progress photo is published the same way”",
+   "question": "What concrete fields constitute prepared photo facts, which fields come from the authenticated staff member versus intake, and what validation or failure outcomes apply?",
+   "options": [
+    "A closed versioned photo-publication input contract",
+    "Only `file_ref` plus operator-provided caption, section, visibility, and project",
+    "An implementation-defined structure delegated to the future intake hand-over"
+   ],
+   "default_guess": "Define a closed versioned input containing stable intake identity, file reference, provenance and capture facts, with project, caption, section and visibility supplied authoritatively by staff.",
+   "witness": {
+    "initial": "A binary has been placed with a file reference and Telegram metadata containing a project and caption.",
+    "events": [
+     "An authenticated operator publishes it with a different project and caption."
+    ],
+    "outcomes": [
+     "Operator-supplied project and caption are authoritative and intake values are provenance only.",
+     "The prepared facts control some or all of those values, so the request is rejected or published differently."
+    ],
+    "observer": "The operator and viewer"
+   },
+   "unit": "00_product.md:Decisions"
+  },
+  {
+   "subject": "sole-administrator recovery",
+   "kind": "action without promise",
+   "text": "“Recovery of the sole administrator stays a deployment-level operation (R0-07)” although R0-07 defines only first-administrator creation and refuses once any staff account exists",
+   "question": "What deployment-level action recovers a sole existing administrator, what authority and inputs does it require, and what are its output, audit, and failure semantics?",
+   "options": [
+    "A separate local recovery command",
+    "An extension of the bootstrap command with a distinct recovery mode",
+    "No recovery operation until an operator intervenes directly in storage"
+   ],
+   "default_guess": "Define a separate local recovery command with explicit proof-of-host authority, secure interactive inputs, audit behavior, and closed exit codes.",
+   "witness": {
+    "initial": "The only administrator account exists but its login email and password are inaccessible.",
+    "events": [
+     "The host operator invokes the only local command described by R0-07."
+    ],
+    "outcomes": [
+     "Recovery succeeds because R0-20 implies a deployment recovery operation.",
+     "The command refuses because a staff account already exists, leaving no specified recovery path."
+    ],
+    "observer": "The host operator"
+   },
+   "unit": "00_product.md:Decisions"
+  },
+  {
+   "subject": "snapshot import-result representation",
+   "kind": "unspecified output",
+   "text": "“A producer reads an earlier import result by its `import_id`” and has `portal.estimate_snapshot.read_import_result`",
+   "question": "What fields and status states are returned for accepted, idempotent replay, validation rejection, integrity conflict, and processing failure, and when is an `import_id` issued?",
+   "options": [
+    "A closed result schema and status machine covering every terminal result",
+    "Only accepted imports receive an `import_id`",
+    "Every attempt receives an immutable result, including rejections"
+   ],
+   "default_guess": "Issue an `import_id` for every authenticated import attempt and return an immutable closed result covering accepted, replayed, rejected, conflicted, and failed outcomes.",
+   "witness": {
+    "initial": "A producer submits a snapshot with a foreign currency or conflicting fingerprint.",
+    "events": [
+     "The import is rejected.",
+     "The producer later reads the result using an import ID."
+    ],
+    "outcomes": [
+     "A persisted rejection result is returned with stable reason data.",
+     "No import ID/result exists because only accepted imports are retained."
+    ],
+    "observer": "The producer"
+   },
+   "unit": "00_product.md:Decisions"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"viewer access management authority\",\"kind\":\"contradiction\",\"text\":\"“created by an operator” and “re-issuable by an operator”; “manage client viewers, access links, and project grants”; but R0-14 says these actions “all require the access-management capability, which only administrators hold”\",\"question\":\"Can an operator create or revoke viewers, re-issue access links, or manage viewer grants, or are all of those actions administrator-only?\",\"options\":[\"Operator and administrator may perform them\",\"Administrator only\"],\"default_guess\":\"Administrator only, following R0-14.\",\"witness\":{\"initial\":\"An operator is assigned to project P and a client needs access.\",\"events\":[\"The operator attempts to create a ClientViewer and issue an access link.\"],\"outcomes\":[\"The operation succeeds because the Principals and Operator management passages authorize an operator.\",\"The operation is denied because R0-14 reserves access management to administrators.\"],\"observer\":\"The operator and client\"},\"unit\":\"00_product.md:Principals\"},{\"subject\":\"service-principal authorization\",\"kind\":\"contradiction\",\"text\":\"“Every project-scoped operation checks together: valid active session” but “Producer operations authenticate with the bearer credential of R0-09”\",\"question\":\"Does a service-principal bearer credential itself satisfy project-scoped authentication, or must a ServicePrincipal also have a session?\",\"options\":[\"Bearer authentication replaces the session check for service principals\",\"Every service principal also has a managed session\"],\"default_guess\":\"Bearer authentication replaces the session check for service principals.\",\"witness\":{\"initial\":\"An active producer has a valid bearer credential and project scope but no session.\",\"events\":[\"The producer imports a snapshot for an allowed project.\"],\"outcomes\":[\"The import succeeds under R0-09 and R0-15.\",\"The import fails the common rule because there is no active session.\"],\"observer\":\"The producer\"},\"unit\":\"00_product.md:Principals\"},{\"subject\":\"ClientViewer revocation state\",\"kind\":\"unnamed stored fact\",\"text\":\"“revoking the viewer or its access credential closes all of that client's projects”\",\"question\":\"What concrete persisted state constitutes a revoked viewer, how does it differ from credential revocation, and can the viewer later be restored without creating a new identity?\",\"options\":[\"ClientViewer has an active/revoked lifecycle independent of credentials\",\"‘Revoke viewer’ means revoke every credential and grant\",\"Viewer revocation permanently retires the identity\"],\"default_guess\":\"Give ClientViewer an independent active/revoked status and invalidate its sessions and credentials on revocation.\",\"witness\":{\"initial\":\"Viewer V has two grants, one credential, and an active session.\",\"events\":[\"An administrator revokes V.\",\"Later an administrator issues a new credential for V.\"],\"outcomes\":[\"V can be restored and regain the still-existing grants.\",\"V is permanently retired, so re-issuance is refused or requires a new viewer.\"],\"observer\":\"The administrator and viewer\"},\"unit\":\"00_product.md:Principals\"},{\"subject\":\"global producer scope\",\"kind\":\"unnamed capability\",\"text\":\"“a global producer exists only through an explicitly granted capability” while the closed capability set names only `portal.estimate_snapshot.import` and `portal.estimate_snapshot.read_import_result`\",\"question\":\"What named authorization fact grants global project scope, and how is it represented separately from the two import capabilities?\",\"options\":[\"A third named global capability\",\"A producer-scope record denoting all projects\",\"An administrative-area scope that happens to cover every project\"],\"default_guess\":\"Represent global reach as an explicit producer-scope fact, not as an unnamed capability.\",\"witness\":{\"initial\":\"A producer has `portal.estimate_snapshot.import` but no project list.\",\"events\":[\"It imports for a newly created Registry project.\"],\"outcomes\":[\"The import succeeds because the import capability is treated as the global grant.\",\"The import fails because no separately represented global scope exists.\"],\"observer\":\"The producer and administrator\"},\"unit\":\"00_product.md:Principals\"},{\"subject\":\"manual budget mutation and versioning\",\"kind\":\"contradictory lifecycle\",\"text\":\"“An authorized operator maintains ordered client-facing Budget Sections” and “manual sections are never rewritten in place”\",\"question\":\"How does an operator edit a manual budget without rewriting its sections: does every edit create a new immutable budget version, or are some fields mutable?\",\"options\":[\"Every manual edit creates and activates a new version\",\"Manual sections are mutable until transition to an imported source\",\"Section records are replaced while stable section identities persist\"],\"default_guess\":\"Create a new manual budget version for each committed edit while preserving stable section identities.\",\"witness\":{\"initial\":\"Project P has an active manual section S with planned work of €10,000.\",\"events\":[\"An operator changes S to €12,000.\"],\"outcomes\":[\"The existing section is updated in place.\",\"A new manual budget version and new section record are created and activated.\"],\"observer\":\"The viewer, auditor, and later domain implementer\"},\"unit\":\"00_product.md:Budget sources\"},{\"subject\":\"active manual budget identity\",\"kind\":\"unnamed model\",\"text\":\"“at most one budget version is active per project at any time” but manual budgets are described only as “manual budgets with ordered budget sections”\",\"question\":\"Are manual budgets versioned members of the same activation model as imported snapshots, and may a project have no active budget version?\",\"options\":[\"Manual and imported budgets are both versions in one activation model\",\"Only snapshots are versioned; manual budget is a separate mutable source\",\"Every project must always have exactly one active budget\",\"Zero or one active budget is allowed\"],\"default_guess\":\"Use one version/activation model for both sources and allow no active budget before initial setup.\",\"witness\":{\"initial\":\"A new project has no budget; an operator creates a manual budget and later imports a snapshot.\",\"events\":[\"The manual budget is first exposed to the viewer.\",\"The snapshot is activated.\"],\"outcomes\":[\"Both are versions and activation moves from the manual version to the snapshot version.\",\"The manual budget is not an active version, so snapshot activation coexists with it under separate rules.\"],\"observer\":\"The viewer and operator\"},\"unit\":\"00_product.md:Budget sources\"},{\"subject\":\"activation with unmapped expenses\",\"kind\":\"missing decision\",\"text\":\"“existing allocations require explicit mapping to the sections of the newly activated version” and “unmapped expenses stay visible and must be resolved by an operator”\",\"question\":\"May activation complete while allocations remain unmapped, or must all required mappings be resolved before activation succeeds?\",\"options\":[\"Activation is rejected until every allocation is mapped\",\"Activation succeeds with an explicit unmapped state\",\"Only affected allocations are excluded from totals until resolved\"],\"default_guess\":\"Allow activation with an explicit unmapped state, because the text says unmapped expenses stay visible afterward.\",\"witness\":{\"initial\":\"The active budget has section A and an included expense allocated to A; a candidate snapshot has no corresponding stable section.\",\"events\":[\"An operator attempts to activate the snapshot without choosing a target section.\"],\"outcomes\":[\"Activation fails until the operator maps the expense.\",\"Activation succeeds and the expense remains visibly unmapped for later resolution.\"],\"observer\":\"The operator and viewer\"},\"unit\":\"00_product.md:Budget sources\"},{\"subject\":\"automatic section correspondence\",\"kind\":\"vague action\",\"text\":\"“matching stable section identifiers may link automatically”\",\"question\":\"Which identifiers must match, who initiates the automatic link, and is the link a persisted mapping decision that can be reviewed or overridden?\",\"options\":[\"Exact equality of a shared canonical section ID creates a persisted mapping automatically\",\"A staff action proposes mappings for review\",\"Automatic linking is optional implementation behavior\"],\"default_guess\":\"Require exact equality of an explicitly shared stable identifier and persist the resulting mapping decision.\",\"witness\":{\"initial\":\"An old manual section has ID `A`; a new snapshot section has `source_section_id=A` but a different source code and name.\",\"events\":[\"The new version is activated.\"],\"outcomes\":[\"The allocation is linked automatically because `A` matches.\",\"No automatic link is made because manual IDs and source IDs are different namespaces.\"],\"observer\":\"The operator and viewer\"},\"unit\":\"00_product.md:Budget sources\"},{\"subject\":\"Other expenses allocation target\",\"kind\":\"unnamed stored fact\",\"text\":\"“`Other expenses` persists independently of budget versions” but Persistent data names no record, identity, ownership, or lifecycle for it\",\"question\":\"Is `Other expenses` a singleton project-owned allocation target, a real section, or a derived category, and what stable identifier is used in allocations?\",\"options\":[\"One permanent project-owned special allocation target\",\"A section in every budget version connected by mapping\",\"A derived category represented by a null section reference\"],\"default_guess\":\"Use one permanent project-owned special allocation target with a stable reserved identity.\",\"witness\":{\"initial\":\"An expense is allocated to Other expenses while manual budget M is active.\",\"events\":[\"Snapshot S is activated.\",\"The expense is read afterward.\"],\"outcomes\":[\"Its allocation still targets a permanent project-level entity.\",\"Its allocation is represented as null or recreated against the new version, producing different persistence and query behavior.\"],\"observer\":\"The operator, viewer, and auditor\"},\"unit\":\"00_product.md:Persistent data\"},{\"subject\":\"expense replay conflict\",\"kind\":\"missing failure\",\"text\":\"“One recognized document creates at most one Expense with one Document; replay is idempotent”\",\"question\":\"What happens when the same `recognized_document_id` is submitted again with different confirmed content, project, total, or allocation?\",\"options\":[\"Reject as an integrity conflict\",\"Return the original Expense regardless of differences\",\"Treat mutable operator allocation fields as an update while preserving recognized content\"],\"default_guess\":\"Return the existing result only for an equivalent request and reject materially different replay as an integrity conflict.\",\"witness\":{\"initial\":\"Recognized document R created expense E in project P for €100.\",\"events\":[\"A staff member submits R again for project Q or with a total of €120.\"],\"outcomes\":[\"The service idempotently returns E.\",\"The service rejects the replay as conflicting content or ownership.\"],\"observer\":\"The staff caller and auditor\"},\"unit\":\"00_product.md:Primary outcomes\"},{\"subject\":\"expense correction action\",\"kind\":\"vague action\",\"text\":\"“an operator can: correct, include, or exclude an expense”\",\"question\":\"Which expense fields may be corrected, which provenance fields are immutable, and what observable failure occurs for forbidden corrections?\",\"options\":[\"Only a closed set of client-facing normalized fields is editable\",\"All fields except identity and project are editable\",\"Correction creates a replacement/version rather than mutating the Expense\"],\"default_guess\":\"Permit a closed set of normalized business-field corrections while keeping identity, project, OCR provenance, and source document reference immutable.\",\"witness\":{\"initial\":\"Expense E was created from confirmed OCR content in project P.\",\"events\":[\"An operator attempts to change E's total, source reference, or project.\"],\"outcomes\":[\"All requested changes are accepted as expense corrections.\",\"Only business fields are changed; provenance/project changes are rejected.\"],\"observer\":\"The operator, viewer, and auditor\"},\"unit\":\"00_product.md:Primary outcomes\"},{\"subject\":\"work progress across budget versions\",\"kind\":\"missing transition rule\",\"text\":\"“update manual work progress per section” while source transitions specify allocation mapping but do not say what happens to work progress\",\"question\":\"When the active budget version changes, is section progress mapped, reset, retained against the old version, or made unavailable until entered again?\",\"options\":[\"Map progress through the same section mappings\",\"Reset progress for the new version\",\"Keep version-specific progress and expose only the active version's values\",\"Block activation until progress is explicitly migrated\"],\"default_guess\":\"Keep progress version-specific and explicitly map it when stable section correspondence exists.\",\"witness\":{\"initial\":\"Manual section A is 50% complete with €10,000 planned work.\",\"events\":[\"A snapshot with corresponding section B and €12,000 planned work is activated.\"],\"outcomes\":[\"B becomes 50% complete and completed work becomes €6,000.\",\"B starts with unavailable or 0% progress while A's historical progress remains attached to the old version.\"],\"observer\":\"The viewer and operator\"},\"unit\":\"00_product.md:Primary outcomes\"},{\"subject\":\"payment replay conflict\",\"kind\":\"missing failure\",\"text\":\"“register work payments (idempotent by stable payment identity)”\",\"question\":\"What happens when the same payment identity is replayed with a different amount, date, project, or payer information?\",\"options\":[\"Reject differing content as an integrity conflict\",\"Return the existing payment and ignore differences\",\"Update the existing payment\"],\"default_guess\":\"Idempotently return an equivalent payment and reject differing content as an integrity conflict.\",\"witness\":{\"initial\":\"Payment X for €1,000 exists in project P.\",\"events\":[\"An operator submits X again for €1,500.\"],\"outcomes\":[\"The existing €1,000 payment is returned without error.\",\"The request is rejected as a conflicting replay.\"],\"observer\":\"The operator and auditor\"},\"unit\":\"00_product.md:Primary outcomes\"},{\"subject\":\"unavailable client data\",\"kind\":\"unspecified output\",\"text\":\"“Unavailable data is shown explicitly, never fabricated or replaced by silent zeros”\",\"question\":\"How does the JSON API represent unavailable values and distinguish unavailable, not applicable, not yet entered, and an external dependency failure?\",\"options\":[\"Null plus a closed reason code\",\"Omitted field plus status metadata\",\"A resource-level error response\",\"One undifferentiated unavailable marker\"],\"default_guess\":\"Return null with a closed machine-readable availability reason.\",\"witness\":{\"initial\":\"A project has no planned work cost and Registry context is temporarily unavailable.\",\"events\":[\"A viewer requests the project view.\"],\"outcomes\":[\"The response succeeds with explicit field-level unavailable reason codes.\",\"The request fails as a whole or returns null/omitted fields without distinguishing the causes.\"],\"observer\":\"The viewer-facing frontend\"},\"unit\":\"00_product.md:Primary outcomes\"},{\"subject\":\"derived-money rounding order\",\"kind\":\"underspecified calculation\",\"text\":\"“Money uses decimal semantics with explicit currency and domain-defined rounding”; R0-05 says “rounded half up to two places” but does not define when intermediate and aggregate values are rounded\",\"question\":\"For completed-work value, weighted progress, allocations, and totals, are values rounded per record/section before summing or only after the final calculation?\",\"options\":[\"Round each section or allocation, then sum\",\"Sum exact decimal intermediates, then round the final value\",\"Define a separate rounding stage for each derived value\"],\"default_guess\":\"Define a separate deterministic rounding stage for each formula; absent that, retain exact decimals through aggregation and round the final monetary result.\",\"witness\":{\"initial\":\"Two sections each have planned work €0.05 at 50% completion.\",\"events\":[\"The portal computes total completed work.\"],\"outcomes\":[\"Each €0.025 rounds to €0.03 and the total is €0.06.\",\"The exact sum €0.05 is rounded once and the total is €0.05.\"],\"observer\":\"The viewer and operator\"},\"unit\":\"00_product.md:Currency policy\"},{\"subject\":\"significant audit actions\",\"kind\":\"open action set\",\"text\":\"“Every significant action records actor provenance”\",\"question\":\"What is the closed definition of a significant action, especially for successful reads, failed authorization, login attempts, challenge requests, session restoration/end, health checks, and local administrative operations?\",\"options\":[\"Audit every authenticated business command and every security-relevant success/failure\",\"Audit only the actions explicitly enumerated\",\"Define separate closed audit-event sets for business and security actions\"],\"default_guess\":\"Define closed business and security audit-event sets, including failed security operations but excluding health checks and ordinary reads.\",\"witness\":{\"initial\":\"A user repeatedly fails login and another viewer downloads a protected document.\",\"events\":[\"The failed logins occur.\",\"The authorized download succeeds.\"],\"outcomes\":[\"Both are audit records because they are security-significant.\",\"Neither is recorded because neither appears in the enumerated examples.\"],\"observer\":\"The administrator investigating an incident\"},\"unit\":\"00_product.md:Primary outcomes\"},{\"subject\":\"Registry dependency failures\",\"kind\":\"missing failure contract\",\"text\":\"“server-side validation before linked writes” and “typed failure translation” without naming the failure types or behavior when Registry is unavailable\",\"question\":\"What observable portal outcomes distinguish nonexistent, archived, forbidden, malformed, timed-out, and unavailable Registry responses for reads and writes?\",\"options\":[\"A closed mapping to portal error codes\",\"Fail all project operations closed with one indistinguishable dependency error\",\"Allow cached reads but reject writes during Registry failure\"],\"default_guess\":\"Fail writes closed and define a closed mapping of Registry lifecycle/not-found failures separately from transient dependency failure.\",\"witness\":{\"initial\":\"Project P was active at the last successful check, but Registry is now unreachable.\",\"events\":[\"An operator submits an expense for P.\",\"A viewer reads P.\"],\"outcomes\":[\"Both operations fail because current Registry validation is required.\",\"The write fails but the read succeeds from portal-owned data or cached context.\"],\"observer\":\"The operator and viewer\"},\"unit\":\"00_product.md:External systems\"},{\"subject\":\"email delivery failure\",\"kind\":\"missing action outcome\",\"text\":\"“The gateway only delivers messages” and “delivery success or failure never counts as address confirmation”\",\"question\":\"What does the portal do and return when challenge or security-notification delivery fails, and are retries automatic, staff-triggered, or absent?\",\"options\":[\"Persist the challenge and return a generic accepted result while recording delivery failure\",\"Revoke the newly created challenge and return a delivery error\",\"Retry according to a defined policy\",\"Leave retry/manual reissue to a later explicit action\"],\"default_guess\":\"Persist the challenge and delivery record, return a non-enumerating accepted response where required, and expose a controlled reissue action rather than treating delivery as confirmation.\",\"witness\":{\"initial\":\"An administrator issues email verification for a pending staff account.\",\"events\":[\"The portal creates the challenge.\",\"The email gateway reports delivery failure.\"],\"outcomes\":[\"The challenge remains valid and can be delivered by retry or reissue.\",\"The challenge is revoked or the whole operation fails atomically.\"],\"observer\":\"The administrator and account holder\"},\"unit\":\"00_product.md:External systems\"},{\"subject\":\"PresuPro transport binding\",\"kind\":\"contradiction\",\"text\":\"“Concrete transport between PresuPro and the portal … Decided by R0-09: a bearer header” but Open questions says “Still open … the PresuPro transport binding”\",\"question\":\"Is bearer-header authentication settled for PresuPro, or is its transport binding still an open later-state decision?\",\"options\":[\"Settled: producer requests use only a bearer header\",\"Still open among bearer, signed request, mTLS, or gateway\"],\"default_guess\":\"Settled as bearer-only, following R0-09.\",\"witness\":{\"initial\":\"An implementer is defining the producer HTTP contract.\",\"events\":[\"They read R0-09 and the Open questions list.\"],\"outcomes\":[\"They reject mTLS-only or signed-request authentication because bearer-only is decided.\",\"They choose mTLS or signed requests because the binding is explicitly still open.\"],\"observer\":\"The producer integrator\"},\"unit\":\"00_product.md:Unresolved decisions for later states\"},{\"subject\":\"bootstrap command outcomes\",\"kind\":\"unnamed observable output\",\"text\":\"“Its outcome is a closed set of exit codes that deployment scripts may branch on”\",\"question\":\"What are the complete exit codes and their meanings, including success, existing staff account, invalid input, configuration failure, and persistence failure?\",\"options\":[\"Enumerate distinct stable exit codes for each actionable outcome\",\"Use success plus one generic failure code\",\"Use success, refused-because-staff-exists, invalid-input, and internal/configuration failure\"],\"default_guess\":\"Define stable codes for success, precondition refusal, invalid input, configuration error, and persistence/internal failure.\",\"witness\":{\"initial\":\"A deployment script invokes bootstrap against a database that already contains a staff account.\",\"events\":[\"The command refuses creation and exits.\"],\"outcomes\":[\"It returns a dedicated ‘staff already exists’ code that the script treats as an expected refusal.\",\"It returns the same generic failure used for malformed input or database failure.\"],\"observer\":\"The host operator and deployment script\"},\"unit\":\"00_product.md:Decisions\"},{\"subject\":\"runtime configuration contract\",\"kind\":\"unnamed inputs and failure\",\"text\":\"“configured only by environment variables, which it validates when it starts”\",\"question\":\"What are the required environment-variable names, accepted formats and bounds, and the observable startup failure for missing, invalid, wildcard, or mutually inconsistent values?\",\"options\":[\"A closed configuration schema with stable startup error categories\",\"Implementation-defined environment names and validation messages\",\"One generic startup refusal for every invalid configuration\"],\"default_guess\":\"Define a closed environment-variable schema and stable non-secret startup error categories.\",\"witness\":{\"initial\":\"A deployment supplies a wildcard trusted host and an invalid `binary_max_read_bytes`.\",\"events\":[\"The service starts and validates configuration.\"],\"outcomes\":[\"Startup refuses with distinct actionable configuration errors.\",\"Startup refuses generically or accepts one value because validation details are implementation-defined.\"],\"observer\":\"The host operator\"},\"unit\":\"00_product.md:Decisions\"},{\"subject\":\"readiness semantics\",\"kind\":\"missing observable state\",\"text\":\"“The service answers an unauthenticated liveness and readiness check”\",\"question\":\"Which conditions make liveness and readiness succeed or fail, and what stable status/body does each check return?\",\"options\":[\"Liveness means process loop is responsive; readiness checks validated configuration, database, binary root, and required dependencies\",\"Both checks always report process availability\",\"Readiness checks only local persistence and not external systems\"],\"default_guess\":\"Make liveness process-local and readiness require valid configuration plus usable SQLite and binary storage, with stable minimal status responses.\",\"witness\":{\"initial\":\"The process is running, but its SQLite database cannot be opened.\",\"events\":[\"A monitor requests liveness.\",\"The monitor requests readiness.\"],\"outcomes\":[\"Liveness succeeds and readiness fails.\",\"Both succeed because the HTTP process can answer.\"],\"observer\":\"The deployment orchestrator\"},\"unit\":\"00_product.md:Decisions\"},{\"subject\":\"binary media allowlists\",\"kind\":\"unnamed policy\",\"text\":\"“its media type is recognized from the content and must be on a closed list per object kind”\",\"question\":\"What exact media types are allowed for ExpenseDocument and ProgressPhoto, and what content-recognition authority determines them?\",\"options\":[\"Enumerated MIME allowlists plus a named content-sniffing rule/library contract\",\"One shared allowlist for both kinds\",\"Implementation-defined allowlists\"],\"default_guess\":\"Define separate enumerated MIME allowlists and determine type from byte signatures, not extensions or stored metadata.\",\"witness\":{\"initial\":\"An authorized ExpenseDocument contains valid TIFF bytes.\",\"events\":[\"The viewer requests the document.\"],\"outcomes\":[\"The download succeeds because TIFF is on the document allowlist.\",\"The request receives the indistinguishable protected-binary failure because TIFF is not allowed.\"],\"observer\":\"The viewer\"},\"unit\":\"00_product.md:Decisions\"},{\"subject\":\"protected-binary failure response\",\"kind\":\"unspecified failure output\",\"text\":\"“An unknown, cross-project, hidden, oversize or unlisted read is answered the same way”\",\"question\":\"What exact HTTP status, headers, and body constitute the common indistinguishable failure, and does storage absence or read failure use that same response?\",\"options\":[\"A fixed not-found response for every concealed condition, including missing stored bytes\",\"A fixed forbidden response\",\"A generic binary-unavailable response, with operational storage failures distinguished only internally\"],\"default_guess\":\"Use one fixed not-found response for all caller-concealed cases, while logging internal storage failures without exposing them.\",\"witness\":{\"initial\":\"Viewer V may access project P.\",\"events\":[\"V requests a hidden photo.\",\"V requests a visible photo whose `file_ref` has no stored bytes.\"],\"outcomes\":[\"Both requests return exactly the same fixed response.\",\"The hidden photo is concealed as not found, while missing storage produces a server error.\"],\"observer\":\"The viewer\"},\"unit\":\"00_product.md:Decisions\"},{\"subject\":\"prepared progress-photo facts\",\"kind\":\"hidden abstraction\",\"text\":\"“prepared photo facts” and “a progress photo is published the same way”\",\"question\":\"What concrete fields constitute prepared photo facts, which fields come from the authenticated staff member versus intake, and what validation or failure outcomes apply?\",\"options\":[\"A closed versioned photo-publication input contract\",\"Only `file_ref` plus operator-provided caption, section, visibility, and project\",\"An implementation-defined structure delegated to the future intake hand-over\"],\"default_guess\":\"Define a closed versioned input containing stable intake identity, file reference, provenance and capture facts, with project, caption, section and visibility supplied authoritatively by staff.\",\"witness\":{\"initial\":\"A binary has been placed with a file reference and Telegram metadata containing a project and caption.\",\"events\":[\"An authenticated operator publishes it with a different project and caption.\"],\"outcomes\":[\"Operator-supplied project and caption are authoritative and intake values are provenance only.\",\"The prepared facts control some or all of those values, so the request is rejected or published differently.\"],\"observer\":\"The operator and viewer\"},\"unit\":\"00_product.md:Decisions\"},{\"subject\":\"sole-administrator recovery\",\"kind\":\"action without promise\",\"text\":\"“Recovery of the sole administrator stays a deployment-level operation (R0-07)” although R0-07 defines only first-administrator creation and refuses once any staff account exists\",\"question\":\"What deployment-level action recovers a sole existing administrator, what authority and inputs does it require, and what are its output, audit, and failure semantics?\",\"options\":[\"A separate local recovery command\",\"An extension of the bootstrap command with a distinct recovery mode\",\"No recovery operation until an operator intervenes directly in storage\"],\"default_guess\":\"Define a separate local recovery command with explicit proof-of-host authority, secure interactive inputs, audit behavior, and closed exit codes.\",\"witness\":{\"initial\":\"The only administrator account exists but its login email and password are inaccessible.\",\"events\":[\"The host operator invokes the only local command described by R0-07.\"],\"outcomes\":[\"Recovery succeeds because R0-20 implies a deployment recovery operation.\",\"The command refuses because a staff account already exists, leaving no specified recovery path.\"],\"observer\":\"The host operator\"},\"unit\":\"00_product.md:Decisions\"},{\"subject\":\"snapshot import-result representation\",\"kind\":\"unspecified output\",\"text\":\"“A producer reads an earlier import result by its `import_id`” and has `portal.estimate_snapshot.read_import_result`\",\"question\":\"What fields and status states are returned for accepted, idempotent replay, validation rejection, integrity conflict, and processing failure, and when is an `import_id` issued?\",\"options\":[\"A closed result schema and status machine covering every terminal result\",\"Only accepted imports receive an `import_id`\",\"Every attempt receives an immutable result, including rejections\"],\"default_guess\":\"Issue an `import_id` for every authenticated import attempt and return an immutable closed result covering accepted, replayed, rejected, conflicted, and failed outcomes.\",\"witness\":{\"initial\":\"A producer submits a snapshot with a foreign currency or conflicting fingerprint.\",\"events\":[\"The import is rejected.\",\"The producer later reads the result using an import ID.\"],\"outcomes\":[\"A persisted rejection result is returned with stable reason data.\",\"No import ID/result exists because only accepted imports are retained.\"],\"observer\":\"The producer\"},\"unit\":\"00_product.md:Decisions\"}]}",
+ "set_aside": []
+}
