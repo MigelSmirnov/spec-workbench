@@ -1,0 +1,273 @@
+{
+ "open_points": [
+  {
+   "subject": "project-access refusal",
+   "kind": "unspecified rejection",
+   "text": "A4 says failures are \"indistinguishable to the caller regarding account/project existence beyond what their own access already proves\" but names no rejection or concealment rule for a missing viewer grant or staff assignment.",
+   "question": "What exact rejection must the guard produce when a viewer lacks an active grant or an operator lacks an active assignment: scoped not-found, generic authorization rejection, or another result?",
+   "options": [
+    "Scoped not-found, concealing whether the project exists",
+    "Generic authorization rejection such as forbidden",
+    "Different results depending on principal kind"
+   ],
+   "default_guess": "Use scoped not-found for both viewers and operators, matching A12's producer concealment.",
+   "witness": {
+    "initial": "An active operator session exists, the operator has expense.read but no assignment to an existing active project.",
+    "events": [
+     "The operator requests that project's expenses."
+    ],
+    "outcomes": [
+     "The guard returns the same not-found result used for a nonexistent project.",
+     "The guard returns an authorization/scope-denied result because the project exists but the assignment is absent."
+    ],
+    "observer": "The operator and HTTP-contract tests see different rejection classifications."
+   },
+   "unit": "A4"
+  },
+  {
+   "subject": "grant and assignment creation authorization sequence",
+   "kind": "missing order",
+   "text": "A4 gives a special sequence for revoking grants and assignments, while A5/A6 say creation operations consult Registry, but no text orders administrator authentication, principal lookup, target lookup, duplicate checks, capability checking, and Registry validation for creation.",
+   "question": "In what order must creation of a viewer grant, staff assignment, or producer grant perform its authorization, local-record, uniqueness, and Registry checks, and which failure wins?",
+   "options": [
+    "Authenticate and check access.manage before every local or Registry lookup",
+    "Check local target records before capability, then Registry",
+    "Validate Registry first, then authorize and check local records"
+   ],
+   "default_guess": "Authenticate the administrator and require access.manage first, then validate local entities and uniqueness, then call Registry.",
+   "witness": {
+    "initial": "The request has an invalid administrator session and names a nonexistent project and nonexistent target principal.",
+    "events": [
+     "The caller requests creation of a producer grant."
+    ],
+    "outcomes": [
+     "The request stops at concealed authentication failure without querying Registry or revealing target existence.",
+     "The implementation first reports a missing target or project, or calls Registry before refusing authentication."
+    ],
+    "observer": "The caller, Registry, and authorization tests can observe which check ran first."
+   },
+   "unit": "A4"
+  },
+  {
+   "subject": "expense-intake authorization sequence",
+   "kind": "contradictory order",
+   "text": "A4 requires every project-scoped operation to check session, active principal, project access, capability, then Registry, while A7 says expense creation checks recognition status, contract version, capability, active project, allocations, then replay and does not mention session, principal status, or staff assignment.",
+   "question": "Does expense creation follow A4 before validating recognition content, and is an active StaffProjectAssignment mandatory, or is A7's listed sequence complete?",
+   "options": [
+    "Apply the complete A4 guard first, then validate recognition content",
+    "Apply A7's content-first sequence but include assignment before Registry",
+    "Treat A7's sequence as complete, allowing any active staff actor with expense.manage"
+   ],
+   "default_guess": "Apply A4 completely before the A7 content checks and require an active assignment for an operator.",
+   "witness": {
+    "initial": "An active operator has expense.manage but no assignment to an existing active project; the recognition publication is otherwise valid.",
+    "events": [
+     "The operator submits expense creation for that project."
+    ],
+    "outcomes": [
+     "A4 refuses at project access and creates nothing.",
+     "A7's enumerated checks pass capability and active-project validation, so the expense can be created."
+    ],
+    "observer": "The operator sees refusal versus creation, and the project records differ."
+   },
+   "unit": "A7"
+  },
+  {
+   "subject": "snapshot missing-content classification",
+   "kind": "internal contradiction",
+   "text": "A7 says after authorization \"a missing envelope field or section list → incomplete_content\" but later says a body lacking a request-model-required field is rejected with HTTP 422 before bearer authentication and is not an import attempt. M18 declares the publication fields, including sections, without optionality.",
+   "question": "Which absent or missing snapshot values survive request decoding and become a recorded incomplete_content import, rather than an unrecorded HTTP 422 decoding failure?",
+   "options": [
+    "No absent required field survives; only admitted present-but-incomplete values such as empty approved_by produce incomplete_content",
+    "Missing sections and other envelope fields are admitted by decoding and recorded as incomplete_content",
+    "Define an explicit subset of optional-at-decoding fields that application validation requires"
+   ],
+   "default_guess": "Treat every absent M18 field as decoding failure and reserve incomplete_content for admitted values such as empty approved_by.",
+   "witness": {
+    "initial": "A valid active producer is authorized for an active project.",
+    "events": [
+     "The producer sends a snapshot body with the sections field omitted."
+    ],
+    "outcomes": [
+     "Request decoding returns HTTP 422 before authentication and writes no SnapshotImportRecord.",
+     "Authorization runs and a fresh import_id is recorded with outcome rejected and reason incomplete_content."
+    ],
+    "observer": "The producer sees whether an import_id exists and can later read the recorded result."
+   },
+   "unit": "A7"
+  },
+  {
+   "subject": "Registry validation domain outcomes",
+   "kind": "contradictory ownership",
+   "text": "A6's translation table maps exists=false to not_found and exists=true with is_active=false to archived as gateway-owned RegistryFailureKind values, but its final paragraph says only after gateway classification does the caller read the validation answer and interpret exists and is_active; A5 likewise says the project guard reads those fields.",
+   "question": "Does the Registry gateway raise RegistryBoundaryError for exists=false and inactive projects, or return ProjectValidationResult for the caller to interpret?",
+   "options": [
+    "Gateway returns every successfully decoded validation result; callers translate exists and lifecycle fields",
+    "Gateway translates exists=false and is_active=false into boundary errors",
+    "Gateway translates them for some operations but returns them for reads or other operations"
+   ],
+   "default_guess": "Return the decoded ProjectValidationResult and let the caller apply A5; reserve RegistryBoundaryError for transport, HTTP, schema, and identity failures.",
+   "witness": {
+    "initial": "Registry is reachable and returns a valid validation body with exists=true, status=archived, is_active=false for the requested UUID.",
+    "events": [
+     "A viewer performs a permitted read of the archived project."
+    ],
+    "outcomes": [
+     "The gateway returns the validation result and A5 permits the archived read.",
+     "The gateway raises RegistryFailureKind.archived before A5 can permit the read."
+    ],
+    "observer": "The viewer sees the archived data versus a failed request."
+   },
+   "unit": "A6"
+  },
+  {
+   "subject": "snapshot producer scope and capability precedence",
+   "kind": "underspecified refusal reachability",
+   "text": "A12 says scope is checked before the A4 capability check and scope_denied is recorded only when the producer's source type lacks import capability, while the closed current source-type policy gives estimate_producer that capability and no other source type is defined.",
+   "question": "Is scope_denied intentionally unreachable in the current closed source-type catalog, and if another source type is later present, does a missing project grant still win over its missing capability because project access precedes capability?",
+   "options": [
+    "scope_denied is currently unreachable; future source types still receive unknown_project first when both scope and capability fail",
+    "Capability is checked before producer scope so a source type without import capability always records scope_denied",
+    "Only source types with import capability may reach the import operation, making scope_denied permanently unreachable"
+   ],
+   "default_guess": "Keep A4 precedence: scope failure records unknown_project first, and scope_denied remains unreachable for the current estimate_producer catalog.",
+   "witness": {
+    "initial": "A service principal has granted_projects scope, no grant for the target, and a source type whose static set lacks estimate_snapshot.import.",
+    "events": [
+     "It submits a valid snapshot for an existing active project."
+    ],
+    "outcomes": [
+     "Project access fails first and the import records unknown_project.",
+     "Capability refusal takes precedence and the import records scope_denied."
+    ],
+    "observer": "The producer sees different import-result reasons."
+   },
+   "unit": "A12"
+  },
+  {
+   "subject": "source-supplied timestamp persistence",
+   "kind": "contradictory representation",
+   "text": "A28 says all persisted timestamps are UTC and stored offset-naive, but also says source-supplied timestamps are \"kept as supplied\"; State 1 describes supplied timestamps as timezone-aware UTC and ApprovedEstimateSnapshot persists them.",
+   "question": "Must source timestamps be converted to offset-naive UTC when persisted, or retain their supplied timezone-aware representation?",
+   "options": [
+    "Normalize the instant to UTC and strip timezone information for persistence",
+    "Persist the timezone-aware value exactly as supplied",
+    "Apply offset-naive storage only to portal-owned timestamps"
+   ],
+   "default_guess": "Normalize every persisted timestamp to offset-naive UTC while preserving the source-supplied instant.",
+   "witness": {
+    "initial": "An authorized producer supplies approved_at and published_at as timezone-aware UTC datetimes.",
+    "events": [
+     "The snapshot is accepted and persisted.",
+     "The stored snapshot is read back."
+    ],
+    "outcomes": [
+     "The timestamps are stored offset-naive in compliance with A28's first sentence.",
+     "The timestamps remain timezone-aware because they are kept as supplied."
+    ],
+    "observer": "Repository tests and API serialization observe different datetime representations."
+   },
+   "unit": "A28"
+  },
+  {
+   "subject": "runtime environment configuration table",
+   "kind": "missing specification",
+   "text": "A30 refers to \"the closed table of environment variables, their types, requiredness, normalization and per-environment defaults\" but does not include that table. The visible configuration omits settings required elsewhere, including trusted hosts, CORS origins, canonical public origin, persistence paths, environment selection, viewer-entry limits, and request/response bounds.",
+   "question": "What are the exact environment-variable names, types, normalization rules, requiredness, and production/development/test defaults for every RuntimeSettings field?",
+   "options": [
+    "Supply the referenced closed table in State 2",
+    "Treat only the visibly named variables as configurable and hard-code the rest",
+    "Allow later implementers to choose environment names and defaults"
+   ],
+   "default_guess": "Define uppercase environment variables for every setting, require security-sensitive values in production, and use the explicit development/test defaults where stated.",
+   "witness": {
+    "initial": "A production deployment supplies REGISTRY_BASE_URL and BINARY_MAX_READ_BYTES but no trusted-host or canonical-origin variable.",
+    "events": [
+     "The service starts."
+    ],
+    "outcomes": [
+     "Startup fails because those omitted values are required by the missing closed table.",
+     "Startup succeeds using implementer-chosen defaults or inferred host/origin values."
+    ],
+    "observer": "The deployer sees startup failure versus a running service with potentially different security boundaries."
+   },
+   "unit": "A30"
+  },
+  {
+   "subject": "Registry endpoint configuration failure",
+   "kind": "requiredness conflict",
+   "text": "A6 defines a runtime missing or unusable Registry endpoint setting as transport_error, while A30 says invalid or missing required variables stop startup but never states whether REGISTRY_BASE_URL is required in each environment.",
+   "question": "Can the service start without a usable REGISTRY_BASE_URL and translate the problem per A6, or must configuration validation prevent startup?",
+   "options": [
+    "REGISTRY_BASE_URL is always required and validated at startup, making A6's missing-setting branch unreachable",
+    "It is optional in some environments and becomes transport_error when a Registry operation runs",
+    "Missing is allowed but malformed is a startup error"
+   ],
+   "default_guess": "Require a usable REGISTRY_BASE_URL at startup in every runtime environment.",
+   "witness": {
+    "initial": "The service environment omits REGISTRY_BASE_URL.",
+    "events": [
+     "The process starts.",
+     "A project-scoped read is requested."
+    ],
+    "outcomes": [
+     "Startup is refused before serving requests.",
+     "Startup succeeds and the read fails with RegistryFailureKind.transport_error."
+    ],
+    "observer": "The deployer and API caller see different service availability."
+   },
+   "unit": "A30"
+  },
+  {
+   "subject": "HTTP body and response limits",
+   "kind": "missing values",
+   "text": "A25 requires request bodies and binary responses to be bounded by runtime settings and says the storage read bound is no larger than the declared response ceiling, but A30 names only BINARY_MAX_READ_BYTES and gives neither a request-body limit nor a distinct response-ceiling setting or value.",
+   "question": "What settings and exact limits bound JSON request bodies and response emission, and is BINARY_MAX_READ_BYTES itself the binary response ceiling or a separate lower storage limit?",
+   "options": [
+    "Use BINARY_MAX_READ_BYTES as both storage-read and binary-response ceiling and add a separate JSON request-body limit",
+    "Define distinct storage-read, request-body, and response-ceiling settings",
+    "Use one global body-size setting for requests and responses"
+   ],
+   "default_guess": "Use BINARY_MAX_READ_BYTES as the binary response ceiling and introduce a separately configured maximum JSON request size.",
+   "witness": {
+    "initial": "A request has a valid host and a 20 MiB JSON body; BINARY_MAX_READ_BYTES is 10 MiB, and no other limit is specified.",
+    "events": [
+     "The request reaches the transport guard."
+    ],
+    "outcomes": [
+     "The guard applies the binary setting to all bodies and rejects the request.",
+     "The guard accepts it because no JSON request limit was defined, or uses an implementer-selected limit."
+    ],
+    "observer": "The API caller and resource-usage monitoring see acceptance versus early rejection."
+   },
+   "unit": "A25"
+  },
+  {
+   "subject": "dependency pin completeness",
+   "kind": "formal contradiction",
+   "text": "A32 says only four direct packages are pinned and their transitive dependencies may resolve to different versions between deploys, while its formal invariant says every externally maintained library the running portal imports is pinned to one exact version.",
+   "question": "Must transitive runtime libraries be pinned exactly, or does the invariant apply only to the four direct dependencies?",
+   "options": [
+    "Pin the complete resolved dependency set exactly",
+    "Narrow the invariant to direct dependencies only and allow transitive versions to vary",
+    "Use a lock or constraints artifact generated per deploy while retaining four direct requirements"
+   ],
+   "default_guess": "Pin or lock the complete resolved dependency set used by the deployment.",
+   "witness": {
+    "initial": "fastapi remains pinned but a new compatible Starlette release is available and selected by pip.",
+    "events": [
+     "Two images are built from the unchanged four-line requirements file at different times."
+    ],
+    "outcomes": [
+     "The images contain different Starlette versions, as A32's normative rule permits.",
+     "The build is rejected because Starlette is an external imported runtime library without an exact pin, as the formal invariant requires."
+    ],
+    "observer": "Deployers and runtime behavior can differ between builds from identical source."
+   },
+   "unit": "A32"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"project-access refusal\",\"kind\":\"unspecified rejection\",\"text\":\"A4 says failures are \\\"indistinguishable to the caller regarding account/project existence beyond what their own access already proves\\\" but names no rejection or concealment rule for a missing viewer grant or staff assignment.\",\"question\":\"What exact rejection must the guard produce when a viewer lacks an active grant or an operator lacks an active assignment: scoped not-found, generic authorization rejection, or another result?\",\"options\":[\"Scoped not-found, concealing whether the project exists\",\"Generic authorization rejection such as forbidden\",\"Different results depending on principal kind\"],\"default_guess\":\"Use scoped not-found for both viewers and operators, matching A12's producer concealment.\",\"witness\":{\"initial\":\"An active operator session exists, the operator has expense.read but no assignment to an existing active project.\",\"events\":[\"The operator requests that project's expenses.\"],\"outcomes\":[\"The guard returns the same not-found result used for a nonexistent project.\",\"The guard returns an authorization/scope-denied result because the project exists but the assignment is absent.\"],\"observer\":\"The operator and HTTP-contract tests see different rejection classifications.\"},\"unit\":\"A4\"},{\"subject\":\"grant and assignment creation authorization sequence\",\"kind\":\"missing order\",\"text\":\"A4 gives a special sequence for revoking grants and assignments, while A5/A6 say creation operations consult Registry, but no text orders administrator authentication, principal lookup, target lookup, duplicate checks, capability checking, and Registry validation for creation.\",\"question\":\"In what order must creation of a viewer grant, staff assignment, or producer grant perform its authorization, local-record, uniqueness, and Registry checks, and which failure wins?\",\"options\":[\"Authenticate and check access.manage before every local or Registry lookup\",\"Check local target records before capability, then Registry\",\"Validate Registry first, then authorize and check local records\"],\"default_guess\":\"Authenticate the administrator and require access.manage first, then validate local entities and uniqueness, then call Registry.\",\"witness\":{\"initial\":\"The request has an invalid administrator session and names a nonexistent project and nonexistent target principal.\",\"events\":[\"The caller requests creation of a producer grant.\"],\"outcomes\":[\"The request stops at concealed authentication failure without querying Registry or revealing target existence.\",\"The implementation first reports a missing target or project, or calls Registry before refusing authentication.\"],\"observer\":\"The caller, Registry, and authorization tests can observe which check ran first.\"},\"unit\":\"A4\"},{\"subject\":\"expense-intake authorization sequence\",\"kind\":\"contradictory order\",\"text\":\"A4 requires every project-scoped operation to check session, active principal, project access, capability, then Registry, while A7 says expense creation checks recognition status, contract version, capability, active project, allocations, then replay and does not mention session, principal status, or staff assignment.\",\"question\":\"Does expense creation follow A4 before validating recognition content, and is an active StaffProjectAssignment mandatory, or is A7's listed sequence complete?\",\"options\":[\"Apply the complete A4 guard first, then validate recognition content\",\"Apply A7's content-first sequence but include assignment before Registry\",\"Treat A7's sequence as complete, allowing any active staff actor with expense.manage\"],\"default_guess\":\"Apply A4 completely before the A7 content checks and require an active assignment for an operator.\",\"witness\":{\"initial\":\"An active operator has expense.manage but no assignment to an existing active project; the recognition publication is otherwise valid.\",\"events\":[\"The operator submits expense creation for that project.\"],\"outcomes\":[\"A4 refuses at project access and creates nothing.\",\"A7's enumerated checks pass capability and active-project validation, so the expense can be created.\"],\"observer\":\"The operator sees refusal versus creation, and the project records differ.\"},\"unit\":\"A7\"},{\"subject\":\"snapshot missing-content classification\",\"kind\":\"internal contradiction\",\"text\":\"A7 says after authorization \\\"a missing envelope field or section list → incomplete_content\\\" but later says a body lacking a request-model-required field is rejected with HTTP 422 before bearer authentication and is not an import attempt. M18 declares the publication fields, including sections, without optionality.\",\"question\":\"Which absent or missing snapshot values survive request decoding and become a recorded incomplete_content import, rather than an unrecorded HTTP 422 decoding failure?\",\"options\":[\"No absent required field survives; only admitted present-but-incomplete values such as empty approved_by produce incomplete_content\",\"Missing sections and other envelope fields are admitted by decoding and recorded as incomplete_content\",\"Define an explicit subset of optional-at-decoding fields that application validation requires\"],\"default_guess\":\"Treat every absent M18 field as decoding failure and reserve incomplete_content for admitted values such as empty approved_by.\",\"witness\":{\"initial\":\"A valid active producer is authorized for an active project.\",\"events\":[\"The producer sends a snapshot body with the sections field omitted.\"],\"outcomes\":[\"Request decoding returns HTTP 422 before authentication and writes no SnapshotImportRecord.\",\"Authorization runs and a fresh import_id is recorded with outcome rejected and reason incomplete_content.\"],\"observer\":\"The producer sees whether an import_id exists and can later read the recorded result.\"},\"unit\":\"A7\"},{\"subject\":\"Registry validation domain outcomes\",\"kind\":\"contradictory ownership\",\"text\":\"A6's translation table maps exists=false to not_found and exists=true with is_active=false to archived as gateway-owned RegistryFailureKind values, but its final paragraph says only after gateway classification does the caller read the validation answer and interpret exists and is_active; A5 likewise says the project guard reads those fields.\",\"question\":\"Does the Registry gateway raise RegistryBoundaryError for exists=false and inactive projects, or return ProjectValidationResult for the caller to interpret?\",\"options\":[\"Gateway returns every successfully decoded validation result; callers translate exists and lifecycle fields\",\"Gateway translates exists=false and is_active=false into boundary errors\",\"Gateway translates them for some operations but returns them for reads or other operations\"],\"default_guess\":\"Return the decoded ProjectValidationResult and let the caller apply A5; reserve RegistryBoundaryError for transport, HTTP, schema, and identity failures.\",\"witness\":{\"initial\":\"Registry is reachable and returns a valid validation body with exists=true, status=archived, is_active=false for the requested UUID.\",\"events\":[\"A viewer performs a permitted read of the archived project.\"],\"outcomes\":[\"The gateway returns the validation result and A5 permits the archived read.\",\"The gateway raises RegistryFailureKind.archived before A5 can permit the read.\"],\"observer\":\"The viewer sees the archived data versus a failed request.\"},\"unit\":\"A6\"},{\"subject\":\"snapshot producer scope and capability precedence\",\"kind\":\"underspecified refusal reachability\",\"text\":\"A12 says scope is checked before the A4 capability check and scope_denied is recorded only when the producer's source type lacks import capability, while the closed current source-type policy gives estimate_producer that capability and no other source type is defined.\",\"question\":\"Is scope_denied intentionally unreachable in the current closed source-type catalog, and if another source type is later present, does a missing project grant still win over its missing capability because project access precedes capability?\",\"options\":[\"scope_denied is currently unreachable; future source types still receive unknown_project first when both scope and capability fail\",\"Capability is checked before producer scope so a source type without import capability always records scope_denied\",\"Only source types with import capability may reach the import operation, making scope_denied permanently unreachable\"],\"default_guess\":\"Keep A4 precedence: scope failure records unknown_project first, and scope_denied remains unreachable for the current estimate_producer catalog.\",\"witness\":{\"initial\":\"A service principal has granted_projects scope, no grant for the target, and a source type whose static set lacks estimate_snapshot.import.\",\"events\":[\"It submits a valid snapshot for an existing active project.\"],\"outcomes\":[\"Project access fails first and the import records unknown_project.\",\"Capability refusal takes precedence and the import records scope_denied.\"],\"observer\":\"The producer sees different import-result reasons.\"},\"unit\":\"A12\"},{\"subject\":\"source-supplied timestamp persistence\",\"kind\":\"contradictory representation\",\"text\":\"A28 says all persisted timestamps are UTC and stored offset-naive, but also says source-supplied timestamps are \\\"kept as supplied\\\"; State 1 describes supplied timestamps as timezone-aware UTC and ApprovedEstimateSnapshot persists them.\",\"question\":\"Must source timestamps be converted to offset-naive UTC when persisted, or retain their supplied timezone-aware representation?\",\"options\":[\"Normalize the instant to UTC and strip timezone information for persistence\",\"Persist the timezone-aware value exactly as supplied\",\"Apply offset-naive storage only to portal-owned timestamps\"],\"default_guess\":\"Normalize every persisted timestamp to offset-naive UTC while preserving the source-supplied instant.\",\"witness\":{\"initial\":\"An authorized producer supplies approved_at and published_at as timezone-aware UTC datetimes.\",\"events\":[\"The snapshot is accepted and persisted.\",\"The stored snapshot is read back.\"],\"outcomes\":[\"The timestamps are stored offset-naive in compliance with A28's first sentence.\",\"The timestamps remain timezone-aware because they are kept as supplied.\"],\"observer\":\"Repository tests and API serialization observe different datetime representations.\"},\"unit\":\"A28\"},{\"subject\":\"runtime environment configuration table\",\"kind\":\"missing specification\",\"text\":\"A30 refers to \\\"the closed table of environment variables, their types, requiredness, normalization and per-environment defaults\\\" but does not include that table. The visible configuration omits settings required elsewhere, including trusted hosts, CORS origins, canonical public origin, persistence paths, environment selection, viewer-entry limits, and request/response bounds.\",\"question\":\"What are the exact environment-variable names, types, normalization rules, requiredness, and production/development/test defaults for every RuntimeSettings field?\",\"options\":[\"Supply the referenced closed table in State 2\",\"Treat only the visibly named variables as configurable and hard-code the rest\",\"Allow later implementers to choose environment names and defaults\"],\"default_guess\":\"Define uppercase environment variables for every setting, require security-sensitive values in production, and use the explicit development/test defaults where stated.\",\"witness\":{\"initial\":\"A production deployment supplies REGISTRY_BASE_URL and BINARY_MAX_READ_BYTES but no trusted-host or canonical-origin variable.\",\"events\":[\"The service starts.\"],\"outcomes\":[\"Startup fails because those omitted values are required by the missing closed table.\",\"Startup succeeds using implementer-chosen defaults or inferred host/origin values.\"],\"observer\":\"The deployer sees startup failure versus a running service with potentially different security boundaries.\"},\"unit\":\"A30\"},{\"subject\":\"Registry endpoint configuration failure\",\"kind\":\"requiredness conflict\",\"text\":\"A6 defines a runtime missing or unusable Registry endpoint setting as transport_error, while A30 says invalid or missing required variables stop startup but never states whether REGISTRY_BASE_URL is required in each environment.\",\"question\":\"Can the service start without a usable REGISTRY_BASE_URL and translate the problem per A6, or must configuration validation prevent startup?\",\"options\":[\"REGISTRY_BASE_URL is always required and validated at startup, making A6's missing-setting branch unreachable\",\"It is optional in some environments and becomes transport_error when a Registry operation runs\",\"Missing is allowed but malformed is a startup error\"],\"default_guess\":\"Require a usable REGISTRY_BASE_URL at startup in every runtime environment.\",\"witness\":{\"initial\":\"The service environment omits REGISTRY_BASE_URL.\",\"events\":[\"The process starts.\",\"A project-scoped read is requested.\"],\"outcomes\":[\"Startup is refused before serving requests.\",\"Startup succeeds and the read fails with RegistryFailureKind.transport_error.\"],\"observer\":\"The deployer and API caller see different service availability.\"},\"unit\":\"A30\"},{\"subject\":\"HTTP body and response limits\",\"kind\":\"missing values\",\"text\":\"A25 requires request bodies and binary responses to be bounded by runtime settings and says the storage read bound is no larger than the declared response ceiling, but A30 names only BINARY_MAX_READ_BYTES and gives neither a request-body limit nor a distinct response-ceiling setting or value.\",\"question\":\"What settings and exact limits bound JSON request bodies and response emission, and is BINARY_MAX_READ_BYTES itself the binary response ceiling or a separate lower storage limit?\",\"options\":[\"Use BINARY_MAX_READ_BYTES as both storage-read and binary-response ceiling and add a separate JSON request-body limit\",\"Define distinct storage-read, request-body, and response-ceiling settings\",\"Use one global body-size setting for requests and responses\"],\"default_guess\":\"Use BINARY_MAX_READ_BYTES as the binary response ceiling and introduce a separately configured maximum JSON request size.\",\"witness\":{\"initial\":\"A request has a valid host and a 20 MiB JSON body; BINARY_MAX_READ_BYTES is 10 MiB, and no other limit is specified.\",\"events\":[\"The request reaches the transport guard.\"],\"outcomes\":[\"The guard applies the binary setting to all bodies and rejects the request.\",\"The guard accepts it because no JSON request limit was defined, or uses an implementer-selected limit.\"],\"observer\":\"The API caller and resource-usage monitoring see acceptance versus early rejection.\"},\"unit\":\"A25\"},{\"subject\":\"dependency pin completeness\",\"kind\":\"formal contradiction\",\"text\":\"A32 says only four direct packages are pinned and their transitive dependencies may resolve to different versions between deploys, while its formal invariant says every externally maintained library the running portal imports is pinned to one exact version.\",\"question\":\"Must transitive runtime libraries be pinned exactly, or does the invariant apply only to the four direct dependencies?\",\"options\":[\"Pin the complete resolved dependency set exactly\",\"Narrow the invariant to direct dependencies only and allow transitive versions to vary\",\"Use a lock or constraints artifact generated per deploy while retaining four direct requirements\"],\"default_guess\":\"Pin or lock the complete resolved dependency set used by the deployment.\",\"witness\":{\"initial\":\"fastapi remains pinned but a new compatible Starlette release is available and selected by pip.\",\"events\":[\"Two images are built from the unchanged four-line requirements file at different times.\"],\"outcomes\":[\"The images contain different Starlette versions, as A32's normative rule permits.\",\"The build is rejected because Starlette is an external imported runtime library without an exact pin, as the formal invariant requires.\"],\"observer\":\"Deployers and runtime behavior can differ between builds from identical source.\"},\"unit\":\"A32\"}]}",
+ "set_aside": []
+}

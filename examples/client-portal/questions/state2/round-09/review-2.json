@@ -1,0 +1,149 @@
+{
+ "open_points": [
+  {
+   "subject": "Registry endpoint validation",
+   "kind": "vague refusal condition",
+   "text": "“the portal's own Registry endpoint setting is missing or unusable → `transport_error`”",
+   "question": "Exactly which `REGISTRY_BASE_URL` values are unusable, including relative URLs, unsupported schemes, credentials, queries, fragments and malformed ports, and how is a valid base URL joined to the fixed Registry paths?",
+   "options": [
+    "Require an absolute HTTP(S) origin and reject every disallowed component as `transport_error`.",
+    "Accept any URL the HTTP client can resolve or normalize, including relative or component-bearing values."
+   ],
+   "default_guess": "Require an absolute HTTP(S) URL with a valid host, reject credentials, query and fragment, and use defined path joining.",
+   "witness": {
+    "initial": "The service is running with `REGISTRY_BASE_URL=registry.internal/api`, and Registry would return an active validation result if contacted over HTTPS.",
+    "events": [
+     "An administrator creates a project grant.",
+     "The operation asks the Registry gateway to validate the project."
+    ],
+    "outcomes": [
+     "The gateway treats the scheme-less value as unusable and returns `transport_error`; the grant is refused.",
+     "The gateway normalizes or resolves the value, receives the active result and creates the grant."
+    ],
+    "observer": "The administrator sees refusal versus successful grant creation."
+   },
+   "unit": "A6"
+  },
+  {
+   "subject": "Registry HTTP redirects",
+   "kind": "missing precedence rule",
+   "text": "“HTTP 404 answer → `not_found`; any other non-success HTTP status → `http_error`” does not say whether redirects are followed before classifying the answer.",
+   "question": "Must a 3xx Registry response be classified immediately as `http_error`, or may the gateway follow redirects and classify the final response?",
+   "options": [
+    "Do not follow redirects; every 3xx is `http_error`.",
+    "Follow redirects under the HTTP client's policy and classify the final response."
+   ],
+   "default_guess": "Do not follow redirects and classify 3xx as `http_error`.",
+   "witness": {
+    "initial": "The configured validation endpoint responds 302 and its target responds 200 with a valid active-project result.",
+    "events": [
+     "An operator performs a project mutation.",
+     "The guard calls Registry validation."
+    ],
+    "outcomes": [
+     "A non-redirecting gateway reports `http_error` and refuses the mutation.",
+     "A redirect-following gateway accepts the final validation result and performs the mutation."
+    ],
+    "observer": "The operator sees refusal versus a committed mutation."
+   },
+   "unit": "A6"
+  },
+  {
+   "subject": "Registry response-shape validation",
+   "kind": "undefined schema strictness",
+   "text": "“the body is not JSON of the expected shape → `schema_mismatch`”",
+   "question": "What exact decoding rules define the expected shape: are unknown fields allowed, are scalar coercions allowed, and must booleans and UUIDs already have their exact JSON representations?",
+   "options": [
+    "Use strict decoding and reject extra fields or coercible values as `schema_mismatch`.",
+    "Ignore extra fields and coerce compatible scalar values into the declared model types."
+   ],
+   "default_guess": "Require exact field types, accept correctly formatted UUID strings, and ignore harmless unknown fields only if the external contract explicitly permits them.",
+   "witness": {
+    "initial": "Registry returns HTTP 200 with the requested UUID, `exists: 1`, `is_active: 1`, `status: \"active\"`, and all other required fields.",
+    "events": [
+     "A staff member attempts a linked project write.",
+     "The guard decodes the validation response."
+    ],
+    "outcomes": [
+     "A strict decoder reports `schema_mismatch` and refuses the write.",
+     "A coercing decoder converts the integers to booleans and permits the write."
+    ],
+    "observer": "The staff caller sees refusal versus success."
+   },
+   "unit": "A6"
+  },
+  {
+   "subject": "Snapshot fingerprint canonical JSON",
+   "kind": "incomplete canonicalization",
+   "text": "“the SHA-256 hex digest of the compact, key-sorted JSON”",
+   "question": "What exact JSON object shape and byte encoding are hashed, and how are UUIDs, Decimals, datetimes, Unicode, escaping, fractional seconds, timezone offsets and the hexadecimal digest normalized?",
+   "options": [
+    "Define one explicit canonical scalar encoding, including UTC datetime normalization, fixed Decimal formatting, UTF-8 JSON escaping rules and lowercase hexadecimal.",
+    "Serialize the accepted runtime values using the implementation's ordinary JSON encoder, preserving representational distinctions such as datetime offsets."
+   ],
+   "default_guess": "Use an explicitly versioned UTF-8 canonical form with fixed field names, UUID strings, fixed-scale decimal strings, UTC-normalized ISO timestamps and lowercase SHA-256 hexadecimal.",
+   "witness": {
+    "initial": "A snapshot is accepted with `approved_at` and `published_at` expressed as `12:00+01:00`. All other content is fixed.",
+    "events": [
+     "The producer republishes the same identity and facts with those instants expressed as `11:00Z`."
+    ],
+    "outcomes": [
+     "An instant-normalizing canonicalizer produces the existing fingerprint and records `idempotent_replay`.",
+     "An offset-preserving canonicalizer produces a different fingerprint and records `integrity_conflict`."
+    ],
+    "observer": "The producer sees replay versus integrity conflict, and the import record differs."
+   },
+   "unit": "A8"
+  },
+  {
+   "subject": "Snapshot section ordering in the fingerprint",
+   "kind": "internal contradiction",
+   "text": "“sorted by `(source_section_id, source_section_code, display_name, sort_order)`; their order in the publication therefore does not change the fingerprint”",
+   "question": "How are two section occurrences ordered when all four declared sort keys are equal but another field differs, so that publication order cannot affect the fingerprint?",
+   "options": [
+    "Use only the declared four-field key, leaving tied occurrences in publication order and allowing their permutation to change the fingerprint.",
+    "Add a deterministic tie-break over the remaining section fields or otherwise canonicalize the tied multiset so permutations hash identically."
+   ],
+   "default_guess": "Canonicalize tied occurrences using all remaining section fields so the stated order-insensitivity holds.",
+   "witness": {
+    "initial": "A snapshot contains two occurrences with identical `source_section_id`, `source_section_code`, `display_name` and `sort_order`; one has `material_planned=1.00` and the other `material_planned=2.00`. It is accepted because duplicates are allowed.",
+    "events": [
+     "The producer republishes the same snapshot identity with only those two occurrences swapped."
+    ],
+    "outcomes": [
+     "A stable sort using exactly the stated key preserves each input order, produces a different fingerprint and records `integrity_conflict`.",
+     "A canonical tie-break produces the same fingerprint and records `idempotent_replay`, as the order-insensitivity sentence requires."
+    ],
+    "observer": "The producer sees conflict versus replay."
+   },
+   "unit": "A8"
+  },
+  {
+   "subject": "ProjectOverview project availability",
+   "kind": "schema contradiction",
+   "text": "The declared DTO requires “`project: ProjectContext`” and lists no `project_availability`, while the carried change says “the project context is absent when its Registry read fails … and a `project_availability` says so”.",
+   "question": "What is the actual `ProjectOverview` shape when validation succeeds but the later Registry context read fails: is `project` optional with a new availability field, or must the operation fail because the declared DTO cannot represent that state?",
+   "options": [
+    "Add `project_availability: ViewAvailability` and make `project` present exactly when it is `available`.",
+    "Keep the declared required `project` field and fail the whole overview when context cannot be read."
+   ],
+   "default_guess": "Add the same availability/value pair used by the other components and return a partial overview.",
+   "witness": {
+    "initial": "A caller is authorized for a project, and Registry validation succeeds.",
+    "events": [
+     "The caller requests the project overview.",
+     "The subsequent Registry context request times out while the portal-owned component reads succeed."
+    ],
+    "outcomes": [
+     "Following the carried change, the service returns a partial overview with absent project context and `project_availability=temporarily_unavailable`.",
+     "Following the declared DTO, construction cannot omit `project`, so the overview request fails."
+    ],
+    "observer": "The caller sees a usable partial overview versus an operation failure."
+   },
+   "unit": "context"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"Registry endpoint validation\",\"kind\":\"vague refusal condition\",\"text\":\"“the portal's own Registry endpoint setting is missing or unusable → `transport_error`”\",\"question\":\"Exactly which `REGISTRY_BASE_URL` values are unusable, including relative URLs, unsupported schemes, credentials, queries, fragments and malformed ports, and how is a valid base URL joined to the fixed Registry paths?\",\"options\":[\"Require an absolute HTTP(S) origin and reject every disallowed component as `transport_error`.\",\"Accept any URL the HTTP client can resolve or normalize, including relative or component-bearing values.\"],\"default_guess\":\"Require an absolute HTTP(S) URL with a valid host, reject credentials, query and fragment, and use defined path joining.\",\"witness\":{\"initial\":\"The service is running with `REGISTRY_BASE_URL=registry.internal/api`, and Registry would return an active validation result if contacted over HTTPS.\",\"events\":[\"An administrator creates a project grant.\",\"The operation asks the Registry gateway to validate the project.\"],\"outcomes\":[\"The gateway treats the scheme-less value as unusable and returns `transport_error`; the grant is refused.\",\"The gateway normalizes or resolves the value, receives the active result and creates the grant.\"],\"observer\":\"The administrator sees refusal versus successful grant creation.\"},\"unit\":\"A6\"},{\"subject\":\"Registry HTTP redirects\",\"kind\":\"missing precedence rule\",\"text\":\"“HTTP 404 answer → `not_found`; any other non-success HTTP status → `http_error`” does not say whether redirects are followed before classifying the answer.\",\"question\":\"Must a 3xx Registry response be classified immediately as `http_error`, or may the gateway follow redirects and classify the final response?\",\"options\":[\"Do not follow redirects; every 3xx is `http_error`.\",\"Follow redirects under the HTTP client's policy and classify the final response.\"],\"default_guess\":\"Do not follow redirects and classify 3xx as `http_error`.\",\"witness\":{\"initial\":\"The configured validation endpoint responds 302 and its target responds 200 with a valid active-project result.\",\"events\":[\"An operator performs a project mutation.\",\"The guard calls Registry validation.\"],\"outcomes\":[\"A non-redirecting gateway reports `http_error` and refuses the mutation.\",\"A redirect-following gateway accepts the final validation result and performs the mutation.\"],\"observer\":\"The operator sees refusal versus a committed mutation.\"},\"unit\":\"A6\"},{\"subject\":\"Registry response-shape validation\",\"kind\":\"undefined schema strictness\",\"text\":\"“the body is not JSON of the expected shape → `schema_mismatch`”\",\"question\":\"What exact decoding rules define the expected shape: are unknown fields allowed, are scalar coercions allowed, and must booleans and UUIDs already have their exact JSON representations?\",\"options\":[\"Use strict decoding and reject extra fields or coercible values as `schema_mismatch`.\",\"Ignore extra fields and coerce compatible scalar values into the declared model types.\"],\"default_guess\":\"Require exact field types, accept correctly formatted UUID strings, and ignore harmless unknown fields only if the external contract explicitly permits them.\",\"witness\":{\"initial\":\"Registry returns HTTP 200 with the requested UUID, `exists: 1`, `is_active: 1`, `status: \\\"active\\\"`, and all other required fields.\",\"events\":[\"A staff member attempts a linked project write.\",\"The guard decodes the validation response.\"],\"outcomes\":[\"A strict decoder reports `schema_mismatch` and refuses the write.\",\"A coercing decoder converts the integers to booleans and permits the write.\"],\"observer\":\"The staff caller sees refusal versus success.\"},\"unit\":\"A6\"},{\"subject\":\"Snapshot fingerprint canonical JSON\",\"kind\":\"incomplete canonicalization\",\"text\":\"“the SHA-256 hex digest of the compact, key-sorted JSON”\",\"question\":\"What exact JSON object shape and byte encoding are hashed, and how are UUIDs, Decimals, datetimes, Unicode, escaping, fractional seconds, timezone offsets and the hexadecimal digest normalized?\",\"options\":[\"Define one explicit canonical scalar encoding, including UTC datetime normalization, fixed Decimal formatting, UTF-8 JSON escaping rules and lowercase hexadecimal.\",\"Serialize the accepted runtime values using the implementation's ordinary JSON encoder, preserving representational distinctions such as datetime offsets.\"],\"default_guess\":\"Use an explicitly versioned UTF-8 canonical form with fixed field names, UUID strings, fixed-scale decimal strings, UTC-normalized ISO timestamps and lowercase SHA-256 hexadecimal.\",\"witness\":{\"initial\":\"A snapshot is accepted with `approved_at` and `published_at` expressed as `12:00+01:00`. All other content is fixed.\",\"events\":[\"The producer republishes the same identity and facts with those instants expressed as `11:00Z`.\"],\"outcomes\":[\"An instant-normalizing canonicalizer produces the existing fingerprint and records `idempotent_replay`.\",\"An offset-preserving canonicalizer produces a different fingerprint and records `integrity_conflict`.\"],\"observer\":\"The producer sees replay versus integrity conflict, and the import record differs.\"},\"unit\":\"A8\"},{\"subject\":\"Snapshot section ordering in the fingerprint\",\"kind\":\"internal contradiction\",\"text\":\"“sorted by `(source_section_id, source_section_code, display_name, sort_order)`; their order in the publication therefore does not change the fingerprint”\",\"question\":\"How are two section occurrences ordered when all four declared sort keys are equal but another field differs, so that publication order cannot affect the fingerprint?\",\"options\":[\"Use only the declared four-field key, leaving tied occurrences in publication order and allowing their permutation to change the fingerprint.\",\"Add a deterministic tie-break over the remaining section fields or otherwise canonicalize the tied multiset so permutations hash identically.\"],\"default_guess\":\"Canonicalize tied occurrences using all remaining section fields so the stated order-insensitivity holds.\",\"witness\":{\"initial\":\"A snapshot contains two occurrences with identical `source_section_id`, `source_section_code`, `display_name` and `sort_order`; one has `material_planned=1.00` and the other `material_planned=2.00`. It is accepted because duplicates are allowed.\",\"events\":[\"The producer republishes the same snapshot identity with only those two occurrences swapped.\"],\"outcomes\":[\"A stable sort using exactly the stated key preserves each input order, produces a different fingerprint and records `integrity_conflict`.\",\"A canonical tie-break produces the same fingerprint and records `idempotent_replay`, as the order-insensitivity sentence requires.\"],\"observer\":\"The producer sees conflict versus replay.\"},\"unit\":\"A8\"},{\"subject\":\"ProjectOverview project availability\",\"kind\":\"schema contradiction\",\"text\":\"The declared DTO requires “`project: ProjectContext`” and lists no `project_availability`, while the carried change says “the project context is absent when its Registry read fails … and a `project_availability` says so”.\",\"question\":\"What is the actual `ProjectOverview` shape when validation succeeds but the later Registry context read fails: is `project` optional with a new availability field, or must the operation fail because the declared DTO cannot represent that state?\",\"options\":[\"Add `project_availability: ViewAvailability` and make `project` present exactly when it is `available`.\",\"Keep the declared required `project` field and fail the whole overview when context cannot be read.\"],\"default_guess\":\"Add the same availability/value pair used by the other components and return a partial overview.\",\"witness\":{\"initial\":\"A caller is authorized for a project, and Registry validation succeeds.\",\"events\":[\"The caller requests the project overview.\",\"The subsequent Registry context request times out while the portal-owned component reads succeed.\"],\"outcomes\":[\"Following the carried change, the service returns a partial overview with absent project context and `project_availability=temporarily_unavailable`.\",\"Following the declared DTO, construction cannot omit `project`, so the overview request fails.\"],\"observer\":\"The caller sees a usable partial overview versus an operation failure.\"},\"unit\":\"context\"}]}",
+ "set_aside": []
+}

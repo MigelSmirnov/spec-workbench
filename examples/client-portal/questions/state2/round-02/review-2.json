@@ -1,0 +1,421 @@
+{
+ "open_points": [
+  {
+   "subject": "Registry failure precedence for malformed project identifiers",
+   "kind": "contradictory precedence",
+   "text": "A6's table maps “malformed UUID input” to `invalid_uuid`, but its ordered classification says the first condition is “the portal's own Registry endpoint setting is missing or unusable → transport_error” and never places malformed UUID input in that sequence.",
+   "question": "When the requested project identifier is malformed and the Registry endpoint is also unusable, which failure wins?",
+   "options": [
+    "Reject as `invalid_uuid` before consulting configuration.",
+    "Reject as `transport_error` because endpoint usability is the first classified condition."
+   ],
+   "default_guess": "Validate the UUID first and return `invalid_uuid`.",
+   "witness": {
+    "initial": "The Registry endpoint setting is unusable.",
+    "events": [
+     "A staff caller submits a project-scoped operation with a malformed project identifier."
+    ],
+    "outcomes": [
+     "The gateway returns `invalid_uuid` without examining the endpoint.",
+     "The gateway returns `transport_error` because endpoint usability is checked first."
+    ],
+    "observer": "The caller or an error-mapping handler sees a different typed failure."
+   },
+   "unit": "A6"
+  },
+  {
+   "subject": "Unknown Registry status entering a typed portal context",
+   "kind": "unspecified refusal",
+   "text": "A5 says a status outside `active | archived` “is refused there as an invalid answer,” while its carried change explicitly removes the former rule that any other value is a `schema_mismatch` boundary failure.",
+   "question": "What exact typed failure is produced when `exists=true`, `is_active=true`, and the Registry status string is neither `active` nor `archived`?",
+   "options": [
+    "Translate it to `schema_mismatch`.",
+    "Use another domain refusal distinct from every `RegistryFailureKind`.",
+    "Treat the context as unavailable without exposing a typed failure."
+   ],
+   "default_guess": "Return `schema_mismatch`.",
+   "witness": {
+    "initial": "Registry contains project P and its validation response says `exists=true`, `is_active=true`, `status=\"paused\"`.",
+    "events": [
+     "An authorized viewer reads project P.",
+     "The gateway decodes the response and the authorization guard tries to build `AuthorizedProjectContext`."
+    ],
+    "outcomes": [
+     "The operation fails with `schema_mismatch`.",
+     "The operation fails with a separate invalid-status/domain error or availability result."
+    ],
+    "observer": "The caller and ProjectOverview availability mapping see different failures."
+   },
+   "unit": "A5"
+  },
+  {
+   "subject": "Snapshot import when Registry validation is unavailable",
+   "kind": "missing rejection classification",
+   "text": "A7 gives import reasons for archived, unknown and scope-denied projects, while A6 also permits `timeout`, `transport_error`, `http_error`, `schema_mismatch`, and `identity_mismatch`; neither rule says whether those failures create the fresh rejected import result required for classified attempts by R0-25, or escape without a record.",
+   "question": "What happens to an authenticated snapshot import when Registry validation fails for an operational or malformed-response reason?",
+   "options": [
+    "Propagate the Registry boundary error and create no SnapshotImportRecord or audit record.",
+    "Create a rejected SnapshotImportRecord, requiring a specified ImportRejectReason.",
+    "Translate selected failures to `unknown_project` and record that rejection."
+   ],
+   "default_guess": "Propagate the Registry boundary error without recording an import attempt.",
+   "witness": {
+    "initial": "An active producer submits a valid version-1 EUR snapshot for project P; Registry times out.",
+    "events": [
+     "The producer authenticates successfully.",
+     "The import flow reaches Registry validation."
+    ],
+    "outcomes": [
+     "The request fails transiently and no import or audit record is written.",
+     "A fresh rejected import record and `snapshot.import` audit record are committed with a guessed reason."
+    ],
+    "observer": "The producer can observe the response and later whether an `import_id` exists."
+   },
+   "unit": "A7"
+  },
+  {
+   "subject": "OCR expense-intake validation precedence",
+   "kind": "missing check order",
+   "text": "A7 closes `ocr_supported_contract_versions = {1}` but specifies first-failure ordering only for snapshot publication; M25–M27 additionally require confirmed status, complete non-empty items, EUR currency, valid amounts, project authorization and allocation equality without an ordering among those checks.",
+   "question": "In what order are authorization, OCR contract version, confirmation/completeness, currency, amount, section and allocation checks applied, and which typed refusal wins when several fail?",
+   "options": [
+    "Authorize first, then contract version, confirmation/completeness, currency and allocation checks.",
+    "Validate the external OCR envelope before project authorization.",
+    "Define another explicit first-failure sequence."
+   ],
+   "default_guess": "Authorize first, then validate contract version, confirmation/completeness, currency, amounts and allocations.",
+   "witness": {
+    "initial": "An operator lacks an active assignment to project P.",
+    "events": [
+     "The operator submits an unconfirmed OCR publication with unsupported contract version 2 for P."
+    ],
+    "outcomes": [
+     "The request is refused for project access before its body is classified.",
+     "The request is refused as `unsupported_contract_version` or unconfirmed content before access is checked."
+    ],
+    "observer": "The operator sees a different typed refusal; tests and any rejection telemetry also differ."
+   },
+   "unit": "A7"
+  },
+  {
+   "subject": "WorkPayment replay with changed content",
+   "kind": "direct contradiction",
+   "text": "A8 says a replay by `payment_id` will “return existing payment”; M33 says only equal amount, date and description return it and “any difference is a conflict that changes nothing.”",
+   "question": "Does reuse of an existing `payment_id` with different payment content return the old payment or reject as an integrity conflict?",
+   "options": [
+    "Return the existing payment regardless of differing fields.",
+    "Reject differing content as an integrity conflict; return existing only for equal content."
+   ],
+   "default_guess": "Reject differing content as an integrity conflict.",
+   "witness": {
+    "initial": "Payment ID X exists for EUR 100 on 2026-11-01 with description “deposit”.",
+    "events": [
+     "An operator registers payment ID X for EUR 200 on the same date."
+    ],
+    "outcomes": [
+     "A8 returns the existing EUR 100 payment as a replay.",
+     "M33 rejects the command as a conflict and returns no successful replay."
+    ],
+    "observer": "The operator sees success versus conflict."
+   },
+   "unit": "A8"
+  },
+  {
+   "subject": "Canonical snapshot and expense fingerprints",
+   "kind": "undefined canonicalization",
+   "text": "A8 relies on `content_fingerprint` and `intake_fingerprint`, while the models call them canonical hashes but do not define the canonical serialization, field inclusion, string handling, decimal representation, or whether snapshot section order is significant.",
+   "question": "What exact canonical byte representation is hashed for snapshot and expense replay classification?",
+   "options": [
+    "Hash a canonical serialization that preserves list order and every accepted field.",
+    "Normalize unordered collections, decimals and other equivalent representations before hashing.",
+    "Use a separately enumerated field-by-field canonical tuple for each fingerprint."
+   ],
+   "default_guess": "Define field-by-field canonical tuples, normalize Decimals, sort allocation instructions as M26 requires, and preserve snapshot section order unless explicitly declared unordered.",
+   "witness": {
+    "initial": "Snapshot key `(P,E,1)` is stored with two sections A and B whose explicit `sort_order` values are 1 and 2.",
+    "events": [
+     "The producer republishes identical section fields but sends the section array as B then A."
+    ],
+    "outcomes": [
+     "Preserving array order yields a different fingerprint and an integrity conflict.",
+     "Canonicalizing sections by stable identity or sort order yields the same fingerprint and an idempotent replay."
+    ],
+    "observer": "The producer sees `integrity_conflict` versus `idempotent_replay`."
+   },
+   "unit": "A8"
+  },
+  {
+   "subject": "Work-balance label at exactly zero",
+   "kind": "contradictory completeness",
+   "text": "A9 says the sign selects only “Completed ahead of payments” or “Unused advance payment,” while State 1 defines `WorkBalanceLabel` with a third value, `balanced`.",
+   "question": "Which label is returned when completed work value equals payments total exactly?",
+   "options": [
+    "Return `balanced`.",
+    "Treat zero as `completed_ahead_of_payments`.",
+    "Treat zero as `unused_advance_payment`."
+   ],
+   "default_guess": "Return `balanced`.",
+   "witness": {
+    "initial": "A project has completed work value EUR 1,000.00 and payments total EUR 1,000.00.",
+    "events": [
+     "A viewer requests PaymentSummaryView."
+    ],
+    "outcomes": [
+     "The response carries `balance_label=balanced`.",
+     "The two-label wording forces one of the nonzero labels for a zero balance."
+    ],
+    "observer": "The viewer sees a different label."
+   },
+   "unit": "A9"
+  },
+  {
+   "subject": "Audit reason on failed staff login",
+   "kind": "model-rule contradiction",
+   "text": "M36 requires `reason_code` “iff rejected,” but A13 says `staff.login_failed` writes a rejected, non-significant record “with no reason_code.”",
+   "question": "May a rejected `staff.login_failed` AuditRecord omit `reason_code`, or must the AuditRecord model require one for every rejected result?",
+   "options": [
+    "Permit `reason_code=None` for rejected non-significant actions.",
+    "Require a closed login-failure reason code and add it to the allowed catalog.",
+    "Record login failure with a non-rejected result."
+   ],
+   "default_guess": "Permit no reason for rejected non-significant actions and narrow M36's validator accordingly.",
+   "witness": {
+    "initial": "A staff login is attempted with invalid credentials.",
+    "events": [
+     "Authentication fails.",
+     "The flow appends `staff.login_failed`."
+    ],
+    "outcomes": [
+     "A13 writes `result=rejected, reason_code=None`.",
+     "M36 rejects that AuditRecord as invalid because every rejected record requires a reason."
+    ],
+    "observer": "The login flow either completes with concealed failure or fails while trying to persist its audit."
+   },
+   "unit": "A13"
+  },
+  {
+   "subject": "Owning-flow behavior when audit persistence fails",
+   "kind": "unclosed carried question",
+   "text": "M36 says “Audit failures must not silently vanish; the owning-flow policy lands in State 2,” but A13 and A22 never state whether a business mutation and its required audit record are atomic or what result is returned when audit insertion fails.",
+   "question": "If the required AuditRecord cannot be appended, must the business mutation roll back, may it commit while surfacing an audit failure, or is some retry/outbox behavior required?",
+   "options": [
+    "Rollback the entire mutation and propagate the audit persistence failure.",
+    "Commit the business mutation but report or retry the missing audit separately.",
+    "Commit both through another specified atomic/outbox mechanism."
+   ],
+   "default_guess": "Write the mutation and audit in one transaction and roll back both on audit failure.",
+   "witness": {
+    "initial": "Expense E exists on an active project; the audit repository will fail its next insert.",
+    "events": [
+     "An authorized operator corrects E.",
+     "The expense update succeeds in storage.",
+     "Appending `expense.correct` fails."
+    ],
+    "outcomes": [
+     "The transaction rolls back, leaving E unchanged.",
+     "The correction commits without its required audit record, while the request fails or succeeds separately."
+    ],
+    "observer": "The operator and later readers see whether the correction persisted."
+   },
+   "unit": "A13"
+  },
+  {
+   "subject": "Audit entity kind and identifier per action",
+   "kind": "missing mapping",
+   "text": "A23 defines how to format “the audited entity's identifier,” but neither A13 nor A23 identifies the audited entity and `AuditEntityKind` for each action, including actions affecting sets or cascades.",
+   "question": "For every audit action, which `entity_kind` and entity identifier must be recorded, especially for set-level actions such as `staff.sessions_revoke` and cascades such as credential re-issue?",
+   "options": [
+    "Map `staff.sessions_revoke` to the staff account and credential issue to the newly issued credential.",
+    "Map set-level actions to no entity and cascade actions to their initiating parent.",
+    "Emit one record per affected child despite A13's one-record-per-action rule."
+   ],
+   "default_guess": "Provide a closed per-action entity mapping; use the staff account for session-set revocation and the newly issued credential for credential issue.",
+   "witness": {
+    "initial": "Staff account S has three active sessions.",
+    "events": [
+     "An administrator invokes sign-out-everywhere for S.",
+     "Exactly one `staff.sessions_revoke` audit record is required."
+    ],
+    "outcomes": [
+     "The record uses `entity_kind=staff_account`, `entity_id=S`.",
+     "The record has no entity, or names one arbitrarily selected `staff_session`."
+    ],
+    "observer": "An auditor querying the affected entity sees different provenance."
+   },
+   "unit": "A23"
+  },
+  {
+   "subject": "Eligibility for setting section progress",
+   "kind": "missing refusal condition",
+   "text": "A20 constrains only the percentage and its manual origin; M32 says only sections with planned work in the active version participate in derived progress, but no rule says whether progress may be written for a same-project section absent from the active version or having zero planned work.",
+   "question": "Which sections accept `set_section_progress`: every PortalSection in the project, only sections planned in the active budget, or only active-version sections with `work_planned > 0`?",
+   "options": [
+    "Allow any PortalSection belonging to the project and exclude ineligible records from derivation.",
+    "Require a plan in the active budget version.",
+    "Require a positive-work plan in the active budget version."
+   ],
+   "default_guess": "Require the section to have a plan in the active budget version, while allowing zero planned work to be recorded but excluded from weighting.",
+   "witness": {
+    "initial": "Project P has an active budget that omits old section S; S remains because historical allocations reference it.",
+    "events": [
+     "An authorized operator sets S to 50% complete."
+    ],
+    "outcomes": [
+     "The update is stored and audited but omitted from the current ProgressView.",
+     "The update is refused because S is not in the active version."
+    ],
+    "observer": "The operator sees success versus refusal, and later historical state differs."
+   },
+   "unit": "A20"
+  },
+  {
+   "subject": "Zero-total expense allocation",
+   "kind": "missing validity rule",
+   "text": "M25 and M27 do not require `total_amount > 0`; allocation amounts must be `> 0`, while A19 requires only that their sum equal the expense total and does not say whether the allocation list must be non-empty.",
+   "question": "Is a confirmed EUR expense with total 0.00 valid, and if so must or may it have an empty allocation set?",
+   "options": [
+    "Accept a zero-total expense with no allocations.",
+    "Reject every expense whose total is not strictly positive.",
+    "Allow a zero-valued allocation despite the stated `amount > 0` rule."
+   ],
+   "default_guess": "Reject expense totals that are not strictly positive.",
+   "witness": {
+    "initial": "An active project and authorized operator exist.",
+    "events": [
+     "The operator submits a complete confirmed OCR receipt with `total_amount=0.00` and an empty allocation list."
+    ],
+    "outcomes": [
+     "The expense and document are created because the empty allocation sum equals zero.",
+     "The intake is refused because an expense or its allocation set must contain a positive amount."
+    ],
+    "observer": "The operator sees creation versus validation failure."
+   },
+   "unit": "A19"
+  },
+  {
+   "subject": "Viewer-entry rate limiting",
+   "kind": "undefined policy parameters",
+   "text": "A25 says viewer entry attempts are “rate limited per client network address and route, with bounded memory and a concealed answer” but gives no algorithm, window, threshold, eviction rule, or exact condition for refusing an attempt.",
+   "question": "What exact viewer-entry rate-limit algorithm, limit, window and state bound apply, and does a blocked valid entry create a session?",
+   "options": [
+    "Use a fixed window with an explicit attempts-per-window limit and refuse before credential verification.",
+    "Use a token bucket with specified capacity/refill and bounded LRU state.",
+    "Apply another fully specified bounded algorithm."
+   ],
+   "default_guess": "Use a fixed per-address-and-route window, refuse before authentication when exhausted, and create no session.",
+   "witness": {
+    "initial": "One network address has made five failed viewer-entry attempts; a valid unrevoked viewer credential is available.",
+    "events": [
+     "The same address submits that valid credential as its sixth attempt within one minute."
+    ],
+    "outcomes": [
+     "An implementation using a five-per-minute threshold returns the concealed refusal and creates no ViewerSession.",
+     "An implementation using a ten-per-minute threshold authenticates and sets the viewer session cookie."
+    ],
+    "observer": "The browser sees whether it received a usable session cookie and can restore the session."
+   },
+   "unit": "A25"
+  },
+  {
+   "subject": "HTTP request-body size bound",
+   "kind": "missing configuration value",
+   "text": "A25 requires request bodies to be bounded by runtime settings before expensive work, but A30 supplies only `binary_max_read_bytes` and merely references an absent closed environment-variable table; no request-body setting, units, default, or per-route rule appears in these texts.",
+   "question": "What is the maximum request-body size, is it global or route-specific, and which runtime setting supplies it?",
+   "options": [
+    "Define one global byte limit for every JSON request.",
+    "Define route-specific byte limits.",
+    "Use the binary read limit for request bodies as well."
+   ],
+   "default_guess": "Add one explicit global JSON request-body byte limit, distinct from the binary read limit.",
+   "witness": {
+    "initial": "The service is otherwise validly configured.",
+    "events": [
+     "A client sends a syntactically valid 2 MiB JSON request to a handler."
+    ],
+    "outcomes": [
+     "A guessed 1 MiB limit rejects it before the handler.",
+     "A guessed 4 MiB limit allows it to reach the handler."
+    ],
+    "observer": "The client sees rejection versus normal handler behavior."
+   },
+   "unit": "A25"
+  },
+  {
+   "subject": "Validation and storage of source-supplied timestamps",
+   "kind": "representation ambiguity",
+   "text": "A28 says all persisted timestamps are UTC and offset-naive, but also says source-supplied times are “validated and kept as supplied”; State 1's former convention required timezone-aware UTC and is only said to be narrowed by A28.",
+   "question": "Which source datetime forms are accepted, and are accepted aware or non-UTC-offset values converted to offset-naive UTC or stored without representation change?",
+   "options": [
+    "Require timezone-aware inputs, normalize their instants to UTC, then strip the offset for storage.",
+    "Accept only explicit UTC-offset inputs and strip `+00:00`.",
+    "Accept offset-naive source values as already UTC.",
+    "Keep the supplied offset-aware representation despite the persisted-naive rule."
+   ],
+   "default_guess": "Require an aware datetime, normalize to UTC, and persist the same instant as offset-naive UTC.",
+   "witness": {
+    "initial": "An authorized operator publishes a photo with `photo_date=2026-11-06T12:00:00+02:00`.",
+    "events": [
+     "The photo publication passes all non-time validation."
+    ],
+    "outcomes": [
+     "The portal accepts it and stores `2026-11-06 10:00:00` as naive UTC.",
+     "The portal rejects it because the supplied offset is not UTC, or stores the aware `+02:00` value unchanged."
+    ],
+    "observer": "The operator sees acceptance versus refusal, and gallery ordering may differ if the value is stored differently."
+   },
+   "unit": "A28"
+  },
+  {
+   "subject": "Requiredness of deferred Email Gateway configuration",
+   "kind": "missing configuration table",
+   "text": "A30 says `config.runtime_environment_variables` is the closed table of variables and requiredness, but does not reproduce it; it lists `EMAIL_GATEWAY_URL` while A10 and R0-23 say no running-service operation calls the gateway.",
+   "question": "Must the running service start when `EMAIL_GATEWAY_URL` is absent while all email operations remain deferred?",
+   "options": [
+    "Require the variable at startup despite the gateway being unused.",
+    "Allow it to be absent until challenge and notification flows are implemented.",
+    "Require it only in deployment modes that enable those flows."
+   ],
+   "default_guess": "Allow it to be absent while all email flows are inert.",
+   "witness": {
+    "initial": "All required persistence, host, origin and Registry settings are valid, but `EMAIL_GATEWAY_URL` is absent.",
+    "events": [
+     "The operator starts the running service."
+    ],
+    "outcomes": [
+     "Startup succeeds because the deferred gateway is unused.",
+     "Startup fails because A30 treats the endpoint as a required runtime variable."
+    ],
+    "observer": "The deployment operator sees whether the service starts."
+   },
+   "unit": "A30"
+  },
+  {
+   "subject": "Credential hash profile as configuration versus fixed Factory decision",
+   "kind": "internal contradiction",
+   "text": "A30 presents `credential_hash_scheme = argon2id (library defaults)` among “Runtime knobs” whose deployment values may differ, but its carried change fixes the RFC_9106_LOW_MEMORY parameters and says a profile change is a Factory route change.",
+   "question": "May a deployment configure different Argon2 parameters without changing source through the Factory route?",
+   "options": [
+    "Treat the scheme and parameters as fixed rules tied to the dependency pin.",
+    "Expose Argon2 parameters as runtime configuration knobs.",
+    "Allow only a named fixed-profile selector through configuration."
+   ],
+   "default_guess": "Treat the current profile as fixed and change it only through the Factory route.",
+   "witness": {
+    "initial": "A deployment operator wants Argon2 memory cost 131072 KiB instead of 65536 KiB.",
+    "events": [
+     "The operator supplies deployment configuration for the stronger profile.",
+     "A new staff password is hashed."
+    ],
+    "outcomes": [
+     "The runtime-knob reading accepts the value and writes a 131072 KiB hash.",
+     "The fixed-profile reading ignores or rejects the setting and writes a 65536 KiB hash."
+    ],
+    "observer": "The deployment operator and later hash inspection see different behavior."
+   },
+   "unit": "A30"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"Registry failure precedence for malformed project identifiers\",\"kind\":\"contradictory precedence\",\"text\":\"A6's table maps “malformed UUID input” to `invalid_uuid`, but its ordered classification says the first condition is “the portal's own Registry endpoint setting is missing or unusable → transport_error” and never places malformed UUID input in that sequence.\",\"question\":\"When the requested project identifier is malformed and the Registry endpoint is also unusable, which failure wins?\",\"options\":[\"Reject as `invalid_uuid` before consulting configuration.\",\"Reject as `transport_error` because endpoint usability is the first classified condition.\"],\"default_guess\":\"Validate the UUID first and return `invalid_uuid`.\",\"witness\":{\"initial\":\"The Registry endpoint setting is unusable.\",\"events\":[\"A staff caller submits a project-scoped operation with a malformed project identifier.\"],\"outcomes\":[\"The gateway returns `invalid_uuid` without examining the endpoint.\",\"The gateway returns `transport_error` because endpoint usability is checked first.\"],\"observer\":\"The caller or an error-mapping handler sees a different typed failure.\"},\"unit\":\"A6\"},{\"subject\":\"Unknown Registry status entering a typed portal context\",\"kind\":\"unspecified refusal\",\"text\":\"A5 says a status outside `active | archived` “is refused there as an invalid answer,” while its carried change explicitly removes the former rule that any other value is a `schema_mismatch` boundary failure.\",\"question\":\"What exact typed failure is produced when `exists=true`, `is_active=true`, and the Registry status string is neither `active` nor `archived`?\",\"options\":[\"Translate it to `schema_mismatch`.\",\"Use another domain refusal distinct from every `RegistryFailureKind`.\",\"Treat the context as unavailable without exposing a typed failure.\"],\"default_guess\":\"Return `schema_mismatch`.\",\"witness\":{\"initial\":\"Registry contains project P and its validation response says `exists=true`, `is_active=true`, `status=\\\"paused\\\"`.\",\"events\":[\"An authorized viewer reads project P.\",\"The gateway decodes the response and the authorization guard tries to build `AuthorizedProjectContext`.\"],\"outcomes\":[\"The operation fails with `schema_mismatch`.\",\"The operation fails with a separate invalid-status/domain error or availability result.\"],\"observer\":\"The caller and ProjectOverview availability mapping see different failures.\"},\"unit\":\"A5\"},{\"subject\":\"Snapshot import when Registry validation is unavailable\",\"kind\":\"missing rejection classification\",\"text\":\"A7 gives import reasons for archived, unknown and scope-denied projects, while A6 also permits `timeout`, `transport_error`, `http_error`, `schema_mismatch`, and `identity_mismatch`; neither rule says whether those failures create the fresh rejected import result required for classified attempts by R0-25, or escape without a record.\",\"question\":\"What happens to an authenticated snapshot import when Registry validation fails for an operational or malformed-response reason?\",\"options\":[\"Propagate the Registry boundary error and create no SnapshotImportRecord or audit record.\",\"Create a rejected SnapshotImportRecord, requiring a specified ImportRejectReason.\",\"Translate selected failures to `unknown_project` and record that rejection.\"],\"default_guess\":\"Propagate the Registry boundary error without recording an import attempt.\",\"witness\":{\"initial\":\"An active producer submits a valid version-1 EUR snapshot for project P; Registry times out.\",\"events\":[\"The producer authenticates successfully.\",\"The import flow reaches Registry validation.\"],\"outcomes\":[\"The request fails transiently and no import or audit record is written.\",\"A fresh rejected import record and `snapshot.import` audit record are committed with a guessed reason.\"],\"observer\":\"The producer can observe the response and later whether an `import_id` exists.\"},\"unit\":\"A7\"},{\"subject\":\"OCR expense-intake validation precedence\",\"kind\":\"missing check order\",\"text\":\"A7 closes `ocr_supported_contract_versions = {1}` but specifies first-failure ordering only for snapshot publication; M25–M27 additionally require confirmed status, complete non-empty items, EUR currency, valid amounts, project authorization and allocation equality without an ordering among those checks.\",\"question\":\"In what order are authorization, OCR contract version, confirmation/completeness, currency, amount, section and allocation checks applied, and which typed refusal wins when several fail?\",\"options\":[\"Authorize first, then contract version, confirmation/completeness, currency and allocation checks.\",\"Validate the external OCR envelope before project authorization.\",\"Define another explicit first-failure sequence.\"],\"default_guess\":\"Authorize first, then validate contract version, confirmation/completeness, currency, amounts and allocations.\",\"witness\":{\"initial\":\"An operator lacks an active assignment to project P.\",\"events\":[\"The operator submits an unconfirmed OCR publication with unsupported contract version 2 for P.\"],\"outcomes\":[\"The request is refused for project access before its body is classified.\",\"The request is refused as `unsupported_contract_version` or unconfirmed content before access is checked.\"],\"observer\":\"The operator sees a different typed refusal; tests and any rejection telemetry also differ.\"},\"unit\":\"A7\"},{\"subject\":\"WorkPayment replay with changed content\",\"kind\":\"direct contradiction\",\"text\":\"A8 says a replay by `payment_id` will “return existing payment”; M33 says only equal amount, date and description return it and “any difference is a conflict that changes nothing.”\",\"question\":\"Does reuse of an existing `payment_id` with different payment content return the old payment or reject as an integrity conflict?\",\"options\":[\"Return the existing payment regardless of differing fields.\",\"Reject differing content as an integrity conflict; return existing only for equal content.\"],\"default_guess\":\"Reject differing content as an integrity conflict.\",\"witness\":{\"initial\":\"Payment ID X exists for EUR 100 on 2026-11-01 with description “deposit”.\",\"events\":[\"An operator registers payment ID X for EUR 200 on the same date.\"],\"outcomes\":[\"A8 returns the existing EUR 100 payment as a replay.\",\"M33 rejects the command as a conflict and returns no successful replay.\"],\"observer\":\"The operator sees success versus conflict.\"},\"unit\":\"A8\"},{\"subject\":\"Canonical snapshot and expense fingerprints\",\"kind\":\"undefined canonicalization\",\"text\":\"A8 relies on `content_fingerprint` and `intake_fingerprint`, while the models call them canonical hashes but do not define the canonical serialization, field inclusion, string handling, decimal representation, or whether snapshot section order is significant.\",\"question\":\"What exact canonical byte representation is hashed for snapshot and expense replay classification?\",\"options\":[\"Hash a canonical serialization that preserves list order and every accepted field.\",\"Normalize unordered collections, decimals and other equivalent representations before hashing.\",\"Use a separately enumerated field-by-field canonical tuple for each fingerprint.\"],\"default_guess\":\"Define field-by-field canonical tuples, normalize Decimals, sort allocation instructions as M26 requires, and preserve snapshot section order unless explicitly declared unordered.\",\"witness\":{\"initial\":\"Snapshot key `(P,E,1)` is stored with two sections A and B whose explicit `sort_order` values are 1 and 2.\",\"events\":[\"The producer republishes identical section fields but sends the section array as B then A.\"],\"outcomes\":[\"Preserving array order yields a different fingerprint and an integrity conflict.\",\"Canonicalizing sections by stable identity or sort order yields the same fingerprint and an idempotent replay.\"],\"observer\":\"The producer sees `integrity_conflict` versus `idempotent_replay`.\"},\"unit\":\"A8\"},{\"subject\":\"Work-balance label at exactly zero\",\"kind\":\"contradictory completeness\",\"text\":\"A9 says the sign selects only “Completed ahead of payments” or “Unused advance payment,” while State 1 defines `WorkBalanceLabel` with a third value, `balanced`.\",\"question\":\"Which label is returned when completed work value equals payments total exactly?\",\"options\":[\"Return `balanced`.\",\"Treat zero as `completed_ahead_of_payments`.\",\"Treat zero as `unused_advance_payment`.\"],\"default_guess\":\"Return `balanced`.\",\"witness\":{\"initial\":\"A project has completed work value EUR 1,000.00 and payments total EUR 1,000.00.\",\"events\":[\"A viewer requests PaymentSummaryView.\"],\"outcomes\":[\"The response carries `balance_label=balanced`.\",\"The two-label wording forces one of the nonzero labels for a zero balance.\"],\"observer\":\"The viewer sees a different label.\"},\"unit\":\"A9\"},{\"subject\":\"Audit reason on failed staff login\",\"kind\":\"model-rule contradiction\",\"text\":\"M36 requires `reason_code` “iff rejected,” but A13 says `staff.login_failed` writes a rejected, non-significant record “with no reason_code.”\",\"question\":\"May a rejected `staff.login_failed` AuditRecord omit `reason_code`, or must the AuditRecord model require one for every rejected result?\",\"options\":[\"Permit `reason_code=None` for rejected non-significant actions.\",\"Require a closed login-failure reason code and add it to the allowed catalog.\",\"Record login failure with a non-rejected result.\"],\"default_guess\":\"Permit no reason for rejected non-significant actions and narrow M36's validator accordingly.\",\"witness\":{\"initial\":\"A staff login is attempted with invalid credentials.\",\"events\":[\"Authentication fails.\",\"The flow appends `staff.login_failed`.\"],\"outcomes\":[\"A13 writes `result=rejected, reason_code=None`.\",\"M36 rejects that AuditRecord as invalid because every rejected record requires a reason.\"],\"observer\":\"The login flow either completes with concealed failure or fails while trying to persist its audit.\"},\"unit\":\"A13\"},{\"subject\":\"Owning-flow behavior when audit persistence fails\",\"kind\":\"unclosed carried question\",\"text\":\"M36 says “Audit failures must not silently vanish; the owning-flow policy lands in State 2,” but A13 and A22 never state whether a business mutation and its required audit record are atomic or what result is returned when audit insertion fails.\",\"question\":\"If the required AuditRecord cannot be appended, must the business mutation roll back, may it commit while surfacing an audit failure, or is some retry/outbox behavior required?\",\"options\":[\"Rollback the entire mutation and propagate the audit persistence failure.\",\"Commit the business mutation but report or retry the missing audit separately.\",\"Commit both through another specified atomic/outbox mechanism.\"],\"default_guess\":\"Write the mutation and audit in one transaction and roll back both on audit failure.\",\"witness\":{\"initial\":\"Expense E exists on an active project; the audit repository will fail its next insert.\",\"events\":[\"An authorized operator corrects E.\",\"The expense update succeeds in storage.\",\"Appending `expense.correct` fails.\"],\"outcomes\":[\"The transaction rolls back, leaving E unchanged.\",\"The correction commits without its required audit record, while the request fails or succeeds separately.\"],\"observer\":\"The operator and later readers see whether the correction persisted.\"},\"unit\":\"A13\"},{\"subject\":\"Audit entity kind and identifier per action\",\"kind\":\"missing mapping\",\"text\":\"A23 defines how to format “the audited entity's identifier,” but neither A13 nor A23 identifies the audited entity and `AuditEntityKind` for each action, including actions affecting sets or cascades.\",\"question\":\"For every audit action, which `entity_kind` and entity identifier must be recorded, especially for set-level actions such as `staff.sessions_revoke` and cascades such as credential re-issue?\",\"options\":[\"Map `staff.sessions_revoke` to the staff account and credential issue to the newly issued credential.\",\"Map set-level actions to no entity and cascade actions to their initiating parent.\",\"Emit one record per affected child despite A13's one-record-per-action rule.\"],\"default_guess\":\"Provide a closed per-action entity mapping; use the staff account for session-set revocation and the newly issued credential for credential issue.\",\"witness\":{\"initial\":\"Staff account S has three active sessions.\",\"events\":[\"An administrator invokes sign-out-everywhere for S.\",\"Exactly one `staff.sessions_revoke` audit record is required.\"],\"outcomes\":[\"The record uses `entity_kind=staff_account`, `entity_id=S`.\",\"The record has no entity, or names one arbitrarily selected `staff_session`.\"],\"observer\":\"An auditor querying the affected entity sees different provenance.\"},\"unit\":\"A23\"},{\"subject\":\"Eligibility for setting section progress\",\"kind\":\"missing refusal condition\",\"text\":\"A20 constrains only the percentage and its manual origin; M32 says only sections with planned work in the active version participate in derived progress, but no rule says whether progress may be written for a same-project section absent from the active version or having zero planned work.\",\"question\":\"Which sections accept `set_section_progress`: every PortalSection in the project, only sections planned in the active budget, or only active-version sections with `work_planned > 0`?\",\"options\":[\"Allow any PortalSection belonging to the project and exclude ineligible records from derivation.\",\"Require a plan in the active budget version.\",\"Require a positive-work plan in the active budget version.\"],\"default_guess\":\"Require the section to have a plan in the active budget version, while allowing zero planned work to be recorded but excluded from weighting.\",\"witness\":{\"initial\":\"Project P has an active budget that omits old section S; S remains because historical allocations reference it.\",\"events\":[\"An authorized operator sets S to 50% complete.\"],\"outcomes\":[\"The update is stored and audited but omitted from the current ProgressView.\",\"The update is refused because S is not in the active version.\"],\"observer\":\"The operator sees success versus refusal, and later historical state differs.\"},\"unit\":\"A20\"},{\"subject\":\"Zero-total expense allocation\",\"kind\":\"missing validity rule\",\"text\":\"M25 and M27 do not require `total_amount > 0`; allocation amounts must be `> 0`, while A19 requires only that their sum equal the expense total and does not say whether the allocation list must be non-empty.\",\"question\":\"Is a confirmed EUR expense with total 0.00 valid, and if so must or may it have an empty allocation set?\",\"options\":[\"Accept a zero-total expense with no allocations.\",\"Reject every expense whose total is not strictly positive.\",\"Allow a zero-valued allocation despite the stated `amount > 0` rule.\"],\"default_guess\":\"Reject expense totals that are not strictly positive.\",\"witness\":{\"initial\":\"An active project and authorized operator exist.\",\"events\":[\"The operator submits a complete confirmed OCR receipt with `total_amount=0.00` and an empty allocation list.\"],\"outcomes\":[\"The expense and document are created because the empty allocation sum equals zero.\",\"The intake is refused because an expense or its allocation set must contain a positive amount.\"],\"observer\":\"The operator sees creation versus validation failure.\"},\"unit\":\"A19\"},{\"subject\":\"Viewer-entry rate limiting\",\"kind\":\"undefined policy parameters\",\"text\":\"A25 says viewer entry attempts are “rate limited per client network address and route, with bounded memory and a concealed answer” but gives no algorithm, window, threshold, eviction rule, or exact condition for refusing an attempt.\",\"question\":\"What exact viewer-entry rate-limit algorithm, limit, window and state bound apply, and does a blocked valid entry create a session?\",\"options\":[\"Use a fixed window with an explicit attempts-per-window limit and refuse before credential verification.\",\"Use a token bucket with specified capacity/refill and bounded LRU state.\",\"Apply another fully specified bounded algorithm.\"],\"default_guess\":\"Use a fixed per-address-and-route window, refuse before authentication when exhausted, and create no session.\",\"witness\":{\"initial\":\"One network address has made five failed viewer-entry attempts; a valid unrevoked viewer credential is available.\",\"events\":[\"The same address submits that valid credential as its sixth attempt within one minute.\"],\"outcomes\":[\"An implementation using a five-per-minute threshold returns the concealed refusal and creates no ViewerSession.\",\"An implementation using a ten-per-minute threshold authenticates and sets the viewer session cookie.\"],\"observer\":\"The browser sees whether it received a usable session cookie and can restore the session.\"},\"unit\":\"A25\"},{\"subject\":\"HTTP request-body size bound\",\"kind\":\"missing configuration value\",\"text\":\"A25 requires request bodies to be bounded by runtime settings before expensive work, but A30 supplies only `binary_max_read_bytes` and merely references an absent closed environment-variable table; no request-body setting, units, default, or per-route rule appears in these texts.\",\"question\":\"What is the maximum request-body size, is it global or route-specific, and which runtime setting supplies it?\",\"options\":[\"Define one global byte limit for every JSON request.\",\"Define route-specific byte limits.\",\"Use the binary read limit for request bodies as well.\"],\"default_guess\":\"Add one explicit global JSON request-body byte limit, distinct from the binary read limit.\",\"witness\":{\"initial\":\"The service is otherwise validly configured.\",\"events\":[\"A client sends a syntactically valid 2 MiB JSON request to a handler.\"],\"outcomes\":[\"A guessed 1 MiB limit rejects it before the handler.\",\"A guessed 4 MiB limit allows it to reach the handler.\"],\"observer\":\"The client sees rejection versus normal handler behavior.\"},\"unit\":\"A25\"},{\"subject\":\"Validation and storage of source-supplied timestamps\",\"kind\":\"representation ambiguity\",\"text\":\"A28 says all persisted timestamps are UTC and offset-naive, but also says source-supplied times are “validated and kept as supplied”; State 1's former convention required timezone-aware UTC and is only said to be narrowed by A28.\",\"question\":\"Which source datetime forms are accepted, and are accepted aware or non-UTC-offset values converted to offset-naive UTC or stored without representation change?\",\"options\":[\"Require timezone-aware inputs, normalize their instants to UTC, then strip the offset for storage.\",\"Accept only explicit UTC-offset inputs and strip `+00:00`.\",\"Accept offset-naive source values as already UTC.\",\"Keep the supplied offset-aware representation despite the persisted-naive rule.\"],\"default_guess\":\"Require an aware datetime, normalize to UTC, and persist the same instant as offset-naive UTC.\",\"witness\":{\"initial\":\"An authorized operator publishes a photo with `photo_date=2026-11-06T12:00:00+02:00`.\",\"events\":[\"The photo publication passes all non-time validation.\"],\"outcomes\":[\"The portal accepts it and stores `2026-11-06 10:00:00` as naive UTC.\",\"The portal rejects it because the supplied offset is not UTC, or stores the aware `+02:00` value unchanged.\"],\"observer\":\"The operator sees acceptance versus refusal, and gallery ordering may differ if the value is stored differently.\"},\"unit\":\"A28\"},{\"subject\":\"Requiredness of deferred Email Gateway configuration\",\"kind\":\"missing configuration table\",\"text\":\"A30 says `config.runtime_environment_variables` is the closed table of variables and requiredness, but does not reproduce it; it lists `EMAIL_GATEWAY_URL` while A10 and R0-23 say no running-service operation calls the gateway.\",\"question\":\"Must the running service start when `EMAIL_GATEWAY_URL` is absent while all email operations remain deferred?\",\"options\":[\"Require the variable at startup despite the gateway being unused.\",\"Allow it to be absent until challenge and notification flows are implemented.\",\"Require it only in deployment modes that enable those flows.\"],\"default_guess\":\"Allow it to be absent while all email flows are inert.\",\"witness\":{\"initial\":\"All required persistence, host, origin and Registry settings are valid, but `EMAIL_GATEWAY_URL` is absent.\",\"events\":[\"The operator starts the running service.\"],\"outcomes\":[\"Startup succeeds because the deferred gateway is unused.\",\"Startup fails because A30 treats the endpoint as a required runtime variable.\"],\"observer\":\"The deployment operator sees whether the service starts.\"},\"unit\":\"A30\"},{\"subject\":\"Credential hash profile as configuration versus fixed Factory decision\",\"kind\":\"internal contradiction\",\"text\":\"A30 presents `credential_hash_scheme = argon2id (library defaults)` among “Runtime knobs” whose deployment values may differ, but its carried change fixes the RFC_9106_LOW_MEMORY parameters and says a profile change is a Factory route change.\",\"question\":\"May a deployment configure different Argon2 parameters without changing source through the Factory route?\",\"options\":[\"Treat the scheme and parameters as fixed rules tied to the dependency pin.\",\"Expose Argon2 parameters as runtime configuration knobs.\",\"Allow only a named fixed-profile selector through configuration.\"],\"default_guess\":\"Treat the current profile as fixed and change it only through the Factory route.\",\"witness\":{\"initial\":\"A deployment operator wants Argon2 memory cost 131072 KiB instead of 65536 KiB.\",\"events\":[\"The operator supplies deployment configuration for the stronger profile.\",\"A new staff password is hashed.\"],\"outcomes\":[\"The runtime-knob reading accepts the value and writes a 131072 KiB hash.\",\"The fixed-profile reading ignores or rejects the setting and writes a 65536 KiB hash.\"],\"observer\":\"The deployment operator and later hash inspection see different behavior.\"},\"unit\":\"A30\"}]}",
+ "set_aside": []
+}

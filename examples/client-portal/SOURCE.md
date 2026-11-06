@@ -201,6 +201,27 @@ Nothing was designed; deferred features stay deferred.
 | round-04 | 4 | `all_projects` chosen at creation is State 0's "explicitly granted capability" (M13); `disabled_at`/`disabled_by` cleared on re-enabling (M13, Factory code `application/service_identity.py`); administrator assignments inert, R0-24 concerns operator assignments (M07); when an imported version is built relative to activation is Q11 (section linking) |
 | round-05 | 0 | clear |
 | round-06 | 0 | clear on the unchanged text; `design_questions.py status --state 1`: closed, every unit closed by two clear rounds |
+| round-07 | 2 | reopened by State 2 repairs (M17 mutation-policy field, M18 sections, M36 reason code, ProjectOverview availability); M18 empty and duplicate section lists stated as the producer's obligation, not a portal check |
+| round-08 | 0 | clear; M18 still needs a second clear round (State 1 open: M18 only) |
+
+### State 2 question rounds (in progress)
+
+Rounds 01–09 (`questions/state2/`, Codex CLI provider) on `02_rules.md`,
+blocking 21, 10, 8, 8, 4, 1, 0, 3, 2. Each blocking topic was closed by
+repairing the decision to the accepted spec 459ac96c and its code, recorded
+under the decision's `Carried changes` (owner 2026-11-06: current service
+behaviour accepted; technical decisions delegated). Meaning corrections
+against the 2026-07-19 text, all to the accepted spec: A4 exceptions of
+R0-09, R0-21, R0-24; A12 an ungranted producer is recorded `unknown_project`
+(note `_authorize_project_operation`), `scope_denied` only for a refused
+capability; A13 only `snapshot.import` and `staff.login_failed` write
+rejected records; A5/A6 the guard reads `status`, grant and assignment
+operations read `is_active`; A16 surrounding whitespace is refused, not
+stripped. Open after round-09: A6, A8, A31, context. Several repairs wrote
+implementation precision (hash parameters, character sets, limiter,
+timeouts, headers, fingerprint) into State 2 prose; the coordinator's note
+of 2026-11-06 stops that: such values are the accepted Factory ones, to be
+carried as State 6/7 texts so the rounds can judge them `answered_later`.
 
 ### Classification of what State 2 carries
 

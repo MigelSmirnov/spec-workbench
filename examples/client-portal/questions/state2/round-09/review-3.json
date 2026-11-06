@@ -1,0 +1,181 @@
+{
+ "open_points": [
+  {
+   "unit": "A6",
+   "subject": "ProjectValidationResult consistency",
+   "kind": "unverified external invariant",
+   "text": "“The two readings agree, because the Registry's validation answer sets `is_active = true` exactly when its `status` is `active` …; an answer in which they disagree is outside the Registry contract and is not something the portal decides. The gateway returns a decoded validation answer as it is and raises no failure for it; it does not check that `exists`, `is_active` and `status` agree, and each caller reads only the field A5 names for it.”",
+   "question": "What must the portal do when a decoded validation answer has inconsistent `exists`, `is_active`, and `status` values?",
+   "options": [
+    "Reject the answer as `schema_mismatch`",
+    "Let each caller trust its designated field, allowing operations to reach different lifecycle decisions",
+    "Define a precedence rule that derives one authoritative lifecycle value"
+   ],
+   "default_guess": "Reject the inconsistent answer as `schema_mismatch`.",
+   "witness": {
+    "initial": "Registry owns project P, but its validation endpoint returns `exists=true`, `status=archived`, `is_active=true`; the portal gateway accepts that shape.",
+    "events": [
+     "An administrator creates a viewer grant for P; grant creation reads `is_active`.",
+     "An operator attempts a project-record mutation for P; the project guard reads `status`."
+    ],
+    "outcomes": [
+     "Grant creation succeeds because `is_active=true`, while the record mutation is rejected as archived.",
+     "The inconsistent answer is rejected for both operations as a boundary failure, preserving the rule that no new grant is created for an archived project."
+    ],
+    "observer": "The administrator, operator, and newly granted viewer see the difference."
+   }
+  },
+  {
+   "unit": "A8",
+   "subject": "Snapshot fingerprint JSON encoding",
+   "kind": "canonicalization gap",
+   "text": "“The snapshot `content_fingerprint` is the SHA-256 hex digest of the compact, key-sorted JSON of the publication's project, estimate and contract identity … and its sections.”",
+   "question": "What exact JSON structure and byte encoding are hashed, including field names and nesting, UUID representation, Decimal normalization, datetime format and offset normalization, Unicode escaping, and text encoding?",
+   "options": [
+    "Hash a flat object using explicitly normalized strings for UUIDs, decimals, and datetimes",
+    "Hash the request-model JSON using its library's default encoders",
+    "Hash a nested project/estimate/contract object with a separately specified canonical scalar encoding"
+   ],
+   "default_guess": "Use a flat UTF-8 JSON object with fixed field names, lowercase canonical UUID strings, fixed two-decimal amount strings, normalized UTC datetime strings, no insignificant whitespace, and a specified Unicode-escaping rule.",
+   "witness": {
+    "initial": "Snapshot key K has not been imported.",
+    "events": [
+     "A producer imports K with `material_planned=Decimal('1.00')` and a UTC `published_at`.",
+     "Two implementations compute the accepted fingerprint; one emits the decimal as a JSON string and the datetime with `Z`, while the other emits a JSON number and `+00:00`."
+    ],
+    "outcomes": [
+     "The stored and producer-readable fingerprint is the digest of `\"1.00\"` and a `Z` timestamp.",
+     "The stored and producer-readable fingerprint is a different digest of `1.0` and a `+00:00` timestamp; a later deployment using the other encoding can classify the same publication as an integrity conflict."
+    ],
+    "observer": "The producer reading the import result and operators performing a replay after an implementation change see the difference."
+   }
+  },
+  {
+   "unit": "A8",
+   "subject": "Ordering repeated snapshot sections",
+   "kind": "contradictory ordering rule",
+   "text": "“The sections enter as a list of every occurrence, duplicates included, each with all its fields, sorted by `(source_section_id, source_section_code, display_name, sort_order)`; their order in the publication therefore does not change the fingerprint.”",
+   "question": "How are two section occurrences ordered when all four stated sort keys are equal but another field, such as a planned amount, differs?",
+   "options": [
+    "Preserve their publication order, which makes the fingerprint order-sensitive",
+    "Add the remaining section fields as deterministic tie-breakers",
+    "Canonicalize equal-key occurrences as an unordered multiset by another specified method"
+   ],
+   "default_guess": "Extend the sort key with canonical representations of all remaining section fields.",
+   "witness": {
+    "initial": "No snapshot exists for key K; the portal accepts repeated `source_section_id` values.",
+    "events": [
+     "The producer imports K with sections A and B having the same `source_section_id`, code, display name, and sort order, but A has material amount 10 and B has 20.",
+     "The producer republishes K with only A and B's input order reversed."
+    ],
+    "outcomes": [
+     "A stable sort preserves each publication's tied input order, so the second digest differs and the import is an `integrity_conflict`.",
+     "An implementation honoring the stated order-independence adds a deterministic tie-breaker, so the second import is an `idempotent_replay`."
+    ],
+    "observer": "The producer sees a conflict instead of a replay and receives a different import result."
+   }
+  },
+  {
+   "unit": "A8",
+   "subject": "Snapshot section sort collation",
+   "kind": "comparison gap",
+   "text": "“sorted by `(source_section_id, source_section_code, display_name, sort_order)`”",
+   "question": "What comparison semantics apply to the three unrestricted strings in the section sort tuple?",
+   "options": [
+    "Unicode code-point order",
+    "UTF-8 byte order",
+    "Locale-aware collation",
+    "A specified normalized Unicode form followed by a specified binary order"
+   ],
+   "default_guess": "Compare unnormalized strings by Unicode scalar/code-point order.",
+   "witness": {
+    "initial": "Snapshot key K has not been imported, and its sections contain non-ASCII identifiers such as `z` and `ä`.",
+    "events": [
+     "The producer imports K.",
+     "One implementation uses language-native code-point ordering; another uses locale-aware collation."
+    ],
+    "outcomes": [
+     "The canonical section list orders `z` before `ä`, producing fingerprint F1.",
+     "The canonical section list orders `ä` before `z`, producing fingerprint F2."
+    ],
+    "observer": "The producer can read the different fingerprint, and a database moved between implementations can classify a replay differently."
+   }
+  },
+  {
+   "unit": "A31",
+   "subject": "Security review coverage of A8 replay identity",
+   "kind": "stale review conclusion",
+   "text": "“concurrency: APPLICABLE; references: A8, A18, A19, A22, A29; affected: replay identities” together with “Every category resolves to an accepted decision or an open question.”",
+   "question": "Can the concurrency/replay-identity category remain resolved when A8 accepts duplicate sections but its stated sort is not total for duplicates with equal sort keys and different remaining fields?",
+   "options": [
+    "Complete A8's canonical ordering and keep the category resolved",
+    "Record an unresolved replay-integrity issue or explicit exception in A31"
+   ],
+   "default_guess": "Treat the review category as unresolved until A8 defines a total canonical ordering.",
+   "witness": {
+    "initial": "A valid publication contains two repeated section identifiers whose four sort-key fields match and whose amounts differ.",
+    "events": [
+     "The publication is accepted.",
+     "The same occurrences are republished in reverse order."
+    ],
+    "outcomes": [
+     "A stable-sort implementation records an integrity conflict, so the replay identity is order-dependent despite A31 treating it as resolved.",
+     "A total-order implementation records an idempotent replay."
+    ],
+    "observer": "The producer and the security reviewer see the differing replay result."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "Registry checks for grant and assignment revocation",
+   "kind": "rule contradiction",
+   "text": "“Portal mutation policy uses only `is_active` for the grant and assignment operations of access management” conflicts with A4 and R0-24: revoking a viewer grant, staff assignment, or producer grant “consults neither project access nor the Registry” and succeeds for archived projects and Registry outages.",
+   "question": "Does “grant and assignment operations” mean creation only, or must revocation also read `is_active`?",
+   "options": [
+    "Only creation validates `exists` and `is_active`; revocation never calls Registry",
+    "Both creation and revocation validate `is_active`",
+    "Different grant or assignment types follow different checks"
+   ],
+   "default_guess": "Apply the `is_active` check only to creation; revocation does not consult Registry.",
+   "witness": {
+    "initial": "Project P is archived and has an active viewer grant.",
+    "events": [
+     "An administrator requests revocation of the grant while Registry reports `exists=true`, `is_active=false`."
+    ],
+    "outcomes": [
+     "Under A4/R0-24, revocation succeeds without consulting Registry and the viewer immediately loses access.",
+     "Under the changed M17 wording, the access-management operation checks `is_active` and is refused, leaving the viewer's grant active."
+    ],
+    "observer": "The administrator and viewer see whether access was revoked."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "ProjectOverview project availability shape",
+   "kind": "model contradiction",
+   "text": "The declared `ProjectOverview` fields require `project: ProjectContext` and define availability pairs only for budget, expenses, progress, payments, and photos, while the change says “the project context is absent when its Registry read fails … and a `project_availability` says so, like the other five pairs.”",
+   "question": "What is the actual `ProjectOverview` schema when the post-guard Registry context read fails: is `project` optional, is `project_availability` a required sixth availability field, and what validation relation binds them?",
+   "options": [
+    "Add `project_availability` and make `project` present exactly when it is `available`",
+    "Keep `project` required and fail the whole overview when context cannot be read",
+    "Return a separate partial-overview result rather than changing `ProjectOverview`"
+   ],
+   "default_guess": "Add `project_availability` and make `project` optional with the same presence rule as the other availability pairs.",
+   "witness": {
+    "initial": "Project P is active; the guard's Registry validation succeeds, and portal-owned budget and expense data are readable.",
+    "events": [
+     "A viewer requests P's overview.",
+     "The subsequent Registry context read times out."
+    ],
+    "outcomes": [
+     "The changed passage returns a partial overview with `project_availability=temporarily_unavailable`, no project context, and independently available portal components.",
+     "The declared DTO cannot represent an absent required `project`, so overview construction fails and the caller receives an operation failure instead."
+    ],
+    "observer": "The viewer sees either a partial overview or a failed request."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A6\",\"subject\":\"ProjectValidationResult consistency\",\"kind\":\"unverified external invariant\",\"text\":\"“The two readings agree, because the Registry's validation answer sets `is_active = true` exactly when its `status` is `active` …; an answer in which they disagree is outside the Registry contract and is not something the portal decides. The gateway returns a decoded validation answer as it is and raises no failure for it; it does not check that `exists`, `is_active` and `status` agree, and each caller reads only the field A5 names for it.”\",\"question\":\"What must the portal do when a decoded validation answer has inconsistent `exists`, `is_active`, and `status` values?\",\"options\":[\"Reject the answer as `schema_mismatch`\",\"Let each caller trust its designated field, allowing operations to reach different lifecycle decisions\",\"Define a precedence rule that derives one authoritative lifecycle value\"],\"default_guess\":\"Reject the inconsistent answer as `schema_mismatch`.\",\"witness\":{\"initial\":\"Registry owns project P, but its validation endpoint returns `exists=true`, `status=archived`, `is_active=true`; the portal gateway accepts that shape.\",\"events\":[\"An administrator creates a viewer grant for P; grant creation reads `is_active`.\",\"An operator attempts a project-record mutation for P; the project guard reads `status`.\"],\"outcomes\":[\"Grant creation succeeds because `is_active=true`, while the record mutation is rejected as archived.\",\"The inconsistent answer is rejected for both operations as a boundary failure, preserving the rule that no new grant is created for an archived project.\"],\"observer\":\"The administrator, operator, and newly granted viewer see the difference.\"}},{\"unit\":\"A8\",\"subject\":\"Snapshot fingerprint JSON encoding\",\"kind\":\"canonicalization gap\",\"text\":\"“The snapshot `content_fingerprint` is the SHA-256 hex digest of the compact, key-sorted JSON of the publication's project, estimate and contract identity … and its sections.”\",\"question\":\"What exact JSON structure and byte encoding are hashed, including field names and nesting, UUID representation, Decimal normalization, datetime format and offset normalization, Unicode escaping, and text encoding?\",\"options\":[\"Hash a flat object using explicitly normalized strings for UUIDs, decimals, and datetimes\",\"Hash the request-model JSON using its library's default encoders\",\"Hash a nested project/estimate/contract object with a separately specified canonical scalar encoding\"],\"default_guess\":\"Use a flat UTF-8 JSON object with fixed field names, lowercase canonical UUID strings, fixed two-decimal amount strings, normalized UTC datetime strings, no insignificant whitespace, and a specified Unicode-escaping rule.\",\"witness\":{\"initial\":\"Snapshot key K has not been imported.\",\"events\":[\"A producer imports K with `material_planned=Decimal('1.00')` and a UTC `published_at`.\",\"Two implementations compute the accepted fingerprint; one emits the decimal as a JSON string and the datetime with `Z`, while the other emits a JSON number and `+00:00`.\"],\"outcomes\":[\"The stored and producer-readable fingerprint is the digest of `\\\"1.00\\\"` and a `Z` timestamp.\",\"The stored and producer-readable fingerprint is a different digest of `1.0` and a `+00:00` timestamp; a later deployment using the other encoding can classify the same publication as an integrity conflict.\"],\"observer\":\"The producer reading the import result and operators performing a replay after an implementation change see the difference.\"}},{\"unit\":\"A8\",\"subject\":\"Ordering repeated snapshot sections\",\"kind\":\"contradictory ordering rule\",\"text\":\"“The sections enter as a list of every occurrence, duplicates included, each with all its fields, sorted by `(source_section_id, source_section_code, display_name, sort_order)`; their order in the publication therefore does not change the fingerprint.”\",\"question\":\"How are two section occurrences ordered when all four stated sort keys are equal but another field, such as a planned amount, differs?\",\"options\":[\"Preserve their publication order, which makes the fingerprint order-sensitive\",\"Add the remaining section fields as deterministic tie-breakers\",\"Canonicalize equal-key occurrences as an unordered multiset by another specified method\"],\"default_guess\":\"Extend the sort key with canonical representations of all remaining section fields.\",\"witness\":{\"initial\":\"No snapshot exists for key K; the portal accepts repeated `source_section_id` values.\",\"events\":[\"The producer imports K with sections A and B having the same `source_section_id`, code, display name, and sort order, but A has material amount 10 and B has 20.\",\"The producer republishes K with only A and B's input order reversed.\"],\"outcomes\":[\"A stable sort preserves each publication's tied input order, so the second digest differs and the import is an `integrity_conflict`.\",\"An implementation honoring the stated order-independence adds a deterministic tie-breaker, so the second import is an `idempotent_replay`.\"],\"observer\":\"The producer sees a conflict instead of a replay and receives a different import result.\"}},{\"unit\":\"A8\",\"subject\":\"Snapshot section sort collation\",\"kind\":\"comparison gap\",\"text\":\"“sorted by `(source_section_id, source_section_code, display_name, sort_order)`”\",\"question\":\"What comparison semantics apply to the three unrestricted strings in the section sort tuple?\",\"options\":[\"Unicode code-point order\",\"UTF-8 byte order\",\"Locale-aware collation\",\"A specified normalized Unicode form followed by a specified binary order\"],\"default_guess\":\"Compare unnormalized strings by Unicode scalar/code-point order.\",\"witness\":{\"initial\":\"Snapshot key K has not been imported, and its sections contain non-ASCII identifiers such as `z` and `ä`.\",\"events\":[\"The producer imports K.\",\"One implementation uses language-native code-point ordering; another uses locale-aware collation.\"],\"outcomes\":[\"The canonical section list orders `z` before `ä`, producing fingerprint F1.\",\"The canonical section list orders `ä` before `z`, producing fingerprint F2.\"],\"observer\":\"The producer can read the different fingerprint, and a database moved between implementations can classify a replay differently.\"}},{\"unit\":\"A31\",\"subject\":\"Security review coverage of A8 replay identity\",\"kind\":\"stale review conclusion\",\"text\":\"“concurrency: APPLICABLE; references: A8, A18, A19, A22, A29; affected: replay identities” together with “Every category resolves to an accepted decision or an open question.”\",\"question\":\"Can the concurrency/replay-identity category remain resolved when A8 accepts duplicate sections but its stated sort is not total for duplicates with equal sort keys and different remaining fields?\",\"options\":[\"Complete A8's canonical ordering and keep the category resolved\",\"Record an unresolved replay-integrity issue or explicit exception in A31\"],\"default_guess\":\"Treat the review category as unresolved until A8 defines a total canonical ordering.\",\"witness\":{\"initial\":\"A valid publication contains two repeated section identifiers whose four sort-key fields match and whose amounts differ.\",\"events\":[\"The publication is accepted.\",\"The same occurrences are republished in reverse order.\"],\"outcomes\":[\"A stable-sort implementation records an integrity conflict, so the replay identity is order-dependent despite A31 treating it as resolved.\",\"A total-order implementation records an idempotent replay.\"],\"observer\":\"The producer and the security reviewer see the differing replay result.\"}},{\"unit\":\"context\",\"subject\":\"Registry checks for grant and assignment revocation\",\"kind\":\"rule contradiction\",\"text\":\"“Portal mutation policy uses only `is_active` for the grant and assignment operations of access management” conflicts with A4 and R0-24: revoking a viewer grant, staff assignment, or producer grant “consults neither project access nor the Registry” and succeeds for archived projects and Registry outages.\",\"question\":\"Does “grant and assignment operations” mean creation only, or must revocation also read `is_active`?\",\"options\":[\"Only creation validates `exists` and `is_active`; revocation never calls Registry\",\"Both creation and revocation validate `is_active`\",\"Different grant or assignment types follow different checks\"],\"default_guess\":\"Apply the `is_active` check only to creation; revocation does not consult Registry.\",\"witness\":{\"initial\":\"Project P is archived and has an active viewer grant.\",\"events\":[\"An administrator requests revocation of the grant while Registry reports `exists=true`, `is_active=false`.\"],\"outcomes\":[\"Under A4/R0-24, revocation succeeds without consulting Registry and the viewer immediately loses access.\",\"Under the changed M17 wording, the access-management operation checks `is_active` and is refused, leaving the viewer's grant active.\"],\"observer\":\"The administrator and viewer see whether access was revoked.\"}},{\"unit\":\"context\",\"subject\":\"ProjectOverview project availability shape\",\"kind\":\"model contradiction\",\"text\":\"The declared `ProjectOverview` fields require `project: ProjectContext` and define availability pairs only for budget, expenses, progress, payments, and photos, while the change says “the project context is absent when its Registry read fails … and a `project_availability` says so, like the other five pairs.”\",\"question\":\"What is the actual `ProjectOverview` schema when the post-guard Registry context read fails: is `project` optional, is `project_availability` a required sixth availability field, and what validation relation binds them?\",\"options\":[\"Add `project_availability` and make `project` present exactly when it is `available`\",\"Keep `project` required and fail the whole overview when context cannot be read\",\"Return a separate partial-overview result rather than changing `ProjectOverview`\"],\"default_guess\":\"Add `project_availability` and make `project` optional with the same presence rule as the other availability pairs.\",\"witness\":{\"initial\":\"Project P is active; the guard's Registry validation succeeds, and portal-owned budget and expense data are readable.\",\"events\":[\"A viewer requests P's overview.\",\"The subsequent Registry context read times out.\"],\"outcomes\":[\"The changed passage returns a partial overview with `project_availability=temporarily_unavailable`, no project context, and independently available portal components.\",\"The declared DTO cannot represent an absent required `project`, so overview construction fails and the caller receives an operation failure instead.\"],\"observer\":\"The viewer sees either a partial overview or a failed request.\"}}]}",
+ "set_aside": []
+}

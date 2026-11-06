@@ -1,0 +1,491 @@
+{
+ "open_points": [
+  {
+   "unit": "context",
+   "subject": "M18 SnapshotPublication section constraints",
+   "kind": "contradiction",
+   "text": "`sections: list[SnapshotSectionData]` is described as `(non-empty, unique source_section_id)`, but the carried change says the import `refuses neither an empty section list nor repeated source_section_id values`.",
+   "question": "Are non-emptiness and uniqueness constraints of the inbound DTO, or merely unenforced producer obligations?",
+   "options": [
+    "Request/model decoding rejects empty or duplicate sections before import.",
+    "The portal accepts empty and duplicate sections and records an accepted snapshot if all other checks pass."
+   ],
+   "default_guess": "Treat them only as producer obligations and accept both cases, because the carried change explicitly records running-service behavior.",
+   "witness": {
+    "initial": "An active project and an authorized producer with no existing snapshot for the identity.",
+    "events": [
+     "The producer publishes a version whose sections list is empty, or contains two entries with the same source_section_id."
+    ],
+    "outcomes": [
+     "DTO validation refuses the request, so no classified import result is written.",
+     "Import validation accepts the publication and persists a snapshot and accepted import result."
+    ],
+    "observer": "The producer, which either receives a decoding refusal without import_id or an accepted import result."
+   }
+  },
+  {
+   "unit": "A4",
+   "subject": "Expense-intake authorization order",
+   "kind": "contradictory precedence",
+   "text": "A4 says `Every project-scoped operation evaluates, in order` session, principal, project access, capability, then Registry; A7 says expense creation checks recognition status and contract version before capability and active project.",
+   "question": "Does expense creation run the universal A4 authorization sequence before validating recognition content, or the A7 content-first sequence?",
+   "options": [
+    "Run A4 authorization first, then validate recognition content.",
+    "Validate recognition status/version first, then perform the authorization and project checks listed by A7."
+   ],
+   "default_guess": "Apply A4 first because it calls itself the sequence for every project-scoped operation.",
+   "witness": {
+    "initial": "A revoked staff session submits an unconfirmed recognition publication for a project.",
+    "events": [
+     "The former staff member sends the expense-creation request."
+    ],
+    "outcomes": [
+     "The request fails at session authentication; recognition content is not evaluated.",
+     "The request fails first at recognition status as an HTTP 422 content refusal."
+    ],
+    "observer": "The caller through the refusal class/status, and operational instrumentation through which checks ran."
+   }
+  },
+  {
+   "unit": "A4",
+   "subject": "Producer scope versus Registry check order",
+   "kind": "circular precedence",
+   "text": "A4 places `project access (… producer scope)` before `Registry lifecycle policy`, while A12 defines `all_projects` scope as allowing an import for any `existing active project`.",
+   "question": "How can the producer-scope step decide an all-projects import before the later Registry step establishes that the project exists and is active, and is Registry called once or twice?",
+   "options": [
+    "Producer scope checks only scope_mode/grants; existence and activity are checked solely by the later Registry step.",
+    "The producer-scope step calls Registry and includes lifecycle validation, making A4's final Registry step redundant.",
+    "Registry is checked before producer scope for imports despite A4's stated order."
+   ],
+   "default_guess": "Make scope check only scope_mode/grants and leave existence/activity to the final Registry check.",
+   "witness": {
+    "initial": "An active all_projects producer submits an import for a UUID unknown to Registry.",
+    "events": [
+     "The producer authenticates and publishes a structurally valid snapshot."
+    ],
+    "outcomes": [
+     "Scope passes from scope_mode alone, then the Registry step rejects unknown_project.",
+     "The scope step queries Registry and rejects there, possibly followed by no separate lifecycle step or by a second Registry call."
+    ],
+    "observer": "Registry through call count/order and the producer through any differing translated failure."
+   }
+  },
+  {
+   "unit": "A5",
+   "subject": "Registry dependency failures during authorized reads and mutations",
+   "kind": "missing outcome policy",
+   "text": "A5 specifies active, archived and unknown-project outcomes, while A6 classifies timeout, transport, HTTP, schema and identity failures but neither decision states the operation-level result for those failures.",
+   "question": "What must a project-scoped operation do when Registry cannot supply a usable lifecycle answer, including whether a composite read becomes temporarily_unavailable or the whole operation fails and how direct operations are refused?",
+   "options": [
+    "Fail closed and abort the whole operation with a translated dependency failure.",
+    "For composite reads, return temporarily_unavailable for affected components; fail direct reads and all mutations.",
+    "Use existing portal access for reads during Registry failure but reject mutations."
+   ],
+   "default_guess": "Fail mutations and direct reads closed; use temporarily_unavailable only where a projection explicitly supports component availability.",
+   "witness": {
+    "initial": "A viewer has an active grant and session for an active project; portal expense data exists.",
+    "events": [
+     "Registry times out while the viewer requests the project overview or a direct expense read."
+    ],
+    "outcomes": [
+     "The entire request fails because the mandatory Registry guard cannot complete.",
+     "The overview succeeds with unavailable components, or portal-owned data is returned despite the Registry timeout."
+    ],
+    "observer": "The viewer."
+   }
+  },
+  {
+   "unit": "A6",
+   "subject": "Registry failure translation at the application/API boundary",
+   "kind": "incomplete translation",
+   "text": "A6 maps conditions to RegistryFailureKind values but does not map most of those values to domain refusals, availability states, or HTTP outcomes.",
+   "question": "For each of timeout, transport_error, http_error, schema_mismatch and identity_mismatch, what result does each caller expose and which failures are concealed or distinguished?",
+   "options": [
+    "Expose one common dependency-unavailable result for all five.",
+    "Preserve each typed failure to callers and map them separately at HTTP.",
+    "Translate differently by operation, such as temporary availability for reads and a common refusal for writes."
+   ],
+   "default_guess": "Preserve the typed internal kind and map all dependency failures to a common unavailable HTTP response unless a projection has ViewAvailability.",
+   "witness": {
+    "initial": "An authenticated administrator creates a project assignment while Registry returns a response naming a different UUID.",
+    "events": [
+     "The gateway classifies identity_mismatch.",
+     "The application handles the gateway error."
+    ],
+    "outcomes": [
+     "The API exposes a dependency/unavailable refusal distinct from unknown_project.",
+     "The exception reaches the default policy and produces the same unclassified HTTP 500 used for invalid typed status."
+    ],
+    "observer": "The administrator and service monitoring."
+   }
+  },
+  {
+   "unit": "A7",
+   "subject": "Snapshot missing-field classification",
+   "kind": "contradictory refusal boundary",
+   "text": "A7 says `a missing envelope field or section list → incomplete_content`, then says a body lacking a request-model-required field is refused by decoding with HTTP 422, is not an import attempt and gets no import_id.",
+   "question": "Which publication fields are admitted as absent by request decoding so import validation can classify them as incomplete_content, and which are required by the request model?",
+   "options": [
+    "Every M18 field is required at decoding; incomplete_content applies only to present-but-empty values.",
+    "Some envelope and section fields are optional in the request model specifically so the import can record incomplete_content.",
+    "All structural missing fields are decoding errors, making the phrase `missing envelope field or section list` unreachable."
+   ],
+   "default_guess": "Require every typed M18 field at decoding and use incomplete_content only for admitted empty content such as an empty approved_by.",
+   "witness": {
+    "initial": "A producer has a valid credential and scope for an active project.",
+    "events": [
+     "It submits JSON omitting approved_by or the sections property."
+    ],
+    "outcomes": [
+     "HTTP 422 occurs before authentication; no import_id, import record, or audit record exists.",
+     "Authentication and authorization run, then a rejected import result is written with reason incomplete_content."
+    ],
+    "observer": "The producer through the presence of import_id and later result readability."
+   }
+  },
+  {
+   "unit": "A9",
+   "subject": "Boundary handling of excess monetary precision",
+   "kind": "unspecified normalization",
+   "text": "A9 says `Decimal, 2 fraction digits`, that rounding occurs `at derivation boundaries`, and that stored amounts are `already 2-digit exact`, but it does not say whether boundary inputs with more than two fraction digits are rejected or rounded.",
+   "question": "What happens when an otherwise valid snapshot, expense, allocation, payment, or manual plan supplies an amount such as EUR 1.005?",
+   "options": [
+    "Reject it as an invalid EUR amount.",
+    "Round half-up to 1.01 before storing.",
+    "Accept and store the higher-precision Decimal, rounding only derived results."
+   ],
+   "default_guess": "Reject inputs with more than two fractional digits, because stored amounts must already be two-digit exact and rounding is limited to derivations.",
+   "witness": {
+    "initial": "An active project and an authorized operator or producer.",
+    "events": [
+     "The actor submits a monetary amount of 1.005 EUR."
+    ],
+    "outcomes": [
+     "The request is rejected and nothing is stored.",
+     "The request succeeds with 1.01 stored after half-up rounding."
+    ],
+    "observer": "The submitting actor and later readers of totals."
+   }
+  },
+  {
+   "unit": "A13",
+   "subject": "Rejected audit occurrences",
+   "kind": "internal contradiction",
+   "text": "A13 says `One audit record per action occurrence` and INV-051 says every catalog action writes exactly one AuditRecord, but it also says only snapshot.import and staff.login_failed write rejected records and `Every other refused operation … writes no record`.",
+   "question": "Does an attempted but refused catalog action count as an action occurrence for the one-record rule, or is that rule limited to successful actions plus the two named rejected cases?",
+   "options": [
+    "Every attempted catalog action, including every refusal, writes exactly one record.",
+    "Only successful actions write records, except rejected snapshot imports and failed logins.",
+    "Only attempts that reach mutation execution count as occurrences; earlier authorization/validation refusals do not."
+   ],
+   "default_guess": "Audit successful catalog actions plus exactly the two expressly named rejected cases.",
+   "witness": {
+    "initial": "An operator has a valid session but no assignment to a project.",
+    "events": [
+     "The operator attempts expense.correct on that project.",
+     "Authorization refuses the request."
+    ],
+    "outcomes": [
+     "INV-051 and `one per action occurrence` cause a rejected expense.correct audit record.",
+     "The explicit running-service rule rolls the transaction back and writes no audit record."
+    ],
+    "observer": "An administrator or auditor reading the audit log."
+   }
+  },
+  {
+   "unit": "A13",
+   "subject": "Actor provenance for staff.login_failed",
+   "kind": "missing actor rule",
+   "text": "A13 requires a staff.login_failed record, while M36 requires actor_id unless actor_kind is system; a failed login may name no existing account and must not reveal whether the email exists.",
+   "question": "What actor_kind and actor_id are recorded for failed login attempts against unknown emails and against known accounts with a wrong password?",
+   "options": [
+    "Use actor_kind=system and actor_id absent for every failed login.",
+    "Use staff and the staff_id when the normalized email exists, system otherwise.",
+    "Use a separate unauthenticated actor representation, which the closed ActorKind currently lacks."
+   ],
+   "default_guess": "Use system with no actor_id for all failed logins to keep known and unknown accounts behaviorally aligned.",
+   "witness": {
+    "initial": "One staff email exists; a second supplied email does not.",
+    "events": [
+     "An attacker submits a wrong password for the existing email.",
+     "The attacker submits the same wrong password for the unknown email."
+    ],
+    "outcomes": [
+     "Both audit records use system/no actor and are structurally identical apart from non-sensitive event identity.",
+     "The known-email failure records the staff actor while the unknown-email failure records system or cannot satisfy model validation."
+    ],
+    "observer": "An audit reader and any code validating AuditRecord."
+   }
+  },
+  {
+   "unit": "A13",
+   "subject": "Audit action to entity reference mapping",
+   "kind": "missing closed mapping",
+   "text": "The catalog is closed and action detail is said to live in a referenced entity, but no table selects entity_kind and entity_id for each action.",
+   "question": "For every audit action, which entity is referenced, especially actions with several plausible entities such as staff.login, grant.create, snapshot.activate, document.update and rejected snapshot.import?",
+   "options": [
+    "Reference the primary entity created or changed by the action.",
+    "Reference the aggregate/root entity, such as staff account for login and expense for document changes.",
+    "Define an action-specific closed mapping, with absent entity references for actions that have no suitable entity."
+   ],
+   "default_guess": "Use an action-specific mapping and reference the directly created or changed entity; use SnapshotImportRecord for every classified snapshot import.",
+   "witness": {
+    "initial": "A staff member logs in successfully and a new StaffSession is created.",
+    "events": [
+     "The login flow appends staff.login."
+    ],
+    "outcomes": [
+     "The record references entity_kind=staff_account and the staff_id.",
+     "The record references entity_kind=staff_session and the new session_id."
+    ],
+    "observer": "Audit consumers correlating security events to accounts or sessions."
+   }
+  },
+  {
+   "unit": "A13",
+   "subject": "Failure to persist a required audit record",
+   "kind": "missing atomicity policy",
+   "text": "M36 says `Audit failures must not silently vanish; the owning-flow policy lands in State 2`, but A13 does not say whether business changes roll back when append_audit fails.",
+   "question": "When a required audit append fails, must the owning mutation roll back atomically, may the mutation commit while the request fails, or is another recovery mechanism required?",
+   "options": [
+    "Audit and business writes are one transaction; any audit failure rolls back the mutation.",
+    "Commit the business mutation and surface the audit failure.",
+    "Commit the mutation and enqueue or retry audit persistence separately."
+   ],
+   "default_guess": "Make the audit append atomic with the business mutation and roll everything back on failure.",
+   "witness": {
+    "initial": "An administrator is creating a viewer and the business insert can succeed, but the audit repository fails.",
+    "events": [
+     "The use case inserts the viewer.",
+     "Appending viewer.create fails."
+    ],
+    "outcomes": [
+     "The transaction rolls back, so no viewer exists.",
+     "The viewer remains created without its required audit record, while the request either fails or reports partial success."
+    ],
+    "observer": "The administrator and an auditor."
+   }
+  },
+  {
+   "unit": "A25",
+   "subject": "Request-body size enforcement",
+   "kind": "missing bound and refusal semantics",
+   "text": "A25 requires request bodies to be bounded before expensive work, but the visible A30 configuration supplies no request-body limit or rules for Content-Length, chunked bodies, or the refusal response.",
+   "question": "What is the maximum request size, how is it configured, how are absent or dishonest Content-Length and streamed/chunked bodies counted, and what exact response is returned when the bound is exceeded?",
+   "options": [
+    "Require a valid Content-Length within a configured bound and reject absent/chunked lengths.",
+    "Count bytes while streaming and stop at the configured bound regardless of Content-Length.",
+    "Apply framework buffering limits, with a fixed source-defined maximum."
+   ],
+   "default_guess": "Use a required positive runtime limit, precheck Content-Length when present, enforce the same byte limit while streaming, and return an empty HTTP 413.",
+   "witness": {
+    "initial": "The service is running with otherwise valid configuration.",
+    "events": [
+     "A caller sends a snapshot-import body larger than the intended limit using chunked transfer and no Content-Length."
+    ],
+    "outcomes": [
+     "The transport stops reading at the limit and returns a size refusal before authentication or parsing.",
+     "The framework buffers/parses the whole body because only Content-Length was checked or no concrete bound exists."
+    ],
+    "observer": "The caller and service resource monitoring."
+   }
+  },
+  {
+   "unit": "A25",
+   "subject": "Viewer-entry limiter concurrency and memory bound",
+   "kind": "unverifiable invariant",
+   "text": "The limiter is described as a per-key sliding-window log `with bounded memory`, but no atomicity rule, maximum key count, or eviction policy for inactive client-address keys is given.",
+   "question": "How are concurrent attempts serialized, and what globally bounds or evicts the set of client-address keys?",
+   "options": [
+    "Use an atomic lock/update per key and evict empty or least-recently-used keys under a fixed global cap.",
+    "Accept approximate races and rely only on per-key attempt caps; key count is unbounded.",
+    "Store limiter state in a bounded external or process-wide cache with a specified maximum."
+   ],
+   "default_guess": "Serialize check-and-record and evict expired empty keys, with a fixed global key cap added to configuration.",
+   "witness": {
+    "initial": "A key has 9 admitted attempts in a 10-attempt window.",
+    "events": [
+     "Two requests for that key arrive concurrently.",
+     "Separately, an attacker sends one attempt from each of many distinct network addresses."
+    ],
+    "outcomes": [
+     "Atomic admission allows only one concurrent request and global eviction keeps memory within a fixed bound.",
+     "Both concurrent requests are admitted, and distinct address keys make memory grow without a stated bound."
+    ],
+    "observer": "The eleventh caller and service memory monitoring."
+   }
+  },
+  {
+   "unit": "A25",
+   "subject": "Missing Origin on viewer mutations",
+   "kind": "unspecified refusal condition",
+   "text": "A25 says mutating viewer requests `must come from the canonical public origin`, but does not say whether the Origin header is mandatory or how an absent Origin is evaluated.",
+   "question": "Must every mutating viewer request include an exact canonical Origin header, or may an absent Origin be accepted using Host/site information?",
+   "options": [
+    "Reject every mutation with a missing Origin.",
+    "Accept a missing Origin when the secure viewer cookie and trusted Host are valid.",
+    "Apply method- or user-agent-specific rules."
+   ],
+   "default_guess": "Require Origin and reject it when absent, because the policy describes origin comparison as a mandatory mutation guard.",
+   "witness": {
+    "initial": "A viewer has a valid cookie session on the trusted host.",
+    "events": [
+     "The viewer sends a logout or other mutating request without an Origin header."
+    ],
+    "outcomes": [
+     "The request is rejected by the origin guard.",
+     "The request succeeds because Host and the same-site cookie are treated as sufficient."
+    ],
+    "observer": "The viewer."
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "Validation and normalization of source-supplied times",
+   "kind": "missing time contract",
+   "text": "A28 says source-supplied times are `validated and kept as supplied` but does not define whether they must be offset-aware, UTC, normalized to UTC, allowed to be offset-naive, or constrained relative to other times.",
+   "question": "Which datetime forms and offsets are accepted for approved_at, published_at, confirmed_at and photo_date, and what exact stored value participates in equality and fingerprints?",
+   "options": [
+    "Require offset-aware input and normalize the instant to offset-naive UTC.",
+    "Require an explicit UTC offset and preserve the original offset representation.",
+    "Accept offset-naive values as already UTC and otherwise preserve supplied values."
+   ],
+   "default_guess": "Require an offset-aware instant, convert it to UTC, and persist the offset-naive UTC value used by the rest of the service.",
+   "witness": {
+    "initial": "An authorized producer has a new snapshot identity.",
+    "events": [
+     "It publishes approved_at as `2026-11-06T12:00:00+02:00` and later republishes the same instant as `2026-11-06T10:00:00Z`."
+    ],
+    "outcomes": [
+     "Both normalize to the same stored instant and produce identical content for replay.",
+     "The supplied representations are preserved and produce different fingerprints, causing an integrity conflict."
+    ],
+    "observer": "The producer through replay versus conflict."
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "Scope of the equal-timestamps invariant",
+   "kind": "contradiction",
+   "text": "The normative rule limits the single clock instant to `portal-owned timestamp` writes and preserves source times, but the formal invariant says `All timestamps written by one operation are equal`.",
+   "question": "Does the equality invariant apply only to timestamps generated by the portal clock, or also to source-supplied timestamps persisted by that operation?",
+   "options": [
+    "Only portal-owned/generated timestamps must equal the single clock reading.",
+    "Every timestamp persisted in the operation must be overwritten with the clock instant.",
+    "Source timestamps are exempt, but the formal invariant must explicitly say so."
+   ],
+   "default_guess": "Apply equality only to portal-owned timestamps and preserve source timestamps.",
+   "witness": {
+    "initial": "A snapshot was approved and published yesterday.",
+    "events": [
+     "The portal imports it today and writes approved_at, published_at, received_at, occurred_at and created timestamps."
+    ],
+    "outcomes": [
+     "Source times remain yesterday while all portal-owned times equal today's single clock read.",
+     "The formal invariant forces every written timestamp to be equal, overwriting or rejecting the source times."
+    ],
+    "observer": "The producer and readers of snapshot provenance."
+   }
+  },
+  {
+   "unit": "A29",
+   "subject": "Bootstrap confirmation and exit-code precedence",
+   "kind": "undefined command behavior",
+   "text": "Exit code 1 is `confirmation did not match`, but the policy never defines what is confirmed, how confirmation is collected, or which check wins when confirmation mismatch, invalid identity input and an already-completed bootstrap coincide.",
+   "question": "What confirmation input exists, and in what order are confirmation, identity validation and the atomic emptiness check evaluated for exit-code selection?",
+   "options": [
+    "Prompt for the password twice; compare first, then validate identity, then check emptiness.",
+    "Check emptiness first, then collect and compare password confirmation, then validate.",
+    "Treat confirmation as an explicit operator yes/no confirmation rather than password repetition."
+   ],
+   "default_guess": "Read email, password and password confirmation interactively; check confirmation, validate identity, then enter the transaction and test emptiness.",
+   "witness": {
+    "initial": "A staff account already exists.",
+    "events": [
+     "The host operator invokes bootstrap and supplies an invalid email plus two different password entries."
+    ],
+    "outcomes": [
+     "The command exits 1 for confirmation mismatch without checking identity or database emptiness.",
+     "The command exits 3 because bootstrap completion is checked first, or exits 2 because identity validation precedes confirmation."
+    ],
+    "observer": "The host deployment script branching on the exit code."
+   }
+  },
+  {
+   "unit": "A30",
+   "subject": "Closed runtime environment configuration",
+   "kind": "missing referenced table",
+   "text": "A30 refers to `the closed table of environment variables, their types, requiredness, normalization and per-environment defaults`, but that table is not present in the accepted texts; the visible list omits settings required by R0-10 and A25 such as database path, binary root, trusted hosts, public origin, CORS, request bound and viewer-entry limiter settings.",
+   "question": "What is the complete environment-variable catalog, including exact names, types, ranges, normalization, production requiredness and development/test defaults?",
+   "options": [
+    "Supply the complete closed table in State 2.",
+    "Treat each omitted setting as a fixed source constant.",
+    "Allow later assembly agents to choose names, parsing and defaults."
+   ],
+   "default_guess": "Add a closed table and require every security- or persistence-sensitive setting in production, with explicit development/test defaults only where already accepted.",
+   "witness": {
+    "initial": "A production deployment supplies REGISTRY_BASE_URL and BINARY_MAX_READ_BYTES but omits EMAIL_GATEWAY_URL, trusted hosts and canonical public origin.",
+    "events": [
+     "The service validates configuration at startup."
+    ],
+    "outcomes": [
+     "Startup fails because those variables are required members of the closed configuration.",
+     "Startup succeeds because the gateway is deferred and omitted settings receive implementation-chosen defaults."
+    ],
+    "observer": "The host operator."
+   }
+  },
+  {
+   "unit": "A32",
+   "subject": "Exact dependency pins versus transitive resolution",
+   "kind": "contradictory reproducibility",
+   "text": "A32 pins only four direct requirements and says pip resolves the packages installed for them, while its formal invariant says `Every library the running portal imports from outside its own source is pinned to one exact version` and calls the vulnerability check reproducible.",
+   "question": "Must all transitive runtime dependencies also be locked to exact versions, or are only the four direct imports fixed while transitive versions may change between deploys?",
+   "options": [
+    "Lock every resolved direct and transitive package to an exact version.",
+    "Pin only the four direct dependencies and accept time-dependent transitive resolution.",
+    "Use a generated lock/constraints artifact for deployment and auditing while keeping the four direct pins as the authored requirements."
+   ],
+   "default_guess": "Generate and deploy from a fully pinned lock or constraints file, and run the audit against that exact resolution.",
+   "witness": {
+    "initial": "The four direct requirement lines are unchanged, but a compatible transitive dependency releases a new version.",
+    "events": [
+     "Deployment A resolves dependencies before the release.",
+     "Deployment B resolves the same requirements after the release."
+    ],
+    "outcomes": [
+     "A full lock makes both deployments install and audit identical package versions.",
+     "Direct-only pins allow the deployments to install and audit different transitive versions despite the claimed exactness and reproducibility."
+    ],
+    "observer": "The deployment operator and vulnerability checker."
+   }
+  },
+  {
+   "unit": "A32",
+   "subject": "Vulnerability-check database availability and time variance",
+   "kind": "missing deploy decision",
+   "text": "The check queries the advisory database `at the time of the deploy`, but the text calls it reproducible and states only that the check must pass; it does not state what happens when the database is unavailable or changes after an earlier successful check.",
+   "question": "Does inability to query the advisory service block deployment, and what evidence or advisory snapshot must be retained so the result can be reproduced later?",
+   "options": [
+    "Fail closed on query errors and retain the tool version, resolved dependency lock, database timestamp and full report.",
+    "Permit deployment when the advisory service is unavailable.",
+    "Retry for a bounded period, then require a manual recorded override."
+   ],
+   "default_guess": "Fail closed and retain the exact resolved lock, pip-audit version, query timestamp and machine-readable report.",
+   "witness": {
+    "initial": "All resolved packages have no advisory in the last successful report, but the advisory database is unreachable during the next deploy.",
+    "events": [
+     "The pre-deploy pip-audit command cannot complete its query."
+    ],
+    "outcomes": [
+     "Deployment is blocked because a passing current check cannot be established.",
+     "Deployment proceeds by treating the unavailable check or a previous result as sufficient."
+    ],
+    "observer": "The deployment operator and security reviewer."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"context\",\"subject\":\"M18 SnapshotPublication section constraints\",\"kind\":\"contradiction\",\"text\":\"`sections: list[SnapshotSectionData]` is described as `(non-empty, unique source_section_id)`, but the carried change says the import `refuses neither an empty section list nor repeated source_section_id values`.\",\"question\":\"Are non-emptiness and uniqueness constraints of the inbound DTO, or merely unenforced producer obligations?\",\"options\":[\"Request/model decoding rejects empty or duplicate sections before import.\",\"The portal accepts empty and duplicate sections and records an accepted snapshot if all other checks pass.\"],\"default_guess\":\"Treat them only as producer obligations and accept both cases, because the carried change explicitly records running-service behavior.\",\"witness\":{\"initial\":\"An active project and an authorized producer with no existing snapshot for the identity.\",\"events\":[\"The producer publishes a version whose sections list is empty, or contains two entries with the same source_section_id.\"],\"outcomes\":[\"DTO validation refuses the request, so no classified import result is written.\",\"Import validation accepts the publication and persists a snapshot and accepted import result.\"],\"observer\":\"The producer, which either receives a decoding refusal without import_id or an accepted import result.\"}},{\"unit\":\"A4\",\"subject\":\"Expense-intake authorization order\",\"kind\":\"contradictory precedence\",\"text\":\"A4 says `Every project-scoped operation evaluates, in order` session, principal, project access, capability, then Registry; A7 says expense creation checks recognition status and contract version before capability and active project.\",\"question\":\"Does expense creation run the universal A4 authorization sequence before validating recognition content, or the A7 content-first sequence?\",\"options\":[\"Run A4 authorization first, then validate recognition content.\",\"Validate recognition status/version first, then perform the authorization and project checks listed by A7.\"],\"default_guess\":\"Apply A4 first because it calls itself the sequence for every project-scoped operation.\",\"witness\":{\"initial\":\"A revoked staff session submits an unconfirmed recognition publication for a project.\",\"events\":[\"The former staff member sends the expense-creation request.\"],\"outcomes\":[\"The request fails at session authentication; recognition content is not evaluated.\",\"The request fails first at recognition status as an HTTP 422 content refusal.\"],\"observer\":\"The caller through the refusal class/status, and operational instrumentation through which checks ran.\"}},{\"unit\":\"A4\",\"subject\":\"Producer scope versus Registry check order\",\"kind\":\"circular precedence\",\"text\":\"A4 places `project access (… producer scope)` before `Registry lifecycle policy`, while A12 defines `all_projects` scope as allowing an import for any `existing active project`.\",\"question\":\"How can the producer-scope step decide an all-projects import before the later Registry step establishes that the project exists and is active, and is Registry called once or twice?\",\"options\":[\"Producer scope checks only scope_mode/grants; existence and activity are checked solely by the later Registry step.\",\"The producer-scope step calls Registry and includes lifecycle validation, making A4's final Registry step redundant.\",\"Registry is checked before producer scope for imports despite A4's stated order.\"],\"default_guess\":\"Make scope check only scope_mode/grants and leave existence/activity to the final Registry check.\",\"witness\":{\"initial\":\"An active all_projects producer submits an import for a UUID unknown to Registry.\",\"events\":[\"The producer authenticates and publishes a structurally valid snapshot.\"],\"outcomes\":[\"Scope passes from scope_mode alone, then the Registry step rejects unknown_project.\",\"The scope step queries Registry and rejects there, possibly followed by no separate lifecycle step or by a second Registry call.\"],\"observer\":\"Registry through call count/order and the producer through any differing translated failure.\"}},{\"unit\":\"A5\",\"subject\":\"Registry dependency failures during authorized reads and mutations\",\"kind\":\"missing outcome policy\",\"text\":\"A5 specifies active, archived and unknown-project outcomes, while A6 classifies timeout, transport, HTTP, schema and identity failures but neither decision states the operation-level result for those failures.\",\"question\":\"What must a project-scoped operation do when Registry cannot supply a usable lifecycle answer, including whether a composite read becomes temporarily_unavailable or the whole operation fails and how direct operations are refused?\",\"options\":[\"Fail closed and abort the whole operation with a translated dependency failure.\",\"For composite reads, return temporarily_unavailable for affected components; fail direct reads and all mutations.\",\"Use existing portal access for reads during Registry failure but reject mutations.\"],\"default_guess\":\"Fail mutations and direct reads closed; use temporarily_unavailable only where a projection explicitly supports component availability.\",\"witness\":{\"initial\":\"A viewer has an active grant and session for an active project; portal expense data exists.\",\"events\":[\"Registry times out while the viewer requests the project overview or a direct expense read.\"],\"outcomes\":[\"The entire request fails because the mandatory Registry guard cannot complete.\",\"The overview succeeds with unavailable components, or portal-owned data is returned despite the Registry timeout.\"],\"observer\":\"The viewer.\"}},{\"unit\":\"A6\",\"subject\":\"Registry failure translation at the application/API boundary\",\"kind\":\"incomplete translation\",\"text\":\"A6 maps conditions to RegistryFailureKind values but does not map most of those values to domain refusals, availability states, or HTTP outcomes.\",\"question\":\"For each of timeout, transport_error, http_error, schema_mismatch and identity_mismatch, what result does each caller expose and which failures are concealed or distinguished?\",\"options\":[\"Expose one common dependency-unavailable result for all five.\",\"Preserve each typed failure to callers and map them separately at HTTP.\",\"Translate differently by operation, such as temporary availability for reads and a common refusal for writes.\"],\"default_guess\":\"Preserve the typed internal kind and map all dependency failures to a common unavailable HTTP response unless a projection has ViewAvailability.\",\"witness\":{\"initial\":\"An authenticated administrator creates a project assignment while Registry returns a response naming a different UUID.\",\"events\":[\"The gateway classifies identity_mismatch.\",\"The application handles the gateway error.\"],\"outcomes\":[\"The API exposes a dependency/unavailable refusal distinct from unknown_project.\",\"The exception reaches the default policy and produces the same unclassified HTTP 500 used for invalid typed status.\"],\"observer\":\"The administrator and service monitoring.\"}},{\"unit\":\"A7\",\"subject\":\"Snapshot missing-field classification\",\"kind\":\"contradictory refusal boundary\",\"text\":\"A7 says `a missing envelope field or section list → incomplete_content`, then says a body lacking a request-model-required field is refused by decoding with HTTP 422, is not an import attempt and gets no import_id.\",\"question\":\"Which publication fields are admitted as absent by request decoding so import validation can classify them as incomplete_content, and which are required by the request model?\",\"options\":[\"Every M18 field is required at decoding; incomplete_content applies only to present-but-empty values.\",\"Some envelope and section fields are optional in the request model specifically so the import can record incomplete_content.\",\"All structural missing fields are decoding errors, making the phrase `missing envelope field or section list` unreachable.\"],\"default_guess\":\"Require every typed M18 field at decoding and use incomplete_content only for admitted empty content such as an empty approved_by.\",\"witness\":{\"initial\":\"A producer has a valid credential and scope for an active project.\",\"events\":[\"It submits JSON omitting approved_by or the sections property.\"],\"outcomes\":[\"HTTP 422 occurs before authentication; no import_id, import record, or audit record exists.\",\"Authentication and authorization run, then a rejected import result is written with reason incomplete_content.\"],\"observer\":\"The producer through the presence of import_id and later result readability.\"}},{\"unit\":\"A9\",\"subject\":\"Boundary handling of excess monetary precision\",\"kind\":\"unspecified normalization\",\"text\":\"A9 says `Decimal, 2 fraction digits`, that rounding occurs `at derivation boundaries`, and that stored amounts are `already 2-digit exact`, but it does not say whether boundary inputs with more than two fraction digits are rejected or rounded.\",\"question\":\"What happens when an otherwise valid snapshot, expense, allocation, payment, or manual plan supplies an amount such as EUR 1.005?\",\"options\":[\"Reject it as an invalid EUR amount.\",\"Round half-up to 1.01 before storing.\",\"Accept and store the higher-precision Decimal, rounding only derived results.\"],\"default_guess\":\"Reject inputs with more than two fractional digits, because stored amounts must already be two-digit exact and rounding is limited to derivations.\",\"witness\":{\"initial\":\"An active project and an authorized operator or producer.\",\"events\":[\"The actor submits a monetary amount of 1.005 EUR.\"],\"outcomes\":[\"The request is rejected and nothing is stored.\",\"The request succeeds with 1.01 stored after half-up rounding.\"],\"observer\":\"The submitting actor and later readers of totals.\"}},{\"unit\":\"A13\",\"subject\":\"Rejected audit occurrences\",\"kind\":\"internal contradiction\",\"text\":\"A13 says `One audit record per action occurrence` and INV-051 says every catalog action writes exactly one AuditRecord, but it also says only snapshot.import and staff.login_failed write rejected records and `Every other refused operation … writes no record`.\",\"question\":\"Does an attempted but refused catalog action count as an action occurrence for the one-record rule, or is that rule limited to successful actions plus the two named rejected cases?\",\"options\":[\"Every attempted catalog action, including every refusal, writes exactly one record.\",\"Only successful actions write records, except rejected snapshot imports and failed logins.\",\"Only attempts that reach mutation execution count as occurrences; earlier authorization/validation refusals do not.\"],\"default_guess\":\"Audit successful catalog actions plus exactly the two expressly named rejected cases.\",\"witness\":{\"initial\":\"An operator has a valid session but no assignment to a project.\",\"events\":[\"The operator attempts expense.correct on that project.\",\"Authorization refuses the request.\"],\"outcomes\":[\"INV-051 and `one per action occurrence` cause a rejected expense.correct audit record.\",\"The explicit running-service rule rolls the transaction back and writes no audit record.\"],\"observer\":\"An administrator or auditor reading the audit log.\"}},{\"unit\":\"A13\",\"subject\":\"Actor provenance for staff.login_failed\",\"kind\":\"missing actor rule\",\"text\":\"A13 requires a staff.login_failed record, while M36 requires actor_id unless actor_kind is system; a failed login may name no existing account and must not reveal whether the email exists.\",\"question\":\"What actor_kind and actor_id are recorded for failed login attempts against unknown emails and against known accounts with a wrong password?\",\"options\":[\"Use actor_kind=system and actor_id absent for every failed login.\",\"Use staff and the staff_id when the normalized email exists, system otherwise.\",\"Use a separate unauthenticated actor representation, which the closed ActorKind currently lacks.\"],\"default_guess\":\"Use system with no actor_id for all failed logins to keep known and unknown accounts behaviorally aligned.\",\"witness\":{\"initial\":\"One staff email exists; a second supplied email does not.\",\"events\":[\"An attacker submits a wrong password for the existing email.\",\"The attacker submits the same wrong password for the unknown email.\"],\"outcomes\":[\"Both audit records use system/no actor and are structurally identical apart from non-sensitive event identity.\",\"The known-email failure records the staff actor while the unknown-email failure records system or cannot satisfy model validation.\"],\"observer\":\"An audit reader and any code validating AuditRecord.\"}},{\"unit\":\"A13\",\"subject\":\"Audit action to entity reference mapping\",\"kind\":\"missing closed mapping\",\"text\":\"The catalog is closed and action detail is said to live in a referenced entity, but no table selects entity_kind and entity_id for each action.\",\"question\":\"For every audit action, which entity is referenced, especially actions with several plausible entities such as staff.login, grant.create, snapshot.activate, document.update and rejected snapshot.import?\",\"options\":[\"Reference the primary entity created or changed by the action.\",\"Reference the aggregate/root entity, such as staff account for login and expense for document changes.\",\"Define an action-specific closed mapping, with absent entity references for actions that have no suitable entity.\"],\"default_guess\":\"Use an action-specific mapping and reference the directly created or changed entity; use SnapshotImportRecord for every classified snapshot import.\",\"witness\":{\"initial\":\"A staff member logs in successfully and a new StaffSession is created.\",\"events\":[\"The login flow appends staff.login.\"],\"outcomes\":[\"The record references entity_kind=staff_account and the staff_id.\",\"The record references entity_kind=staff_session and the new session_id.\"],\"observer\":\"Audit consumers correlating security events to accounts or sessions.\"}},{\"unit\":\"A13\",\"subject\":\"Failure to persist a required audit record\",\"kind\":\"missing atomicity policy\",\"text\":\"M36 says `Audit failures must not silently vanish; the owning-flow policy lands in State 2`, but A13 does not say whether business changes roll back when append_audit fails.\",\"question\":\"When a required audit append fails, must the owning mutation roll back atomically, may the mutation commit while the request fails, or is another recovery mechanism required?\",\"options\":[\"Audit and business writes are one transaction; any audit failure rolls back the mutation.\",\"Commit the business mutation and surface the audit failure.\",\"Commit the mutation and enqueue or retry audit persistence separately.\"],\"default_guess\":\"Make the audit append atomic with the business mutation and roll everything back on failure.\",\"witness\":{\"initial\":\"An administrator is creating a viewer and the business insert can succeed, but the audit repository fails.\",\"events\":[\"The use case inserts the viewer.\",\"Appending viewer.create fails.\"],\"outcomes\":[\"The transaction rolls back, so no viewer exists.\",\"The viewer remains created without its required audit record, while the request either fails or reports partial success.\"],\"observer\":\"The administrator and an auditor.\"}},{\"unit\":\"A25\",\"subject\":\"Request-body size enforcement\",\"kind\":\"missing bound and refusal semantics\",\"text\":\"A25 requires request bodies to be bounded before expensive work, but the visible A30 configuration supplies no request-body limit or rules for Content-Length, chunked bodies, or the refusal response.\",\"question\":\"What is the maximum request size, how is it configured, how are absent or dishonest Content-Length and streamed/chunked bodies counted, and what exact response is returned when the bound is exceeded?\",\"options\":[\"Require a valid Content-Length within a configured bound and reject absent/chunked lengths.\",\"Count bytes while streaming and stop at the configured bound regardless of Content-Length.\",\"Apply framework buffering limits, with a fixed source-defined maximum.\"],\"default_guess\":\"Use a required positive runtime limit, precheck Content-Length when present, enforce the same byte limit while streaming, and return an empty HTTP 413.\",\"witness\":{\"initial\":\"The service is running with otherwise valid configuration.\",\"events\":[\"A caller sends a snapshot-import body larger than the intended limit using chunked transfer and no Content-Length.\"],\"outcomes\":[\"The transport stops reading at the limit and returns a size refusal before authentication or parsing.\",\"The framework buffers/parses the whole body because only Content-Length was checked or no concrete bound exists.\"],\"observer\":\"The caller and service resource monitoring.\"}},{\"unit\":\"A25\",\"subject\":\"Viewer-entry limiter concurrency and memory bound\",\"kind\":\"unverifiable invariant\",\"text\":\"The limiter is described as a per-key sliding-window log `with bounded memory`, but no atomicity rule, maximum key count, or eviction policy for inactive client-address keys is given.\",\"question\":\"How are concurrent attempts serialized, and what globally bounds or evicts the set of client-address keys?\",\"options\":[\"Use an atomic lock/update per key and evict empty or least-recently-used keys under a fixed global cap.\",\"Accept approximate races and rely only on per-key attempt caps; key count is unbounded.\",\"Store limiter state in a bounded external or process-wide cache with a specified maximum.\"],\"default_guess\":\"Serialize check-and-record and evict expired empty keys, with a fixed global key cap added to configuration.\",\"witness\":{\"initial\":\"A key has 9 admitted attempts in a 10-attempt window.\",\"events\":[\"Two requests for that key arrive concurrently.\",\"Separately, an attacker sends one attempt from each of many distinct network addresses.\"],\"outcomes\":[\"Atomic admission allows only one concurrent request and global eviction keeps memory within a fixed bound.\",\"Both concurrent requests are admitted, and distinct address keys make memory grow without a stated bound.\"],\"observer\":\"The eleventh caller and service memory monitoring.\"}},{\"unit\":\"A25\",\"subject\":\"Missing Origin on viewer mutations\",\"kind\":\"unspecified refusal condition\",\"text\":\"A25 says mutating viewer requests `must come from the canonical public origin`, but does not say whether the Origin header is mandatory or how an absent Origin is evaluated.\",\"question\":\"Must every mutating viewer request include an exact canonical Origin header, or may an absent Origin be accepted using Host/site information?\",\"options\":[\"Reject every mutation with a missing Origin.\",\"Accept a missing Origin when the secure viewer cookie and trusted Host are valid.\",\"Apply method- or user-agent-specific rules.\"],\"default_guess\":\"Require Origin and reject it when absent, because the policy describes origin comparison as a mandatory mutation guard.\",\"witness\":{\"initial\":\"A viewer has a valid cookie session on the trusted host.\",\"events\":[\"The viewer sends a logout or other mutating request without an Origin header.\"],\"outcomes\":[\"The request is rejected by the origin guard.\",\"The request succeeds because Host and the same-site cookie are treated as sufficient.\"],\"observer\":\"The viewer.\"}},{\"unit\":\"A28\",\"subject\":\"Validation and normalization of source-supplied times\",\"kind\":\"missing time contract\",\"text\":\"A28 says source-supplied times are `validated and kept as supplied` but does not define whether they must be offset-aware, UTC, normalized to UTC, allowed to be offset-naive, or constrained relative to other times.\",\"question\":\"Which datetime forms and offsets are accepted for approved_at, published_at, confirmed_at and photo_date, and what exact stored value participates in equality and fingerprints?\",\"options\":[\"Require offset-aware input and normalize the instant to offset-naive UTC.\",\"Require an explicit UTC offset and preserve the original offset representation.\",\"Accept offset-naive values as already UTC and otherwise preserve supplied values.\"],\"default_guess\":\"Require an offset-aware instant, convert it to UTC, and persist the offset-naive UTC value used by the rest of the service.\",\"witness\":{\"initial\":\"An authorized producer has a new snapshot identity.\",\"events\":[\"It publishes approved_at as `2026-11-06T12:00:00+02:00` and later republishes the same instant as `2026-11-06T10:00:00Z`.\"],\"outcomes\":[\"Both normalize to the same stored instant and produce identical content for replay.\",\"The supplied representations are preserved and produce different fingerprints, causing an integrity conflict.\"],\"observer\":\"The producer through replay versus conflict.\"}},{\"unit\":\"A28\",\"subject\":\"Scope of the equal-timestamps invariant\",\"kind\":\"contradiction\",\"text\":\"The normative rule limits the single clock instant to `portal-owned timestamp` writes and preserves source times, but the formal invariant says `All timestamps written by one operation are equal`.\",\"question\":\"Does the equality invariant apply only to timestamps generated by the portal clock, or also to source-supplied timestamps persisted by that operation?\",\"options\":[\"Only portal-owned/generated timestamps must equal the single clock reading.\",\"Every timestamp persisted in the operation must be overwritten with the clock instant.\",\"Source timestamps are exempt, but the formal invariant must explicitly say so.\"],\"default_guess\":\"Apply equality only to portal-owned timestamps and preserve source timestamps.\",\"witness\":{\"initial\":\"A snapshot was approved and published yesterday.\",\"events\":[\"The portal imports it today and writes approved_at, published_at, received_at, occurred_at and created timestamps.\"],\"outcomes\":[\"Source times remain yesterday while all portal-owned times equal today's single clock read.\",\"The formal invariant forces every written timestamp to be equal, overwriting or rejecting the source times.\"],\"observer\":\"The producer and readers of snapshot provenance.\"}},{\"unit\":\"A29\",\"subject\":\"Bootstrap confirmation and exit-code precedence\",\"kind\":\"undefined command behavior\",\"text\":\"Exit code 1 is `confirmation did not match`, but the policy never defines what is confirmed, how confirmation is collected, or which check wins when confirmation mismatch, invalid identity input and an already-completed bootstrap coincide.\",\"question\":\"What confirmation input exists, and in what order are confirmation, identity validation and the atomic emptiness check evaluated for exit-code selection?\",\"options\":[\"Prompt for the password twice; compare first, then validate identity, then check emptiness.\",\"Check emptiness first, then collect and compare password confirmation, then validate.\",\"Treat confirmation as an explicit operator yes/no confirmation rather than password repetition.\"],\"default_guess\":\"Read email, password and password confirmation interactively; check confirmation, validate identity, then enter the transaction and test emptiness.\",\"witness\":{\"initial\":\"A staff account already exists.\",\"events\":[\"The host operator invokes bootstrap and supplies an invalid email plus two different password entries.\"],\"outcomes\":[\"The command exits 1 for confirmation mismatch without checking identity or database emptiness.\",\"The command exits 3 because bootstrap completion is checked first, or exits 2 because identity validation precedes confirmation.\"],\"observer\":\"The host deployment script branching on the exit code.\"}},{\"unit\":\"A30\",\"subject\":\"Closed runtime environment configuration\",\"kind\":\"missing referenced table\",\"text\":\"A30 refers to `the closed table of environment variables, their types, requiredness, normalization and per-environment defaults`, but that table is not present in the accepted texts; the visible list omits settings required by R0-10 and A25 such as database path, binary root, trusted hosts, public origin, CORS, request bound and viewer-entry limiter settings.\",\"question\":\"What is the complete environment-variable catalog, including exact names, types, ranges, normalization, production requiredness and development/test defaults?\",\"options\":[\"Supply the complete closed table in State 2.\",\"Treat each omitted setting as a fixed source constant.\",\"Allow later assembly agents to choose names, parsing and defaults.\"],\"default_guess\":\"Add a closed table and require every security- or persistence-sensitive setting in production, with explicit development/test defaults only where already accepted.\",\"witness\":{\"initial\":\"A production deployment supplies REGISTRY_BASE_URL and BINARY_MAX_READ_BYTES but omits EMAIL_GATEWAY_URL, trusted hosts and canonical public origin.\",\"events\":[\"The service validates configuration at startup.\"],\"outcomes\":[\"Startup fails because those variables are required members of the closed configuration.\",\"Startup succeeds because the gateway is deferred and omitted settings receive implementation-chosen defaults.\"],\"observer\":\"The host operator.\"}},{\"unit\":\"A32\",\"subject\":\"Exact dependency pins versus transitive resolution\",\"kind\":\"contradictory reproducibility\",\"text\":\"A32 pins only four direct requirements and says pip resolves the packages installed for them, while its formal invariant says `Every library the running portal imports from outside its own source is pinned to one exact version` and calls the vulnerability check reproducible.\",\"question\":\"Must all transitive runtime dependencies also be locked to exact versions, or are only the four direct imports fixed while transitive versions may change between deploys?\",\"options\":[\"Lock every resolved direct and transitive package to an exact version.\",\"Pin only the four direct dependencies and accept time-dependent transitive resolution.\",\"Use a generated lock/constraints artifact for deployment and auditing while keeping the four direct pins as the authored requirements.\"],\"default_guess\":\"Generate and deploy from a fully pinned lock or constraints file, and run the audit against that exact resolution.\",\"witness\":{\"initial\":\"The four direct requirement lines are unchanged, but a compatible transitive dependency releases a new version.\",\"events\":[\"Deployment A resolves dependencies before the release.\",\"Deployment B resolves the same requirements after the release.\"],\"outcomes\":[\"A full lock makes both deployments install and audit identical package versions.\",\"Direct-only pins allow the deployments to install and audit different transitive versions despite the claimed exactness and reproducibility.\"],\"observer\":\"The deployment operator and vulnerability checker.\"}},{\"unit\":\"A32\",\"subject\":\"Vulnerability-check database availability and time variance\",\"kind\":\"missing deploy decision\",\"text\":\"The check queries the advisory database `at the time of the deploy`, but the text calls it reproducible and states only that the check must pass; it does not state what happens when the database is unavailable or changes after an earlier successful check.\",\"question\":\"Does inability to query the advisory service block deployment, and what evidence or advisory snapshot must be retained so the result can be reproduced later?\",\"options\":[\"Fail closed on query errors and retain the tool version, resolved dependency lock, database timestamp and full report.\",\"Permit deployment when the advisory service is unavailable.\",\"Retry for a bounded period, then require a manual recorded override.\"],\"default_guess\":\"Fail closed and retain the exact resolved lock, pip-audit version, query timestamp and machine-readable report.\",\"witness\":{\"initial\":\"All resolved packages have no advisory in the last successful report, but the advisory database is unreachable during the next deploy.\",\"events\":[\"The pre-deploy pip-audit command cannot complete its query.\"],\"outcomes\":[\"Deployment is blocked because a passing current check cannot be established.\",\"Deployment proceeds by treating the unavailable check or a previous result as sufficient.\"],\"observer\":\"The deployment operator and security reviewer.\"}}]}",
+ "set_aside": []
+}

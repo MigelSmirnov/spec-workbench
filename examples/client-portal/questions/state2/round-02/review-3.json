@@ -1,0 +1,439 @@
+{
+ "open_points": [
+  {
+   "unit": "A6",
+   "subject": "Registry failure precedence for malformed project identifiers",
+   "kind": "missing precedence",
+   "text": "The translation table maps “malformed UUID input” to `invalid_uuid`, but the exhaustive “first condition that holds, in this order” paragraph omits malformed UUID input and begins with an unusable Registry endpoint.",
+   "question": "When the requested project identifier is malformed and another earlier boundary condition also exists, such as missing Registry configuration, which failure wins?",
+   "options": [
+    "Validate the UUID first and return `invalid_uuid`.",
+    "Apply the written precedence paragraph and return `transport_error` before inspecting the UUID."
+   ],
+   "default_guess": "Validate the UUID before attempting or configuring a Registry call.",
+   "witness": {
+    "initial": "The Registry endpoint setting is missing or unusable.",
+    "events": [
+     "A caller submits a project-scoped request whose `project_id` is not a UUID."
+    ],
+    "outcomes": [
+     "The gateway returns `invalid_uuid` because malformed input is rejected before boundary setup.",
+     "The gateway returns `transport_error` because unusable endpoint configuration is the first listed condition."
+    ],
+    "observer": "The caller and any failure-handling use case."
+   }
+  },
+  {
+   "unit": "A7",
+   "subject": "OCR publication validation precedence",
+   "kind": "missing check order",
+   "text": "A7 gives an exact first-failure order only for an authenticated snapshot publication; INV-031 merely requires an OCR result to be confirmed, complete and on a supported contract version.",
+   "question": "In what order are OCR contract version, confirmation status, completeness, currency, item shape and project/allocation checks evaluated when more than one fails?",
+   "options": [
+    "Validate authorization and project rules first, then the OCR envelope in a specified order.",
+    "Validate and decode the OCR envelope before project authorization.",
+    "Let adapter/model validation order determine the reported failure."
+   ],
+   "default_guess": "Authorize first, then check contract version, confirmation, required fields, currency, items and allocations in a closed order.",
+   "witness": {
+    "initial": "An operator has an active session and assignment to an active project.",
+    "events": [
+     "The operator submits an OCR publication with an unsupported `contract_version`, a non-EUR currency and incomplete normalized items."
+    ],
+    "outcomes": [
+     "The request is refused as an unsupported contract version.",
+     "The request is refused as a currency or incomplete-content error because a different validation layer runs first."
+    ],
+    "observer": "The operator through the typed/API error."
+   }
+  },
+  {
+   "unit": "A7",
+   "subject": "Snapshot section rejection classification",
+   "kind": "incomplete validation table",
+   "text": "M18 requires a non-empty section list with unique `source_section_id`, while A7 classifies a missing section list and, per section, missing fields and invalid EUR amounts, but never classifies an empty list, duplicate source IDs or other invalid section structure.",
+   "question": "Which `ImportRejectReason` applies to each section-shape violation, and where do those checks occur in the first-failure order?",
+   "options": [
+    "Classify all such violations as `invalid_sections`.",
+    "Classify an empty list as `incomplete_content` and duplicates/shape violations as `invalid_sections`.",
+    "Treat some violations as schema failures before an import attempt is recorded."
+   ],
+   "default_guess": "Use `incomplete_content` for an absent or empty list and `invalid_sections` for duplicate IDs and invalid section values.",
+   "witness": {
+    "initial": "An authenticated producer is authorized for an active project.",
+    "events": [
+     "The producer publishes a snapshot containing two otherwise valid sections with the same `source_section_id`; one duplicate section also has an invalid amount."
+    ],
+    "outcomes": [
+     "The portal records `invalid_sections` at the duplicate-ID check.",
+     "The portal reaches the amount check first and records `invalid_sections` for that field, or rejects during DTO decoding before recording an import result."
+    ],
+    "observer": "The producer reading the import result and the audit reader."
+   }
+  },
+  {
+   "unit": "A7",
+   "subject": "Fingerprint of rejected incomplete snapshot attempts",
+   "kind": "unconstructible required field",
+   "text": "A7 requires missing envelope fields or a missing section list to produce a recorded `incomplete_content` rejection, while M20 requires every `SnapshotImportRecord` to contain `content_fingerprint: str`; no rule defines a fingerprint for content that cannot form a `SnapshotPublication`.",
+   "question": "What exact input is fingerprinted for a rejected partial or malformed publication, and how is it canonicalized?",
+   "options": [
+    "Fingerprint a canonical representation of the raw request body.",
+    "Fingerprint the successfully decoded subset with explicit missing-value markers.",
+    "Permit a sentinel or nullable fingerprint for pre-publication rejection."
+   ],
+   "default_guess": "Fingerprint a canonical representation of the received request body, including explicit structure and values.",
+   "witness": {
+    "initial": "A producer is authenticated and authorized for an active project.",
+    "events": [
+     "The producer submits a snapshot request with `currency` omitted."
+    ],
+    "outcomes": [
+     "The portal records `incomplete_content` with a hash of the raw partial request.",
+     "The portal records the rejection with a sentinel/partial-content hash, producing a different immutable import record."
+    ],
+    "observer": "The producer reading the result and an auditor comparing recorded fingerprints."
+   }
+  },
+  {
+   "unit": "A8",
+   "subject": "Approved snapshot content equality",
+   "kind": "undefined canonicalization",
+   "text": "A8 identifies replay by `content_fingerprint`, and M19 calls it a “canonical content hash”, but no rule says whether publication list order, decimal spelling, timestamp offsets or other representation differences are part of content equality or defines the canonical encoding/hash.",
+   "question": "What exact semantic fields and canonical representation determine a snapshot fingerprint?",
+   "options": [
+    "Fingerprint normalized typed values and canonicalize sections independently of their incoming list order.",
+    "Treat section list order and other accepted representation choices as content.",
+    "Define a byte-level canonical JSON representation and hash algorithm."
+   ],
+   "default_guess": "Hash a versioned canonical serialization of normalized typed values, ordering sections by a declared stable key rather than request order.",
+   "witness": {
+    "initial": "Snapshot `(project P, estimate E, version 1)` has been accepted with sections A then B, each carrying explicit distinct `sort_order` values.",
+    "events": [
+     "The same producer republishes identical section values in the order B then A."
+    ],
+    "outcomes": [
+     "The publication is an `idempotent_replay` because section order is not business content.",
+     "The publication is an `integrity_conflict` because list order participates in the fingerprint."
+    ],
+    "observer": "The producer and the audit/import-result reader."
+   }
+  },
+  {
+   "unit": "A8",
+   "subject": "WorkPayment replay behavior",
+   "kind": "contradiction",
+   "text": "A8 says a repeated `payment_id` will “return existing payment”, while M33 says only equal amount, date and description return it and “any difference is a conflict that changes nothing.”",
+   "question": "Does reuse of a payment ID with different payment content return the existing payment or report an integrity conflict?",
+   "options": [
+    "Always return the existing payment for a repeated ID.",
+    "Return the existing payment only for equal content; otherwise return a conflict."
+   ],
+   "default_guess": "Return a conflict when payment content differs.",
+   "witness": {
+    "initial": "Payment ID X is stored for EUR 100 on 2026-11-01 with description “deposit”.",
+    "events": [
+     "An authorized operator registers payment ID X for EUR 200 with the same date and description."
+    ],
+    "outcomes": [
+     "A8's table returns the existing EUR 100 payment as an idempotent replay.",
+     "M33 reports a conflict and returns no successful replay result."
+    ],
+    "observer": "The operator."
+   }
+  },
+  {
+   "unit": "A9",
+   "subject": "Input money scale handling",
+   "kind": "undefined refusal condition",
+   "text": "A9 says `ROUND_HALF_UP` applies “at derivation boundaries” and that stored amounts are already “2-digit exact”, but it does not say whether an inbound amount with more than two fractional digits is rejected or rounded before storage.",
+   "question": "Are over-precision monetary inputs rejected, or quantized half-up to two places?",
+   "options": [
+    "Reject any inbound amount whose exact scale exceeds two fractional digits.",
+    "Round inbound amounts half-up before validating related invariants.",
+    "Allow numerically equivalent trailing-zero forms but reject non-zero excess precision."
+   ],
+   "default_guess": "Allow excess trailing zeros but reject any value whose quantization would change its numeric value.",
+   "witness": {
+    "initial": "An operator is authorized to create an expense in an active project.",
+    "events": [
+     "The operator submits an expense total and matching allocation of EUR 10.005."
+    ],
+    "outcomes": [
+     "The request is rejected because the amount is not a valid two-digit EUR amount.",
+     "The values are rounded half-up to EUR 10.01 and stored."
+    ],
+    "observer": "The operator and later financial-view readers."
+   }
+  },
+  {
+   "unit": "A9",
+   "subject": "Zero work-balance label",
+   "kind": "missing case",
+   "text": "A9 says the sign selects `Completed ahead of payments` or `Unused advance payment`, while State 1 defines a third `WorkBalanceLabel` value, `balanced`; A9 never assigns the zero case.",
+   "question": "Which label and numeric presentation apply when completed work value exactly equals payments total?",
+   "options": [
+    "Use `balanced`.",
+    "Treat zero as non-negative and use `completed_ahead_of_payments`.",
+    "Treat zero as a separate unavailable or unlabeled case."
+   ],
+   "default_guess": "Use `balanced`.",
+   "witness": {
+    "initial": "Completed work total and payments total are both EUR 1,000.00.",
+    "events": [
+     "A viewer requests the payment summary."
+    ],
+    "outcomes": [
+     "The response has `work_balance = 0.00` and label `balanced`.",
+     "The response has `work_balance = 0.00` and label `completed_ahead_of_payments` under a non-negative sign test."
+    ],
+    "observer": "The viewer."
+   }
+  },
+  {
+   "unit": "A9",
+   "subject": "Negative work-balance numeric representation",
+   "kind": "ambiguous output rule",
+   "text": "A9 defines work balance as `completed work value − payments total` but then says the sign selects “absolute value as `Unused advance payment`”; `PaymentSummaryView.work_balance` and `WorkBalanceResult.balance` do not say whether they hold the signed result or the displayed absolute value.",
+   "question": "When payments exceed completed work, is the returned balance negative or converted to a positive magnitude?",
+   "options": [
+    "Return the signed subtraction result and use the label for interpretation.",
+    "Return the absolute magnitude with `unused_advance_payment`.",
+    "Keep a signed policy result but expose an absolute presentation amount in a distinct field."
+   ],
+   "default_guess": "Keep the numeric balance signed and use the label to explain it.",
+   "witness": {
+    "initial": "Completed work is EUR 100.00 and received payments are EUR 150.00.",
+    "events": [
+     "A viewer requests the payment summary."
+    ],
+    "outcomes": [
+     "`work_balance` is `-50.00` with label `unused_advance_payment`.",
+     "`work_balance` is `50.00` with label `unused_advance_payment`."
+    ],
+    "observer": "The viewer."
+   }
+  },
+  {
+   "unit": "A12",
+   "subject": "Producer grants for an all-projects principal",
+   "kind": "missing refusal rule",
+   "text": "A12 says an `all_projects` principal needs no grant and M15 says grants are consulted only for `granted_projects`, but no text says whether administrators may create or revoke a `ProducerProjectGrant` for an `all_projects` principal.",
+   "question": "Are redundant producer grants valid persisted administration records for an `all_projects` principal, or must grant management refuse them?",
+   "options": [
+    "Allow and audit them, though authorization ignores them.",
+    "Refuse creation because grants are valid only for `granted_projects`.",
+    "Allow revocation of existing redundant grants but forbid new ones."
+   ],
+   "default_guess": "Refuse creation for an `all_projects` principal while still permitting revocation of any legacy record.",
+   "witness": {
+    "initial": "An active service principal has `scope_mode = all_projects`; Registry project P is active.",
+    "events": [
+     "An administrator with `portal.access.manage` attempts to grant P to that principal."
+    ],
+    "outcomes": [
+     "A `ProducerProjectGrant` is stored and `producer_grant.create` is audited, without changing access.",
+     "The operation is refused because the principal's scope mode does not use grants."
+    ],
+    "observer": "The administrator and audit readers."
+   }
+  },
+  {
+   "unit": "A13",
+   "subject": "Rejected staff-login audit reason",
+   "kind": "contradiction",
+   "text": "A13 says `staff.login_failed` writes a rejected audit record “with no `reason_code`”, while M36 requires `reason_code` iff `result = rejected`.",
+   "question": "Can a rejected `staff.login_failed` audit record have no reason code, or must the model/policy provide one?",
+   "options": [
+    "Permit `reason_code = None` specifically for `staff.login_failed`.",
+    "Add a closed concealed login-failure reason code.",
+    "Do not represent login failure with `result = rejected`."
+   ],
+   "default_guess": "Permit no reason code for this one non-significant, existence-hiding action and narrow M36's validator accordingly.",
+   "witness": {
+    "initial": "No account exists for `unknown@example.test`.",
+    "events": [
+     "A caller attempts staff login with that email and a password."
+    ],
+    "outcomes": [
+     "A `staff.login_failed` record with `result=rejected` and `reason_code=None` is written as A13 requires.",
+     "Audit model validation rejects that record because M36 requires a reason for every rejected result, so the audit or whole login flow fails."
+    ],
+    "observer": "Operations staff examining audit records, and potentially the login caller if the transaction fails."
+   }
+  },
+  {
+   "unit": "A13",
+   "subject": "Actor provenance for unresolved login failures",
+   "kind": "missing actor mapping",
+   "text": "A13 requires `staff.login_failed` to be written, while M36 requires `actor_id` for `actor_kind = staff`; an existence-hiding failed login may resolve no staff account, and no rule assigns its actor kind or actor ID.",
+   "question": "How is actor provenance represented for a failed login whose email matches no account?",
+   "options": [
+    "Use `actor_kind=system` with no actor ID.",
+    "Use `actor_kind=staff` with no actor ID as a special exception.",
+    "Record no login-failure audit when no account resolves.",
+    "Use a non-reversible synthetic actor identifier."
+   ],
+   "default_guess": "Use the system actor with no actor ID and never encode the submitted email.",
+   "witness": {
+    "initial": "There is no staff account for a submitted email.",
+    "events": [
+     "A caller submits that email and an incorrect password to staff login."
+    ],
+    "outcomes": [
+     "The portal writes `staff.login_failed` as a system-actor record without an actor ID.",
+     "The portal cannot construct a valid AuditRecord and either omits the required audit or fails the operation."
+    ],
+    "observer": "Audit readers and, if audit failure propagates, the login caller."
+   }
+  },
+  {
+   "unit": "A13",
+   "subject": "Audit action-to-entity mapping",
+   "kind": "missing closed mapping",
+   "text": "A13 closes the action catalog and A23 constrains the chosen audited entity ID, but no table selects `entity_kind` and entity identity for each action that can create or affect several records.",
+   "question": "For every audit action, which entity kind and identifier must be referenced, and when may both be absent?",
+   "options": [
+    "Define a closed action-to-entity-kind/ID-source table.",
+    "Infer the entity from the action name in each use case.",
+    "For compound actions, reference the aggregate root and leave child records discoverable through it."
+   ],
+   "default_guess": "Define a closed mapping and use the operation's aggregate root, such as the expense for expense intake/allocation actions.",
+   "witness": {
+    "initial": "No expense exists for a recognized document.",
+    "events": [
+     "An operator creates an expense, its document and multiple allocations atomically."
+    ],
+    "outcomes": [
+     "The `expense.create` audit references the new `expense_id`.",
+     "The audit references the `document_id`, an allocation ID, or has no entity because the operation created several entities."
+    ],
+    "observer": "An auditor following an audit entity reference."
+   }
+  },
+  {
+   "unit": "A16",
+   "subject": "Quoted email local parts containing at-signs",
+   "kind": "contradiction",
+   "text": "The email rule requires “exactly one `@`” while also saying “quoted local parts … are accepted as written.”",
+   "question": "Is an otherwise valid quoted local part containing an `@` accepted, or does the raw-character count reject it?",
+   "options": [
+    "Reject it because the supplied string contains more than one `@`.",
+    "Parse quoted local-part syntax and count only the separator `@`.",
+    "Accept quoted local parts only when their quoted content contains no `@`."
+   ],
+   "default_guess": "Apply the expressly exact raw syntax rule and reject any string containing more than one `@`, narrowing the quoted-local statement.",
+   "witness": {
+    "initial": "No staff account uses the candidate address.",
+    "events": [
+     "An administrator creates an account with email `\"a@b\"@example.com`."
+    ],
+    "outcomes": [
+     "The email is rejected because the supplied value contains two `@` characters.",
+     "The email is accepted because one `@` is quoted local-part content and the other separates the domain."
+    ],
+    "observer": "The administrator and eventual account holder."
+   }
+  },
+  {
+   "unit": "A20",
+   "subject": "Progress updates for sections absent from the active budget",
+   "kind": "missing eligibility rule",
+   "text": "A20 constrains only the percentage range and provenance; M32 says only sections with planned work in the active version participate in derived progress, but no rule says whether `set_section_progress` may write progress for a project section that has no plan in the active version or has zero planned work.",
+   "question": "Which project sections are eligible for a progress update?",
+   "options": [
+    "Any PortalSection of the project.",
+    "Only sections present in the active budget version.",
+    "Only active-version sections with `work_planned > 0`."
+   ],
+   "default_guess": "Allow updates only for sections present in the active version, including zero-work sections if the product needs to retain manual state.",
+   "witness": {
+    "initial": "Section S belongs to project P and existed in an older budget version but is absent from P's active version.",
+    "events": [
+     "An authorized operator sets S to 50% completion."
+    ],
+    "outcomes": [
+     "A SectionProgress record is stored but omitted from current derived progress.",
+     "The operation is rejected because S is not in the active budget."
+    ],
+    "observer": "The operator, and later readers if S returns in a reactivated version."
+   }
+  },
+  {
+   "unit": "A25",
+   "subject": "Cache policy for binary responses",
+   "kind": "contradiction",
+   "text": "A14 requires binary responses to carry `no-store`, while A25 says exactly seven credential/session route answers carry `Cache-Control: no-store` and “no other answer sets `Cache-Control`.”",
+   "question": "Must authenticated document/photo binary responses set `Cache-Control: no-store`, or are they forbidden from setting it?",
+   "options": [
+    "Binary responses set `Cache-Control: no-store` in addition to the seven listed routes.",
+    "Only the seven routes set the header; binary responses omit it.",
+    "Replace the exact route list with a closed list that includes binary delivery."
+   ],
+   "default_guess": "Include authenticated binary responses in the no-store policy.",
+   "witness": {
+    "initial": "A viewer is authorized to read a client-visible expense document.",
+    "events": [
+     "The viewer downloads the document binary."
+    ],
+    "outcomes": [
+     "The response contains `Cache-Control: no-store` under A14.",
+     "The response has no `Cache-Control` header under A25's exact allow-list."
+    ],
+    "observer": "The viewer's browser, intermediaries and HTTP tests."
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "Storage of source-supplied timestamp offsets",
+   "kind": "contradiction",
+   "text": "A28 says all persisted timestamps are UTC offset-naive, but also says source-supplied timestamps such as `approved_at`, `published_at`, `confirmed_at` and `photo_date` are “kept as supplied”; those source fields are persisted and may carry an offset under the earlier timezone-aware convention.",
+   "question": "Must source timestamps be supplied already as naive UTC, converted to UTC and stripped of their offset, stored with their supplied offset, or rejected when not in the storage form?",
+   "options": [
+    "Require source timestamps to be naive UTC.",
+    "Convert any accepted offset-aware instant to UTC and store it offset-naive.",
+    "Preserve the supplied offset despite the general persisted-timestamp rule.",
+    "Strip the offset without converting the wall time."
+   ],
+   "default_guess": "Accept offset-aware source instants, convert them to UTC, and persist the equivalent naive UTC value.",
+   "witness": {
+    "initial": "An authorized producer submits an otherwise valid snapshot.",
+    "events": [
+     "Its `published_at` is `2026-11-06T12:00:00+02:00`."
+    ],
+    "outcomes": [
+     "The snapshot stores `2026-11-06 10:00:00` as naive UTC.",
+     "The snapshot preserves `12:00:00+02:00`, or stores naive `12:00:00`, under the instruction to keep it as supplied."
+    ],
+    "observer": "The producer on replay classification and readers of snapshot provenance."
+   }
+  },
+  {
+   "unit": "A29",
+   "subject": "Bootstrap confirmation-failure exit code",
+   "kind": "undefined outcome condition",
+   "text": "R0-07 says the bootstrap command's inputs are email and password, while A29 adds exit code 1 for “confirmation did not match” without defining a confirmation input or what is being confirmed.",
+   "question": "What user input and comparison produce bootstrap exit code 1?",
+   "options": [
+    "Read the password twice and use code 1 when the two entries differ.",
+    "Require a separate explicit deployment confirmation phrase.",
+    "Remove the unreachable confirmation outcome from the closed contract."
+   ],
+   "default_guess": "Prompt for the password twice without echo and return 1 when the entries differ.",
+   "witness": {
+    "initial": "The staff table is empty.",
+    "events": [
+     "The host operator supplies a valid administrator email and one valid password to the documented two-input command."
+    ],
+    "outcomes": [
+     "The command proceeds because email and password are the complete input set described by R0-07.",
+     "The command requires an additional password or action confirmation and may return exit code 1 before writing anything."
+    ],
+    "observer": "The host operator and deployment script."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A6\",\"subject\":\"Registry failure precedence for malformed project identifiers\",\"kind\":\"missing precedence\",\"text\":\"The translation table maps “malformed UUID input” to `invalid_uuid`, but the exhaustive “first condition that holds, in this order” paragraph omits malformed UUID input and begins with an unusable Registry endpoint.\",\"question\":\"When the requested project identifier is malformed and another earlier boundary condition also exists, such as missing Registry configuration, which failure wins?\",\"options\":[\"Validate the UUID first and return `invalid_uuid`.\",\"Apply the written precedence paragraph and return `transport_error` before inspecting the UUID.\"],\"default_guess\":\"Validate the UUID before attempting or configuring a Registry call.\",\"witness\":{\"initial\":\"The Registry endpoint setting is missing or unusable.\",\"events\":[\"A caller submits a project-scoped request whose `project_id` is not a UUID.\"],\"outcomes\":[\"The gateway returns `invalid_uuid` because malformed input is rejected before boundary setup.\",\"The gateway returns `transport_error` because unusable endpoint configuration is the first listed condition.\"],\"observer\":\"The caller and any failure-handling use case.\"}},{\"unit\":\"A7\",\"subject\":\"OCR publication validation precedence\",\"kind\":\"missing check order\",\"text\":\"A7 gives an exact first-failure order only for an authenticated snapshot publication; INV-031 merely requires an OCR result to be confirmed, complete and on a supported contract version.\",\"question\":\"In what order are OCR contract version, confirmation status, completeness, currency, item shape and project/allocation checks evaluated when more than one fails?\",\"options\":[\"Validate authorization and project rules first, then the OCR envelope in a specified order.\",\"Validate and decode the OCR envelope before project authorization.\",\"Let adapter/model validation order determine the reported failure.\"],\"default_guess\":\"Authorize first, then check contract version, confirmation, required fields, currency, items and allocations in a closed order.\",\"witness\":{\"initial\":\"An operator has an active session and assignment to an active project.\",\"events\":[\"The operator submits an OCR publication with an unsupported `contract_version`, a non-EUR currency and incomplete normalized items.\"],\"outcomes\":[\"The request is refused as an unsupported contract version.\",\"The request is refused as a currency or incomplete-content error because a different validation layer runs first.\"],\"observer\":\"The operator through the typed/API error.\"}},{\"unit\":\"A7\",\"subject\":\"Snapshot section rejection classification\",\"kind\":\"incomplete validation table\",\"text\":\"M18 requires a non-empty section list with unique `source_section_id`, while A7 classifies a missing section list and, per section, missing fields and invalid EUR amounts, but never classifies an empty list, duplicate source IDs or other invalid section structure.\",\"question\":\"Which `ImportRejectReason` applies to each section-shape violation, and where do those checks occur in the first-failure order?\",\"options\":[\"Classify all such violations as `invalid_sections`.\",\"Classify an empty list as `incomplete_content` and duplicates/shape violations as `invalid_sections`.\",\"Treat some violations as schema failures before an import attempt is recorded.\"],\"default_guess\":\"Use `incomplete_content` for an absent or empty list and `invalid_sections` for duplicate IDs and invalid section values.\",\"witness\":{\"initial\":\"An authenticated producer is authorized for an active project.\",\"events\":[\"The producer publishes a snapshot containing two otherwise valid sections with the same `source_section_id`; one duplicate section also has an invalid amount.\"],\"outcomes\":[\"The portal records `invalid_sections` at the duplicate-ID check.\",\"The portal reaches the amount check first and records `invalid_sections` for that field, or rejects during DTO decoding before recording an import result.\"],\"observer\":\"The producer reading the import result and the audit reader.\"}},{\"unit\":\"A7\",\"subject\":\"Fingerprint of rejected incomplete snapshot attempts\",\"kind\":\"unconstructible required field\",\"text\":\"A7 requires missing envelope fields or a missing section list to produce a recorded `incomplete_content` rejection, while M20 requires every `SnapshotImportRecord` to contain `content_fingerprint: str`; no rule defines a fingerprint for content that cannot form a `SnapshotPublication`.\",\"question\":\"What exact input is fingerprinted for a rejected partial or malformed publication, and how is it canonicalized?\",\"options\":[\"Fingerprint a canonical representation of the raw request body.\",\"Fingerprint the successfully decoded subset with explicit missing-value markers.\",\"Permit a sentinel or nullable fingerprint for pre-publication rejection.\"],\"default_guess\":\"Fingerprint a canonical representation of the received request body, including explicit structure and values.\",\"witness\":{\"initial\":\"A producer is authenticated and authorized for an active project.\",\"events\":[\"The producer submits a snapshot request with `currency` omitted.\"],\"outcomes\":[\"The portal records `incomplete_content` with a hash of the raw partial request.\",\"The portal records the rejection with a sentinel/partial-content hash, producing a different immutable import record.\"],\"observer\":\"The producer reading the result and an auditor comparing recorded fingerprints.\"}},{\"unit\":\"A8\",\"subject\":\"Approved snapshot content equality\",\"kind\":\"undefined canonicalization\",\"text\":\"A8 identifies replay by `content_fingerprint`, and M19 calls it a “canonical content hash”, but no rule says whether publication list order, decimal spelling, timestamp offsets or other representation differences are part of content equality or defines the canonical encoding/hash.\",\"question\":\"What exact semantic fields and canonical representation determine a snapshot fingerprint?\",\"options\":[\"Fingerprint normalized typed values and canonicalize sections independently of their incoming list order.\",\"Treat section list order and other accepted representation choices as content.\",\"Define a byte-level canonical JSON representation and hash algorithm.\"],\"default_guess\":\"Hash a versioned canonical serialization of normalized typed values, ordering sections by a declared stable key rather than request order.\",\"witness\":{\"initial\":\"Snapshot `(project P, estimate E, version 1)` has been accepted with sections A then B, each carrying explicit distinct `sort_order` values.\",\"events\":[\"The same producer republishes identical section values in the order B then A.\"],\"outcomes\":[\"The publication is an `idempotent_replay` because section order is not business content.\",\"The publication is an `integrity_conflict` because list order participates in the fingerprint.\"],\"observer\":\"The producer and the audit/import-result reader.\"}},{\"unit\":\"A8\",\"subject\":\"WorkPayment replay behavior\",\"kind\":\"contradiction\",\"text\":\"A8 says a repeated `payment_id` will “return existing payment”, while M33 says only equal amount, date and description return it and “any difference is a conflict that changes nothing.”\",\"question\":\"Does reuse of a payment ID with different payment content return the existing payment or report an integrity conflict?\",\"options\":[\"Always return the existing payment for a repeated ID.\",\"Return the existing payment only for equal content; otherwise return a conflict.\"],\"default_guess\":\"Return a conflict when payment content differs.\",\"witness\":{\"initial\":\"Payment ID X is stored for EUR 100 on 2026-11-01 with description “deposit”.\",\"events\":[\"An authorized operator registers payment ID X for EUR 200 with the same date and description.\"],\"outcomes\":[\"A8's table returns the existing EUR 100 payment as an idempotent replay.\",\"M33 reports a conflict and returns no successful replay result.\"],\"observer\":\"The operator.\"}},{\"unit\":\"A9\",\"subject\":\"Input money scale handling\",\"kind\":\"undefined refusal condition\",\"text\":\"A9 says `ROUND_HALF_UP` applies “at derivation boundaries” and that stored amounts are already “2-digit exact”, but it does not say whether an inbound amount with more than two fractional digits is rejected or rounded before storage.\",\"question\":\"Are over-precision monetary inputs rejected, or quantized half-up to two places?\",\"options\":[\"Reject any inbound amount whose exact scale exceeds two fractional digits.\",\"Round inbound amounts half-up before validating related invariants.\",\"Allow numerically equivalent trailing-zero forms but reject non-zero excess precision.\"],\"default_guess\":\"Allow excess trailing zeros but reject any value whose quantization would change its numeric value.\",\"witness\":{\"initial\":\"An operator is authorized to create an expense in an active project.\",\"events\":[\"The operator submits an expense total and matching allocation of EUR 10.005.\"],\"outcomes\":[\"The request is rejected because the amount is not a valid two-digit EUR amount.\",\"The values are rounded half-up to EUR 10.01 and stored.\"],\"observer\":\"The operator and later financial-view readers.\"}},{\"unit\":\"A9\",\"subject\":\"Zero work-balance label\",\"kind\":\"missing case\",\"text\":\"A9 says the sign selects `Completed ahead of payments` or `Unused advance payment`, while State 1 defines a third `WorkBalanceLabel` value, `balanced`; A9 never assigns the zero case.\",\"question\":\"Which label and numeric presentation apply when completed work value exactly equals payments total?\",\"options\":[\"Use `balanced`.\",\"Treat zero as non-negative and use `completed_ahead_of_payments`.\",\"Treat zero as a separate unavailable or unlabeled case.\"],\"default_guess\":\"Use `balanced`.\",\"witness\":{\"initial\":\"Completed work total and payments total are both EUR 1,000.00.\",\"events\":[\"A viewer requests the payment summary.\"],\"outcomes\":[\"The response has `work_balance = 0.00` and label `balanced`.\",\"The response has `work_balance = 0.00` and label `completed_ahead_of_payments` under a non-negative sign test.\"],\"observer\":\"The viewer.\"}},{\"unit\":\"A9\",\"subject\":\"Negative work-balance numeric representation\",\"kind\":\"ambiguous output rule\",\"text\":\"A9 defines work balance as `completed work value − payments total` but then says the sign selects “absolute value as `Unused advance payment`”; `PaymentSummaryView.work_balance` and `WorkBalanceResult.balance` do not say whether they hold the signed result or the displayed absolute value.\",\"question\":\"When payments exceed completed work, is the returned balance negative or converted to a positive magnitude?\",\"options\":[\"Return the signed subtraction result and use the label for interpretation.\",\"Return the absolute magnitude with `unused_advance_payment`.\",\"Keep a signed policy result but expose an absolute presentation amount in a distinct field.\"],\"default_guess\":\"Keep the numeric balance signed and use the label to explain it.\",\"witness\":{\"initial\":\"Completed work is EUR 100.00 and received payments are EUR 150.00.\",\"events\":[\"A viewer requests the payment summary.\"],\"outcomes\":[\"`work_balance` is `-50.00` with label `unused_advance_payment`.\",\"`work_balance` is `50.00` with label `unused_advance_payment`.\"],\"observer\":\"The viewer.\"}},{\"unit\":\"A12\",\"subject\":\"Producer grants for an all-projects principal\",\"kind\":\"missing refusal rule\",\"text\":\"A12 says an `all_projects` principal needs no grant and M15 says grants are consulted only for `granted_projects`, but no text says whether administrators may create or revoke a `ProducerProjectGrant` for an `all_projects` principal.\",\"question\":\"Are redundant producer grants valid persisted administration records for an `all_projects` principal, or must grant management refuse them?\",\"options\":[\"Allow and audit them, though authorization ignores them.\",\"Refuse creation because grants are valid only for `granted_projects`.\",\"Allow revocation of existing redundant grants but forbid new ones.\"],\"default_guess\":\"Refuse creation for an `all_projects` principal while still permitting revocation of any legacy record.\",\"witness\":{\"initial\":\"An active service principal has `scope_mode = all_projects`; Registry project P is active.\",\"events\":[\"An administrator with `portal.access.manage` attempts to grant P to that principal.\"],\"outcomes\":[\"A `ProducerProjectGrant` is stored and `producer_grant.create` is audited, without changing access.\",\"The operation is refused because the principal's scope mode does not use grants.\"],\"observer\":\"The administrator and audit readers.\"}},{\"unit\":\"A13\",\"subject\":\"Rejected staff-login audit reason\",\"kind\":\"contradiction\",\"text\":\"A13 says `staff.login_failed` writes a rejected audit record “with no `reason_code`”, while M36 requires `reason_code` iff `result = rejected`.\",\"question\":\"Can a rejected `staff.login_failed` audit record have no reason code, or must the model/policy provide one?\",\"options\":[\"Permit `reason_code = None` specifically for `staff.login_failed`.\",\"Add a closed concealed login-failure reason code.\",\"Do not represent login failure with `result = rejected`.\"],\"default_guess\":\"Permit no reason code for this one non-significant, existence-hiding action and narrow M36's validator accordingly.\",\"witness\":{\"initial\":\"No account exists for `unknown@example.test`.\",\"events\":[\"A caller attempts staff login with that email and a password.\"],\"outcomes\":[\"A `staff.login_failed` record with `result=rejected` and `reason_code=None` is written as A13 requires.\",\"Audit model validation rejects that record because M36 requires a reason for every rejected result, so the audit or whole login flow fails.\"],\"observer\":\"Operations staff examining audit records, and potentially the login caller if the transaction fails.\"}},{\"unit\":\"A13\",\"subject\":\"Actor provenance for unresolved login failures\",\"kind\":\"missing actor mapping\",\"text\":\"A13 requires `staff.login_failed` to be written, while M36 requires `actor_id` for `actor_kind = staff`; an existence-hiding failed login may resolve no staff account, and no rule assigns its actor kind or actor ID.\",\"question\":\"How is actor provenance represented for a failed login whose email matches no account?\",\"options\":[\"Use `actor_kind=system` with no actor ID.\",\"Use `actor_kind=staff` with no actor ID as a special exception.\",\"Record no login-failure audit when no account resolves.\",\"Use a non-reversible synthetic actor identifier.\"],\"default_guess\":\"Use the system actor with no actor ID and never encode the submitted email.\",\"witness\":{\"initial\":\"There is no staff account for a submitted email.\",\"events\":[\"A caller submits that email and an incorrect password to staff login.\"],\"outcomes\":[\"The portal writes `staff.login_failed` as a system-actor record without an actor ID.\",\"The portal cannot construct a valid AuditRecord and either omits the required audit or fails the operation.\"],\"observer\":\"Audit readers and, if audit failure propagates, the login caller.\"}},{\"unit\":\"A13\",\"subject\":\"Audit action-to-entity mapping\",\"kind\":\"missing closed mapping\",\"text\":\"A13 closes the action catalog and A23 constrains the chosen audited entity ID, but no table selects `entity_kind` and entity identity for each action that can create or affect several records.\",\"question\":\"For every audit action, which entity kind and identifier must be referenced, and when may both be absent?\",\"options\":[\"Define a closed action-to-entity-kind/ID-source table.\",\"Infer the entity from the action name in each use case.\",\"For compound actions, reference the aggregate root and leave child records discoverable through it.\"],\"default_guess\":\"Define a closed mapping and use the operation's aggregate root, such as the expense for expense intake/allocation actions.\",\"witness\":{\"initial\":\"No expense exists for a recognized document.\",\"events\":[\"An operator creates an expense, its document and multiple allocations atomically.\"],\"outcomes\":[\"The `expense.create` audit references the new `expense_id`.\",\"The audit references the `document_id`, an allocation ID, or has no entity because the operation created several entities.\"],\"observer\":\"An auditor following an audit entity reference.\"}},{\"unit\":\"A16\",\"subject\":\"Quoted email local parts containing at-signs\",\"kind\":\"contradiction\",\"text\":\"The email rule requires “exactly one `@`” while also saying “quoted local parts … are accepted as written.”\",\"question\":\"Is an otherwise valid quoted local part containing an `@` accepted, or does the raw-character count reject it?\",\"options\":[\"Reject it because the supplied string contains more than one `@`.\",\"Parse quoted local-part syntax and count only the separator `@`.\",\"Accept quoted local parts only when their quoted content contains no `@`.\"],\"default_guess\":\"Apply the expressly exact raw syntax rule and reject any string containing more than one `@`, narrowing the quoted-local statement.\",\"witness\":{\"initial\":\"No staff account uses the candidate address.\",\"events\":[\"An administrator creates an account with email `\\\"a@b\\\"@example.com`.\"],\"outcomes\":[\"The email is rejected because the supplied value contains two `@` characters.\",\"The email is accepted because one `@` is quoted local-part content and the other separates the domain.\"],\"observer\":\"The administrator and eventual account holder.\"}},{\"unit\":\"A20\",\"subject\":\"Progress updates for sections absent from the active budget\",\"kind\":\"missing eligibility rule\",\"text\":\"A20 constrains only the percentage range and provenance; M32 says only sections with planned work in the active version participate in derived progress, but no rule says whether `set_section_progress` may write progress for a project section that has no plan in the active version or has zero planned work.\",\"question\":\"Which project sections are eligible for a progress update?\",\"options\":[\"Any PortalSection of the project.\",\"Only sections present in the active budget version.\",\"Only active-version sections with `work_planned > 0`.\"],\"default_guess\":\"Allow updates only for sections present in the active version, including zero-work sections if the product needs to retain manual state.\",\"witness\":{\"initial\":\"Section S belongs to project P and existed in an older budget version but is absent from P's active version.\",\"events\":[\"An authorized operator sets S to 50% completion.\"],\"outcomes\":[\"A SectionProgress record is stored but omitted from current derived progress.\",\"The operation is rejected because S is not in the active budget.\"],\"observer\":\"The operator, and later readers if S returns in a reactivated version.\"}},{\"unit\":\"A25\",\"subject\":\"Cache policy for binary responses\",\"kind\":\"contradiction\",\"text\":\"A14 requires binary responses to carry `no-store`, while A25 says exactly seven credential/session route answers carry `Cache-Control: no-store` and “no other answer sets `Cache-Control`.”\",\"question\":\"Must authenticated document/photo binary responses set `Cache-Control: no-store`, or are they forbidden from setting it?\",\"options\":[\"Binary responses set `Cache-Control: no-store` in addition to the seven listed routes.\",\"Only the seven routes set the header; binary responses omit it.\",\"Replace the exact route list with a closed list that includes binary delivery.\"],\"default_guess\":\"Include authenticated binary responses in the no-store policy.\",\"witness\":{\"initial\":\"A viewer is authorized to read a client-visible expense document.\",\"events\":[\"The viewer downloads the document binary.\"],\"outcomes\":[\"The response contains `Cache-Control: no-store` under A14.\",\"The response has no `Cache-Control` header under A25's exact allow-list.\"],\"observer\":\"The viewer's browser, intermediaries and HTTP tests.\"}},{\"unit\":\"A28\",\"subject\":\"Storage of source-supplied timestamp offsets\",\"kind\":\"contradiction\",\"text\":\"A28 says all persisted timestamps are UTC offset-naive, but also says source-supplied timestamps such as `approved_at`, `published_at`, `confirmed_at` and `photo_date` are “kept as supplied”; those source fields are persisted and may carry an offset under the earlier timezone-aware convention.\",\"question\":\"Must source timestamps be supplied already as naive UTC, converted to UTC and stripped of their offset, stored with their supplied offset, or rejected when not in the storage form?\",\"options\":[\"Require source timestamps to be naive UTC.\",\"Convert any accepted offset-aware instant to UTC and store it offset-naive.\",\"Preserve the supplied offset despite the general persisted-timestamp rule.\",\"Strip the offset without converting the wall time.\"],\"default_guess\":\"Accept offset-aware source instants, convert them to UTC, and persist the equivalent naive UTC value.\",\"witness\":{\"initial\":\"An authorized producer submits an otherwise valid snapshot.\",\"events\":[\"Its `published_at` is `2026-11-06T12:00:00+02:00`.\"],\"outcomes\":[\"The snapshot stores `2026-11-06 10:00:00` as naive UTC.\",\"The snapshot preserves `12:00:00+02:00`, or stores naive `12:00:00`, under the instruction to keep it as supplied.\"],\"observer\":\"The producer on replay classification and readers of snapshot provenance.\"}},{\"unit\":\"A29\",\"subject\":\"Bootstrap confirmation-failure exit code\",\"kind\":\"undefined outcome condition\",\"text\":\"R0-07 says the bootstrap command's inputs are email and password, while A29 adds exit code 1 for “confirmation did not match” without defining a confirmation input or what is being confirmed.\",\"question\":\"What user input and comparison produce bootstrap exit code 1?\",\"options\":[\"Read the password twice and use code 1 when the two entries differ.\",\"Require a separate explicit deployment confirmation phrase.\",\"Remove the unreachable confirmation outcome from the closed contract.\"],\"default_guess\":\"Prompt for the password twice without echo and return 1 when the entries differ.\",\"witness\":{\"initial\":\"The staff table is empty.\",\"events\":[\"The host operator supplies a valid administrator email and one valid password to the documented two-input command.\"],\"outcomes\":[\"The command proceeds because email and password are the complete input set described by R0-07.\",\"The command requires an additional password or action confirmation and may return exit code 1 before writing anything.\"],\"observer\":\"The host operator and deployment script.\"}}]}",
+ "set_aside": []
+}

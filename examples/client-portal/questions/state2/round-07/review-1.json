@@ -1,0 +1,408 @@
+{
+ "open_points": [
+  {
+   "unit": "context",
+   "subject": "SnapshotPublication section validation",
+   "kind": "direct contradiction",
+   "text": "M18 declares `sections: list[SnapshotSectionData] (non-empty, unique source_section_id)` but then says the import refuses neither an empty section list nor repeated `source_section_id` values.",
+   "question": "Are emptiness and `source_section_id` uniqueness constraints of the State 2 import boundary, or merely an unenforced producer obligation?",
+   "options": [
+    "Request/model decoding rejects empty or duplicate sections.",
+    "Import accepts empty and duplicate sections; the parenthetical field constraints are not model validation.",
+    "Only a later Q11 operation validates them, while import and persistence accept them."
+   ],
+   "default_guess": "Follow the explicit running-service passage and accept both cases during import.",
+   "witness": {
+    "initial": "An active authorized producer has no snapshot with the submitted identity.",
+    "events": [
+     "The producer submits a valid EUR publication whose `sections` list is empty.",
+     "In a second history it submits two otherwise-valid sections with the same `source_section_id`."
+    ],
+    "outcomes": [
+     "The DTO or request decoder rejects the publication before an import attempt is recorded because M18 declares the list non-empty and identifiers unique.",
+     "The import accepts the publication and persists an ApprovedEstimateSnapshot and accepted SnapshotImportRecord because the running-service passage says neither condition is refused."
+    ],
+    "observer": "The producer, which either receives a decoding rejection without `import_id` or an accepted import result."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "ProjectOverview project availability shape",
+   "kind": "model contradiction",
+   "text": "The declared `ProjectOverview` fields require `project: ProjectContext`, but the carried change says the project context can be absent and a `project_availability` says so; no `project_availability` field or conditional validation rule is added to the declared fields.",
+   "question": "What is the actual ProjectOverview schema when the post-guard Registry context read fails?",
+   "options": [
+    "Add `project_availability` and make `project` conditional on it, like the other availability/value pairs.",
+    "Keep `project` required and fail the whole overview despite the carried change.",
+    "Return an ad hoc response shape not represented by the declared DTO."
+   ],
+   "default_guess": "Treat it as an availability pair and make `project` optional when Registry context is temporarily unavailable.",
+   "witness": {
+    "initial": "A caller is authorized for a project and Registry validation in the A4 guard succeeds.",
+    "events": [
+     "The overview builder subsequently calls Registry for ProjectContext.",
+     "That context call times out."
+    ],
+    "outcomes": [
+     "The operation returns a ProjectOverview with absent project context and `project_availability=temporarily_unavailable`, as the carried change requires.",
+     "Construction fails or the whole operation fails because the declared ProjectOverview requires `project` and has no `project_availability` member."
+    ],
+    "observer": "The staff member or viewer requesting the overview."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "ProjectValidationResult consistency across guards",
+   "kind": "unverified external invariant",
+   "text": "M17 says access-management creation uses only `is_active` while the project guard uses only `status`; A6 says these readings agree because Registry sets them consistently, but also says the gateway does not verify that `exists`, `is_active` and `status` agree and that disagreement is not something the portal decides.",
+   "question": "What must the portal do when a successfully decoded validation answer has inconsistent `exists`, `is_active` and `status` fields?",
+   "options": [
+    "Reject it as `schema_mismatch`.",
+    "Apply each caller's designated field, allowing different decisions for the same answer.",
+    "Define a precedence among `exists`, `status` and `is_active` and use it everywhere."
+   ],
+   "default_guess": "Reject inconsistent validation answers as `schema_mismatch`.",
+   "witness": {
+    "initial": "Registry returns HTTP success for an existing project with `exists=true`, `status=archived`, and `is_active=true`.",
+    "events": [
+     "An administrator creates a viewer grant for the project.",
+     "An operator then attempts a project-record mutation using an existing assignment."
+    ],
+    "outcomes": [
+     "Grant creation succeeds because it reads only `is_active`, while the mutation is rejected as `archived_project` because the guard reads only `status`.",
+     "Both operations reject the inconsistent Registry response as a boundary/schema failure."
+    ],
+    "observer": "The administrator and operator, and later the viewer whose grant may or may not exist."
+   }
+  },
+  {
+   "unit": "A6",
+   "subject": "Registry failure during snapshot-import authorization",
+   "kind": "missing failure translation",
+   "text": "A6 translates Registry timeout, transport, HTTP and schema failures to `RegistryFailureKind`, while A7 lists the import reasons recorded for authorization failures but provides no `ImportRejectReason` or recording rule for those Registry boundary failures.",
+   "question": "When authenticated snapshot import reaches Registry validation and that call fails with `timeout`, `transport_error`, `http_error`, `schema_mismatch` or `identity_mismatch`, is this a classified import attempt, is a SnapshotImportRecord written, and what result is returned?",
+   "options": [
+    "Propagate the Registry boundary failure and write no import or audit record.",
+    "Record a rejected import using one of the existing reasons such as `unknown_project`.",
+    "Extend the import rejection catalog with dependency-failure reasons."
+   ],
+   "default_guess": "Propagate the dependency failure and write no SnapshotImportRecord because no existing ImportRejectReason represents it.",
+   "witness": {
+    "initial": "An active producer with a valid credential and appropriate project scope submits a well-formed snapshot.",
+    "events": [
+     "The import guard calls Registry validation.",
+     "Registry times out before returning validation."
+    ],
+    "outcomes": [
+     "The operation fails as a Registry dependency error and records no classified attempt.",
+     "The operation creates a fresh rejected SnapshotImportRecord and `snapshot.import` audit record, after mapping the timeout to an existing rejection reason."
+    ],
+    "observer": "The producer, which may receive an `import_id`, and auditors inspecting import history."
+   }
+  },
+  {
+   "unit": "A25",
+   "subject": "Request-body bound",
+   "kind": "missing configuration and refusal rule",
+   "text": "A25 says request bodies are bounded by runtime settings before expensive work, but it names no request-body setting, unit, default, byte-counting rule or refusal response; A30 names only the binary read limit among size bounds.",
+   "question": "What exact maximum applies to request bodies, what bytes count toward it, and how is an oversized or indeterminately sized body refused?",
+   "options": [
+    "A single configured limit applies to raw HTTP body bytes and excess is rejected with a specified status and empty body.",
+    "Limits differ by route or body type.",
+    "Only declared Content-Length is checked, leaving chunked bodies to a streaming limit.",
+    "No request-body bound exists despite the invariant."
+   ],
+   "default_guess": "Use one configured raw-body byte ceiling, enforce it while reading as well as against Content-Length, and return an explicit payload-too-large response.",
+   "witness": {
+    "initial": "The service has otherwise-valid production settings and receives an authenticated JSON mutation.",
+    "events": [
+     "The caller sends a two-megabyte body using chunked transfer encoding without Content-Length."
+    ],
+    "outcomes": [
+     "The transport rejects it before decoding because two megabytes exceeds an implementation-selected bound.",
+     "The transport accepts and decodes it because no State 2 request-body bound can be obtained from RuntimeSettings."
+    ],
+    "observer": "The HTTP caller and service operator observing resource use."
+   }
+  },
+  {
+   "unit": "A25",
+   "subject": "Transport-guard check precedence",
+   "kind": "unspecified order",
+   "text": "A25 independently requires trusted-host rejection, request-size rejection, viewer-entry rate limiting, CORS/origin checks and handler decoding, but gives no overall order among those checks apart from rate limiting being before code verification.",
+   "question": "Which failure wins when one request violates more than one transport rule?",
+   "options": [
+    "Trusted host, then size, then route-specific origin/rate checks, then decoding.",
+    "Size is checked before host and route checks.",
+    "Viewer-entry rate limiting precedes all other checks and counts any request reaching that route.",
+    "Each middleware's assembly order decides silently."
+   ],
+   "default_guess": "Reject an untrusted host first, then enforce size, then route-specific controls, then decode.",
+   "witness": {
+    "initial": "The viewer-entry key has already reached its attempt limit.",
+    "events": [
+     "A client sends an oversized `POST /auth/viewer/enter` with an untrusted Host header."
+    ],
+    "outcomes": [
+     "The response is the trusted-host rejection and the rate-limit state is untouched.",
+     "The response is HTTP 429, or a payload-too-large response, depending on middleware order."
+    ],
+    "observer": "The requesting client, which sees different status codes and can infer which guard ran."
+   }
+  },
+  {
+   "unit": "A25",
+   "subject": "Viewer-entry limiter memory claim",
+   "kind": "internal contradiction",
+   "text": "A25 says the limiter has memory bounded by the rate-limit window and that the log never holds more than attempts admitted within one window, but also says there is no cap on distinct keys and no other eviction.",
+   "question": "Is a time-based retention bound alone intended, or must there be a finite global space bound on limiter memory?",
+   "options": [
+    "Retention is time-bounded but memory is unbounded with respect to distinct client addresses.",
+    "A global key/entry cap or eviction rule is required.",
+    "The stated memory-bounded invariant applies only per key, not to the whole limiter."
+   ],
+   "default_guess": "Interpret the algorithm literally: retention is bounded in time and per key, but total memory is not bounded.",
+   "witness": {
+    "initial": "The limiter is empty and permits ten attempts per address per window.",
+    "events": [
+     "Within one window, requests arrive from one million distinct client network addresses.",
+     "Each address makes one admitted viewer-entry attempt."
+    ],
+    "outcomes": [
+     "The limiter retains approximately one million keys and entries, contradicting the claim that memory itself is bounded.",
+     "An implementation evicts or refuses keys using an unstated global memory cap."
+    ],
+    "observer": "The service operator, through memory consumption and possibly clients whose keys are evicted or refused."
+   }
+  },
+  {
+   "unit": "A25",
+   "subject": "Canonical public origin",
+   "kind": "undefined authority value",
+   "text": "A25 requires mutating viewer requests to come from `the canonical public origin`, compared by scheme, host and effective port, but no passage defines where that origin comes from or how it relates to the CORS allowlist and trusted hosts.",
+   "question": "What value is the canonical public origin, and can it differ from the CORS allowlist or contain more than one origin?",
+   "options": [
+    "A dedicated single RuntimeSettings value is authoritative.",
+    "The first or sole CORS-allowed origin is canonical.",
+    "The request Host plus a fixed scheme determines it.",
+    "Every CORS-allowed origin is accepted for viewer mutations."
+   ],
+   "default_guess": "Use a dedicated, explicitly configured single public origin.",
+   "witness": {
+    "initial": "Trusted hosts contain `portal.example` and CORS allows both `https://portal.example` and `https://admin.example`.",
+    "events": [
+     "A valid viewer cookie is sent with a logout request whose Origin is `https://admin.example`."
+    ],
+    "outcomes": [
+     "Logout succeeds because the origin is on the CORS allowlist.",
+     "Logout is refused because only `https://portal.example` is the canonical viewer origin."
+    ],
+    "observer": "The viewer browser, whose session is either ended or retained."
+   }
+  },
+  {
+   "unit": "A25",
+   "subject": "Trusted-host matching",
+   "kind": "vague refusal condition",
+   "text": "A25 requires at least one trusted host, forbids wildcards, and refuses untrusted hosts, but does not define normalization or whether matching includes the port, DNS case, a trailing dot, IPv6 notation or proxy-supplied host information.",
+   "question": "How is the request host canonicalized and compared with the trusted-host entries?",
+   "options": [
+    "Compare a normalized DNS host without port, case-insensitively and with a defined trailing-dot rule.",
+    "Compare the Host header text exactly.",
+    "Compare host and effective port as an authority pair.",
+    "Use framework defaults, whatever they are."
+   ],
+   "default_guess": "Parse the authority, ignore the port for host membership, compare DNS names case-insensitively, and reject malformed or ambiguous forms.",
+   "witness": {
+    "initial": "The trusted-host setting contains `portal.example`.",
+    "events": [
+     "A caller sends `Host: PORTAL.EXAMPLE.:443` to the HTTPS service."
+    ],
+    "outcomes": [
+     "The request is accepted after DNS case and trailing-dot normalization and port removal.",
+     "The request is refused because the configured and received strings are not identical."
+    ],
+    "observer": "The HTTP caller."
+   }
+  },
+  {
+   "unit": "A25",
+   "subject": "CORS behavior",
+   "kind": "incomplete policy",
+   "text": "A25 states only that CORS is off for an empty allowlist and an allowed origin is never a wildcard; it does not specify matching normalization, credential allowance, allowed methods or headers, preflight behavior, or whether rejected origins receive a normal response without CORS headers or an HTTP refusal.",
+   "question": "What exact CORS response policy applies for allowed and disallowed origins, especially to credentialed preflight requests?",
+   "options": [
+    "Use exact-origin matching with credentials and a closed method/header allowlist.",
+    "Use exact-origin matching without credential support.",
+    "Treat disallowed origins as ordinary responses without CORS headers.",
+    "Actively reject disallowed-origin requests with an HTTP error."
+   ],
+   "default_guess": "Use exact normalized origins, allow credentials only where required, and define a closed method/header list; disallowed origins receive no CORS permission headers.",
+   "witness": {
+    "initial": "`https://admin.example` is in the CORS allowlist.",
+    "events": [
+     "A browser sends a preflight for a credentialed request using `Authorization` and `X-Request-Id` headers."
+    ],
+    "outcomes": [
+     "The preflight succeeds and permits credentials and both headers.",
+     "The preflight fails because the implementation's default allowed-header or credential policy excludes them."
+    ],
+    "observer": "The browser application, which can or cannot send the real request."
+   }
+  },
+  {
+   "unit": "A25",
+   "subject": "X-Request-Id generation and trust",
+   "kind": "undefined response field",
+   "text": "A25 requires an `X-Request-Id` on every response but gives no source, syntax, uniqueness rule, or decision on whether a caller-supplied value is echoed, replaced or rejected.",
+   "question": "How is `X-Request-Id` selected and validated?",
+   "options": [
+    "Always generate a fresh server UUID and ignore incoming values.",
+    "Echo a valid incoming identifier and generate one when absent or invalid.",
+    "Echo any incoming string.",
+    "Reject malformed incoming identifiers."
+   ],
+   "default_guess": "Generate a fresh opaque server identifier for every request and do not trust an incoming value.",
+   "witness": {
+    "initial": "The service receives an otherwise-valid health request.",
+    "events": [
+     "The caller supplies `X-Request-Id` containing a chosen value with log-delimiter characters."
+    ],
+    "outcomes": [
+     "The response echoes the caller value and logs may correlate under it.",
+     "The service replaces it with a generated safe identifier."
+    ],
+    "observer": "The caller and operators using request-correlation logs."
+   }
+  },
+  {
+   "unit": "A25",
+   "subject": "Log redaction field set",
+   "kind": "unenforceable invariant",
+   "text": "A25 says logs redact authorization, cookie and `secret-like names`, but `secret-like names` is not a closed set or matching rule.",
+   "question": "Which request, response and exception fields are considered secret-like, and is matching by exact name, case-insensitive name, substring or schema metadata?",
+   "options": [
+    "Use a closed case-insensitive field-name catalog.",
+    "Redact any name containing substrings such as token, secret, password, authorization or cookie.",
+    "Mark secret fields in schemas and redact from that metadata.",
+    "Forbid logging request and response bodies entirely."
+   ],
+   "default_guess": "Forbid body logging and use a closed case-insensitive catalog plus authorization and cookie headers.",
+   "witness": {
+    "initial": "A malformed administration request contains a field named `new_password` and raises a decoding error.",
+    "events": [
+     "The transport or exception logger records structured request-error context."
+    ],
+    "outcomes": [
+     "The submitted password is redacted because `new_password` is treated as secret-like.",
+     "The value is logged because only fields exactly named `password` or `secret` are redacted."
+    ],
+    "observer": "Anyone with access to application logs."
+   }
+  },
+  {
+   "unit": "A25",
+   "subject": "Client-address rate-limit identity",
+   "kind": "undefined key canonicalization",
+   "text": "The viewer-entry limiter keys by `client network address` read from the connection, but gives no canonical representation for IPv4, IPv4-mapped IPv6, IPv6 compression or address/port tuples.",
+   "question": "Which connection-address forms represent the same limiter key?",
+   "options": [
+    "Canonicalize to an IP address, mapping IPv4-mapped IPv6 to IPv4 and excluding the source port.",
+    "Use the raw address string supplied by the server.",
+    "Use the complete remote address and source port.",
+    "Keep IPv4 and IPv4-mapped IPv6 as distinct identities."
+   ],
+   "default_guess": "Use a canonical IP value without source port and collapse IPv4-mapped IPv6 to IPv4.",
+   "witness": {
+    "initial": "One client has exhausted the viewer-entry limit through IPv4 address `192.0.2.10`.",
+    "events": [
+     "The same network peer connects through a listener that reports `::ffff:192.0.2.10`."
+    ],
+    "outcomes": [
+     "The attempt is refused with HTTP 429 because both forms share a canonical key.",
+     "The attempt is admitted because the raw connection-address strings are different."
+    ],
+    "observer": "The client and service operator evaluating rate-limit bypasses."
+   }
+  },
+  {
+   "unit": "A32",
+   "subject": "Reproducibility of the vulnerability check",
+   "kind": "reproducibility gap",
+   "text": "A32 calls `pip-audit --local` reproducible, but pins neither the pip-audit version nor the advisory snapshot, and explicitly allows transitive versions to differ between image builds while querying the database at deploy time.",
+   "question": "What exactly must be held constant or recorded for the vulnerability result to be reproducible?",
+   "options": [
+    "Reproducibility means only rerunning the same tool against the same already-built image at the same advisory state.",
+    "Pin the audit tool and retain its version, resolved package inventory and advisory database timestamp or snapshot.",
+    "Only the command text is considered reproducible; results may differ without explanation."
+   ],
+   "default_guess": "Record the audit-tool version, complete installed-package inventory, command output and advisory-query timestamp for each built image.",
+   "witness": {
+    "initial": "The four direct requirement pins are unchanged.",
+    "events": [
+     "Image A is built and audited on one date.",
+     "Image B is built later after a transitive release and advisory-database update."
+    ],
+    "outcomes": [
+     "The same stated one-command check produces a different package set or vulnerability result, so the deploy decisions differ despite unchanged pins.",
+     "A recorded and pinned audit environment reproduces the earlier result for Image A while separately evaluating Image B."
+    ],
+    "observer": "The deployment operator or auditor attempting to reproduce why a deploy passed."
+   }
+  },
+  {
+   "unit": "A32",
+   "subject": "Location and installation of pip-audit",
+   "kind": "operational gap",
+   "text": "A32 requires `pip-audit --local` to run inside the built image, while the deployment requirements contain only the four portal libraries and the text does not say how pip-audit is made available without changing the installed set being audited or the shipped image.",
+   "question": "Where does the pip-audit executable come from, and is pip-audit and its own dependency graph part of the audited and shipped package set?",
+   "options": [
+    "Install pip-audit in the final image and audit it along with the portal dependencies.",
+    "Use a build-only stage or mounted executable that inspects the final image environment.",
+    "Temporarily install pip-audit, audit, and remove it while proving the remaining environment is the audited one.",
+    "Run it outside the image despite the stated requirement."
+   ],
+   "default_guess": "Use a pinned build-stage audit tool against the final environment's exported installed-package inventory, without shipping the tool.",
+   "witness": {
+    "initial": "A final image contains only the portal and packages resolved from its four pinned requirements.",
+    "events": [
+     "The pre-deploy pipeline attempts to execute `pip-audit --local` inside that image."
+    ],
+    "outcomes": [
+     "The command is unavailable and the deploy waits.",
+     "The pipeline installs pip-audit into the image, causing the audit to include additional packages and making the audited set differ from the originally built set."
+    ],
+    "observer": "The deployment pipeline and operator."
+   }
+  },
+  {
+   "unit": "A32",
+   "subject": "Validity interval of a passing vulnerability check",
+   "kind": "missing temporal rule",
+   "text": "A32 says the check runs `before a deploy` and queries advisories `at the time of the deploy`, but defines no maximum delay, binding to a particular image digest, or rule for an advisory published after the check but before deployment.",
+   "question": "How is a passing audit bound to the exact image and deployment time, and when must it be rerun?",
+   "options": [
+    "A pass is valid only for one immutable image digest and the immediately following deploy attempt.",
+    "A pass remains valid for a specified interval for the same image.",
+    "Any newly published advisory before deployment invalidates the pass and requires rerun.",
+    "Any earlier pass for the same direct pins is sufficient."
+   ],
+   "default_guess": "Bind the result to the immutable image digest and rerun for each deploy attempt immediately before release.",
+   "witness": {
+    "initial": "An immutable image passes its audit in the morning.",
+    "events": [
+     "A blocking advisory for one installed transitive package is published later that day.",
+     "The same image is deployed that evening without another audit."
+    ],
+    "outcomes": [
+     "Deployment proceeds because it had a prior passing pre-deploy check.",
+     "Deployment is blocked because the required check must reflect the advisory state at the actual deploy time."
+    ],
+    "observer": "The deployment operator and users exposed to the vulnerable package."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"context\",\"subject\":\"SnapshotPublication section validation\",\"kind\":\"direct contradiction\",\"text\":\"M18 declares `sections: list[SnapshotSectionData] (non-empty, unique source_section_id)` but then says the import refuses neither an empty section list nor repeated `source_section_id` values.\",\"question\":\"Are emptiness and `source_section_id` uniqueness constraints of the State 2 import boundary, or merely an unenforced producer obligation?\",\"options\":[\"Request/model decoding rejects empty or duplicate sections.\",\"Import accepts empty and duplicate sections; the parenthetical field constraints are not model validation.\",\"Only a later Q11 operation validates them, while import and persistence accept them.\"],\"default_guess\":\"Follow the explicit running-service passage and accept both cases during import.\",\"witness\":{\"initial\":\"An active authorized producer has no snapshot with the submitted identity.\",\"events\":[\"The producer submits a valid EUR publication whose `sections` list is empty.\",\"In a second history it submits two otherwise-valid sections with the same `source_section_id`.\"],\"outcomes\":[\"The DTO or request decoder rejects the publication before an import attempt is recorded because M18 declares the list non-empty and identifiers unique.\",\"The import accepts the publication and persists an ApprovedEstimateSnapshot and accepted SnapshotImportRecord because the running-service passage says neither condition is refused.\"],\"observer\":\"The producer, which either receives a decoding rejection without `import_id` or an accepted import result.\"}},{\"unit\":\"context\",\"subject\":\"ProjectOverview project availability shape\",\"kind\":\"model contradiction\",\"text\":\"The declared `ProjectOverview` fields require `project: ProjectContext`, but the carried change says the project context can be absent and a `project_availability` says so; no `project_availability` field or conditional validation rule is added to the declared fields.\",\"question\":\"What is the actual ProjectOverview schema when the post-guard Registry context read fails?\",\"options\":[\"Add `project_availability` and make `project` conditional on it, like the other availability/value pairs.\",\"Keep `project` required and fail the whole overview despite the carried change.\",\"Return an ad hoc response shape not represented by the declared DTO.\"],\"default_guess\":\"Treat it as an availability pair and make `project` optional when Registry context is temporarily unavailable.\",\"witness\":{\"initial\":\"A caller is authorized for a project and Registry validation in the A4 guard succeeds.\",\"events\":[\"The overview builder subsequently calls Registry for ProjectContext.\",\"That context call times out.\"],\"outcomes\":[\"The operation returns a ProjectOverview with absent project context and `project_availability=temporarily_unavailable`, as the carried change requires.\",\"Construction fails or the whole operation fails because the declared ProjectOverview requires `project` and has no `project_availability` member.\"],\"observer\":\"The staff member or viewer requesting the overview.\"}},{\"unit\":\"context\",\"subject\":\"ProjectValidationResult consistency across guards\",\"kind\":\"unverified external invariant\",\"text\":\"M17 says access-management creation uses only `is_active` while the project guard uses only `status`; A6 says these readings agree because Registry sets them consistently, but also says the gateway does not verify that `exists`, `is_active` and `status` agree and that disagreement is not something the portal decides.\",\"question\":\"What must the portal do when a successfully decoded validation answer has inconsistent `exists`, `is_active` and `status` fields?\",\"options\":[\"Reject it as `schema_mismatch`.\",\"Apply each caller's designated field, allowing different decisions for the same answer.\",\"Define a precedence among `exists`, `status` and `is_active` and use it everywhere.\"],\"default_guess\":\"Reject inconsistent validation answers as `schema_mismatch`.\",\"witness\":{\"initial\":\"Registry returns HTTP success for an existing project with `exists=true`, `status=archived`, and `is_active=true`.\",\"events\":[\"An administrator creates a viewer grant for the project.\",\"An operator then attempts a project-record mutation using an existing assignment.\"],\"outcomes\":[\"Grant creation succeeds because it reads only `is_active`, while the mutation is rejected as `archived_project` because the guard reads only `status`.\",\"Both operations reject the inconsistent Registry response as a boundary/schema failure.\"],\"observer\":\"The administrator and operator, and later the viewer whose grant may or may not exist.\"}},{\"unit\":\"A6\",\"subject\":\"Registry failure during snapshot-import authorization\",\"kind\":\"missing failure translation\",\"text\":\"A6 translates Registry timeout, transport, HTTP and schema failures to `RegistryFailureKind`, while A7 lists the import reasons recorded for authorization failures but provides no `ImportRejectReason` or recording rule for those Registry boundary failures.\",\"question\":\"When authenticated snapshot import reaches Registry validation and that call fails with `timeout`, `transport_error`, `http_error`, `schema_mismatch` or `identity_mismatch`, is this a classified import attempt, is a SnapshotImportRecord written, and what result is returned?\",\"options\":[\"Propagate the Registry boundary failure and write no import or audit record.\",\"Record a rejected import using one of the existing reasons such as `unknown_project`.\",\"Extend the import rejection catalog with dependency-failure reasons.\"],\"default_guess\":\"Propagate the dependency failure and write no SnapshotImportRecord because no existing ImportRejectReason represents it.\",\"witness\":{\"initial\":\"An active producer with a valid credential and appropriate project scope submits a well-formed snapshot.\",\"events\":[\"The import guard calls Registry validation.\",\"Registry times out before returning validation.\"],\"outcomes\":[\"The operation fails as a Registry dependency error and records no classified attempt.\",\"The operation creates a fresh rejected SnapshotImportRecord and `snapshot.import` audit record, after mapping the timeout to an existing rejection reason.\"],\"observer\":\"The producer, which may receive an `import_id`, and auditors inspecting import history.\"}},{\"unit\":\"A25\",\"subject\":\"Request-body bound\",\"kind\":\"missing configuration and refusal rule\",\"text\":\"A25 says request bodies are bounded by runtime settings before expensive work, but it names no request-body setting, unit, default, byte-counting rule or refusal response; A30 names only the binary read limit among size bounds.\",\"question\":\"What exact maximum applies to request bodies, what bytes count toward it, and how is an oversized or indeterminately sized body refused?\",\"options\":[\"A single configured limit applies to raw HTTP body bytes and excess is rejected with a specified status and empty body.\",\"Limits differ by route or body type.\",\"Only declared Content-Length is checked, leaving chunked bodies to a streaming limit.\",\"No request-body bound exists despite the invariant.\"],\"default_guess\":\"Use one configured raw-body byte ceiling, enforce it while reading as well as against Content-Length, and return an explicit payload-too-large response.\",\"witness\":{\"initial\":\"The service has otherwise-valid production settings and receives an authenticated JSON mutation.\",\"events\":[\"The caller sends a two-megabyte body using chunked transfer encoding without Content-Length.\"],\"outcomes\":[\"The transport rejects it before decoding because two megabytes exceeds an implementation-selected bound.\",\"The transport accepts and decodes it because no State 2 request-body bound can be obtained from RuntimeSettings.\"],\"observer\":\"The HTTP caller and service operator observing resource use.\"}},{\"unit\":\"A25\",\"subject\":\"Transport-guard check precedence\",\"kind\":\"unspecified order\",\"text\":\"A25 independently requires trusted-host rejection, request-size rejection, viewer-entry rate limiting, CORS/origin checks and handler decoding, but gives no overall order among those checks apart from rate limiting being before code verification.\",\"question\":\"Which failure wins when one request violates more than one transport rule?\",\"options\":[\"Trusted host, then size, then route-specific origin/rate checks, then decoding.\",\"Size is checked before host and route checks.\",\"Viewer-entry rate limiting precedes all other checks and counts any request reaching that route.\",\"Each middleware's assembly order decides silently.\"],\"default_guess\":\"Reject an untrusted host first, then enforce size, then route-specific controls, then decode.\",\"witness\":{\"initial\":\"The viewer-entry key has already reached its attempt limit.\",\"events\":[\"A client sends an oversized `POST /auth/viewer/enter` with an untrusted Host header.\"],\"outcomes\":[\"The response is the trusted-host rejection and the rate-limit state is untouched.\",\"The response is HTTP 429, or a payload-too-large response, depending on middleware order.\"],\"observer\":\"The requesting client, which sees different status codes and can infer which guard ran.\"}},{\"unit\":\"A25\",\"subject\":\"Viewer-entry limiter memory claim\",\"kind\":\"internal contradiction\",\"text\":\"A25 says the limiter has memory bounded by the rate-limit window and that the log never holds more than attempts admitted within one window, but also says there is no cap on distinct keys and no other eviction.\",\"question\":\"Is a time-based retention bound alone intended, or must there be a finite global space bound on limiter memory?\",\"options\":[\"Retention is time-bounded but memory is unbounded with respect to distinct client addresses.\",\"A global key/entry cap or eviction rule is required.\",\"The stated memory-bounded invariant applies only per key, not to the whole limiter.\"],\"default_guess\":\"Interpret the algorithm literally: retention is bounded in time and per key, but total memory is not bounded.\",\"witness\":{\"initial\":\"The limiter is empty and permits ten attempts per address per window.\",\"events\":[\"Within one window, requests arrive from one million distinct client network addresses.\",\"Each address makes one admitted viewer-entry attempt.\"],\"outcomes\":[\"The limiter retains approximately one million keys and entries, contradicting the claim that memory itself is bounded.\",\"An implementation evicts or refuses keys using an unstated global memory cap.\"],\"observer\":\"The service operator, through memory consumption and possibly clients whose keys are evicted or refused.\"}},{\"unit\":\"A25\",\"subject\":\"Canonical public origin\",\"kind\":\"undefined authority value\",\"text\":\"A25 requires mutating viewer requests to come from `the canonical public origin`, compared by scheme, host and effective port, but no passage defines where that origin comes from or how it relates to the CORS allowlist and trusted hosts.\",\"question\":\"What value is the canonical public origin, and can it differ from the CORS allowlist or contain more than one origin?\",\"options\":[\"A dedicated single RuntimeSettings value is authoritative.\",\"The first or sole CORS-allowed origin is canonical.\",\"The request Host plus a fixed scheme determines it.\",\"Every CORS-allowed origin is accepted for viewer mutations.\"],\"default_guess\":\"Use a dedicated, explicitly configured single public origin.\",\"witness\":{\"initial\":\"Trusted hosts contain `portal.example` and CORS allows both `https://portal.example` and `https://admin.example`.\",\"events\":[\"A valid viewer cookie is sent with a logout request whose Origin is `https://admin.example`.\"],\"outcomes\":[\"Logout succeeds because the origin is on the CORS allowlist.\",\"Logout is refused because only `https://portal.example` is the canonical viewer origin.\"],\"observer\":\"The viewer browser, whose session is either ended or retained.\"}},{\"unit\":\"A25\",\"subject\":\"Trusted-host matching\",\"kind\":\"vague refusal condition\",\"text\":\"A25 requires at least one trusted host, forbids wildcards, and refuses untrusted hosts, but does not define normalization or whether matching includes the port, DNS case, a trailing dot, IPv6 notation or proxy-supplied host information.\",\"question\":\"How is the request host canonicalized and compared with the trusted-host entries?\",\"options\":[\"Compare a normalized DNS host without port, case-insensitively and with a defined trailing-dot rule.\",\"Compare the Host header text exactly.\",\"Compare host and effective port as an authority pair.\",\"Use framework defaults, whatever they are.\"],\"default_guess\":\"Parse the authority, ignore the port for host membership, compare DNS names case-insensitively, and reject malformed or ambiguous forms.\",\"witness\":{\"initial\":\"The trusted-host setting contains `portal.example`.\",\"events\":[\"A caller sends `Host: PORTAL.EXAMPLE.:443` to the HTTPS service.\"],\"outcomes\":[\"The request is accepted after DNS case and trailing-dot normalization and port removal.\",\"The request is refused because the configured and received strings are not identical.\"],\"observer\":\"The HTTP caller.\"}},{\"unit\":\"A25\",\"subject\":\"CORS behavior\",\"kind\":\"incomplete policy\",\"text\":\"A25 states only that CORS is off for an empty allowlist and an allowed origin is never a wildcard; it does not specify matching normalization, credential allowance, allowed methods or headers, preflight behavior, or whether rejected origins receive a normal response without CORS headers or an HTTP refusal.\",\"question\":\"What exact CORS response policy applies for allowed and disallowed origins, especially to credentialed preflight requests?\",\"options\":[\"Use exact-origin matching with credentials and a closed method/header allowlist.\",\"Use exact-origin matching without credential support.\",\"Treat disallowed origins as ordinary responses without CORS headers.\",\"Actively reject disallowed-origin requests with an HTTP error.\"],\"default_guess\":\"Use exact normalized origins, allow credentials only where required, and define a closed method/header list; disallowed origins receive no CORS permission headers.\",\"witness\":{\"initial\":\"`https://admin.example` is in the CORS allowlist.\",\"events\":[\"A browser sends a preflight for a credentialed request using `Authorization` and `X-Request-Id` headers.\"],\"outcomes\":[\"The preflight succeeds and permits credentials and both headers.\",\"The preflight fails because the implementation's default allowed-header or credential policy excludes them.\"],\"observer\":\"The browser application, which can or cannot send the real request.\"}},{\"unit\":\"A25\",\"subject\":\"X-Request-Id generation and trust\",\"kind\":\"undefined response field\",\"text\":\"A25 requires an `X-Request-Id` on every response but gives no source, syntax, uniqueness rule, or decision on whether a caller-supplied value is echoed, replaced or rejected.\",\"question\":\"How is `X-Request-Id` selected and validated?\",\"options\":[\"Always generate a fresh server UUID and ignore incoming values.\",\"Echo a valid incoming identifier and generate one when absent or invalid.\",\"Echo any incoming string.\",\"Reject malformed incoming identifiers.\"],\"default_guess\":\"Generate a fresh opaque server identifier for every request and do not trust an incoming value.\",\"witness\":{\"initial\":\"The service receives an otherwise-valid health request.\",\"events\":[\"The caller supplies `X-Request-Id` containing a chosen value with log-delimiter characters.\"],\"outcomes\":[\"The response echoes the caller value and logs may correlate under it.\",\"The service replaces it with a generated safe identifier.\"],\"observer\":\"The caller and operators using request-correlation logs.\"}},{\"unit\":\"A25\",\"subject\":\"Log redaction field set\",\"kind\":\"unenforceable invariant\",\"text\":\"A25 says logs redact authorization, cookie and `secret-like names`, but `secret-like names` is not a closed set or matching rule.\",\"question\":\"Which request, response and exception fields are considered secret-like, and is matching by exact name, case-insensitive name, substring or schema metadata?\",\"options\":[\"Use a closed case-insensitive field-name catalog.\",\"Redact any name containing substrings such as token, secret, password, authorization or cookie.\",\"Mark secret fields in schemas and redact from that metadata.\",\"Forbid logging request and response bodies entirely.\"],\"default_guess\":\"Forbid body logging and use a closed case-insensitive catalog plus authorization and cookie headers.\",\"witness\":{\"initial\":\"A malformed administration request contains a field named `new_password` and raises a decoding error.\",\"events\":[\"The transport or exception logger records structured request-error context.\"],\"outcomes\":[\"The submitted password is redacted because `new_password` is treated as secret-like.\",\"The value is logged because only fields exactly named `password` or `secret` are redacted.\"],\"observer\":\"Anyone with access to application logs.\"}},{\"unit\":\"A25\",\"subject\":\"Client-address rate-limit identity\",\"kind\":\"undefined key canonicalization\",\"text\":\"The viewer-entry limiter keys by `client network address` read from the connection, but gives no canonical representation for IPv4, IPv4-mapped IPv6, IPv6 compression or address/port tuples.\",\"question\":\"Which connection-address forms represent the same limiter key?\",\"options\":[\"Canonicalize to an IP address, mapping IPv4-mapped IPv6 to IPv4 and excluding the source port.\",\"Use the raw address string supplied by the server.\",\"Use the complete remote address and source port.\",\"Keep IPv4 and IPv4-mapped IPv6 as distinct identities.\"],\"default_guess\":\"Use a canonical IP value without source port and collapse IPv4-mapped IPv6 to IPv4.\",\"witness\":{\"initial\":\"One client has exhausted the viewer-entry limit through IPv4 address `192.0.2.10`.\",\"events\":[\"The same network peer connects through a listener that reports `::ffff:192.0.2.10`.\"],\"outcomes\":[\"The attempt is refused with HTTP 429 because both forms share a canonical key.\",\"The attempt is admitted because the raw connection-address strings are different.\"],\"observer\":\"The client and service operator evaluating rate-limit bypasses.\"}},{\"unit\":\"A32\",\"subject\":\"Reproducibility of the vulnerability check\",\"kind\":\"reproducibility gap\",\"text\":\"A32 calls `pip-audit --local` reproducible, but pins neither the pip-audit version nor the advisory snapshot, and explicitly allows transitive versions to differ between image builds while querying the database at deploy time.\",\"question\":\"What exactly must be held constant or recorded for the vulnerability result to be reproducible?\",\"options\":[\"Reproducibility means only rerunning the same tool against the same already-built image at the same advisory state.\",\"Pin the audit tool and retain its version, resolved package inventory and advisory database timestamp or snapshot.\",\"Only the command text is considered reproducible; results may differ without explanation.\"],\"default_guess\":\"Record the audit-tool version, complete installed-package inventory, command output and advisory-query timestamp for each built image.\",\"witness\":{\"initial\":\"The four direct requirement pins are unchanged.\",\"events\":[\"Image A is built and audited on one date.\",\"Image B is built later after a transitive release and advisory-database update.\"],\"outcomes\":[\"The same stated one-command check produces a different package set or vulnerability result, so the deploy decisions differ despite unchanged pins.\",\"A recorded and pinned audit environment reproduces the earlier result for Image A while separately evaluating Image B.\"],\"observer\":\"The deployment operator or auditor attempting to reproduce why a deploy passed.\"}},{\"unit\":\"A32\",\"subject\":\"Location and installation of pip-audit\",\"kind\":\"operational gap\",\"text\":\"A32 requires `pip-audit --local` to run inside the built image, while the deployment requirements contain only the four portal libraries and the text does not say how pip-audit is made available without changing the installed set being audited or the shipped image.\",\"question\":\"Where does the pip-audit executable come from, and is pip-audit and its own dependency graph part of the audited and shipped package set?\",\"options\":[\"Install pip-audit in the final image and audit it along with the portal dependencies.\",\"Use a build-only stage or mounted executable that inspects the final image environment.\",\"Temporarily install pip-audit, audit, and remove it while proving the remaining environment is the audited one.\",\"Run it outside the image despite the stated requirement.\"],\"default_guess\":\"Use a pinned build-stage audit tool against the final environment's exported installed-package inventory, without shipping the tool.\",\"witness\":{\"initial\":\"A final image contains only the portal and packages resolved from its four pinned requirements.\",\"events\":[\"The pre-deploy pipeline attempts to execute `pip-audit --local` inside that image.\"],\"outcomes\":[\"The command is unavailable and the deploy waits.\",\"The pipeline installs pip-audit into the image, causing the audit to include additional packages and making the audited set differ from the originally built set.\"],\"observer\":\"The deployment pipeline and operator.\"}},{\"unit\":\"A32\",\"subject\":\"Validity interval of a passing vulnerability check\",\"kind\":\"missing temporal rule\",\"text\":\"A32 says the check runs `before a deploy` and queries advisories `at the time of the deploy`, but defines no maximum delay, binding to a particular image digest, or rule for an advisory published after the check but before deployment.\",\"question\":\"How is a passing audit bound to the exact image and deployment time, and when must it be rerun?\",\"options\":[\"A pass is valid only for one immutable image digest and the immediately following deploy attempt.\",\"A pass remains valid for a specified interval for the same image.\",\"Any newly published advisory before deployment invalidates the pass and requires rerun.\",\"Any earlier pass for the same direct pins is sufficient.\"],\"default_guess\":\"Bind the result to the immutable image digest and rerun for each deploy attempt immediately before release.\",\"witness\":{\"initial\":\"An immutable image passes its audit in the morning.\",\"events\":[\"A blocking advisory for one installed transitive package is published later that day.\",\"The same image is deployed that evening without another audit.\"],\"outcomes\":[\"Deployment proceeds because it had a prior passing pre-deploy check.\",\"Deployment is blocked because the required check must reflect the advisory state at the actual deploy time.\"],\"observer\":\"The deployment operator and users exposed to the vulnerable package.\"}}]}",
+ "set_aside": []
+}

@@ -1,0 +1,127 @@
+{
+ "open_points": [
+  {
+   "unit": "A6",
+   "subject": "Registry endpoint configuration lifecycle",
+   "kind": "contradiction",
+   "text": "A6 says “The Registry endpoint (`REGISTRY_BASE_URL`) is not one of the start-up variables of A30: the service starts without it, and each Registry call reads it,” while R0-10 says the service is “configured only by environment variables, which it validates when it starts,” and A30 lists `registry_endpoint_env_name = REGISTRY_BASE_URL` among its runtime configuration.",
+   "question": "Must a missing or invalid `REGISTRY_BASE_URL` prevent startup, or may the service start and translate each later Registry call to `transport_error`?",
+   "options": [
+    "Fail startup when `REGISTRY_BASE_URL` is missing or invalid",
+    "Start successfully and return `transport_error` from Registry-dependent operations"
+   ],
+   "default_guess": "Follow the specific A6 rule: start successfully and translate failure per call.",
+   "witness": {
+    "initial": "A deployment has all required settings except `REGISTRY_BASE_URL`.",
+    "events": [
+     "The host operator starts the portal.",
+     "An authenticated user invokes a project operation."
+    ],
+    "outcomes": [
+     "Startup is refused during environment validation, so no project request can be made.",
+     "Startup succeeds; the project request reaches the gateway and fails as `transport_error`."
+    ],
+    "observer": "The host operator and the authenticated API caller"
+   }
+  },
+  {
+   "unit": "A6",
+   "subject": "Registry endpoint failure classification",
+   "kind": "vague refusal condition",
+   "text": "A6 classifies “the portal's own Registry endpoint setting is missing or unusable” as `transport_error`, but does not define `unusable` or the normalization and URL validation applied to the environment value.",
+   "question": "Exactly which `REGISTRY_BASE_URL` values are accepted, normalized, or refused locally as unusable before a request is attempted?",
+   "options": [
+    "Require a syntactically valid absolute HTTP(S) URL exactly as supplied",
+    "Apply normalization such as trimming whitespace or accepting equivalent URL spellings before validation",
+    "Pass any non-empty value to the HTTP client and classify only the resulting client error"
+   ],
+   "default_guess": "Require an absolute HTTP(S) URL after the same explicit environment normalization used by runtime configuration, without making a network request for invalid values.",
+   "witness": {
+    "initial": "`REGISTRY_BASE_URL` contains ` https://registry.example ` with surrounding whitespace, and Registry is reachable at the trimmed URL.",
+    "events": [
+     "The service starts.",
+     "A staff member performs a project read."
+    ],
+    "outcomes": [
+     "The gateway treats the setting as unusable and returns `transport_error` without contacting Registry.",
+     "The configuration reader trims it, the gateway contacts Registry, and the project read succeeds."
+    ],
+    "observer": "The staff caller and the deployment operator"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "M17 Registry checks for access-management grants and assignments",
+   "kind": "contradiction",
+   "text": "The changed M17 passage says “Portal mutation policy uses only `is_active` for the grant and assignment operations of access management,” but R0-24 and A4 say revoking a viewer grant, staff assignment, or producer grant consults no Registry and succeeds during a Registry outage.",
+   "question": "Does “grant and assignment operations” mean creation operations only, or does it also require Registry validation for revocation?",
+   "options": [
+    "Only creation reads `exists` and `is_active`; revocation never calls Registry",
+    "Both creation and revocation read `is_active`"
+   ],
+   "default_guess": "Limit the changed sentence to creation; keep revocation independent of Registry as R0-24 and A4 explicitly require.",
+   "witness": {
+    "initial": "An active viewer grant exists for a project, and Registry is unavailable.",
+    "events": [
+     "An authenticated administrator with `portal.access.manage` revokes the grant."
+    ],
+    "outcomes": [
+     "Revocation succeeds without a Registry call, immediately removing viewer access.",
+     "Revocation attempts validation and is refused because Registry cannot return `is_active`."
+    ],
+    "observer": "The administrator and the viewer"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "M18 SnapshotPublication section constraints",
+   "kind": "contradiction",
+   "text": "M18 declares `sections: list[SnapshotSectionData] (non-empty, unique source_section_id)`, then the changed passage says the import “refuses neither an empty section list nor repeated `source_section_id` values.”",
+   "question": "Are non-emptiness and `source_section_id` uniqueness input-model constraints enforced before import, or merely unenforced producer obligations?",
+   "options": [
+    "Request/model decoding rejects empty sections and duplicate source identifiers",
+    "The portal accepts both cases and records an accepted snapshot when all other checks pass"
+   ],
+   "default_guess": "Follow the explicit running-service change and treat both as unenforced producer obligations until Q11.",
+   "witness": {
+    "initial": "An active authorized producer can import for an active project, and no snapshot with the submitted identity exists.",
+    "events": [
+     "The producer submits a valid version-1 EUR publication whose `sections` list is empty."
+    ],
+    "outcomes": [
+     "SnapshotPublication validation refuses the request before import, producing HTTP 422 and no import record.",
+     "The request model accepts it; import records an accepted snapshot and returns a fresh `import_id`."
+    ],
+    "observer": "The producer"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "ProjectOverview Registry project availability",
+   "kind": "model contradiction",
+   "text": "The changed passage says “the project context is absent when its Registry read fails … and a `project_availability` says so, like the other five pairs,” but the declared `ProjectOverview` fields require `project: ProjectContext` and contain no `project_availability` field or project/availability closed-choice validation.",
+   "question": "What is the actual ProjectOverview shape when the post-guard Registry context read fails?",
+   "options": [
+    "Add `project_availability: ViewAvailability` and make `project: ProjectContext | None`, with the same closed-choice rule as the other components",
+    "Keep `project` required and fail the entire overview when context cannot be read",
+    "Return an omitted or null `project` without a declared availability field"
+   ],
+   "default_guess": "Add the missing availability pair and require `project` exactly when `project_availability` is `available`.",
+   "witness": {
+    "initial": "A viewer is authorized for an active project; the guard's Registry validation succeeds.",
+    "events": [
+     "The viewer requests the project overview.",
+     "The subsequent Registry context request times out while all portal-owned component reads succeed."
+    ],
+    "outcomes": [
+     "The API returns a partial overview with `project` absent and `project_availability=temporarily_unavailable`.",
+     "Construction of the declared ProjectOverview fails because its required `project` field is absent, so the whole request fails."
+    ],
+    "observer": "The viewer"
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A6\",\"subject\":\"Registry endpoint configuration lifecycle\",\"kind\":\"contradiction\",\"text\":\"A6 says “The Registry endpoint (`REGISTRY_BASE_URL`) is not one of the start-up variables of A30: the service starts without it, and each Registry call reads it,” while R0-10 says the service is “configured only by environment variables, which it validates when it starts,” and A30 lists `registry_endpoint_env_name = REGISTRY_BASE_URL` among its runtime configuration.\",\"question\":\"Must a missing or invalid `REGISTRY_BASE_URL` prevent startup, or may the service start and translate each later Registry call to `transport_error`?\",\"options\":[\"Fail startup when `REGISTRY_BASE_URL` is missing or invalid\",\"Start successfully and return `transport_error` from Registry-dependent operations\"],\"default_guess\":\"Follow the specific A6 rule: start successfully and translate failure per call.\",\"witness\":{\"initial\":\"A deployment has all required settings except `REGISTRY_BASE_URL`.\",\"events\":[\"The host operator starts the portal.\",\"An authenticated user invokes a project operation.\"],\"outcomes\":[\"Startup is refused during environment validation, so no project request can be made.\",\"Startup succeeds; the project request reaches the gateway and fails as `transport_error`.\"],\"observer\":\"The host operator and the authenticated API caller\"}},{\"unit\":\"A6\",\"subject\":\"Registry endpoint failure classification\",\"kind\":\"vague refusal condition\",\"text\":\"A6 classifies “the portal's own Registry endpoint setting is missing or unusable” as `transport_error`, but does not define `unusable` or the normalization and URL validation applied to the environment value.\",\"question\":\"Exactly which `REGISTRY_BASE_URL` values are accepted, normalized, or refused locally as unusable before a request is attempted?\",\"options\":[\"Require a syntactically valid absolute HTTP(S) URL exactly as supplied\",\"Apply normalization such as trimming whitespace or accepting equivalent URL spellings before validation\",\"Pass any non-empty value to the HTTP client and classify only the resulting client error\"],\"default_guess\":\"Require an absolute HTTP(S) URL after the same explicit environment normalization used by runtime configuration, without making a network request for invalid values.\",\"witness\":{\"initial\":\"`REGISTRY_BASE_URL` contains ` https://registry.example ` with surrounding whitespace, and Registry is reachable at the trimmed URL.\",\"events\":[\"The service starts.\",\"A staff member performs a project read.\"],\"outcomes\":[\"The gateway treats the setting as unusable and returns `transport_error` without contacting Registry.\",\"The configuration reader trims it, the gateway contacts Registry, and the project read succeeds.\"],\"observer\":\"The staff caller and the deployment operator\"}},{\"unit\":\"context\",\"subject\":\"M17 Registry checks for access-management grants and assignments\",\"kind\":\"contradiction\",\"text\":\"The changed M17 passage says “Portal mutation policy uses only `is_active` for the grant and assignment operations of access management,” but R0-24 and A4 say revoking a viewer grant, staff assignment, or producer grant consults no Registry and succeeds during a Registry outage.\",\"question\":\"Does “grant and assignment operations” mean creation operations only, or does it also require Registry validation for revocation?\",\"options\":[\"Only creation reads `exists` and `is_active`; revocation never calls Registry\",\"Both creation and revocation read `is_active`\"],\"default_guess\":\"Limit the changed sentence to creation; keep revocation independent of Registry as R0-24 and A4 explicitly require.\",\"witness\":{\"initial\":\"An active viewer grant exists for a project, and Registry is unavailable.\",\"events\":[\"An authenticated administrator with `portal.access.manage` revokes the grant.\"],\"outcomes\":[\"Revocation succeeds without a Registry call, immediately removing viewer access.\",\"Revocation attempts validation and is refused because Registry cannot return `is_active`.\"],\"observer\":\"The administrator and the viewer\"}},{\"unit\":\"context\",\"subject\":\"M18 SnapshotPublication section constraints\",\"kind\":\"contradiction\",\"text\":\"M18 declares `sections: list[SnapshotSectionData] (non-empty, unique source_section_id)`, then the changed passage says the import “refuses neither an empty section list nor repeated `source_section_id` values.”\",\"question\":\"Are non-emptiness and `source_section_id` uniqueness input-model constraints enforced before import, or merely unenforced producer obligations?\",\"options\":[\"Request/model decoding rejects empty sections and duplicate source identifiers\",\"The portal accepts both cases and records an accepted snapshot when all other checks pass\"],\"default_guess\":\"Follow the explicit running-service change and treat both as unenforced producer obligations until Q11.\",\"witness\":{\"initial\":\"An active authorized producer can import for an active project, and no snapshot with the submitted identity exists.\",\"events\":[\"The producer submits a valid version-1 EUR publication whose `sections` list is empty.\"],\"outcomes\":[\"SnapshotPublication validation refuses the request before import, producing HTTP 422 and no import record.\",\"The request model accepts it; import records an accepted snapshot and returns a fresh `import_id`.\"],\"observer\":\"The producer\"}},{\"unit\":\"context\",\"subject\":\"ProjectOverview Registry project availability\",\"kind\":\"model contradiction\",\"text\":\"The changed passage says “the project context is absent when its Registry read fails … and a `project_availability` says so, like the other five pairs,” but the declared `ProjectOverview` fields require `project: ProjectContext` and contain no `project_availability` field or project/availability closed-choice validation.\",\"question\":\"What is the actual ProjectOverview shape when the post-guard Registry context read fails?\",\"options\":[\"Add `project_availability: ViewAvailability` and make `project: ProjectContext | None`, with the same closed-choice rule as the other components\",\"Keep `project` required and fail the entire overview when context cannot be read\",\"Return an omitted or null `project` without a declared availability field\"],\"default_guess\":\"Add the missing availability pair and require `project` exactly when `project_availability` is `available`.\",\"witness\":{\"initial\":\"A viewer is authorized for an active project; the guard's Registry validation succeeds.\",\"events\":[\"The viewer requests the project overview.\",\"The subsequent Registry context request times out while all portal-owned component reads succeed.\"],\"outcomes\":[\"The API returns a partial overview with `project` absent and `project_availability=temporarily_unavailable`.\",\"Construction of the declared ProjectOverview fails because its required `project` field is absent, so the whole request fails.\"],\"observer\":\"The viewer\"}}]}",
+ "set_aside": []
+}

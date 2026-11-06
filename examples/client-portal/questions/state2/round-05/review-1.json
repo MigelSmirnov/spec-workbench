@@ -1,0 +1,176 @@
+{
+ "open_points": [
+  {
+   "unit": "A5",
+   "subject": "Registry status policy for access-management creation",
+   "kind": "contradiction",
+   "text": "The table says an `archived` project rejects every portal mutation, while the specific rule says grant and assignment operations use `is_active`; A6 permits `status` and `is_active` to disagree and says each caller trusts only its named field.",
+   "question": "When validation returns `exists=true`, `status=\"archived\"`, and `is_active=true`, must creation of a viewer grant, staff assignment, or producer grant be allowed or rejected?",
+   "options": [
+    "Reject because `status=\"archived\"` makes the project archived under the A5 table and R0-24.",
+    "Allow because access-management creation trusts only `is_active=true`.",
+    "Treat the inconsistent validation answer as `schema_mismatch` despite A6 saying the gateway does not check consistency."
+   ],
+   "default_guess": "Follow the operation-specific rule and allow creation when `is_active=true`.",
+   "witness": {
+    "initial": "An administrator has an active session and `portal.access.manage`; no grant exists for project P. Registry validation for P returns the same UUID with `exists=true`, `status=\"archived\"`, and `is_active=true`, a combination A6 explicitly allows through decoding.",
+    "events": [
+     "The administrator creates a viewer grant for P."
+    ],
+    "outcomes": [
+     "The A5 state table and R0-24 reject the mutation as `archived_project`; no grant is stored.",
+     "The operation-specific A5/A6 rule trusts `is_active=true`; the grant is stored and audited successfully."
+    ],
+    "observer": "The administrator and the viewer see whether the new grant exists and gives read access."
+   }
+  },
+  {
+   "unit": "A7",
+   "subject": "Expense-intake authorization sequence",
+   "kind": "contradictory sequence",
+   "text": "A4 requires project access before capability and Registry lifecycle checks, but A7's exact expense order is `recognition status`, supported version, `portal.expense.manage` capability, active project, amount, allocations, replay; it never names the staff assignment/project-access check.",
+   "question": "Must expense creation check the operator's active `StaffProjectAssignment`, and if so where does that check occur relative to the content checks listed by A7?",
+   "options": [
+    "Apply A4 first, including assignment scope, before any expense-content validation.",
+    "Use A7's listed sequence literally and require role capability plus an active Registry project without checking an assignment.",
+    "Insert assignment scope somewhere into A7's sequence, with its position still to be specified."
+   ],
+   "default_guess": "Apply the complete A4 guard, including assignment scope, before validating expense content.",
+   "witness": {
+    "initial": "Operator O has an active verified account, valid session, and the operator capability set, but no active assignment to active Registry project P. No expense uses recognized document R.",
+    "events": [
+     "O submits an otherwise valid confirmed version-1 recognition for P with valid allocations and recognized_document_id R."
+    ],
+    "outcomes": [
+     "A4 rejects at project access; no expense or document is created.",
+     "A7's literal sequence finds the capability and active project, validates the content, and creates the expense and document because it never checks the assignment."
+    ],
+    "observer": "O and any authorized reader of P can observe whether the expense was created."
+   }
+  },
+  {
+   "unit": "A7",
+   "subject": "Snapshot import during Registry validation failure",
+   "kind": "missing failure classification",
+   "text": "A4 says an unanswered Registry validation fails the operation under A6, while A7 says an authenticated snapshot authorization failure is recorded as only `unknown_project`, `scope_denied`, or `archived_project`; `ImportRejectReason` has no timeout, transport, HTTP, schema, or identity-mismatch reason.",
+   "question": "What result and persistence behavior apply when snapshot authorization reaches Registry validation and it fails with `timeout`, `transport_error`, `http_error`, `schema_mismatch`, or `identity_mismatch`?",
+   "options": [
+    "Propagate an availability/boundary failure and write no `SnapshotImportRecord`.",
+    "Record a rejected import as `unknown_project` to conceal the Registry failure.",
+    "Add or map to another import rejection reason, despite the currently closed catalog."
+   ],
+   "default_guess": "Propagate the Registry boundary failure and write no import record.",
+   "witness": {
+    "initial": "An active estimate producer has a valid credential, import capability, and an active grant for project P. The submitted snapshot is otherwise valid.",
+    "events": [
+     "The producer imports the snapshot.",
+     "Registry validation of P times out."
+    ],
+    "outcomes": [
+     "The operation returns a Registry availability failure and stores no import result because no catalog reason represents the timeout.",
+     "The timeout is concealed as `unknown_project`, producing a fresh rejected `SnapshotImportRecord` and `import_id`."
+    ],
+    "observer": "The producer sees either an availability failure without an import result or a readable rejected import result."
+   }
+  },
+  {
+   "unit": "A6",
+   "subject": "Registry response schema decoding",
+   "kind": "vague schema boundary",
+   "text": "A6 classifies a body that is not JSON of the `expected shape` as `schema_mismatch`, but does not define whether decoding is strict or may coerce JSON values into the M17 field types, nor whether unknown fields are accepted.",
+   "question": "Which exact JSON representations count as the expected Registry response shape, including type coercion and additional fields?",
+   "options": [
+    "Require exact JSON types and reject unknown fields.",
+    "Require exact JSON types but ignore unknown fields.",
+    "Use coercive model decoding, accepting values such as string booleans or numeric strings when convertible."
+   ],
+   "default_guess": "Require exact JSON types while allowing additional fields for forward compatibility.",
+   "witness": {
+    "initial": "The Registry validation endpoint answers HTTP 200 for requested project P with the correct UUID, `status=\"active\"`, `is_active=true`, and `exists=\"false\"` as a JSON string rather than a boolean.",
+    "events": [
+     "The portal validates P for a project operation."
+    ],
+    "outcomes": [
+     "A strict decoder raises `schema_mismatch`.",
+     "A coercive decoder converts `\"false\"` to boolean false, after which the caller classifies P as not found."
+    ],
+    "observer": "The caller and boundary diagnostics see different failure classifications."
+   }
+  },
+  {
+   "unit": "A7",
+   "subject": "HTTP request-model type rejection for snapshot publications",
+   "kind": "undefined coercion",
+   "text": "A7 says a body carrying a required field `of the wrong type` is refused by request decoding before bearer authentication, but it does not define whether convertible JSON values are wrong types or are coerced by the request-model implementation.",
+   "question": "Must external snapshot request decoding be strict about JSON types, or may it coerce compatible values before A7 validation?",
+   "options": [
+    "Strict decoding: JSON strings are rejected for integer, decimal, UUID, and datetime fields.",
+    "Framework-default coercion: convertible strings may become typed values.",
+    "Define strictness separately for identity and scalar fields."
+   ],
+   "default_guess": "Use strict external request decoding with no scalar coercion.",
+   "witness": {
+    "initial": "A producer has a valid active credential and authorization for active project P. No snapshot with the submitted identity exists.",
+    "events": [
+     "The producer submits a complete valid snapshot except that `contract_version` is the JSON string `\"1\"` rather than the number `1`."
+    ],
+    "outcomes": [
+     "Strict decoding returns HTTP 422 before credential checking and writes no import record.",
+     "Coercive decoding converts the value to integer 1, authenticates the producer, and accepts the snapshot with a new import record."
+    ],
+    "observer": "The producer sees rejection versus successful import, and later readers can observe whether the snapshot exists."
+   }
+  },
+  {
+   "unit": "A30",
+   "subject": "Runtime environment configuration table",
+   "kind": "missing normative table",
+   "text": "A30 refers to `config.runtime_environment_variables` as a closed table of variable names, types, requiredness, normalization, and per-environment defaults, but the table is not present; the displayed configuration block omits settings required elsewhere, including persistence paths, trusted hosts/origins, request-body bounds, public origin, viewer-entry limits, and runtime environment selection.",
+   "question": "What is the complete environment-variable contract and which missing or invalid values prevent startup in each environment?",
+   "options": [
+    "Only the variables displayed in A30 are normative; implementations choose the remaining names and defaults.",
+    "The referenced but absent Factory table is normative and must be reproduced in the accepted texts.",
+    "Each policy-owning decision separately defines its variables, requiredness, normalization, and defaults."
+   ],
+   "default_guess": "Reproduce one complete closed runtime-environment table and fail startup for every missing required value.",
+   "witness": {
+    "initial": "A production deployment supplies only the variables explicitly named in A30's displayed block, with no trusted-host, database-path, public-origin, or request-body-limit variables.",
+    "events": [
+     "The deployment starts the portal."
+    ],
+    "outcomes": [
+     "Startup succeeds using implementation-chosen defaults for the omitted settings.",
+     "Startup fails because one or more variables from the referenced unseen closed table are required in production."
+    ],
+    "observer": "The deployment operator sees whether the service starts and, if it starts, which hosts, origins, paths, and limits it uses."
+   }
+  },
+  {
+   "unit": "A32",
+   "subject": "Pre-deploy dependency vulnerability check",
+   "kind": "contradictory command",
+   "text": "A32 first defines the reproducible check as `pip-audit -r deploy/requirements.txt`, which resolves dependencies for the check, and later says `The check runs inside the built image against what is installed there (pip-audit --local)`, which audits the already-installed dependency set.",
+   "question": "Is a deploy required to pass the requirements-resolution audit, the installed-image audit, or both, and which result governs when they differ?",
+   "options": [
+    "Run only `pip-audit --local` in the built image because the shipped set is authoritative.",
+    "Run only `pip-audit -r deploy/requirements.txt` and build from that resolved result.",
+    "Run both checks and block if either reports an advisory or cannot complete."
+   ],
+   "default_guess": "Run both and block if either fails.",
+   "witness": {
+    "initial": "The built image contains transitive dependency T version 1, which now has an advisory. A fresh resolution of the four direct pins selects T version 2, which has no advisory.",
+    "events": [
+     "The pre-deploy vulnerability policy is executed after the image has been built."
+    ],
+    "outcomes": [
+     "`pip-audit -r deploy/requirements.txt` resolves T version 2 and passes, so the image containing vulnerable T version 1 is deployed.",
+     "`pip-audit --local` inspects installed T version 1 and blocks the deploy."
+    ],
+    "observer": "The deployment operator and users see whether the image is released."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A5\",\"subject\":\"Registry status policy for access-management creation\",\"kind\":\"contradiction\",\"text\":\"The table says an `archived` project rejects every portal mutation, while the specific rule says grant and assignment operations use `is_active`; A6 permits `status` and `is_active` to disagree and says each caller trusts only its named field.\",\"question\":\"When validation returns `exists=true`, `status=\\\"archived\\\"`, and `is_active=true`, must creation of a viewer grant, staff assignment, or producer grant be allowed or rejected?\",\"options\":[\"Reject because `status=\\\"archived\\\"` makes the project archived under the A5 table and R0-24.\",\"Allow because access-management creation trusts only `is_active=true`.\",\"Treat the inconsistent validation answer as `schema_mismatch` despite A6 saying the gateway does not check consistency.\"],\"default_guess\":\"Follow the operation-specific rule and allow creation when `is_active=true`.\",\"witness\":{\"initial\":\"An administrator has an active session and `portal.access.manage`; no grant exists for project P. Registry validation for P returns the same UUID with `exists=true`, `status=\\\"archived\\\"`, and `is_active=true`, a combination A6 explicitly allows through decoding.\",\"events\":[\"The administrator creates a viewer grant for P.\"],\"outcomes\":[\"The A5 state table and R0-24 reject the mutation as `archived_project`; no grant is stored.\",\"The operation-specific A5/A6 rule trusts `is_active=true`; the grant is stored and audited successfully.\"],\"observer\":\"The administrator and the viewer see whether the new grant exists and gives read access.\"}},{\"unit\":\"A7\",\"subject\":\"Expense-intake authorization sequence\",\"kind\":\"contradictory sequence\",\"text\":\"A4 requires project access before capability and Registry lifecycle checks, but A7's exact expense order is `recognition status`, supported version, `portal.expense.manage` capability, active project, amount, allocations, replay; it never names the staff assignment/project-access check.\",\"question\":\"Must expense creation check the operator's active `StaffProjectAssignment`, and if so where does that check occur relative to the content checks listed by A7?\",\"options\":[\"Apply A4 first, including assignment scope, before any expense-content validation.\",\"Use A7's listed sequence literally and require role capability plus an active Registry project without checking an assignment.\",\"Insert assignment scope somewhere into A7's sequence, with its position still to be specified.\"],\"default_guess\":\"Apply the complete A4 guard, including assignment scope, before validating expense content.\",\"witness\":{\"initial\":\"Operator O has an active verified account, valid session, and the operator capability set, but no active assignment to active Registry project P. No expense uses recognized document R.\",\"events\":[\"O submits an otherwise valid confirmed version-1 recognition for P with valid allocations and recognized_document_id R.\"],\"outcomes\":[\"A4 rejects at project access; no expense or document is created.\",\"A7's literal sequence finds the capability and active project, validates the content, and creates the expense and document because it never checks the assignment.\"],\"observer\":\"O and any authorized reader of P can observe whether the expense was created.\"}},{\"unit\":\"A7\",\"subject\":\"Snapshot import during Registry validation failure\",\"kind\":\"missing failure classification\",\"text\":\"A4 says an unanswered Registry validation fails the operation under A6, while A7 says an authenticated snapshot authorization failure is recorded as only `unknown_project`, `scope_denied`, or `archived_project`; `ImportRejectReason` has no timeout, transport, HTTP, schema, or identity-mismatch reason.\",\"question\":\"What result and persistence behavior apply when snapshot authorization reaches Registry validation and it fails with `timeout`, `transport_error`, `http_error`, `schema_mismatch`, or `identity_mismatch`?\",\"options\":[\"Propagate an availability/boundary failure and write no `SnapshotImportRecord`.\",\"Record a rejected import as `unknown_project` to conceal the Registry failure.\",\"Add or map to another import rejection reason, despite the currently closed catalog.\"],\"default_guess\":\"Propagate the Registry boundary failure and write no import record.\",\"witness\":{\"initial\":\"An active estimate producer has a valid credential, import capability, and an active grant for project P. The submitted snapshot is otherwise valid.\",\"events\":[\"The producer imports the snapshot.\",\"Registry validation of P times out.\"],\"outcomes\":[\"The operation returns a Registry availability failure and stores no import result because no catalog reason represents the timeout.\",\"The timeout is concealed as `unknown_project`, producing a fresh rejected `SnapshotImportRecord` and `import_id`.\"],\"observer\":\"The producer sees either an availability failure without an import result or a readable rejected import result.\"}},{\"unit\":\"A6\",\"subject\":\"Registry response schema decoding\",\"kind\":\"vague schema boundary\",\"text\":\"A6 classifies a body that is not JSON of the `expected shape` as `schema_mismatch`, but does not define whether decoding is strict or may coerce JSON values into the M17 field types, nor whether unknown fields are accepted.\",\"question\":\"Which exact JSON representations count as the expected Registry response shape, including type coercion and additional fields?\",\"options\":[\"Require exact JSON types and reject unknown fields.\",\"Require exact JSON types but ignore unknown fields.\",\"Use coercive model decoding, accepting values such as string booleans or numeric strings when convertible.\"],\"default_guess\":\"Require exact JSON types while allowing additional fields for forward compatibility.\",\"witness\":{\"initial\":\"The Registry validation endpoint answers HTTP 200 for requested project P with the correct UUID, `status=\\\"active\\\"`, `is_active=true`, and `exists=\\\"false\\\"` as a JSON string rather than a boolean.\",\"events\":[\"The portal validates P for a project operation.\"],\"outcomes\":[\"A strict decoder raises `schema_mismatch`.\",\"A coercive decoder converts `\\\"false\\\"` to boolean false, after which the caller classifies P as not found.\"],\"observer\":\"The caller and boundary diagnostics see different failure classifications.\"}},{\"unit\":\"A7\",\"subject\":\"HTTP request-model type rejection for snapshot publications\",\"kind\":\"undefined coercion\",\"text\":\"A7 says a body carrying a required field `of the wrong type` is refused by request decoding before bearer authentication, but it does not define whether convertible JSON values are wrong types or are coerced by the request-model implementation.\",\"question\":\"Must external snapshot request decoding be strict about JSON types, or may it coerce compatible values before A7 validation?\",\"options\":[\"Strict decoding: JSON strings are rejected for integer, decimal, UUID, and datetime fields.\",\"Framework-default coercion: convertible strings may become typed values.\",\"Define strictness separately for identity and scalar fields.\"],\"default_guess\":\"Use strict external request decoding with no scalar coercion.\",\"witness\":{\"initial\":\"A producer has a valid active credential and authorization for active project P. No snapshot with the submitted identity exists.\",\"events\":[\"The producer submits a complete valid snapshot except that `contract_version` is the JSON string `\\\"1\\\"` rather than the number `1`.\"],\"outcomes\":[\"Strict decoding returns HTTP 422 before credential checking and writes no import record.\",\"Coercive decoding converts the value to integer 1, authenticates the producer, and accepts the snapshot with a new import record.\"],\"observer\":\"The producer sees rejection versus successful import, and later readers can observe whether the snapshot exists.\"}},{\"unit\":\"A30\",\"subject\":\"Runtime environment configuration table\",\"kind\":\"missing normative table\",\"text\":\"A30 refers to `config.runtime_environment_variables` as a closed table of variable names, types, requiredness, normalization, and per-environment defaults, but the table is not present; the displayed configuration block omits settings required elsewhere, including persistence paths, trusted hosts/origins, request-body bounds, public origin, viewer-entry limits, and runtime environment selection.\",\"question\":\"What is the complete environment-variable contract and which missing or invalid values prevent startup in each environment?\",\"options\":[\"Only the variables displayed in A30 are normative; implementations choose the remaining names and defaults.\",\"The referenced but absent Factory table is normative and must be reproduced in the accepted texts.\",\"Each policy-owning decision separately defines its variables, requiredness, normalization, and defaults.\"],\"default_guess\":\"Reproduce one complete closed runtime-environment table and fail startup for every missing required value.\",\"witness\":{\"initial\":\"A production deployment supplies only the variables explicitly named in A30's displayed block, with no trusted-host, database-path, public-origin, or request-body-limit variables.\",\"events\":[\"The deployment starts the portal.\"],\"outcomes\":[\"Startup succeeds using implementation-chosen defaults for the omitted settings.\",\"Startup fails because one or more variables from the referenced unseen closed table are required in production.\"],\"observer\":\"The deployment operator sees whether the service starts and, if it starts, which hosts, origins, paths, and limits it uses.\"}},{\"unit\":\"A32\",\"subject\":\"Pre-deploy dependency vulnerability check\",\"kind\":\"contradictory command\",\"text\":\"A32 first defines the reproducible check as `pip-audit -r deploy/requirements.txt`, which resolves dependencies for the check, and later says `The check runs inside the built image against what is installed there (pip-audit --local)`, which audits the already-installed dependency set.\",\"question\":\"Is a deploy required to pass the requirements-resolution audit, the installed-image audit, or both, and which result governs when they differ?\",\"options\":[\"Run only `pip-audit --local` in the built image because the shipped set is authoritative.\",\"Run only `pip-audit -r deploy/requirements.txt` and build from that resolved result.\",\"Run both checks and block if either reports an advisory or cannot complete.\"],\"default_guess\":\"Run both and block if either fails.\",\"witness\":{\"initial\":\"The built image contains transitive dependency T version 1, which now has an advisory. A fresh resolution of the four direct pins selects T version 2, which has no advisory.\",\"events\":[\"The pre-deploy vulnerability policy is executed after the image has been built.\"],\"outcomes\":[\"`pip-audit -r deploy/requirements.txt` resolves T version 2 and passes, so the image containing vulnerable T version 1 is deployed.\",\"`pip-audit --local` inspects installed T version 1 and blocks the deploy.\"],\"observer\":\"The deployment operator and users see whether the image is released.\"}}]}",
+ "set_aside": []
+}

@@ -1,0 +1,326 @@
+{
+ "open_points": [
+  {
+   "unit": "A4",
+   "subject": "Project-authorization failure classification",
+   "kind": "underspecified refusal",
+   "text": "“First failure wins; failures are indistinguishable to the caller regarding account/project existence beyond what their own access already proves.”",
+   "question": "Which concrete rejection class must each failed session, principal-status, project-access, capability, and Registry check produce, and which failures must share the same caller-visible response?",
+   "options": [
+    "All project-access and project-existence failures use the scoped not-found rejection; authentication and capability failures use separate concealed rejections.",
+    "Every guard failure uses one common concealed rejection.",
+    "Project-access failures use authorization rejection while only Registry not-found uses scoped not-found."
+   ],
+   "default_guess": "Use a concealed authentication rejection for session/principal failures, scoped not-found for project-access or unknown-project failures, and authorization rejection for capability failures.",
+   "witness": {
+    "initial": "An active operator has a valid session and expense capability but no assignment for project P; Registry also does not know P.",
+    "events": [
+     "The operator requests a project-scoped expense read for P."
+    ],
+    "outcomes": [
+     "The guard raises scoped not-found and the caller receives the same response as for an unknown project.",
+     "The guard raises authorization rejection and the caller receives a forbidden response."
+    ],
+    "observer": "The operator and HTTP contract tests see the different rejection."
+   }
+  },
+  {
+   "unit": "A4",
+   "subject": "Registry-dependent authorization of ProjectOverview",
+   "kind": "contradiction",
+   "text": "A4 says “Every project-scoped operation” reaches “Registry lifecycle policy,” while State 1 says a Registry outage “no longer fails the whole overview” and instead returns `project_availability = temporarily_unavailable`.",
+   "question": "During a Registry failure, may an already-scoped caller receive portal-owned ProjectOverview components, or must the authorization guard reject the entire operation before those components are read?",
+   "options": [
+    "Reject the whole overview because Registry lifecycle authorization cannot complete.",
+    "Authorize from the active local grant or assignment and return the overview with only project context unavailable.",
+    "Treat ProjectOverview as an explicit exception to A4 with a separately specified guard."
+   ],
+   "default_guess": "Make ProjectOverview an explicit exception that still verifies local scope and capability but permits Registry context to be temporarily unavailable.",
+   "witness": {
+    "initial": "Viewer V has a valid session and active grant for project P; P has portal budget and expense data; Registry times out.",
+    "events": [
+     "V requests P's ProjectOverview."
+    ],
+    "outcomes": [
+     "A4 rejects the whole request at the Registry lifecycle step.",
+     "The overview is returned with project context temporarily unavailable and the portal-owned budget and expenses available."
+    ],
+    "observer": "Viewer V sees either an error or a partial overview."
+   }
+  },
+  {
+   "unit": "A7",
+   "subject": "Expense-intake check order versus the common project guard",
+   "kind": "contradictory precedence",
+   "text": "A4 requires session, principal status, project access, capability, then Registry policy; A7 says expense creation checks recognition status, contract version, capability, active project, allocations, then replay, and says every listed refusal is HTTP 422.",
+   "question": "Does authentication and the complete A4 guard run before recognition-content validation, or do recognition status and contract version take precedence over authentication and project scope?",
+   "options": [
+    "Run the full A4 guard first, then validate recognition content and allocations.",
+    "Decode and validate recognition status/version first, then run authorization.",
+    "Treat transport decoding as pre-authorization but run A4 before every domain content check."
+   ],
+   "default_guess": "Perform structural request decoding first, then the complete A4 guard, then domain content validation.",
+   "witness": {
+    "initial": "A request carries an expired staff session and a structurally valid recognition publication with unsupported contract version 2.",
+    "events": [
+     "The caller submits expense creation for project P."
+    ],
+    "outcomes": [
+     "A4 wins first and the request receives the concealed authentication rejection.",
+     "A7 wins first and the request receives HTTP 422 for the unsupported contract version."
+    ],
+    "observer": "The caller sees different status and refusal behavior."
+   }
+  },
+  {
+   "unit": "A6",
+   "subject": "Meaning of `is_active=false` in Registry validation",
+   "kind": "internal contradiction",
+   "text": "The translation table maps “`is_active=false`, `exists=true`” to `RegistryFailureKind.archived`, but the precedence paragraph says the decoded validation answer is returned to its caller and only then interpreted using `status` for project guards or `is_active` for grant and assignment operations.",
+   "question": "Does the gateway raise or return an `archived` boundary failure whenever `is_active=false`, or does it return the validation result so each caller applies its operation-specific field?",
+   "options": [
+    "The gateway translates `is_active=false` into an archived boundary error for every caller.",
+    "The gateway returns the validation result; project guards use `status`, while access-management creation uses `is_active`.",
+    "The gateway must reject any disagreement between `status` and `is_active` as `schema_mismatch`."
+   ],
+   "default_guess": "Return the validation result and require consistency between `status` and `is_active`; inconsistent answers should be `schema_mismatch`.",
+   "witness": {
+    "initial": "Registry returns a shape-valid validation answer for P with `exists=true`, `status=\"active\"`, and `is_active=false`.",
+    "events": [
+     "Authorized staff attempts a project-record mutation on P."
+    ],
+    "outcomes": [
+     "The translation table produces `archived`, so the mutation is rejected.",
+     "The caller reads `status=\"active\"`, so the project guard permits the mutation."
+    ],
+    "observer": "The staff caller sees rejection versus success, and P's records differ."
+   }
+  },
+  {
+   "unit": "A7",
+   "subject": "Missing snapshot fields and section list",
+   "kind": "contradiction",
+   "text": "A7 says “a missing envelope field or section list → `incomplete_content`,” but later says a body lacking a request-model-required field is HTTP 422 before bearer authentication, creates no attempt, and receives no `import_id`; M18 declares the publication fields, including `sections`, as required.",
+   "question": "Which snapshot fields may be absent after request decoding and therefore create an `incomplete_content` import record?",
+   "options": [
+    "All M18 fields are decoder-required; omission is HTTP 422 with no import record.",
+    "Some or all fields are decoder-optional specifically so domain validation can record `incomplete_content`.",
+    "Only `sections` may be omitted after decoding; other missing fields are transport errors."
+   ],
+   "default_guess": "Keep all M18 fields decoder-required, making omissions HTTP 422 with no import record; reserve `incomplete_content` for admitted present values such as empty `approved_by`.",
+   "witness": {
+    "initial": "Producer S has a valid credential, capability, active grant, and active project P.",
+    "events": [
+     "S submits a JSON snapshot body that omits `sections`."
+    ],
+    "outcomes": [
+     "Request decoding refuses it with HTTP 422; no import record or `import_id` exists.",
+     "The import is classified and persisted as rejected with reason `incomplete_content`, and a fresh `import_id` is returned."
+    ],
+    "observer": "Producer S sees whether an import result is returned and can later read it."
+   }
+  },
+  {
+   "unit": "A7",
+   "subject": "Fingerprint of content-rejected snapshot attempts",
+   "kind": "missing rule",
+   "text": "A7 requires classified content refusals to create an import record, while M20 requires every such record to contain `content_fingerprint`; no rule defines the fingerprint input or canonicalization when the publication is incomplete or otherwise invalid.",
+   "question": "How is `content_fingerprint` computed for an admitted publication rejected before becoming a valid canonical snapshot?",
+   "options": [
+    "Fingerprint the parsed request exactly as admitted, including invalid present values.",
+    "Fingerprint a canonical partial-publication representation.",
+    "Use a distinguished fingerprint value for content that cannot be canonicalized.",
+    "Permit `content_fingerprint` to be absent on rejected imports."
+   ],
+   "default_guess": "Define and hash a canonical representation of every structurally decoded request, including values later rejected by domain validation.",
+   "witness": {
+    "initial": "Producer S is authorized and submits a structurally valid snapshot whose `approved_by` is empty.",
+    "events": [
+     "The content check records an `incomplete_content` rejection.",
+     "S later reads the import result."
+    ],
+    "outcomes": [
+     "The record contains a hash of the normalized parsed DTO.",
+     "The record contains a hash of the original JSON representation or a sentinel value."
+    ],
+    "observer": "The producer if fingerprints are exposed, and otherwise audit, persistence, replay tests, and operators see different stored records."
+   }
+  },
+  {
+   "unit": "A25",
+   "subject": "Viewer-entry limiter ordering relative to other transport guards",
+   "kind": "unspecified precedence",
+   "text": "A25 says every admitted viewer-entry attempt counts and refusal occurs before code verification, but does not order rate-limit admission against trusted-host, request-size, content-type, JSON-decoding, or other transport refusals.",
+   "question": "Which requests consume a viewer-entry rate-limit attempt when another transport check would also refuse them?",
+   "options": [
+    "Run host and size guards first, then count every request reaching the viewer-entry route before decoding or secret verification.",
+    "Count any request whose method and path match the viewer-entry route, even if its host or body is invalid.",
+    "Count only requests that decode into a valid ViewerEnterRequest."
+   ],
+   "default_guess": "Reject untrusted hosts and oversized bodies first, then atomically count every route-matching request before body decoding and credential verification.",
+   "witness": {
+    "initial": "Address A has nine admitted attempts in a ten-attempt window.",
+    "events": [
+     "A sends an oversized `POST /auth/viewer/enter`.",
+     "A immediately sends a valid viewer-entry request."
+    ],
+    "outcomes": [
+     "The oversized request is rejected before the limiter, so the valid request is admitted as attempt ten.",
+     "The oversized request consumes attempt ten, so the valid request receives HTTP 429."
+    ],
+    "observer": "The client at address A sees whether the valid request is admitted."
+   }
+  },
+  {
+   "unit": "A25",
+   "subject": "Bounded memory of the viewer-entry limiter",
+   "kind": "unverifiable invariant",
+   "text": "A25 requires “bounded memory,” but the only bound is per `(client address, route)` key and expired-key cleanup; no global key or entry bound, eviction rule, or overload behavior is specified.",
+   "question": "How is limiter memory bounded when arbitrarily many client addresses each make attempts during one window?",
+   "options": [
+    "Allow one live key per observed address with no global cap.",
+    "Impose a global key/entry cap and define deterministic eviction.",
+    "Reject new keys after a global cap is reached.",
+    "Aggregate addresses into a fixed-size structure, accepting approximation."
+   ],
+   "default_guess": "Add a global entry cap and reject new viewer-entry attempts when admitting them would exceed it, without evicting active enforcement state.",
+   "witness": {
+    "initial": "The limiter starts empty and the window is 60 seconds.",
+    "events": [
+     "More distinct client addresses than any practical memory budget each make one admitted viewer-entry attempt within 60 seconds."
+    ],
+    "outcomes": [
+     "The literal per-key algorithm retains every key and memory grows with the number of addresses.",
+     "An implementation silently evicts or refuses keys to preserve bounded memory, changing which later attempts are rate-limited."
+    ],
+    "observer": "The service operator sees memory behavior; clients whose keys are evicted or refused see different admission results."
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "Storage of source-supplied datetimes",
+   "kind": "contradiction",
+   "text": "A28 says persisted timestamps are UTC offset-naive, but also says source-supplied times are “kept as supplied”; the source DTOs accept datetime values and the text does not define timezone validation or normalization.",
+   "question": "Must source-supplied datetimes already be offset-naive UTC, must aware values be converted to naive UTC, or are aware offsets persisted unchanged as supplied?",
+   "options": [
+    "Require offset-naive values representing UTC and reject aware values.",
+    "Accept aware values and normalize them to offset-naive UTC before persistence.",
+    "Persist source values with their supplied timezone offsets, exempting them from the offset-naive rule."
+   ],
+   "default_guess": "Accept timezone-aware source instants, normalize them to UTC, and persist the equivalent offset-naive value.",
+   "witness": {
+    "initial": "An authorized producer sends `approved_at=2026-11-06T12:00:00+02:00` in an otherwise valid snapshot.",
+    "events": [
+     "The snapshot is accepted and persisted."
+    ],
+    "outcomes": [
+     "The stored value remains `12:00+02:00` because source time is kept as supplied.",
+     "The stored value is normalized to naive UTC `10:00`, or the request is rejected because persisted timestamps must be naive UTC."
+    ],
+    "observer": "The producer on later reads, database inspection, audit tooling, and time-based tests see the difference."
+   }
+  },
+  {
+   "unit": "A30",
+   "subject": "Validation ranges for runtime knobs",
+   "kind": "missing refusal conditions",
+   "text": "A30 says deployment values may differ and startup validates configuration, but gives no admissible ranges for timeouts, TTLs, challenge limits, viewer-entry limits, or credential entropy except that `BINARY_MAX_READ_BYTES` is a positive integer.",
+   "question": "Which zero, negative, excessively large, or weak values must stop startup for each runtime setting?",
+   "options": [
+    "Require every timeout, TTL, window, attempt count, rate limit, and entropy byte count to be strictly positive, with explicit upper and security lower bounds.",
+    "Require only correct types and allow zero or negative values to retain literal semantics.",
+    "Use library-specific or implementation-chosen validation ranges."
+   ],
+   "default_guess": "Require all durations and counts to be positive and define explicit safe upper bounds; require credential entropy to be at least 32 bytes.",
+   "witness": {
+    "initial": "A deployment sets `STAFF_SESSION_TTL_HOURS=-1` and `credential_entropy_bytes=1`.",
+    "events": [
+     "The service starts."
+    ],
+    "outcomes": [
+     "Startup rejects the configuration as invalid.",
+     "Startup succeeds; staff sessions are immediately expired and issued credentials have only one byte of entropy."
+    ],
+    "observer": "The deployment operator and authenticating users see the difference."
+   }
+  },
+  {
+   "unit": "A30",
+   "subject": "Configuration values referenced but not specified",
+   "kind": "incomplete configuration contract",
+   "text": "A30 refers to a closed `config.runtime_environment_variables` table without reproducing it, while A25 requires runtime request-body bounds, a declared binary response ceiling, trusted hosts, allowed origins, canonical public origin, and viewer-entry limiter settings that are not fully defined in A30's listed configuration.",
+   "question": "What are the exact environment names, types, requiredness, normalization, defaults, and validation rules for every runtime value used by A25 and A14?",
+   "options": [
+    "Add every referenced setting to A30's normative configuration table.",
+    "Treat unlisted values as fixed source constants.",
+    "Allow implementations to choose environment names, defaults, and requiredness."
+   ],
+   "default_guess": "Make every behavior-changing transport value an explicit, typed A30 environment setting with no production default for security boundaries.",
+   "witness": {
+    "initial": "A production deployment provides the variables explicitly listed in A30 but no request-body limit or canonical public-origin variable.",
+    "events": [
+     "The service starts and receives a large request and a viewer mutation."
+    ],
+    "outcomes": [
+     "Startup fails because omitted security settings are required.",
+     "The service starts using implementation-chosen constants or inferred values, producing different size and origin decisions across implementations."
+    ],
+    "observer": "The deployment operator and API clients see different startup and request behavior."
+   }
+  },
+  {
+   "unit": "A32",
+   "subject": "Exact dependency pin invariant versus transitive dependencies",
+   "kind": "contradiction",
+   "text": "A32's formal invariant says every external library imported by the running portal is pinned to one exact version, while its normative rules pin only four direct packages and explicitly allow pip-resolved transitive dependency versions to differ between deploys.",
+   "question": "Are transitive runtime packages required to be exactly locked, or is the invariant limited to the four direct requirements?",
+   "options": [
+    "Lock every resolved runtime package to an exact version.",
+    "Narrow the invariant to direct dependencies only and accept varying transitive packages.",
+    "Pin transitive packages only when the portal source imports them directly."
+   ],
+   "default_guess": "Lock the complete resolved runtime dependency set, while retaining a separately maintained list of direct dependencies.",
+   "witness": {
+    "initial": "The four direct requirements remain unchanged, but a compatible new transitive version becomes available between two deploys.",
+    "events": [
+     "Deploy A installs the earlier transitive version.",
+     "Deploy B installs the newer transitive version."
+    ],
+    "outcomes": [
+     "Both deploys comply because only direct packages must be pinned.",
+     "Deploy B violates the formal invariant because an externally imported runtime library changed without an exact pin."
+    ],
+    "observer": "Deployment operators and users can see different runtime behavior despite identical requirements files."
+   }
+  },
+  {
+   "unit": "A32",
+   "subject": "Identity of the dependency set audited and deployed",
+   "kind": "missing reproducibility rule",
+   "text": "A32 says `pip-audit -r deploy/requirements.txt` audits “the set resolved for the deploy at hand,” but the requirements do not lock transitives and no rule binds the audit resolution to the artifacts later installed in the image.",
+   "question": "How is it guaranteed that the exact package versions and artifacts audited are the ones installed in the deployed image?",
+   "options": [
+    "Build a fully resolved lock or wheel set once, audit it, and install that same set.",
+    "Audit the already-built image's installed environment.",
+    "Run `pip-audit` and the image build independently and accept any compatible resolutions."
+   ],
+   "default_guess": "Resolve and build a locked artifact set once, audit that exact set, then install only those audited artifacts.",
+   "witness": {
+    "initial": "Direct pins permit transitive package T across a version range; T version 1 is available and safe.",
+    "events": [
+     "The pre-deploy audit resolves and checks T version 1.",
+     "Before the image build, T version 2 is published and becomes the resolver's choice.",
+     "The image build installs T version 2."
+    ],
+    "outcomes": [
+     "The deploy proceeds even though the installed dependency set was never audited.",
+     "The deploy is blocked unless the exact installed set is re-audited or comes from the audited lock."
+    ],
+    "observer": "The deployment operator and security reviewer see whether the shipped environment matches the audit evidence."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A4\",\"subject\":\"Project-authorization failure classification\",\"kind\":\"underspecified refusal\",\"text\":\"“First failure wins; failures are indistinguishable to the caller regarding account/project existence beyond what their own access already proves.”\",\"question\":\"Which concrete rejection class must each failed session, principal-status, project-access, capability, and Registry check produce, and which failures must share the same caller-visible response?\",\"options\":[\"All project-access and project-existence failures use the scoped not-found rejection; authentication and capability failures use separate concealed rejections.\",\"Every guard failure uses one common concealed rejection.\",\"Project-access failures use authorization rejection while only Registry not-found uses scoped not-found.\"],\"default_guess\":\"Use a concealed authentication rejection for session/principal failures, scoped not-found for project-access or unknown-project failures, and authorization rejection for capability failures.\",\"witness\":{\"initial\":\"An active operator has a valid session and expense capability but no assignment for project P; Registry also does not know P.\",\"events\":[\"The operator requests a project-scoped expense read for P.\"],\"outcomes\":[\"The guard raises scoped not-found and the caller receives the same response as for an unknown project.\",\"The guard raises authorization rejection and the caller receives a forbidden response.\"],\"observer\":\"The operator and HTTP contract tests see the different rejection.\"}},{\"unit\":\"A4\",\"subject\":\"Registry-dependent authorization of ProjectOverview\",\"kind\":\"contradiction\",\"text\":\"A4 says “Every project-scoped operation” reaches “Registry lifecycle policy,” while State 1 says a Registry outage “no longer fails the whole overview” and instead returns `project_availability = temporarily_unavailable`.\",\"question\":\"During a Registry failure, may an already-scoped caller receive portal-owned ProjectOverview components, or must the authorization guard reject the entire operation before those components are read?\",\"options\":[\"Reject the whole overview because Registry lifecycle authorization cannot complete.\",\"Authorize from the active local grant or assignment and return the overview with only project context unavailable.\",\"Treat ProjectOverview as an explicit exception to A4 with a separately specified guard.\"],\"default_guess\":\"Make ProjectOverview an explicit exception that still verifies local scope and capability but permits Registry context to be temporarily unavailable.\",\"witness\":{\"initial\":\"Viewer V has a valid session and active grant for project P; P has portal budget and expense data; Registry times out.\",\"events\":[\"V requests P's ProjectOverview.\"],\"outcomes\":[\"A4 rejects the whole request at the Registry lifecycle step.\",\"The overview is returned with project context temporarily unavailable and the portal-owned budget and expenses available.\"],\"observer\":\"Viewer V sees either an error or a partial overview.\"}},{\"unit\":\"A7\",\"subject\":\"Expense-intake check order versus the common project guard\",\"kind\":\"contradictory precedence\",\"text\":\"A4 requires session, principal status, project access, capability, then Registry policy; A7 says expense creation checks recognition status, contract version, capability, active project, allocations, then replay, and says every listed refusal is HTTP 422.\",\"question\":\"Does authentication and the complete A4 guard run before recognition-content validation, or do recognition status and contract version take precedence over authentication and project scope?\",\"options\":[\"Run the full A4 guard first, then validate recognition content and allocations.\",\"Decode and validate recognition status/version first, then run authorization.\",\"Treat transport decoding as pre-authorization but run A4 before every domain content check.\"],\"default_guess\":\"Perform structural request decoding first, then the complete A4 guard, then domain content validation.\",\"witness\":{\"initial\":\"A request carries an expired staff session and a structurally valid recognition publication with unsupported contract version 2.\",\"events\":[\"The caller submits expense creation for project P.\"],\"outcomes\":[\"A4 wins first and the request receives the concealed authentication rejection.\",\"A7 wins first and the request receives HTTP 422 for the unsupported contract version.\"],\"observer\":\"The caller sees different status and refusal behavior.\"}},{\"unit\":\"A6\",\"subject\":\"Meaning of `is_active=false` in Registry validation\",\"kind\":\"internal contradiction\",\"text\":\"The translation table maps “`is_active=false`, `exists=true`” to `RegistryFailureKind.archived`, but the precedence paragraph says the decoded validation answer is returned to its caller and only then interpreted using `status` for project guards or `is_active` for grant and assignment operations.\",\"question\":\"Does the gateway raise or return an `archived` boundary failure whenever `is_active=false`, or does it return the validation result so each caller applies its operation-specific field?\",\"options\":[\"The gateway translates `is_active=false` into an archived boundary error for every caller.\",\"The gateway returns the validation result; project guards use `status`, while access-management creation uses `is_active`.\",\"The gateway must reject any disagreement between `status` and `is_active` as `schema_mismatch`.\"],\"default_guess\":\"Return the validation result and require consistency between `status` and `is_active`; inconsistent answers should be `schema_mismatch`.\",\"witness\":{\"initial\":\"Registry returns a shape-valid validation answer for P with `exists=true`, `status=\\\"active\\\"`, and `is_active=false`.\",\"events\":[\"Authorized staff attempts a project-record mutation on P.\"],\"outcomes\":[\"The translation table produces `archived`, so the mutation is rejected.\",\"The caller reads `status=\\\"active\\\"`, so the project guard permits the mutation.\"],\"observer\":\"The staff caller sees rejection versus success, and P's records differ.\"}},{\"unit\":\"A7\",\"subject\":\"Missing snapshot fields and section list\",\"kind\":\"contradiction\",\"text\":\"A7 says “a missing envelope field or section list → `incomplete_content`,” but later says a body lacking a request-model-required field is HTTP 422 before bearer authentication, creates no attempt, and receives no `import_id`; M18 declares the publication fields, including `sections`, as required.\",\"question\":\"Which snapshot fields may be absent after request decoding and therefore create an `incomplete_content` import record?\",\"options\":[\"All M18 fields are decoder-required; omission is HTTP 422 with no import record.\",\"Some or all fields are decoder-optional specifically so domain validation can record `incomplete_content`.\",\"Only `sections` may be omitted after decoding; other missing fields are transport errors.\"],\"default_guess\":\"Keep all M18 fields decoder-required, making omissions HTTP 422 with no import record; reserve `incomplete_content` for admitted present values such as empty `approved_by`.\",\"witness\":{\"initial\":\"Producer S has a valid credential, capability, active grant, and active project P.\",\"events\":[\"S submits a JSON snapshot body that omits `sections`.\"],\"outcomes\":[\"Request decoding refuses it with HTTP 422; no import record or `import_id` exists.\",\"The import is classified and persisted as rejected with reason `incomplete_content`, and a fresh `import_id` is returned.\"],\"observer\":\"Producer S sees whether an import result is returned and can later read it.\"}},{\"unit\":\"A7\",\"subject\":\"Fingerprint of content-rejected snapshot attempts\",\"kind\":\"missing rule\",\"text\":\"A7 requires classified content refusals to create an import record, while M20 requires every such record to contain `content_fingerprint`; no rule defines the fingerprint input or canonicalization when the publication is incomplete or otherwise invalid.\",\"question\":\"How is `content_fingerprint` computed for an admitted publication rejected before becoming a valid canonical snapshot?\",\"options\":[\"Fingerprint the parsed request exactly as admitted, including invalid present values.\",\"Fingerprint a canonical partial-publication representation.\",\"Use a distinguished fingerprint value for content that cannot be canonicalized.\",\"Permit `content_fingerprint` to be absent on rejected imports.\"],\"default_guess\":\"Define and hash a canonical representation of every structurally decoded request, including values later rejected by domain validation.\",\"witness\":{\"initial\":\"Producer S is authorized and submits a structurally valid snapshot whose `approved_by` is empty.\",\"events\":[\"The content check records an `incomplete_content` rejection.\",\"S later reads the import result.\"],\"outcomes\":[\"The record contains a hash of the normalized parsed DTO.\",\"The record contains a hash of the original JSON representation or a sentinel value.\"],\"observer\":\"The producer if fingerprints are exposed, and otherwise audit, persistence, replay tests, and operators see different stored records.\"}},{\"unit\":\"A25\",\"subject\":\"Viewer-entry limiter ordering relative to other transport guards\",\"kind\":\"unspecified precedence\",\"text\":\"A25 says every admitted viewer-entry attempt counts and refusal occurs before code verification, but does not order rate-limit admission against trusted-host, request-size, content-type, JSON-decoding, or other transport refusals.\",\"question\":\"Which requests consume a viewer-entry rate-limit attempt when another transport check would also refuse them?\",\"options\":[\"Run host and size guards first, then count every request reaching the viewer-entry route before decoding or secret verification.\",\"Count any request whose method and path match the viewer-entry route, even if its host or body is invalid.\",\"Count only requests that decode into a valid ViewerEnterRequest.\"],\"default_guess\":\"Reject untrusted hosts and oversized bodies first, then atomically count every route-matching request before body decoding and credential verification.\",\"witness\":{\"initial\":\"Address A has nine admitted attempts in a ten-attempt window.\",\"events\":[\"A sends an oversized `POST /auth/viewer/enter`.\",\"A immediately sends a valid viewer-entry request.\"],\"outcomes\":[\"The oversized request is rejected before the limiter, so the valid request is admitted as attempt ten.\",\"The oversized request consumes attempt ten, so the valid request receives HTTP 429.\"],\"observer\":\"The client at address A sees whether the valid request is admitted.\"}},{\"unit\":\"A25\",\"subject\":\"Bounded memory of the viewer-entry limiter\",\"kind\":\"unverifiable invariant\",\"text\":\"A25 requires “bounded memory,” but the only bound is per `(client address, route)` key and expired-key cleanup; no global key or entry bound, eviction rule, or overload behavior is specified.\",\"question\":\"How is limiter memory bounded when arbitrarily many client addresses each make attempts during one window?\",\"options\":[\"Allow one live key per observed address with no global cap.\",\"Impose a global key/entry cap and define deterministic eviction.\",\"Reject new keys after a global cap is reached.\",\"Aggregate addresses into a fixed-size structure, accepting approximation.\"],\"default_guess\":\"Add a global entry cap and reject new viewer-entry attempts when admitting them would exceed it, without evicting active enforcement state.\",\"witness\":{\"initial\":\"The limiter starts empty and the window is 60 seconds.\",\"events\":[\"More distinct client addresses than any practical memory budget each make one admitted viewer-entry attempt within 60 seconds.\"],\"outcomes\":[\"The literal per-key algorithm retains every key and memory grows with the number of addresses.\",\"An implementation silently evicts or refuses keys to preserve bounded memory, changing which later attempts are rate-limited.\"],\"observer\":\"The service operator sees memory behavior; clients whose keys are evicted or refused see different admission results.\"}},{\"unit\":\"A28\",\"subject\":\"Storage of source-supplied datetimes\",\"kind\":\"contradiction\",\"text\":\"A28 says persisted timestamps are UTC offset-naive, but also says source-supplied times are “kept as supplied”; the source DTOs accept datetime values and the text does not define timezone validation or normalization.\",\"question\":\"Must source-supplied datetimes already be offset-naive UTC, must aware values be converted to naive UTC, or are aware offsets persisted unchanged as supplied?\",\"options\":[\"Require offset-naive values representing UTC and reject aware values.\",\"Accept aware values and normalize them to offset-naive UTC before persistence.\",\"Persist source values with their supplied timezone offsets, exempting them from the offset-naive rule.\"],\"default_guess\":\"Accept timezone-aware source instants, normalize them to UTC, and persist the equivalent offset-naive value.\",\"witness\":{\"initial\":\"An authorized producer sends `approved_at=2026-11-06T12:00:00+02:00` in an otherwise valid snapshot.\",\"events\":[\"The snapshot is accepted and persisted.\"],\"outcomes\":[\"The stored value remains `12:00+02:00` because source time is kept as supplied.\",\"The stored value is normalized to naive UTC `10:00`, or the request is rejected because persisted timestamps must be naive UTC.\"],\"observer\":\"The producer on later reads, database inspection, audit tooling, and time-based tests see the difference.\"}},{\"unit\":\"A30\",\"subject\":\"Validation ranges for runtime knobs\",\"kind\":\"missing refusal conditions\",\"text\":\"A30 says deployment values may differ and startup validates configuration, but gives no admissible ranges for timeouts, TTLs, challenge limits, viewer-entry limits, or credential entropy except that `BINARY_MAX_READ_BYTES` is a positive integer.\",\"question\":\"Which zero, negative, excessively large, or weak values must stop startup for each runtime setting?\",\"options\":[\"Require every timeout, TTL, window, attempt count, rate limit, and entropy byte count to be strictly positive, with explicit upper and security lower bounds.\",\"Require only correct types and allow zero or negative values to retain literal semantics.\",\"Use library-specific or implementation-chosen validation ranges.\"],\"default_guess\":\"Require all durations and counts to be positive and define explicit safe upper bounds; require credential entropy to be at least 32 bytes.\",\"witness\":{\"initial\":\"A deployment sets `STAFF_SESSION_TTL_HOURS=-1` and `credential_entropy_bytes=1`.\",\"events\":[\"The service starts.\"],\"outcomes\":[\"Startup rejects the configuration as invalid.\",\"Startup succeeds; staff sessions are immediately expired and issued credentials have only one byte of entropy.\"],\"observer\":\"The deployment operator and authenticating users see the difference.\"}},{\"unit\":\"A30\",\"subject\":\"Configuration values referenced but not specified\",\"kind\":\"incomplete configuration contract\",\"text\":\"A30 refers to a closed `config.runtime_environment_variables` table without reproducing it, while A25 requires runtime request-body bounds, a declared binary response ceiling, trusted hosts, allowed origins, canonical public origin, and viewer-entry limiter settings that are not fully defined in A30's listed configuration.\",\"question\":\"What are the exact environment names, types, requiredness, normalization, defaults, and validation rules for every runtime value used by A25 and A14?\",\"options\":[\"Add every referenced setting to A30's normative configuration table.\",\"Treat unlisted values as fixed source constants.\",\"Allow implementations to choose environment names, defaults, and requiredness.\"],\"default_guess\":\"Make every behavior-changing transport value an explicit, typed A30 environment setting with no production default for security boundaries.\",\"witness\":{\"initial\":\"A production deployment provides the variables explicitly listed in A30 but no request-body limit or canonical public-origin variable.\",\"events\":[\"The service starts and receives a large request and a viewer mutation.\"],\"outcomes\":[\"Startup fails because omitted security settings are required.\",\"The service starts using implementation-chosen constants or inferred values, producing different size and origin decisions across implementations.\"],\"observer\":\"The deployment operator and API clients see different startup and request behavior.\"}},{\"unit\":\"A32\",\"subject\":\"Exact dependency pin invariant versus transitive dependencies\",\"kind\":\"contradiction\",\"text\":\"A32's formal invariant says every external library imported by the running portal is pinned to one exact version, while its normative rules pin only four direct packages and explicitly allow pip-resolved transitive dependency versions to differ between deploys.\",\"question\":\"Are transitive runtime packages required to be exactly locked, or is the invariant limited to the four direct requirements?\",\"options\":[\"Lock every resolved runtime package to an exact version.\",\"Narrow the invariant to direct dependencies only and accept varying transitive packages.\",\"Pin transitive packages only when the portal source imports them directly.\"],\"default_guess\":\"Lock the complete resolved runtime dependency set, while retaining a separately maintained list of direct dependencies.\",\"witness\":{\"initial\":\"The four direct requirements remain unchanged, but a compatible new transitive version becomes available between two deploys.\",\"events\":[\"Deploy A installs the earlier transitive version.\",\"Deploy B installs the newer transitive version.\"],\"outcomes\":[\"Both deploys comply because only direct packages must be pinned.\",\"Deploy B violates the formal invariant because an externally imported runtime library changed without an exact pin.\"],\"observer\":\"Deployment operators and users can see different runtime behavior despite identical requirements files.\"}},{\"unit\":\"A32\",\"subject\":\"Identity of the dependency set audited and deployed\",\"kind\":\"missing reproducibility rule\",\"text\":\"A32 says `pip-audit -r deploy/requirements.txt` audits “the set resolved for the deploy at hand,” but the requirements do not lock transitives and no rule binds the audit resolution to the artifacts later installed in the image.\",\"question\":\"How is it guaranteed that the exact package versions and artifacts audited are the ones installed in the deployed image?\",\"options\":[\"Build a fully resolved lock or wheel set once, audit it, and install that same set.\",\"Audit the already-built image's installed environment.\",\"Run `pip-audit` and the image build independently and accept any compatible resolutions.\"],\"default_guess\":\"Resolve and build a locked artifact set once, audit that exact set, then install only those audited artifacts.\",\"witness\":{\"initial\":\"Direct pins permit transitive package T across a version range; T version 1 is available and safe.\",\"events\":[\"The pre-deploy audit resolves and checks T version 1.\",\"Before the image build, T version 2 is published and becomes the resolver's choice.\",\"The image build installs T version 2.\"],\"outcomes\":[\"The deploy proceeds even though the installed dependency set was never audited.\",\"The deploy is blocked unless the exact installed set is re-audited or comes from the audited lock.\"],\"observer\":\"The deployment operator and security reviewer see whether the shipped environment matches the audit evidence.\"}}]}",
+ "set_aside": []
+}

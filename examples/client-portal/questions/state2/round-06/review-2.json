@@ -1,0 +1,325 @@
+{
+ "open_points": [
+  {
+   "unit": "context",
+   "subject": "ProjectOverview Registry availability shape",
+   "kind": "contradictory model shape",
+   "text": "“ProjectOverview” requires `project: ProjectContext`, but the carried change says “the project context is absent … and a `project_availability` says so”; no `project_availability` field or optional-project condition exists in the declared DTO.",
+   "question": "What is the exact ProjectOverview shape when the guard validation succeeds but the subsequent Registry context read fails?",
+   "options": [
+    "Add `project_availability` and make `project` conditional on it",
+    "Keep `project` required and fail the whole overview",
+    "Represent the failure through an existing field despite no such mapping being specified"
+   ],
+   "default_guess": "Add `project_availability: ViewAvailability` and require `project` exactly when it is available.",
+   "witness": {
+    "initial": "An authorized caller passes project validation; all portal-owned overview components are readable.",
+    "events": [
+     "Registry validation returns a valid active project.",
+     "The later Registry context request times out.",
+     "The overview builder constructs its response."
+    ],
+    "outcomes": [
+     "Return an overview with no project and `project_availability=temporarily_unavailable`, which requires an undeclared DTO shape.",
+     "Fail the overview because the declared required `project` field cannot be omitted."
+    ],
+    "observer": "The API caller"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "Archived-project access-management creation",
+   "kind": "contradictory lifecycle authority",
+   "text": "The change says grant and assignment creation uses only `is_active`, and A6 says `is_active=true` admits creation whatever `status` says; R0-24 says no viewer grant, staff assignment, or producer grant is created for an archived project.",
+   "question": "When Registry returns `exists=true`, `status=\"archived\"`, and `is_active=true`, must creation be admitted or refused?",
+   "options": [
+    "Trust only `is_active` and create the grant or assignment",
+    "Treat `status=\"archived\"` as authoritative and refuse",
+    "Reject the inconsistent Registry answer"
+   ],
+   "default_guess": "Follow the newly accepted running-service rule and trust `is_active`, while explicitly superseding the older archival sentence.",
+   "witness": {
+    "initial": "An active administrator has access-management capability; Registry contains project P.",
+    "events": [
+     "Registry validation for P returns `exists=true`, `status=\"archived\"`, `is_active=true`.",
+     "The administrator creates a viewer grant for P."
+    ],
+    "outcomes": [
+     "The new is_active-only rule admits and stores the grant.",
+     "R0-24's archived-project rule refuses the grant."
+    ],
+    "observer": "The administrator and the viewer"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "Meaning of “grant and assignment operations”",
+   "kind": "overbroad operation set",
+   "text": "The change and A6 say “the grant and assignment operations of access management” read `exists` and `is_active`, while A4 and R0-24 say revocation of viewer grants, staff assignments, and producer grants consults no Registry.",
+   "question": "Does the is_active rule apply only to creation, or also to revocation and any other grant/assignment operation?",
+   "options": [
+    "Only creation validates `exists` and `is_active`",
+    "Every grant/assignment operation validates them",
+    "Define the rule separately for each operation"
+   ],
+   "default_guess": "Apply Registry validation only to creation; revocation never consults Registry.",
+   "witness": {
+    "initial": "Project P is archived, Registry is unavailable, and an active viewer grant for P exists.",
+    "events": [
+     "An administrator revokes the viewer grant."
+    ],
+    "outcomes": [
+     "Revocation succeeds without a Registry call under A4/R0-24.",
+     "Revocation calls Registry and fails under a literal reading of “grant and assignment operations”."
+    ],
+    "observer": "The administrator and viewer"
+   }
+  },
+  {
+   "unit": "A4",
+   "subject": "Access-management creation guard order",
+   "kind": "missing check precedence",
+   "text": "A4 gives an ordered guard for operations on project records and a special sequence for revocation, but no exact ordered sequence for creating viewer grants, staff assignments, or producer grants; State 0 only says those creations check session, active principal, access-management capability, and active Registry project.",
+   "question": "In what order are authorization and Registry validation performed for access-management creation?",
+   "options": [
+    "Session → principal → access.manage → Registry exists/is_active",
+    "Session → principal → Registry exists/is_active → access.manage",
+    "Use the full project guard including target-project access"
+   ],
+   "default_guess": "Session → active principal → access.manage → Registry validation, with no target-project access check.",
+   "witness": {
+    "initial": "An authenticated operator lacks `portal.access.manage`, and Registry is unavailable.",
+    "events": [
+     "The operator attempts to create a staff assignment for project P."
+    ],
+    "outcomes": [
+     "Capability is checked first, so the request is refused without contacting Registry.",
+     "Registry is checked first, so the operation reports a Registry failure and makes an external request."
+    ],
+    "observer": "The caller and Registry operator"
+   }
+  },
+  {
+   "unit": "A6",
+   "subject": "Unusable Registry endpoint setting",
+   "kind": "undefined refusal condition",
+   "text": "A6 classifies a Registry endpoint setting that is “missing or unusable” as `transport_error`, but does not define which URL forms are unusable.",
+   "question": "Which exact `REGISTRY_BASE_URL` values are accepted, normalized, or refused before an HTTP request?",
+   "options": [
+    "Require an absolute HTTP/HTTPS URL with no credentials, query, or fragment",
+    "Accept any URL the HTTP client accepts",
+    "Define a different closed URL grammar"
+   ],
+   "default_guess": "Require an absolute HTTP or HTTPS base URL with a host and no credentials, query, or fragment.",
+   "witness": {
+    "initial": "The service starts with `REGISTRY_BASE_URL=https://user:pass@registry.example/api`.",
+    "events": [
+     "A project operation triggers Registry validation."
+    ],
+    "outcomes": [
+     "The endpoint is accepted and a credential-bearing HTTP request is attempted.",
+     "The setting is considered unusable and the operation fails immediately with `transport_error`."
+    ],
+    "observer": "The caller and Registry operator"
+   }
+  },
+  {
+   "unit": "A6",
+   "subject": "Registry response shape validation",
+   "kind": "undefined schema strictness",
+   "text": "A6 maps an “undecodable/invalid response body” or body “not JSON of the expected shape” to `schema_mismatch`, but does not define coercion, extra-field, nullability, or exact primitive-type rules for that shape.",
+   "question": "What exact JSON decoding rules decide whether a Registry response is valid?",
+   "options": [
+    "Strict JSON types and exactly the declared fields",
+    "Strict required field types but ignore unknown fields",
+    "Allow model-library coercion and its default extra-field behavior"
+   ],
+   "default_guess": "Use strict primitive types for declared fields while allowing unknown fields for forward compatibility.",
+   "witness": {
+    "initial": "Registry validation is otherwise successful.",
+    "events": [
+     "Registry returns `{\"project_id\":\"<P>\",\"exists\":true,\"is_active\":true,\"status\":\"active\",\"new_field\":1}`."
+    ],
+    "outcomes": [
+     "The extra field is ignored and authorization continues.",
+     "The response is invalid and becomes `schema_mismatch`."
+    ],
+    "observer": "The project-operation caller"
+   }
+  },
+  {
+   "unit": "A7",
+   "subject": "Snapshot import during Registry boundary failure",
+   "kind": "missing rejection translation",
+   "text": "A7 assigns import reasons for unknown project, missing producer scope, capability denial, archived project, and content failures, but A4/A6 also allow timeout, transport, HTTP, schema, and identity failures during Registry validation; no ImportRejectReason or record policy covers them.",
+   "question": "Does an authenticated snapshot request that reaches Registry but encounters a boundary failure create a SnapshotImportRecord, and if so with which closed reason?",
+   "options": [
+    "Create no import record and propagate the Registry failure",
+    "Record it as `unknown_project`",
+    "Add a distinct import rejection reason for Registry unavailability or invalidity"
+   ],
+   "default_guess": "Create no import record and propagate the typed Registry boundary failure.",
+   "witness": {
+    "initial": "An active all-projects producer presents a valid bearer credential and a valid snapshot body.",
+    "events": [
+     "The producer imports for project P.",
+     "Registry validation times out."
+    ],
+    "outcomes": [
+     "The operation fails without an `import_id` because no catalog reason can represent the timeout.",
+     "A rejected import record is written, requiring an unstated mapping such as `unknown_project`."
+    ],
+    "observer": "The producer and audit operator"
+   }
+  },
+  {
+   "unit": "A7",
+   "subject": "Expense creation authorization sequence",
+   "kind": "contradictory guard order",
+   "text": "A7 says expense creation checks recognition status, contract version, capability, active project, amount, allocations, and replay; A4 says every project-scoped operation first checks session, principal status, project access, capability, and Registry lifecycle. A7 omits project assignment and orders capability before the active-project check.",
+   "question": "Which sequence governs expense creation, and where is the staff assignment check performed?",
+   "options": [
+    "Run the complete A4 guard before all recognition/content checks",
+    "Validate recognition status/version first, then run the complete A4 guard",
+    "Use A7 literally without a staff-assignment check"
+   ],
+   "default_guess": "Decode the request, run the complete A4 guard, then validate recognition content and allocations.",
+   "witness": {
+    "initial": "An active operator has expense capability by role but no assignment to project P; Registry is unavailable.",
+    "events": [
+     "The operator submits an otherwise valid confirmed recognition for P."
+    ],
+    "outcomes": [
+     "A4 stops at project access, without calling Registry.",
+     "A7 passes capability and proceeds to the active-project check, causing a Registry failure; a literal implementation may never check assignment."
+    ],
+    "observer": "The caller and Registry operator"
+   }
+  },
+  {
+   "unit": "A25",
+   "subject": "Viewer origin-check route set",
+   "kind": "undefined protected operations",
+   "text": "A25 says “mutating viewer requests must come from the canonical public origin” but does not identify which viewer authentication/session routes count as mutations.",
+   "question": "Are viewer entry, session restoration, logout, and any other viewer routes subject to the origin check, and what happens when `Origin` is absent?",
+   "options": [
+    "Check entry and logout because they create or revoke sessions",
+    "Check logout only when a viewer cookie is present",
+    "Check every non-safe-method viewer route",
+    "Use an explicit closed route list"
+   ],
+   "default_guess": "Use an explicit list covering viewer entry and logout; require an exact Origin on both.",
+   "witness": {
+    "initial": "A viewer has a valid session cookie.",
+    "events": [
+     "A foreign-origin page sends `POST /api/auth/viewer/logout` with the cookie."
+    ],
+    "outcomes": [
+     "Logout is a viewer mutation, so it is refused and the session remains active.",
+     "Logout is not classified by the unstated route set, so it succeeds and revokes the session."
+    ],
+    "observer": "The viewer"
+   }
+  },
+  {
+   "unit": "A25",
+   "subject": "Transport-guard precedence and rate-limit accounting",
+   "kind": "missing middleware order",
+   "text": "A25 defines trusted-host, body-size, origin, and viewer-entry rate-limit checks, but specifies only that rate limiting precedes code verification; it does not say whether requests rejected by the other transport checks count as admitted entry attempts.",
+   "question": "What is the exact order of trusted-host, size, origin, request decoding, and viewer-entry rate-limit checks?",
+   "options": [
+    "Host → size → origin → rate limit → decoding/code verification",
+    "Rate limit immediately after route/method recognition, before host, size, origin, and decoding",
+    "Define another explicit order and counting rule"
+   ],
+   "default_guess": "Host → body bound → origin when applicable → rate limit → request decoding and secret verification.",
+   "witness": {
+    "initial": "The rate limit is 10 attempts per window and the key has no entries.",
+    "events": [
+     "The same client sends 10 oversize POST requests to the viewer-entry route.",
+     "It then sends one valid-size entry request."
+    ],
+    "outcomes": [
+     "Oversize requests fail before limiter accounting, so the valid request is admitted.",
+     "Each oversize route attempt counts, so the valid request receives HTTP 429."
+    ],
+    "observer": "The viewer client"
+   }
+  },
+  {
+   "unit": "A25",
+   "subject": "X-Request-Id generation and trust",
+   "kind": "undefined header authority",
+   "text": "A25 requires an `X-Request-Id` on every response but does not say whether an inbound value is accepted, validated, replaced, or reflected, nor define the generated identifier format.",
+   "question": "How is the response request ID selected when the request supplies zero, one, malformed, or multiple `X-Request-Id` headers?",
+   "options": [
+    "Always generate a new server UUID and ignore inbound values",
+    "Echo one validated inbound value, otherwise generate",
+    "Reject malformed or duplicate inbound values"
+   ],
+   "default_guess": "Always generate a fresh server-side UUID and never reflect an untrusted inbound value.",
+   "witness": {
+    "initial": "The service is healthy and the host is trusted.",
+    "events": [
+     "A client sends a request with `X-Request-Id: attacker-controlled`."
+    ],
+    "outcomes": [
+     "The response echoes `attacker-controlled`.",
+     "The response contains a newly generated server identifier."
+    ],
+    "observer": "The API caller and log operator"
+   }
+  },
+  {
+   "unit": "A30",
+   "subject": "Runtime environment-variable contract",
+   "kind": "missing referenced table",
+   "text": "A30 says `config.runtime_environment_variables` is the closed table of variable names, types, requiredness, normalization, and per-environment defaults, but the table is not present. The texts name only some variables while A25 and R0-10 require settings for persistence paths, trusted hosts, origins, body/response bounds, public origin, environment, and viewer-entry limits.",
+   "question": "What is the complete environment-variable contract from which RuntimeSettings is built?",
+   "options": [
+    "Specify every variable, type, normalization, requiredness, and development/test/production default in State 2",
+    "Let later implementers invent names and defaults for settings not listed",
+    "Treat all unnamed settings as fixed source constants"
+   ],
+   "default_guess": "Add a complete closed table and make security-sensitive production values required with no permissive defaults.",
+   "witness": {
+    "initial": "A production deployment supplies the SQLite path, binary root, and `BINARY_MAX_READ_BYTES`, but no trusted-host, public-origin, CORS, body-limit, or viewer-rate variables because their names are absent.",
+    "events": [
+     "The service starts and loads RuntimeSettings."
+    ],
+    "outcomes": [
+     "Startup fails because unnamed security settings are required.",
+     "Startup succeeds using implementer-chosen defaults, which may accept different hosts/origins or enforce different limits."
+    ],
+    "observer": "The deployment operator and API clients"
+   }
+  },
+  {
+   "unit": "A32",
+   "subject": "Availability and isolation of pip-audit",
+   "kind": "operational contradiction",
+   "text": "A32 requires `pip-audit --local` to run inside the built image, while the deployment requirements contain only the four runtime direct packages and no rule explains how `pip-audit` and its dependencies are installed, pinned, audited, or excluded from the shipped set.",
+   "question": "How is the mandated audit command made available without silently changing the installed and audited dependency set?",
+   "options": [
+    "Install and pin pip-audit in the final image and include its dependencies in the audit",
+    "Use a separate pinned audit stage or environment that inspects the final image's installed metadata",
+    "Temporarily install pip-audit in the image and remove it after auditing, with a specified reproducible procedure"
+   ],
+   "default_guess": "Use a separately pinned build-stage audit tool that inspects the final runtime environment, and ship only the runtime image.",
+   "witness": {
+    "initial": "A runtime image is built from the stated requirements and contains only their resolved runtime packages.",
+    "events": [
+     "The pre-deploy step executes `pip-audit --local` inside that image."
+    ],
+    "outcomes": [
+     "The command is unavailable, so every deployment waits.",
+     "The builder installs pip-audit ad hoc, adding unpinned packages to the supposedly shipped/audited environment."
+    ],
+    "observer": "The release operator"
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"context\",\"subject\":\"ProjectOverview Registry availability shape\",\"kind\":\"contradictory model shape\",\"text\":\"“ProjectOverview” requires `project: ProjectContext`, but the carried change says “the project context is absent … and a `project_availability` says so”; no `project_availability` field or optional-project condition exists in the declared DTO.\",\"question\":\"What is the exact ProjectOverview shape when the guard validation succeeds but the subsequent Registry context read fails?\",\"options\":[\"Add `project_availability` and make `project` conditional on it\",\"Keep `project` required and fail the whole overview\",\"Represent the failure through an existing field despite no such mapping being specified\"],\"default_guess\":\"Add `project_availability: ViewAvailability` and require `project` exactly when it is available.\",\"witness\":{\"initial\":\"An authorized caller passes project validation; all portal-owned overview components are readable.\",\"events\":[\"Registry validation returns a valid active project.\",\"The later Registry context request times out.\",\"The overview builder constructs its response.\"],\"outcomes\":[\"Return an overview with no project and `project_availability=temporarily_unavailable`, which requires an undeclared DTO shape.\",\"Fail the overview because the declared required `project` field cannot be omitted.\"],\"observer\":\"The API caller\"}},{\"unit\":\"context\",\"subject\":\"Archived-project access-management creation\",\"kind\":\"contradictory lifecycle authority\",\"text\":\"The change says grant and assignment creation uses only `is_active`, and A6 says `is_active=true` admits creation whatever `status` says; R0-24 says no viewer grant, staff assignment, or producer grant is created for an archived project.\",\"question\":\"When Registry returns `exists=true`, `status=\\\"archived\\\"`, and `is_active=true`, must creation be admitted or refused?\",\"options\":[\"Trust only `is_active` and create the grant or assignment\",\"Treat `status=\\\"archived\\\"` as authoritative and refuse\",\"Reject the inconsistent Registry answer\"],\"default_guess\":\"Follow the newly accepted running-service rule and trust `is_active`, while explicitly superseding the older archival sentence.\",\"witness\":{\"initial\":\"An active administrator has access-management capability; Registry contains project P.\",\"events\":[\"Registry validation for P returns `exists=true`, `status=\\\"archived\\\"`, `is_active=true`.\",\"The administrator creates a viewer grant for P.\"],\"outcomes\":[\"The new is_active-only rule admits and stores the grant.\",\"R0-24's archived-project rule refuses the grant.\"],\"observer\":\"The administrator and the viewer\"}},{\"unit\":\"context\",\"subject\":\"Meaning of “grant and assignment operations”\",\"kind\":\"overbroad operation set\",\"text\":\"The change and A6 say “the grant and assignment operations of access management” read `exists` and `is_active`, while A4 and R0-24 say revocation of viewer grants, staff assignments, and producer grants consults no Registry.\",\"question\":\"Does the is_active rule apply only to creation, or also to revocation and any other grant/assignment operation?\",\"options\":[\"Only creation validates `exists` and `is_active`\",\"Every grant/assignment operation validates them\",\"Define the rule separately for each operation\"],\"default_guess\":\"Apply Registry validation only to creation; revocation never consults Registry.\",\"witness\":{\"initial\":\"Project P is archived, Registry is unavailable, and an active viewer grant for P exists.\",\"events\":[\"An administrator revokes the viewer grant.\"],\"outcomes\":[\"Revocation succeeds without a Registry call under A4/R0-24.\",\"Revocation calls Registry and fails under a literal reading of “grant and assignment operations”.\"],\"observer\":\"The administrator and viewer\"}},{\"unit\":\"A4\",\"subject\":\"Access-management creation guard order\",\"kind\":\"missing check precedence\",\"text\":\"A4 gives an ordered guard for operations on project records and a special sequence for revocation, but no exact ordered sequence for creating viewer grants, staff assignments, or producer grants; State 0 only says those creations check session, active principal, access-management capability, and active Registry project.\",\"question\":\"In what order are authorization and Registry validation performed for access-management creation?\",\"options\":[\"Session → principal → access.manage → Registry exists/is_active\",\"Session → principal → Registry exists/is_active → access.manage\",\"Use the full project guard including target-project access\"],\"default_guess\":\"Session → active principal → access.manage → Registry validation, with no target-project access check.\",\"witness\":{\"initial\":\"An authenticated operator lacks `portal.access.manage`, and Registry is unavailable.\",\"events\":[\"The operator attempts to create a staff assignment for project P.\"],\"outcomes\":[\"Capability is checked first, so the request is refused without contacting Registry.\",\"Registry is checked first, so the operation reports a Registry failure and makes an external request.\"],\"observer\":\"The caller and Registry operator\"}},{\"unit\":\"A6\",\"subject\":\"Unusable Registry endpoint setting\",\"kind\":\"undefined refusal condition\",\"text\":\"A6 classifies a Registry endpoint setting that is “missing or unusable” as `transport_error`, but does not define which URL forms are unusable.\",\"question\":\"Which exact `REGISTRY_BASE_URL` values are accepted, normalized, or refused before an HTTP request?\",\"options\":[\"Require an absolute HTTP/HTTPS URL with no credentials, query, or fragment\",\"Accept any URL the HTTP client accepts\",\"Define a different closed URL grammar\"],\"default_guess\":\"Require an absolute HTTP or HTTPS base URL with a host and no credentials, query, or fragment.\",\"witness\":{\"initial\":\"The service starts with `REGISTRY_BASE_URL=https://user:pass@registry.example/api`.\",\"events\":[\"A project operation triggers Registry validation.\"],\"outcomes\":[\"The endpoint is accepted and a credential-bearing HTTP request is attempted.\",\"The setting is considered unusable and the operation fails immediately with `transport_error`.\"],\"observer\":\"The caller and Registry operator\"}},{\"unit\":\"A6\",\"subject\":\"Registry response shape validation\",\"kind\":\"undefined schema strictness\",\"text\":\"A6 maps an “undecodable/invalid response body” or body “not JSON of the expected shape” to `schema_mismatch`, but does not define coercion, extra-field, nullability, or exact primitive-type rules for that shape.\",\"question\":\"What exact JSON decoding rules decide whether a Registry response is valid?\",\"options\":[\"Strict JSON types and exactly the declared fields\",\"Strict required field types but ignore unknown fields\",\"Allow model-library coercion and its default extra-field behavior\"],\"default_guess\":\"Use strict primitive types for declared fields while allowing unknown fields for forward compatibility.\",\"witness\":{\"initial\":\"Registry validation is otherwise successful.\",\"events\":[\"Registry returns `{\\\"project_id\\\":\\\"<P>\\\",\\\"exists\\\":true,\\\"is_active\\\":true,\\\"status\\\":\\\"active\\\",\\\"new_field\\\":1}`.\"],\"outcomes\":[\"The extra field is ignored and authorization continues.\",\"The response is invalid and becomes `schema_mismatch`.\"],\"observer\":\"The project-operation caller\"}},{\"unit\":\"A7\",\"subject\":\"Snapshot import during Registry boundary failure\",\"kind\":\"missing rejection translation\",\"text\":\"A7 assigns import reasons for unknown project, missing producer scope, capability denial, archived project, and content failures, but A4/A6 also allow timeout, transport, HTTP, schema, and identity failures during Registry validation; no ImportRejectReason or record policy covers them.\",\"question\":\"Does an authenticated snapshot request that reaches Registry but encounters a boundary failure create a SnapshotImportRecord, and if so with which closed reason?\",\"options\":[\"Create no import record and propagate the Registry failure\",\"Record it as `unknown_project`\",\"Add a distinct import rejection reason for Registry unavailability or invalidity\"],\"default_guess\":\"Create no import record and propagate the typed Registry boundary failure.\",\"witness\":{\"initial\":\"An active all-projects producer presents a valid bearer credential and a valid snapshot body.\",\"events\":[\"The producer imports for project P.\",\"Registry validation times out.\"],\"outcomes\":[\"The operation fails without an `import_id` because no catalog reason can represent the timeout.\",\"A rejected import record is written, requiring an unstated mapping such as `unknown_project`.\"],\"observer\":\"The producer and audit operator\"}},{\"unit\":\"A7\",\"subject\":\"Expense creation authorization sequence\",\"kind\":\"contradictory guard order\",\"text\":\"A7 says expense creation checks recognition status, contract version, capability, active project, amount, allocations, and replay; A4 says every project-scoped operation first checks session, principal status, project access, capability, and Registry lifecycle. A7 omits project assignment and orders capability before the active-project check.\",\"question\":\"Which sequence governs expense creation, and where is the staff assignment check performed?\",\"options\":[\"Run the complete A4 guard before all recognition/content checks\",\"Validate recognition status/version first, then run the complete A4 guard\",\"Use A7 literally without a staff-assignment check\"],\"default_guess\":\"Decode the request, run the complete A4 guard, then validate recognition content and allocations.\",\"witness\":{\"initial\":\"An active operator has expense capability by role but no assignment to project P; Registry is unavailable.\",\"events\":[\"The operator submits an otherwise valid confirmed recognition for P.\"],\"outcomes\":[\"A4 stops at project access, without calling Registry.\",\"A7 passes capability and proceeds to the active-project check, causing a Registry failure; a literal implementation may never check assignment.\"],\"observer\":\"The caller and Registry operator\"}},{\"unit\":\"A25\",\"subject\":\"Viewer origin-check route set\",\"kind\":\"undefined protected operations\",\"text\":\"A25 says “mutating viewer requests must come from the canonical public origin” but does not identify which viewer authentication/session routes count as mutations.\",\"question\":\"Are viewer entry, session restoration, logout, and any other viewer routes subject to the origin check, and what happens when `Origin` is absent?\",\"options\":[\"Check entry and logout because they create or revoke sessions\",\"Check logout only when a viewer cookie is present\",\"Check every non-safe-method viewer route\",\"Use an explicit closed route list\"],\"default_guess\":\"Use an explicit list covering viewer entry and logout; require an exact Origin on both.\",\"witness\":{\"initial\":\"A viewer has a valid session cookie.\",\"events\":[\"A foreign-origin page sends `POST /api/auth/viewer/logout` with the cookie.\"],\"outcomes\":[\"Logout is a viewer mutation, so it is refused and the session remains active.\",\"Logout is not classified by the unstated route set, so it succeeds and revokes the session.\"],\"observer\":\"The viewer\"}},{\"unit\":\"A25\",\"subject\":\"Transport-guard precedence and rate-limit accounting\",\"kind\":\"missing middleware order\",\"text\":\"A25 defines trusted-host, body-size, origin, and viewer-entry rate-limit checks, but specifies only that rate limiting precedes code verification; it does not say whether requests rejected by the other transport checks count as admitted entry attempts.\",\"question\":\"What is the exact order of trusted-host, size, origin, request decoding, and viewer-entry rate-limit checks?\",\"options\":[\"Host → size → origin → rate limit → decoding/code verification\",\"Rate limit immediately after route/method recognition, before host, size, origin, and decoding\",\"Define another explicit order and counting rule\"],\"default_guess\":\"Host → body bound → origin when applicable → rate limit → request decoding and secret verification.\",\"witness\":{\"initial\":\"The rate limit is 10 attempts per window and the key has no entries.\",\"events\":[\"The same client sends 10 oversize POST requests to the viewer-entry route.\",\"It then sends one valid-size entry request.\"],\"outcomes\":[\"Oversize requests fail before limiter accounting, so the valid request is admitted.\",\"Each oversize route attempt counts, so the valid request receives HTTP 429.\"],\"observer\":\"The viewer client\"}},{\"unit\":\"A25\",\"subject\":\"X-Request-Id generation and trust\",\"kind\":\"undefined header authority\",\"text\":\"A25 requires an `X-Request-Id` on every response but does not say whether an inbound value is accepted, validated, replaced, or reflected, nor define the generated identifier format.\",\"question\":\"How is the response request ID selected when the request supplies zero, one, malformed, or multiple `X-Request-Id` headers?\",\"options\":[\"Always generate a new server UUID and ignore inbound values\",\"Echo one validated inbound value, otherwise generate\",\"Reject malformed or duplicate inbound values\"],\"default_guess\":\"Always generate a fresh server-side UUID and never reflect an untrusted inbound value.\",\"witness\":{\"initial\":\"The service is healthy and the host is trusted.\",\"events\":[\"A client sends a request with `X-Request-Id: attacker-controlled`.\"],\"outcomes\":[\"The response echoes `attacker-controlled`.\",\"The response contains a newly generated server identifier.\"],\"observer\":\"The API caller and log operator\"}},{\"unit\":\"A30\",\"subject\":\"Runtime environment-variable contract\",\"kind\":\"missing referenced table\",\"text\":\"A30 says `config.runtime_environment_variables` is the closed table of variable names, types, requiredness, normalization, and per-environment defaults, but the table is not present. The texts name only some variables while A25 and R0-10 require settings for persistence paths, trusted hosts, origins, body/response bounds, public origin, environment, and viewer-entry limits.\",\"question\":\"What is the complete environment-variable contract from which RuntimeSettings is built?\",\"options\":[\"Specify every variable, type, normalization, requiredness, and development/test/production default in State 2\",\"Let later implementers invent names and defaults for settings not listed\",\"Treat all unnamed settings as fixed source constants\"],\"default_guess\":\"Add a complete closed table and make security-sensitive production values required with no permissive defaults.\",\"witness\":{\"initial\":\"A production deployment supplies the SQLite path, binary root, and `BINARY_MAX_READ_BYTES`, but no trusted-host, public-origin, CORS, body-limit, or viewer-rate variables because their names are absent.\",\"events\":[\"The service starts and loads RuntimeSettings.\"],\"outcomes\":[\"Startup fails because unnamed security settings are required.\",\"Startup succeeds using implementer-chosen defaults, which may accept different hosts/origins or enforce different limits.\"],\"observer\":\"The deployment operator and API clients\"}},{\"unit\":\"A32\",\"subject\":\"Availability and isolation of pip-audit\",\"kind\":\"operational contradiction\",\"text\":\"A32 requires `pip-audit --local` to run inside the built image, while the deployment requirements contain only the four runtime direct packages and no rule explains how `pip-audit` and its dependencies are installed, pinned, audited, or excluded from the shipped set.\",\"question\":\"How is the mandated audit command made available without silently changing the installed and audited dependency set?\",\"options\":[\"Install and pin pip-audit in the final image and include its dependencies in the audit\",\"Use a separate pinned audit stage or environment that inspects the final image's installed metadata\",\"Temporarily install pip-audit in the image and remove it after auditing, with a specified reproducible procedure\"],\"default_guess\":\"Use a separately pinned build-stage audit tool that inspects the final runtime environment, and ship only the runtime image.\",\"witness\":{\"initial\":\"A runtime image is built from the stated requirements and contains only their resolved runtime packages.\",\"events\":[\"The pre-deploy step executes `pip-audit --local` inside that image.\"],\"outcomes\":[\"The command is unavailable, so every deployment waits.\",\"The builder installs pip-audit ad hoc, adding unpinned packages to the supposedly shipped/audited environment.\"],\"observer\":\"The release operator\"}}]}",
+ "set_aside": []
+}

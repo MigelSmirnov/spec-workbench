@@ -1,0 +1,402 @@
+{
+ "open_points": [
+  {
+   "unit": "A5",
+   "subject": "Registry lifecycle check versus portal commit",
+   "kind": "unverifiable timing invariant",
+   "text": "“Mutation guards call `validate` server-side before every linked write” and “an archived project's … records are … immutable” do not say which Registry state governs when Registry archives the project after validation but before the portal commits.",
+   "question": "Is mutation permission determined by the successful validation response, or must the project still be active at the portal commit point, and what mechanism can establish that?",
+   "options": [
+    "Permission is fixed by the validation response for that operation",
+    "The portal must revalidate immediately before commit",
+    "Registry must provide a version, lease, or atomic conditional-write mechanism"
+   ],
+   "default_guess": "Treat the validation response as the authorization observation for the operation, because no cross-service atomic mechanism is specified.",
+   "witness": {
+    "initial": "Project P is active in Registry and has an existing portal expense.",
+    "events": [
+     "An authorized operator starts correcting the expense.",
+     "The portal validates P and receives active.",
+     "Registry archives P before the portal transaction commits.",
+     "The portal reaches its write commit."
+    ],
+    "outcomes": [
+     "The correction commits because validation reported active.",
+     "The correction is refused because P was archived before commit."
+    ],
+    "observer": "The operator and anyone reading the expense history"
+   }
+  },
+  {
+   "unit": "A6",
+   "subject": "Inconsistent ProjectValidationResult fields",
+   "kind": "contradiction",
+   "text": "A6 says “The two readings agree” and that disagreement is “outside the Registry contract,” but also says the gateway “does not check that `exists`, `is_active` and `status` agree” and callers read different fields. This conflicts with R0-24 and PLAT-REG-003, which forbid creating access for an archived project and require validation to report the project active.",
+   "question": "What must the portal do when a decoded validation answer has contradictory `exists`, `is_active`, and `status` values?",
+   "options": [
+    "Reject it as `schema_mismatch`",
+    "Use caller-specific fields, allowing different operations to reach different decisions",
+    "Give one field explicit precedence for every caller"
+   ],
+   "default_guess": "Reject the answer as `schema_mismatch`.",
+   "witness": {
+    "initial": "Registry project P is archived; the gateway accepts a validation response with `exists=true`, `status=\"archived\"`, and `is_active=true`.",
+    "events": [
+     "An administrator creates a viewer grant for P.",
+     "An operator attempts a project-record mutation on P."
+    ],
+    "outcomes": [
+     "The grant creation succeeds from `is_active=true`, while the mutation is rejected from `status=\"archived\"`.",
+     "Both operations reject the semantically invalid Registry answer as `schema_mismatch`."
+    ],
+    "observer": "The administrator and the newly granted viewer"
+   }
+  },
+  {
+   "unit": "A6",
+   "subject": "Registry HTTP redirects",
+   "kind": "missing transport rule",
+   "text": "“HTTP 404 answer → `not_found`; any other non-success HTTP status → `http_error`” does not say whether the Registry client follows redirects before this classification.",
+   "question": "Are Registry redirects followed, and if so, which schemes, hosts, redirect counts, and method changes are permitted?",
+   "options": [
+    "Never follow redirects; classify 3xx as `http_error`",
+    "Follow redirects according to the HTTP library defaults",
+    "Follow only explicitly constrained same-origin redirects"
+   ],
+   "default_guess": "Do not follow redirects; classify the first 3xx response as `http_error`.",
+   "witness": {
+    "initial": "The configured Registry validation URL responds with HTTP 302 to another URL.",
+    "events": [
+     "A project operation invokes Registry validation."
+    ],
+    "outcomes": [
+     "The gateway follows the redirect and may return a successful validation.",
+     "The gateway does not follow it and raises `RegistryBoundaryError(kind=http_error)`."
+    ],
+    "observer": "The operation caller and the operator monitoring Registry traffic"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "SnapshotPublication section constraints",
+   "kind": "direct contradiction",
+   "text": "M18 still declares `sections: list[SnapshotSectionData] (non-empty, unique source_section_id)`, while the added passage says these are only the producer's obligation and “the import refuses neither an empty section list nor repeated `source_section_id` values.”",
+   "question": "Are non-emptiness and `source_section_id` uniqueness DTO validation constraints at import time, or are they accepted without portal validation until Q11?",
+   "options": [
+    "Reject during request/model decoding",
+    "Accept and classify the import normally",
+    "Accept only for storage but reject before creating an ApprovedEstimateSnapshot"
+   ],
+   "default_guess": "Accept them at import time, following the explicit running-service passage, and leave Q11 to decide budget conversion checks.",
+   "witness": {
+    "initial": "An active authorized producer has access to active project P.",
+    "events": [
+     "The producer submits a complete EUR version-1 publication whose `sections` list is empty."
+    ],
+    "outcomes": [
+     "The request is rejected during DTO validation and creates no `import_id`.",
+     "The publication is accepted, producing an immutable snapshot and accepted import record."
+    ],
+    "observer": "The producer reading the import response"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "ProjectOverview project availability shape",
+   "kind": "model contradiction",
+   "text": "The declared `ProjectOverview` fields require `project: ProjectContext`, contain no `project_availability`, and only validate the five existing availability/value pairs; the added passage says “the project context is absent” and “a `project_availability` says so.”",
+   "question": "What is the actual ProjectOverview schema after the change, including the type and local validation rule for the project pair?",
+   "options": [
+    "Add `project_availability: ViewAvailability` and make `project` optional under the same paired rule",
+    "Keep `project` required and fail the whole overview when its context read fails",
+    "Introduce a different project-specific availability type"
+   ],
+   "default_guess": "Add a `ViewAvailability` project pair and require `project` exactly when it is available.",
+   "witness": {
+    "initial": "The project guard successfully validates active project P.",
+    "events": [
+     "While building the overview, the subsequent Registry context read times out.",
+     "The other five overview components are available."
+    ],
+    "outcomes": [
+     "A partial overview is returned with `project=null` and `project_availability=temporarily_unavailable`.",
+     "ProjectOverview validation fails because `project` is required or the undeclared availability field is rejected."
+    ],
+    "observer": "The staff or viewer requesting the overview"
+   }
+  },
+  {
+   "unit": "A25",
+   "subject": "HTTP transport runtime settings",
+   "kind": "missing configuration",
+   "text": "A25 refers to trusted hosts, a CORS allowlist, a canonical public origin, and a runtime request-body bound, but the visible A30 settings give no names, types, requiredness, defaults, or normalization rules for those values.",
+   "question": "Which runtime settings supply these policies, and what startup behavior applies when each is absent or malformed?",
+   "options": [
+    "They are required production settings and invalid values stop startup",
+    "They have defined development/test defaults but are required in production",
+    "Some are derived from request or deployment-proxy data"
+   ],
+   "default_guess": "Use explicit environment-backed settings, required in production with closed development/test defaults, and fail startup on invalid values.",
+   "witness": {
+    "initial": "A production deployment supplies the listed A30 variables but no public-origin, trusted-host, CORS, or request-size variable.",
+    "events": [
+     "The service starts.",
+     "A viewer sends a request with a valid cookie."
+    ],
+    "outcomes": [
+     "Startup fails because required transport settings are missing.",
+     "The service starts using framework or inferred defaults and handles the request."
+    ],
+    "observer": "The deployer and the viewer"
+   }
+  },
+  {
+   "unit": "A25",
+   "subject": "Request-body bound enforcement",
+   "kind": "underspecified refusal",
+   "text": "“Request bodies … are bounded by runtime settings before expensive work” does not define the bound, whether it applies to compressed or decoded bytes, how chunked or dishonest `Content-Length` requests are measured, or the refusal status and body.",
+   "question": "Exactly how is the body ceiling measured and enforced for requests without a trustworthy Content-Length, and what response is returned on excess?",
+   "options": [
+    "Reject from `Content-Length` alone",
+    "Stream and count wire bytes up to limit plus one",
+    "Decode content encoding and limit decoded bytes"
+   ],
+   "default_guess": "Stream and count actual received bytes up to limit plus one, reject before model decoding, and return a fixed empty error response.",
+   "witness": {
+    "initial": "The request-size ceiling is N bytes.",
+    "events": [
+     "A client sends a chunked snapshot-import body of N+1 bytes without `Content-Length`."
+    ],
+    "outcomes": [
+     "The transport stops at N+1 and rejects before authentication or decoding.",
+     "The framework buffers and decodes the whole body because no declared length exceeded the limit."
+    ],
+    "observer": "The caller and service resource monitor"
+   }
+  },
+  {
+   "unit": "A25",
+   "subject": "Precedence of transport checks",
+   "kind": "missing check order",
+   "text": "A25 requires trusted-host checking, body bounds, CORS/origin checks, and viewer-entry rate limiting, but only locates rate limiting before code verification; it gives no precedence when several transport checks fail together.",
+   "question": "In what order are host, body-size, rate-limit, CORS/origin, request decoding, and handler authentication checks applied, and which failure wins?",
+   "options": [
+    "Trusted host, body bound, rate limit/origin, decoding, authentication",
+    "Rate limit before all body and origin processing",
+    "Framework middleware order is allowed to decide"
+   ],
+   "default_guess": "Check trusted host first, then body size, then route-specific rate/origin policy, then decoding and authentication.",
+   "witness": {
+    "initial": "A client-address key is already at its viewer-entry limit.",
+    "events": [
+     "The same client sends an oversized `POST /auth/viewer/enter` with an untrusted Host."
+    ],
+    "outcomes": [
+     "The response is the trusted-host refusal and the limiter is untouched.",
+     "The response is HTTP 429, or the body-size refusal, depending on middleware order."
+    ],
+    "observer": "The caller and rate-limit-state operator"
+   }
+  },
+  {
+   "unit": "A25",
+   "subject": "Viewer origin enforcement scope",
+   "kind": "ambiguous refusal conditions",
+   "text": "“mutating viewer requests must come from the canonical public origin” does not identify the routes counted as mutations or state how missing, `null`, malformed, or multiple Origin values are treated.",
+   "question": "Does origin enforcement apply to viewer entry, logout, session restoration, and project reads, and is a missing Origin accepted or refused on each applicable route?",
+   "options": [
+    "Apply to every state-changing viewer route, including entry and logout, and require exactly one valid Origin",
+    "Apply only when an Origin header is present",
+    "Apply only to authenticated cookie-bearing mutations such as logout"
+   ],
+   "default_guess": "Require exactly one matching Origin on every state-changing viewer route, including entry and logout; do not require it for reads.",
+   "witness": {
+    "initial": "A viewer has a valid session cookie.",
+    "events": [
+     "A non-browser client sends `POST /auth/viewer/logout` without an Origin header."
+    ],
+    "outcomes": [
+     "Logout succeeds because absence of Origin is accepted or the check only targets foreign origins.",
+     "Logout is refused because a canonical Origin is mandatory for the mutation."
+    ],
+    "observer": "The viewer restoring the session afterward"
+   }
+  },
+  {
+   "unit": "A25",
+   "subject": "Rate-limit client-address identity",
+   "kind": "undefined key normalization",
+   "text": "The limiter key uses “client network address” read from the connection, but no canonicalization rule is given for IPv4-mapped IPv6 addresses, IPv6 textual variants, scope identifiers, or absent/non-IP peer information.",
+   "question": "What exact value forms one client-address key?",
+   "options": [
+    "Use the framework's raw peer-address string",
+    "Parse and canonicalize IP addresses, including IPv4-mapped IPv6",
+    "Key by the complete transport peer tuple"
+   ],
+   "default_guess": "Canonicalize the connection peer as an IP address, collapsing IPv4-mapped IPv6 to its IPv4 identity, and refuse entry if no usable peer address exists.",
+   "witness": {
+    "initial": "One client has exhausted its limit using peer text `192.0.2.7`.",
+    "events": [
+     "The same network client reconnects and is exposed by the server as `::ffff:192.0.2.7`.",
+     "It attempts viewer entry again."
+    ],
+    "outcomes": [
+     "The attempt is admitted under a distinct raw-string key.",
+     "The attempt is refused under the same canonical address key."
+    ],
+    "observer": "The client and abuse-monitoring operator"
+   }
+  },
+  {
+   "unit": "A25",
+   "subject": "Viewer limiter cleanup and memory claim",
+   "kind": "internal contradiction",
+   "text": "A25 says old entries are dropped “on every attempt” but also says the log “never holds more than the attempts admitted within one window.” With no later attempt, entries older than the window remain stored indefinitely.",
+   "question": "Is expiry cleanup lazy on the next attempt, or must entries be removed when their window expires even during an idle period?",
+   "options": [
+    "Lazy cleanup on the next attempt",
+    "Scheduled/eager removal at expiry",
+    "Retain stale entries but weaken the stated memory invariant"
+   ],
+   "default_guess": "Use lazy cleanup and state the bound as a bound on growth and live decision data, not literal age of every retained entry.",
+   "witness": {
+    "initial": "The in-memory limiter is empty and the window is 60 seconds.",
+    "events": [
+     "One viewer-entry attempt is admitted.",
+     "No request reaches the service for ten minutes."
+    ],
+    "outcomes": [
+     "The old entry remains until another attempt triggers cleanup.",
+     "A timer or expiry structure removes the entry at about 60 seconds."
+    ],
+    "observer": "The service operator inspecting memory/state"
+   }
+  },
+  {
+   "unit": "A25",
+   "subject": "X-Request-Id generation and trust",
+   "kind": "missing header semantics",
+   "text": "A25 requires “an `X-Request-Id`” on every response but says neither whether a client-supplied value is echoed nor how a server-generated value is formed and correlated with logs.",
+   "question": "Is an inbound X-Request-Id trusted, validated, replaced, or ignored, and what uniqueness/format rule applies to the response value?",
+   "options": [
+    "Always generate a new server UUID",
+    "Echo only a strictly validated inbound identifier; otherwise generate one",
+    "Echo any inbound value"
+   ],
+   "default_guess": "Accept only a short, strictly validated identifier; otherwise generate a fresh UUID, and use the chosen value for structured log correlation.",
+   "witness": {
+    "initial": "A client sends `X-Request-Id` containing a secret-like value or newline-like invalid data.",
+    "events": [
+     "The service returns an error response and writes its request log."
+    ],
+    "outcomes": [
+     "The supplied value is echoed and possibly logged.",
+     "The supplied value is discarded and a server-generated identifier is returned and logged."
+    ],
+    "observer": "The caller and log operator"
+   }
+  },
+  {
+   "unit": "A25",
+   "subject": "Credential and secret log exclusion",
+   "kind": "unverifiable invariant",
+   "text": "“Logs redact authorization, cookie and secret-like names” and “No credential, cookie or secret appears in a log line” do not define the logged request parts, the closed set or matching rule for “secret-like names,” or treatment of secrets placed in query strings, paths, unknown JSON fields, exception text, and request IDs.",
+   "question": "What exact structured fields may be logged, and what rule makes the no-secret invariant testable for arbitrary request input?",
+   "options": [
+    "Log only a closed allowlist of metadata and never bodies, raw URLs, or sensitive headers",
+    "Log request data after a closed recursive name-based redaction rule",
+    "Permit framework access/error logs with additional pattern scrubbing"
+   ],
+   "default_guess": "Use a closed metadata allowlist and exclude bodies, raw query strings, authorization/cookie headers, and exception messages containing request values.",
+   "witness": {
+    "initial": "A client knows a valid service credential.",
+    "events": [
+     "The client sends a failing request with that credential duplicated in an unknown query parameter and JSON field.",
+     "The transport and validation layers log the failure."
+    ],
+    "outcomes": [
+     "A generic framework logger records the raw URL or validation input and exposes the credential.",
+     "Only allowlisted metadata and a server request ID are logged."
+    ],
+    "observer": "Anyone with log access"
+   }
+  },
+  {
+   "unit": "A32",
+   "subject": "Scope of vulnerability blocking",
+   "kind": "direct contradiction",
+   "text": "Normative rule 3 says “Every advisory it reports for any resolved package blocks the deploy” and explicitly forbids judging whether an unused feature affects the portal; the formal invariant and opening rule instead say only a vulnerability “that affects the portal” blocks deployment, while the required test refers to “those pins.”",
+   "question": "Does any pip-audit advisory in the resolved environment block, or may advisories be waived based on affected code and/or whether the package is a direct pin?",
+   "options": [
+    "Every reported advisory for every resolved package blocks without waiver",
+    "Only advisories assessed as affecting portal behavior block",
+    "Only advisories on the four direct pins block"
+   ],
+   "default_guess": "Every advisory reported for any resolved package blocks without waiver.",
+   "witness": {
+    "initial": "The built image contains a transitive dependency with an advisory limited to an optional feature the portal does not use; all four direct pins have no advisory.",
+    "events": [
+     "The pre-deploy `pip-audit --local` reports the transitive advisory."
+    ],
+    "outcomes": [
+     "The deployment is blocked under normative rule 3.",
+     "The deployment passes under the “affects the portal” or “those pins” wording."
+    ],
+    "observer": "The release operator"
+   }
+  },
+  {
+   "unit": "A32",
+   "subject": "Availability of pip-audit inside the shipped image",
+   "kind": "operational gap",
+   "text": "The check must be “`pip-audit --local`, run inside the built image against what is installed there,” while deployment requirements contain only the four portal libraries and “the audited set is the shipped set.” The text does not say how pip-audit and its own dependencies are made available without changing that installed and shipped set.",
+   "question": "How is the audit command executed against the exact image filesystem without adding audit-only packages to the set being audited and shipped or modifying the image after the check?",
+   "options": [
+    "Ship pip-audit and its dependencies in the production image",
+    "Mount or inject the audit tool from outside while inspecting the built image environment",
+    "Audit an intermediate image and remove the tool before producing a different final image"
+   ],
+   "default_guess": "Run the audit tool from an external build stage against the final image's installed environment, identified by digest, without installing it into that environment.",
+   "witness": {
+    "initial": "A final application image contains only the portal runtime and dependencies resolved from the four pinned requirements.",
+    "events": [
+     "The pipeline starts the required in-image `pip-audit --local` command."
+    ],
+    "outcomes": [
+     "The command is unavailable unless pip-audit is installed, which changes the installed and possibly audited set.",
+     "The pipeline supplies the tool externally, but that mechanism is not defined by the text."
+    ],
+    "observer": "The release pipeline operator"
+   }
+  },
+  {
+   "unit": "A32",
+   "subject": "Identity of the audited and deployed artifact",
+   "kind": "unverifiable deployment invariant",
+   "text": "“Because it audits the built image, the audited set is the shipped set” gives no artifact identity, digest, promotion rule, or prohibition on rebuilding after the check.",
+   "question": "What proves that the exact image audited is the image deployed, rather than a later rebuild with newly resolved transitive versions?",
+   "options": [
+    "Audit and deploy one immutable image digest",
+    "Permit a rebuild if requirements are unchanged",
+    "Re-run the audit after every rebuild and bind the result to that new digest"
+   ],
+   "default_guess": "Audit one immutable image digest and deploy only that digest.",
+   "witness": {
+    "initial": "The four direct requirements pins are unchanged, but a transitive dependency has released a new version.",
+    "events": [
+     "Build A resolves the old transitive version and passes the audit.",
+     "The deployment stage rebuilds as Build B and resolves the new version without another audit.",
+     "Build B is deployed."
+    ],
+    "outcomes": [
+     "Deployment is allowed because the direct requirements and earlier audit passed.",
+     "Deployment is refused because Build B's digest has no passing audit bound to it."
+    ],
+    "observer": "The release operator and security auditor"
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A5\",\"subject\":\"Registry lifecycle check versus portal commit\",\"kind\":\"unverifiable timing invariant\",\"text\":\"“Mutation guards call `validate` server-side before every linked write” and “an archived project's … records are … immutable” do not say which Registry state governs when Registry archives the project after validation but before the portal commits.\",\"question\":\"Is mutation permission determined by the successful validation response, or must the project still be active at the portal commit point, and what mechanism can establish that?\",\"options\":[\"Permission is fixed by the validation response for that operation\",\"The portal must revalidate immediately before commit\",\"Registry must provide a version, lease, or atomic conditional-write mechanism\"],\"default_guess\":\"Treat the validation response as the authorization observation for the operation, because no cross-service atomic mechanism is specified.\",\"witness\":{\"initial\":\"Project P is active in Registry and has an existing portal expense.\",\"events\":[\"An authorized operator starts correcting the expense.\",\"The portal validates P and receives active.\",\"Registry archives P before the portal transaction commits.\",\"The portal reaches its write commit.\"],\"outcomes\":[\"The correction commits because validation reported active.\",\"The correction is refused because P was archived before commit.\"],\"observer\":\"The operator and anyone reading the expense history\"}},{\"unit\":\"A6\",\"subject\":\"Inconsistent ProjectValidationResult fields\",\"kind\":\"contradiction\",\"text\":\"A6 says “The two readings agree” and that disagreement is “outside the Registry contract,” but also says the gateway “does not check that `exists`, `is_active` and `status` agree” and callers read different fields. This conflicts with R0-24 and PLAT-REG-003, which forbid creating access for an archived project and require validation to report the project active.\",\"question\":\"What must the portal do when a decoded validation answer has contradictory `exists`, `is_active`, and `status` values?\",\"options\":[\"Reject it as `schema_mismatch`\",\"Use caller-specific fields, allowing different operations to reach different decisions\",\"Give one field explicit precedence for every caller\"],\"default_guess\":\"Reject the answer as `schema_mismatch`.\",\"witness\":{\"initial\":\"Registry project P is archived; the gateway accepts a validation response with `exists=true`, `status=\\\"archived\\\"`, and `is_active=true`.\",\"events\":[\"An administrator creates a viewer grant for P.\",\"An operator attempts a project-record mutation on P.\"],\"outcomes\":[\"The grant creation succeeds from `is_active=true`, while the mutation is rejected from `status=\\\"archived\\\"`.\",\"Both operations reject the semantically invalid Registry answer as `schema_mismatch`.\"],\"observer\":\"The administrator and the newly granted viewer\"}},{\"unit\":\"A6\",\"subject\":\"Registry HTTP redirects\",\"kind\":\"missing transport rule\",\"text\":\"“HTTP 404 answer → `not_found`; any other non-success HTTP status → `http_error`” does not say whether the Registry client follows redirects before this classification.\",\"question\":\"Are Registry redirects followed, and if so, which schemes, hosts, redirect counts, and method changes are permitted?\",\"options\":[\"Never follow redirects; classify 3xx as `http_error`\",\"Follow redirects according to the HTTP library defaults\",\"Follow only explicitly constrained same-origin redirects\"],\"default_guess\":\"Do not follow redirects; classify the first 3xx response as `http_error`.\",\"witness\":{\"initial\":\"The configured Registry validation URL responds with HTTP 302 to another URL.\",\"events\":[\"A project operation invokes Registry validation.\"],\"outcomes\":[\"The gateway follows the redirect and may return a successful validation.\",\"The gateway does not follow it and raises `RegistryBoundaryError(kind=http_error)`.\"],\"observer\":\"The operation caller and the operator monitoring Registry traffic\"}},{\"unit\":\"context\",\"subject\":\"SnapshotPublication section constraints\",\"kind\":\"direct contradiction\",\"text\":\"M18 still declares `sections: list[SnapshotSectionData] (non-empty, unique source_section_id)`, while the added passage says these are only the producer's obligation and “the import refuses neither an empty section list nor repeated `source_section_id` values.”\",\"question\":\"Are non-emptiness and `source_section_id` uniqueness DTO validation constraints at import time, or are they accepted without portal validation until Q11?\",\"options\":[\"Reject during request/model decoding\",\"Accept and classify the import normally\",\"Accept only for storage but reject before creating an ApprovedEstimateSnapshot\"],\"default_guess\":\"Accept them at import time, following the explicit running-service passage, and leave Q11 to decide budget conversion checks.\",\"witness\":{\"initial\":\"An active authorized producer has access to active project P.\",\"events\":[\"The producer submits a complete EUR version-1 publication whose `sections` list is empty.\"],\"outcomes\":[\"The request is rejected during DTO validation and creates no `import_id`.\",\"The publication is accepted, producing an immutable snapshot and accepted import record.\"],\"observer\":\"The producer reading the import response\"}},{\"unit\":\"context\",\"subject\":\"ProjectOverview project availability shape\",\"kind\":\"model contradiction\",\"text\":\"The declared `ProjectOverview` fields require `project: ProjectContext`, contain no `project_availability`, and only validate the five existing availability/value pairs; the added passage says “the project context is absent” and “a `project_availability` says so.”\",\"question\":\"What is the actual ProjectOverview schema after the change, including the type and local validation rule for the project pair?\",\"options\":[\"Add `project_availability: ViewAvailability` and make `project` optional under the same paired rule\",\"Keep `project` required and fail the whole overview when its context read fails\",\"Introduce a different project-specific availability type\"],\"default_guess\":\"Add a `ViewAvailability` project pair and require `project` exactly when it is available.\",\"witness\":{\"initial\":\"The project guard successfully validates active project P.\",\"events\":[\"While building the overview, the subsequent Registry context read times out.\",\"The other five overview components are available.\"],\"outcomes\":[\"A partial overview is returned with `project=null` and `project_availability=temporarily_unavailable`.\",\"ProjectOverview validation fails because `project` is required or the undeclared availability field is rejected.\"],\"observer\":\"The staff or viewer requesting the overview\"}},{\"unit\":\"A25\",\"subject\":\"HTTP transport runtime settings\",\"kind\":\"missing configuration\",\"text\":\"A25 refers to trusted hosts, a CORS allowlist, a canonical public origin, and a runtime request-body bound, but the visible A30 settings give no names, types, requiredness, defaults, or normalization rules for those values.\",\"question\":\"Which runtime settings supply these policies, and what startup behavior applies when each is absent or malformed?\",\"options\":[\"They are required production settings and invalid values stop startup\",\"They have defined development/test defaults but are required in production\",\"Some are derived from request or deployment-proxy data\"],\"default_guess\":\"Use explicit environment-backed settings, required in production with closed development/test defaults, and fail startup on invalid values.\",\"witness\":{\"initial\":\"A production deployment supplies the listed A30 variables but no public-origin, trusted-host, CORS, or request-size variable.\",\"events\":[\"The service starts.\",\"A viewer sends a request with a valid cookie.\"],\"outcomes\":[\"Startup fails because required transport settings are missing.\",\"The service starts using framework or inferred defaults and handles the request.\"],\"observer\":\"The deployer and the viewer\"}},{\"unit\":\"A25\",\"subject\":\"Request-body bound enforcement\",\"kind\":\"underspecified refusal\",\"text\":\"“Request bodies … are bounded by runtime settings before expensive work” does not define the bound, whether it applies to compressed or decoded bytes, how chunked or dishonest `Content-Length` requests are measured, or the refusal status and body.\",\"question\":\"Exactly how is the body ceiling measured and enforced for requests without a trustworthy Content-Length, and what response is returned on excess?\",\"options\":[\"Reject from `Content-Length` alone\",\"Stream and count wire bytes up to limit plus one\",\"Decode content encoding and limit decoded bytes\"],\"default_guess\":\"Stream and count actual received bytes up to limit plus one, reject before model decoding, and return a fixed empty error response.\",\"witness\":{\"initial\":\"The request-size ceiling is N bytes.\",\"events\":[\"A client sends a chunked snapshot-import body of N+1 bytes without `Content-Length`.\"],\"outcomes\":[\"The transport stops at N+1 and rejects before authentication or decoding.\",\"The framework buffers and decodes the whole body because no declared length exceeded the limit.\"],\"observer\":\"The caller and service resource monitor\"}},{\"unit\":\"A25\",\"subject\":\"Precedence of transport checks\",\"kind\":\"missing check order\",\"text\":\"A25 requires trusted-host checking, body bounds, CORS/origin checks, and viewer-entry rate limiting, but only locates rate limiting before code verification; it gives no precedence when several transport checks fail together.\",\"question\":\"In what order are host, body-size, rate-limit, CORS/origin, request decoding, and handler authentication checks applied, and which failure wins?\",\"options\":[\"Trusted host, body bound, rate limit/origin, decoding, authentication\",\"Rate limit before all body and origin processing\",\"Framework middleware order is allowed to decide\"],\"default_guess\":\"Check trusted host first, then body size, then route-specific rate/origin policy, then decoding and authentication.\",\"witness\":{\"initial\":\"A client-address key is already at its viewer-entry limit.\",\"events\":[\"The same client sends an oversized `POST /auth/viewer/enter` with an untrusted Host.\"],\"outcomes\":[\"The response is the trusted-host refusal and the limiter is untouched.\",\"The response is HTTP 429, or the body-size refusal, depending on middleware order.\"],\"observer\":\"The caller and rate-limit-state operator\"}},{\"unit\":\"A25\",\"subject\":\"Viewer origin enforcement scope\",\"kind\":\"ambiguous refusal conditions\",\"text\":\"“mutating viewer requests must come from the canonical public origin” does not identify the routes counted as mutations or state how missing, `null`, malformed, or multiple Origin values are treated.\",\"question\":\"Does origin enforcement apply to viewer entry, logout, session restoration, and project reads, and is a missing Origin accepted or refused on each applicable route?\",\"options\":[\"Apply to every state-changing viewer route, including entry and logout, and require exactly one valid Origin\",\"Apply only when an Origin header is present\",\"Apply only to authenticated cookie-bearing mutations such as logout\"],\"default_guess\":\"Require exactly one matching Origin on every state-changing viewer route, including entry and logout; do not require it for reads.\",\"witness\":{\"initial\":\"A viewer has a valid session cookie.\",\"events\":[\"A non-browser client sends `POST /auth/viewer/logout` without an Origin header.\"],\"outcomes\":[\"Logout succeeds because absence of Origin is accepted or the check only targets foreign origins.\",\"Logout is refused because a canonical Origin is mandatory for the mutation.\"],\"observer\":\"The viewer restoring the session afterward\"}},{\"unit\":\"A25\",\"subject\":\"Rate-limit client-address identity\",\"kind\":\"undefined key normalization\",\"text\":\"The limiter key uses “client network address” read from the connection, but no canonicalization rule is given for IPv4-mapped IPv6 addresses, IPv6 textual variants, scope identifiers, or absent/non-IP peer information.\",\"question\":\"What exact value forms one client-address key?\",\"options\":[\"Use the framework's raw peer-address string\",\"Parse and canonicalize IP addresses, including IPv4-mapped IPv6\",\"Key by the complete transport peer tuple\"],\"default_guess\":\"Canonicalize the connection peer as an IP address, collapsing IPv4-mapped IPv6 to its IPv4 identity, and refuse entry if no usable peer address exists.\",\"witness\":{\"initial\":\"One client has exhausted its limit using peer text `192.0.2.7`.\",\"events\":[\"The same network client reconnects and is exposed by the server as `::ffff:192.0.2.7`.\",\"It attempts viewer entry again.\"],\"outcomes\":[\"The attempt is admitted under a distinct raw-string key.\",\"The attempt is refused under the same canonical address key.\"],\"observer\":\"The client and abuse-monitoring operator\"}},{\"unit\":\"A25\",\"subject\":\"Viewer limiter cleanup and memory claim\",\"kind\":\"internal contradiction\",\"text\":\"A25 says old entries are dropped “on every attempt” but also says the log “never holds more than the attempts admitted within one window.” With no later attempt, entries older than the window remain stored indefinitely.\",\"question\":\"Is expiry cleanup lazy on the next attempt, or must entries be removed when their window expires even during an idle period?\",\"options\":[\"Lazy cleanup on the next attempt\",\"Scheduled/eager removal at expiry\",\"Retain stale entries but weaken the stated memory invariant\"],\"default_guess\":\"Use lazy cleanup and state the bound as a bound on growth and live decision data, not literal age of every retained entry.\",\"witness\":{\"initial\":\"The in-memory limiter is empty and the window is 60 seconds.\",\"events\":[\"One viewer-entry attempt is admitted.\",\"No request reaches the service for ten minutes.\"],\"outcomes\":[\"The old entry remains until another attempt triggers cleanup.\",\"A timer or expiry structure removes the entry at about 60 seconds.\"],\"observer\":\"The service operator inspecting memory/state\"}},{\"unit\":\"A25\",\"subject\":\"X-Request-Id generation and trust\",\"kind\":\"missing header semantics\",\"text\":\"A25 requires “an `X-Request-Id`” on every response but says neither whether a client-supplied value is echoed nor how a server-generated value is formed and correlated with logs.\",\"question\":\"Is an inbound X-Request-Id trusted, validated, replaced, or ignored, and what uniqueness/format rule applies to the response value?\",\"options\":[\"Always generate a new server UUID\",\"Echo only a strictly validated inbound identifier; otherwise generate one\",\"Echo any inbound value\"],\"default_guess\":\"Accept only a short, strictly validated identifier; otherwise generate a fresh UUID, and use the chosen value for structured log correlation.\",\"witness\":{\"initial\":\"A client sends `X-Request-Id` containing a secret-like value or newline-like invalid data.\",\"events\":[\"The service returns an error response and writes its request log.\"],\"outcomes\":[\"The supplied value is echoed and possibly logged.\",\"The supplied value is discarded and a server-generated identifier is returned and logged.\"],\"observer\":\"The caller and log operator\"}},{\"unit\":\"A25\",\"subject\":\"Credential and secret log exclusion\",\"kind\":\"unverifiable invariant\",\"text\":\"“Logs redact authorization, cookie and secret-like names” and “No credential, cookie or secret appears in a log line” do not define the logged request parts, the closed set or matching rule for “secret-like names,” or treatment of secrets placed in query strings, paths, unknown JSON fields, exception text, and request IDs.\",\"question\":\"What exact structured fields may be logged, and what rule makes the no-secret invariant testable for arbitrary request input?\",\"options\":[\"Log only a closed allowlist of metadata and never bodies, raw URLs, or sensitive headers\",\"Log request data after a closed recursive name-based redaction rule\",\"Permit framework access/error logs with additional pattern scrubbing\"],\"default_guess\":\"Use a closed metadata allowlist and exclude bodies, raw query strings, authorization/cookie headers, and exception messages containing request values.\",\"witness\":{\"initial\":\"A client knows a valid service credential.\",\"events\":[\"The client sends a failing request with that credential duplicated in an unknown query parameter and JSON field.\",\"The transport and validation layers log the failure.\"],\"outcomes\":[\"A generic framework logger records the raw URL or validation input and exposes the credential.\",\"Only allowlisted metadata and a server request ID are logged.\"],\"observer\":\"Anyone with log access\"}},{\"unit\":\"A32\",\"subject\":\"Scope of vulnerability blocking\",\"kind\":\"direct contradiction\",\"text\":\"Normative rule 3 says “Every advisory it reports for any resolved package blocks the deploy” and explicitly forbids judging whether an unused feature affects the portal; the formal invariant and opening rule instead say only a vulnerability “that affects the portal” blocks deployment, while the required test refers to “those pins.”\",\"question\":\"Does any pip-audit advisory in the resolved environment block, or may advisories be waived based on affected code and/or whether the package is a direct pin?\",\"options\":[\"Every reported advisory for every resolved package blocks without waiver\",\"Only advisories assessed as affecting portal behavior block\",\"Only advisories on the four direct pins block\"],\"default_guess\":\"Every advisory reported for any resolved package blocks without waiver.\",\"witness\":{\"initial\":\"The built image contains a transitive dependency with an advisory limited to an optional feature the portal does not use; all four direct pins have no advisory.\",\"events\":[\"The pre-deploy `pip-audit --local` reports the transitive advisory.\"],\"outcomes\":[\"The deployment is blocked under normative rule 3.\",\"The deployment passes under the “affects the portal” or “those pins” wording.\"],\"observer\":\"The release operator\"}},{\"unit\":\"A32\",\"subject\":\"Availability of pip-audit inside the shipped image\",\"kind\":\"operational gap\",\"text\":\"The check must be “`pip-audit --local`, run inside the built image against what is installed there,” while deployment requirements contain only the four portal libraries and “the audited set is the shipped set.” The text does not say how pip-audit and its own dependencies are made available without changing that installed and shipped set.\",\"question\":\"How is the audit command executed against the exact image filesystem without adding audit-only packages to the set being audited and shipped or modifying the image after the check?\",\"options\":[\"Ship pip-audit and its dependencies in the production image\",\"Mount or inject the audit tool from outside while inspecting the built image environment\",\"Audit an intermediate image and remove the tool before producing a different final image\"],\"default_guess\":\"Run the audit tool from an external build stage against the final image's installed environment, identified by digest, without installing it into that environment.\",\"witness\":{\"initial\":\"A final application image contains only the portal runtime and dependencies resolved from the four pinned requirements.\",\"events\":[\"The pipeline starts the required in-image `pip-audit --local` command.\"],\"outcomes\":[\"The command is unavailable unless pip-audit is installed, which changes the installed and possibly audited set.\",\"The pipeline supplies the tool externally, but that mechanism is not defined by the text.\"],\"observer\":\"The release pipeline operator\"}},{\"unit\":\"A32\",\"subject\":\"Identity of the audited and deployed artifact\",\"kind\":\"unverifiable deployment invariant\",\"text\":\"“Because it audits the built image, the audited set is the shipped set” gives no artifact identity, digest, promotion rule, or prohibition on rebuilding after the check.\",\"question\":\"What proves that the exact image audited is the image deployed, rather than a later rebuild with newly resolved transitive versions?\",\"options\":[\"Audit and deploy one immutable image digest\",\"Permit a rebuild if requirements are unchanged\",\"Re-run the audit after every rebuild and bind the result to that new digest\"],\"default_guess\":\"Audit one immutable image digest and deploy only that digest.\",\"witness\":{\"initial\":\"The four direct requirements pins are unchanged, but a transitive dependency has released a new version.\",\"events\":[\"Build A resolves the old transitive version and passes the audit.\",\"The deployment stage rebuilds as Build B and resolves the new version without another audit.\",\"Build B is deployed.\"],\"outcomes\":[\"Deployment is allowed because the direct requirements and earlier audit passed.\",\"Deployment is refused because Build B's digest has no passing audit bound to it.\"],\"observer\":\"The release operator and security auditor\"}}]}",
+ "set_aside": []
+}

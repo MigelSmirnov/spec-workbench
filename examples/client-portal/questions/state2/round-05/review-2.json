@@ -1,0 +1,202 @@
+{
+ "open_points": [
+  {
+   "subject": "Registry validation fields used by project and access-management guards",
+   "kind": "contradiction",
+   "text": "A5 says grant and assignment operations trust `is_active`, the project guard trusts `status`, and A6 says the gateway does not check that `exists`, `is_active` and `status` agree; R0-24 nevertheless says no new grant or assignment is created for an archived project.",
+   "question": "When a decoded validation answer has `exists=true`, `status=\"archived\"`, and `is_active=true`, must creation of a viewer grant, staff assignment, or producer grant succeed or be rejected as an archived project?",
+   "options": [
+    "Trust `is_active` for access-management creation and allow it",
+    "Treat `status=\"archived\"` as authoritative and reject it",
+    "Reject inconsistent Registry answers as a boundary/schema failure"
+   ],
+   "default_guess": "Reject the inconsistent answer as `schema_mismatch` and create nothing.",
+   "witness": {
+    "initial": "An active administrator is authorized for access management; no grant exists for project P; Registry regards P as archived, and its validation response is decoded as `exists=true`, `status=\"archived\"`, `is_active=true`.",
+    "events": [
+     "The administrator requests creation of a viewer grant for P.",
+     "The portal validates P through Registry."
+    ],
+    "outcomes": [
+     "Following the changed A5/A6 caller rule, grant creation trusts `is_active=true` and succeeds.",
+     "Following R0-24 and the registry-status policy, creation is rejected because P is archived."
+    ],
+    "observer": "The administrator and the persisted grant repository see whether the grant was created."
+   },
+   "unit": "A5"
+  },
+  {
+   "subject": "Snapshot import when Registry validation fails operationally",
+   "kind": "missing rejection mapping",
+   "text": "A4 says an unanswered Registry validation fails the operation through A6, while A7 says an authenticated import authorization failure is recorded as only `unknown_project`, `scope_denied`, or `archived_project`; `ImportRejectReason` has no timeout, transport, HTTP, schema, or identity-mismatch reason.",
+   "question": "What response, import-record behavior, outcome, and reason apply when Registry validation raises `timeout`, `transport_error`, `http_error`, `schema_mismatch`, or `identity_mismatch` during an authenticated snapshot import?",
+   "options": [
+    "Propagate the Registry boundary failure and write no import record",
+    "Record a rejected import as `unknown_project`",
+    "Add or otherwise define a distinct Registry-unavailable rejection"
+   ],
+   "default_guess": "Propagate the Registry boundary failure and write no import or audit record, because no permitted `ImportRejectReason` represents it.",
+   "witness": {
+    "initial": "An active estimate producer has a valid bearer credential, import capability, and an active grant for project P; the publication body is valid.",
+    "events": [
+     "The producer submits the snapshot.",
+     "Registry validation for P times out."
+    ],
+    "outcomes": [
+     "The timeout escapes as a boundary/server failure and no `SnapshotImportRecord` is written.",
+     "The failure is concealed as `unknown_project`, producing a fresh rejected import record and audit record."
+    ],
+    "observer": "The producer sees whether an `import_id` is returned and can later attempt to read that result."
+   },
+   "unit": "A7"
+  },
+  {
+   "subject": "Expense-intake validation versus the common authorization guard",
+   "kind": "order contradiction",
+   "text": "A4 requires every project-scoped operation to check project access before capability and Registry lifecycle, but A7 orders expense creation as recognition status, contract version, capability, active project, allocation validation, then replay.",
+   "question": "Does expense creation validate recognition content before invoking the complete A4 guard, or must project access be checked before contract-version and other content checks?",
+   "options": [
+    "Run the complete A4 guard before recognition/content validation",
+    "Validate recognition status and contract version before the A4 guard",
+    "Treat A7's `capability, active project` step as the whole A4 guard but retain its position after contract validation"
+   ],
+   "default_guess": "Authenticate first, then run the complete A4 guard, then validate recognition content.",
+   "witness": {
+    "initial": "An active operator has a valid session and expense capability but no assignment for project P; the submitted recognition has an unsupported contract version.",
+    "events": [
+     "The operator submits expense creation for P."
+    ],
+    "outcomes": [
+     "A4 checks project access first and refuses because the assignment is absent, without classifying the contract version.",
+     "A7 rejects the unsupported contract version before checking project access."
+    ],
+    "observer": "A focused use-case test or instrumented assignment repository sees whether the project-scope lookup occurred and which rejection was raised."
+   },
+   "unit": "A7"
+  },
+  {
+   "subject": "HTTP request-body size bound",
+   "kind": "missing configuration",
+   "text": "A25 requires request bodies to be bounded by runtime settings, but A30 specifies `BINARY_MAX_READ_BYTES` and does not give a request-body limit key, type, requiredness, default, or numeric value.",
+   "question": "Which runtime setting defines the request-body ceiling, and what are its environment name, validation rule, requiredness, and environment defaults?",
+   "options": [
+    "Introduce a required request-body byte-limit setting",
+    "Use a fixed source constant",
+    "Apply the binary-read limit to request bodies as well"
+   ],
+   "default_guess": "Use a separate required positive-integer `request_body_max_bytes` setting.",
+   "witness": {
+    "initial": "A deployment supplies every environment variable and value explicitly listed in A30, but no unlisted request-body setting.",
+    "events": [
+     "A caller sends a JSON request body of 2 MiB."
+    ],
+    "outcomes": [
+     "An implementation with a 1 MiB assumed ceiling rejects it before the handler.",
+     "An implementation with a 10 MiB assumed ceiling admits it."
+    ],
+    "observer": "The caller sees rejection versus handler execution."
+   },
+   "unit": "A25"
+  },
+  {
+   "subject": "Viewer-entry sliding-window boundary",
+   "kind": "boundary ambiguity",
+   "text": "A25 says attempts already `within the last ... seconds` count, but also says entries `older than the window` are dropped; it does not state whether an entry exactly at `now - window` is retained or dropped.",
+   "question": "At the exact window boundary, is an earlier admitted viewer-entry attempt still counted?",
+   "options": [
+    "Use a half-open window and drop timestamps `<= now - window`",
+    "Use a closed window and drop only timestamps `< now - window`"
+   ],
+   "default_guess": "Drop entries at or before `now - window`, using `(now - window, now]`.",
+   "witness": {
+    "initial": "The limit is one attempt per 60 seconds, and an attempt from address A was admitted at exactly 12:00:00.",
+    "events": [
+     "At exactly 12:01:00, A makes another viewer-entry attempt."
+    ],
+    "outcomes": [
+     "The first entry is outside the half-open window, so the new attempt is admitted and counted.",
+     "The first entry is retained at the closed boundary, so the new attempt receives HTTP 429."
+    ],
+    "observer": "The viewer sees admission versus HTTP 429."
+   },
+   "unit": "A25"
+  },
+  {
+   "subject": "Viewer-entry limiter memory bound",
+   "kind": "internal contradiction",
+   "text": "A25 calls the viewer-entry limiter bounded-memory, then states that there is no cap on distinct keys and no other eviction, so arbitrarily many client-address keys can remain during one window.",
+   "question": "Must the limiter impose a global memory/key bound with defined eviction or refusal behavior, or is memory intentionally unbounded across distinct client addresses within a window?",
+   "options": [
+    "Keep the stated no-cap algorithm and remove the bounded-memory guarantee",
+    "Define a global key/entry cap and deterministic eviction",
+    "Define a global cap that refuses new keys instead of evicting"
+   ],
+   "default_guess": "Define a global cap with deterministic eviction that preserves existing rate-limit decisions as far as possible.",
+   "witness": {
+    "initial": "Address A has already used all allowed attempts in the current window.",
+    "events": [
+     "Arbitrarily many distinct addresses each make one admitted attempt before the window expires.",
+     "Address A retries before its original entries expire."
+    ],
+    "outcomes": [
+     "Following `no cap on distinct keys and no other eviction`, all keys remain and A receives HTTP 429, while memory can grow without bound.",
+     "Following the bounded-memory requirement, some entry or key must be evicted or refused; if A's key is evicted, its retry is admitted."
+    ],
+    "observer": "The service operator sees memory growth, and address A may see admission versus HTTP 429."
+   },
+   "unit": "A25"
+  },
+  {
+   "subject": "Response `X-Request-Id` generation and trust",
+   "kind": "missing value policy",
+   "text": "A25 requires every response to carry `an X-Request-Id` but gives no source, syntax, uniqueness, maximum length, handling of an inbound header, or relation to logging.",
+   "question": "Must the service always generate the request ID, may it accept or echo a caller-supplied value, and what validation and logging rules apply?",
+   "options": [
+    "Always generate a fresh server-owned identifier and ignore inbound values",
+    "Validate and reuse a caller-supplied identifier, otherwise generate one",
+    "Echo any caller-supplied value"
+   ],
+   "default_guess": "Always generate a fresh server-owned UUID and use the same value in response and request-correlated logs.",
+   "witness": {
+    "initial": "A caller can send arbitrary request headers.",
+    "events": [
+     "The caller sends `X-Request-Id` containing a chosen long value with a newline-like control character.",
+     "The service answers the request."
+    ],
+    "outcomes": [
+     "An implementation echoes or logs the supplied value as the response request ID.",
+     "An implementation ignores it and returns a newly generated safe identifier."
+    ],
+    "observer": "The caller sees the returned identifier, and the service operator sees different log-correlation and injection behavior."
+   },
+   "unit": "A25"
+  },
+  {
+   "subject": "Dependency vulnerability-check command and audited package set",
+   "kind": "contradictory procedure",
+   "text": "A32 first defines the reproducible check as `pip-audit -r deploy/requirements.txt`, which resolves requirements, and later says the check runs against the built image as `pip-audit --local`, which audits the installed environment.",
+   "question": "Are both checks required, or which command and package set is authoritative for deciding whether the deploy passes?",
+   "options": [
+    "Require both the requirements-resolution audit and the installed-image audit",
+    "Use only `pip-audit --local` in the built image",
+    "Use only `pip-audit -r deploy/requirements.txt`"
+   ],
+   "default_guess": "Require the installed-image `pip-audit --local` result as authoritative, with the requirements audit optional and non-authoritative.",
+   "witness": {
+    "initial": "The built image contains transitive package version T1, while a fresh resolution of the four direct pins selects newer transitive version T2; an advisory affects exactly one of T1 and T2.",
+    "events": [
+     "The pre-deploy vulnerability gate runs."
+    ],
+    "outcomes": [
+     "`pip-audit -r deploy/requirements.txt` audits T2 and produces one pass/block decision.",
+     "`pip-audit --local` audits shipped T1 and produces the opposite decision."
+    ],
+    "observer": "The deployment pipeline sees whether the release is allowed or blocked."
+   },
+   "unit": "A32"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"Registry validation fields used by project and access-management guards\",\"kind\":\"contradiction\",\"text\":\"A5 says grant and assignment operations trust `is_active`, the project guard trusts `status`, and A6 says the gateway does not check that `exists`, `is_active` and `status` agree; R0-24 nevertheless says no new grant or assignment is created for an archived project.\",\"question\":\"When a decoded validation answer has `exists=true`, `status=\\\"archived\\\"`, and `is_active=true`, must creation of a viewer grant, staff assignment, or producer grant succeed or be rejected as an archived project?\",\"options\":[\"Trust `is_active` for access-management creation and allow it\",\"Treat `status=\\\"archived\\\"` as authoritative and reject it\",\"Reject inconsistent Registry answers as a boundary/schema failure\"],\"default_guess\":\"Reject the inconsistent answer as `schema_mismatch` and create nothing.\",\"witness\":{\"initial\":\"An active administrator is authorized for access management; no grant exists for project P; Registry regards P as archived, and its validation response is decoded as `exists=true`, `status=\\\"archived\\\"`, `is_active=true`.\",\"events\":[\"The administrator requests creation of a viewer grant for P.\",\"The portal validates P through Registry.\"],\"outcomes\":[\"Following the changed A5/A6 caller rule, grant creation trusts `is_active=true` and succeeds.\",\"Following R0-24 and the registry-status policy, creation is rejected because P is archived.\"],\"observer\":\"The administrator and the persisted grant repository see whether the grant was created.\"},\"unit\":\"A5\"},{\"subject\":\"Snapshot import when Registry validation fails operationally\",\"kind\":\"missing rejection mapping\",\"text\":\"A4 says an unanswered Registry validation fails the operation through A6, while A7 says an authenticated import authorization failure is recorded as only `unknown_project`, `scope_denied`, or `archived_project`; `ImportRejectReason` has no timeout, transport, HTTP, schema, or identity-mismatch reason.\",\"question\":\"What response, import-record behavior, outcome, and reason apply when Registry validation raises `timeout`, `transport_error`, `http_error`, `schema_mismatch`, or `identity_mismatch` during an authenticated snapshot import?\",\"options\":[\"Propagate the Registry boundary failure and write no import record\",\"Record a rejected import as `unknown_project`\",\"Add or otherwise define a distinct Registry-unavailable rejection\"],\"default_guess\":\"Propagate the Registry boundary failure and write no import or audit record, because no permitted `ImportRejectReason` represents it.\",\"witness\":{\"initial\":\"An active estimate producer has a valid bearer credential, import capability, and an active grant for project P; the publication body is valid.\",\"events\":[\"The producer submits the snapshot.\",\"Registry validation for P times out.\"],\"outcomes\":[\"The timeout escapes as a boundary/server failure and no `SnapshotImportRecord` is written.\",\"The failure is concealed as `unknown_project`, producing a fresh rejected import record and audit record.\"],\"observer\":\"The producer sees whether an `import_id` is returned and can later attempt to read that result.\"},\"unit\":\"A7\"},{\"subject\":\"Expense-intake validation versus the common authorization guard\",\"kind\":\"order contradiction\",\"text\":\"A4 requires every project-scoped operation to check project access before capability and Registry lifecycle, but A7 orders expense creation as recognition status, contract version, capability, active project, allocation validation, then replay.\",\"question\":\"Does expense creation validate recognition content before invoking the complete A4 guard, or must project access be checked before contract-version and other content checks?\",\"options\":[\"Run the complete A4 guard before recognition/content validation\",\"Validate recognition status and contract version before the A4 guard\",\"Treat A7's `capability, active project` step as the whole A4 guard but retain its position after contract validation\"],\"default_guess\":\"Authenticate first, then run the complete A4 guard, then validate recognition content.\",\"witness\":{\"initial\":\"An active operator has a valid session and expense capability but no assignment for project P; the submitted recognition has an unsupported contract version.\",\"events\":[\"The operator submits expense creation for P.\"],\"outcomes\":[\"A4 checks project access first and refuses because the assignment is absent, without classifying the contract version.\",\"A7 rejects the unsupported contract version before checking project access.\"],\"observer\":\"A focused use-case test or instrumented assignment repository sees whether the project-scope lookup occurred and which rejection was raised.\"},\"unit\":\"A7\"},{\"subject\":\"HTTP request-body size bound\",\"kind\":\"missing configuration\",\"text\":\"A25 requires request bodies to be bounded by runtime settings, but A30 specifies `BINARY_MAX_READ_BYTES` and does not give a request-body limit key, type, requiredness, default, or numeric value.\",\"question\":\"Which runtime setting defines the request-body ceiling, and what are its environment name, validation rule, requiredness, and environment defaults?\",\"options\":[\"Introduce a required request-body byte-limit setting\",\"Use a fixed source constant\",\"Apply the binary-read limit to request bodies as well\"],\"default_guess\":\"Use a separate required positive-integer `request_body_max_bytes` setting.\",\"witness\":{\"initial\":\"A deployment supplies every environment variable and value explicitly listed in A30, but no unlisted request-body setting.\",\"events\":[\"A caller sends a JSON request body of 2 MiB.\"],\"outcomes\":[\"An implementation with a 1 MiB assumed ceiling rejects it before the handler.\",\"An implementation with a 10 MiB assumed ceiling admits it.\"],\"observer\":\"The caller sees rejection versus handler execution.\"},\"unit\":\"A25\"},{\"subject\":\"Viewer-entry sliding-window boundary\",\"kind\":\"boundary ambiguity\",\"text\":\"A25 says attempts already `within the last ... seconds` count, but also says entries `older than the window` are dropped; it does not state whether an entry exactly at `now - window` is retained or dropped.\",\"question\":\"At the exact window boundary, is an earlier admitted viewer-entry attempt still counted?\",\"options\":[\"Use a half-open window and drop timestamps `<= now - window`\",\"Use a closed window and drop only timestamps `< now - window`\"],\"default_guess\":\"Drop entries at or before `now - window`, using `(now - window, now]`.\",\"witness\":{\"initial\":\"The limit is one attempt per 60 seconds, and an attempt from address A was admitted at exactly 12:00:00.\",\"events\":[\"At exactly 12:01:00, A makes another viewer-entry attempt.\"],\"outcomes\":[\"The first entry is outside the half-open window, so the new attempt is admitted and counted.\",\"The first entry is retained at the closed boundary, so the new attempt receives HTTP 429.\"],\"observer\":\"The viewer sees admission versus HTTP 429.\"},\"unit\":\"A25\"},{\"subject\":\"Viewer-entry limiter memory bound\",\"kind\":\"internal contradiction\",\"text\":\"A25 calls the viewer-entry limiter bounded-memory, then states that there is no cap on distinct keys and no other eviction, so arbitrarily many client-address keys can remain during one window.\",\"question\":\"Must the limiter impose a global memory/key bound with defined eviction or refusal behavior, or is memory intentionally unbounded across distinct client addresses within a window?\",\"options\":[\"Keep the stated no-cap algorithm and remove the bounded-memory guarantee\",\"Define a global key/entry cap and deterministic eviction\",\"Define a global cap that refuses new keys instead of evicting\"],\"default_guess\":\"Define a global cap with deterministic eviction that preserves existing rate-limit decisions as far as possible.\",\"witness\":{\"initial\":\"Address A has already used all allowed attempts in the current window.\",\"events\":[\"Arbitrarily many distinct addresses each make one admitted attempt before the window expires.\",\"Address A retries before its original entries expire.\"],\"outcomes\":[\"Following `no cap on distinct keys and no other eviction`, all keys remain and A receives HTTP 429, while memory can grow without bound.\",\"Following the bounded-memory requirement, some entry or key must be evicted or refused; if A's key is evicted, its retry is admitted.\"],\"observer\":\"The service operator sees memory growth, and address A may see admission versus HTTP 429.\"},\"unit\":\"A25\"},{\"subject\":\"Response `X-Request-Id` generation and trust\",\"kind\":\"missing value policy\",\"text\":\"A25 requires every response to carry `an X-Request-Id` but gives no source, syntax, uniqueness, maximum length, handling of an inbound header, or relation to logging.\",\"question\":\"Must the service always generate the request ID, may it accept or echo a caller-supplied value, and what validation and logging rules apply?\",\"options\":[\"Always generate a fresh server-owned identifier and ignore inbound values\",\"Validate and reuse a caller-supplied identifier, otherwise generate one\",\"Echo any caller-supplied value\"],\"default_guess\":\"Always generate a fresh server-owned UUID and use the same value in response and request-correlated logs.\",\"witness\":{\"initial\":\"A caller can send arbitrary request headers.\",\"events\":[\"The caller sends `X-Request-Id` containing a chosen long value with a newline-like control character.\",\"The service answers the request.\"],\"outcomes\":[\"An implementation echoes or logs the supplied value as the response request ID.\",\"An implementation ignores it and returns a newly generated safe identifier.\"],\"observer\":\"The caller sees the returned identifier, and the service operator sees different log-correlation and injection behavior.\"},\"unit\":\"A25\"},{\"subject\":\"Dependency vulnerability-check command and audited package set\",\"kind\":\"contradictory procedure\",\"text\":\"A32 first defines the reproducible check as `pip-audit -r deploy/requirements.txt`, which resolves requirements, and later says the check runs against the built image as `pip-audit --local`, which audits the installed environment.\",\"question\":\"Are both checks required, or which command and package set is authoritative for deciding whether the deploy passes?\",\"options\":[\"Require both the requirements-resolution audit and the installed-image audit\",\"Use only `pip-audit --local` in the built image\",\"Use only `pip-audit -r deploy/requirements.txt`\"],\"default_guess\":\"Require the installed-image `pip-audit --local` result as authoritative, with the requirements audit optional and non-authoritative.\",\"witness\":{\"initial\":\"The built image contains transitive package version T1, while a fresh resolution of the four direct pins selects newer transitive version T2; an advisory affects exactly one of T1 and T2.\",\"events\":[\"The pre-deploy vulnerability gate runs.\"],\"outcomes\":[\"`pip-audit -r deploy/requirements.txt` audits T2 and produces one pass/block decision.\",\"`pip-audit --local` audits shipped T1 and produces the opposite decision.\"],\"observer\":\"The deployment pipeline sees whether the release is allowed or blocked.\"},\"unit\":\"A32\"}]}",
+ "set_aside": []
+}

@@ -1,0 +1,297 @@
+{
+ "open_points": [
+  {
+   "unit": "A7",
+   "subject": "Expense creation authorization and validation order",
+   "kind": "contradictory precedence",
+   "text": "A4 says every project-scoped operation evaluates authorization through the Registry guard before proceeding, while A7 says expense creation checks recognition status and contract version before capability and active-project checks.",
+   "question": "For expense creation, do recognition-content checks run before the A4 authorization guard, or only after the complete guard succeeds?",
+   "options": [
+    "Run the complete A4 guard first, then validate recognition content.",
+    "Validate recognition status and contract version first, then run authorization and project checks."
+   ],
+   "default_guess": "Run the complete A4 guard first because expense creation is a project-scoped operation.",
+   "witness": {
+    "initial": "An operator has a valid active session but no assignment to project P; P is archived, and the submitted recognition has an unsupported contract version.",
+    "events": [
+     "The operator submits expense creation for P."
+    ],
+    "outcomes": [
+     "A4-first implementation checks scope and Registry lifecycle and refuses on authorization or archived-project grounds.",
+     "A7-order implementation refuses the unsupported contract version before checking assignment or calling Registry."
+    ],
+    "observer": "The Registry sees whether it was called, and the caller may receive a different classified refusal."
+   }
+  },
+  {
+   "unit": "A7",
+   "subject": "Snapshot import during Registry boundary failure",
+   "kind": "missing failure classification",
+   "text": "A7 enumerates recorded authorization failures as unknown_project, scope_denied, or archived_project, but A4/A6 also allow timeout, transport_error, http_error, schema_mismatch, and identity_mismatch while validating the project; SnapshotImportRecord has no rejection reason for them.",
+   "question": "After bearer authentication succeeds, what happens to a snapshot publication when Registry validation fails with one of A6's boundary failures: is an import attempt recorded, and if so with which outcome and reason?",
+   "options": [
+    "Propagate the Registry failure and create no SnapshotImportRecord.",
+    "Create a rejected SnapshotImportRecord using a new catalog reason for the Registry failure.",
+    "Translate the failure into one of the existing import rejection reasons."
+   ],
+   "default_guess": "Propagate the Registry failure without recording an import attempt, because no existing ImportRejectReason represents it.",
+   "witness": {
+    "initial": "An active producer with valid scope submits a well-formed snapshot, but Registry times out during project validation.",
+    "events": [
+     "The producer publishes the snapshot.",
+     "The producer later attempts to retrieve the import result if an import_id was returned."
+    ],
+    "outcomes": [
+     "The operation fails with no import_id, import record, or snapshot.import audit record.",
+     "A fresh rejected import result and audit record are written, requiring an unspecified reason mapping."
+    ],
+    "observer": "The producer and an audit reader see whether the attempt exists."
+   }
+  },
+  {
+   "unit": "A6",
+   "subject": "Inconsistent ProjectValidationResult lifecycle fields",
+   "kind": "cross-text contradiction",
+   "text": "A5 says an archived project rejects mutations and an active project allows them, while A6 says grant and assignment creation trusts only is_active, performs no consistency check, and admits is_active=true whatever status says.",
+   "question": "When exists, is_active, and status disagree, which field determines whether a viewer grant, staff assignment, or producer grant may be created?",
+   "options": [
+    "Treat inconsistent validation data as schema_mismatch and refuse.",
+    "Trust is_active for access-management creation, even when status says archived.",
+    "Trust status and apply the active/archived table."
+   ],
+   "default_guess": "Trust is_active, because A6 explicitly describes that as the accepted running behavior, while documenting the resulting exception to the lifecycle table.",
+   "witness": {
+    "initial": "Registry returns exists=true, is_active=true, status=\"archived\" for project P; an administrator has a valid access-management session.",
+    "events": [
+     "The administrator creates a viewer grant for P."
+    ],
+    "outcomes": [
+     "A5 and R0-24 reject the creation because P is archived.",
+     "A6 admits and stores the grant because is_active is true."
+    ],
+    "observer": "The administrator and viewer see whether the new grant exists."
+   }
+  },
+  {
+   "unit": "A25",
+   "subject": "Viewer-entry limiter versus request decoding",
+   "kind": "unspecified check order",
+   "text": "The limiter acts \"before any code verification\" and counts \"every admitted attempt\", but the text does not say whether malformed JSON, request-model failures, or other pre-handler refusals are admitted attempts that consume the limit.",
+   "question": "At what exact point relative to body-size enforcement, JSON parsing, and request-model validation is a viewer-entry attempt counted?",
+   "options": [
+    "Count every trusted-host, within-size POST reaching the route, even if its body is malformed.",
+    "Count only requests that successfully decode into ViewerEnterRequest.",
+    "Count only requests that reach secret verification."
+   ],
+   "default_guess": "Count after transport size/host checks but before JSON or model validation, so malformed attempts cannot bypass throttling.",
+   "witness": {
+    "initial": "A client-address/route key has nine counted attempts in a 10-attempt window.",
+    "events": [
+     "The client sends a within-size POST with malformed JSON.",
+     "The client immediately sends a well-formed viewer-entry request."
+    ],
+    "outcomes": [
+     "The malformed request is counted, so the well-formed request is refused with HTTP 429.",
+     "The malformed request is not counted, so the well-formed request is admitted to credential verification."
+    ],
+    "observer": "The client sees whether the second request is rate-limited."
+   }
+  },
+  {
+   "unit": "A25",
+   "subject": "Request and response size bounds",
+   "kind": "missing configuration and refusal semantics",
+   "text": "\"Request bodies and binary responses are bounded by runtime settings before expensive work\" does not name the request-body or response-ceiling settings, their units/defaults, whether actual bytes or Content-Length controls the check, or the refusal response.",
+   "question": "What are the exact body and response limits, how are streaming/chunked or falsely declared lengths measured, and which HTTP result is returned when a limit is exceeded?",
+   "options": [
+    "Reject from Content-Length before reading, and also enforce an actual-byte streaming limit.",
+    "Ignore Content-Length and count actual received bytes.",
+    "Use separate endpoint-specific limits rather than one service-wide setting."
+   ],
+   "default_guess": "Use positive byte-count settings, reject an excessive declared length early, enforce the same limit against actual bytes while reading, and return an empty HTTP 413 response.",
+   "witness": {
+    "initial": "A trusted client sends a chunked JSON request whose actual body is 2 MiB and has no Content-Length.",
+    "events": [
+     "The request reaches the transport guard."
+    ],
+    "outcomes": [
+     "An implementation with a 1 MiB actual-byte limit rejects it before the handler.",
+     "An implementation that checks only Content-Length admits it."
+    ],
+    "observer": "The client and handler see whether the request is processed."
+   }
+  },
+  {
+   "unit": "A25",
+   "subject": "Trusted-host comparison",
+   "kind": "underspecified normalization",
+   "text": "The service allows only configured trusted hosts and forbids wildcards, but host comparison rules for case, trailing dots, ports, IPv6 notation, and malformed or multiple Host values are not stated.",
+   "question": "How is the request authority normalized and compared with a configured trusted host, and what exact response is used for a mismatch or malformed Host header?",
+   "options": [
+    "Compare DNS names case-insensitively after removing a trailing dot and handling the port separately.",
+    "Compare the received Host value literally with configured strings.",
+    "Use URL authority normalization including effective default ports."
+   ],
+   "default_guess": "Parse a single valid authority, compare DNS names case-insensitively with explicit port semantics, and reject malformed or untrusted authorities before routing.",
+   "witness": {
+    "initial": "The trusted-host configuration contains \"portal.example\".",
+    "events": [
+     "A client sends Host: PORTAL.EXAMPLE:443 over HTTPS."
+    ],
+    "outcomes": [
+     "A normalized comparison accepts the request.",
+     "A literal comparison rejects it as untrusted."
+    ],
+    "observer": "The client sees whether any route is reachable."
+   }
+  },
+  {
+   "unit": "A25",
+   "subject": "CORS behavior",
+   "kind": "incomplete transport contract",
+   "text": "\"CORS is off when its allowlist is empty, and an allowed origin is never a wildcard\" leaves allowed methods, allowed request headers, credential permission, preflight caching, origin normalization, and rejection behavior unspecified.",
+   "question": "What exact CORS response and preflight policy applies for an allowlisted origin, especially for Authorization headers and cookies?",
+   "options": [
+    "Allow a closed method/header set and credentials, echoing only an exactly normalized allowlisted origin.",
+    "Allow origins without credentials and permit only simple requests.",
+    "Treat CORS solely as response headers and leave disallowed preflights to route handling."
+   ],
+   "default_guess": "Use a closed method/header set, allow credentials only where needed, echo an exact normalized allowlisted origin, and refuse disallowed preflights without invoking handlers.",
+   "witness": {
+    "initial": "https://ui.example is allowlisted and sends a preflight for a staff request using Authorization.",
+    "events": [
+     "The browser sends OPTIONS with Origin and Access-Control-Request-Headers: authorization."
+    ],
+    "outcomes": [
+     "The service permits the preflight and the browser sends the staff request.",
+     "The service omits or refuses Authorization in CORS headers, so the browser blocks the request."
+    ],
+    "observer": "The browser user sees whether the API call can be made."
+   }
+  },
+  {
+   "unit": "A25",
+   "subject": "X-Request-Id generation and propagation",
+   "kind": "unspecified header authority",
+   "text": "Every response has \"an X-Request-Id\", but the text does not say whether an incoming value is trusted, validated, replaced, or logged, nor its format and uniqueness requirements.",
+   "question": "Who creates X-Request-Id, and what happens when the request supplies a missing, malformed, duplicated, or attacker-chosen value?",
+   "options": [
+    "Always generate a new server UUID and ignore incoming values.",
+    "Reuse one valid incoming identifier and generate a value otherwise.",
+    "Echo the incoming value without validation."
+   ],
+   "default_guess": "Always generate a fresh server UUID and use it consistently in the response and sanitized logs.",
+   "witness": {
+    "initial": "A client sends X-Request-Id: attacker-controlled on an otherwise valid request.",
+    "events": [
+     "The service answers the request."
+    ],
+    "outcomes": [
+     "The response contains a fresh server-generated identifier.",
+     "The response echoes attacker-controlled."
+    ],
+    "observer": "The client and log reader see different correlation identifiers."
+   }
+  },
+  {
+   "unit": "A30",
+   "subject": "Runtime environment variable table",
+   "kind": "missing normative table",
+   "text": "A30 refers to \"the closed table of environment variables, their types, requiredness, normalization and per-environment defaults\" but does not include that table; settings required by R0-10 and A25 are also absent from the displayed configuration list.",
+   "question": "What is the complete RuntimeSettings environment contract, including exact variable names, parsing, valid ranges, requiredness, and development/test/production defaults for persistence paths, trusted hosts, origins, public origin, body/response limits, and viewer-entry limiting?",
+   "options": [
+    "Supply a complete closed environment-variable table in State 2.",
+    "Treat the displayed variables as exhaustive and hard-code all omitted transport and persistence settings.",
+    "Let later implementers invent names, parsing, and defaults."
+   ],
+   "default_guess": "Supply a complete closed table and make security-sensitive production settings required with no permissive defaults.",
+   "witness": {
+    "initial": "Two agents receive only these texts and must configure a production deployment with a trusted host, public origin, SQLite path, binary root, and request-body limit.",
+    "events": [
+     "Each agent independently defines RuntimeSettings and startup validation."
+    ],
+    "outcomes": [
+     "One agent invents one set of environment names, formats, defaults, and accepted ranges.",
+     "The other invents incompatible names or requiredness, so the same environment starts one implementation and fails or behaves differently in the other."
+    ],
+    "observer": "The deployer sees incompatible configuration contracts."
+   }
+  },
+  {
+   "unit": "A32",
+   "subject": "Provisioning and pinning pip-audit",
+   "kind": "missing deployment mechanism",
+   "text": "The vulnerability check is specified as \"pip-audit --local, run inside the built image\", but pip-audit is not among the four pinned dependencies and the text does not say how or at which version the command is made available without changing the shipped package set.",
+   "question": "How is the audit tool installed and versioned, and is it present in the final runtime image or only in a reproducible audit stage that inspects the final environment?",
+   "options": [
+    "Pin pip-audit in a separate build/audit stage and inspect the final runtime environment.",
+    "Install an unpinned pip-audit into the final image before running it.",
+    "Provide pip-audit externally and mount or invoke it against the built image."
+   ],
+   "default_guess": "Pin pip-audit separately in a reproducible audit stage and audit the exact finalized runtime environment without shipping the tool.",
+   "witness": {
+    "initial": "The runtime image installs only the four listed direct pins and their resolved dependencies.",
+    "events": [
+     "The deployment pipeline tries to execute pip-audit --local inside that image."
+    ],
+    "outcomes": [
+     "The command is unavailable and the deploy cannot pass.",
+     "The builder installs pip-audit ad hoc, changing the installed/audited package set and possibly the shipped image."
+    ],
+    "observer": "The deployment pipeline sees whether the required check can run and what packages it audits."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "SnapshotPublication section-list constraints",
+   "kind": "changed-text contradiction",
+   "text": "M18 still declares sections as \"list[SnapshotSectionData] (non-empty, unique source_section_id)\", but the added running-service passage says these are only producer obligations and the portal refuses neither an empty list nor repeated identifiers; A7 also says both are accepted.",
+   "question": "Are non-emptiness and source_section_id uniqueness DTO/model invariants enforced during request decoding, or merely unenforced producer obligations?",
+   "options": [
+    "Remove them from portal model validation and accept empty or duplicate sections.",
+    "Keep them as SnapshotPublication model invariants, causing request decoding to refuse violations.",
+    "Represent them as warnings or audit-only producer-contract violations."
+   ],
+   "default_guess": "Treat them solely as producer obligations and do not enforce them in the portal, matching the added running-service behavior.",
+   "witness": {
+    "initial": "An active, authorized producer submits a complete version-1 EUR publication whose sections list is empty.",
+    "events": [
+     "The HTTP request is decoded.",
+     "Snapshot import is invoked if decoding succeeds."
+    ],
+    "outcomes": [
+     "The declared SnapshotPublication constraint rejects the body with HTTP 422 and creates no import record.",
+     "The carried change accepts the publication and creates an accepted snapshot and import record."
+    ],
+    "observer": "The producer sees whether an import_id and accepted result are returned."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "ProjectOverview project availability shape",
+   "kind": "changed-text/schema contradiction",
+   "text": "ProjectOverview still declares required field \"project: ProjectContext\" and no project_availability field, while the changed passage says project context is absent after a post-guard Registry read failure and \"a project_availability says so, like the other five pairs\".",
+   "question": "What is the exact ProjectOverview schema and local validation rule for project context availability?",
+   "options": [
+    "Add project_availability: ViewAvailability and make project optional, required exactly when available.",
+    "Keep project required and fail the entire overview when its context read fails.",
+    "Omit project without an availability discriminator."
+   ],
+   "default_guess": "Add a project_availability/project pair governed by the same conditional-presence rule as the other components.",
+   "witness": {
+    "initial": "The project guard successfully validates project P, then the subsequent Registry context read times out while all portal-owned component reads succeed.",
+    "events": [
+     "A viewer requests ProjectOverview for P."
+    ],
+    "outcomes": [
+     "The service returns an overview with project absent and project_availability=temporarily_unavailable, while returning the other components.",
+     "The required project field prevents construction, so the whole overview fails or an implementer fabricates a ProjectContext."
+    ],
+    "observer": "The viewer sees a partial overview or a failed operation."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A7\",\"subject\":\"Expense creation authorization and validation order\",\"kind\":\"contradictory precedence\",\"text\":\"A4 says every project-scoped operation evaluates authorization through the Registry guard before proceeding, while A7 says expense creation checks recognition status and contract version before capability and active-project checks.\",\"question\":\"For expense creation, do recognition-content checks run before the A4 authorization guard, or only after the complete guard succeeds?\",\"options\":[\"Run the complete A4 guard first, then validate recognition content.\",\"Validate recognition status and contract version first, then run authorization and project checks.\"],\"default_guess\":\"Run the complete A4 guard first because expense creation is a project-scoped operation.\",\"witness\":{\"initial\":\"An operator has a valid active session but no assignment to project P; P is archived, and the submitted recognition has an unsupported contract version.\",\"events\":[\"The operator submits expense creation for P.\"],\"outcomes\":[\"A4-first implementation checks scope and Registry lifecycle and refuses on authorization or archived-project grounds.\",\"A7-order implementation refuses the unsupported contract version before checking assignment or calling Registry.\"],\"observer\":\"The Registry sees whether it was called, and the caller may receive a different classified refusal.\"}},{\"unit\":\"A7\",\"subject\":\"Snapshot import during Registry boundary failure\",\"kind\":\"missing failure classification\",\"text\":\"A7 enumerates recorded authorization failures as unknown_project, scope_denied, or archived_project, but A4/A6 also allow timeout, transport_error, http_error, schema_mismatch, and identity_mismatch while validating the project; SnapshotImportRecord has no rejection reason for them.\",\"question\":\"After bearer authentication succeeds, what happens to a snapshot publication when Registry validation fails with one of A6's boundary failures: is an import attempt recorded, and if so with which outcome and reason?\",\"options\":[\"Propagate the Registry failure and create no SnapshotImportRecord.\",\"Create a rejected SnapshotImportRecord using a new catalog reason for the Registry failure.\",\"Translate the failure into one of the existing import rejection reasons.\"],\"default_guess\":\"Propagate the Registry failure without recording an import attempt, because no existing ImportRejectReason represents it.\",\"witness\":{\"initial\":\"An active producer with valid scope submits a well-formed snapshot, but Registry times out during project validation.\",\"events\":[\"The producer publishes the snapshot.\",\"The producer later attempts to retrieve the import result if an import_id was returned.\"],\"outcomes\":[\"The operation fails with no import_id, import record, or snapshot.import audit record.\",\"A fresh rejected import result and audit record are written, requiring an unspecified reason mapping.\"],\"observer\":\"The producer and an audit reader see whether the attempt exists.\"}},{\"unit\":\"A6\",\"subject\":\"Inconsistent ProjectValidationResult lifecycle fields\",\"kind\":\"cross-text contradiction\",\"text\":\"A5 says an archived project rejects mutations and an active project allows them, while A6 says grant and assignment creation trusts only is_active, performs no consistency check, and admits is_active=true whatever status says.\",\"question\":\"When exists, is_active, and status disagree, which field determines whether a viewer grant, staff assignment, or producer grant may be created?\",\"options\":[\"Treat inconsistent validation data as schema_mismatch and refuse.\",\"Trust is_active for access-management creation, even when status says archived.\",\"Trust status and apply the active/archived table.\"],\"default_guess\":\"Trust is_active, because A6 explicitly describes that as the accepted running behavior, while documenting the resulting exception to the lifecycle table.\",\"witness\":{\"initial\":\"Registry returns exists=true, is_active=true, status=\\\"archived\\\" for project P; an administrator has a valid access-management session.\",\"events\":[\"The administrator creates a viewer grant for P.\"],\"outcomes\":[\"A5 and R0-24 reject the creation because P is archived.\",\"A6 admits and stores the grant because is_active is true.\"],\"observer\":\"The administrator and viewer see whether the new grant exists.\"}},{\"unit\":\"A25\",\"subject\":\"Viewer-entry limiter versus request decoding\",\"kind\":\"unspecified check order\",\"text\":\"The limiter acts \\\"before any code verification\\\" and counts \\\"every admitted attempt\\\", but the text does not say whether malformed JSON, request-model failures, or other pre-handler refusals are admitted attempts that consume the limit.\",\"question\":\"At what exact point relative to body-size enforcement, JSON parsing, and request-model validation is a viewer-entry attempt counted?\",\"options\":[\"Count every trusted-host, within-size POST reaching the route, even if its body is malformed.\",\"Count only requests that successfully decode into ViewerEnterRequest.\",\"Count only requests that reach secret verification.\"],\"default_guess\":\"Count after transport size/host checks but before JSON or model validation, so malformed attempts cannot bypass throttling.\",\"witness\":{\"initial\":\"A client-address/route key has nine counted attempts in a 10-attempt window.\",\"events\":[\"The client sends a within-size POST with malformed JSON.\",\"The client immediately sends a well-formed viewer-entry request.\"],\"outcomes\":[\"The malformed request is counted, so the well-formed request is refused with HTTP 429.\",\"The malformed request is not counted, so the well-formed request is admitted to credential verification.\"],\"observer\":\"The client sees whether the second request is rate-limited.\"}},{\"unit\":\"A25\",\"subject\":\"Request and response size bounds\",\"kind\":\"missing configuration and refusal semantics\",\"text\":\"\\\"Request bodies and binary responses are bounded by runtime settings before expensive work\\\" does not name the request-body or response-ceiling settings, their units/defaults, whether actual bytes or Content-Length controls the check, or the refusal response.\",\"question\":\"What are the exact body and response limits, how are streaming/chunked or falsely declared lengths measured, and which HTTP result is returned when a limit is exceeded?\",\"options\":[\"Reject from Content-Length before reading, and also enforce an actual-byte streaming limit.\",\"Ignore Content-Length and count actual received bytes.\",\"Use separate endpoint-specific limits rather than one service-wide setting.\"],\"default_guess\":\"Use positive byte-count settings, reject an excessive declared length early, enforce the same limit against actual bytes while reading, and return an empty HTTP 413 response.\",\"witness\":{\"initial\":\"A trusted client sends a chunked JSON request whose actual body is 2 MiB and has no Content-Length.\",\"events\":[\"The request reaches the transport guard.\"],\"outcomes\":[\"An implementation with a 1 MiB actual-byte limit rejects it before the handler.\",\"An implementation that checks only Content-Length admits it.\"],\"observer\":\"The client and handler see whether the request is processed.\"}},{\"unit\":\"A25\",\"subject\":\"Trusted-host comparison\",\"kind\":\"underspecified normalization\",\"text\":\"The service allows only configured trusted hosts and forbids wildcards, but host comparison rules for case, trailing dots, ports, IPv6 notation, and malformed or multiple Host values are not stated.\",\"question\":\"How is the request authority normalized and compared with a configured trusted host, and what exact response is used for a mismatch or malformed Host header?\",\"options\":[\"Compare DNS names case-insensitively after removing a trailing dot and handling the port separately.\",\"Compare the received Host value literally with configured strings.\",\"Use URL authority normalization including effective default ports.\"],\"default_guess\":\"Parse a single valid authority, compare DNS names case-insensitively with explicit port semantics, and reject malformed or untrusted authorities before routing.\",\"witness\":{\"initial\":\"The trusted-host configuration contains \\\"portal.example\\\".\",\"events\":[\"A client sends Host: PORTAL.EXAMPLE:443 over HTTPS.\"],\"outcomes\":[\"A normalized comparison accepts the request.\",\"A literal comparison rejects it as untrusted.\"],\"observer\":\"The client sees whether any route is reachable.\"}},{\"unit\":\"A25\",\"subject\":\"CORS behavior\",\"kind\":\"incomplete transport contract\",\"text\":\"\\\"CORS is off when its allowlist is empty, and an allowed origin is never a wildcard\\\" leaves allowed methods, allowed request headers, credential permission, preflight caching, origin normalization, and rejection behavior unspecified.\",\"question\":\"What exact CORS response and preflight policy applies for an allowlisted origin, especially for Authorization headers and cookies?\",\"options\":[\"Allow a closed method/header set and credentials, echoing only an exactly normalized allowlisted origin.\",\"Allow origins without credentials and permit only simple requests.\",\"Treat CORS solely as response headers and leave disallowed preflights to route handling.\"],\"default_guess\":\"Use a closed method/header set, allow credentials only where needed, echo an exact normalized allowlisted origin, and refuse disallowed preflights without invoking handlers.\",\"witness\":{\"initial\":\"https://ui.example is allowlisted and sends a preflight for a staff request using Authorization.\",\"events\":[\"The browser sends OPTIONS with Origin and Access-Control-Request-Headers: authorization.\"],\"outcomes\":[\"The service permits the preflight and the browser sends the staff request.\",\"The service omits or refuses Authorization in CORS headers, so the browser blocks the request.\"],\"observer\":\"The browser user sees whether the API call can be made.\"}},{\"unit\":\"A25\",\"subject\":\"X-Request-Id generation and propagation\",\"kind\":\"unspecified header authority\",\"text\":\"Every response has \\\"an X-Request-Id\\\", but the text does not say whether an incoming value is trusted, validated, replaced, or logged, nor its format and uniqueness requirements.\",\"question\":\"Who creates X-Request-Id, and what happens when the request supplies a missing, malformed, duplicated, or attacker-chosen value?\",\"options\":[\"Always generate a new server UUID and ignore incoming values.\",\"Reuse one valid incoming identifier and generate a value otherwise.\",\"Echo the incoming value without validation.\"],\"default_guess\":\"Always generate a fresh server UUID and use it consistently in the response and sanitized logs.\",\"witness\":{\"initial\":\"A client sends X-Request-Id: attacker-controlled on an otherwise valid request.\",\"events\":[\"The service answers the request.\"],\"outcomes\":[\"The response contains a fresh server-generated identifier.\",\"The response echoes attacker-controlled.\"],\"observer\":\"The client and log reader see different correlation identifiers.\"}},{\"unit\":\"A30\",\"subject\":\"Runtime environment variable table\",\"kind\":\"missing normative table\",\"text\":\"A30 refers to \\\"the closed table of environment variables, their types, requiredness, normalization and per-environment defaults\\\" but does not include that table; settings required by R0-10 and A25 are also absent from the displayed configuration list.\",\"question\":\"What is the complete RuntimeSettings environment contract, including exact variable names, parsing, valid ranges, requiredness, and development/test/production defaults for persistence paths, trusted hosts, origins, public origin, body/response limits, and viewer-entry limiting?\",\"options\":[\"Supply a complete closed environment-variable table in State 2.\",\"Treat the displayed variables as exhaustive and hard-code all omitted transport and persistence settings.\",\"Let later implementers invent names, parsing, and defaults.\"],\"default_guess\":\"Supply a complete closed table and make security-sensitive production settings required with no permissive defaults.\",\"witness\":{\"initial\":\"Two agents receive only these texts and must configure a production deployment with a trusted host, public origin, SQLite path, binary root, and request-body limit.\",\"events\":[\"Each agent independently defines RuntimeSettings and startup validation.\"],\"outcomes\":[\"One agent invents one set of environment names, formats, defaults, and accepted ranges.\",\"The other invents incompatible names or requiredness, so the same environment starts one implementation and fails or behaves differently in the other.\"],\"observer\":\"The deployer sees incompatible configuration contracts.\"}},{\"unit\":\"A32\",\"subject\":\"Provisioning and pinning pip-audit\",\"kind\":\"missing deployment mechanism\",\"text\":\"The vulnerability check is specified as \\\"pip-audit --local, run inside the built image\\\", but pip-audit is not among the four pinned dependencies and the text does not say how or at which version the command is made available without changing the shipped package set.\",\"question\":\"How is the audit tool installed and versioned, and is it present in the final runtime image or only in a reproducible audit stage that inspects the final environment?\",\"options\":[\"Pin pip-audit in a separate build/audit stage and inspect the final runtime environment.\",\"Install an unpinned pip-audit into the final image before running it.\",\"Provide pip-audit externally and mount or invoke it against the built image.\"],\"default_guess\":\"Pin pip-audit separately in a reproducible audit stage and audit the exact finalized runtime environment without shipping the tool.\",\"witness\":{\"initial\":\"The runtime image installs only the four listed direct pins and their resolved dependencies.\",\"events\":[\"The deployment pipeline tries to execute pip-audit --local inside that image.\"],\"outcomes\":[\"The command is unavailable and the deploy cannot pass.\",\"The builder installs pip-audit ad hoc, changing the installed/audited package set and possibly the shipped image.\"],\"observer\":\"The deployment pipeline sees whether the required check can run and what packages it audits.\"}},{\"unit\":\"context\",\"subject\":\"SnapshotPublication section-list constraints\",\"kind\":\"changed-text contradiction\",\"text\":\"M18 still declares sections as \\\"list[SnapshotSectionData] (non-empty, unique source_section_id)\\\", but the added running-service passage says these are only producer obligations and the portal refuses neither an empty list nor repeated identifiers; A7 also says both are accepted.\",\"question\":\"Are non-emptiness and source_section_id uniqueness DTO/model invariants enforced during request decoding, or merely unenforced producer obligations?\",\"options\":[\"Remove them from portal model validation and accept empty or duplicate sections.\",\"Keep them as SnapshotPublication model invariants, causing request decoding to refuse violations.\",\"Represent them as warnings or audit-only producer-contract violations.\"],\"default_guess\":\"Treat them solely as producer obligations and do not enforce them in the portal, matching the added running-service behavior.\",\"witness\":{\"initial\":\"An active, authorized producer submits a complete version-1 EUR publication whose sections list is empty.\",\"events\":[\"The HTTP request is decoded.\",\"Snapshot import is invoked if decoding succeeds.\"],\"outcomes\":[\"The declared SnapshotPublication constraint rejects the body with HTTP 422 and creates no import record.\",\"The carried change accepts the publication and creates an accepted snapshot and import record.\"],\"observer\":\"The producer sees whether an import_id and accepted result are returned.\"}},{\"unit\":\"context\",\"subject\":\"ProjectOverview project availability shape\",\"kind\":\"changed-text/schema contradiction\",\"text\":\"ProjectOverview still declares required field \\\"project: ProjectContext\\\" and no project_availability field, while the changed passage says project context is absent after a post-guard Registry read failure and \\\"a project_availability says so, like the other five pairs\\\".\",\"question\":\"What is the exact ProjectOverview schema and local validation rule for project context availability?\",\"options\":[\"Add project_availability: ViewAvailability and make project optional, required exactly when available.\",\"Keep project required and fail the entire overview when its context read fails.\",\"Omit project without an availability discriminator.\"],\"default_guess\":\"Add a project_availability/project pair governed by the same conditional-presence rule as the other components.\",\"witness\":{\"initial\":\"The project guard successfully validates project P, then the subsequent Registry context read times out while all portal-owned component reads succeed.\",\"events\":[\"A viewer requests ProjectOverview for P.\"],\"outcomes\":[\"The service returns an overview with project absent and project_availability=temporarily_unavailable, while returning the other components.\",\"The required project field prevents construction, so the whole overview fails or an implementer fabricates a ProjectContext.\"],\"observer\":\"The viewer sees a partial overview or a failed operation.\"}}]}",
+ "set_aside": []
+}

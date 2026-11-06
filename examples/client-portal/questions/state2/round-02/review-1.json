@@ -1,0 +1,302 @@
+{
+ "open_points": [
+  {
+   "unit": "A6",
+   "subject": "Registry failure precedence for malformed project identifiers",
+   "kind": "contradictory precedence",
+   "text": "The condition table maps “malformed UUID input” to `invalid_uuid`, but the exhaustive sentence “A Registry call is classified by the first condition that holds, in this order” starts with an unusable endpoint and omits malformed UUID input.",
+   "question": "When the requested project identifier is malformed and the Registry endpoint is also missing or unusable, which failure wins?",
+   "options": [
+    "Reject as `invalid_uuid` before consulting Registry configuration.",
+    "Classify as `transport_error` because endpoint usability is the first listed condition."
+   ],
+   "default_guess": "Validate the UUID first and return `invalid_uuid`.",
+   "witness": {
+    "initial": "The configured Registry endpoint is missing or unusable.",
+    "events": [
+     "A caller invokes a project operation with project_id `not-a-uuid`.",
+     "The gateway begins validation."
+    ],
+    "outcomes": [
+     "The UUID is validated first and the caller receives `invalid_uuid`.",
+     "Endpoint configuration is checked first and the caller receives `transport_error`."
+    ],
+    "observer": "The caller and gateway failure-translation tests."
+   }
+  },
+  {
+   "unit": "A5",
+   "subject": "Invalid Registry status on an otherwise active validation answer",
+   "kind": "unspecified refusal",
+   "text": "The lifecycle decision uses `exists` and `is_active` alone and the validation decoder accepts any status string, but “a status outside the two that would enter a typed portal context … is refused there as an invalid answer.” No failure kind is assigned to that refusal.",
+   "question": "What exact failure is produced when `exists=true`, `is_active=true`, and `status` is neither `active` nor `archived` while an `AuthorizedProjectContext` must be built?",
+   "options": [
+    "Translate the invalid typed status to `schema_mismatch`.",
+    "Raise a separate domain/context-construction refusal.",
+    "Treat `is_active=true` as authoritative and place `active` in the context."
+   ],
+   "default_guess": "Refuse it as `schema_mismatch`.",
+   "witness": {
+    "initial": "Registry contains project P and its validation response is structurally valid with `exists=true`, `is_active=true`, and `status=\"paused\"`.",
+    "events": [
+     "An authorized operator performs a project read for P.",
+     "The guard accepts the lifecycle fields and attempts to build `AuthorizedProjectContext`."
+    ],
+    "outcomes": [
+     "The operation is refused as a Registry `schema_mismatch`.",
+     "The operation fails through an unclassified typed-context error, producing a different boundary response."
+    ],
+    "observer": "The API caller and operational error monitoring."
+   }
+  },
+  {
+   "unit": "A7",
+   "subject": "Recording snapshot rejections when required publication identity fields are missing",
+   "kind": "model-policy contradiction",
+   "text": "A7 says “a missing envelope field … → `incomplete_content`” and R0-25 requires every classified rejection to receive a fresh import record, but `SnapshotImportRecord` requires `project_id`, `estimate_id`, `estimate_version`, `contract_version`, `content_fingerprint`, and producer provenance. Authorization is also required before content validation even when `project_id` is missing.",
+   "question": "How is an incomplete snapshot request classified and recorded when one or more fields required to authorize the request or construct its immutable import record are absent?",
+   "options": [
+    "Reject it before the import use case and create no import record.",
+    "Create an `incomplete_content` import record using nullable or placeholder identity fields.",
+    "Require enough identity fields for recording first, and treat their absence differently from other incomplete content."
+   ],
+   "default_guess": "Reject before classification and create no import record when the fields needed for authorization or the record are absent.",
+   "witness": {
+    "initial": "An active producer has valid credentials and all-project scope.",
+    "events": [
+     "The producer submits a snapshot envelope that omits `estimate_id` but includes a valid active `project_id`.",
+     "Authorization succeeds and content validation detects the missing field."
+    ],
+    "outcomes": [
+     "A fresh `rejected/incomplete_content` result is required, but cannot satisfy the declared `SnapshotImportRecord` fields.",
+     "The request is refused without an import record, contrary to the rule that every classified rejection is recorded."
+    ],
+    "observer": "The producer, which either receives an `import_id` or receives an unrecorded boundary error."
+   }
+  },
+  {
+   "unit": "A7",
+   "subject": "Snapshot import behavior on Registry infrastructure and schema failures",
+   "kind": "missing classification",
+   "text": "Authorization failures are mapped only to `archived_project`, `unknown_project`, or `scope_denied`, while A6 also permits `timeout`, `transport_error`, `http_error`, `schema_mismatch`, and `identity_mismatch`; none of those has an `ImportRejectReason` or a stated recording rule.",
+   "question": "For an authenticated snapshot import, do Registry infrastructure/schema failures produce an immutable rejected import result, or abort without an import record, and what does the producer receive?",
+   "options": [
+    "Abort with the translated Registry failure and write no import record.",
+    "Record a rejected import by mapping the failure to an existing import reason.",
+    "Add distinct import rejection reasons for Registry dependency failures."
+   ],
+   "default_guess": "Propagate the Registry failure and write no import record.",
+   "witness": {
+    "initial": "A producer is active, its credential is valid, and its scope would allow project P.",
+    "events": [
+     "The producer submits a complete valid snapshot for P.",
+     "Registry validation times out."
+    ],
+    "outcomes": [
+     "The import aborts with `timeout` and creates no `SnapshotImportRecord`.",
+     "The attempt is classified as a rejected import and returns a fresh `import_id` with some mapped reason."
+    ],
+    "observer": "The producer and an auditor inspecting import history."
+   }
+  },
+  {
+   "unit": "A8",
+   "subject": "WorkPayment replay with the same identity and different content",
+   "kind": "contradiction",
+   "text": "A8 states `payment_id` replay behavior as “return existing payment,” while M33 states that only equal amount, date, and description return the existing record and “any difference is a conflict that changes nothing.”",
+   "question": "Does a repeated `payment_id` with different payment content return the existing payment or return an integrity conflict?",
+   "options": [
+    "Always return the existing payment for an existing `payment_id`.",
+    "Return the existing payment only for equal content; otherwise refuse with a conflict."
+   ],
+   "default_guess": "Compare amount, date, and description and return a conflict on any difference.",
+   "witness": {
+    "initial": "Payment Q exists for project P with amount EUR 100, date D, and description `deposit`.",
+    "events": [
+     "An authorized operator registers payment_id Q again for P with amount EUR 200 and otherwise valid data."
+    ],
+    "outcomes": [
+     "A8 returns the existing EUR 100 payment as an idempotent replay.",
+     "M33 returns a conflict and no payment result."
+    ],
+    "observer": "The operator making the retry."
+   }
+  },
+  {
+   "unit": "A8",
+   "subject": "ProgressPhoto replay with the same intake_id and different content or project",
+   "kind": "missing replay rule",
+   "text": "The idempotency table says only “ProgressPhoto | `intake_id` | return existing photo”; unlike expenses, snapshots, and payments, it defines no equality fields and no different-content behavior.",
+   "question": "What happens when an existing `intake_id` is submitted again with different photo facts, especially a different `project_id`?",
+   "options": [
+    "Return the existing photo regardless of the repeated payload.",
+    "Return the existing photo only if all persisted photo facts match; otherwise conflict.",
+    "Treat `intake_id` as project-scoped and permit the same value in another project."
+   ],
+   "default_guess": "Use a globally unique `intake_id`, compare persisted facts, and refuse differing content as a conflict.",
+   "witness": {
+    "initial": "Photo X was published in project A with file reference F1; an operator is assigned to both A and B.",
+    "events": [
+     "The operator publishes intake_id X for project B with file reference F2."
+    ],
+    "outcomes": [
+     "The operation returns the existing photo from project A because `intake_id` alone controls replay.",
+     "The operation refuses a conflicting replay because the project and file reference differ."
+    ],
+    "observer": "The operator, who receives either a photo result or a conflict."
+   }
+  },
+  {
+   "unit": "A13",
+   "subject": "Reason code on failed-login audit records",
+   "kind": "model contradiction",
+   "text": "A13 requires `staff.login_failed` to be written “with no `reason_code`,” but M36 declares `reason_code` “[required iff rejected]”; a failed-login audit record necessarily has `result = rejected`.",
+   "question": "Is a `staff.login_failed` record valid without a reason code, or must it carry one despite A13's closed reason-code policy?",
+   "options": [
+    "Allow rejected non-significant audit records without a reason code.",
+    "Require a reason code for every rejected record and add a closed failed-login reason.",
+    "Represent `staff.login_failed` with a result other than `rejected`."
+   ],
+   "default_guess": "Allow `staff.login_failed` as rejected with no reason code, narrowing M36 to the A13 policy.",
+   "witness": {
+    "initial": "A staff account exists and no session is active.",
+    "events": [
+     "Someone submits its email with an incorrect password.",
+     "Authentication writes the required `staff.login_failed` audit record."
+    ],
+    "outcomes": [
+     "A13 writes `result=rejected` with `reason_code=None`.",
+     "M36 validation rejects that audit record because every rejected record requires a reason code."
+    ],
+    "observer": "The login caller if audit failure changes the response, and the auditor inspecting failed-login records."
+   }
+  },
+  {
+   "unit": "A13",
+   "subject": "Actor provenance for a failed login to an unknown email",
+   "kind": "unconstructable audit",
+   "text": "Every catalog action must write one audit record with actor provenance, but `AuditRecord` requires `actor_id` for `actor_kind=staff` and provides no anonymous-login actor kind. An unknown email has no staff identifier.",
+   "question": "What actor_kind and actor_id must `staff.login_failed` use when no account matches the submitted email?",
+   "options": [
+    "Use `system` with no actor_id.",
+    "Use `staff` with no actor_id as an exception to the model.",
+    "Do not audit failed logins for unknown accounts.",
+    "Create a separate anonymous authentication actor representation."
+   ],
+   "default_guess": "Use the system actor with no actor_id while recording no submitted email.",
+   "witness": {
+    "initial": "No staff account has normalized email `missing@example.com`.",
+    "events": [
+     "A caller attempts staff login with that email and an arbitrary password.",
+     "The existence-hiding login flow must write `staff.login_failed`."
+    ],
+    "outcomes": [
+     "The record uses `actor_kind=system`, `actor_id=None`.",
+     "The record cannot be constructed under M36's staff-actor constraint and is omitted or causes the login transaction to fail."
+    ],
+    "observer": "The security auditor and the login caller if audit construction affects the response."
+   }
+  },
+  {
+   "unit": "A13",
+   "subject": "Audit multiplicity for implicit revocation cascades",
+   "kind": "undefined action occurrence",
+   "text": "A13 says “One audit record per action occurrence,” while operations such as viewer credential re-issue and service-principal disable implicitly revoke other records whose explicit revocation actions also exist in the closed catalog.",
+   "question": "Does each record changed by an automatic cascade generate its catalogued revoke action, or is only the initiating action audited?",
+   "options": [
+    "Audit only the initiating action, with cascade effects inferred from it.",
+    "Audit the initiating action plus one revoke action for every cascaded credential or grant.",
+    "Audit one aggregate cascade action, which is not presently in the catalog."
+   ],
+   "default_guess": "Audit only the initiating action unless the catalog explicitly defines a cascade action.",
+   "witness": {
+    "initial": "Viewer V has one live access credential C and active sessions.",
+    "events": [
+     "An administrator re-issues V's access credential.",
+     "The operation creates C2 and atomically revokes C and V's sessions."
+    ],
+    "outcomes": [
+     "One `viewer.credential_issue` audit record is written for C2.",
+     "A `viewer.credential_issue` record for C2 and a `viewer.credential_revoke` record for C are both written."
+    ],
+    "observer": "An administrator or auditor reading the append-only audit history."
+   }
+  },
+  {
+   "unit": "A13",
+   "subject": "Atomicity when audit persistence fails",
+   "kind": "missing owning-flow policy",
+   "text": "M36 says “Audit failures must not silently vanish; the owning-flow policy lands in State 2,” but A13 and A22 never state whether an audit append failure rolls back the associated successful business mutation.",
+   "question": "Must every audited mutation and its AuditRecord commit atomically, and what result is returned if the audit write fails?",
+   "options": [
+    "Roll back the business mutation and propagate the audit/persistence failure.",
+    "Commit the business mutation but report the audit failure.",
+    "Commit the mutation and retry or repair the audit asynchronously."
+   ],
+   "default_guess": "Keep the mutation and its audit in the same transaction and roll back both if audit append fails.",
+   "witness": {
+    "initial": "Administrator A is authorized to create viewer V; the business repository is writable but the audit append fails.",
+    "events": [
+     "A submits the viewer-creation command.",
+     "The use case writes the new viewer and then attempts `viewer.create` audit persistence."
+    ],
+    "outcomes": [
+     "The whole transaction rolls back, so V does not exist.",
+     "V commits without its required audit record, while the request reports or logs the audit failure."
+    ],
+    "observer": "A immediately, and any later administrator listing viewers or audit records."
+   }
+  },
+  {
+   "unit": "A14",
+   "subject": "Concealed binary-read failure outcome",
+   "kind": "ambiguous failure contract",
+   "text": "A14 calls a missing source object “an explicit unavailable/not-found failure,” while R0-12 requires unknown, cross-project, hidden, oversize, or unlisted reads to be answered the same way. The slash leaves the actual failure category and inclusion of a missing stored object unsettled.",
+   "question": "What single refusal is used for concealed binary failures, and must a missing source object use that same refusal or a distinguishable temporary-unavailability response?",
+   "options": [
+    "Use one not-found response for unknown, unauthorized, hidden, missing, oversize, and unlisted objects.",
+    "Use one concealed not-found response for authorization/type/size cases but a distinct temporary-unavailable response for a missing stored object.",
+    "Use an unavailable response for every listed case."
+   ],
+   "default_guess": "Use the same concealed not-found response for every listed failure, including a missing source object.",
+   "witness": {
+    "initial": "Document D is authorized and client-visible, but its stored `file_ref` no longer resolves to bytes.",
+    "events": [
+     "The authorized client requests D's binary."
+    ],
+    "outcomes": [
+     "The client receives the same concealed not-found refusal used for a hidden or unknown document.",
+     "The client receives a distinguishable unavailable/storage failure because the business record exists and authorization succeeded."
+    ],
+    "observer": "The client and storage-failure monitoring."
+   }
+  },
+  {
+   "unit": "A30",
+   "subject": "Closed runtime-environment configuration contract",
+   "kind": "missing table",
+   "text": "A30 refers to “the closed table of environment variables, their types, requiredness, normalization and per-environment defaults” but does not include that table, while A25 and R0-10 depend on settings absent from the displayed defaults, including trusted hosts/origins, public origin, body ceilings, persistence paths, and viewer-entry rate-limit bounds.",
+   "question": "What is the complete environment-variable contract, including which variables are required and their normalization/default rules?",
+   "options": [
+    "Only the variables explicitly shown in A30 are part of State 2 configuration.",
+    "All settings referenced by A25 and R0-10 are additional required variables.",
+    "Some referenced settings have defaults or are optional, according to a table not present in the accepted texts."
+   ],
+   "default_guess": "Require explicit values for security-sensitive hosts, origins, persistence paths, and size bounds; allow the displayed operational defaults for TTLs and timeouts.",
+   "witness": {
+    "initial": "A deployment supplies database and Registry settings but omits `EMAIL_GATEWAY_URL`; email operations are deferred and call no gateway.",
+    "events": [
+     "The service validates its environment at startup."
+    ],
+    "outcomes": [
+     "Startup succeeds because the unused deferred gateway endpoint is optional.",
+     "Startup is refused because every configured external boundary has a required environment variable."
+    ],
+    "observer": "The deployment operator and readiness check."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A6\",\"subject\":\"Registry failure precedence for malformed project identifiers\",\"kind\":\"contradictory precedence\",\"text\":\"The condition table maps “malformed UUID input” to `invalid_uuid`, but the exhaustive sentence “A Registry call is classified by the first condition that holds, in this order” starts with an unusable endpoint and omits malformed UUID input.\",\"question\":\"When the requested project identifier is malformed and the Registry endpoint is also missing or unusable, which failure wins?\",\"options\":[\"Reject as `invalid_uuid` before consulting Registry configuration.\",\"Classify as `transport_error` because endpoint usability is the first listed condition.\"],\"default_guess\":\"Validate the UUID first and return `invalid_uuid`.\",\"witness\":{\"initial\":\"The configured Registry endpoint is missing or unusable.\",\"events\":[\"A caller invokes a project operation with project_id `not-a-uuid`.\",\"The gateway begins validation.\"],\"outcomes\":[\"The UUID is validated first and the caller receives `invalid_uuid`.\",\"Endpoint configuration is checked first and the caller receives `transport_error`.\"],\"observer\":\"The caller and gateway failure-translation tests.\"}},{\"unit\":\"A5\",\"subject\":\"Invalid Registry status on an otherwise active validation answer\",\"kind\":\"unspecified refusal\",\"text\":\"The lifecycle decision uses `exists` and `is_active` alone and the validation decoder accepts any status string, but “a status outside the two that would enter a typed portal context … is refused there as an invalid answer.” No failure kind is assigned to that refusal.\",\"question\":\"What exact failure is produced when `exists=true`, `is_active=true`, and `status` is neither `active` nor `archived` while an `AuthorizedProjectContext` must be built?\",\"options\":[\"Translate the invalid typed status to `schema_mismatch`.\",\"Raise a separate domain/context-construction refusal.\",\"Treat `is_active=true` as authoritative and place `active` in the context.\"],\"default_guess\":\"Refuse it as `schema_mismatch`.\",\"witness\":{\"initial\":\"Registry contains project P and its validation response is structurally valid with `exists=true`, `is_active=true`, and `status=\\\"paused\\\"`.\",\"events\":[\"An authorized operator performs a project read for P.\",\"The guard accepts the lifecycle fields and attempts to build `AuthorizedProjectContext`.\"],\"outcomes\":[\"The operation is refused as a Registry `schema_mismatch`.\",\"The operation fails through an unclassified typed-context error, producing a different boundary response.\"],\"observer\":\"The API caller and operational error monitoring.\"}},{\"unit\":\"A7\",\"subject\":\"Recording snapshot rejections when required publication identity fields are missing\",\"kind\":\"model-policy contradiction\",\"text\":\"A7 says “a missing envelope field … → `incomplete_content`” and R0-25 requires every classified rejection to receive a fresh import record, but `SnapshotImportRecord` requires `project_id`, `estimate_id`, `estimate_version`, `contract_version`, `content_fingerprint`, and producer provenance. Authorization is also required before content validation even when `project_id` is missing.\",\"question\":\"How is an incomplete snapshot request classified and recorded when one or more fields required to authorize the request or construct its immutable import record are absent?\",\"options\":[\"Reject it before the import use case and create no import record.\",\"Create an `incomplete_content` import record using nullable or placeholder identity fields.\",\"Require enough identity fields for recording first, and treat their absence differently from other incomplete content.\"],\"default_guess\":\"Reject before classification and create no import record when the fields needed for authorization or the record are absent.\",\"witness\":{\"initial\":\"An active producer has valid credentials and all-project scope.\",\"events\":[\"The producer submits a snapshot envelope that omits `estimate_id` but includes a valid active `project_id`.\",\"Authorization succeeds and content validation detects the missing field.\"],\"outcomes\":[\"A fresh `rejected/incomplete_content` result is required, but cannot satisfy the declared `SnapshotImportRecord` fields.\",\"The request is refused without an import record, contrary to the rule that every classified rejection is recorded.\"],\"observer\":\"The producer, which either receives an `import_id` or receives an unrecorded boundary error.\"}},{\"unit\":\"A7\",\"subject\":\"Snapshot import behavior on Registry infrastructure and schema failures\",\"kind\":\"missing classification\",\"text\":\"Authorization failures are mapped only to `archived_project`, `unknown_project`, or `scope_denied`, while A6 also permits `timeout`, `transport_error`, `http_error`, `schema_mismatch`, and `identity_mismatch`; none of those has an `ImportRejectReason` or a stated recording rule.\",\"question\":\"For an authenticated snapshot import, do Registry infrastructure/schema failures produce an immutable rejected import result, or abort without an import record, and what does the producer receive?\",\"options\":[\"Abort with the translated Registry failure and write no import record.\",\"Record a rejected import by mapping the failure to an existing import reason.\",\"Add distinct import rejection reasons for Registry dependency failures.\"],\"default_guess\":\"Propagate the Registry failure and write no import record.\",\"witness\":{\"initial\":\"A producer is active, its credential is valid, and its scope would allow project P.\",\"events\":[\"The producer submits a complete valid snapshot for P.\",\"Registry validation times out.\"],\"outcomes\":[\"The import aborts with `timeout` and creates no `SnapshotImportRecord`.\",\"The attempt is classified as a rejected import and returns a fresh `import_id` with some mapped reason.\"],\"observer\":\"The producer and an auditor inspecting import history.\"}},{\"unit\":\"A8\",\"subject\":\"WorkPayment replay with the same identity and different content\",\"kind\":\"contradiction\",\"text\":\"A8 states `payment_id` replay behavior as “return existing payment,” while M33 states that only equal amount, date, and description return the existing record and “any difference is a conflict that changes nothing.”\",\"question\":\"Does a repeated `payment_id` with different payment content return the existing payment or return an integrity conflict?\",\"options\":[\"Always return the existing payment for an existing `payment_id`.\",\"Return the existing payment only for equal content; otherwise refuse with a conflict.\"],\"default_guess\":\"Compare amount, date, and description and return a conflict on any difference.\",\"witness\":{\"initial\":\"Payment Q exists for project P with amount EUR 100, date D, and description `deposit`.\",\"events\":[\"An authorized operator registers payment_id Q again for P with amount EUR 200 and otherwise valid data.\"],\"outcomes\":[\"A8 returns the existing EUR 100 payment as an idempotent replay.\",\"M33 returns a conflict and no payment result.\"],\"observer\":\"The operator making the retry.\"}},{\"unit\":\"A8\",\"subject\":\"ProgressPhoto replay with the same intake_id and different content or project\",\"kind\":\"missing replay rule\",\"text\":\"The idempotency table says only “ProgressPhoto | `intake_id` | return existing photo”; unlike expenses, snapshots, and payments, it defines no equality fields and no different-content behavior.\",\"question\":\"What happens when an existing `intake_id` is submitted again with different photo facts, especially a different `project_id`?\",\"options\":[\"Return the existing photo regardless of the repeated payload.\",\"Return the existing photo only if all persisted photo facts match; otherwise conflict.\",\"Treat `intake_id` as project-scoped and permit the same value in another project.\"],\"default_guess\":\"Use a globally unique `intake_id`, compare persisted facts, and refuse differing content as a conflict.\",\"witness\":{\"initial\":\"Photo X was published in project A with file reference F1; an operator is assigned to both A and B.\",\"events\":[\"The operator publishes intake_id X for project B with file reference F2.\"],\"outcomes\":[\"The operation returns the existing photo from project A because `intake_id` alone controls replay.\",\"The operation refuses a conflicting replay because the project and file reference differ.\"],\"observer\":\"The operator, who receives either a photo result or a conflict.\"}},{\"unit\":\"A13\",\"subject\":\"Reason code on failed-login audit records\",\"kind\":\"model contradiction\",\"text\":\"A13 requires `staff.login_failed` to be written “with no `reason_code`,” but M36 declares `reason_code` “[required iff rejected]”; a failed-login audit record necessarily has `result = rejected`.\",\"question\":\"Is a `staff.login_failed` record valid without a reason code, or must it carry one despite A13's closed reason-code policy?\",\"options\":[\"Allow rejected non-significant audit records without a reason code.\",\"Require a reason code for every rejected record and add a closed failed-login reason.\",\"Represent `staff.login_failed` with a result other than `rejected`.\"],\"default_guess\":\"Allow `staff.login_failed` as rejected with no reason code, narrowing M36 to the A13 policy.\",\"witness\":{\"initial\":\"A staff account exists and no session is active.\",\"events\":[\"Someone submits its email with an incorrect password.\",\"Authentication writes the required `staff.login_failed` audit record.\"],\"outcomes\":[\"A13 writes `result=rejected` with `reason_code=None`.\",\"M36 validation rejects that audit record because every rejected record requires a reason code.\"],\"observer\":\"The login caller if audit failure changes the response, and the auditor inspecting failed-login records.\"}},{\"unit\":\"A13\",\"subject\":\"Actor provenance for a failed login to an unknown email\",\"kind\":\"unconstructable audit\",\"text\":\"Every catalog action must write one audit record with actor provenance, but `AuditRecord` requires `actor_id` for `actor_kind=staff` and provides no anonymous-login actor kind. An unknown email has no staff identifier.\",\"question\":\"What actor_kind and actor_id must `staff.login_failed` use when no account matches the submitted email?\",\"options\":[\"Use `system` with no actor_id.\",\"Use `staff` with no actor_id as an exception to the model.\",\"Do not audit failed logins for unknown accounts.\",\"Create a separate anonymous authentication actor representation.\"],\"default_guess\":\"Use the system actor with no actor_id while recording no submitted email.\",\"witness\":{\"initial\":\"No staff account has normalized email `missing@example.com`.\",\"events\":[\"A caller attempts staff login with that email and an arbitrary password.\",\"The existence-hiding login flow must write `staff.login_failed`.\"],\"outcomes\":[\"The record uses `actor_kind=system`, `actor_id=None`.\",\"The record cannot be constructed under M36's staff-actor constraint and is omitted or causes the login transaction to fail.\"],\"observer\":\"The security auditor and the login caller if audit construction affects the response.\"}},{\"unit\":\"A13\",\"subject\":\"Audit multiplicity for implicit revocation cascades\",\"kind\":\"undefined action occurrence\",\"text\":\"A13 says “One audit record per action occurrence,” while operations such as viewer credential re-issue and service-principal disable implicitly revoke other records whose explicit revocation actions also exist in the closed catalog.\",\"question\":\"Does each record changed by an automatic cascade generate its catalogued revoke action, or is only the initiating action audited?\",\"options\":[\"Audit only the initiating action, with cascade effects inferred from it.\",\"Audit the initiating action plus one revoke action for every cascaded credential or grant.\",\"Audit one aggregate cascade action, which is not presently in the catalog.\"],\"default_guess\":\"Audit only the initiating action unless the catalog explicitly defines a cascade action.\",\"witness\":{\"initial\":\"Viewer V has one live access credential C and active sessions.\",\"events\":[\"An administrator re-issues V's access credential.\",\"The operation creates C2 and atomically revokes C and V's sessions.\"],\"outcomes\":[\"One `viewer.credential_issue` audit record is written for C2.\",\"A `viewer.credential_issue` record for C2 and a `viewer.credential_revoke` record for C are both written.\"],\"observer\":\"An administrator or auditor reading the append-only audit history.\"}},{\"unit\":\"A13\",\"subject\":\"Atomicity when audit persistence fails\",\"kind\":\"missing owning-flow policy\",\"text\":\"M36 says “Audit failures must not silently vanish; the owning-flow policy lands in State 2,” but A13 and A22 never state whether an audit append failure rolls back the associated successful business mutation.\",\"question\":\"Must every audited mutation and its AuditRecord commit atomically, and what result is returned if the audit write fails?\",\"options\":[\"Roll back the business mutation and propagate the audit/persistence failure.\",\"Commit the business mutation but report the audit failure.\",\"Commit the mutation and retry or repair the audit asynchronously.\"],\"default_guess\":\"Keep the mutation and its audit in the same transaction and roll back both if audit append fails.\",\"witness\":{\"initial\":\"Administrator A is authorized to create viewer V; the business repository is writable but the audit append fails.\",\"events\":[\"A submits the viewer-creation command.\",\"The use case writes the new viewer and then attempts `viewer.create` audit persistence.\"],\"outcomes\":[\"The whole transaction rolls back, so V does not exist.\",\"V commits without its required audit record, while the request reports or logs the audit failure.\"],\"observer\":\"A immediately, and any later administrator listing viewers or audit records.\"}},{\"unit\":\"A14\",\"subject\":\"Concealed binary-read failure outcome\",\"kind\":\"ambiguous failure contract\",\"text\":\"A14 calls a missing source object “an explicit unavailable/not-found failure,” while R0-12 requires unknown, cross-project, hidden, oversize, or unlisted reads to be answered the same way. The slash leaves the actual failure category and inclusion of a missing stored object unsettled.\",\"question\":\"What single refusal is used for concealed binary failures, and must a missing source object use that same refusal or a distinguishable temporary-unavailability response?\",\"options\":[\"Use one not-found response for unknown, unauthorized, hidden, missing, oversize, and unlisted objects.\",\"Use one concealed not-found response for authorization/type/size cases but a distinct temporary-unavailable response for a missing stored object.\",\"Use an unavailable response for every listed case.\"],\"default_guess\":\"Use the same concealed not-found response for every listed failure, including a missing source object.\",\"witness\":{\"initial\":\"Document D is authorized and client-visible, but its stored `file_ref` no longer resolves to bytes.\",\"events\":[\"The authorized client requests D's binary.\"],\"outcomes\":[\"The client receives the same concealed not-found refusal used for a hidden or unknown document.\",\"The client receives a distinguishable unavailable/storage failure because the business record exists and authorization succeeded.\"],\"observer\":\"The client and storage-failure monitoring.\"}},{\"unit\":\"A30\",\"subject\":\"Closed runtime-environment configuration contract\",\"kind\":\"missing table\",\"text\":\"A30 refers to “the closed table of environment variables, their types, requiredness, normalization and per-environment defaults” but does not include that table, while A25 and R0-10 depend on settings absent from the displayed defaults, including trusted hosts/origins, public origin, body ceilings, persistence paths, and viewer-entry rate-limit bounds.\",\"question\":\"What is the complete environment-variable contract, including which variables are required and their normalization/default rules?\",\"options\":[\"Only the variables explicitly shown in A30 are part of State 2 configuration.\",\"All settings referenced by A25 and R0-10 are additional required variables.\",\"Some referenced settings have defaults or are optional, according to a table not present in the accepted texts.\"],\"default_guess\":\"Require explicit values for security-sensitive hosts, origins, persistence paths, and size bounds; allow the displayed operational defaults for TTLs and timeouts.\",\"witness\":{\"initial\":\"A deployment supplies database and Registry settings but omits `EMAIL_GATEWAY_URL`; email operations are deferred and call no gateway.\",\"events\":[\"The service validates its environment at startup.\"],\"outcomes\":[\"Startup succeeds because the unused deferred gateway endpoint is optional.\",\"Startup is refused because every configured external boundary has a required environment variable.\"],\"observer\":\"The deployment operator and readiness check.\"}}]}",
+ "set_aside": []
+}

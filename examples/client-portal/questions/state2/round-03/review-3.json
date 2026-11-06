@@ -1,0 +1,478 @@
+{
+ "open_points": [
+  {
+   "unit": "A4",
+   "subject": "Expense-intake authorization and validation order",
+   "kind": "contradictory precedence",
+   "text": "A4 says every project-scoped operation checks session, principal status, project access, capability, then Registry; A7 orders expense checks as recognition status, contract version, capability, active project, amount, allocations, replay.",
+   "question": "Which sequence governs expense creation when both authentication/authorization and recognition-content checks would fail?",
+   "options": [
+    "Apply A4 before every content check",
+    "Apply A7's expense-specific order before authorization",
+    "Treat request decoding separately, then apply A4, then the remaining A7 checks"
+   ],
+   "default_guess": "Treat A7 as an operation-specific override and use its stated order.",
+   "witness": {
+    "initial": "A suspended staff account still has an unexpired session; a recognition request has an unsupported contract version.",
+    "events": [
+     "The suspended staff member submits the expense-creation request."
+    ],
+    "outcomes": [
+     "A4 rejects at principal status without evaluating the contract version.",
+     "A7 rejects the unsupported contract version before checking capability or project status."
+    ],
+    "observer": "The caller sees whichever refusal/status the transport maps, and instrumentation sees different checks and dependency calls."
+   }
+  },
+  {
+   "unit": "A4",
+   "subject": "Snapshot-import failure concealment",
+   "kind": "cross-rule contradiction",
+   "text": "A4 says failures are indistinguishable regarding project existence beyond the caller's own access, while A7 returns recorded reasons including unknown_project, archived_project, and scope_denied.",
+   "question": "May a producer without project access distinguish an unknown, archived, or merely ungranted project through its import result?",
+   "options": [
+    "Return the specific A7 reason",
+    "Conceal all project-existence states as one reason",
+    "Return specific reasons only after project access has already been proved"
+   ],
+   "default_guess": "Use the specific A7 import reasons because they are explicitly persisted in SnapshotImportRecord.",
+   "witness": {
+    "initial": "An active granted-projects producer has no grant for either project identifier; one identifier is unknown and the other names an archived project.",
+    "events": [
+     "The producer imports the same valid snapshot shape for each identifier.",
+     "The producer reads both returned import results."
+    ],
+    "outcomes": [
+     "A7 exposes unknown_project for one and archived_project or scope_denied for the other.",
+     "A4 conceals the distinction because the producer had proved access to neither project."
+    ],
+    "observer": "The producer sees whether the two import results differ."
+   }
+  },
+  {
+   "unit": "A6",
+   "subject": "Registry HTTP 404 translation",
+   "kind": "internal contradiction",
+   "text": "The main table maps every non-success HTTP status to http_error, but the ordered translation below maps HTTP 404 to not_found and only other non-success statuses to http_error.",
+   "question": "What RegistryFailureKind must an HTTP 404 produce?",
+   "options": [
+    "not_found",
+    "http_error"
+   ],
+   "default_guess": "not_found, following the more specific ordered rule.",
+   "witness": {
+    "initial": "The Registry endpoint is configured and reachable.",
+    "events": [
+     "The portal requests validation for a project.",
+     "Registry responds HTTP 404 with any body."
+    ],
+    "outcomes": [
+     "The table yields http_error.",
+     "The detailed precedence yields not_found."
+    ],
+    "observer": "The calling use case and its HTTP error translation see a different RegistryFailureKind."
+   }
+  },
+  {
+   "unit": "A7",
+   "subject": "Producer scope-denial reason",
+   "kind": "overlapping refusal conditions",
+   "text": "A7 defines unknown_project as 'project not found or not visible' and scope_denied as 'scope or capability refused'; A12 says a granted_projects producer without an active grant gets scope_denied.",
+   "question": "For a known active project that is not visible because the producer lacks a grant, is the import reason unknown_project or scope_denied?",
+   "options": [
+    "scope_denied",
+    "unknown_project",
+    "Use unknown_project for absent grants but scope_denied for another scope failure"
+   ],
+   "default_guess": "scope_denied, following A12's explicit no-grant rule.",
+   "witness": {
+    "initial": "A known active project exists; an active granted-projects producer has a valid credential but no grant for it.",
+    "events": [
+     "The producer submits an otherwise valid snapshot publication for that project."
+    ],
+    "outcomes": [
+     "The 'not visible' clause records unknown_project.",
+     "The scope rule records scope_denied."
+    ],
+    "observer": "The producer sees the reason in the returned import result and later reads it by import_id."
+   }
+  },
+  {
+   "unit": "A7",
+   "subject": "Snapshot incomplete-content boundary",
+   "kind": "undefined refusal set",
+   "text": "A7 says 'a missing envelope field or section list' and admitted incomplete content such as 'an empty approved_by' produce incomplete_content, but it does not define which other admitted strings, collections, or values count as incomplete.",
+   "question": "Exactly which decoding-admitted snapshot values are rejected as incomplete_content?",
+   "options": [
+    "Only empty approved_by plus actually absent optional/model-admitted fields",
+    "Every required textual field must be non-empty",
+    "Also reject empty section fields such as source_section_id, source_section_code, and display_name",
+    "Rely solely on request-model shape except for empty approved_by"
+   ],
+   "default_guess": "Require every business-required textual field to be non-empty, while accepting an empty sections list and repeated source_section_id values as expressly required.",
+   "witness": {
+    "initial": "An authenticated authorized producer constructs a version-1 EUR publication with one section whose display_name is empty; all fields have the correct JSON types.",
+    "events": [
+     "The producer submits the publication."
+    ],
+    "outcomes": [
+     "The portal accepts it because only shape, amounts, currency, version, and the example approved_by emptiness are checked.",
+     "The portal records rejected/incomplete_content because a required content string is empty."
+    ],
+    "observer": "The producer sees accepted versus rejected and the database may contain a snapshot."
+   }
+  },
+  {
+   "unit": "A9",
+   "subject": "Boundary handling of monetary scale",
+   "kind": "missing normalization rule",
+   "text": "A9 says Decimal, two fraction digits, ROUND_HALF_UP at derivation boundaries, and that stored amounts are already two-digit exact; it does not say whether boundary input with more than two fraction digits is rejected or rounded.",
+   "question": "What happens when a caller supplies an otherwise valid amount such as EUR 1.005?",
+   "options": [
+    "Reject it as an invalid EUR amount",
+    "Round it to 1.01 before persistence",
+    "Accept and persist 1.005 despite the two-digit rule"
+   ],
+   "default_guess": "Reject boundary amounts that are not already exact to two fraction digits.",
+   "witness": {
+    "initial": "An active authorized operator is registering a payment with amount 1.005 EUR.",
+    "events": [
+     "The operator submits the payment."
+    ],
+    "outcomes": [
+     "The payment is refused because its scale exceeds two digits.",
+     "The amount is rounded half-up to 1.01 and the payment is stored."
+    ],
+    "observer": "The operator and later payment totals see the difference."
+   }
+  },
+  {
+   "unit": "A9",
+   "subject": "Zero work-balance label",
+   "kind": "missing case",
+   "text": "A9 says the sign selects 'Completed ahead of payments' or 'Unused advance payment', while State 1 defines a third WorkBalanceLabel value, balanced.",
+   "question": "Which label and displayed magnitude apply when completed work value exactly equals payments total?",
+   "options": [
+    "balanced with zero",
+    "completed_ahead_of_payments with zero",
+    "unused_advance_payment with zero"
+   ],
+   "default_guess": "balanced with zero.",
+   "witness": {
+    "initial": "A project has completed work value EUR 100.00 and payments totaling EUR 100.00.",
+    "events": [
+     "A viewer requests the payment summary."
+    ],
+    "outcomes": [
+     "The result uses balanced.",
+     "The implementation treats zero as one side of the sign test and uses one of the two labels named in A9."
+    ],
+    "observer": "The viewer sees a different balance label."
+   }
+  },
+  {
+   "unit": "A13",
+   "subject": "Audit provenance for failed staff login",
+   "kind": "unrepresentable required record",
+   "text": "A13 requires staff.login_failed to write a rejected audit record, but AuditRecord requires actor_id for actor_kind staff and an unknown-email login has no authenticated staff actor or staff_id.",
+   "question": "What actor_kind, actor_id, entity_kind, and entity_id must be recorded for failed login attempts, especially when the email is unknown?",
+   "options": [
+    "Use actor_kind system with no actor_id and no entity",
+    "Use staff with the matched staff_id only when an account exists and a different shape for unknown email",
+    "Do not audit unknown-email failures",
+    "Create a non-account correlation identity"
+   ],
+   "default_guess": "Use the system actor with no entity for every failed login so account existence is not encoded in audit shape.",
+   "witness": {
+    "initial": "No staff account exists for nobody@example.com.",
+    "events": [
+     "A caller submits that email and an arbitrary password to staff login."
+    ],
+    "outcomes": [
+     "A staff.login_failed record is written with an implementation-chosen system actor representation.",
+     "No valid AuditRecord can be formed under a staff actor, so the attempt is left unaudited or rejected by audit validation."
+    ],
+    "observer": "An auditor sees whether the required record exists and whether its shape leaks account existence."
+   }
+  },
+  {
+   "unit": "A16",
+   "subject": "Email whitespace classification",
+   "kind": "undefined character set",
+   "text": "A16 refuses 'whitespace character anywhere' but, unlike casefolding and password controls, does not identify the Unicode property or runtime predicate that defines whitespace.",
+   "question": "Which code points count as whitespace for staff-email validation?",
+   "options": [
+    "Python str.isspace()",
+    "Unicode White_Space property",
+    "ASCII whitespace only",
+    "A separately enumerated closed set"
+   ],
+   "default_guess": "Use Python str.isspace(), matching the explicitly Python-based normalization policy.",
+   "witness": {
+    "initial": "No account uses the normalized address.",
+    "events": [
+     "An administrator creates an account whose local part contains U+00A0 NO-BREAK SPACE."
+    ],
+    "outcomes": [
+     "The address is rejected because U+00A0 is classified as whitespace.",
+     "The address is accepted by an ASCII-only whitespace check."
+    ],
+    "observer": "The administrator sees creation succeed or fail."
+   }
+  },
+  {
+   "unit": "A25",
+   "subject": "Viewer mutation Origin handling",
+   "kind": "missing refusal conditions",
+   "text": "A25 says mutating viewer requests must come from the canonical public origin but does not say what happens when Origin is absent or enumerate which viewer POST operations count as mutations.",
+   "question": "Which viewer routes require the origin check, and is a missing Origin accepted or refused?",
+   "options": [
+    "Require an exactly matching Origin on every state-changing viewer route, including logout",
+    "Allow a missing Origin and reject only a present mismatch",
+    "Apply the check to every non-safe-method viewer route, including entry",
+    "Apply it only to cookie-authenticated mutations"
+   ],
+   "default_guess": "Require a matching Origin on cookie-authenticated state-changing viewer routes and refuse a missing Origin; do not apply it to capability-link entry.",
+   "witness": {
+    "initial": "A viewer has a valid cookie session.",
+    "events": [
+     "A client sends the viewer logout POST with the cookie but no Origin header."
+    ],
+    "outcomes": [
+     "The request is refused because its origin cannot be proved.",
+     "The request succeeds because no conflicting origin was supplied."
+    ],
+    "observer": "The viewer sees whether the session is ended."
+   }
+  },
+  {
+   "unit": "A25",
+   "subject": "Viewer-entry limiter memory bound",
+   "kind": "unachievable invariant",
+   "text": "The limiter is described as a log per client-address/route key, with old entries dropped on attempts, 'which bounds the memory'; no bound or eviction rule exists for the number of distinct keys or attempts arriving within one window.",
+   "question": "What hard bound applies to rate-limiter keys and entries, and what happens when that bound is reached?",
+   "options": [
+    "No hard bound; accept memory growth",
+    "Use a fixed maximum key/entry count and refuse new keys at capacity",
+    "Evict keys by a defined policy",
+    "Use an external bounded limiter"
+   ],
+   "default_guess": "Use a fixed capacity with deterministic expiry and eviction, failing closed when capacity cannot be reclaimed.",
+   "witness": {
+    "initial": "The limiter is empty and the window is 60 seconds.",
+    "events": [
+     "Many clients using distinct network addresses each make one admitted viewer-entry attempt within the same window."
+    ],
+    "outcomes": [
+     "A map entry is retained for every address, so memory grows with the number of addresses despite the claimed bound.",
+     "A capacity rule evicts or refuses entries after a fixed limit."
+    ],
+    "observer": "The service operator sees bounded versus attacker-controlled memory use."
+   }
+  },
+  {
+   "unit": "A25",
+   "subject": "X-Request-Id authority",
+   "kind": "missing header policy",
+   "text": "A25 requires an X-Request-Id on every response but does not say whether it is generated, whether a request value is accepted or echoed, what syntax/length is allowed, or whether the same value enters logs.",
+   "question": "How is the response X-Request-Id chosen when the request omits it or supplies one or several values?",
+   "options": [
+    "Always generate a new server UUID",
+    "Echo one valid bounded request value and otherwise generate",
+    "Echo the request header verbatim",
+    "Reject malformed or duplicate request IDs"
+   ],
+   "default_guess": "Always generate a server-owned UUID and use the same value in response and request-scoped logs.",
+   "witness": {
+    "initial": "The service is ready.",
+    "events": [
+     "A caller sends a request with two X-Request-Id headers, one containing a very long value and control-like text."
+    ],
+    "outcomes": [
+     "The service echoes caller input as the response identifier.",
+     "The service ignores it and generates a bounded server identifier."
+    ],
+    "observer": "The caller and log operator see different identifiers and different log-injection exposure."
+   }
+  },
+  {
+   "unit": "A25",
+   "subject": "Oversize request detection",
+   "kind": "missing enforcement semantics",
+   "text": "A25 requires request bodies to be bounded before expensive work but does not define handling for missing, invalid, understated, or chunked Content-Length, nor the refusal status/body.",
+   "question": "How is the body limit enforced when Content-Length is absent or incorrect, and what exact response is returned on overflow?",
+   "options": [
+    "Stream-count all bodies and stop at limit regardless of Content-Length",
+    "Require a valid Content-Length on body-bearing routes",
+    "Trust Content-Length and reject only declared oversize bodies",
+    "Buffer the whole body before checking"
+   ],
+   "default_guess": "Check a valid declared length when present and also enforce a streaming byte counter, returning an empty 413 response before decoding or authentication.",
+   "witness": {
+    "initial": "A body limit is configured.",
+    "events": [
+     "A caller sends a chunked JSON request whose actual body exceeds the limit and has no Content-Length."
+    ],
+    "outcomes": [
+     "The transport stops reading at the limit and refuses it before the handler.",
+     "The request is admitted because no declared length exceeded the limit, or is fully buffered before refusal."
+    ],
+    "observer": "The caller sees the response and the operator sees whether expensive parsing/memory use occurred."
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "Representation of source-supplied timestamps",
+   "kind": "ambiguous validation and storage",
+   "text": "A28 says persisted timestamps are UTC offset-naive, but source-supplied approved_at, published_at, confirmed_at, and photo_date are 'validated and kept as supplied, never replaced by the clock.'",
+   "question": "Must source timestamps be supplied in UTC, and are aware/non-UTC values rejected, converted to UTC-naive, or persisted with their supplied offset?",
+   "options": [
+    "Require UTC-aware input and convert to UTC-naive storage",
+    "Require already UTC-naive input",
+    "Accept any offset and normalize to UTC-naive",
+    "Persist the supplied offset-aware value unchanged"
+   ],
+   "default_guess": "Require an offset-bearing instant, normalize it to UTC, and persist the corresponding offset-naive UTC datetime.",
+   "witness": {
+    "initial": "An authorized producer submits a snapshot with published_at 2026-11-06T12:00:00+02:00.",
+    "events": [
+     "The portal accepts or validates the publication and stores an ApprovedEstimateSnapshot."
+    ],
+    "outcomes": [
+     "It stores 2026-11-06 10:00:00 as offset-naive UTC.",
+     "It preserves 2026-11-06 12:00:00+02:00 as supplied, or rejects it because persisted timestamps must be UTC-naive."
+    ],
+    "observer": "A later snapshot read/fingerprint computation and the database see different timestamp values."
+   }
+  },
+  {
+   "unit": "A29",
+   "subject": "Bootstrap confirmation failure",
+   "kind": "undefined exit condition",
+   "text": "A29 assigns exit code 1 to 'confirmation did not match' but never states what value is confirmed, how confirmation is obtained, or whether confirmation is mandatory.",
+   "question": "What inputs are entered twice, through what permitted channel, and exactly what mismatch or input failure yields exit code 1?",
+   "options": [
+    "Prompt for password twice through non-echoing terminal input",
+    "Prompt for both email and password confirmation",
+    "Accept structured standard input with a repeated password",
+    "Delegate confirmation to the host wrapper, making code 1 unreachable inside the command"
+   ],
+   "default_guess": "Read email once and password twice from a non-echoing interactive terminal; unequal passwords yield exit code 1 before opening a transaction.",
+   "witness": {
+    "initial": "The staff table is empty.",
+    "events": [
+     "The host operator enters a valid email, a valid password, and a different second password."
+    ],
+    "outcomes": [
+     "The command exits 1 and persists nothing.",
+     "An implementation without an internal confirmation proceeds to create the administrator or classifies the extra/missing input differently."
+    ],
+    "observer": "The host operator and deployment script see a different exit code and database state."
+   }
+  },
+  {
+   "unit": "A29",
+   "subject": "Bootstrap operational-failure exit behavior",
+   "kind": "incomplete closed contract",
+   "text": "A29 calls exit codes 0–3 a closed external contract but gives no outcome for database-open, transaction, hashing, audit-write, clock, or other operational failure.",
+   "question": "How must the command terminate when an unexpected operational failure prevents completion?",
+   "options": [
+    "Use an additional defined nonzero exit code",
+    "Propagate the exception and let the runtime choose an exit status",
+    "Map it to one of codes 1–3",
+    "Return code 3 for every non-success after confirmation"
+   ],
+   "default_guess": "Propagate an exception without printing sensitive inputs, while reserving codes 0–3 for the classified policy outcomes; the text should state that such runtime termination is outside the closed outcome set.",
+   "witness": {
+    "initial": "The staff table is empty but the database is read-only or the audit insert fails.",
+    "events": [
+     "The operator supplies matching valid bootstrap inputs.",
+     "The command attempts the immediate transaction."
+    ],
+    "outcomes": [
+     "The runtime exits with a generic status that may collide with code 1.",
+     "The implementation maps the failure to one of the declared codes or invents another code."
+    ],
+    "observer": "The deployment script cannot distinguish confirmation mismatch from infrastructure failure consistently."
+   }
+  },
+  {
+   "unit": "A30",
+   "subject": "Closed runtime environment configuration",
+   "kind": "referenced table absent",
+   "text": "A30 says config.runtime_environment_variables is a closed table of names, types, requiredness, normalization, and per-environment defaults, but the accepted texts do not contain that table and list only a subset of settings.",
+   "question": "What is the complete environment-variable contract for database path, binary root, environment/profile, trusted hosts, CORS origins, canonical public origin, body/response bounds, viewer-entry limits, URLs, timeouts, and TTLs?",
+   "options": [
+    "Use the variable names and defaults implied by property names",
+    "Define explicit names and validation for every RuntimeSettings field",
+    "Leave unlisted settings as fixed source constants",
+    "Defer the missing table to assembly"
+   ],
+   "default_guess": "Define an explicit closed environment-variable table before implementation, with no inferred aliases.",
+   "witness": {
+    "initial": "A deployment provides REGISTRY_BASE_URL and BINARY_MAX_READ_BYTES but no trusted-host, public-origin, database-path, or environment-profile variables.",
+    "events": [
+     "The service starts."
+    ],
+    "outcomes": [
+     "One implementation applies development defaults and starts.",
+     "Another treats production-critical values as required and refuses startup."
+    ],
+    "observer": "The deployer sees startup success versus configuration failure."
+   }
+  },
+  {
+   "unit": "A30",
+   "subject": "Configuration value domains",
+   "kind": "missing validation constraints",
+   "text": "A30 says invalid settings stop startup and that each timeout, TTL, rate limit, and bound must exist, but gives no allowed ranges for most numeric settings; only BINARY_MAX_READ_BYTES is explicitly a required positive integer.",
+   "question": "May timeouts, TTLs, entropy sizes, challenge limits, and viewer-entry settings be zero, negative, fractional, or arbitrarily large?",
+   "options": [
+    "Require every duration/count/size to be a positive bounded integer",
+    "Allow zero for disabling selected behavior",
+    "Apply type checks only and allow any numeric value",
+    "Define constraints separately per setting"
+   ],
+   "default_guess": "Require positive integers for counts and byte sizes and positive finite numbers for timeouts, with explicit upper bounds where resource exhaustion is possible.",
+   "witness": {
+    "initial": "The environment sets REGISTRY timeout to 0 and staff session TTL to -1.",
+    "events": [
+     "The service validates startup configuration."
+    ],
+    "outcomes": [
+     "Startup succeeds and all calls immediately time out/sessions are born expired.",
+     "Startup fails because the values are outside the accepted domains."
+    ],
+    "observer": "The deployer sees whether the service starts."
+   }
+  },
+  {
+   "unit": "A32",
+   "subject": "Reproducibility and completeness of dependency pins",
+   "kind": "non-reproducible operational rule",
+   "text": "A32 pins only four direct requirements but says pip-audit resolves the packages pip installs for them and calls the check reproducible; transitive versions, Python/pip/pip-audit versions, package index state, and the advisory database snapshot are not pinned.",
+   "question": "What exact environment and lock evidence make dependency resolution and the vulnerability result reproducible?",
+   "options": [
+    "Pin and hash the full transitive dependency closure plus toolchain and advisory snapshot",
+    "Treat only the command invocation as reproducible even if its result changes",
+    "Accept latest compatible transitive packages and current advisories at each deploy",
+    "Vendor the resolved environment and scanner data"
+   ],
+   "default_guess": "Generate and retain a fully pinned, hashed transitive lock plus the scanner/toolchain versions and audit report used for the deploy.",
+   "witness": {
+    "initial": "The same four-line requirements file is used for two deploys at different times.",
+    "events": [
+     "Each deploy runs pip-audit against the then-current package index and OSV data."
+    ],
+    "outcomes": [
+     "Different compatible transitive versions or newly published advisories produce a different resolved set/result.",
+     "A locked toolchain, dependency closure, and advisory snapshot reproduce the same result."
+    ],
+    "observer": "The deployment gate sees one deploy pass and another fail without any accepted pin changing."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A4\",\"subject\":\"Expense-intake authorization and validation order\",\"kind\":\"contradictory precedence\",\"text\":\"A4 says every project-scoped operation checks session, principal status, project access, capability, then Registry; A7 orders expense checks as recognition status, contract version, capability, active project, amount, allocations, replay.\",\"question\":\"Which sequence governs expense creation when both authentication/authorization and recognition-content checks would fail?\",\"options\":[\"Apply A4 before every content check\",\"Apply A7's expense-specific order before authorization\",\"Treat request decoding separately, then apply A4, then the remaining A7 checks\"],\"default_guess\":\"Treat A7 as an operation-specific override and use its stated order.\",\"witness\":{\"initial\":\"A suspended staff account still has an unexpired session; a recognition request has an unsupported contract version.\",\"events\":[\"The suspended staff member submits the expense-creation request.\"],\"outcomes\":[\"A4 rejects at principal status without evaluating the contract version.\",\"A7 rejects the unsupported contract version before checking capability or project status.\"],\"observer\":\"The caller sees whichever refusal/status the transport maps, and instrumentation sees different checks and dependency calls.\"}},{\"unit\":\"A4\",\"subject\":\"Snapshot-import failure concealment\",\"kind\":\"cross-rule contradiction\",\"text\":\"A4 says failures are indistinguishable regarding project existence beyond the caller's own access, while A7 returns recorded reasons including unknown_project, archived_project, and scope_denied.\",\"question\":\"May a producer without project access distinguish an unknown, archived, or merely ungranted project through its import result?\",\"options\":[\"Return the specific A7 reason\",\"Conceal all project-existence states as one reason\",\"Return specific reasons only after project access has already been proved\"],\"default_guess\":\"Use the specific A7 import reasons because they are explicitly persisted in SnapshotImportRecord.\",\"witness\":{\"initial\":\"An active granted-projects producer has no grant for either project identifier; one identifier is unknown and the other names an archived project.\",\"events\":[\"The producer imports the same valid snapshot shape for each identifier.\",\"The producer reads both returned import results.\"],\"outcomes\":[\"A7 exposes unknown_project for one and archived_project or scope_denied for the other.\",\"A4 conceals the distinction because the producer had proved access to neither project.\"],\"observer\":\"The producer sees whether the two import results differ.\"}},{\"unit\":\"A6\",\"subject\":\"Registry HTTP 404 translation\",\"kind\":\"internal contradiction\",\"text\":\"The main table maps every non-success HTTP status to http_error, but the ordered translation below maps HTTP 404 to not_found and only other non-success statuses to http_error.\",\"question\":\"What RegistryFailureKind must an HTTP 404 produce?\",\"options\":[\"not_found\",\"http_error\"],\"default_guess\":\"not_found, following the more specific ordered rule.\",\"witness\":{\"initial\":\"The Registry endpoint is configured and reachable.\",\"events\":[\"The portal requests validation for a project.\",\"Registry responds HTTP 404 with any body.\"],\"outcomes\":[\"The table yields http_error.\",\"The detailed precedence yields not_found.\"],\"observer\":\"The calling use case and its HTTP error translation see a different RegistryFailureKind.\"}},{\"unit\":\"A7\",\"subject\":\"Producer scope-denial reason\",\"kind\":\"overlapping refusal conditions\",\"text\":\"A7 defines unknown_project as 'project not found or not visible' and scope_denied as 'scope or capability refused'; A12 says a granted_projects producer without an active grant gets scope_denied.\",\"question\":\"For a known active project that is not visible because the producer lacks a grant, is the import reason unknown_project or scope_denied?\",\"options\":[\"scope_denied\",\"unknown_project\",\"Use unknown_project for absent grants but scope_denied for another scope failure\"],\"default_guess\":\"scope_denied, following A12's explicit no-grant rule.\",\"witness\":{\"initial\":\"A known active project exists; an active granted-projects producer has a valid credential but no grant for it.\",\"events\":[\"The producer submits an otherwise valid snapshot publication for that project.\"],\"outcomes\":[\"The 'not visible' clause records unknown_project.\",\"The scope rule records scope_denied.\"],\"observer\":\"The producer sees the reason in the returned import result and later reads it by import_id.\"}},{\"unit\":\"A7\",\"subject\":\"Snapshot incomplete-content boundary\",\"kind\":\"undefined refusal set\",\"text\":\"A7 says 'a missing envelope field or section list' and admitted incomplete content such as 'an empty approved_by' produce incomplete_content, but it does not define which other admitted strings, collections, or values count as incomplete.\",\"question\":\"Exactly which decoding-admitted snapshot values are rejected as incomplete_content?\",\"options\":[\"Only empty approved_by plus actually absent optional/model-admitted fields\",\"Every required textual field must be non-empty\",\"Also reject empty section fields such as source_section_id, source_section_code, and display_name\",\"Rely solely on request-model shape except for empty approved_by\"],\"default_guess\":\"Require every business-required textual field to be non-empty, while accepting an empty sections list and repeated source_section_id values as expressly required.\",\"witness\":{\"initial\":\"An authenticated authorized producer constructs a version-1 EUR publication with one section whose display_name is empty; all fields have the correct JSON types.\",\"events\":[\"The producer submits the publication.\"],\"outcomes\":[\"The portal accepts it because only shape, amounts, currency, version, and the example approved_by emptiness are checked.\",\"The portal records rejected/incomplete_content because a required content string is empty.\"],\"observer\":\"The producer sees accepted versus rejected and the database may contain a snapshot.\"}},{\"unit\":\"A9\",\"subject\":\"Boundary handling of monetary scale\",\"kind\":\"missing normalization rule\",\"text\":\"A9 says Decimal, two fraction digits, ROUND_HALF_UP at derivation boundaries, and that stored amounts are already two-digit exact; it does not say whether boundary input with more than two fraction digits is rejected or rounded.\",\"question\":\"What happens when a caller supplies an otherwise valid amount such as EUR 1.005?\",\"options\":[\"Reject it as an invalid EUR amount\",\"Round it to 1.01 before persistence\",\"Accept and persist 1.005 despite the two-digit rule\"],\"default_guess\":\"Reject boundary amounts that are not already exact to two fraction digits.\",\"witness\":{\"initial\":\"An active authorized operator is registering a payment with amount 1.005 EUR.\",\"events\":[\"The operator submits the payment.\"],\"outcomes\":[\"The payment is refused because its scale exceeds two digits.\",\"The amount is rounded half-up to 1.01 and the payment is stored.\"],\"observer\":\"The operator and later payment totals see the difference.\"}},{\"unit\":\"A9\",\"subject\":\"Zero work-balance label\",\"kind\":\"missing case\",\"text\":\"A9 says the sign selects 'Completed ahead of payments' or 'Unused advance payment', while State 1 defines a third WorkBalanceLabel value, balanced.\",\"question\":\"Which label and displayed magnitude apply when completed work value exactly equals payments total?\",\"options\":[\"balanced with zero\",\"completed_ahead_of_payments with zero\",\"unused_advance_payment with zero\"],\"default_guess\":\"balanced with zero.\",\"witness\":{\"initial\":\"A project has completed work value EUR 100.00 and payments totaling EUR 100.00.\",\"events\":[\"A viewer requests the payment summary.\"],\"outcomes\":[\"The result uses balanced.\",\"The implementation treats zero as one side of the sign test and uses one of the two labels named in A9.\"],\"observer\":\"The viewer sees a different balance label.\"}},{\"unit\":\"A13\",\"subject\":\"Audit provenance for failed staff login\",\"kind\":\"unrepresentable required record\",\"text\":\"A13 requires staff.login_failed to write a rejected audit record, but AuditRecord requires actor_id for actor_kind staff and an unknown-email login has no authenticated staff actor or staff_id.\",\"question\":\"What actor_kind, actor_id, entity_kind, and entity_id must be recorded for failed login attempts, especially when the email is unknown?\",\"options\":[\"Use actor_kind system with no actor_id and no entity\",\"Use staff with the matched staff_id only when an account exists and a different shape for unknown email\",\"Do not audit unknown-email failures\",\"Create a non-account correlation identity\"],\"default_guess\":\"Use the system actor with no entity for every failed login so account existence is not encoded in audit shape.\",\"witness\":{\"initial\":\"No staff account exists for nobody@example.com.\",\"events\":[\"A caller submits that email and an arbitrary password to staff login.\"],\"outcomes\":[\"A staff.login_failed record is written with an implementation-chosen system actor representation.\",\"No valid AuditRecord can be formed under a staff actor, so the attempt is left unaudited or rejected by audit validation.\"],\"observer\":\"An auditor sees whether the required record exists and whether its shape leaks account existence.\"}},{\"unit\":\"A16\",\"subject\":\"Email whitespace classification\",\"kind\":\"undefined character set\",\"text\":\"A16 refuses 'whitespace character anywhere' but, unlike casefolding and password controls, does not identify the Unicode property or runtime predicate that defines whitespace.\",\"question\":\"Which code points count as whitespace for staff-email validation?\",\"options\":[\"Python str.isspace()\",\"Unicode White_Space property\",\"ASCII whitespace only\",\"A separately enumerated closed set\"],\"default_guess\":\"Use Python str.isspace(), matching the explicitly Python-based normalization policy.\",\"witness\":{\"initial\":\"No account uses the normalized address.\",\"events\":[\"An administrator creates an account whose local part contains U+00A0 NO-BREAK SPACE.\"],\"outcomes\":[\"The address is rejected because U+00A0 is classified as whitespace.\",\"The address is accepted by an ASCII-only whitespace check.\"],\"observer\":\"The administrator sees creation succeed or fail.\"}},{\"unit\":\"A25\",\"subject\":\"Viewer mutation Origin handling\",\"kind\":\"missing refusal conditions\",\"text\":\"A25 says mutating viewer requests must come from the canonical public origin but does not say what happens when Origin is absent or enumerate which viewer POST operations count as mutations.\",\"question\":\"Which viewer routes require the origin check, and is a missing Origin accepted or refused?\",\"options\":[\"Require an exactly matching Origin on every state-changing viewer route, including logout\",\"Allow a missing Origin and reject only a present mismatch\",\"Apply the check to every non-safe-method viewer route, including entry\",\"Apply it only to cookie-authenticated mutations\"],\"default_guess\":\"Require a matching Origin on cookie-authenticated state-changing viewer routes and refuse a missing Origin; do not apply it to capability-link entry.\",\"witness\":{\"initial\":\"A viewer has a valid cookie session.\",\"events\":[\"A client sends the viewer logout POST with the cookie but no Origin header.\"],\"outcomes\":[\"The request is refused because its origin cannot be proved.\",\"The request succeeds because no conflicting origin was supplied.\"],\"observer\":\"The viewer sees whether the session is ended.\"}},{\"unit\":\"A25\",\"subject\":\"Viewer-entry limiter memory bound\",\"kind\":\"unachievable invariant\",\"text\":\"The limiter is described as a log per client-address/route key, with old entries dropped on attempts, 'which bounds the memory'; no bound or eviction rule exists for the number of distinct keys or attempts arriving within one window.\",\"question\":\"What hard bound applies to rate-limiter keys and entries, and what happens when that bound is reached?\",\"options\":[\"No hard bound; accept memory growth\",\"Use a fixed maximum key/entry count and refuse new keys at capacity\",\"Evict keys by a defined policy\",\"Use an external bounded limiter\"],\"default_guess\":\"Use a fixed capacity with deterministic expiry and eviction, failing closed when capacity cannot be reclaimed.\",\"witness\":{\"initial\":\"The limiter is empty and the window is 60 seconds.\",\"events\":[\"Many clients using distinct network addresses each make one admitted viewer-entry attempt within the same window.\"],\"outcomes\":[\"A map entry is retained for every address, so memory grows with the number of addresses despite the claimed bound.\",\"A capacity rule evicts or refuses entries after a fixed limit.\"],\"observer\":\"The service operator sees bounded versus attacker-controlled memory use.\"}},{\"unit\":\"A25\",\"subject\":\"X-Request-Id authority\",\"kind\":\"missing header policy\",\"text\":\"A25 requires an X-Request-Id on every response but does not say whether it is generated, whether a request value is accepted or echoed, what syntax/length is allowed, or whether the same value enters logs.\",\"question\":\"How is the response X-Request-Id chosen when the request omits it or supplies one or several values?\",\"options\":[\"Always generate a new server UUID\",\"Echo one valid bounded request value and otherwise generate\",\"Echo the request header verbatim\",\"Reject malformed or duplicate request IDs\"],\"default_guess\":\"Always generate a server-owned UUID and use the same value in response and request-scoped logs.\",\"witness\":{\"initial\":\"The service is ready.\",\"events\":[\"A caller sends a request with two X-Request-Id headers, one containing a very long value and control-like text.\"],\"outcomes\":[\"The service echoes caller input as the response identifier.\",\"The service ignores it and generates a bounded server identifier.\"],\"observer\":\"The caller and log operator see different identifiers and different log-injection exposure.\"}},{\"unit\":\"A25\",\"subject\":\"Oversize request detection\",\"kind\":\"missing enforcement semantics\",\"text\":\"A25 requires request bodies to be bounded before expensive work but does not define handling for missing, invalid, understated, or chunked Content-Length, nor the refusal status/body.\",\"question\":\"How is the body limit enforced when Content-Length is absent or incorrect, and what exact response is returned on overflow?\",\"options\":[\"Stream-count all bodies and stop at limit regardless of Content-Length\",\"Require a valid Content-Length on body-bearing routes\",\"Trust Content-Length and reject only declared oversize bodies\",\"Buffer the whole body before checking\"],\"default_guess\":\"Check a valid declared length when present and also enforce a streaming byte counter, returning an empty 413 response before decoding or authentication.\",\"witness\":{\"initial\":\"A body limit is configured.\",\"events\":[\"A caller sends a chunked JSON request whose actual body exceeds the limit and has no Content-Length.\"],\"outcomes\":[\"The transport stops reading at the limit and refuses it before the handler.\",\"The request is admitted because no declared length exceeded the limit, or is fully buffered before refusal.\"],\"observer\":\"The caller sees the response and the operator sees whether expensive parsing/memory use occurred.\"}},{\"unit\":\"A28\",\"subject\":\"Representation of source-supplied timestamps\",\"kind\":\"ambiguous validation and storage\",\"text\":\"A28 says persisted timestamps are UTC offset-naive, but source-supplied approved_at, published_at, confirmed_at, and photo_date are 'validated and kept as supplied, never replaced by the clock.'\",\"question\":\"Must source timestamps be supplied in UTC, and are aware/non-UTC values rejected, converted to UTC-naive, or persisted with their supplied offset?\",\"options\":[\"Require UTC-aware input and convert to UTC-naive storage\",\"Require already UTC-naive input\",\"Accept any offset and normalize to UTC-naive\",\"Persist the supplied offset-aware value unchanged\"],\"default_guess\":\"Require an offset-bearing instant, normalize it to UTC, and persist the corresponding offset-naive UTC datetime.\",\"witness\":{\"initial\":\"An authorized producer submits a snapshot with published_at 2026-11-06T12:00:00+02:00.\",\"events\":[\"The portal accepts or validates the publication and stores an ApprovedEstimateSnapshot.\"],\"outcomes\":[\"It stores 2026-11-06 10:00:00 as offset-naive UTC.\",\"It preserves 2026-11-06 12:00:00+02:00 as supplied, or rejects it because persisted timestamps must be UTC-naive.\"],\"observer\":\"A later snapshot read/fingerprint computation and the database see different timestamp values.\"}},{\"unit\":\"A29\",\"subject\":\"Bootstrap confirmation failure\",\"kind\":\"undefined exit condition\",\"text\":\"A29 assigns exit code 1 to 'confirmation did not match' but never states what value is confirmed, how confirmation is obtained, or whether confirmation is mandatory.\",\"question\":\"What inputs are entered twice, through what permitted channel, and exactly what mismatch or input failure yields exit code 1?\",\"options\":[\"Prompt for password twice through non-echoing terminal input\",\"Prompt for both email and password confirmation\",\"Accept structured standard input with a repeated password\",\"Delegate confirmation to the host wrapper, making code 1 unreachable inside the command\"],\"default_guess\":\"Read email once and password twice from a non-echoing interactive terminal; unequal passwords yield exit code 1 before opening a transaction.\",\"witness\":{\"initial\":\"The staff table is empty.\",\"events\":[\"The host operator enters a valid email, a valid password, and a different second password.\"],\"outcomes\":[\"The command exits 1 and persists nothing.\",\"An implementation without an internal confirmation proceeds to create the administrator or classifies the extra/missing input differently.\"],\"observer\":\"The host operator and deployment script see a different exit code and database state.\"}},{\"unit\":\"A29\",\"subject\":\"Bootstrap operational-failure exit behavior\",\"kind\":\"incomplete closed contract\",\"text\":\"A29 calls exit codes 0–3 a closed external contract but gives no outcome for database-open, transaction, hashing, audit-write, clock, or other operational failure.\",\"question\":\"How must the command terminate when an unexpected operational failure prevents completion?\",\"options\":[\"Use an additional defined nonzero exit code\",\"Propagate the exception and let the runtime choose an exit status\",\"Map it to one of codes 1–3\",\"Return code 3 for every non-success after confirmation\"],\"default_guess\":\"Propagate an exception without printing sensitive inputs, while reserving codes 0–3 for the classified policy outcomes; the text should state that such runtime termination is outside the closed outcome set.\",\"witness\":{\"initial\":\"The staff table is empty but the database is read-only or the audit insert fails.\",\"events\":[\"The operator supplies matching valid bootstrap inputs.\",\"The command attempts the immediate transaction.\"],\"outcomes\":[\"The runtime exits with a generic status that may collide with code 1.\",\"The implementation maps the failure to one of the declared codes or invents another code.\"],\"observer\":\"The deployment script cannot distinguish confirmation mismatch from infrastructure failure consistently.\"}},{\"unit\":\"A30\",\"subject\":\"Closed runtime environment configuration\",\"kind\":\"referenced table absent\",\"text\":\"A30 says config.runtime_environment_variables is a closed table of names, types, requiredness, normalization, and per-environment defaults, but the accepted texts do not contain that table and list only a subset of settings.\",\"question\":\"What is the complete environment-variable contract for database path, binary root, environment/profile, trusted hosts, CORS origins, canonical public origin, body/response bounds, viewer-entry limits, URLs, timeouts, and TTLs?\",\"options\":[\"Use the variable names and defaults implied by property names\",\"Define explicit names and validation for every RuntimeSettings field\",\"Leave unlisted settings as fixed source constants\",\"Defer the missing table to assembly\"],\"default_guess\":\"Define an explicit closed environment-variable table before implementation, with no inferred aliases.\",\"witness\":{\"initial\":\"A deployment provides REGISTRY_BASE_URL and BINARY_MAX_READ_BYTES but no trusted-host, public-origin, database-path, or environment-profile variables.\",\"events\":[\"The service starts.\"],\"outcomes\":[\"One implementation applies development defaults and starts.\",\"Another treats production-critical values as required and refuses startup.\"],\"observer\":\"The deployer sees startup success versus configuration failure.\"}},{\"unit\":\"A30\",\"subject\":\"Configuration value domains\",\"kind\":\"missing validation constraints\",\"text\":\"A30 says invalid settings stop startup and that each timeout, TTL, rate limit, and bound must exist, but gives no allowed ranges for most numeric settings; only BINARY_MAX_READ_BYTES is explicitly a required positive integer.\",\"question\":\"May timeouts, TTLs, entropy sizes, challenge limits, and viewer-entry settings be zero, negative, fractional, or arbitrarily large?\",\"options\":[\"Require every duration/count/size to be a positive bounded integer\",\"Allow zero for disabling selected behavior\",\"Apply type checks only and allow any numeric value\",\"Define constraints separately per setting\"],\"default_guess\":\"Require positive integers for counts and byte sizes and positive finite numbers for timeouts, with explicit upper bounds where resource exhaustion is possible.\",\"witness\":{\"initial\":\"The environment sets REGISTRY timeout to 0 and staff session TTL to -1.\",\"events\":[\"The service validates startup configuration.\"],\"outcomes\":[\"Startup succeeds and all calls immediately time out/sessions are born expired.\",\"Startup fails because the values are outside the accepted domains.\"],\"observer\":\"The deployer sees whether the service starts.\"}},{\"unit\":\"A32\",\"subject\":\"Reproducibility and completeness of dependency pins\",\"kind\":\"non-reproducible operational rule\",\"text\":\"A32 pins only four direct requirements but says pip-audit resolves the packages pip installs for them and calls the check reproducible; transitive versions, Python/pip/pip-audit versions, package index state, and the advisory database snapshot are not pinned.\",\"question\":\"What exact environment and lock evidence make dependency resolution and the vulnerability result reproducible?\",\"options\":[\"Pin and hash the full transitive dependency closure plus toolchain and advisory snapshot\",\"Treat only the command invocation as reproducible even if its result changes\",\"Accept latest compatible transitive packages and current advisories at each deploy\",\"Vendor the resolved environment and scanner data\"],\"default_guess\":\"Generate and retain a fully pinned, hashed transitive lock plus the scanner/toolchain versions and audit report used for the deploy.\",\"witness\":{\"initial\":\"The same four-line requirements file is used for two deploys at different times.\",\"events\":[\"Each deploy runs pip-audit against the then-current package index and OSV data.\"],\"outcomes\":[\"Different compatible transitive versions or newly published advisories produce a different resolved set/result.\",\"A locked toolchain, dependency closure, and advisory snapshot reproduce the same result.\"],\"observer\":\"The deployment gate sees one deploy pass and another fail without any accepted pin changing.\"}}]}",
+ "set_aside": []
+}

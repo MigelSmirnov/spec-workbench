@@ -1,0 +1,963 @@
+{
+ "open_points": [
+  {
+   "unit": "A4",
+   "subject": "authorization of service principals",
+   "kind": "contradiction",
+   "text": "“Every project-scoped operation evaluates, in order: valid unexpired unrevoked session” conflicts with State 0: “for a service principal, its authenticated bearer credential … needs no separate session”.",
+   "question": "Does the first guard step accept an authenticated service bearer credential as the service principal’s complete authentication evidence, or must a service session exist?",
+   "options": [
+    "A valid bearer credential satisfies the first step for service principals.",
+    "Service principals require a separate session in addition to the bearer credential."
+   ],
+   "default_guess": "Treat the authenticated bearer credential as satisfying the first step.",
+   "witness": {
+    "initial": "An active service principal has a valid credential and scope for an active project, but no session record.",
+    "events": [
+     "The producer submits a valid snapshot publication using its bearer credential."
+    ],
+    "outcomes": [
+     "The import proceeds because service authentication needs no session.",
+     "The import is refused at the first guard step because no session exists."
+    ],
+    "observer": "The producer"
+   }
+  },
+  {
+   "unit": "A4",
+   "subject": "access-management revocations",
+   "kind": "contradiction",
+   "text": "“Every project-scoped operation” must reach the Registry lifecycle check, while R0-24 says revoking an existing viewer grant, staff assignment or producer grant “does not consult the Registry and succeeds … also while the Registry is unavailable”.",
+   "question": "Are project grant and assignment revocations exempt from the project-operation guard sequence and its Registry check?",
+   "options": [
+    "Use the separate access-management guard and never consult Registry for revocation.",
+    "Apply the complete project guard, including Registry, to revocation."
+   ],
+   "default_guess": "Use the separate access-management guard without Registry.",
+   "witness": {
+    "initial": "A viewer grant exists for a project and Registry is unavailable.",
+    "events": [
+     "An authenticated administrator with access-management capability revokes the grant."
+    ],
+    "outcomes": [
+     "Revocation succeeds without consulting Registry, as R0-24 requires.",
+     "Revocation fails at the Registry lifecycle step, as A4’s universal wording requires."
+    ],
+    "observer": "The administrator and the viewer"
+   }
+  },
+  {
+   "unit": "A4",
+   "subject": "project overview during Registry failure",
+   "kind": "contradiction",
+   "text": "A4 requires every project-scoped operation to pass the Registry lifecycle step, but State 1 says a Registry outage “no longer fails the whole overview” and instead yields unavailable project context beside independently available components.",
+   "question": "Does a Registry timeout reject a project-overview read at authorization, or may the overview return portal-owned components with project_availability temporarily_unavailable?",
+   "options": [
+    "Reject the entire overview before reading components.",
+    "Return the partial overview with unavailable Registry context."
+   ],
+   "default_guess": "Return the partial overview described by the later accepted projection change.",
+   "witness": {
+    "initial": "A viewer has an active session and grant; portal budget and expense data exist; Registry is timing out.",
+    "events": [
+     "The viewer requests the project overview."
+    ],
+    "outcomes": [
+     "The request is rejected by the mandatory Registry guard.",
+     "The request succeeds with project_availability=temporarily_unavailable and available portal-owned components."
+    ],
+    "observer": "The viewer"
+   }
+  },
+  {
+   "unit": "A4",
+   "subject": "concealed authorization failures",
+   "kind": "vague refusal contract",
+   "text": "“failures are indistinguishable to the caller regarding account/project existence beyond what their own access already proves” does not define which failures may be distinguished once some access has been proved.",
+   "question": "Which guard failures share one caller-visible refusal, and which may expose a distinct archived, unknown, unavailable, scope-denied or capability-denied result?",
+   "options": [
+    "All failures after authentication use one concealed refusal.",
+    "Only pre-access failures are concealed; later lifecycle failures are typed.",
+    "Define a specific equivalence class for every guard step."
+   ],
+   "default_guess": "Conceal authentication, principal, scope and capability failures; expose typed Registry lifecycle failures only after project access succeeds.",
+   "witness": {
+    "initial": "An authenticated operator is assigned to a project that Registry now reports unknown.",
+    "events": [
+     "The operator performs a project read."
+    ],
+    "outcomes": [
+     "The caller receives the same concealed refusal as an unassigned operator.",
+     "The caller receives a typed unknown-project result because the assignment already proves prior access."
+    ],
+    "observer": "The operator"
+   }
+  },
+  {
+   "unit": "A5",
+   "subject": "Registry validation before linked writes",
+   "kind": "contradiction",
+   "text": "“Mutation guards call validate server-side before every linked write” conflicts with R0-24’s rule that revoking grants and assignments performs no Registry call and succeeds during Registry failure.",
+   "question": "Does “every linked write” exclude access-management revocations, and if so, what is the exact excluded operation set?",
+   "options": [
+    "Exclude viewer-grant, staff-assignment and producer-grant revocations.",
+    "Validate Registry before those revocations too."
+   ],
+   "default_guess": "Exclude all three revocation operations explicitly.",
+   "witness": {
+    "initial": "A staff assignment exists and Registry is unavailable.",
+    "events": [
+     "An administrator revokes the assignment."
+    ],
+    "outcomes": [
+     "The write commits without Registry validation.",
+     "The write is refused because every linked write must first validate."
+    ],
+    "observer": "The administrator and assigned staff member"
+   }
+  },
+  {
+   "unit": "A6",
+   "subject": "Registry status decoding",
+   "kind": "overlapping classification",
+   "text": "A6 maps `exists=true, is_active=false` to `archived`, while A5 says any status literal other than `active` or `archived` is `schema_mismatch`.",
+   "question": "How is a response classified when it says exists=true and is_active=false but carries an unknown status literal?",
+   "options": [
+    "Classify it as archived from the boolean fields.",
+    "Classify it as schema_mismatch from the invalid status.",
+    "Apply a stated precedence rule between shape validation and semantic mapping."
+   ],
+   "default_guess": "Validate the status literal first and classify it as schema_mismatch.",
+   "witness": {
+    "initial": "Registry returns the requested UUID with exists=true, is_active=false and status=\"deleted\".",
+    "events": [
+     "The portal validates the response for a project mutation."
+    ],
+    "outcomes": [
+     "The portal reports archived_project.",
+     "The portal reports a Registry schema_mismatch."
+    ],
+    "observer": "The staff caller and audit/error handling"
+   }
+  },
+  {
+   "unit": "A6",
+   "subject": "Registry failure during snapshot import",
+   "kind": "missing outcome mapping",
+   "text": "The Registry gateway can produce timeout, transport_error, http_error, schema_mismatch or identity_mismatch, but SnapshotImportRecord’s closed rejection reasons contain no corresponding values and R0-25 says every classified rejection gets a fresh import result.",
+   "question": "When Registry validation fails for an operational or malformed-response reason, is the import attempt recorded, and with which closed outcome/reason?",
+   "options": [
+    "Do not classify or record it; propagate a Registry boundary error.",
+    "Record outcome=rejected after adding or selecting a closed import reason.",
+    "Translate some Registry failures to unknown_project or archived_project."
+   ],
+   "default_guess": "Propagate the Registry boundary error and create no import record unless a specific import-reason mapping is added.",
+   "witness": {
+    "initial": "A valid producer submits a valid publication for an in-scope project.",
+    "events": [
+     "Registry times out during project validation."
+    ],
+    "outcomes": [
+     "The request fails with no SnapshotImportRecord.",
+     "A fresh rejected SnapshotImportRecord is committed, requiring a reason not present in the catalog."
+    ],
+    "observer": "The producer reading the response or later import history"
+   }
+  },
+  {
+   "unit": "A8",
+   "subject": "WorkPayment replay",
+   "kind": "contradiction",
+   "text": "A8 says replay by `payment_id` “return existing payment”, while M33 says equal amount/date/description returns it and “any difference is a conflict that changes nothing”.",
+   "question": "Must a repeated payment_id compare the submitted payment content, and what happens when it differs?",
+   "options": [
+    "Return the existing payment regardless of submitted content.",
+    "Return it only for equal content and reject differing content as an integrity conflict."
+   ],
+   "default_guess": "Compare amount, date and description and reject a differing replay.",
+   "witness": {
+    "initial": "Payment P exists for EUR 100 on 2026-11-01.",
+    "events": [
+     "An operator submits payment_id P again with EUR 900 and the same date."
+    ],
+    "outcomes": [
+     "The existing EUR 100 payment is returned as a replay.",
+     "The request is rejected as a content conflict."
+    ],
+    "observer": "The operator"
+   }
+  },
+  {
+   "unit": "A8",
+   "subject": "snapshot integrity-conflict persistence",
+   "kind": "contradiction",
+   "text": "A8 says a different fingerprint for an existing snapshot identity causes `integrity_conflict, nothing stored`, while R0-25 and M19 require a fresh immutable SnapshotImportRecord for that conflict.",
+   "question": "Does “nothing stored” mean no new snapshot only, or no record of the attempt at all?",
+   "options": [
+    "Store a fresh integrity-conflict import record but no snapshot.",
+    "Store nothing, including no import record."
+   ],
+   "default_guess": "Store the fresh import record and no snapshot.",
+   "witness": {
+    "initial": "A snapshot already exists for one project, estimate_id and version.",
+    "events": [
+     "The producer republishes the same identity with different content."
+    ],
+    "outcomes": [
+     "A fresh integrity_conflict import result is persisted and returned.",
+     "The request is rejected without persisting any record."
+    ],
+    "observer": "The producer and an auditor"
+   }
+  },
+  {
+   "unit": "A9",
+   "subject": "boundary money precision",
+   "kind": "missing refusal rule",
+   "text": "“ROUND_HALF_UP at derivation boundaries; stored amounts are already 2-digit exact” does not say whether an input amount with more than two fractional digits is rejected or rounded before storage.",
+   "question": "What happens to otherwise valid boundary money such as EUR 1.005?",
+   "options": [
+    "Reject it as invalid precision.",
+    "Round it half-up to EUR 1.01 before storage.",
+    "Accept and store the higher precision despite the stated stored form."
+   ],
+   "default_guess": "Reject boundary amounts that are not already exactly representable at two fractional digits.",
+   "witness": {
+    "initial": "No corresponding expense or snapshot exists.",
+    "events": [
+     "An authorized caller submits a EUR amount of 1.005."
+    ],
+    "outcomes": [
+     "The request is rejected for invalid money precision.",
+     "The request succeeds and stores EUR 1.01."
+    ],
+    "observer": "The caller and later financial views"
+   }
+  },
+  {
+   "unit": "A9",
+   "subject": "overall-progress precision",
+   "kind": "missing rounding rule",
+   "text": "The overall-progress formula is specified, but its result scale and rounding point are not; only monetary derivations are explicitly rounded to two digits.",
+   "question": "At what precision is overall_progress_percent returned, and is each product, the numerator, or only the final quotient rounded?",
+   "options": [
+    "Return an exact/unbounded Decimal quotient.",
+    "Round only the final percentage to a specified scale.",
+    "Round intermediate weighted products before division."
+   ],
+   "default_guess": "Use exact Decimal products and round only the final percentage to two decimal places.",
+   "witness": {
+    "initial": "Two active sections have work_planned values 1.00 and 2.00 with completion 0 and 1 percent.",
+    "events": [
+     "A caller reads ProgressView."
+    ],
+    "outcomes": [
+     "overall_progress_percent is represented as the repeating Decimal 0.666….",
+     "overall_progress_percent is rounded to 0.67.",
+     "Intermediate rounding yields another permitted result."
+    ],
+    "observer": "Staff and viewers"
+   }
+  },
+  {
+   "unit": "A9",
+   "subject": "zero work-balance label",
+   "kind": "missing case",
+   "text": "“sign selects the presentation label (`Completed ahead of payments` / absolute value as `Unused advance payment`)” gives only positive and negative labels, while State 1 also defines `balanced`.",
+   "question": "Which label and displayed amount apply when completed work value equals payments total exactly?",
+   "options": [
+    "Use `balanced` with zero.",
+    "Use `completed_ahead_of_payments` with zero.",
+    "Use `unused_advance_payment` with zero."
+   ],
+   "default_guess": "Use `balanced` with zero.",
+   "witness": {
+    "initial": "Completed work and received payments are both EUR 1,000.00.",
+    "events": [
+     "A caller reads PaymentSummaryView."
+    ],
+    "outcomes": [
+     "The label is balanced.",
+     "One of the two sign-based labels is used for zero."
+    ],
+    "observer": "Staff and viewers"
+   }
+  },
+  {
+   "unit": "A11",
+   "subject": "service-principal disable and re-enable",
+   "kind": "underspecified cascade",
+   "text": "A11 says disabling makes credentials “unusable”, while M13 says disabling revokes every credential and re-enabling restores none.",
+   "question": "Does disabling persistently revoke each credential, or merely make credentials ineffective while principal status is disabled?",
+   "options": [
+    "Mark all credentials revoked; enabling requires a new credential.",
+    "Leave credential records unrevoked; enabling makes them usable again."
+   ],
+   "default_guess": "Persistently revoke every credential on disable.",
+   "witness": {
+    "initial": "An active service principal has an unexpired, unrevoked credential.",
+    "events": [
+     "An administrator disables the principal.",
+     "The administrator enables it again.",
+     "The producer retries with the old credential."
+    ],
+    "outcomes": [
+     "Authentication fails because disablement permanently revoked the credential.",
+     "Authentication succeeds because the credential was only temporarily unusable."
+    ],
+    "observer": "The producer and administrator"
+   }
+  },
+  {
+   "unit": "A12",
+   "subject": "producer scope and Registry-check ordering",
+   "kind": "contradictory order",
+   "text": "A12 defines `all_projects` as allowed for any “existing active project”, but A4 places project access before capability and Registry lifecycle, and A12 says scope is checked before content validation.",
+   "question": "May producer-scope evaluation call Registry to establish existence/activity before the later Registry lifecycle step, or is `all_projects` scope satisfied without Registry and activity checked only at the final guard step?",
+   "options": [
+    "Scope_mode alone satisfies project access; Registry activity is checked later.",
+    "The scope step itself calls Registry and therefore moves lifecycle validation earlier."
+   ],
+   "default_guess": "Treat scope_mode/grant as the scope step and perform Registry lifecycle validation only at A4’s final step.",
+   "witness": {
+    "initial": "An all_projects producer has a valid credential; the submitted project UUID is unknown to Registry.",
+    "events": [
+     "The producer submits a malformed snapshot body for that UUID."
+    ],
+    "outcomes": [
+     "Scope passes, capability passes, and Registry rejects unknown_project before content validation.",
+     "Scope itself rejects because the project is not an existing active project, collapsing two nominal guard steps."
+    ],
+    "observer": "The producer and import-record classification"
+   }
+  },
+  {
+   "unit": "A13",
+   "subject": "pending staff-account activation audit",
+   "kind": "missing audit action mapping",
+   "text": "The catalog has `staff.reinstate` and `staff.email_verified`, but no explicit action for the running service’s administrator transition `pending_verification → active`, which simultaneously marks email verified.",
+   "question": "Which single audit action records administrator activation of a pending account, or are two records required?",
+   "options": [
+    "Record `staff.reinstate`.",
+    "Record `staff.email_verified`.",
+    "Record both actions.",
+    "Add a distinct activation action."
+   ],
+   "default_guess": "Record `staff.email_verified` once, because this transition marks verification and is not reinstatement from suspension.",
+   "witness": {
+    "initial": "A newly created account is pending_verification with no verified timestamp.",
+    "events": [
+     "An administrator activates the account."
+    ],
+    "outcomes": [
+     "One audit record uses staff.reinstate.",
+     "One audit record uses staff.email_verified.",
+     "Two audit records are written, conflicting with a one-action interpretation."
+    ],
+    "observer": "An auditor"
+   }
+  },
+  {
+   "unit": "A13",
+   "subject": "audit records for cascaded actions",
+   "kind": "missing occurrence boundary",
+   "text": "“One audit record per action occurrence” does not define whether revocations performed as part of another command are separate action occurrences.",
+   "question": "When reissuing a viewer credential atomically revokes the old credential and all viewer sessions, which catalog actions and how many audit records are written?",
+   "options": [
+    "Write only `viewer.credential_issue` for the command.",
+    "Write `viewer.credential_issue` plus `viewer.credential_revoke` for each prior credential.",
+    "Treat every cascaded record change as separately audited where a catalog action exists."
+   ],
+   "default_guess": "Write one issue and one revoke record for the prior non-revoked credential; session revocations have no catalog action.",
+   "witness": {
+    "initial": "A viewer has one active credential and two active sessions.",
+    "events": [
+     "An administrator reissues the viewer access link."
+    ],
+    "outcomes": [
+     "Exactly one viewer.credential_issue record is added.",
+     "A viewer.credential_issue and viewer.credential_revoke record are added.",
+     "Additional records are attempted for session revocations despite no matching action."
+    ],
+    "observer": "An auditor"
+   }
+  },
+  {
+   "unit": "A13",
+   "subject": "significant-mutation subset",
+   "kind": "missing closed table",
+   "text": "The carried change says `rules.audit_significant_mutation_actions` is a closed subset “now listed”, but the text never identifies which catalog members belong to that subset.",
+   "question": "Exactly which rejected actions must produce a rejected audit record?",
+   "options": [
+    "Every mutation-like catalog action.",
+    "Every catalog action except reads and authentication.",
+    "Only an explicitly enumerated subset that must be added to the text."
+   ],
+   "default_guess": "Enumerate the subset explicitly; do not infer it from action names.",
+   "witness": {
+    "initial": "An administrator attempts to issue a credential for a revoked viewer and the operation is rejected.",
+    "events": [
+     "The owning use case classifies the refusal."
+    ],
+    "outcomes": [
+     "A rejected viewer.credential_issue audit record is mandatory.",
+     "No audit record is required because the action was not known to be in the missing subset."
+    ],
+    "observer": "An auditor"
+   }
+  },
+  {
+   "unit": "A13",
+   "subject": "audit rejection reason catalog",
+   "kind": "missing closed catalog",
+   "text": "INV-053 requires “a closed reason_code”, but `reason_code` is modeled as `str`, and no closed set or action-to-reason mapping is supplied.",
+   "question": "What are the permitted rejection reason codes for each significant mutation?",
+   "options": [
+    "Any non-blank string is permitted.",
+    "One global closed reason catalog applies.",
+    "Each audit action has its own closed reason set."
+   ],
+   "default_guess": "Define one closed global catalog with an explicit action-to-allowed-reasons table.",
+   "witness": {
+    "initial": "A budget activation is rejected because allocations are unresolved.",
+    "events": [
+     "The use case writes the required rejected audit record."
+    ],
+    "outcomes": [
+     "It stores reason_code=\"unresolved_allocations\".",
+     "It stores another non-blank spelling such as \"allocations_unresolved\"; both satisfy the present text but produce different audit contracts."
+    ],
+    "observer": "Audit consumers"
+   }
+  },
+  {
+   "unit": "A13",
+   "subject": "audit write failure",
+   "kind": "missing atomicity rule",
+   "text": "M36 says “Audit failures must not silently vanish; the owning-flow policy lands in State 2”, but A13 does not say whether failure to append audit rolls back the business mutation or allows it to commit with an error.",
+   "question": "Must every significant action and its AuditRecord commit atomically?",
+   "options": [
+    "Roll back the business change if its required audit append fails.",
+    "Commit the business change and surface or retry the audit failure separately."
+   ],
+   "default_guess": "Commit the business change and required audit record in the same transaction, rolling both back on audit failure.",
+   "witness": {
+    "initial": "An expense exists and its correction is valid, but the audit insert fails.",
+    "events": [
+     "An operator corrects the expense."
+    ],
+    "outcomes": [
+     "Neither correction nor audit record commits.",
+     "The correction commits without its mandatory audit record."
+    ],
+    "observer": "The operator and auditor"
+   }
+  },
+  {
+   "unit": "A14",
+   "subject": "hidden binary access by staff",
+   "kind": "vague eligibility rule",
+   "text": "The owning module must re-check “client-visible eligibility” before storage access, while State 1 only explicitly refuses a viewer when `client_visible=false` and staff listings include hidden documents.",
+   "question": "May authorized staff download a hidden expense document or progress photo?",
+   "options": [
+    "Staff with the read capability may download it; visibility restricts viewers only.",
+    "No caller may download it while client_visible=false."
+   ],
+   "default_guess": "Allow authorized staff and refuse viewers.",
+   "witness": {
+    "initial": "An active-project expense document exists with client_visible=false; an assigned operator has expense.read.",
+    "events": [
+     "The operator requests its binary."
+    ],
+    "outcomes": [
+     "The exact bytes are returned because visibility is a viewer restriction.",
+     "The request receives the concealed binary refusal because client-visible eligibility is mandatory for everyone."
+    ],
+    "observer": "The operator"
+   }
+  },
+  {
+   "unit": "A14",
+   "subject": "concealed binary failures",
+   "kind": "contradiction",
+   "text": "R0-12 requires unknown, cross-project, hidden, oversize and unlisted reads to be “answered the same way”, while A14 calls a missing source object an “explicit unavailable/not-found failure” and does not define a common response for the other cases.",
+   "question": "What single caller-visible result, if any, must all concealed binary failures share, including a missing storage object?",
+   "options": [
+    "All listed conditions return the same not-found response.",
+    "All return the same unavailable response.",
+    "Authorization failures are concealed together, but storage absence and size/type failures remain distinct."
+   ],
+   "default_guess": "Use one not-found-style response for unknown, cross-project, hidden, missing, oversize and unlisted cases.",
+   "witness": {
+    "initial": "An authorized viewer knows two document IDs: one is hidden and one points to a missing source object.",
+    "events": [
+     "The viewer requests each binary."
+    ],
+    "outcomes": [
+     "Both requests have identical status and body.",
+     "The hidden request is concealed while the missing object returns an explicit unavailable/not-found classification."
+    ],
+    "observer": "The viewer"
+   }
+  },
+  {
+   "unit": "A14",
+   "subject": "binary type recognition",
+   "kind": "missing exact classifier",
+   "text": "Media type is resolved from “leading signature bytes” for PDF, JPEG, PNG and WebP, but the accepted signatures, required byte count and handling of ambiguous/truncated signatures are not specified.",
+   "question": "What exact byte predicates classify each allowed media type, and what happens when a short or polyglot payload matches more than one predicate?",
+   "options": [
+    "Use a specified signature table with deterministic precedence.",
+    "Delegate classification to a library, allowing library-dependent results.",
+    "Reject every ambiguous or truncated match."
+   ],
+   "default_guess": "Define exact signatures and reject ambiguous or incomplete matches.",
+   "witness": {
+    "initial": "A stored photo begins with bytes accepted as WebP by one common detector but is truncated before the full RIFF/WEBP signature another detector requires.",
+    "events": [
+     "An authorized viewer downloads the photo."
+    ],
+    "outcomes": [
+     "It is returned as image/webp.",
+     "It is rejected as unrecognized content."
+    ],
+    "observer": "The viewer"
+   }
+  },
+  {
+   "unit": "A16",
+   "subject": "staff email syntax",
+   "kind": "missing validation grammar",
+   "text": "The email is “syntax-validated”, but no accepted grammar, Unicode domain policy, maximum lengths or IDNA handling is defined.",
+   "question": "Which exact email strings are valid before casefolding and uniqueness comparison?",
+   "options": [
+    "ASCII mailbox/domain syntax only.",
+    "Unicode local parts and domains are accepted directly.",
+    "Unicode domains are converted through a specified IDNA profile."
+   ],
+   "default_guess": "Use a conservative explicitly documented syntax with IDNA-normalized domains and stated length limits.",
+   "witness": {
+    "initial": "No staff account uses the address.",
+    "events": [
+     "An administrator creates an account with email `δοκιμή@παράδειγμα.δοκιμή`."
+    ],
+    "outcomes": [
+     "The address is accepted, casefolded and stored.",
+     "The request is rejected as invalid email syntax."
+    ],
+    "observer": "The administrator"
+   }
+  },
+  {
+   "unit": "A16",
+   "subject": "password control characters",
+   "kind": "ambiguous character class",
+   "text": "A password “contains no NUL/control characters”, but “control characters” is not tied to a Unicode category or explicit code-point set.",
+   "question": "Are only NUL and Unicode category Cc forbidden, or are format, surrogate, private-use and other Unicode C categories also forbidden?",
+   "options": [
+    "Forbid NUL and category Cc only.",
+    "Forbid all Unicode category C characters.",
+    "Use an explicit code-point/category list."
+   ],
+   "default_guess": "Forbid NUL and all Unicode Cc characters only, with the category stated.",
+   "witness": {
+    "initial": "A valid active staff account changes its password.",
+    "events": [
+     "The holder submits a 12-character password containing U+200D ZERO WIDTH JOINER."
+    ],
+    "outcomes": [
+     "The password is accepted because U+200D is a format character, not Cc.",
+     "The password is rejected because it is treated as a control character."
+    ],
+    "observer": "The staff holder"
+   }
+  },
+  {
+   "unit": "A17",
+   "subject": "verification-secret envelope format",
+   "kind": "missing wire format",
+   "text": "Tokens encode “a public record UUID selector plus a random secret”, but their delimiter, encoding, versioning, canonical UUID form and malformed-input rules are not defined.",
+   "question": "What exact plaintext token grammar must issuers and parsers share?",
+   "options": [
+    "Canonical UUID plus a delimiter plus base64url secret.",
+    "A binary structure encoded as base64url.",
+    "An opaque versioned format with a specified parser."
+   ],
+   "default_guess": "Use an explicitly versioned base64url-safe envelope containing canonical UUID and random bytes.",
+   "witness": {
+    "initial": "A session record and verification hash have been created.",
+    "events": [
+     "The issuing module serializes the selector and random secret.",
+     "A later request presents that token to another independently implemented parser."
+    ],
+    "outcomes": [
+     "The parser recovers the selector and verifies the secret.",
+     "The parser rejects the token because it chose a different delimiter or encoding."
+    ],
+    "observer": "The authenticating user or service"
+   }
+  },
+  {
+   "unit": "A19",
+   "subject": "zero-value expense allocation",
+   "kind": "missing edge case",
+   "text": "Allocations must sum to total_amount and each AllocationInstruction amount is greater than zero, but neither A19 nor the models say whether an expense total may be zero or whether an empty allocation set is valid.",
+   "question": "Can a confirmed zero-total expense be created, and if so, must it have no allocations or some special allocation representation?",
+   "options": [
+    "Reject zero-total expenses.",
+    "Allow zero total with an empty allocation list.",
+    "Allow a zero-valued allocation despite the positive-amount rule."
+   ],
+   "default_guess": "Reject zero-total expenses unless the model explicitly introduces a valid zero-allocation representation.",
+   "witness": {
+    "initial": "No expense exists for the recognized document.",
+    "events": [
+     "An operator submits a confirmed EUR 0.00 receipt with an empty allocation list."
+    ],
+    "outcomes": [
+     "Creation succeeds because the empty allocation sum equals zero.",
+     "Creation is refused because expenses or allocation sets must be positive/non-empty."
+    ],
+    "observer": "The operator and financial views"
+   }
+  },
+  {
+   "unit": "A20",
+   "subject": "eligible section for progress updates",
+   "kind": "missing refusal condition",
+   "text": "A20 only bounds the percentage and forbids photo-derived progress; M32 says only sections with planned work in the active version participate in derived progress but does not say which sections may receive an update.",
+   "question": "May staff set progress for a same-project PortalSection that has no plan in the active budget, or whose active plan has work_planned=0?",
+   "options": [
+    "Allow updates for any same-project PortalSection and merely exclude them from derivation.",
+    "Require a plan in the active version.",
+    "Require a plan with work_planned greater than zero."
+   ],
+   "default_guess": "Require the section to have a plan in the active version, while allowing zero-work plans to store progress but excluding them from weighting.",
+   "witness": {
+    "initial": "An active project has a PortalSection retained from an older budget but absent from the active version.",
+    "events": [
+     "An assigned operator sets its completion to 50 percent."
+    ],
+    "outcomes": [
+     "A SectionProgress record is stored but does not affect current progress.",
+     "The request is rejected because the section is not in the active version."
+    ],
+    "observer": "The operator and later progress views"
+   }
+  },
+  {
+   "unit": "A25",
+   "subject": "HTTP security headers",
+   "kind": "missing normative values",
+   "text": "“Fixed security headers are sent” does not list the headers or their exact values.",
+   "question": "Which headers and values must every JSON, binary, health, error and credential response contain?",
+   "options": [
+    "Use a specified global header table with response-kind overrides.",
+    "Let the chosen framework or implementer select customary headers.",
+    "Apply only `no-store` and `nosniff`, the two values named elsewhere."
+   ],
+   "default_guess": "Add an explicit response-class-to-header table.",
+   "witness": {
+    "initial": "The service is running with valid configuration.",
+    "events": [
+     "A client requests a JSON API response and a binary response."
+    ],
+    "outcomes": [
+     "Both include one implementer’s chosen CSP, frame, referrer and HSTS headers.",
+     "Another implementation emits only no-store/nosniff where expressly named."
+    ],
+    "observer": "Browsers, security scanners and API clients"
+   }
+  },
+  {
+   "unit": "A25",
+   "subject": "request and response bounds",
+   "kind": "missing configuration and refusal behavior",
+   "text": "“Request bodies and binary responses are bounded by runtime settings” names neither the body/response setting keys nor the exact response when a bound is exceeded; A30 lists only the binary read limit.",
+   "question": "What are the request-body and response ceilings, how are they configured, and at which transport stage is each enforced?",
+   "options": [
+    "Add required runtime settings and explicit too-large responses.",
+    "Use framework defaults for request bodies and BINARY_MAX_READ_BYTES for binaries.",
+    "Use one shared size setting for both directions."
+   ],
+   "default_guess": "Define separate required request-body and binary-response limits and reject before parsing or emission.",
+   "witness": {
+    "initial": "The service has BINARY_MAX_READ_BYTES but no documented request-body limit setting.",
+    "events": [
+     "A caller sends a very large JSON body to a route."
+    ],
+    "outcomes": [
+     "The transport rejects it before parsing using an implementer-chosen limit.",
+     "The handler receives it because no concrete limit can be obtained from the specified configuration."
+    ],
+    "observer": "The caller and service operator"
+   }
+  },
+  {
+   "unit": "A25",
+   "subject": "viewer-entry rate limiting",
+   "kind": "missing rate-limit policy",
+   "text": "Viewer entry is rate limited per client network address and route “with bounded memory”, but no window, attempt limit, eviction policy or concealed throttling response is specified.",
+   "question": "What exact rate, time window, state bound and caller-visible result govern viewer-entry attempts?",
+   "options": [
+    "Use a fixed-window policy with specified count, duration and capacity.",
+    "Use a token bucket with specified parameters.",
+    "Delegate all parameters to runtime configuration that must be enumerated."
+   ],
+   "default_guess": "Specify configurable count/window/capacity values and make throttled attempts indistinguishable from invalid credentials.",
+   "witness": {
+    "initial": "One network address has made several failed viewer-entry attempts.",
+    "events": [
+     "It makes the next attempt with a valid access link."
+    ],
+    "outcomes": [
+     "The attempt is throttled under one implementer’s threshold.",
+     "The attempt succeeds under another implementer’s threshold."
+    ],
+    "observer": "The viewer"
+   }
+  },
+  {
+   "unit": "A29",
+   "subject": "bootstrap audit requirement",
+   "kind": "contradiction",
+   "text": "A29 requires the bootstrap to insert a `staff.create` audit record, while R0-07 says the command’s creation is “never … audited”.",
+   "question": "Does successful first-administrator bootstrap write the system-actor staff.create audit record?",
+   "options": [
+    "Write the audit record atomically with the account.",
+    "Write no audit record."
+   ],
+   "default_guess": "Follow the later A29 rule and write the audit record atomically.",
+   "witness": {
+    "initial": "The staff table is empty.",
+    "events": [
+     "The host operator successfully bootstraps the first administrator."
+    ],
+    "outcomes": [
+     "The database contains the administrator and one system staff.create audit record.",
+     "The database contains the administrator and no audit record."
+    ],
+    "observer": "An auditor"
+   }
+  },
+  {
+   "unit": "A29",
+   "subject": "bootstrap confirmation input",
+   "kind": "missing command contract",
+   "text": "Exit code 1 means “confirmation did not match”, but neither R0-07 nor A29 defines what is confirmed, how many secret/non-secret prompts exist, or which comparison produces this outcome.",
+   "question": "What input is repeated for confirmation and what exact mismatch yields exit code 1?",
+   "options": [
+    "The password is entered twice and compared exactly.",
+    "Both email and password are confirmed.",
+    "A separate yes/no confirmation controls creation."
+   ],
+   "default_guess": "Read the password twice from a non-echoing terminal and compare it exactly.",
+   "witness": {
+    "initial": "The deployment has no staff accounts.",
+    "events": [
+     "The host operator supplies an email, one password value and a different confirmation value."
+    ],
+    "outcomes": [
+     "The command exits 1 because password confirmation differs.",
+     "The command treats confirmation as a yes/no step or email confirmation and reaches another outcome."
+    ],
+    "observer": "The host operator and deployment script"
+   }
+  },
+  {
+   "unit": "A29",
+   "subject": "bootstrap unexpected failures",
+   "kind": "incomplete closed exit contract",
+   "text": "The exit-code contract is declared closed with only codes 0–3, but no outcome is assigned to database, audit, hashing, terminal-input or other operational failures.",
+   "question": "How does the command report an unexpected operational failure without violating the closed exit-code and no-secret-disclosure rules?",
+   "options": [
+    "Add a closed generic-failure exit code.",
+    "Allow an uncaught process/runtime exit outside the contract.",
+    "Map all operational failures onto one of codes 1–3."
+   ],
+   "default_guess": "Add a distinct generic operational-failure exit code with a secret-free diagnostic.",
+   "witness": {
+    "initial": "The staff table is empty but the database becomes unwritable.",
+    "events": [
+     "The host operator runs bootstrap with valid matching inputs."
+    ],
+    "outcomes": [
+     "The process exits with an unspecified runtime-dependent code.",
+     "The failure is incorrectly mapped to identity rejection or already completed.",
+     "A new generic failure code is used, contradicting the current closed list."
+    ],
+    "observer": "The host operator and deployment script"
+   }
+  },
+  {
+   "unit": "A30",
+   "subject": "runtime environment variable table",
+   "kind": "missing configuration contract",
+   "text": "A30 refers to a “closed table of environment variables, their types, requiredness, normalization and per-environment defaults” but does not include that table.",
+   "question": "What are the complete names, types, requiredness rules, normalization and defaults for database path, binary root, trusted hosts, allowed origins, canonical public origin, size limits, rate limits and every other RuntimeSettings field?",
+   "options": [
+    "Include the complete closed table in State 2.",
+    "Let State 6 reconstruct it from external Factory artifacts.",
+    "Allow implementers to choose missing variables and defaults."
+   ],
+   "default_guess": "Include the complete table in State 2 before later states proceed.",
+   "witness": {
+    "initial": "Two teams implement startup using only these texts.",
+    "events": [
+     "Each configures database storage, trusted hosts and the public viewer origin."
+    ],
+    "outcomes": [
+     "One chooses DATABASE_PATH, TRUSTED_HOSTS and PUBLIC_ORIGIN as required variables.",
+     "The other chooses different names, defaults or combined settings; both satisfy the visible A30 text."
+    ],
+    "observer": "Deployers and HTTP clients"
+   }
+  },
+  {
+   "unit": "A30",
+   "subject": "password hashing parameters",
+   "kind": "unstable unspecified default",
+   "text": "`credential_hash_scheme = argon2id (library defaults)` does not state time cost, memory cost, parallelism, salt length, hash length or library/version whose defaults are normative.",
+   "question": "Which exact Argon2id parameters must be used, and how are existing hashes upgraded when configuration or library defaults change?",
+   "options": [
+    "Pin explicit Argon2id parameters in configuration.",
+    "Make a named pinned library version’s defaults normative.",
+    "Permit each deployment/library version to use its current defaults."
+   ],
+   "default_guess": "Specify explicit parameters and verify stored hashes in a version-aware form.",
+   "witness": {
+    "initial": "Two conforming implementations use different Argon2 libraries or versions.",
+    "events": [
+     "Each hashes the same newly supplied password."
+    ],
+    "outcomes": [
+     "One uses its library’s lower memory/time defaults.",
+     "The other uses different defaults, producing materially different security and resource behavior."
+    ],
+    "observer": "Service operators and authentication performance"
+   }
+  },
+  {
+   "unit": "A32",
+   "subject": "exact dependency pins",
+   "kind": "missing accepted values",
+   "text": "A32 requires the exact versions pinned in an external `requirements.txt`, but the versions themselves are absent from the accepted texts.",
+   "question": "Which exact fastapi, pydantic, argon2-cffi and uvicorn versions must later agents implement and assess?",
+   "options": [
+    "List the four exact pins in A32.",
+    "Treat any exact versions selected later as conforming.",
+    "Require access to the external Factory file despite the instruction that later work uses these texts alone."
+   ],
+   "default_guess": "Copy the exact four version pins into A32.",
+   "witness": {
+    "initial": "Two agents build deployment requirements from these texts alone.",
+    "events": [
+     "Each selects exact versions of the four named packages."
+    ],
+    "outcomes": [
+     "They choose different current versions, both satisfying the visible requirement to pin exactly.",
+     "Only one accidentally matches the inaccessible Factory deployment."
+    ],
+    "observer": "Deployers and vulnerability checks"
+   }
+  },
+  {
+   "unit": "A32",
+   "subject": "pre-deploy vulnerability decision",
+   "kind": "missing operational rule",
+   "text": "Pins are checked against “a public known-vulnerability database”, and a vulnerability that “affects the portal” blocks deploy, but neither the database, freshness requirement nor affectedness decision procedure is specified.",
+   "question": "Which advisory source and timestamp are authoritative, and who or what decides whether an advisory affects the portal?",
+   "options": [
+    "Name one database/tool and a maximum database age; every matching advisory blocks.",
+    "Aggregate specified databases and allow a documented reviewed exception.",
+    "Leave source and affectedness to each deployment operator."
+   ],
+   "default_guess": "Specify a reproducible scanner/database snapshot policy and a documented exception process.",
+   "witness": {
+    "initial": "A pinned library has an advisory affecting an optional feature the portal does not use.",
+    "events": [
+     "Two deployment pipelines run their pre-deploy checks against different public databases or interpretations."
+    ],
+    "outcomes": [
+     "One blocks deployment because the package/version matches the advisory.",
+     "The other deploys because it judges the vulnerable path unreachable or its database lacks the advisory."
+    ],
+    "observer": "Deployment operators and users"
+   }
+  },
+  {
+   "unit": "02_rules.md:Unresolved at State 2",
+   "subject": "PresuPro authentication transport",
+   "kind": "contradiction",
+   "text": "The unresolved list says “PresuPro→Portal transport binding (bearer/signed/mTLS)” remains unresolved, while R0-09, A25 and the ServicePrincipal text require bearer headers only.",
+   "question": "Is bearer-header authentication closed, or may later design still choose signed requests or mTLS?",
+   "options": [
+    "Bearer header only; remove the unresolved item.",
+    "Transport remains open among bearer, signed and mTLS, contradicting R0-09/A25."
+   ],
+   "default_guess": "Bearer header only.",
+   "witness": {
+    "initial": "A producer integration is being implemented.",
+    "events": [
+     "The producer sends a correctly formed signed request without a bearer header."
+    ],
+    "outcomes": [
+     "The request is refused because service principals authenticate only by bearer header.",
+     "The request may be accepted because transport binding was still unresolved."
+    ],
+    "observer": "The producer"
+   }
+  },
+  {
+   "unit": "02_rules.md:Unresolved at State 2",
+   "subject": "mandatory staff MFA",
+   "kind": "unresolved State-2 behavior",
+   "text": "“Mandatory MFA for staff” remains an open product question, although later authentication and HTTP code must decide whether password verification alone can create a StaffSession.",
+   "question": "Is MFA required for operators and administrators in the service being specified?",
+   "options": [
+    "No MFA in the current service.",
+    "MFA is mandatory for all staff.",
+    "MFA is mandatory only for administrators."
+   ],
+   "default_guess": "No MFA in the current service until an explicit factor model and flow are accepted.",
+   "witness": {
+    "initial": "An active verified administrator has a correct email and password and no second-factor record exists.",
+    "events": [
+     "The administrator submits a login request."
+    ],
+    "outcomes": [
+     "A StaffSession is issued after password verification.",
+     "Login cannot complete without an unspecified second factor."
+    ],
+    "observer": "The administrator"
+   }
+  },
+  {
+   "unit": "02_rules.md:State 2 readiness assessment",
+   "subject": "claim that every security category is resolved",
+   "kind": "contradictory readiness claim",
+   "text": "The readiness assessment says “every security category resolves to an accepted decision”, while mandatory staff MFA is still unresolved and the configuration/security policies omit concrete rate-limit, header and dependency values.",
+   "question": "What criterion permits State 2 to be ready while authentication and transport-security behavior still requires unresolved choices?",
+   "options": [
+    "State 2 is not ready until those choices are closed.",
+    "The unresolved items are explicitly declared out of the current service and the readiness claim is narrowed accordingly.",
+    "Later agents are expected to decide them silently."
+   ],
+   "default_guess": "Narrow the current service to no MFA and close the missing transport/configuration values before declaring readiness.",
+   "witness": {
+    "initial": "Two later agents accept the readiness statement and implement authentication independently.",
+    "events": [
+     "Each interprets the unresolved MFA item."
+    ],
+    "outcomes": [
+     "One ships password-only login.",
+     "The other blocks login pending a second factor."
+    ],
+    "observer": "All staff users"
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A4\",\"subject\":\"authorization of service principals\",\"kind\":\"contradiction\",\"text\":\"“Every project-scoped operation evaluates, in order: valid unexpired unrevoked session” conflicts with State 0: “for a service principal, its authenticated bearer credential … needs no separate session”.\",\"question\":\"Does the first guard step accept an authenticated service bearer credential as the service principal’s complete authentication evidence, or must a service session exist?\",\"options\":[\"A valid bearer credential satisfies the first step for service principals.\",\"Service principals require a separate session in addition to the bearer credential.\"],\"default_guess\":\"Treat the authenticated bearer credential as satisfying the first step.\",\"witness\":{\"initial\":\"An active service principal has a valid credential and scope for an active project, but no session record.\",\"events\":[\"The producer submits a valid snapshot publication using its bearer credential.\"],\"outcomes\":[\"The import proceeds because service authentication needs no session.\",\"The import is refused at the first guard step because no session exists.\"],\"observer\":\"The producer\"}},{\"unit\":\"A4\",\"subject\":\"access-management revocations\",\"kind\":\"contradiction\",\"text\":\"“Every project-scoped operation” must reach the Registry lifecycle check, while R0-24 says revoking an existing viewer grant, staff assignment or producer grant “does not consult the Registry and succeeds … also while the Registry is unavailable”.\",\"question\":\"Are project grant and assignment revocations exempt from the project-operation guard sequence and its Registry check?\",\"options\":[\"Use the separate access-management guard and never consult Registry for revocation.\",\"Apply the complete project guard, including Registry, to revocation.\"],\"default_guess\":\"Use the separate access-management guard without Registry.\",\"witness\":{\"initial\":\"A viewer grant exists for a project and Registry is unavailable.\",\"events\":[\"An authenticated administrator with access-management capability revokes the grant.\"],\"outcomes\":[\"Revocation succeeds without consulting Registry, as R0-24 requires.\",\"Revocation fails at the Registry lifecycle step, as A4’s universal wording requires.\"],\"observer\":\"The administrator and the viewer\"}},{\"unit\":\"A4\",\"subject\":\"project overview during Registry failure\",\"kind\":\"contradiction\",\"text\":\"A4 requires every project-scoped operation to pass the Registry lifecycle step, but State 1 says a Registry outage “no longer fails the whole overview” and instead yields unavailable project context beside independently available components.\",\"question\":\"Does a Registry timeout reject a project-overview read at authorization, or may the overview return portal-owned components with project_availability temporarily_unavailable?\",\"options\":[\"Reject the entire overview before reading components.\",\"Return the partial overview with unavailable Registry context.\"],\"default_guess\":\"Return the partial overview described by the later accepted projection change.\",\"witness\":{\"initial\":\"A viewer has an active session and grant; portal budget and expense data exist; Registry is timing out.\",\"events\":[\"The viewer requests the project overview.\"],\"outcomes\":[\"The request is rejected by the mandatory Registry guard.\",\"The request succeeds with project_availability=temporarily_unavailable and available portal-owned components.\"],\"observer\":\"The viewer\"}},{\"unit\":\"A4\",\"subject\":\"concealed authorization failures\",\"kind\":\"vague refusal contract\",\"text\":\"“failures are indistinguishable to the caller regarding account/project existence beyond what their own access already proves” does not define which failures may be distinguished once some access has been proved.\",\"question\":\"Which guard failures share one caller-visible refusal, and which may expose a distinct archived, unknown, unavailable, scope-denied or capability-denied result?\",\"options\":[\"All failures after authentication use one concealed refusal.\",\"Only pre-access failures are concealed; later lifecycle failures are typed.\",\"Define a specific equivalence class for every guard step.\"],\"default_guess\":\"Conceal authentication, principal, scope and capability failures; expose typed Registry lifecycle failures only after project access succeeds.\",\"witness\":{\"initial\":\"An authenticated operator is assigned to a project that Registry now reports unknown.\",\"events\":[\"The operator performs a project read.\"],\"outcomes\":[\"The caller receives the same concealed refusal as an unassigned operator.\",\"The caller receives a typed unknown-project result because the assignment already proves prior access.\"],\"observer\":\"The operator\"}},{\"unit\":\"A5\",\"subject\":\"Registry validation before linked writes\",\"kind\":\"contradiction\",\"text\":\"“Mutation guards call validate server-side before every linked write” conflicts with R0-24’s rule that revoking grants and assignments performs no Registry call and succeeds during Registry failure.\",\"question\":\"Does “every linked write” exclude access-management revocations, and if so, what is the exact excluded operation set?\",\"options\":[\"Exclude viewer-grant, staff-assignment and producer-grant revocations.\",\"Validate Registry before those revocations too.\"],\"default_guess\":\"Exclude all three revocation operations explicitly.\",\"witness\":{\"initial\":\"A staff assignment exists and Registry is unavailable.\",\"events\":[\"An administrator revokes the assignment.\"],\"outcomes\":[\"The write commits without Registry validation.\",\"The write is refused because every linked write must first validate.\"],\"observer\":\"The administrator and assigned staff member\"}},{\"unit\":\"A6\",\"subject\":\"Registry status decoding\",\"kind\":\"overlapping classification\",\"text\":\"A6 maps `exists=true, is_active=false` to `archived`, while A5 says any status literal other than `active` or `archived` is `schema_mismatch`.\",\"question\":\"How is a response classified when it says exists=true and is_active=false but carries an unknown status literal?\",\"options\":[\"Classify it as archived from the boolean fields.\",\"Classify it as schema_mismatch from the invalid status.\",\"Apply a stated precedence rule between shape validation and semantic mapping.\"],\"default_guess\":\"Validate the status literal first and classify it as schema_mismatch.\",\"witness\":{\"initial\":\"Registry returns the requested UUID with exists=true, is_active=false and status=\\\"deleted\\\".\",\"events\":[\"The portal validates the response for a project mutation.\"],\"outcomes\":[\"The portal reports archived_project.\",\"The portal reports a Registry schema_mismatch.\"],\"observer\":\"The staff caller and audit/error handling\"}},{\"unit\":\"A6\",\"subject\":\"Registry failure during snapshot import\",\"kind\":\"missing outcome mapping\",\"text\":\"The Registry gateway can produce timeout, transport_error, http_error, schema_mismatch or identity_mismatch, but SnapshotImportRecord’s closed rejection reasons contain no corresponding values and R0-25 says every classified rejection gets a fresh import result.\",\"question\":\"When Registry validation fails for an operational or malformed-response reason, is the import attempt recorded, and with which closed outcome/reason?\",\"options\":[\"Do not classify or record it; propagate a Registry boundary error.\",\"Record outcome=rejected after adding or selecting a closed import reason.\",\"Translate some Registry failures to unknown_project or archived_project.\"],\"default_guess\":\"Propagate the Registry boundary error and create no import record unless a specific import-reason mapping is added.\",\"witness\":{\"initial\":\"A valid producer submits a valid publication for an in-scope project.\",\"events\":[\"Registry times out during project validation.\"],\"outcomes\":[\"The request fails with no SnapshotImportRecord.\",\"A fresh rejected SnapshotImportRecord is committed, requiring a reason not present in the catalog.\"],\"observer\":\"The producer reading the response or later import history\"}},{\"unit\":\"A8\",\"subject\":\"WorkPayment replay\",\"kind\":\"contradiction\",\"text\":\"A8 says replay by `payment_id` “return existing payment”, while M33 says equal amount/date/description returns it and “any difference is a conflict that changes nothing”.\",\"question\":\"Must a repeated payment_id compare the submitted payment content, and what happens when it differs?\",\"options\":[\"Return the existing payment regardless of submitted content.\",\"Return it only for equal content and reject differing content as an integrity conflict.\"],\"default_guess\":\"Compare amount, date and description and reject a differing replay.\",\"witness\":{\"initial\":\"Payment P exists for EUR 100 on 2026-11-01.\",\"events\":[\"An operator submits payment_id P again with EUR 900 and the same date.\"],\"outcomes\":[\"The existing EUR 100 payment is returned as a replay.\",\"The request is rejected as a content conflict.\"],\"observer\":\"The operator\"}},{\"unit\":\"A8\",\"subject\":\"snapshot integrity-conflict persistence\",\"kind\":\"contradiction\",\"text\":\"A8 says a different fingerprint for an existing snapshot identity causes `integrity_conflict, nothing stored`, while R0-25 and M19 require a fresh immutable SnapshotImportRecord for that conflict.\",\"question\":\"Does “nothing stored” mean no new snapshot only, or no record of the attempt at all?\",\"options\":[\"Store a fresh integrity-conflict import record but no snapshot.\",\"Store nothing, including no import record.\"],\"default_guess\":\"Store the fresh import record and no snapshot.\",\"witness\":{\"initial\":\"A snapshot already exists for one project, estimate_id and version.\",\"events\":[\"The producer republishes the same identity with different content.\"],\"outcomes\":[\"A fresh integrity_conflict import result is persisted and returned.\",\"The request is rejected without persisting any record.\"],\"observer\":\"The producer and an auditor\"}},{\"unit\":\"A9\",\"subject\":\"boundary money precision\",\"kind\":\"missing refusal rule\",\"text\":\"“ROUND_HALF_UP at derivation boundaries; stored amounts are already 2-digit exact” does not say whether an input amount with more than two fractional digits is rejected or rounded before storage.\",\"question\":\"What happens to otherwise valid boundary money such as EUR 1.005?\",\"options\":[\"Reject it as invalid precision.\",\"Round it half-up to EUR 1.01 before storage.\",\"Accept and store the higher precision despite the stated stored form.\"],\"default_guess\":\"Reject boundary amounts that are not already exactly representable at two fractional digits.\",\"witness\":{\"initial\":\"No corresponding expense or snapshot exists.\",\"events\":[\"An authorized caller submits a EUR amount of 1.005.\"],\"outcomes\":[\"The request is rejected for invalid money precision.\",\"The request succeeds and stores EUR 1.01.\"],\"observer\":\"The caller and later financial views\"}},{\"unit\":\"A9\",\"subject\":\"overall-progress precision\",\"kind\":\"missing rounding rule\",\"text\":\"The overall-progress formula is specified, but its result scale and rounding point are not; only monetary derivations are explicitly rounded to two digits.\",\"question\":\"At what precision is overall_progress_percent returned, and is each product, the numerator, or only the final quotient rounded?\",\"options\":[\"Return an exact/unbounded Decimal quotient.\",\"Round only the final percentage to a specified scale.\",\"Round intermediate weighted products before division.\"],\"default_guess\":\"Use exact Decimal products and round only the final percentage to two decimal places.\",\"witness\":{\"initial\":\"Two active sections have work_planned values 1.00 and 2.00 with completion 0 and 1 percent.\",\"events\":[\"A caller reads ProgressView.\"],\"outcomes\":[\"overall_progress_percent is represented as the repeating Decimal 0.666….\",\"overall_progress_percent is rounded to 0.67.\",\"Intermediate rounding yields another permitted result.\"],\"observer\":\"Staff and viewers\"}},{\"unit\":\"A9\",\"subject\":\"zero work-balance label\",\"kind\":\"missing case\",\"text\":\"“sign selects the presentation label (`Completed ahead of payments` / absolute value as `Unused advance payment`)” gives only positive and negative labels, while State 1 also defines `balanced`.\",\"question\":\"Which label and displayed amount apply when completed work value equals payments total exactly?\",\"options\":[\"Use `balanced` with zero.\",\"Use `completed_ahead_of_payments` with zero.\",\"Use `unused_advance_payment` with zero.\"],\"default_guess\":\"Use `balanced` with zero.\",\"witness\":{\"initial\":\"Completed work and received payments are both EUR 1,000.00.\",\"events\":[\"A caller reads PaymentSummaryView.\"],\"outcomes\":[\"The label is balanced.\",\"One of the two sign-based labels is used for zero.\"],\"observer\":\"Staff and viewers\"}},{\"unit\":\"A11\",\"subject\":\"service-principal disable and re-enable\",\"kind\":\"underspecified cascade\",\"text\":\"A11 says disabling makes credentials “unusable”, while M13 says disabling revokes every credential and re-enabling restores none.\",\"question\":\"Does disabling persistently revoke each credential, or merely make credentials ineffective while principal status is disabled?\",\"options\":[\"Mark all credentials revoked; enabling requires a new credential.\",\"Leave credential records unrevoked; enabling makes them usable again.\"],\"default_guess\":\"Persistently revoke every credential on disable.\",\"witness\":{\"initial\":\"An active service principal has an unexpired, unrevoked credential.\",\"events\":[\"An administrator disables the principal.\",\"The administrator enables it again.\",\"The producer retries with the old credential.\"],\"outcomes\":[\"Authentication fails because disablement permanently revoked the credential.\",\"Authentication succeeds because the credential was only temporarily unusable.\"],\"observer\":\"The producer and administrator\"}},{\"unit\":\"A12\",\"subject\":\"producer scope and Registry-check ordering\",\"kind\":\"contradictory order\",\"text\":\"A12 defines `all_projects` as allowed for any “existing active project”, but A4 places project access before capability and Registry lifecycle, and A12 says scope is checked before content validation.\",\"question\":\"May producer-scope evaluation call Registry to establish existence/activity before the later Registry lifecycle step, or is `all_projects` scope satisfied without Registry and activity checked only at the final guard step?\",\"options\":[\"Scope_mode alone satisfies project access; Registry activity is checked later.\",\"The scope step itself calls Registry and therefore moves lifecycle validation earlier.\"],\"default_guess\":\"Treat scope_mode/grant as the scope step and perform Registry lifecycle validation only at A4’s final step.\",\"witness\":{\"initial\":\"An all_projects producer has a valid credential; the submitted project UUID is unknown to Registry.\",\"events\":[\"The producer submits a malformed snapshot body for that UUID.\"],\"outcomes\":[\"Scope passes, capability passes, and Registry rejects unknown_project before content validation.\",\"Scope itself rejects because the project is not an existing active project, collapsing two nominal guard steps.\"],\"observer\":\"The producer and import-record classification\"}},{\"unit\":\"A13\",\"subject\":\"pending staff-account activation audit\",\"kind\":\"missing audit action mapping\",\"text\":\"The catalog has `staff.reinstate` and `staff.email_verified`, but no explicit action for the running service’s administrator transition `pending_verification → active`, which simultaneously marks email verified.\",\"question\":\"Which single audit action records administrator activation of a pending account, or are two records required?\",\"options\":[\"Record `staff.reinstate`.\",\"Record `staff.email_verified`.\",\"Record both actions.\",\"Add a distinct activation action.\"],\"default_guess\":\"Record `staff.email_verified` once, because this transition marks verification and is not reinstatement from suspension.\",\"witness\":{\"initial\":\"A newly created account is pending_verification with no verified timestamp.\",\"events\":[\"An administrator activates the account.\"],\"outcomes\":[\"One audit record uses staff.reinstate.\",\"One audit record uses staff.email_verified.\",\"Two audit records are written, conflicting with a one-action interpretation.\"],\"observer\":\"An auditor\"}},{\"unit\":\"A13\",\"subject\":\"audit records for cascaded actions\",\"kind\":\"missing occurrence boundary\",\"text\":\"“One audit record per action occurrence” does not define whether revocations performed as part of another command are separate action occurrences.\",\"question\":\"When reissuing a viewer credential atomically revokes the old credential and all viewer sessions, which catalog actions and how many audit records are written?\",\"options\":[\"Write only `viewer.credential_issue` for the command.\",\"Write `viewer.credential_issue` plus `viewer.credential_revoke` for each prior credential.\",\"Treat every cascaded record change as separately audited where a catalog action exists.\"],\"default_guess\":\"Write one issue and one revoke record for the prior non-revoked credential; session revocations have no catalog action.\",\"witness\":{\"initial\":\"A viewer has one active credential and two active sessions.\",\"events\":[\"An administrator reissues the viewer access link.\"],\"outcomes\":[\"Exactly one viewer.credential_issue record is added.\",\"A viewer.credential_issue and viewer.credential_revoke record are added.\",\"Additional records are attempted for session revocations despite no matching action.\"],\"observer\":\"An auditor\"}},{\"unit\":\"A13\",\"subject\":\"significant-mutation subset\",\"kind\":\"missing closed table\",\"text\":\"The carried change says `rules.audit_significant_mutation_actions` is a closed subset “now listed”, but the text never identifies which catalog members belong to that subset.\",\"question\":\"Exactly which rejected actions must produce a rejected audit record?\",\"options\":[\"Every mutation-like catalog action.\",\"Every catalog action except reads and authentication.\",\"Only an explicitly enumerated subset that must be added to the text.\"],\"default_guess\":\"Enumerate the subset explicitly; do not infer it from action names.\",\"witness\":{\"initial\":\"An administrator attempts to issue a credential for a revoked viewer and the operation is rejected.\",\"events\":[\"The owning use case classifies the refusal.\"],\"outcomes\":[\"A rejected viewer.credential_issue audit record is mandatory.\",\"No audit record is required because the action was not known to be in the missing subset.\"],\"observer\":\"An auditor\"}},{\"unit\":\"A13\",\"subject\":\"audit rejection reason catalog\",\"kind\":\"missing closed catalog\",\"text\":\"INV-053 requires “a closed reason_code”, but `reason_code` is modeled as `str`, and no closed set or action-to-reason mapping is supplied.\",\"question\":\"What are the permitted rejection reason codes for each significant mutation?\",\"options\":[\"Any non-blank string is permitted.\",\"One global closed reason catalog applies.\",\"Each audit action has its own closed reason set.\"],\"default_guess\":\"Define one closed global catalog with an explicit action-to-allowed-reasons table.\",\"witness\":{\"initial\":\"A budget activation is rejected because allocations are unresolved.\",\"events\":[\"The use case writes the required rejected audit record.\"],\"outcomes\":[\"It stores reason_code=\\\"unresolved_allocations\\\".\",\"It stores another non-blank spelling such as \\\"allocations_unresolved\\\"; both satisfy the present text but produce different audit contracts.\"],\"observer\":\"Audit consumers\"}},{\"unit\":\"A13\",\"subject\":\"audit write failure\",\"kind\":\"missing atomicity rule\",\"text\":\"M36 says “Audit failures must not silently vanish; the owning-flow policy lands in State 2”, but A13 does not say whether failure to append audit rolls back the business mutation or allows it to commit with an error.\",\"question\":\"Must every significant action and its AuditRecord commit atomically?\",\"options\":[\"Roll back the business change if its required audit append fails.\",\"Commit the business change and surface or retry the audit failure separately.\"],\"default_guess\":\"Commit the business change and required audit record in the same transaction, rolling both back on audit failure.\",\"witness\":{\"initial\":\"An expense exists and its correction is valid, but the audit insert fails.\",\"events\":[\"An operator corrects the expense.\"],\"outcomes\":[\"Neither correction nor audit record commits.\",\"The correction commits without its mandatory audit record.\"],\"observer\":\"The operator and auditor\"}},{\"unit\":\"A14\",\"subject\":\"hidden binary access by staff\",\"kind\":\"vague eligibility rule\",\"text\":\"The owning module must re-check “client-visible eligibility” before storage access, while State 1 only explicitly refuses a viewer when `client_visible=false` and staff listings include hidden documents.\",\"question\":\"May authorized staff download a hidden expense document or progress photo?\",\"options\":[\"Staff with the read capability may download it; visibility restricts viewers only.\",\"No caller may download it while client_visible=false.\"],\"default_guess\":\"Allow authorized staff and refuse viewers.\",\"witness\":{\"initial\":\"An active-project expense document exists with client_visible=false; an assigned operator has expense.read.\",\"events\":[\"The operator requests its binary.\"],\"outcomes\":[\"The exact bytes are returned because visibility is a viewer restriction.\",\"The request receives the concealed binary refusal because client-visible eligibility is mandatory for everyone.\"],\"observer\":\"The operator\"}},{\"unit\":\"A14\",\"subject\":\"concealed binary failures\",\"kind\":\"contradiction\",\"text\":\"R0-12 requires unknown, cross-project, hidden, oversize and unlisted reads to be “answered the same way”, while A14 calls a missing source object an “explicit unavailable/not-found failure” and does not define a common response for the other cases.\",\"question\":\"What single caller-visible result, if any, must all concealed binary failures share, including a missing storage object?\",\"options\":[\"All listed conditions return the same not-found response.\",\"All return the same unavailable response.\",\"Authorization failures are concealed together, but storage absence and size/type failures remain distinct.\"],\"default_guess\":\"Use one not-found-style response for unknown, cross-project, hidden, missing, oversize and unlisted cases.\",\"witness\":{\"initial\":\"An authorized viewer knows two document IDs: one is hidden and one points to a missing source object.\",\"events\":[\"The viewer requests each binary.\"],\"outcomes\":[\"Both requests have identical status and body.\",\"The hidden request is concealed while the missing object returns an explicit unavailable/not-found classification.\"],\"observer\":\"The viewer\"}},{\"unit\":\"A14\",\"subject\":\"binary type recognition\",\"kind\":\"missing exact classifier\",\"text\":\"Media type is resolved from “leading signature bytes” for PDF, JPEG, PNG and WebP, but the accepted signatures, required byte count and handling of ambiguous/truncated signatures are not specified.\",\"question\":\"What exact byte predicates classify each allowed media type, and what happens when a short or polyglot payload matches more than one predicate?\",\"options\":[\"Use a specified signature table with deterministic precedence.\",\"Delegate classification to a library, allowing library-dependent results.\",\"Reject every ambiguous or truncated match.\"],\"default_guess\":\"Define exact signatures and reject ambiguous or incomplete matches.\",\"witness\":{\"initial\":\"A stored photo begins with bytes accepted as WebP by one common detector but is truncated before the full RIFF/WEBP signature another detector requires.\",\"events\":[\"An authorized viewer downloads the photo.\"],\"outcomes\":[\"It is returned as image/webp.\",\"It is rejected as unrecognized content.\"],\"observer\":\"The viewer\"}},{\"unit\":\"A16\",\"subject\":\"staff email syntax\",\"kind\":\"missing validation grammar\",\"text\":\"The email is “syntax-validated”, but no accepted grammar, Unicode domain policy, maximum lengths or IDNA handling is defined.\",\"question\":\"Which exact email strings are valid before casefolding and uniqueness comparison?\",\"options\":[\"ASCII mailbox/domain syntax only.\",\"Unicode local parts and domains are accepted directly.\",\"Unicode domains are converted through a specified IDNA profile.\"],\"default_guess\":\"Use a conservative explicitly documented syntax with IDNA-normalized domains and stated length limits.\",\"witness\":{\"initial\":\"No staff account uses the address.\",\"events\":[\"An administrator creates an account with email `δοκιμή@παράδειγμα.δοκιμή`.\"],\"outcomes\":[\"The address is accepted, casefolded and stored.\",\"The request is rejected as invalid email syntax.\"],\"observer\":\"The administrator\"}},{\"unit\":\"A16\",\"subject\":\"password control characters\",\"kind\":\"ambiguous character class\",\"text\":\"A password “contains no NUL/control characters”, but “control characters” is not tied to a Unicode category or explicit code-point set.\",\"question\":\"Are only NUL and Unicode category Cc forbidden, or are format, surrogate, private-use and other Unicode C categories also forbidden?\",\"options\":[\"Forbid NUL and category Cc only.\",\"Forbid all Unicode category C characters.\",\"Use an explicit code-point/category list.\"],\"default_guess\":\"Forbid NUL and all Unicode Cc characters only, with the category stated.\",\"witness\":{\"initial\":\"A valid active staff account changes its password.\",\"events\":[\"The holder submits a 12-character password containing U+200D ZERO WIDTH JOINER.\"],\"outcomes\":[\"The password is accepted because U+200D is a format character, not Cc.\",\"The password is rejected because it is treated as a control character.\"],\"observer\":\"The staff holder\"}},{\"unit\":\"A17\",\"subject\":\"verification-secret envelope format\",\"kind\":\"missing wire format\",\"text\":\"Tokens encode “a public record UUID selector plus a random secret”, but their delimiter, encoding, versioning, canonical UUID form and malformed-input rules are not defined.\",\"question\":\"What exact plaintext token grammar must issuers and parsers share?\",\"options\":[\"Canonical UUID plus a delimiter plus base64url secret.\",\"A binary structure encoded as base64url.\",\"An opaque versioned format with a specified parser.\"],\"default_guess\":\"Use an explicitly versioned base64url-safe envelope containing canonical UUID and random bytes.\",\"witness\":{\"initial\":\"A session record and verification hash have been created.\",\"events\":[\"The issuing module serializes the selector and random secret.\",\"A later request presents that token to another independently implemented parser.\"],\"outcomes\":[\"The parser recovers the selector and verifies the secret.\",\"The parser rejects the token because it chose a different delimiter or encoding.\"],\"observer\":\"The authenticating user or service\"}},{\"unit\":\"A19\",\"subject\":\"zero-value expense allocation\",\"kind\":\"missing edge case\",\"text\":\"Allocations must sum to total_amount and each AllocationInstruction amount is greater than zero, but neither A19 nor the models say whether an expense total may be zero or whether an empty allocation set is valid.\",\"question\":\"Can a confirmed zero-total expense be created, and if so, must it have no allocations or some special allocation representation?\",\"options\":[\"Reject zero-total expenses.\",\"Allow zero total with an empty allocation list.\",\"Allow a zero-valued allocation despite the positive-amount rule.\"],\"default_guess\":\"Reject zero-total expenses unless the model explicitly introduces a valid zero-allocation representation.\",\"witness\":{\"initial\":\"No expense exists for the recognized document.\",\"events\":[\"An operator submits a confirmed EUR 0.00 receipt with an empty allocation list.\"],\"outcomes\":[\"Creation succeeds because the empty allocation sum equals zero.\",\"Creation is refused because expenses or allocation sets must be positive/non-empty.\"],\"observer\":\"The operator and financial views\"}},{\"unit\":\"A20\",\"subject\":\"eligible section for progress updates\",\"kind\":\"missing refusal condition\",\"text\":\"A20 only bounds the percentage and forbids photo-derived progress; M32 says only sections with planned work in the active version participate in derived progress but does not say which sections may receive an update.\",\"question\":\"May staff set progress for a same-project PortalSection that has no plan in the active budget, or whose active plan has work_planned=0?\",\"options\":[\"Allow updates for any same-project PortalSection and merely exclude them from derivation.\",\"Require a plan in the active version.\",\"Require a plan with work_planned greater than zero.\"],\"default_guess\":\"Require the section to have a plan in the active version, while allowing zero-work plans to store progress but excluding them from weighting.\",\"witness\":{\"initial\":\"An active project has a PortalSection retained from an older budget but absent from the active version.\",\"events\":[\"An assigned operator sets its completion to 50 percent.\"],\"outcomes\":[\"A SectionProgress record is stored but does not affect current progress.\",\"The request is rejected because the section is not in the active version.\"],\"observer\":\"The operator and later progress views\"}},{\"unit\":\"A25\",\"subject\":\"HTTP security headers\",\"kind\":\"missing normative values\",\"text\":\"“Fixed security headers are sent” does not list the headers or their exact values.\",\"question\":\"Which headers and values must every JSON, binary, health, error and credential response contain?\",\"options\":[\"Use a specified global header table with response-kind overrides.\",\"Let the chosen framework or implementer select customary headers.\",\"Apply only `no-store` and `nosniff`, the two values named elsewhere.\"],\"default_guess\":\"Add an explicit response-class-to-header table.\",\"witness\":{\"initial\":\"The service is running with valid configuration.\",\"events\":[\"A client requests a JSON API response and a binary response.\"],\"outcomes\":[\"Both include one implementer’s chosen CSP, frame, referrer and HSTS headers.\",\"Another implementation emits only no-store/nosniff where expressly named.\"],\"observer\":\"Browsers, security scanners and API clients\"}},{\"unit\":\"A25\",\"subject\":\"request and response bounds\",\"kind\":\"missing configuration and refusal behavior\",\"text\":\"“Request bodies and binary responses are bounded by runtime settings” names neither the body/response setting keys nor the exact response when a bound is exceeded; A30 lists only the binary read limit.\",\"question\":\"What are the request-body and response ceilings, how are they configured, and at which transport stage is each enforced?\",\"options\":[\"Add required runtime settings and explicit too-large responses.\",\"Use framework defaults for request bodies and BINARY_MAX_READ_BYTES for binaries.\",\"Use one shared size setting for both directions.\"],\"default_guess\":\"Define separate required request-body and binary-response limits and reject before parsing or emission.\",\"witness\":{\"initial\":\"The service has BINARY_MAX_READ_BYTES but no documented request-body limit setting.\",\"events\":[\"A caller sends a very large JSON body to a route.\"],\"outcomes\":[\"The transport rejects it before parsing using an implementer-chosen limit.\",\"The handler receives it because no concrete limit can be obtained from the specified configuration.\"],\"observer\":\"The caller and service operator\"}},{\"unit\":\"A25\",\"subject\":\"viewer-entry rate limiting\",\"kind\":\"missing rate-limit policy\",\"text\":\"Viewer entry is rate limited per client network address and route “with bounded memory”, but no window, attempt limit, eviction policy or concealed throttling response is specified.\",\"question\":\"What exact rate, time window, state bound and caller-visible result govern viewer-entry attempts?\",\"options\":[\"Use a fixed-window policy with specified count, duration and capacity.\",\"Use a token bucket with specified parameters.\",\"Delegate all parameters to runtime configuration that must be enumerated.\"],\"default_guess\":\"Specify configurable count/window/capacity values and make throttled attempts indistinguishable from invalid credentials.\",\"witness\":{\"initial\":\"One network address has made several failed viewer-entry attempts.\",\"events\":[\"It makes the next attempt with a valid access link.\"],\"outcomes\":[\"The attempt is throttled under one implementer’s threshold.\",\"The attempt succeeds under another implementer’s threshold.\"],\"observer\":\"The viewer\"}},{\"unit\":\"A29\",\"subject\":\"bootstrap audit requirement\",\"kind\":\"contradiction\",\"text\":\"A29 requires the bootstrap to insert a `staff.create` audit record, while R0-07 says the command’s creation is “never … audited”.\",\"question\":\"Does successful first-administrator bootstrap write the system-actor staff.create audit record?\",\"options\":[\"Write the audit record atomically with the account.\",\"Write no audit record.\"],\"default_guess\":\"Follow the later A29 rule and write the audit record atomically.\",\"witness\":{\"initial\":\"The staff table is empty.\",\"events\":[\"The host operator successfully bootstraps the first administrator.\"],\"outcomes\":[\"The database contains the administrator and one system staff.create audit record.\",\"The database contains the administrator and no audit record.\"],\"observer\":\"An auditor\"}},{\"unit\":\"A29\",\"subject\":\"bootstrap confirmation input\",\"kind\":\"missing command contract\",\"text\":\"Exit code 1 means “confirmation did not match”, but neither R0-07 nor A29 defines what is confirmed, how many secret/non-secret prompts exist, or which comparison produces this outcome.\",\"question\":\"What input is repeated for confirmation and what exact mismatch yields exit code 1?\",\"options\":[\"The password is entered twice and compared exactly.\",\"Both email and password are confirmed.\",\"A separate yes/no confirmation controls creation.\"],\"default_guess\":\"Read the password twice from a non-echoing terminal and compare it exactly.\",\"witness\":{\"initial\":\"The deployment has no staff accounts.\",\"events\":[\"The host operator supplies an email, one password value and a different confirmation value.\"],\"outcomes\":[\"The command exits 1 because password confirmation differs.\",\"The command treats confirmation as a yes/no step or email confirmation and reaches another outcome.\"],\"observer\":\"The host operator and deployment script\"}},{\"unit\":\"A29\",\"subject\":\"bootstrap unexpected failures\",\"kind\":\"incomplete closed exit contract\",\"text\":\"The exit-code contract is declared closed with only codes 0–3, but no outcome is assigned to database, audit, hashing, terminal-input or other operational failures.\",\"question\":\"How does the command report an unexpected operational failure without violating the closed exit-code and no-secret-disclosure rules?\",\"options\":[\"Add a closed generic-failure exit code.\",\"Allow an uncaught process/runtime exit outside the contract.\",\"Map all operational failures onto one of codes 1–3.\"],\"default_guess\":\"Add a distinct generic operational-failure exit code with a secret-free diagnostic.\",\"witness\":{\"initial\":\"The staff table is empty but the database becomes unwritable.\",\"events\":[\"The host operator runs bootstrap with valid matching inputs.\"],\"outcomes\":[\"The process exits with an unspecified runtime-dependent code.\",\"The failure is incorrectly mapped to identity rejection or already completed.\",\"A new generic failure code is used, contradicting the current closed list.\"],\"observer\":\"The host operator and deployment script\"}},{\"unit\":\"A30\",\"subject\":\"runtime environment variable table\",\"kind\":\"missing configuration contract\",\"text\":\"A30 refers to a “closed table of environment variables, their types, requiredness, normalization and per-environment defaults” but does not include that table.\",\"question\":\"What are the complete names, types, requiredness rules, normalization and defaults for database path, binary root, trusted hosts, allowed origins, canonical public origin, size limits, rate limits and every other RuntimeSettings field?\",\"options\":[\"Include the complete closed table in State 2.\",\"Let State 6 reconstruct it from external Factory artifacts.\",\"Allow implementers to choose missing variables and defaults.\"],\"default_guess\":\"Include the complete table in State 2 before later states proceed.\",\"witness\":{\"initial\":\"Two teams implement startup using only these texts.\",\"events\":[\"Each configures database storage, trusted hosts and the public viewer origin.\"],\"outcomes\":[\"One chooses DATABASE_PATH, TRUSTED_HOSTS and PUBLIC_ORIGIN as required variables.\",\"The other chooses different names, defaults or combined settings; both satisfy the visible A30 text.\"],\"observer\":\"Deployers and HTTP clients\"}},{\"unit\":\"A30\",\"subject\":\"password hashing parameters\",\"kind\":\"unstable unspecified default\",\"text\":\"`credential_hash_scheme = argon2id (library defaults)` does not state time cost, memory cost, parallelism, salt length, hash length or library/version whose defaults are normative.\",\"question\":\"Which exact Argon2id parameters must be used, and how are existing hashes upgraded when configuration or library defaults change?\",\"options\":[\"Pin explicit Argon2id parameters in configuration.\",\"Make a named pinned library version’s defaults normative.\",\"Permit each deployment/library version to use its current defaults.\"],\"default_guess\":\"Specify explicit parameters and verify stored hashes in a version-aware form.\",\"witness\":{\"initial\":\"Two conforming implementations use different Argon2 libraries or versions.\",\"events\":[\"Each hashes the same newly supplied password.\"],\"outcomes\":[\"One uses its library’s lower memory/time defaults.\",\"The other uses different defaults, producing materially different security and resource behavior.\"],\"observer\":\"Service operators and authentication performance\"}},{\"unit\":\"A32\",\"subject\":\"exact dependency pins\",\"kind\":\"missing accepted values\",\"text\":\"A32 requires the exact versions pinned in an external `requirements.txt`, but the versions themselves are absent from the accepted texts.\",\"question\":\"Which exact fastapi, pydantic, argon2-cffi and uvicorn versions must later agents implement and assess?\",\"options\":[\"List the four exact pins in A32.\",\"Treat any exact versions selected later as conforming.\",\"Require access to the external Factory file despite the instruction that later work uses these texts alone.\"],\"default_guess\":\"Copy the exact four version pins into A32.\",\"witness\":{\"initial\":\"Two agents build deployment requirements from these texts alone.\",\"events\":[\"Each selects exact versions of the four named packages.\"],\"outcomes\":[\"They choose different current versions, both satisfying the visible requirement to pin exactly.\",\"Only one accidentally matches the inaccessible Factory deployment.\"],\"observer\":\"Deployers and vulnerability checks\"}},{\"unit\":\"A32\",\"subject\":\"pre-deploy vulnerability decision\",\"kind\":\"missing operational rule\",\"text\":\"Pins are checked against “a public known-vulnerability database”, and a vulnerability that “affects the portal” blocks deploy, but neither the database, freshness requirement nor affectedness decision procedure is specified.\",\"question\":\"Which advisory source and timestamp are authoritative, and who or what decides whether an advisory affects the portal?\",\"options\":[\"Name one database/tool and a maximum database age; every matching advisory blocks.\",\"Aggregate specified databases and allow a documented reviewed exception.\",\"Leave source and affectedness to each deployment operator.\"],\"default_guess\":\"Specify a reproducible scanner/database snapshot policy and a documented exception process.\",\"witness\":{\"initial\":\"A pinned library has an advisory affecting an optional feature the portal does not use.\",\"events\":[\"Two deployment pipelines run their pre-deploy checks against different public databases or interpretations.\"],\"outcomes\":[\"One blocks deployment because the package/version matches the advisory.\",\"The other deploys because it judges the vulnerable path unreachable or its database lacks the advisory.\"],\"observer\":\"Deployment operators and users\"}},{\"unit\":\"02_rules.md:Unresolved at State 2\",\"subject\":\"PresuPro authentication transport\",\"kind\":\"contradiction\",\"text\":\"The unresolved list says “PresuPro→Portal transport binding (bearer/signed/mTLS)” remains unresolved, while R0-09, A25 and the ServicePrincipal text require bearer headers only.\",\"question\":\"Is bearer-header authentication closed, or may later design still choose signed requests or mTLS?\",\"options\":[\"Bearer header only; remove the unresolved item.\",\"Transport remains open among bearer, signed and mTLS, contradicting R0-09/A25.\"],\"default_guess\":\"Bearer header only.\",\"witness\":{\"initial\":\"A producer integration is being implemented.\",\"events\":[\"The producer sends a correctly formed signed request without a bearer header.\"],\"outcomes\":[\"The request is refused because service principals authenticate only by bearer header.\",\"The request may be accepted because transport binding was still unresolved.\"],\"observer\":\"The producer\"}},{\"unit\":\"02_rules.md:Unresolved at State 2\",\"subject\":\"mandatory staff MFA\",\"kind\":\"unresolved State-2 behavior\",\"text\":\"“Mandatory MFA for staff” remains an open product question, although later authentication and HTTP code must decide whether password verification alone can create a StaffSession.\",\"question\":\"Is MFA required for operators and administrators in the service being specified?\",\"options\":[\"No MFA in the current service.\",\"MFA is mandatory for all staff.\",\"MFA is mandatory only for administrators.\"],\"default_guess\":\"No MFA in the current service until an explicit factor model and flow are accepted.\",\"witness\":{\"initial\":\"An active verified administrator has a correct email and password and no second-factor record exists.\",\"events\":[\"The administrator submits a login request.\"],\"outcomes\":[\"A StaffSession is issued after password verification.\",\"Login cannot complete without an unspecified second factor.\"],\"observer\":\"The administrator\"}},{\"unit\":\"02_rules.md:State 2 readiness assessment\",\"subject\":\"claim that every security category is resolved\",\"kind\":\"contradictory readiness claim\",\"text\":\"The readiness assessment says “every security category resolves to an accepted decision”, while mandatory staff MFA is still unresolved and the configuration/security policies omit concrete rate-limit, header and dependency values.\",\"question\":\"What criterion permits State 2 to be ready while authentication and transport-security behavior still requires unresolved choices?\",\"options\":[\"State 2 is not ready until those choices are closed.\",\"The unresolved items are explicitly declared out of the current service and the readiness claim is narrowed accordingly.\",\"Later agents are expected to decide them silently.\"],\"default_guess\":\"Narrow the current service to no MFA and close the missing transport/configuration values before declaring readiness.\",\"witness\":{\"initial\":\"Two later agents accept the readiness statement and implement authentication independently.\",\"events\":[\"Each interprets the unresolved MFA item.\"],\"outcomes\":[\"One ships password-only login.\",\"The other blocks login pending a second factor.\"],\"observer\":\"All staff users\"}}]}",
+ "set_aside": []
+}

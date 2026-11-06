@@ -1,0 +1,445 @@
+{
+ "open_points": [
+  {
+   "unit": "A6",
+   "subject": "Registry endpoint validation",
+   "kind": "vague refusal condition",
+   "text": "\"the portal's own Registry endpoint setting is missing or unusable → transport_error\"",
+   "question": "Exactly which configured endpoint values are \"unusable\" before a request is attempted?",
+   "options": [
+    "Only a missing or empty value is unusable.",
+    "Whitespace-only, malformed, relative, unsupported-scheme, credential-bearing, or otherwise invalid URLs are also unusable.",
+    "Some invalid values are attempted and become connection/transport errors from the HTTP client."
+   ],
+   "default_guess": "Treat a missing, blank, non-absolute, or non-HTTP(S) URL as transport_error before making a request.",
+   "witness": {
+    "initial": "REGISTRY_BASE_URL is set to a whitespace-only or relative value.",
+    "events": [
+     "A staff member performs a project-scoped operation.",
+     "The gateway reads REGISTRY_BASE_URL."
+    ],
+    "outcomes": [
+     "The gateway rejects the setting immediately as transport_error without an HTTP request.",
+     "The HTTP client attempts to interpret the value and may raise a different error or contact a locally resolved target."
+    ],
+    "observer": "The caller and operators observing outbound traffic and failure telemetry."
+   }
+  },
+  {
+   "unit": "A6",
+   "subject": "Registry response decoding",
+   "kind": "unspecified schema strictness",
+   "text": "\"the body is not JSON of the expected shape → schema_mismatch\"",
+   "question": "Are Registry response fields decoded strictly, or may the model layer coerce values into the expected types?",
+   "options": [
+    "Require exact JSON types and reject coercible values as schema_mismatch.",
+    "Use ordinary model coercion, such as converting string booleans or numbers.",
+    "Define strictness separately for identity and lifecycle fields."
+   ],
+   "default_guess": "Use strict decoding for all Registry response fields.",
+   "witness": {
+    "initial": "Registry returns HTTP 200 with {\"project_id\":\"<requested UUID>\",\"exists\":\"false\",\"is_active\":false,\"status\":null}.",
+    "events": [
+     "A caller validates that project.",
+     "The gateway decodes the response."
+    ],
+    "outcomes": [
+     "Strict decoding raises schema_mismatch.",
+     "Coercive decoding produces exists=false and the caller treats the project as not found."
+    ],
+    "observer": "The API caller sees a boundary failure versus a not-found refusal."
+   }
+  },
+  {
+   "unit": "A6",
+   "subject": "Registry HTTP redirects",
+   "kind": "missing transport rule",
+   "text": "\"Registry answers HTTP 404 → not_found; any other non-success HTTP status → http_error\"",
+   "question": "Does the Registry gateway follow redirects, or classify a 3xx response itself as http_error?",
+   "options": [
+    "Never follow redirects; every 3xx is http_error.",
+    "Follow redirects according to the HTTP client and classify only the terminal response.",
+    "Follow only same-origin or otherwise constrained redirects."
+   ],
+   "default_guess": "Do not follow Registry redirects; classify 3xx as http_error.",
+   "witness": {
+    "initial": "The configured validation endpoint responds 302 to another URL whose response is a valid active-project answer.",
+    "events": [
+     "A project mutation invokes Registry validation.",
+     "The HTTP client receives the 302 response."
+    ],
+    "outcomes": [
+     "The gateway returns a successful validation after following the redirect.",
+     "The gateway raises http_error for the 302 response."
+    ],
+    "observer": "The staff caller sees the mutation succeed or fail."
+   }
+  },
+  {
+   "unit": "A6",
+   "subject": "Registry boundary failures during snapshot import",
+   "kind": "unclassified failure outcome",
+   "text": "\"an unanswered validation fails the operation (A6)\" and A6 defines timeout, transport_error, http_error, schema_mismatch, and identity_mismatch, while SnapshotImportRecord has no rejection reason for them",
+   "question": "When authenticated snapshot import reaches Registry but validation fails with one of these gateway failures, is it a classified import attempt, is a SnapshotImportRecord/audit record written, and what response category results?",
+   "options": [
+    "Propagate the RegistryBoundaryError, roll back, and write no import or audit record.",
+    "Record a rejected import using an existing reason such as unknown_project.",
+    "Add a distinct import rejection mapping for Registry boundary failures."
+   ],
+   "default_guess": "Propagate the typed RegistryBoundaryError and write no import or audit record because no ImportRejectReason represents it.",
+   "witness": {
+    "initial": "An active producer with a valid credential and project scope submits a well-formed snapshot; Registry times out during validation.",
+    "events": [
+     "The producer calls snapshot import.",
+     "The gateway classifies the failure as timeout."
+    ],
+    "outcomes": [
+     "The operation fails without an import_id, SnapshotImportRecord, or snapshot.import audit record.",
+     "The operation writes a rejected import result and audit record, requiring an unstated reject reason mapping."
+    ],
+    "observer": "The producer sees whether it receives an import_id, and auditors see whether an attempt was recorded."
+   }
+  },
+  {
+   "unit": "A25",
+   "subject": "HTTP request-body bound",
+   "kind": "missing configuration and refusal contract",
+   "text": "\"Request bodies and binary responses are bounded by runtime settings before expensive work\"",
+   "question": "What is the request-body limit setting, its environment variable, units, requiredness/default, validation range, enforcement method, and oversize HTTP response?",
+   "options": [
+    "Reject from Content-Length before reading and also enforce a streaming byte ceiling.",
+    "Trust Content-Length only.",
+    "Buffer the body up to a configured ceiling, then reject; choose an error status and body."
+   ],
+   "default_guess": "Add a required positive byte limit, enforce it for declared and streamed sizes, and answer 413 with an empty body.",
+   "witness": {
+    "initial": "A valid trusted-host request uses chunked transfer encoding and sends a body larger than the intended bound without Content-Length.",
+    "events": [
+     "The client sends the request body.",
+     "The transport guard processes it before the handler."
+    ],
+    "outcomes": [
+     "Streaming enforcement stops the read at the ceiling and refuses the request.",
+     "Content-Length-only enforcement admits and buffers the entire body."
+    ],
+    "observer": "The client sees refusal versus handler execution; the service sees materially different memory use."
+   }
+  },
+  {
+   "unit": "A25",
+   "subject": "HTTP transport runtime settings",
+   "kind": "missing closed configuration",
+   "text": "A25 requires trusted hosts, a CORS allowlist, a canonical public origin, and request-body bounds, while A30 only refers to a \"closed table\" of environment variables without stating these entries",
+   "question": "What are the environment variable names, types, normalization, requiredness, defaults, and start-up validation for these A25 settings?",
+   "options": [
+    "Define all of them as required production settings with development/test defaults.",
+    "Derive some values from other settings such as trusted hosts.",
+    "Leave them fixed in source rather than runtime settings."
+   ],
+   "default_guess": "Use separate, explicitly validated environment settings for trusted hosts, allowed origins, canonical public origin, and maximum request bytes."
+  },
+  {
+   "unit": "A25",
+   "subject": "Transport guard precedence",
+   "kind": "unspecified check order",
+   "text": "A25 separately requires trusted-host rejection, body-size rejection, viewer-entry rate limiting, and viewer-origin validation but gives no precedence between them",
+   "question": "In what order are transport checks applied, and which checks have side effects such as counting a viewer-entry attempt when several conditions fail?",
+   "options": [
+    "Trusted host → size → rate limit → origin → authentication/handler.",
+    "Size → trusted host → origin → rate limit → handler.",
+    "Count every viewer-entry request that reaches the service, even if another transport check rejects it."
+   ],
+   "default_guess": "Check trusted host, then body bounds, then applicable origin, then rate limiting, and count only requests admitted through the preceding checks.",
+   "witness": {
+    "initial": "A viewer-entry request has an untrusted Host, an oversize body, and a rate-limit key with one remaining admitted attempt.",
+    "events": [
+     "The client sends POST /auth/viewer/enter.",
+     "The transport guards evaluate the request."
+    ],
+    "outcomes": [
+     "Host rejection occurs first and the rate-limit history is unchanged.",
+     "The limiter records the attempt before host or body rejection, consuming the remaining attempt."
+    ],
+    "observer": "A later valid viewer-entry request from the same address is admitted or receives 429."
+   }
+  },
+  {
+   "unit": "A25",
+   "subject": "Trusted-host comparison",
+   "kind": "unspecified normalization",
+   "text": "\"The service answers only on its trusted hosts (at least one, no wildcard at any position)\"",
+   "question": "How is the request Host compared with configured hosts regarding case, trailing dots, explicit/default ports, IPv6 notation, internationalized names, and malformed or duplicate Host headers?",
+   "options": [
+    "Compare an exact raw Host header string.",
+    "Parse and canonicalize host and effective port before comparison.",
+    "Trust framework-specific host normalization."
+   ],
+   "default_guess": "Parse one valid Host value, normalize DNS case and effective port, reject malformed/duplicate values, and compare against canonical configured authorities.",
+   "witness": {
+    "initial": "The allowlist contains example.com and the request carries Host: EXAMPLE.COM:443 over HTTPS.",
+    "events": [
+     "The request reaches the trusted-host guard."
+    ],
+    "outcomes": [
+     "Canonical comparison admits the request.",
+     "Exact string comparison rejects it."
+    ],
+    "observer": "The API client sees a normal response or a trusted-host refusal."
+   }
+  },
+  {
+   "unit": "A25",
+   "subject": "CORS policy",
+   "kind": "incomplete browser contract",
+   "text": "\"CORS is off when its allowlist is empty, and an allowed origin is never a wildcard\"",
+   "question": "For a non-empty allowlist, what exact-origin comparison, credential policy, allowed methods/headers, preflight behavior, exposed headers, and failure response apply?",
+   "options": [
+    "Use exact canonical origins with credentials and an explicit closed method/header set.",
+    "Use framework defaults for all unspecified CORS behavior.",
+    "Reflect any allowlisted textual Origin and requested method/header values."
+   ],
+   "default_guess": "Use exact canonical-origin matching, allow credentials only where required by the viewer cookie, and define closed methods and headers.",
+   "witness": {
+    "initial": "The allowlist contains https://portal.example and a browser sends a credentialed preflight requesting a non-simple header.",
+    "events": [
+     "The browser sends OPTIONS with Origin and Access-Control-Request-Headers.",
+     "The CORS middleware evaluates it."
+    ],
+    "outcomes": [
+     "The preflight is accepted because requested headers are reflected or broadly allowed.",
+     "The preflight is rejected because the header is not in a closed allowed set."
+    ],
+    "observer": "The viewer browser can or cannot send the subsequent request."
+   }
+  },
+  {
+   "unit": "A25",
+   "subject": "Viewer mutation origin check",
+   "kind": "undefined operation set and refusal",
+   "text": "\"mutating viewer requests must come from the canonical public origin\"",
+   "question": "Which viewer routes count as mutations, how are absent or opaque Origin values handled, and what status/body is returned on mismatch?",
+   "options": [
+    "Apply only to viewer logout or other state-changing viewer routes and require an exact Origin header.",
+    "Apply to every non-safe HTTP method under viewer routes.",
+    "Also validate Referer when Origin is absent."
+   ],
+   "default_guess": "Apply to every state-changing viewer-cookie route, require an exact canonical Origin, and refuse absent, null, or mismatched origins with an empty 403 response.",
+   "witness": {
+    "initial": "A valid viewer cookie is presented to the logout route with no Origin header.",
+    "events": [
+     "The client submits the logout request.",
+     "The transport guard evaluates the origin requirement."
+    ],
+    "outcomes": [
+     "Logout is refused because a mutation requires Origin.",
+     "Logout succeeds because logout is exempt or absence is allowed for non-browser clients."
+    ],
+    "observer": "The viewer sees whether the session remains active."
+   }
+  },
+  {
+   "unit": "A25",
+   "subject": "X-Request-Id",
+   "kind": "missing identifier policy",
+   "text": "\"Fixed security headers are sent on every response ... and an X-Request-Id\"",
+   "question": "Is an incoming X-Request-Id accepted, validated and echoed, or is a new server identifier always generated; what syntax and uniqueness rules apply?",
+   "options": [
+    "Always generate a new server-owned identifier.",
+    "Echo a valid client identifier and replace invalid ones.",
+    "Echo any supplied value verbatim."
+   ],
+   "default_guess": "Always generate a fresh server-owned UUID and do not trust an incoming value.",
+   "witness": {
+    "initial": "A client sends X-Request-Id containing a chosen value with whitespace and log-delimiter characters.",
+    "events": [
+     "The service returns an error response.",
+     "Request logging records the request identifier."
+    ],
+    "outcomes": [
+     "The service echoes and logs the supplied value.",
+     "The service replaces it with a generated safe identifier."
+    ],
+    "observer": "The client and log operators see different correlation identifiers and log-safety behavior."
+   }
+  },
+  {
+   "unit": "A25",
+   "subject": "Viewer-entry client address key",
+   "kind": "unspecified key normalization",
+   "text": "\"rate limited per client network address and route ... the address read only from the connection\"",
+   "question": "What canonical key is used for IPv4, IPv4-mapped IPv6, IPv6 textual variants, Unix/local connections, and connections where the peer address is unavailable?",
+   "options": [
+    "Use the raw framework peer-address string.",
+    "Canonicalize IP addresses and collapse IPv4-mapped IPv6 to IPv4.",
+    "Reject requests whose connection has no usable IP address."
+   ],
+   "default_guess": "Parse and canonicalize the peer IP, collapse IPv4-mapped IPv6, and refuse viewer entry if no network address is available.",
+   "witness": {
+    "initial": "One client reaches the service alternately as 192.0.2.1 and ::ffff:192.0.2.1.",
+    "events": [
+     "It makes the configured maximum failed entry attempts through the first representation.",
+     "It immediately retries through the second representation."
+    ],
+    "outcomes": [
+     "Canonicalization treats both as one key and returns 429.",
+     "Raw-string keys treat them separately and admit more attempts."
+    ],
+    "observer": "The client sees whether the limit can be bypassed."
+   }
+  },
+  {
+   "unit": "A25",
+   "subject": "Viewer-entry sliding-window clock",
+   "kind": "unspecified time source",
+   "text": "\"attempts within the last viewer_entry_rate_limit_window_seconds\"",
+   "question": "Which clock supplies limiter timestamps, and what happens if wall time moves backward or forward?",
+   "options": [
+    "Use a monotonic process clock.",
+    "Use the A28 UTC wall clock.",
+    "Use framework/event-loop time."
+   ],
+   "default_guess": "Use a monotonic process clock because limiter state is process-local and duration-based.",
+   "witness": {
+    "initial": "A key has reached its limit and the system wall clock is moved backward.",
+    "events": [
+     "The client retries after the real window duration has elapsed.",
+     "The limiter computes entry ages."
+    ],
+    "outcomes": [
+     "A monotonic clock expires the entries and admits the request.",
+     "A backward wall clock keeps entries within the window and continues returning 429."
+    ],
+    "observer": "The viewer sees a temporary or prolonged lockout."
+   }
+  },
+  {
+   "unit": "A25",
+   "subject": "Secret log redaction",
+   "kind": "vague security rule",
+   "text": "\"Logs redact authorization, cookie and secret-like names\"",
+   "question": "What exact names and locations are redacted, and is matching case-insensitive and recursive across headers, query parameters, bodies, structured fields and exception data?",
+   "options": [
+    "Use a closed case-insensitive catalog of sensitive field/header names everywhere structured data is logged.",
+    "Redact only Authorization and Cookie headers plus fields whose names contain secret/token/password.",
+    "Do not log request bodies or query strings at all, and redact a smaller closed header set."
+   ],
+   "default_guess": "Never log bodies or query strings; apply a closed, case-insensitive recursive redaction catalog to all structured log and exception fields.",
+   "witness": {
+    "initial": "A rejected request contains a credential in X-Api-Token and a nested JSON field named credential_secret.",
+    "events": [
+     "Request validation raises an error.",
+     "The transport layer emits its normal structured error log."
+    ],
+    "outcomes": [
+     "Both values are redacted under a broad secret-name policy.",
+     "One or both values are logged because only Authorization and Cookie are covered."
+    ],
+    "observer": "Log readers can or cannot recover the credential."
+   }
+  },
+  {
+   "unit": "A32",
+   "subject": "Vulnerability blocking criterion",
+   "kind": "contradictory rule",
+   "text": "Normative rule 3 says \"Every advisory it reports for any resolved package blocks the deploy; 'affects the portal' is not judged case by case\", while the formal invariant says \"No deploy ships a pin with a known vulnerability affecting the portal\"",
+   "question": "Does every reported advisory block, or may an advisory be waived after deciding it does not affect the portal?",
+   "options": [
+    "Every pip-audit advisory blocks without exception.",
+    "Only vulnerabilities assessed as affecting portal behavior block.",
+    "Every advisory blocks unless a separately specified waiver mechanism approves it."
+   ],
+   "default_guess": "Every reported advisory blocks, following the more explicit normative rule.",
+   "witness": {
+    "initial": "pip-audit reports an advisory affecting only an optional dependency feature the portal never invokes.",
+    "events": [
+     "The deployment check runs successfully and reports the advisory.",
+     "The release process evaluates whether deployment may continue."
+    ],
+    "outcomes": [
+     "The deployment is blocked because every advisory blocks.",
+     "The deployment proceeds because the vulnerability is judged not to affect the portal."
+    ],
+    "observer": "Release operators see whether the image is deployable."
+   }
+  },
+  {
+   "unit": "A32",
+   "subject": "pip-audit installation and audited environment",
+   "kind": "missing operational boundary",
+   "text": "\"pip-audit --local, run inside the built image against what is installed there\" and \"Because it audits the built image, the audited set is the shipped set\", while the deployment requirements contain only the four portal direct packages",
+   "question": "How is pip-audit made available without either adding audit-tool packages to the shipped/audited environment or auditing an environment different from the shipped image?",
+   "options": [
+    "Ship pip-audit and its dependencies in the runtime image and audit them too.",
+    "Install pip-audit temporarily into the built image, audit, then remove it without otherwise changing the artifact.",
+    "Run a standalone audit tool against the runtime environment's installed metadata without installing the tool into that environment.",
+    "Use a separate but byte-for-byte equivalent audit stage."
+   ],
+   "default_guess": "Use an external/standalone pip-audit runner against the final image's installed package metadata, without adding packages to the runtime environment.",
+   "witness": {
+    "initial": "pip-audit depends on an additional Python package that has an advisory, while the portal runtime dependency set has none.",
+    "events": [
+     "The audit tool is installed into the built runtime image so the prescribed command can run.",
+     "pip-audit --local examines the local environment."
+    ],
+    "outcomes": [
+     "The audit-tool dependency is reported and blocks deployment, and remains part of the shipped set.",
+     "The audit tool is external or removed, so only the portal runtime set is audited and shipped."
+    ],
+    "observer": "Release operators see a blocked or passing deployment and users receive images with different package sets."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "SnapshotPublication section constraints",
+   "kind": "direct contradiction",
+   "text": "M18 declares \"sections: list[SnapshotSectionData] (non-empty, unique source_section_id)\", but the change says \"the import refuses neither an empty section list nor repeated source_section_id values\"; A7 likewise says both are accepted",
+   "question": "Are non-emptiness and source_section_id uniqueness input-model invariants enforced during decoding, or merely unenforced producer obligations?",
+   "options": [
+    "The request model rejects empty or duplicate sections before import.",
+    "The request model accepts them and import stores the snapshot unchanged.",
+    "The model accepts them now but a separate validation layer rejects them."
+   ],
+   "default_guess": "Accept and store them, treating the parenthetical constraint only as a producer obligation, because the changed text and A7 explicitly describe running behavior.",
+   "witness": {
+    "initial": "A valid active producer is authorized for an active project.",
+    "events": [
+     "The producer publishes a well-typed snapshot with an empty sections array.",
+     "Request decoding and import validation run."
+    ],
+    "outcomes": [
+     "The M18 non-empty constraint rejects the body before an import record is created.",
+     "The changed running-service rule accepts the publication and stores an immutable snapshot with no sections."
+    ],
+    "observer": "The producer sees HTTP rejection versus an accepted import_id, and storage contains or lacks the snapshot."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "ProjectOverview project availability shape",
+   "kind": "direct model contradiction",
+   "text": "The ProjectOverview definition requires \"project: ProjectContext\" and defines only five availability/value pairs, but the change says \"the project context is absent ... and a project_availability says so, like the other five pairs\"",
+   "question": "Must ProjectOverview add project_availability and make project optional with the same conditional validation as the other components, or does a failed post-guard context read still prevent constructing the declared DTO?",
+   "options": [
+    "Add project_availability: ViewAvailability and change project to ProjectContext | None, with project required iff available.",
+    "Keep the declared required project field and fail the whole overview when context cannot be read.",
+    "Use a separate overview variant for missing project context."
+   ],
+   "default_guess": "Add the sixth availability pair and make project conditionally optional, following the changed accepted behavior.",
+   "witness": {
+    "initial": "A caller passes project authorization because Registry validation succeeds.",
+    "events": [
+     "The overview builder performs its subsequent Registry context read.",
+     "That read times out while all portal-owned components are readable."
+    ],
+    "outcomes": [
+     "The service returns an overview with project_availability=temporarily_unavailable and project absent.",
+     "The required ProjectOverview model cannot be constructed, so the whole operation fails."
+    ],
+    "observer": "The API caller receives partial portal data or an operation-level failure."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A6\",\"subject\":\"Registry endpoint validation\",\"kind\":\"vague refusal condition\",\"text\":\"\\\"the portal's own Registry endpoint setting is missing or unusable → transport_error\\\"\",\"question\":\"Exactly which configured endpoint values are \\\"unusable\\\" before a request is attempted?\",\"options\":[\"Only a missing or empty value is unusable.\",\"Whitespace-only, malformed, relative, unsupported-scheme, credential-bearing, or otherwise invalid URLs are also unusable.\",\"Some invalid values are attempted and become connection/transport errors from the HTTP client.\"],\"default_guess\":\"Treat a missing, blank, non-absolute, or non-HTTP(S) URL as transport_error before making a request.\",\"witness\":{\"initial\":\"REGISTRY_BASE_URL is set to a whitespace-only or relative value.\",\"events\":[\"A staff member performs a project-scoped operation.\",\"The gateway reads REGISTRY_BASE_URL.\"],\"outcomes\":[\"The gateway rejects the setting immediately as transport_error without an HTTP request.\",\"The HTTP client attempts to interpret the value and may raise a different error or contact a locally resolved target.\"],\"observer\":\"The caller and operators observing outbound traffic and failure telemetry.\"}},{\"unit\":\"A6\",\"subject\":\"Registry response decoding\",\"kind\":\"unspecified schema strictness\",\"text\":\"\\\"the body is not JSON of the expected shape → schema_mismatch\\\"\",\"question\":\"Are Registry response fields decoded strictly, or may the model layer coerce values into the expected types?\",\"options\":[\"Require exact JSON types and reject coercible values as schema_mismatch.\",\"Use ordinary model coercion, such as converting string booleans or numbers.\",\"Define strictness separately for identity and lifecycle fields.\"],\"default_guess\":\"Use strict decoding for all Registry response fields.\",\"witness\":{\"initial\":\"Registry returns HTTP 200 with {\\\"project_id\\\":\\\"<requested UUID>\\\",\\\"exists\\\":\\\"false\\\",\\\"is_active\\\":false,\\\"status\\\":null}.\",\"events\":[\"A caller validates that project.\",\"The gateway decodes the response.\"],\"outcomes\":[\"Strict decoding raises schema_mismatch.\",\"Coercive decoding produces exists=false and the caller treats the project as not found.\"],\"observer\":\"The API caller sees a boundary failure versus a not-found refusal.\"}},{\"unit\":\"A6\",\"subject\":\"Registry HTTP redirects\",\"kind\":\"missing transport rule\",\"text\":\"\\\"Registry answers HTTP 404 → not_found; any other non-success HTTP status → http_error\\\"\",\"question\":\"Does the Registry gateway follow redirects, or classify a 3xx response itself as http_error?\",\"options\":[\"Never follow redirects; every 3xx is http_error.\",\"Follow redirects according to the HTTP client and classify only the terminal response.\",\"Follow only same-origin or otherwise constrained redirects.\"],\"default_guess\":\"Do not follow Registry redirects; classify 3xx as http_error.\",\"witness\":{\"initial\":\"The configured validation endpoint responds 302 to another URL whose response is a valid active-project answer.\",\"events\":[\"A project mutation invokes Registry validation.\",\"The HTTP client receives the 302 response.\"],\"outcomes\":[\"The gateway returns a successful validation after following the redirect.\",\"The gateway raises http_error for the 302 response.\"],\"observer\":\"The staff caller sees the mutation succeed or fail.\"}},{\"unit\":\"A6\",\"subject\":\"Registry boundary failures during snapshot import\",\"kind\":\"unclassified failure outcome\",\"text\":\"\\\"an unanswered validation fails the operation (A6)\\\" and A6 defines timeout, transport_error, http_error, schema_mismatch, and identity_mismatch, while SnapshotImportRecord has no rejection reason for them\",\"question\":\"When authenticated snapshot import reaches Registry but validation fails with one of these gateway failures, is it a classified import attempt, is a SnapshotImportRecord/audit record written, and what response category results?\",\"options\":[\"Propagate the RegistryBoundaryError, roll back, and write no import or audit record.\",\"Record a rejected import using an existing reason such as unknown_project.\",\"Add a distinct import rejection mapping for Registry boundary failures.\"],\"default_guess\":\"Propagate the typed RegistryBoundaryError and write no import or audit record because no ImportRejectReason represents it.\",\"witness\":{\"initial\":\"An active producer with a valid credential and project scope submits a well-formed snapshot; Registry times out during validation.\",\"events\":[\"The producer calls snapshot import.\",\"The gateway classifies the failure as timeout.\"],\"outcomes\":[\"The operation fails without an import_id, SnapshotImportRecord, or snapshot.import audit record.\",\"The operation writes a rejected import result and audit record, requiring an unstated reject reason mapping.\"],\"observer\":\"The producer sees whether it receives an import_id, and auditors see whether an attempt was recorded.\"}},{\"unit\":\"A25\",\"subject\":\"HTTP request-body bound\",\"kind\":\"missing configuration and refusal contract\",\"text\":\"\\\"Request bodies and binary responses are bounded by runtime settings before expensive work\\\"\",\"question\":\"What is the request-body limit setting, its environment variable, units, requiredness/default, validation range, enforcement method, and oversize HTTP response?\",\"options\":[\"Reject from Content-Length before reading and also enforce a streaming byte ceiling.\",\"Trust Content-Length only.\",\"Buffer the body up to a configured ceiling, then reject; choose an error status and body.\"],\"default_guess\":\"Add a required positive byte limit, enforce it for declared and streamed sizes, and answer 413 with an empty body.\",\"witness\":{\"initial\":\"A valid trusted-host request uses chunked transfer encoding and sends a body larger than the intended bound without Content-Length.\",\"events\":[\"The client sends the request body.\",\"The transport guard processes it before the handler.\"],\"outcomes\":[\"Streaming enforcement stops the read at the ceiling and refuses the request.\",\"Content-Length-only enforcement admits and buffers the entire body.\"],\"observer\":\"The client sees refusal versus handler execution; the service sees materially different memory use.\"}},{\"unit\":\"A25\",\"subject\":\"HTTP transport runtime settings\",\"kind\":\"missing closed configuration\",\"text\":\"A25 requires trusted hosts, a CORS allowlist, a canonical public origin, and request-body bounds, while A30 only refers to a \\\"closed table\\\" of environment variables without stating these entries\",\"question\":\"What are the environment variable names, types, normalization, requiredness, defaults, and start-up validation for these A25 settings?\",\"options\":[\"Define all of them as required production settings with development/test defaults.\",\"Derive some values from other settings such as trusted hosts.\",\"Leave them fixed in source rather than runtime settings.\"],\"default_guess\":\"Use separate, explicitly validated environment settings for trusted hosts, allowed origins, canonical public origin, and maximum request bytes.\"},{\"unit\":\"A25\",\"subject\":\"Transport guard precedence\",\"kind\":\"unspecified check order\",\"text\":\"A25 separately requires trusted-host rejection, body-size rejection, viewer-entry rate limiting, and viewer-origin validation but gives no precedence between them\",\"question\":\"In what order are transport checks applied, and which checks have side effects such as counting a viewer-entry attempt when several conditions fail?\",\"options\":[\"Trusted host → size → rate limit → origin → authentication/handler.\",\"Size → trusted host → origin → rate limit → handler.\",\"Count every viewer-entry request that reaches the service, even if another transport check rejects it.\"],\"default_guess\":\"Check trusted host, then body bounds, then applicable origin, then rate limiting, and count only requests admitted through the preceding checks.\",\"witness\":{\"initial\":\"A viewer-entry request has an untrusted Host, an oversize body, and a rate-limit key with one remaining admitted attempt.\",\"events\":[\"The client sends POST /auth/viewer/enter.\",\"The transport guards evaluate the request.\"],\"outcomes\":[\"Host rejection occurs first and the rate-limit history is unchanged.\",\"The limiter records the attempt before host or body rejection, consuming the remaining attempt.\"],\"observer\":\"A later valid viewer-entry request from the same address is admitted or receives 429.\"}},{\"unit\":\"A25\",\"subject\":\"Trusted-host comparison\",\"kind\":\"unspecified normalization\",\"text\":\"\\\"The service answers only on its trusted hosts (at least one, no wildcard at any position)\\\"\",\"question\":\"How is the request Host compared with configured hosts regarding case, trailing dots, explicit/default ports, IPv6 notation, internationalized names, and malformed or duplicate Host headers?\",\"options\":[\"Compare an exact raw Host header string.\",\"Parse and canonicalize host and effective port before comparison.\",\"Trust framework-specific host normalization.\"],\"default_guess\":\"Parse one valid Host value, normalize DNS case and effective port, reject malformed/duplicate values, and compare against canonical configured authorities.\",\"witness\":{\"initial\":\"The allowlist contains example.com and the request carries Host: EXAMPLE.COM:443 over HTTPS.\",\"events\":[\"The request reaches the trusted-host guard.\"],\"outcomes\":[\"Canonical comparison admits the request.\",\"Exact string comparison rejects it.\"],\"observer\":\"The API client sees a normal response or a trusted-host refusal.\"}},{\"unit\":\"A25\",\"subject\":\"CORS policy\",\"kind\":\"incomplete browser contract\",\"text\":\"\\\"CORS is off when its allowlist is empty, and an allowed origin is never a wildcard\\\"\",\"question\":\"For a non-empty allowlist, what exact-origin comparison, credential policy, allowed methods/headers, preflight behavior, exposed headers, and failure response apply?\",\"options\":[\"Use exact canonical origins with credentials and an explicit closed method/header set.\",\"Use framework defaults for all unspecified CORS behavior.\",\"Reflect any allowlisted textual Origin and requested method/header values.\"],\"default_guess\":\"Use exact canonical-origin matching, allow credentials only where required by the viewer cookie, and define closed methods and headers.\",\"witness\":{\"initial\":\"The allowlist contains https://portal.example and a browser sends a credentialed preflight requesting a non-simple header.\",\"events\":[\"The browser sends OPTIONS with Origin and Access-Control-Request-Headers.\",\"The CORS middleware evaluates it.\"],\"outcomes\":[\"The preflight is accepted because requested headers are reflected or broadly allowed.\",\"The preflight is rejected because the header is not in a closed allowed set.\"],\"observer\":\"The viewer browser can or cannot send the subsequent request.\"}},{\"unit\":\"A25\",\"subject\":\"Viewer mutation origin check\",\"kind\":\"undefined operation set and refusal\",\"text\":\"\\\"mutating viewer requests must come from the canonical public origin\\\"\",\"question\":\"Which viewer routes count as mutations, how are absent or opaque Origin values handled, and what status/body is returned on mismatch?\",\"options\":[\"Apply only to viewer logout or other state-changing viewer routes and require an exact Origin header.\",\"Apply to every non-safe HTTP method under viewer routes.\",\"Also validate Referer when Origin is absent.\"],\"default_guess\":\"Apply to every state-changing viewer-cookie route, require an exact canonical Origin, and refuse absent, null, or mismatched origins with an empty 403 response.\",\"witness\":{\"initial\":\"A valid viewer cookie is presented to the logout route with no Origin header.\",\"events\":[\"The client submits the logout request.\",\"The transport guard evaluates the origin requirement.\"],\"outcomes\":[\"Logout is refused because a mutation requires Origin.\",\"Logout succeeds because logout is exempt or absence is allowed for non-browser clients.\"],\"observer\":\"The viewer sees whether the session remains active.\"}},{\"unit\":\"A25\",\"subject\":\"X-Request-Id\",\"kind\":\"missing identifier policy\",\"text\":\"\\\"Fixed security headers are sent on every response ... and an X-Request-Id\\\"\",\"question\":\"Is an incoming X-Request-Id accepted, validated and echoed, or is a new server identifier always generated; what syntax and uniqueness rules apply?\",\"options\":[\"Always generate a new server-owned identifier.\",\"Echo a valid client identifier and replace invalid ones.\",\"Echo any supplied value verbatim.\"],\"default_guess\":\"Always generate a fresh server-owned UUID and do not trust an incoming value.\",\"witness\":{\"initial\":\"A client sends X-Request-Id containing a chosen value with whitespace and log-delimiter characters.\",\"events\":[\"The service returns an error response.\",\"Request logging records the request identifier.\"],\"outcomes\":[\"The service echoes and logs the supplied value.\",\"The service replaces it with a generated safe identifier.\"],\"observer\":\"The client and log operators see different correlation identifiers and log-safety behavior.\"}},{\"unit\":\"A25\",\"subject\":\"Viewer-entry client address key\",\"kind\":\"unspecified key normalization\",\"text\":\"\\\"rate limited per client network address and route ... the address read only from the connection\\\"\",\"question\":\"What canonical key is used for IPv4, IPv4-mapped IPv6, IPv6 textual variants, Unix/local connections, and connections where the peer address is unavailable?\",\"options\":[\"Use the raw framework peer-address string.\",\"Canonicalize IP addresses and collapse IPv4-mapped IPv6 to IPv4.\",\"Reject requests whose connection has no usable IP address.\"],\"default_guess\":\"Parse and canonicalize the peer IP, collapse IPv4-mapped IPv6, and refuse viewer entry if no network address is available.\",\"witness\":{\"initial\":\"One client reaches the service alternately as 192.0.2.1 and ::ffff:192.0.2.1.\",\"events\":[\"It makes the configured maximum failed entry attempts through the first representation.\",\"It immediately retries through the second representation.\"],\"outcomes\":[\"Canonicalization treats both as one key and returns 429.\",\"Raw-string keys treat them separately and admit more attempts.\"],\"observer\":\"The client sees whether the limit can be bypassed.\"}},{\"unit\":\"A25\",\"subject\":\"Viewer-entry sliding-window clock\",\"kind\":\"unspecified time source\",\"text\":\"\\\"attempts within the last viewer_entry_rate_limit_window_seconds\\\"\",\"question\":\"Which clock supplies limiter timestamps, and what happens if wall time moves backward or forward?\",\"options\":[\"Use a monotonic process clock.\",\"Use the A28 UTC wall clock.\",\"Use framework/event-loop time.\"],\"default_guess\":\"Use a monotonic process clock because limiter state is process-local and duration-based.\",\"witness\":{\"initial\":\"A key has reached its limit and the system wall clock is moved backward.\",\"events\":[\"The client retries after the real window duration has elapsed.\",\"The limiter computes entry ages.\"],\"outcomes\":[\"A monotonic clock expires the entries and admits the request.\",\"A backward wall clock keeps entries within the window and continues returning 429.\"],\"observer\":\"The viewer sees a temporary or prolonged lockout.\"}},{\"unit\":\"A25\",\"subject\":\"Secret log redaction\",\"kind\":\"vague security rule\",\"text\":\"\\\"Logs redact authorization, cookie and secret-like names\\\"\",\"question\":\"What exact names and locations are redacted, and is matching case-insensitive and recursive across headers, query parameters, bodies, structured fields and exception data?\",\"options\":[\"Use a closed case-insensitive catalog of sensitive field/header names everywhere structured data is logged.\",\"Redact only Authorization and Cookie headers plus fields whose names contain secret/token/password.\",\"Do not log request bodies or query strings at all, and redact a smaller closed header set.\"],\"default_guess\":\"Never log bodies or query strings; apply a closed, case-insensitive recursive redaction catalog to all structured log and exception fields.\",\"witness\":{\"initial\":\"A rejected request contains a credential in X-Api-Token and a nested JSON field named credential_secret.\",\"events\":[\"Request validation raises an error.\",\"The transport layer emits its normal structured error log.\"],\"outcomes\":[\"Both values are redacted under a broad secret-name policy.\",\"One or both values are logged because only Authorization and Cookie are covered.\"],\"observer\":\"Log readers can or cannot recover the credential.\"}},{\"unit\":\"A32\",\"subject\":\"Vulnerability blocking criterion\",\"kind\":\"contradictory rule\",\"text\":\"Normative rule 3 says \\\"Every advisory it reports for any resolved package blocks the deploy; 'affects the portal' is not judged case by case\\\", while the formal invariant says \\\"No deploy ships a pin with a known vulnerability affecting the portal\\\"\",\"question\":\"Does every reported advisory block, or may an advisory be waived after deciding it does not affect the portal?\",\"options\":[\"Every pip-audit advisory blocks without exception.\",\"Only vulnerabilities assessed as affecting portal behavior block.\",\"Every advisory blocks unless a separately specified waiver mechanism approves it.\"],\"default_guess\":\"Every reported advisory blocks, following the more explicit normative rule.\",\"witness\":{\"initial\":\"pip-audit reports an advisory affecting only an optional dependency feature the portal never invokes.\",\"events\":[\"The deployment check runs successfully and reports the advisory.\",\"The release process evaluates whether deployment may continue.\"],\"outcomes\":[\"The deployment is blocked because every advisory blocks.\",\"The deployment proceeds because the vulnerability is judged not to affect the portal.\"],\"observer\":\"Release operators see whether the image is deployable.\"}},{\"unit\":\"A32\",\"subject\":\"pip-audit installation and audited environment\",\"kind\":\"missing operational boundary\",\"text\":\"\\\"pip-audit --local, run inside the built image against what is installed there\\\" and \\\"Because it audits the built image, the audited set is the shipped set\\\", while the deployment requirements contain only the four portal direct packages\",\"question\":\"How is pip-audit made available without either adding audit-tool packages to the shipped/audited environment or auditing an environment different from the shipped image?\",\"options\":[\"Ship pip-audit and its dependencies in the runtime image and audit them too.\",\"Install pip-audit temporarily into the built image, audit, then remove it without otherwise changing the artifact.\",\"Run a standalone audit tool against the runtime environment's installed metadata without installing the tool into that environment.\",\"Use a separate but byte-for-byte equivalent audit stage.\"],\"default_guess\":\"Use an external/standalone pip-audit runner against the final image's installed package metadata, without adding packages to the runtime environment.\",\"witness\":{\"initial\":\"pip-audit depends on an additional Python package that has an advisory, while the portal runtime dependency set has none.\",\"events\":[\"The audit tool is installed into the built runtime image so the prescribed command can run.\",\"pip-audit --local examines the local environment.\"],\"outcomes\":[\"The audit-tool dependency is reported and blocks deployment, and remains part of the shipped set.\",\"The audit tool is external or removed, so only the portal runtime set is audited and shipped.\"],\"observer\":\"Release operators see a blocked or passing deployment and users receive images with different package sets.\"}},{\"unit\":\"context\",\"subject\":\"SnapshotPublication section constraints\",\"kind\":\"direct contradiction\",\"text\":\"M18 declares \\\"sections: list[SnapshotSectionData] (non-empty, unique source_section_id)\\\", but the change says \\\"the import refuses neither an empty section list nor repeated source_section_id values\\\"; A7 likewise says both are accepted\",\"question\":\"Are non-emptiness and source_section_id uniqueness input-model invariants enforced during decoding, or merely unenforced producer obligations?\",\"options\":[\"The request model rejects empty or duplicate sections before import.\",\"The request model accepts them and import stores the snapshot unchanged.\",\"The model accepts them now but a separate validation layer rejects them.\"],\"default_guess\":\"Accept and store them, treating the parenthetical constraint only as a producer obligation, because the changed text and A7 explicitly describe running behavior.\",\"witness\":{\"initial\":\"A valid active producer is authorized for an active project.\",\"events\":[\"The producer publishes a well-typed snapshot with an empty sections array.\",\"Request decoding and import validation run.\"],\"outcomes\":[\"The M18 non-empty constraint rejects the body before an import record is created.\",\"The changed running-service rule accepts the publication and stores an immutable snapshot with no sections.\"],\"observer\":\"The producer sees HTTP rejection versus an accepted import_id, and storage contains or lacks the snapshot.\"}},{\"unit\":\"context\",\"subject\":\"ProjectOverview project availability shape\",\"kind\":\"direct model contradiction\",\"text\":\"The ProjectOverview definition requires \\\"project: ProjectContext\\\" and defines only five availability/value pairs, but the change says \\\"the project context is absent ... and a project_availability says so, like the other five pairs\\\"\",\"question\":\"Must ProjectOverview add project_availability and make project optional with the same conditional validation as the other components, or does a failed post-guard context read still prevent constructing the declared DTO?\",\"options\":[\"Add project_availability: ViewAvailability and change project to ProjectContext | None, with project required iff available.\",\"Keep the declared required project field and fail the whole overview when context cannot be read.\",\"Use a separate overview variant for missing project context.\"],\"default_guess\":\"Add the sixth availability pair and make project conditionally optional, following the changed accepted behavior.\",\"witness\":{\"initial\":\"A caller passes project authorization because Registry validation succeeds.\",\"events\":[\"The overview builder performs its subsequent Registry context read.\",\"That read times out while all portal-owned components are readable.\"],\"outcomes\":[\"The service returns an overview with project_availability=temporarily_unavailable and project absent.\",\"The required ProjectOverview model cannot be constructed, so the whole operation fails.\"],\"observer\":\"The API caller receives partial portal data or an operation-level failure.\"}}]}",
+ "set_aside": []
+}

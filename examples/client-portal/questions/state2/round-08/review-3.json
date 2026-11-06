@@ -1,0 +1,130 @@
+{
+ "open_points": [
+  {
+   "unit": "A6",
+   "subject": "ProjectValidationResult consistency",
+   "kind": "contradiction",
+   "text": "“The two readings agree, because the Registry's validation answer sets `is_active = true` exactly when its `status` is `active`” conflicts with “The gateway returns a decoded validation answer as it is and raises no failure for it; it does not check that `exists`, `is_active` and `status` agree, and each caller reads only the field A5 names for it.”",
+   "question": "What must the portal do when a structurally valid validation answer has inconsistent `exists`, `is_active`, and `status` values?",
+   "options": [
+    "Reject it as `schema_mismatch` before any caller uses it",
+    "Accept it and let project guards and grant/assignment operations reach different decisions",
+    "Define a precedence among `exists`, `is_active`, and `status` for every caller"
+   ],
+   "default_guess": "Reject an inconsistent validation answer as `schema_mismatch`.",
+   "witness": {
+    "initial": "Registry contains project P; the portal has an authenticated administrator and an assigned operator for P.",
+    "events": [
+     "Registry returns `{project_id:P, exists:true, status:\"active\", is_active:false}` for validation.",
+     "The administrator attempts to create a grant or assignment for P.",
+     "The operator attempts a project mutation on P."
+    ],
+    "outcomes": [
+     "Following the stated caller-specific fields, grant or assignment creation is refused because `is_active=false`, while the project mutation is allowed because `status=\"active\"`.",
+     "Following the assertion that the readings must agree, the response is rejected as invalid and neither operation proceeds."
+    ],
+    "observer": "The administrator and operator see different authorization outcomes; a gateway test also observes whether `schema_mismatch` is raised."
+   }
+  },
+  {
+   "unit": "A6",
+   "subject": "Registry endpoint validation",
+   "kind": "vague refusal condition",
+   "text": "“the portal's own Registry endpoint setting is missing or unusable → `transport_error`”",
+   "question": "Exactly which configured endpoint values are “unusable,” and may the gateway normalize or repair any of them before deciding?",
+   "options": [
+    "Only a missing or empty value is unusable",
+    "Any value that is not an absolute HTTP(S) base URL is unusable",
+    "Defer usability to the HTTP client and translate its resulting failure"
+   ],
+   "default_guess": "Require a non-empty absolute HTTP(S) base URL and otherwise return `transport_error` without making a request.",
+   "witness": {
+    "initial": "The service starts with `REGISTRY_BASE_URL=registry.internal`, which has no scheme.",
+    "events": [
+     "A staff actor invokes a project operation requiring Registry validation."
+    ],
+    "outcomes": [
+     "The gateway rejects the setting immediately as unusable and returns `transport_error`.",
+     "The gateway normalizes the value or lets its HTTP client interpret it, makes a request, and may validate the project successfully."
+    ],
+    "observer": "The staff caller sees failure versus success, and the Registry sees whether a request was made."
+   }
+  },
+  {
+   "unit": "A6",
+   "subject": "Timeout classification",
+   "kind": "ambiguous translation boundary",
+   "text": "“the request times out → `timeout`” and “any other connection failure → `transport_error`”",
+   "question": "Which timeout classes count as `timeout`—connect, TLS handshake, pool acquisition, write, read, and whole-request timeouts—and which, if any, count as `transport_error`?",
+   "options": [
+    "Every timeout raised by the HTTP stack maps to `timeout`",
+    "Only an overall request deadline maps to `timeout`; phase-specific timeouts map to `transport_error`",
+    "List the mapping separately for each timeout phase"
+   ],
+   "default_guess": "Map every HTTP-client timeout subtype to `timeout`.",
+   "witness": {
+    "initial": "The Registry accepts a connection for project P but stalls while sending the response body.",
+    "events": [
+     "A project operation waits until the configured read timeout expires."
+    ],
+    "outcomes": [
+     "The read timeout is classified as `timeout`.",
+     "The read timeout is treated as a connection failure and classified as `transport_error`."
+    ],
+    "observer": "The Registry gateway caller and tests observe a different `RegistryFailureKind`."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "SnapshotPublication sections validation",
+   "kind": "contradiction",
+   "text": "The field declaration says `sections: list[SnapshotSectionData] (non-empty, unique source_section_id)`, while the changed passage says “the import refuses neither an empty section list nor repeated `source_section_id` values.”",
+   "question": "Are non-emptiness and `source_section_id` uniqueness input-model constraints enforced before the import use case, or merely unenforced producer obligations?",
+   "options": [
+    "The request model rejects empty or duplicate sections before import",
+    "The request model accepts them and the import may accept the snapshot",
+    "Remove the constraints from the input model but retain them as non-enforced producer obligations"
+   ],
+   "default_guess": "Treat them only as producer obligations and allow the request model and import to accept them.",
+   "witness": {
+    "initial": "An active authorized producer can import for active project P, and no snapshot with the submitted identity exists.",
+    "events": [
+     "The producer submits a complete EUR publication whose `sections` list is empty."
+    ],
+    "outcomes": [
+     "Model decoding enforces “non-empty” and refuses the request before authentication/import, producing no import record.",
+     "Model decoding accepts the body; import validation does not check emptiness, so an accepted snapshot and import record are written."
+    ],
+    "observer": "The producer sees refusal without an `import_id` versus an accepted import result."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "ProjectOverview project availability shape",
+   "kind": "model contradiction",
+   "text": "`ProjectOverview` still declares the required field `project: ProjectContext` and only five availability/value pairs, while the changed passage says “the project context is absent when its Registry read fails ... and a `project_availability` says so, like the other five pairs.”",
+   "question": "What is the exact `ProjectOverview` schema after this change, including the type and local validation rule for `project_availability` and optional `project`?",
+   "options": [
+    "Add `project_availability: ViewAvailability` and make `project: ProjectContext | None`, with the same conditional-presence rule as the other pairs",
+    "Keep `project` required and fail the overview when the context read fails",
+    "Use a different project-specific availability enum or result type"
+   ],
+   "default_guess": "Add a sixth `ViewAvailability` pair: `project_availability` plus optional `project`, governed by the existing conditional-presence rule.",
+   "witness": {
+    "initial": "A viewer is authorized for project P, and the guard's Registry validation succeeds.",
+    "events": [
+     "The subsequent Registry context read for the overview times out.",
+     "The other five overview components are readable."
+    ],
+    "outcomes": [
+     "Following the changed passage, the portal returns an overview with no project context and `project_availability=temporarily_unavailable`.",
+     "Following the declared DTO, construction fails because `project` is required and `project_availability` is not a field, so the whole operation fails."
+    ],
+    "observer": "The viewer sees a partial overview versus an operation failure."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A6\",\"subject\":\"ProjectValidationResult consistency\",\"kind\":\"contradiction\",\"text\":\"“The two readings agree, because the Registry's validation answer sets `is_active = true` exactly when its `status` is `active`” conflicts with “The gateway returns a decoded validation answer as it is and raises no failure for it; it does not check that `exists`, `is_active` and `status` agree, and each caller reads only the field A5 names for it.”\",\"question\":\"What must the portal do when a structurally valid validation answer has inconsistent `exists`, `is_active`, and `status` values?\",\"options\":[\"Reject it as `schema_mismatch` before any caller uses it\",\"Accept it and let project guards and grant/assignment operations reach different decisions\",\"Define a precedence among `exists`, `is_active`, and `status` for every caller\"],\"default_guess\":\"Reject an inconsistent validation answer as `schema_mismatch`.\",\"witness\":{\"initial\":\"Registry contains project P; the portal has an authenticated administrator and an assigned operator for P.\",\"events\":[\"Registry returns `{project_id:P, exists:true, status:\\\"active\\\", is_active:false}` for validation.\",\"The administrator attempts to create a grant or assignment for P.\",\"The operator attempts a project mutation on P.\"],\"outcomes\":[\"Following the stated caller-specific fields, grant or assignment creation is refused because `is_active=false`, while the project mutation is allowed because `status=\\\"active\\\"`.\",\"Following the assertion that the readings must agree, the response is rejected as invalid and neither operation proceeds.\"],\"observer\":\"The administrator and operator see different authorization outcomes; a gateway test also observes whether `schema_mismatch` is raised.\"}},{\"unit\":\"A6\",\"subject\":\"Registry endpoint validation\",\"kind\":\"vague refusal condition\",\"text\":\"“the portal's own Registry endpoint setting is missing or unusable → `transport_error`”\",\"question\":\"Exactly which configured endpoint values are “unusable,” and may the gateway normalize or repair any of them before deciding?\",\"options\":[\"Only a missing or empty value is unusable\",\"Any value that is not an absolute HTTP(S) base URL is unusable\",\"Defer usability to the HTTP client and translate its resulting failure\"],\"default_guess\":\"Require a non-empty absolute HTTP(S) base URL and otherwise return `transport_error` without making a request.\",\"witness\":{\"initial\":\"The service starts with `REGISTRY_BASE_URL=registry.internal`, which has no scheme.\",\"events\":[\"A staff actor invokes a project operation requiring Registry validation.\"],\"outcomes\":[\"The gateway rejects the setting immediately as unusable and returns `transport_error`.\",\"The gateway normalizes the value or lets its HTTP client interpret it, makes a request, and may validate the project successfully.\"],\"observer\":\"The staff caller sees failure versus success, and the Registry sees whether a request was made.\"}},{\"unit\":\"A6\",\"subject\":\"Timeout classification\",\"kind\":\"ambiguous translation boundary\",\"text\":\"“the request times out → `timeout`” and “any other connection failure → `transport_error`”\",\"question\":\"Which timeout classes count as `timeout`—connect, TLS handshake, pool acquisition, write, read, and whole-request timeouts—and which, if any, count as `transport_error`?\",\"options\":[\"Every timeout raised by the HTTP stack maps to `timeout`\",\"Only an overall request deadline maps to `timeout`; phase-specific timeouts map to `transport_error`\",\"List the mapping separately for each timeout phase\"],\"default_guess\":\"Map every HTTP-client timeout subtype to `timeout`.\",\"witness\":{\"initial\":\"The Registry accepts a connection for project P but stalls while sending the response body.\",\"events\":[\"A project operation waits until the configured read timeout expires.\"],\"outcomes\":[\"The read timeout is classified as `timeout`.\",\"The read timeout is treated as a connection failure and classified as `transport_error`.\"],\"observer\":\"The Registry gateway caller and tests observe a different `RegistryFailureKind`.\"}},{\"unit\":\"context\",\"subject\":\"SnapshotPublication sections validation\",\"kind\":\"contradiction\",\"text\":\"The field declaration says `sections: list[SnapshotSectionData] (non-empty, unique source_section_id)`, while the changed passage says “the import refuses neither an empty section list nor repeated `source_section_id` values.”\",\"question\":\"Are non-emptiness and `source_section_id` uniqueness input-model constraints enforced before the import use case, or merely unenforced producer obligations?\",\"options\":[\"The request model rejects empty or duplicate sections before import\",\"The request model accepts them and the import may accept the snapshot\",\"Remove the constraints from the input model but retain them as non-enforced producer obligations\"],\"default_guess\":\"Treat them only as producer obligations and allow the request model and import to accept them.\",\"witness\":{\"initial\":\"An active authorized producer can import for active project P, and no snapshot with the submitted identity exists.\",\"events\":[\"The producer submits a complete EUR publication whose `sections` list is empty.\"],\"outcomes\":[\"Model decoding enforces “non-empty” and refuses the request before authentication/import, producing no import record.\",\"Model decoding accepts the body; import validation does not check emptiness, so an accepted snapshot and import record are written.\"],\"observer\":\"The producer sees refusal without an `import_id` versus an accepted import result.\"}},{\"unit\":\"context\",\"subject\":\"ProjectOverview project availability shape\",\"kind\":\"model contradiction\",\"text\":\"`ProjectOverview` still declares the required field `project: ProjectContext` and only five availability/value pairs, while the changed passage says “the project context is absent when its Registry read fails ... and a `project_availability` says so, like the other five pairs.”\",\"question\":\"What is the exact `ProjectOverview` schema after this change, including the type and local validation rule for `project_availability` and optional `project`?\",\"options\":[\"Add `project_availability: ViewAvailability` and make `project: ProjectContext | None`, with the same conditional-presence rule as the other pairs\",\"Keep `project` required and fail the overview when the context read fails\",\"Use a different project-specific availability enum or result type\"],\"default_guess\":\"Add a sixth `ViewAvailability` pair: `project_availability` plus optional `project`, governed by the existing conditional-presence rule.\",\"witness\":{\"initial\":\"A viewer is authorized for project P, and the guard's Registry validation succeeds.\",\"events\":[\"The subsequent Registry context read for the overview times out.\",\"The other five overview components are readable.\"],\"outcomes\":[\"Following the changed passage, the portal returns an overview with no project context and `project_availability=temporarily_unavailable`.\",\"Following the declared DTO, construction fails because `project` is required and `project_availability` is not a field, so the whole operation fails.\"],\"observer\":\"The viewer sees a partial overview versus an operation failure.\"}}]}",
+ "set_aside": []
+}

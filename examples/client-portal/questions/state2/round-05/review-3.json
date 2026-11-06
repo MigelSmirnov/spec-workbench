@@ -1,0 +1,369 @@
+{
+ "open_points": [
+  {
+   "unit": "A4",
+   "subject": "Project-guard failure concealment",
+   "kind": "missing rejection mapping",
+   "text": "“First failure wins; failures are indistinguishable to the caller regarding account/project existence beyond what their own access already proves.”",
+   "question": "Which concrete rejection type and HTTP outcome must each staff/viewer project-access failure produce, and which failures must converge on the same outcome?",
+   "options": [
+    "Return scoped not-found for absent, inactive, or revoked project access.",
+    "Return authorization-forbidden for project-access failures.",
+    "Use different results depending on what the authenticated principal has already proved."
+   ],
+   "default_guess": "Use one scoped not-found result whenever revealing the distinction could disclose project existence.",
+   "witness": {
+    "initial": "An active viewer session exists, but the viewer has no grant for project P; P exists and is active.",
+    "events": [
+     "The viewer requests P.",
+     "The project-access step refuses before Registry validation."
+    ],
+    "outcomes": [
+     "The implementation returns the same not-found response used for an unknown project.",
+     "The implementation returns a forbidden response because authentication succeeded but the grant is absent."
+    ],
+    "observer": "The viewer sees a different response classification or HTTP status."
+   }
+  },
+  {
+   "unit": "A7",
+   "subject": "Expense-intake authorization order",
+   "kind": "contradictory precedence",
+   "text": "A4 says every project-scoped operation checks session, principal, project access, capability, then Registry; A7 says expense creation checks “recognition status `confirmed`, a supported contract version, the `portal.expense.manage` capability, an active project…”",
+   "question": "Does expense creation run the complete A4 guard before recognition-content checks, or do recognition status and contract version precede authentication, scope, and capability?",
+   "options": [
+    "Run the complete A4 guard first.",
+    "Check recognition status and contract version first as A7 states.",
+    "Treat request-model validation separately, then run A4 before application content validation."
+   ],
+   "default_guess": "Decode the request, run the complete A4 guard, then validate recognition content.",
+   "witness": {
+    "initial": "A request carries an expired staff session and an unsupported recognition contract version.",
+    "events": [
+     "The caller submits the expense-creation request for a project."
+    ],
+    "outcomes": [
+     "A4 makes the expired-session rejection win without evaluating the recognition version.",
+     "A7 makes the unsupported-version refusal win before session, scope, or Registry checks."
+    ],
+    "observer": "The caller or a focused test harness sees a different failure and a different set of dependency calls."
+   }
+  },
+  {
+   "unit": "A5",
+   "subject": "Inconsistent Registry lifecycle fields during access-management creation",
+   "kind": "cross-text contradiction",
+   "text": "A5/A6 require grant and assignment operations to trust `exists` and `is_active` and explicitly permit decoded fields to disagree, while R0-24 says no grant or assignment is created for an archived project.",
+   "question": "When validation returns `exists=true`, `is_active=true`, and `status=\"archived\"`, is access-management creation allowed or rejected as an archived project?",
+   "options": [
+    "Allow creation because access-management operations trust only `is_active`.",
+    "Reject creation because `status=archived` makes the project archived under R0-24.",
+    "Reject inconsistent validation as a boundary failure."
+   ],
+   "default_guess": "Follow the explicit current-service rule and trust `is_active` for these operations, while documenting the exception to R0-24.",
+   "witness": {
+    "initial": "An administrator is active and has `portal.access.manage`; Registry validation for P returns `exists=true`, `is_active=true`, `status=\"archived\"`.",
+    "events": [
+     "The administrator creates a viewer grant, staff assignment, or producer grant for P."
+    ],
+    "outcomes": [
+     "A5/A6 allow and persist the new access record because `is_active` is true.",
+     "R0-24 rejects the creation because P is archived."
+    ],
+    "observer": "The administrator and the new grantee see whether the access record exists."
+   }
+  },
+  {
+   "unit": "A6",
+   "subject": "Unusable Registry endpoint classification",
+   "kind": "vague refusal condition",
+   "text": "“the portal's own Registry endpoint setting is missing or unusable → `transport_error`”",
+   "question": "Exactly which configured endpoint values are “unusable,” and must they be rejected without attempting a request or passed to the HTTP client and translated from its failure?",
+   "options": [
+    "Define and validate an exact URL grammar before making a request.",
+    "Treat only a missing/empty value as unusable and let the HTTP client classify other values.",
+    "Normalize recoverable values before sending a request."
+   ],
+   "default_guess": "Require an absolute HTTP(S) base URL and classify any failure of that validation as `transport_error` without a network call.",
+   "witness": {
+    "initial": "`REGISTRY_BASE_URL` is set to `registry.internal` without a scheme.",
+    "events": [
+     "A valid project operation reaches Registry validation."
+    ],
+    "outcomes": [
+     "The gateway rejects the endpoint locally as unusable and makes no Registry request.",
+     "The gateway normalizes or passes the value to its HTTP client, which may contact a host or fail later."
+    ],
+    "observer": "The Registry operator or an instrumented gateway test sees whether a request was attempted and where."
+   }
+  },
+  {
+   "unit": "A7",
+   "subject": "Snapshot import during Registry boundary failure",
+   "kind": "missing record semantics",
+   "text": "A4 says an unanswered Registry validation fails the operation; A7 maps authorization failures only to `unknown_project`, `scope_denied`, or `archived_project`; M20 has no reject reason for timeout, transport, HTTP, schema, or identity failures; R0-25 records every import attempt it classifies except failed bearer authentication.",
+   "question": "Does a Registry boundary failure during an otherwise authenticated snapshot import create a `SnapshotImportRecord`; if so, with which legal outcome and reason?",
+   "options": [
+    "Create no import record and surface the Registry boundary failure.",
+    "Create a rejected import record after adding or selecting a reason for Registry failures.",
+    "Conceal selected Registry failures as `unknown_project` and record that reason."
+   ],
+   "default_guess": "Create no import record because the attempt cannot be classified with the closed import-reason catalog.",
+   "witness": {
+    "initial": "An active producer with a valid credential and active grant submits a valid snapshot; Registry validation times out.",
+    "events": [
+     "The import runs authentication and scope checks.",
+     "The guard calls Registry and receives a timeout."
+    ],
+    "outcomes": [
+     "The operation fails with `RegistryFailureKind.timeout` and writes no import result.",
+     "The operation writes the fresh rejected import result that R0-25 appears to require, forcing an unspecified reject reason."
+    ],
+    "observer": "The producer sees whether an `import_id` is returned, and storage/audit readers see whether a record exists."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "Snapshot section-list and source-section-id validation",
+   "kind": "direct contradiction",
+   "text": "M18 still declares `sections: list[SnapshotSectionData] (non-empty, unique source_section_id)`, but the added text says “the import refuses neither an empty section list nor repeated `source_section_id` values.”",
+   "question": "Are non-emptiness and `source_section_id` uniqueness input-model constraints enforced by the portal, or merely unenforced producer obligations?",
+   "options": [
+    "Accept empty lists and duplicate IDs, as the carried change requires.",
+    "Reject them during request/model decoding, as the field declaration requires.",
+    "Accept them at decoding but reject them later during import validation."
+   ],
+   "default_guess": "Accept them in State 2 because the change explicitly says the running portal does not refuse them.",
+   "witness": {
+    "initial": "An authenticated, authorized producer prepares a version-1 EUR snapshot with `sections=[]`.",
+    "events": [
+     "The producer submits the snapshot."
+    ],
+    "outcomes": [
+     "The field constraint rejects the request before an import attempt is recorded.",
+     "The carried change permits the empty list and the snapshot can be accepted and recorded."
+    ],
+    "observer": "The producer sees rejection versus an accepted import result."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "ProjectOverview project availability shape",
+   "kind": "model contradiction",
+   "text": "The declared `ProjectOverview` requires `project: ProjectContext` and has no `project_availability`, while the carried change says “the project context is absent … and a `project_availability` says so, like the other five pairs.”",
+   "question": "What are the actual `ProjectOverview` fields and validation rule after a post-guard Registry context read fails?",
+   "options": [
+    "Add `project_availability` and make `project` optional under the same paired-field rule as other components.",
+    "Keep `project` required and fail the whole overview when context cannot be read.",
+    "Return an overview outside the declared DTO shape."
+   ],
+   "default_guess": "Add the missing availability field and make `project` conditionally present.",
+   "witness": {
+    "initial": "The project guard successfully validates P, but the subsequent Registry context read times out.",
+    "events": [
+     "An authorized viewer requests P's overview."
+    ],
+    "outcomes": [
+     "The carried change returns a partial overview with no project context and `project_availability=temporarily_unavailable`.",
+     "The declared DTO cannot be constructed, so the operation fails instead."
+    ],
+    "observer": "The viewer sees a partial overview versus an operation failure."
+   }
+  },
+  {
+   "unit": "A25",
+   "subject": "Request-body and binary-response size bounds",
+   "kind": "missing configuration and refusal rule",
+   "text": "“Request bodies and binary responses are bounded by runtime settings before expensive work,” but no request-body setting, binary-response ceiling, units, comparison boundary, or transport response for exceeding them is given in A25/A30.",
+   "question": "What are the exact bounds, environment keys/defaults, whether equality is allowed, and the HTTP outcomes for an oversized request or binary response?",
+   "options": [
+    "Define separate request-body and response-size settings and reject only sizes strictly above each limit.",
+    "Reuse `BINARY_MAX_READ_BYTES` as the binary response ceiling and add one request-body setting.",
+    "Leave the values and error mapping to the later router implementation."
+   ],
+   "default_guess": "Use explicit independent positive-byte settings, permit size equal to the bound, and reject larger inputs before parsing or storage reads.",
+   "witness": {
+    "initial": "A deployment uses only the configuration values explicitly listed in A30.",
+    "events": [
+     "A caller submits a 2 MiB JSON body.",
+     "An authorized caller requests a stored 2 MiB binary."
+    ],
+    "outcomes": [
+     "An implementation with inferred limits accepts both requests.",
+     "An implementation that invents smaller runtime defaults rejects one or both before application work."
+    ],
+    "observer": "The callers see success versus a size-limit error."
+   }
+  },
+  {
+   "unit": "A25",
+   "subject": "Viewer-entry limiter memory bound",
+   "kind": "internal contradiction",
+   "text": "The limiter is described as having “bounded memory,” but the same rule says “there is no cap on distinct keys and no other eviction.”",
+   "question": "Must the implementation impose a global key/entry bound, or must it admit arbitrarily many distinct client-address keys within one window?",
+   "options": [
+    "Honor the no-cap rule, making total memory depend without a fixed bound on distinct addresses.",
+    "Add a global cap or eviction policy to make memory bounded.",
+    "Apply a fixed network-address normalization or aggregation that bounds possible keys."
+   ],
+   "default_guess": "Honor the explicit no-cap semantics and remove the claim of bounded total memory.",
+   "witness": {
+    "initial": "The process has an empty limiter and a limit of 10 attempts per address per 60 seconds.",
+    "events": [
+     "Within one second, requests arrive from one million distinct client addresses, one admitted attempt per address."
+    ],
+    "outcomes": [
+     "The no-cap rule retains one million keys and admits every attempt.",
+     "An implementation satisfying “bounded memory” evicts keys or refuses some first attempts."
+    ],
+    "observer": "The requesting clients and the service operator see different admissions and memory use."
+   }
+  },
+  {
+   "unit": "A25",
+   "subject": "Viewer-entry sliding-window boundary",
+   "kind": "ambiguous boundary",
+   "text": "The rule counts attempts “within the last `window_seconds`” but drops only entries “older than the window.”",
+   "question": "At an age exactly equal to the configured window, does an earlier attempt still count?",
+   "options": [
+    "Keep it until its age is strictly greater than the window.",
+    "Drop it when its age is greater than or equal to the window."
+   ],
+   "default_guess": "Drop entries at `age >= window`, treating the window as half-open.",
+   "witness": {
+    "initial": "The limit is one attempt per 60 seconds, and one attempt was admitted at exactly 12:00:00.",
+    "events": [
+     "The same client attempts entry at exactly 12:01:00."
+    ],
+    "outcomes": [
+     "Because the old entry is not older than 60 seconds, it remains and the new attempt receives HTTP 429.",
+     "Because it is no longer within the last 60 seconds, it is removed and the new attempt is admitted."
+    ],
+    "observer": "The viewer sees refusal versus an attempted credential check."
+   }
+  },
+  {
+   "unit": "A25",
+   "subject": "X-Request-Id generation and trust",
+   "kind": "missing header semantics",
+   "text": "Every response must contain “an `X-Request-Id`,” but the text does not say whether an incoming value is accepted, validated, echoed, replaced, or linked to logs.",
+   "question": "How is the response request ID chosen, and what happens to a caller-supplied `X-Request-Id`?",
+   "options": [
+    "Always generate a new server-owned identifier and ignore the incoming value.",
+    "Echo a valid incoming identifier and generate one only when absent or invalid.",
+    "Echo any incoming string unchanged."
+   ],
+   "default_guess": "Always generate a server-owned opaque identifier and treat any incoming value as untrusted metadata.",
+   "witness": {
+    "initial": "A caller has no authentication and sends `X-Request-Id: attacker-chosen` to the health route.",
+    "events": [
+     "The service returns its normal health response."
+    ],
+    "outcomes": [
+     "The response echoes `attacker-chosen`.",
+     "The response contains a newly generated server identifier."
+    ],
+    "observer": "The caller sees the different response header, and log correlation may differ."
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "Validation and storage of source-supplied timestamps",
+   "kind": "contradictory representation",
+   "text": "State 1 says timestamps are timezone-aware UTC; A28 says persisted timestamps are UTC and offset-naive, while also saying source-supplied times are “validated and kept as supplied.”",
+   "question": "Which timezone forms are accepted for source timestamps, and are accepted values preserved with their supplied offset, normalized to UTC and made naive, or required to arrive as UTC?",
+   "options": [
+    "Require timezone-aware UTC input and persist its UTC wall time in the storage representation.",
+    "Accept any aware offset and normalize the instant to offset-naive UTC.",
+    "Preserve the supplied aware datetime and offset unchanged.",
+    "Accept offset-naive source values as already UTC."
+   ],
+   "default_guess": "Require an aware timestamp, normalize its instant to UTC, and persist the normalized offset-naive UTC value.",
+   "witness": {
+    "initial": "A valid snapshot contains `approved_at=2026-11-06T12:00:00+02:00`.",
+    "events": [
+     "An authorized producer imports the snapshot."
+    ],
+    "outcomes": [
+     "“Kept as supplied” stores the aware `+02:00` value.",
+     "The UTC offset-naive rule stores `2026-11-06T10:00:00` without an offset, or the State 1 convention rejects the non-UTC representation."
+    ],
+    "observer": "A snapshot reader, persistence test, or fingerprint implementation sees a different stored value and possibly a different acceptance result."
+   }
+  },
+  {
+   "unit": "A30",
+   "subject": "Referenced closed runtime-environment table",
+   "kind": "missing normative artifact",
+   "text": "A30 says `config.runtime_environment_variables` is a closed table of variables, types, requiredness, normalization, and per-environment defaults, but that table is not included; visible rules rely on settings for trusted hosts, CORS, canonical origin, persistence paths, request/response bounds, and viewer-entry limits.",
+   "question": "What is the complete environment-variable table, including exact names, types, normalization, requiredness, environment selection, and defaults?",
+   "options": [
+    "Include the full closed table in State 2.",
+    "Limit A30 to the visible variables and remove behavior that depends on unspecified settings.",
+    "Explicitly carry the complete table to a later state instead of calling State 2 closed."
+   ],
+   "default_guess": "Include the full table in A30 because startup and refusal behavior depend on it.",
+   "witness": {
+    "initial": "A deployment supplies every environment variable explicitly named in A30's visible code block, but supplies no trusted-host, canonical-origin, CORS, request-size, database-path, or viewer-rate-limit variables.",
+    "events": [
+     "The operator starts the service in a production environment."
+    ],
+    "outcomes": [
+     "The service starts using implementation-chosen defaults for the unnamed settings.",
+     "Startup fails because some members of the absent closed table are required in production."
+    ],
+    "observer": "The deployment operator sees successful startup versus configuration failure."
+   }
+  },
+  {
+   "unit": "A32",
+   "subject": "Vulnerability blocking criterion",
+   "kind": "direct contradiction",
+   "text": "The formal invariant says no deploy ships a known vulnerability “affecting the portal,” while the normative rule says every advisory for any resolved package blocks and “affects the portal” is not judged case by case, including unused optional features.",
+   "question": "Does every reported advisory block deployment, or only an advisory assessed as affecting the portal?",
+   "options": [
+    "Every advisory reported for the installed resolved set blocks deployment.",
+    "Only advisories shown to affect the portal's used code paths block deployment."
+   ],
+   "default_guess": "Block on every reported advisory, following the more specific normative rule.",
+   "witness": {
+    "initial": "The installed dependency set has an advisory affecting only an optional feature the portal never invokes.",
+    "events": [
+     "The pre-deploy vulnerability check reports the advisory."
+    ],
+    "outcomes": [
+     "The normative rule blocks deployment without a relevance assessment.",
+     "The formal invariant permits deployment after concluding that the advisory does not affect the portal."
+    ],
+    "observer": "The release operator sees the deployment blocked versus allowed."
+   }
+  },
+  {
+   "unit": "A32",
+   "subject": "Authoritative dependency-audit command and resolved set",
+   "kind": "conflicting procedure",
+   "text": "A32 first defines the reproducible check as `pip-audit -r deploy/requirements.txt`, then says the check runs inside the built image against installed packages using `pip-audit --local`.",
+   "question": "Must deployment pass the requirements-resolution audit, the installed-image audit, or both, and which result is authoritative if the resolved package sets differ?",
+   "options": [
+    "Run only `pip-audit --local` in the built image.",
+    "Run both commands and require both to pass.",
+    "Run only `pip-audit -r deploy/requirements.txt` using the deployment resolver environment."
+   ],
+   "default_guess": "Treat the built-image `--local` result as authoritative because it audits what will ship.",
+   "witness": {
+    "initial": "The requirements audit resolves transitive package T at version 1, while the already built image contains T version 2; only version 2 has a reported advisory.",
+    "events": [
+     "The pre-deploy vulnerability gate runs."
+    ],
+    "outcomes": [
+     "The `-r` interpretation passes and permits deployment.",
+     "The `--local` interpretation reports the installed vulnerable version and blocks deployment."
+    ],
+    "observer": "The release operator sees the image deployed versus held."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A4\",\"subject\":\"Project-guard failure concealment\",\"kind\":\"missing rejection mapping\",\"text\":\"“First failure wins; failures are indistinguishable to the caller regarding account/project existence beyond what their own access already proves.”\",\"question\":\"Which concrete rejection type and HTTP outcome must each staff/viewer project-access failure produce, and which failures must converge on the same outcome?\",\"options\":[\"Return scoped not-found for absent, inactive, or revoked project access.\",\"Return authorization-forbidden for project-access failures.\",\"Use different results depending on what the authenticated principal has already proved.\"],\"default_guess\":\"Use one scoped not-found result whenever revealing the distinction could disclose project existence.\",\"witness\":{\"initial\":\"An active viewer session exists, but the viewer has no grant for project P; P exists and is active.\",\"events\":[\"The viewer requests P.\",\"The project-access step refuses before Registry validation.\"],\"outcomes\":[\"The implementation returns the same not-found response used for an unknown project.\",\"The implementation returns a forbidden response because authentication succeeded but the grant is absent.\"],\"observer\":\"The viewer sees a different response classification or HTTP status.\"}},{\"unit\":\"A7\",\"subject\":\"Expense-intake authorization order\",\"kind\":\"contradictory precedence\",\"text\":\"A4 says every project-scoped operation checks session, principal, project access, capability, then Registry; A7 says expense creation checks “recognition status `confirmed`, a supported contract version, the `portal.expense.manage` capability, an active project…”\",\"question\":\"Does expense creation run the complete A4 guard before recognition-content checks, or do recognition status and contract version precede authentication, scope, and capability?\",\"options\":[\"Run the complete A4 guard first.\",\"Check recognition status and contract version first as A7 states.\",\"Treat request-model validation separately, then run A4 before application content validation.\"],\"default_guess\":\"Decode the request, run the complete A4 guard, then validate recognition content.\",\"witness\":{\"initial\":\"A request carries an expired staff session and an unsupported recognition contract version.\",\"events\":[\"The caller submits the expense-creation request for a project.\"],\"outcomes\":[\"A4 makes the expired-session rejection win without evaluating the recognition version.\",\"A7 makes the unsupported-version refusal win before session, scope, or Registry checks.\"],\"observer\":\"The caller or a focused test harness sees a different failure and a different set of dependency calls.\"}},{\"unit\":\"A5\",\"subject\":\"Inconsistent Registry lifecycle fields during access-management creation\",\"kind\":\"cross-text contradiction\",\"text\":\"A5/A6 require grant and assignment operations to trust `exists` and `is_active` and explicitly permit decoded fields to disagree, while R0-24 says no grant or assignment is created for an archived project.\",\"question\":\"When validation returns `exists=true`, `is_active=true`, and `status=\\\"archived\\\"`, is access-management creation allowed or rejected as an archived project?\",\"options\":[\"Allow creation because access-management operations trust only `is_active`.\",\"Reject creation because `status=archived` makes the project archived under R0-24.\",\"Reject inconsistent validation as a boundary failure.\"],\"default_guess\":\"Follow the explicit current-service rule and trust `is_active` for these operations, while documenting the exception to R0-24.\",\"witness\":{\"initial\":\"An administrator is active and has `portal.access.manage`; Registry validation for P returns `exists=true`, `is_active=true`, `status=\\\"archived\\\"`.\",\"events\":[\"The administrator creates a viewer grant, staff assignment, or producer grant for P.\"],\"outcomes\":[\"A5/A6 allow and persist the new access record because `is_active` is true.\",\"R0-24 rejects the creation because P is archived.\"],\"observer\":\"The administrator and the new grantee see whether the access record exists.\"}},{\"unit\":\"A6\",\"subject\":\"Unusable Registry endpoint classification\",\"kind\":\"vague refusal condition\",\"text\":\"“the portal's own Registry endpoint setting is missing or unusable → `transport_error`”\",\"question\":\"Exactly which configured endpoint values are “unusable,” and must they be rejected without attempting a request or passed to the HTTP client and translated from its failure?\",\"options\":[\"Define and validate an exact URL grammar before making a request.\",\"Treat only a missing/empty value as unusable and let the HTTP client classify other values.\",\"Normalize recoverable values before sending a request.\"],\"default_guess\":\"Require an absolute HTTP(S) base URL and classify any failure of that validation as `transport_error` without a network call.\",\"witness\":{\"initial\":\"`REGISTRY_BASE_URL` is set to `registry.internal` without a scheme.\",\"events\":[\"A valid project operation reaches Registry validation.\"],\"outcomes\":[\"The gateway rejects the endpoint locally as unusable and makes no Registry request.\",\"The gateway normalizes or passes the value to its HTTP client, which may contact a host or fail later.\"],\"observer\":\"The Registry operator or an instrumented gateway test sees whether a request was attempted and where.\"}},{\"unit\":\"A7\",\"subject\":\"Snapshot import during Registry boundary failure\",\"kind\":\"missing record semantics\",\"text\":\"A4 says an unanswered Registry validation fails the operation; A7 maps authorization failures only to `unknown_project`, `scope_denied`, or `archived_project`; M20 has no reject reason for timeout, transport, HTTP, schema, or identity failures; R0-25 records every import attempt it classifies except failed bearer authentication.\",\"question\":\"Does a Registry boundary failure during an otherwise authenticated snapshot import create a `SnapshotImportRecord`; if so, with which legal outcome and reason?\",\"options\":[\"Create no import record and surface the Registry boundary failure.\",\"Create a rejected import record after adding or selecting a reason for Registry failures.\",\"Conceal selected Registry failures as `unknown_project` and record that reason.\"],\"default_guess\":\"Create no import record because the attempt cannot be classified with the closed import-reason catalog.\",\"witness\":{\"initial\":\"An active producer with a valid credential and active grant submits a valid snapshot; Registry validation times out.\",\"events\":[\"The import runs authentication and scope checks.\",\"The guard calls Registry and receives a timeout.\"],\"outcomes\":[\"The operation fails with `RegistryFailureKind.timeout` and writes no import result.\",\"The operation writes the fresh rejected import result that R0-25 appears to require, forcing an unspecified reject reason.\"],\"observer\":\"The producer sees whether an `import_id` is returned, and storage/audit readers see whether a record exists.\"}},{\"unit\":\"context\",\"subject\":\"Snapshot section-list and source-section-id validation\",\"kind\":\"direct contradiction\",\"text\":\"M18 still declares `sections: list[SnapshotSectionData] (non-empty, unique source_section_id)`, but the added text says “the import refuses neither an empty section list nor repeated `source_section_id` values.”\",\"question\":\"Are non-emptiness and `source_section_id` uniqueness input-model constraints enforced by the portal, or merely unenforced producer obligations?\",\"options\":[\"Accept empty lists and duplicate IDs, as the carried change requires.\",\"Reject them during request/model decoding, as the field declaration requires.\",\"Accept them at decoding but reject them later during import validation.\"],\"default_guess\":\"Accept them in State 2 because the change explicitly says the running portal does not refuse them.\",\"witness\":{\"initial\":\"An authenticated, authorized producer prepares a version-1 EUR snapshot with `sections=[]`.\",\"events\":[\"The producer submits the snapshot.\"],\"outcomes\":[\"The field constraint rejects the request before an import attempt is recorded.\",\"The carried change permits the empty list and the snapshot can be accepted and recorded.\"],\"observer\":\"The producer sees rejection versus an accepted import result.\"}},{\"unit\":\"context\",\"subject\":\"ProjectOverview project availability shape\",\"kind\":\"model contradiction\",\"text\":\"The declared `ProjectOverview` requires `project: ProjectContext` and has no `project_availability`, while the carried change says “the project context is absent … and a `project_availability` says so, like the other five pairs.”\",\"question\":\"What are the actual `ProjectOverview` fields and validation rule after a post-guard Registry context read fails?\",\"options\":[\"Add `project_availability` and make `project` optional under the same paired-field rule as other components.\",\"Keep `project` required and fail the whole overview when context cannot be read.\",\"Return an overview outside the declared DTO shape.\"],\"default_guess\":\"Add the missing availability field and make `project` conditionally present.\",\"witness\":{\"initial\":\"The project guard successfully validates P, but the subsequent Registry context read times out.\",\"events\":[\"An authorized viewer requests P's overview.\"],\"outcomes\":[\"The carried change returns a partial overview with no project context and `project_availability=temporarily_unavailable`.\",\"The declared DTO cannot be constructed, so the operation fails instead.\"],\"observer\":\"The viewer sees a partial overview versus an operation failure.\"}},{\"unit\":\"A25\",\"subject\":\"Request-body and binary-response size bounds\",\"kind\":\"missing configuration and refusal rule\",\"text\":\"“Request bodies and binary responses are bounded by runtime settings before expensive work,” but no request-body setting, binary-response ceiling, units, comparison boundary, or transport response for exceeding them is given in A25/A30.\",\"question\":\"What are the exact bounds, environment keys/defaults, whether equality is allowed, and the HTTP outcomes for an oversized request or binary response?\",\"options\":[\"Define separate request-body and response-size settings and reject only sizes strictly above each limit.\",\"Reuse `BINARY_MAX_READ_BYTES` as the binary response ceiling and add one request-body setting.\",\"Leave the values and error mapping to the later router implementation.\"],\"default_guess\":\"Use explicit independent positive-byte settings, permit size equal to the bound, and reject larger inputs before parsing or storage reads.\",\"witness\":{\"initial\":\"A deployment uses only the configuration values explicitly listed in A30.\",\"events\":[\"A caller submits a 2 MiB JSON body.\",\"An authorized caller requests a stored 2 MiB binary.\"],\"outcomes\":[\"An implementation with inferred limits accepts both requests.\",\"An implementation that invents smaller runtime defaults rejects one or both before application work.\"],\"observer\":\"The callers see success versus a size-limit error.\"}},{\"unit\":\"A25\",\"subject\":\"Viewer-entry limiter memory bound\",\"kind\":\"internal contradiction\",\"text\":\"The limiter is described as having “bounded memory,” but the same rule says “there is no cap on distinct keys and no other eviction.”\",\"question\":\"Must the implementation impose a global key/entry bound, or must it admit arbitrarily many distinct client-address keys within one window?\",\"options\":[\"Honor the no-cap rule, making total memory depend without a fixed bound on distinct addresses.\",\"Add a global cap or eviction policy to make memory bounded.\",\"Apply a fixed network-address normalization or aggregation that bounds possible keys.\"],\"default_guess\":\"Honor the explicit no-cap semantics and remove the claim of bounded total memory.\",\"witness\":{\"initial\":\"The process has an empty limiter and a limit of 10 attempts per address per 60 seconds.\",\"events\":[\"Within one second, requests arrive from one million distinct client addresses, one admitted attempt per address.\"],\"outcomes\":[\"The no-cap rule retains one million keys and admits every attempt.\",\"An implementation satisfying “bounded memory” evicts keys or refuses some first attempts.\"],\"observer\":\"The requesting clients and the service operator see different admissions and memory use.\"}},{\"unit\":\"A25\",\"subject\":\"Viewer-entry sliding-window boundary\",\"kind\":\"ambiguous boundary\",\"text\":\"The rule counts attempts “within the last `window_seconds`” but drops only entries “older than the window.”\",\"question\":\"At an age exactly equal to the configured window, does an earlier attempt still count?\",\"options\":[\"Keep it until its age is strictly greater than the window.\",\"Drop it when its age is greater than or equal to the window.\"],\"default_guess\":\"Drop entries at `age >= window`, treating the window as half-open.\",\"witness\":{\"initial\":\"The limit is one attempt per 60 seconds, and one attempt was admitted at exactly 12:00:00.\",\"events\":[\"The same client attempts entry at exactly 12:01:00.\"],\"outcomes\":[\"Because the old entry is not older than 60 seconds, it remains and the new attempt receives HTTP 429.\",\"Because it is no longer within the last 60 seconds, it is removed and the new attempt is admitted.\"],\"observer\":\"The viewer sees refusal versus an attempted credential check.\"}},{\"unit\":\"A25\",\"subject\":\"X-Request-Id generation and trust\",\"kind\":\"missing header semantics\",\"text\":\"Every response must contain “an `X-Request-Id`,” but the text does not say whether an incoming value is accepted, validated, echoed, replaced, or linked to logs.\",\"question\":\"How is the response request ID chosen, and what happens to a caller-supplied `X-Request-Id`?\",\"options\":[\"Always generate a new server-owned identifier and ignore the incoming value.\",\"Echo a valid incoming identifier and generate one only when absent or invalid.\",\"Echo any incoming string unchanged.\"],\"default_guess\":\"Always generate a server-owned opaque identifier and treat any incoming value as untrusted metadata.\",\"witness\":{\"initial\":\"A caller has no authentication and sends `X-Request-Id: attacker-chosen` to the health route.\",\"events\":[\"The service returns its normal health response.\"],\"outcomes\":[\"The response echoes `attacker-chosen`.\",\"The response contains a newly generated server identifier.\"],\"observer\":\"The caller sees the different response header, and log correlation may differ.\"}},{\"unit\":\"A28\",\"subject\":\"Validation and storage of source-supplied timestamps\",\"kind\":\"contradictory representation\",\"text\":\"State 1 says timestamps are timezone-aware UTC; A28 says persisted timestamps are UTC and offset-naive, while also saying source-supplied times are “validated and kept as supplied.”\",\"question\":\"Which timezone forms are accepted for source timestamps, and are accepted values preserved with their supplied offset, normalized to UTC and made naive, or required to arrive as UTC?\",\"options\":[\"Require timezone-aware UTC input and persist its UTC wall time in the storage representation.\",\"Accept any aware offset and normalize the instant to offset-naive UTC.\",\"Preserve the supplied aware datetime and offset unchanged.\",\"Accept offset-naive source values as already UTC.\"],\"default_guess\":\"Require an aware timestamp, normalize its instant to UTC, and persist the normalized offset-naive UTC value.\",\"witness\":{\"initial\":\"A valid snapshot contains `approved_at=2026-11-06T12:00:00+02:00`.\",\"events\":[\"An authorized producer imports the snapshot.\"],\"outcomes\":[\"“Kept as supplied” stores the aware `+02:00` value.\",\"The UTC offset-naive rule stores `2026-11-06T10:00:00` without an offset, or the State 1 convention rejects the non-UTC representation.\"],\"observer\":\"A snapshot reader, persistence test, or fingerprint implementation sees a different stored value and possibly a different acceptance result.\"}},{\"unit\":\"A30\",\"subject\":\"Referenced closed runtime-environment table\",\"kind\":\"missing normative artifact\",\"text\":\"A30 says `config.runtime_environment_variables` is a closed table of variables, types, requiredness, normalization, and per-environment defaults, but that table is not included; visible rules rely on settings for trusted hosts, CORS, canonical origin, persistence paths, request/response bounds, and viewer-entry limits.\",\"question\":\"What is the complete environment-variable table, including exact names, types, normalization, requiredness, environment selection, and defaults?\",\"options\":[\"Include the full closed table in State 2.\",\"Limit A30 to the visible variables and remove behavior that depends on unspecified settings.\",\"Explicitly carry the complete table to a later state instead of calling State 2 closed.\"],\"default_guess\":\"Include the full table in A30 because startup and refusal behavior depend on it.\",\"witness\":{\"initial\":\"A deployment supplies every environment variable explicitly named in A30's visible code block, but supplies no trusted-host, canonical-origin, CORS, request-size, database-path, or viewer-rate-limit variables.\",\"events\":[\"The operator starts the service in a production environment.\"],\"outcomes\":[\"The service starts using implementation-chosen defaults for the unnamed settings.\",\"Startup fails because some members of the absent closed table are required in production.\"],\"observer\":\"The deployment operator sees successful startup versus configuration failure.\"}},{\"unit\":\"A32\",\"subject\":\"Vulnerability blocking criterion\",\"kind\":\"direct contradiction\",\"text\":\"The formal invariant says no deploy ships a known vulnerability “affecting the portal,” while the normative rule says every advisory for any resolved package blocks and “affects the portal” is not judged case by case, including unused optional features.\",\"question\":\"Does every reported advisory block deployment, or only an advisory assessed as affecting the portal?\",\"options\":[\"Every advisory reported for the installed resolved set blocks deployment.\",\"Only advisories shown to affect the portal's used code paths block deployment.\"],\"default_guess\":\"Block on every reported advisory, following the more specific normative rule.\",\"witness\":{\"initial\":\"The installed dependency set has an advisory affecting only an optional feature the portal never invokes.\",\"events\":[\"The pre-deploy vulnerability check reports the advisory.\"],\"outcomes\":[\"The normative rule blocks deployment without a relevance assessment.\",\"The formal invariant permits deployment after concluding that the advisory does not affect the portal.\"],\"observer\":\"The release operator sees the deployment blocked versus allowed.\"}},{\"unit\":\"A32\",\"subject\":\"Authoritative dependency-audit command and resolved set\",\"kind\":\"conflicting procedure\",\"text\":\"A32 first defines the reproducible check as `pip-audit -r deploy/requirements.txt`, then says the check runs inside the built image against installed packages using `pip-audit --local`.\",\"question\":\"Must deployment pass the requirements-resolution audit, the installed-image audit, or both, and which result is authoritative if the resolved package sets differ?\",\"options\":[\"Run only `pip-audit --local` in the built image.\",\"Run both commands and require both to pass.\",\"Run only `pip-audit -r deploy/requirements.txt` using the deployment resolver environment.\"],\"default_guess\":\"Treat the built-image `--local` result as authoritative because it audits what will ship.\",\"witness\":{\"initial\":\"The requirements audit resolves transitive package T at version 1, while the already built image contains T version 2; only version 2 has a reported advisory.\",\"events\":[\"The pre-deploy vulnerability gate runs.\"],\"outcomes\":[\"The `-r` interpretation passes and permits deployment.\",\"The `--local` interpretation reports the installed vulnerable version and blocks deployment.\"],\"observer\":\"The release operator sees the image deployed versus held.\"}}]}",
+ "set_aside": []
+}

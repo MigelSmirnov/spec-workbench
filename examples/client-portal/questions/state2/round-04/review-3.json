@@ -1,0 +1,297 @@
+{
+ "open_points": [
+  {
+   "subject": "Access-management creation guard order",
+   "kind": "missing precedence",
+   "text": "A4 defines an ordered guard only for “Every project-scoped operation” and gives a special sequence for revocation, while State 0 says creating a grant or assignment checks the session, active principal, access-management capability, and an active Registry project without stating their order.",
+   "question": "In what order are authentication, principal status, access-management capability, target-record checks, and Registry validation evaluated when creating a viewer grant, staff assignment, or producer grant?",
+   "options": [
+    "Authorize the administrator completely before checking the target or calling Registry.",
+    "Check the target and Registry project before or between administrator authorization checks."
+   ],
+   "default_guess": "Authorize the administrator and capability first, then validate the target and Registry project.",
+   "witness": {
+    "initial": "An administrator session is expired, and Registry is unavailable.",
+    "events": [
+     "The caller requests creation of a project grant."
+    ],
+    "outcomes": [
+     "The request fails at authentication and Registry is never called.",
+     "The implementation calls Registry first and returns or logs a Registry failure before discovering the expired session."
+    ],
+    "observer": "The caller, Registry operator, and service telemetry."
+   },
+   "unit": "A4"
+  },
+  {
+   "subject": "Inconsistent Registry validation fields",
+   "kind": "contradictory precedence",
+   "text": "A5 says the project guard decides mutation eligibility from `status` and grant/assignment operations decide it from `is_active`; A6 also maps `exists=true, is_active=false` to `archived`, while allowing callers to read the validation answer afterward.",
+   "question": "What is authoritative when a successful validation answer has inconsistent `status`, `is_active`, and `exists` values, and must such an answer instead be rejected as `schema_mismatch`?",
+   "options": [
+    "Trust `status` in the project guard and `is_active` in access management, so the same answer can authorize one operation and reject another.",
+    "Apply the A6 `is_active=false` classification to every caller.",
+    "Reject any inconsistent combination as `schema_mismatch`."
+   ],
+   "default_guess": "Reject inconsistent validation fields as `schema_mismatch`.",
+   "witness": {
+    "initial": "Registry returns `exists=true`, `status=\"active\"`, and `is_active=false` for one project.",
+    "events": [
+     "An authorized operator performs a linked project mutation.",
+     "An administrator attempts to create a grant for the same project."
+    ],
+    "outcomes": [
+     "The mutation is allowed from `status`, while grant creation is rejected as archived from `is_active`.",
+     "Both operations are rejected as archived or both are rejected for an invalid Registry answer."
+    ],
+    "observer": "The operator and administrator."
+   },
+   "unit": "A5"
+  },
+  {
+   "subject": "Registry boundary failures during snapshot import",
+   "kind": "unclassified refusal",
+   "text": "A6 defines `timeout`, `transport_error`, `http_error`, `schema_mismatch`, and `identity_mismatch`, but A7 assigns import-record reasons only for unknown project, scope denial, archived project, and content failures; `SnapshotImportRecord.reject_reason` has no Registry-failure values.",
+   "question": "When Registry authorization fails with one of these boundary failures, is the request an import attempt, is an import record written, and what response is returned?",
+   "options": [
+    "Propagate an unavailable/internal error and write no import record.",
+    "Record a rejected import by translating the failure to an existing reason such as `unknown_project`.",
+    "Extend the import rejection catalog with Registry-failure reasons."
+   ],
+   "default_guess": "Propagate the boundary failure and write no import record because the closed rejection catalog cannot represent it.",
+   "witness": {
+    "initial": "A producer has a valid active credential and valid scope; Registry times out.",
+    "events": [
+     "The producer submits a well-formed snapshot."
+    ],
+    "outcomes": [
+     "The API returns an unavailable/internal failure and no `import_id` exists.",
+     "The portal writes a rejected import result and returns its new `import_id`."
+    ],
+    "observer": "The producer and audit/import-result readers."
+   },
+   "unit": "A6"
+  },
+  {
+   "subject": "Missing snapshot fields",
+   "kind": "direct contradiction",
+   "text": "A7 says “a missing envelope field or section list” and “a missing [section] field” produce a recorded `incomplete_content` rejection, but also says a body lacking any field required by the request model is rejected with HTTP 422 before authentication and is not an import attempt. M18 makes the envelope and section fields required.",
+   "question": "Which missing snapshot fields, if any, survive request decoding and become a recorded `incomplete_content` rejection?",
+   "options": [
+    "No required field does; every missing envelope or section field is an unrecorded HTTP 422.",
+    "Snapshot fields are decoding-optional so the import use case records `incomplete_content`.",
+    "Only an explicitly enumerated subset is decoding-optional and checked by the import use case."
+   ],
+   "default_guess": "Treat every M18-required field as a decoding requirement, making missing-field `incomplete_content` unreachable over HTTP.",
+   "witness": {
+    "initial": "A producer has a valid credential and scope.",
+    "events": [
+     "The producer submits a snapshot section without `display_name`."
+    ],
+    "outcomes": [
+     "Request decoding returns HTTP 422, performs no authentication, and writes no import record.",
+     "Import processing writes a rejected record with reason `incomplete_content` and returns an `import_id`."
+    ],
+    "observer": "The producer and import-result store."
+   },
+   "unit": "A7"
+  },
+  {
+   "subject": "Expense-intake check order",
+   "kind": "sequence contradiction",
+   "text": "A4 requires session, active principal, project access, capability, then Registry lifecycle for every project-scoped operation. A7 instead orders expense creation as recognition status, contract version, capability, active project, amount, allocations, and replay, omitting session/principal/project-access checks and placing content checks before authorization.",
+   "question": "Does expense creation follow A4 before validating recognition content, or does it follow A7's content-first sequence, and where is assignment scope checked?",
+   "options": [
+    "Run the complete A4 guard first, then validate recognition content.",
+    "Validate recognition status/version first, then perform authorization and project checks.",
+    "Treat some authorization as having occurred before the A7 sequence and state exactly which checks remain."
+   ],
+   "default_guess": "Run authentication, principal status, assignment scope, capability, and Registry policy before content validation.",
+   "witness": {
+    "initial": "A request has an expired staff session and an unsupported recognition contract version.",
+    "events": [
+     "The caller submits the expense-creation request."
+    ],
+    "outcomes": [
+     "A4 makes the authentication failure win.",
+     "A7 makes the unsupported contract version win and returns its stated HTTP 422 refusal."
+    ],
+    "observer": "The caller."
+   },
+   "unit": "A7"
+  },
+  {
+   "subject": "HTTP request and response bounds",
+   "kind": "missing configuration and refusal",
+   "text": "A25 says request bodies and binary responses are bounded by runtime settings before expensive work, but gives neither the request-body setting nor its limit, and does not state the HTTP status/body for an oversized request. A30 lists only the binary read limit in its visible configuration.",
+   "question": "What exact request-body and declared-response ceilings apply, how are they measured, and what response is produced when either is exceeded?",
+   "options": [
+    "Use one global byte limit for all request bodies and return a fixed empty error.",
+    "Use route-specific limits with route-specific refusals.",
+    "Rely on the server/framework limit rather than a portal runtime setting."
+   ],
+   "default_guess": "Use a required global byte limit measured on received body bytes and return an empty HTTP 413 before decoding.",
+   "witness": {
+    "initial": "The service receives a syntactically valid snapshot body larger than an implementation's chosen threshold.",
+    "events": [
+     "A producer submits the request."
+    ],
+    "outcomes": [
+     "One implementation rejects it before authentication with HTTP 413.",
+     "Another accepts and processes it because no concrete request-body limit is present in the supplied configuration."
+    ],
+    "observer": "The producer and service resource monitors."
+   },
+   "unit": "A25"
+  },
+  {
+   "subject": "Trusted-host matching and rejection",
+   "kind": "underspecified refusal",
+   "text": "A25 requires configured trusted hosts with no wildcard but does not define normalization of case, ports, trailing dots, IPv6 forms, or the response when a host fails the check.",
+   "question": "How is the request Host authority compared with configured trusted hosts, and what exact status/body is returned on mismatch?",
+   "options": [
+    "Compare normalized DNS host names while handling ports separately.",
+    "Compare the complete authority literally.",
+    "Use the framework's host-normalization and default rejection behavior."
+   ],
+   "default_guess": "Normalize DNS case, validate the optional port separately, reject malformed or unmatched authorities with an empty HTTP 400.",
+   "witness": {
+    "initial": "The configured trusted host is `portal.example.com`.",
+    "events": [
+     "A client sends `Host: Portal.Example.Com:443`."
+    ],
+    "outcomes": [
+     "The request is accepted after DNS-name and effective-port normalization.",
+     "The request is rejected because the authority is not a literal match."
+    ],
+    "observer": "The client."
+   },
+   "unit": "A25"
+  },
+  {
+   "subject": "Viewer origin enforcement coverage",
+   "kind": "ambiguous applicability",
+   "text": "A25 says “mutating viewer requests must come from the canonical public origin,” while viewers cannot mutate project data and the text does not enumerate whether viewer entry, session restore, and logout are covered.",
+   "question": "Which viewer routes require the Origin check, especially session logout, and what happens when Origin is absent or malformed?",
+   "options": [
+    "Apply it only to cookie-authenticated state-changing routes such as logout.",
+    "Apply it to every viewer POST, including entry.",
+    "Apply it to all viewer routes carrying the session cookie."
+   ],
+   "default_guess": "Apply it to cookie-authenticated state-changing routes, including logout, and reject absent, malformed, or non-canonical Origin values.",
+   "witness": {
+    "initial": "A viewer has a valid cookie session.",
+    "events": [
+     "A cross-origin page submits `POST /auth/viewer/logout` with the cookie."
+    ],
+    "outcomes": [
+     "Logout is refused because it is a mutating viewer request from a foreign origin.",
+     "Logout succeeds because the origin rule is interpreted as applying only to portal-record mutations."
+    ],
+    "observer": "The viewer."
+   },
+   "unit": "A25"
+  },
+  {
+   "subject": "X-Request-Id provenance",
+   "kind": "underspecified observable header",
+   "text": "A25 requires an `X-Request-Id` on every response but does not say whether an incoming value is trusted, replaced, validated, or propagated, nor what format or uniqueness is required.",
+   "question": "Who generates the request ID, may a client-supplied ID be echoed, and what validation and uniqueness rules apply?",
+   "options": [
+    "Always generate a new server-owned identifier.",
+    "Echo a valid client identifier and generate one only when absent or invalid.",
+    "Echo any supplied value verbatim."
+   ],
+   "default_guess": "Always generate a server-owned UUID and do not trust a caller-supplied value.",
+   "witness": {
+    "initial": "A client sends `X-Request-Id: secret-controlled-value`.",
+    "events": [
+     "The service answers the request."
+    ],
+    "outcomes": [
+     "The response and logs use a fresh server-generated identifier.",
+     "The response and logs echo the caller-controlled value."
+    ],
+    "observer": "The client and log operators."
+   },
+   "unit": "A25"
+  },
+  {
+   "subject": "Clock scope across transport and use case",
+   "kind": "undefined operation boundary",
+   "text": "A28 says “Each operation reads the clock once,” but does not define whether an operation is the whole HTTP request, each transport guard, each use case, or each nested module call.",
+   "question": "Which components must share the single instant when one request passes through rate limiting, authentication, authorization, and a writing use case?",
+   "options": [
+    "One instant is captured for the whole HTTP request and passed through every layer.",
+    "Each use case gets one instant, while transport guards may read independently.",
+    "Each independently named policy operation gets its own single read."
+   ],
+   "default_guess": "Treat each application use case as an operation; transport policies use their own captured instant.",
+   "witness": {
+    "initial": "A viewer credential expires between the rate-limit check and credential verification.",
+    "events": [
+     "A viewer-entry request begins just before expiry.",
+     "The transport limiter checks its window.",
+     "Authentication verifies the credential and creates a session if valid."
+    ],
+    "outcomes": [
+     "One request-wide instant keeps the credential valid and a session is created.",
+     "A later authentication instant sees the credential expired and refuses entry."
+    ],
+    "observer": "The viewer."
+   },
+   "unit": "A28"
+  },
+  {
+   "subject": "Source-supplied datetime representation",
+   "kind": "representation conflict",
+   "text": "A28 says persisted timestamps are UTC and offset-naive, while source-supplied `approved_at`, `published_at`, `confirmed_at`, and `photo_date` are “validated and kept as supplied.” The accepted offsets and normalization rule are not stated.",
+   "question": "Are source datetimes required to be UTC, normalized to UTC and stripped of their offset, preserved with their supplied offset, or rejected when offset-aware/non-UTC?",
+   "options": [
+    "Require offset-aware input, convert the instant to UTC, and persist it offset-naive.",
+    "Require already-UTC offset-naive input.",
+    "Preserve the supplied offset-aware representation despite the persisted-timestamp rule."
+   ],
+   "default_guess": "Require an unambiguous offset, normalize the instant to UTC, and store it offset-naive.",
+   "witness": {
+    "initial": "A valid snapshot carries `published_at=2026-11-06T12:00:00+02:00`.",
+    "events": [
+     "The producer imports the snapshot."
+    ],
+    "outcomes": [
+     "The portal stores `2026-11-06 10:00:00` as offset-naive UTC.",
+     "The portal stores `12:00:00+02:00` unchanged or rejects it for not already matching the storage representation."
+    ],
+    "observer": "The producer reading provenance and database/audit operators."
+   },
+   "unit": "A28"
+  },
+  {
+   "subject": "Runtime environment schema",
+   "kind": "missing normative table",
+   "text": "A30 says `config.runtime_environment_variables` is a closed table of variable names, types, requiredness, normalization, and per-environment defaults, but that table is not included. Settings required by A25 and R0-10—including trusted hosts, origins, public origin, persistence paths, body bounds, and viewer-entry limits—are absent from the visible list.",
+   "question": "What is the complete environment-variable contract, including exact names, parsing, normalization, cross-field constraints, requiredness, and development/test/production defaults?",
+   "options": [
+    "Reconstruct settings ad hoc from each policy passage.",
+    "Supply the referenced closed table as part of State 2.",
+    "Let later assembly choose variable names and defaults."
+   ],
+   "default_guess": "Block implementation until the referenced closed environment table is supplied.",
+   "witness": {
+    "initial": "Production starts without a configured public origin and without a viewer-entry limit variable.",
+    "events": [
+     "The settings loader initializes the service."
+    ],
+    "outcomes": [
+     "Startup is refused because both variables are required in production.",
+     "The service starts using inferred defaults or with the related protection disabled."
+    ],
+    "observer": "The deploy operator and viewer clients."
+   },
+   "unit": "A30"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"Access-management creation guard order\",\"kind\":\"missing precedence\",\"text\":\"A4 defines an ordered guard only for “Every project-scoped operation” and gives a special sequence for revocation, while State 0 says creating a grant or assignment checks the session, active principal, access-management capability, and an active Registry project without stating their order.\",\"question\":\"In what order are authentication, principal status, access-management capability, target-record checks, and Registry validation evaluated when creating a viewer grant, staff assignment, or producer grant?\",\"options\":[\"Authorize the administrator completely before checking the target or calling Registry.\",\"Check the target and Registry project before or between administrator authorization checks.\"],\"default_guess\":\"Authorize the administrator and capability first, then validate the target and Registry project.\",\"witness\":{\"initial\":\"An administrator session is expired, and Registry is unavailable.\",\"events\":[\"The caller requests creation of a project grant.\"],\"outcomes\":[\"The request fails at authentication and Registry is never called.\",\"The implementation calls Registry first and returns or logs a Registry failure before discovering the expired session.\"],\"observer\":\"The caller, Registry operator, and service telemetry.\"},\"unit\":\"A4\"},{\"subject\":\"Inconsistent Registry validation fields\",\"kind\":\"contradictory precedence\",\"text\":\"A5 says the project guard decides mutation eligibility from `status` and grant/assignment operations decide it from `is_active`; A6 also maps `exists=true, is_active=false` to `archived`, while allowing callers to read the validation answer afterward.\",\"question\":\"What is authoritative when a successful validation answer has inconsistent `status`, `is_active`, and `exists` values, and must such an answer instead be rejected as `schema_mismatch`?\",\"options\":[\"Trust `status` in the project guard and `is_active` in access management, so the same answer can authorize one operation and reject another.\",\"Apply the A6 `is_active=false` classification to every caller.\",\"Reject any inconsistent combination as `schema_mismatch`.\"],\"default_guess\":\"Reject inconsistent validation fields as `schema_mismatch`.\",\"witness\":{\"initial\":\"Registry returns `exists=true`, `status=\\\"active\\\"`, and `is_active=false` for one project.\",\"events\":[\"An authorized operator performs a linked project mutation.\",\"An administrator attempts to create a grant for the same project.\"],\"outcomes\":[\"The mutation is allowed from `status`, while grant creation is rejected as archived from `is_active`.\",\"Both operations are rejected as archived or both are rejected for an invalid Registry answer.\"],\"observer\":\"The operator and administrator.\"},\"unit\":\"A5\"},{\"subject\":\"Registry boundary failures during snapshot import\",\"kind\":\"unclassified refusal\",\"text\":\"A6 defines `timeout`, `transport_error`, `http_error`, `schema_mismatch`, and `identity_mismatch`, but A7 assigns import-record reasons only for unknown project, scope denial, archived project, and content failures; `SnapshotImportRecord.reject_reason` has no Registry-failure values.\",\"question\":\"When Registry authorization fails with one of these boundary failures, is the request an import attempt, is an import record written, and what response is returned?\",\"options\":[\"Propagate an unavailable/internal error and write no import record.\",\"Record a rejected import by translating the failure to an existing reason such as `unknown_project`.\",\"Extend the import rejection catalog with Registry-failure reasons.\"],\"default_guess\":\"Propagate the boundary failure and write no import record because the closed rejection catalog cannot represent it.\",\"witness\":{\"initial\":\"A producer has a valid active credential and valid scope; Registry times out.\",\"events\":[\"The producer submits a well-formed snapshot.\"],\"outcomes\":[\"The API returns an unavailable/internal failure and no `import_id` exists.\",\"The portal writes a rejected import result and returns its new `import_id`.\"],\"observer\":\"The producer and audit/import-result readers.\"},\"unit\":\"A6\"},{\"subject\":\"Missing snapshot fields\",\"kind\":\"direct contradiction\",\"text\":\"A7 says “a missing envelope field or section list” and “a missing [section] field” produce a recorded `incomplete_content` rejection, but also says a body lacking any field required by the request model is rejected with HTTP 422 before authentication and is not an import attempt. M18 makes the envelope and section fields required.\",\"question\":\"Which missing snapshot fields, if any, survive request decoding and become a recorded `incomplete_content` rejection?\",\"options\":[\"No required field does; every missing envelope or section field is an unrecorded HTTP 422.\",\"Snapshot fields are decoding-optional so the import use case records `incomplete_content`.\",\"Only an explicitly enumerated subset is decoding-optional and checked by the import use case.\"],\"default_guess\":\"Treat every M18-required field as a decoding requirement, making missing-field `incomplete_content` unreachable over HTTP.\",\"witness\":{\"initial\":\"A producer has a valid credential and scope.\",\"events\":[\"The producer submits a snapshot section without `display_name`.\"],\"outcomes\":[\"Request decoding returns HTTP 422, performs no authentication, and writes no import record.\",\"Import processing writes a rejected record with reason `incomplete_content` and returns an `import_id`.\"],\"observer\":\"The producer and import-result store.\"},\"unit\":\"A7\"},{\"subject\":\"Expense-intake check order\",\"kind\":\"sequence contradiction\",\"text\":\"A4 requires session, active principal, project access, capability, then Registry lifecycle for every project-scoped operation. A7 instead orders expense creation as recognition status, contract version, capability, active project, amount, allocations, and replay, omitting session/principal/project-access checks and placing content checks before authorization.\",\"question\":\"Does expense creation follow A4 before validating recognition content, or does it follow A7's content-first sequence, and where is assignment scope checked?\",\"options\":[\"Run the complete A4 guard first, then validate recognition content.\",\"Validate recognition status/version first, then perform authorization and project checks.\",\"Treat some authorization as having occurred before the A7 sequence and state exactly which checks remain.\"],\"default_guess\":\"Run authentication, principal status, assignment scope, capability, and Registry policy before content validation.\",\"witness\":{\"initial\":\"A request has an expired staff session and an unsupported recognition contract version.\",\"events\":[\"The caller submits the expense-creation request.\"],\"outcomes\":[\"A4 makes the authentication failure win.\",\"A7 makes the unsupported contract version win and returns its stated HTTP 422 refusal.\"],\"observer\":\"The caller.\"},\"unit\":\"A7\"},{\"subject\":\"HTTP request and response bounds\",\"kind\":\"missing configuration and refusal\",\"text\":\"A25 says request bodies and binary responses are bounded by runtime settings before expensive work, but gives neither the request-body setting nor its limit, and does not state the HTTP status/body for an oversized request. A30 lists only the binary read limit in its visible configuration.\",\"question\":\"What exact request-body and declared-response ceilings apply, how are they measured, and what response is produced when either is exceeded?\",\"options\":[\"Use one global byte limit for all request bodies and return a fixed empty error.\",\"Use route-specific limits with route-specific refusals.\",\"Rely on the server/framework limit rather than a portal runtime setting.\"],\"default_guess\":\"Use a required global byte limit measured on received body bytes and return an empty HTTP 413 before decoding.\",\"witness\":{\"initial\":\"The service receives a syntactically valid snapshot body larger than an implementation's chosen threshold.\",\"events\":[\"A producer submits the request.\"],\"outcomes\":[\"One implementation rejects it before authentication with HTTP 413.\",\"Another accepts and processes it because no concrete request-body limit is present in the supplied configuration.\"],\"observer\":\"The producer and service resource monitors.\"},\"unit\":\"A25\"},{\"subject\":\"Trusted-host matching and rejection\",\"kind\":\"underspecified refusal\",\"text\":\"A25 requires configured trusted hosts with no wildcard but does not define normalization of case, ports, trailing dots, IPv6 forms, or the response when a host fails the check.\",\"question\":\"How is the request Host authority compared with configured trusted hosts, and what exact status/body is returned on mismatch?\",\"options\":[\"Compare normalized DNS host names while handling ports separately.\",\"Compare the complete authority literally.\",\"Use the framework's host-normalization and default rejection behavior.\"],\"default_guess\":\"Normalize DNS case, validate the optional port separately, reject malformed or unmatched authorities with an empty HTTP 400.\",\"witness\":{\"initial\":\"The configured trusted host is `portal.example.com`.\",\"events\":[\"A client sends `Host: Portal.Example.Com:443`.\"],\"outcomes\":[\"The request is accepted after DNS-name and effective-port normalization.\",\"The request is rejected because the authority is not a literal match.\"],\"observer\":\"The client.\"},\"unit\":\"A25\"},{\"subject\":\"Viewer origin enforcement coverage\",\"kind\":\"ambiguous applicability\",\"text\":\"A25 says “mutating viewer requests must come from the canonical public origin,” while viewers cannot mutate project data and the text does not enumerate whether viewer entry, session restore, and logout are covered.\",\"question\":\"Which viewer routes require the Origin check, especially session logout, and what happens when Origin is absent or malformed?\",\"options\":[\"Apply it only to cookie-authenticated state-changing routes such as logout.\",\"Apply it to every viewer POST, including entry.\",\"Apply it to all viewer routes carrying the session cookie.\"],\"default_guess\":\"Apply it to cookie-authenticated state-changing routes, including logout, and reject absent, malformed, or non-canonical Origin values.\",\"witness\":{\"initial\":\"A viewer has a valid cookie session.\",\"events\":[\"A cross-origin page submits `POST /auth/viewer/logout` with the cookie.\"],\"outcomes\":[\"Logout is refused because it is a mutating viewer request from a foreign origin.\",\"Logout succeeds because the origin rule is interpreted as applying only to portal-record mutations.\"],\"observer\":\"The viewer.\"},\"unit\":\"A25\"},{\"subject\":\"X-Request-Id provenance\",\"kind\":\"underspecified observable header\",\"text\":\"A25 requires an `X-Request-Id` on every response but does not say whether an incoming value is trusted, replaced, validated, or propagated, nor what format or uniqueness is required.\",\"question\":\"Who generates the request ID, may a client-supplied ID be echoed, and what validation and uniqueness rules apply?\",\"options\":[\"Always generate a new server-owned identifier.\",\"Echo a valid client identifier and generate one only when absent or invalid.\",\"Echo any supplied value verbatim.\"],\"default_guess\":\"Always generate a server-owned UUID and do not trust a caller-supplied value.\",\"witness\":{\"initial\":\"A client sends `X-Request-Id: secret-controlled-value`.\",\"events\":[\"The service answers the request.\"],\"outcomes\":[\"The response and logs use a fresh server-generated identifier.\",\"The response and logs echo the caller-controlled value.\"],\"observer\":\"The client and log operators.\"},\"unit\":\"A25\"},{\"subject\":\"Clock scope across transport and use case\",\"kind\":\"undefined operation boundary\",\"text\":\"A28 says “Each operation reads the clock once,” but does not define whether an operation is the whole HTTP request, each transport guard, each use case, or each nested module call.\",\"question\":\"Which components must share the single instant when one request passes through rate limiting, authentication, authorization, and a writing use case?\",\"options\":[\"One instant is captured for the whole HTTP request and passed through every layer.\",\"Each use case gets one instant, while transport guards may read independently.\",\"Each independently named policy operation gets its own single read.\"],\"default_guess\":\"Treat each application use case as an operation; transport policies use their own captured instant.\",\"witness\":{\"initial\":\"A viewer credential expires between the rate-limit check and credential verification.\",\"events\":[\"A viewer-entry request begins just before expiry.\",\"The transport limiter checks its window.\",\"Authentication verifies the credential and creates a session if valid.\"],\"outcomes\":[\"One request-wide instant keeps the credential valid and a session is created.\",\"A later authentication instant sees the credential expired and refuses entry.\"],\"observer\":\"The viewer.\"},\"unit\":\"A28\"},{\"subject\":\"Source-supplied datetime representation\",\"kind\":\"representation conflict\",\"text\":\"A28 says persisted timestamps are UTC and offset-naive, while source-supplied `approved_at`, `published_at`, `confirmed_at`, and `photo_date` are “validated and kept as supplied.” The accepted offsets and normalization rule are not stated.\",\"question\":\"Are source datetimes required to be UTC, normalized to UTC and stripped of their offset, preserved with their supplied offset, or rejected when offset-aware/non-UTC?\",\"options\":[\"Require offset-aware input, convert the instant to UTC, and persist it offset-naive.\",\"Require already-UTC offset-naive input.\",\"Preserve the supplied offset-aware representation despite the persisted-timestamp rule.\"],\"default_guess\":\"Require an unambiguous offset, normalize the instant to UTC, and store it offset-naive.\",\"witness\":{\"initial\":\"A valid snapshot carries `published_at=2026-11-06T12:00:00+02:00`.\",\"events\":[\"The producer imports the snapshot.\"],\"outcomes\":[\"The portal stores `2026-11-06 10:00:00` as offset-naive UTC.\",\"The portal stores `12:00:00+02:00` unchanged or rejects it for not already matching the storage representation.\"],\"observer\":\"The producer reading provenance and database/audit operators.\"},\"unit\":\"A28\"},{\"subject\":\"Runtime environment schema\",\"kind\":\"missing normative table\",\"text\":\"A30 says `config.runtime_environment_variables` is a closed table of variable names, types, requiredness, normalization, and per-environment defaults, but that table is not included. Settings required by A25 and R0-10—including trusted hosts, origins, public origin, persistence paths, body bounds, and viewer-entry limits—are absent from the visible list.\",\"question\":\"What is the complete environment-variable contract, including exact names, parsing, normalization, cross-field constraints, requiredness, and development/test/production defaults?\",\"options\":[\"Reconstruct settings ad hoc from each policy passage.\",\"Supply the referenced closed table as part of State 2.\",\"Let later assembly choose variable names and defaults.\"],\"default_guess\":\"Block implementation until the referenced closed environment table is supplied.\",\"witness\":{\"initial\":\"Production starts without a configured public origin and without a viewer-entry limit variable.\",\"events\":[\"The settings loader initializes the service.\"],\"outcomes\":[\"Startup is refused because both variables are required in production.\",\"The service starts using inferred defaults or with the related protection disabled.\"],\"observer\":\"The deploy operator and viewer clients.\"},\"unit\":\"A30\"}]}",
+ "set_aside": []
+}

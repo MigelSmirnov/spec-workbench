@@ -1,0 +1,104 @@
+{
+ "open_points": [
+  {
+   "subject": "Registry validation consistency",
+   "kind": "unverified invariant",
+   "text": "“The two readings agree, because the Registry's validation answer sets `is_active = true` exactly when its `status` is `active` … an answer in which they disagree is outside the Registry contract and is not something the portal decides. The gateway returns a decoded validation answer as it is and raises no failure for it; it does not check that `exists`, `is_active` and `status` agree, and each caller reads only the field A5 names for it.”",
+   "question": "What must the portal do when a structurally valid validation answer has inconsistent `exists`, `is_active`, and `status` values: reject it with a specified failure kind, or accept it and permit caller-dependent lifecycle decisions?",
+   "options": [
+    "Validate consistency in the gateway and translate disagreement to `schema_mismatch`.",
+    "Accept the answer unchanged and let grant/assignment operations and project guards reach different decisions.",
+    "Choose one field as authoritative for every caller."
+   ],
+   "default_guess": "Reject an inconsistent answer as `schema_mismatch`.",
+   "witness": {
+    "initial": "Registry project P is archived, but its validation response is `exists=true`, `status=\"archived\"`, `is_active=true`; the gateway accepts this shape unchanged.",
+    "events": [
+     "An administrator creates a grant or assignment for P.",
+     "A staff actor later attempts a project-record mutation for P."
+    ],
+    "outcomes": [
+     "The access-management operation reads `is_active=true` and creates the grant or assignment.",
+     "The project guard reads `status=\"archived\"` and rejects the mutation as `archived_project`."
+    ],
+    "observer": "The administrator and the staff actor see incompatible lifecycle decisions for the same validation answer."
+   },
+   "unit": "A6"
+  },
+  {
+   "subject": "SnapshotPublication section constraints",
+   "kind": "contradiction",
+   "text": "M18 declares `sections: list[SnapshotSectionData] (non-empty, unique source_section_id)`, but the carried change says “the import refuses neither an empty section list nor repeated `source_section_id` values”; A7 likewise says they “are not refused.”",
+   "question": "Are non-emptiness and `source_section_id` uniqueness actual DTO/request invariants enforced before import, or merely unenforced producer obligations?",
+   "options": [
+    "Request decoding enforces both constraints and refuses violations before an import attempt exists.",
+    "The portal accepts empty lists and repeated identifiers and may persist them in an approved snapshot."
+   ],
+   "default_guess": "Treat them only as producer obligations and accept them, following the explicit running-service change.",
+   "witness": {
+    "initial": "An active authorized producer targets an active project with no existing snapshot for the supplied identity.",
+    "events": [
+     "The producer publishes a complete EUR snapshot whose `sections` list is empty."
+    ],
+    "outcomes": [
+     "The M18 field constraint rejects the request during DTO decoding, producing HTTP 422 with no import record.",
+     "The carried change and A7 admit the request, creating an accepted import record and an approved snapshot with no sections."
+    ],
+    "observer": "The producer sees either a decoding refusal without `import_id` or an accepted import result."
+   },
+   "unit": "context"
+  },
+  {
+   "subject": "Snapshot content fingerprint with repeated section identifiers",
+   "kind": "canonicalization gap",
+   "text": "Repeated `source_section_id` values are now accepted, while M19 still requires a “canonical content hash” and A8 classifies replay by `content_fingerprint`; no rule says how repeated section identifiers participate in canonicalization or whether every repeated occurrence is preserved.",
+   "question": "How is `content_fingerprint` computed when multiple sections have the same `source_section_id`, including whether list order and every duplicate occurrence affect the hash?",
+   "options": [
+    "Hash the ordered section list, preserving every occurrence.",
+    "Canonicalize sections as an order-independent multiset while preserving duplicates.",
+    "Canonicalize by `source_section_id`, which necessarily selects or combines duplicate occurrences."
+   ],
+   "default_guess": "Hash a canonical serialization of the complete ordered list without collapsing duplicates.",
+   "witness": {
+    "initial": "A producer has an accepted snapshot containing two sections with the same `source_section_id`; the occurrences have different codes and amounts.",
+    "events": [
+     "The producer republishes the same snapshot identity after changing only the first duplicate occurrence, while leaving the last occurrence unchanged."
+    ],
+    "outcomes": [
+     "A fingerprint preserving every list occurrence changes, so the import is an `integrity_conflict`.",
+     "A keyed canonicalization that collapses duplicates to the last occurrence produces the same fingerprint, so the import is an `idempotent_replay`."
+    ],
+    "observer": "The producer sees a conflict or a successful replay, and the resulting import record differs."
+   },
+   "unit": "context"
+  },
+  {
+   "subject": "ProjectOverview project availability shape",
+   "kind": "model contradiction",
+   "text": "The declared `ProjectOverview` fields require `project: ProjectContext` and contain no `project_availability`, but the carried change says “the project context is absent when its Registry read fails after the project guard's validation succeeded, and a `project_availability` says so, like the other five pairs.”",
+   "question": "What is the exact `ProjectOverview` schema and local validation rule for the project pair: is `project` optional, is `project_availability: ViewAvailability` required, and which value represents each post-guard Registry failure?",
+   "options": [
+    "Add `project_availability` and make `project` present exactly when it is `available`; otherwise return the partial overview.",
+    "Keep `project` required and fail the entire overview when the context read fails.",
+    "Use a nullable `project` without a separate availability field."
+   ],
+   "default_guess": "Add the same availability/value pair used by the other components, with post-guard Registry read failures represented as `temporarily_unavailable`.",
+   "witness": {
+    "initial": "A caller passes the project guard because Registry validation succeeds; portal-owned overview components are readable.",
+    "events": [
+     "The subsequent Registry context request times out.",
+     "The service attempts to construct `ProjectOverview`."
+    ],
+    "outcomes": [
+     "Following the carried change, it returns the other components with `project=null` and `project_availability=temporarily_unavailable`.",
+     "Following the listed DTO fields, construction cannot omit `project`, so the whole overview fails or the implementation returns a different undocumented shape."
+    ],
+    "observer": "The overview API caller sees either a usable partial overview or an operation-level failure/schema difference."
+   },
+   "unit": "context"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"Registry validation consistency\",\"kind\":\"unverified invariant\",\"text\":\"“The two readings agree, because the Registry's validation answer sets `is_active = true` exactly when its `status` is `active` … an answer in which they disagree is outside the Registry contract and is not something the portal decides. The gateway returns a decoded validation answer as it is and raises no failure for it; it does not check that `exists`, `is_active` and `status` agree, and each caller reads only the field A5 names for it.”\",\"question\":\"What must the portal do when a structurally valid validation answer has inconsistent `exists`, `is_active`, and `status` values: reject it with a specified failure kind, or accept it and permit caller-dependent lifecycle decisions?\",\"options\":[\"Validate consistency in the gateway and translate disagreement to `schema_mismatch`.\",\"Accept the answer unchanged and let grant/assignment operations and project guards reach different decisions.\",\"Choose one field as authoritative for every caller.\"],\"default_guess\":\"Reject an inconsistent answer as `schema_mismatch`.\",\"witness\":{\"initial\":\"Registry project P is archived, but its validation response is `exists=true`, `status=\\\"archived\\\"`, `is_active=true`; the gateway accepts this shape unchanged.\",\"events\":[\"An administrator creates a grant or assignment for P.\",\"A staff actor later attempts a project-record mutation for P.\"],\"outcomes\":[\"The access-management operation reads `is_active=true` and creates the grant or assignment.\",\"The project guard reads `status=\\\"archived\\\"` and rejects the mutation as `archived_project`.\"],\"observer\":\"The administrator and the staff actor see incompatible lifecycle decisions for the same validation answer.\"},\"unit\":\"A6\"},{\"subject\":\"SnapshotPublication section constraints\",\"kind\":\"contradiction\",\"text\":\"M18 declares `sections: list[SnapshotSectionData] (non-empty, unique source_section_id)`, but the carried change says “the import refuses neither an empty section list nor repeated `source_section_id` values”; A7 likewise says they “are not refused.”\",\"question\":\"Are non-emptiness and `source_section_id` uniqueness actual DTO/request invariants enforced before import, or merely unenforced producer obligations?\",\"options\":[\"Request decoding enforces both constraints and refuses violations before an import attempt exists.\",\"The portal accepts empty lists and repeated identifiers and may persist them in an approved snapshot.\"],\"default_guess\":\"Treat them only as producer obligations and accept them, following the explicit running-service change.\",\"witness\":{\"initial\":\"An active authorized producer targets an active project with no existing snapshot for the supplied identity.\",\"events\":[\"The producer publishes a complete EUR snapshot whose `sections` list is empty.\"],\"outcomes\":[\"The M18 field constraint rejects the request during DTO decoding, producing HTTP 422 with no import record.\",\"The carried change and A7 admit the request, creating an accepted import record and an approved snapshot with no sections.\"],\"observer\":\"The producer sees either a decoding refusal without `import_id` or an accepted import result.\"},\"unit\":\"context\"},{\"subject\":\"Snapshot content fingerprint with repeated section identifiers\",\"kind\":\"canonicalization gap\",\"text\":\"Repeated `source_section_id` values are now accepted, while M19 still requires a “canonical content hash” and A8 classifies replay by `content_fingerprint`; no rule says how repeated section identifiers participate in canonicalization or whether every repeated occurrence is preserved.\",\"question\":\"How is `content_fingerprint` computed when multiple sections have the same `source_section_id`, including whether list order and every duplicate occurrence affect the hash?\",\"options\":[\"Hash the ordered section list, preserving every occurrence.\",\"Canonicalize sections as an order-independent multiset while preserving duplicates.\",\"Canonicalize by `source_section_id`, which necessarily selects or combines duplicate occurrences.\"],\"default_guess\":\"Hash a canonical serialization of the complete ordered list without collapsing duplicates.\",\"witness\":{\"initial\":\"A producer has an accepted snapshot containing two sections with the same `source_section_id`; the occurrences have different codes and amounts.\",\"events\":[\"The producer republishes the same snapshot identity after changing only the first duplicate occurrence, while leaving the last occurrence unchanged.\"],\"outcomes\":[\"A fingerprint preserving every list occurrence changes, so the import is an `integrity_conflict`.\",\"A keyed canonicalization that collapses duplicates to the last occurrence produces the same fingerprint, so the import is an `idempotent_replay`.\"],\"observer\":\"The producer sees a conflict or a successful replay, and the resulting import record differs.\"},\"unit\":\"context\"},{\"subject\":\"ProjectOverview project availability shape\",\"kind\":\"model contradiction\",\"text\":\"The declared `ProjectOverview` fields require `project: ProjectContext` and contain no `project_availability`, but the carried change says “the project context is absent when its Registry read fails after the project guard's validation succeeded, and a `project_availability` says so, like the other five pairs.”\",\"question\":\"What is the exact `ProjectOverview` schema and local validation rule for the project pair: is `project` optional, is `project_availability: ViewAvailability` required, and which value represents each post-guard Registry failure?\",\"options\":[\"Add `project_availability` and make `project` present exactly when it is `available`; otherwise return the partial overview.\",\"Keep `project` required and fail the entire overview when the context read fails.\",\"Use a nullable `project` without a separate availability field.\"],\"default_guess\":\"Add the same availability/value pair used by the other components, with post-guard Registry read failures represented as `temporarily_unavailable`.\",\"witness\":{\"initial\":\"A caller passes the project guard because Registry validation succeeds; portal-owned overview components are readable.\",\"events\":[\"The subsequent Registry context request times out.\",\"The service attempts to construct `ProjectOverview`.\"],\"outcomes\":[\"Following the carried change, it returns the other components with `project=null` and `project_availability=temporarily_unavailable`.\",\"Following the listed DTO fields, construction cannot omit `project`, so the whole overview fails or the implementation returns a different undocumented shape.\"],\"observer\":\"The overview API caller sees either a usable partial overview or an operation-level failure/schema difference.\"},\"unit\":\"context\"}]}",
+ "set_aside": []
+}
