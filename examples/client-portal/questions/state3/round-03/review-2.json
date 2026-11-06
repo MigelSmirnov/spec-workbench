@@ -1,0 +1,83 @@
+{
+ "open_points": [
+  {
+   "subject": "Malformed project-id decoding ownership",
+   "kind": "missing owner",
+   "text": "A6 says, “A malformed project identifier never reaches the gateway: request decoding refuses it (HTTP 422) before any Registry call or endpoint check,” but the decision table assigns A6 to `registry_gateway` with only `authorization_guard` and `derived_views` as consumers, while `api` owns only “request-body decoding” and is not an A6 consumer.",
+   "question": "Which module owns decoding project identifiers from route/query input and guarantees that malformed identifiers are rejected before authentication, endpoint logic, and Registry access?",
+   "options": [
+    "`api` owns typed route/query decoding as an A6 consumer",
+    "`transport_guard` performs the early decoding",
+    "`registry_gateway` accepts raw identifiers and produces `invalid_uuid`"
+   ],
+   "default_guess": "Make `api` own typed route/query decoding and reject malformed UUIDs with HTTP 422 before authentication or Registry access.",
+   "witness": {
+    "initial": "A project route exists and the Registry is reachable.",
+    "events": [
+     "A caller sends a request whose project-id path value is not a UUID.",
+     "The HTTP boundary, authentication layer, and Registry gateway process the request according to their assigned responsibilities."
+    ],
+    "outcomes": [
+     "The HTTP boundary rejects the request with HTTP 422 before authentication and makes no Registry call.",
+     "Authentication or endpoint processing runs first, or the raw identifier reaches the Registry boundary and is classified as `invalid_uuid`."
+    ],
+    "observer": "The caller sees a different response, and the Registry operator can observe whether a Registry request occurred."
+   },
+   "unit": "30_modules.md:`api`"
+  },
+  {
+   "subject": "Snapshot request decoding before bearer authentication",
+   "kind": "unowned sequencing",
+   "text": "A7 requires that “A body that lacks a required field or carries one of the wrong type is refused by request decoding before the bearer credential is checked,” but State 3 assigns A7 to `snapshot_import` with only `expense_intake` as consumer; `api`, which owns request-body decoding and bearer extraction, is not assigned any part of A7 and states no ordering between them.",
+   "question": "Which module owns and enforces the required ordering between snapshot body decoding and producer bearer authentication?",
+   "options": [
+    "`api` owns this A7 boundary-ordering rule",
+    "`snapshot_import` receives undecoded input and controls the order",
+    "Bearer authentication may precede request decoding"
+   ],
+   "default_guess": "Assign the ordering to `api`: fully decode the snapshot request before extracting or authenticating the producer bearer credential.",
+   "witness": {
+    "initial": "A snapshot-import route is available.",
+    "events": [
+     "A producer request contains both an invalid bearer credential and a body missing a required snapshot field.",
+     "The HTTP route processes body decoding and bearer authentication."
+    ],
+    "outcomes": [
+     "Body decoding runs first and returns HTTP 422 without checking the bearer credential.",
+     "Bearer authentication runs first and returns the concealed authentication failure instead of the decoding response."
+    ],
+    "observer": "The producer can distinguish the outcomes from the HTTP response."
+   },
+   "unit": "30_modules.md:`api`"
+  },
+  {
+   "subject": "Authorization re-check before binary storage access",
+   "kind": "dependency contradiction",
+   "text": "The shared-facts section says “`expense_management` and `photo_management` re-check access and visibility,” and A14 says the owning domain module re-checks authenticated project access, but neither module's `Knows` list includes `authorization_guard`; only `api` and `api_irregular` know both the guard and the binary-owning modules.",
+   "question": "Does the required re-check mean a fresh call to `authorization_guard`, or only comparison of the record with an `AuthorizedProjectContext` previously produced by the HTTP facade; and which module owns that decision?",
+   "options": [
+    "The domain module calls `authorization_guard` immediately before storage access",
+    "The HTTP facade authorizes and the domain module only checks object project and visibility against the supplied context",
+    "The supplied context remains sufficient even if access is revoked after it was issued"
+   ],
+   "default_guess": "Have the facade obtain a fresh `AuthorizedProjectContext`, then have the domain module verify the object's project and visibility against it before calling `binary_storage`.",
+   "witness": {
+    "initial": "A viewer has an active session and grant for a project containing a client-visible document or photo.",
+    "events": [
+     "`api_irregular` obtains an `AuthorizedProjectContext` for the binary request.",
+     "An administrator revokes the viewer's project grant before the owning domain module accesses storage.",
+     "The owning domain module performs whatever State 3 means by “re-check access” and requests the binary."
+    ],
+    "outcomes": [
+     "The prior context is accepted as sufficient and the bytes are returned after revocation.",
+     "The domain module performs a fresh authorization check and refuses the binary because the grant is now revoked."
+    ],
+    "observer": "The viewer sees either the protected binary or a concealed refusal."
+   },
+   "unit": "30_modules.md:Facts several modules touch, and their one owner"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"Malformed project-id decoding ownership\",\"kind\":\"missing owner\",\"text\":\"A6 says, “A malformed project identifier never reaches the gateway: request decoding refuses it (HTTP 422) before any Registry call or endpoint check,” but the decision table assigns A6 to `registry_gateway` with only `authorization_guard` and `derived_views` as consumers, while `api` owns only “request-body decoding” and is not an A6 consumer.\",\"question\":\"Which module owns decoding project identifiers from route/query input and guarantees that malformed identifiers are rejected before authentication, endpoint logic, and Registry access?\",\"options\":[\"`api` owns typed route/query decoding as an A6 consumer\",\"`transport_guard` performs the early decoding\",\"`registry_gateway` accepts raw identifiers and produces `invalid_uuid`\"],\"default_guess\":\"Make `api` own typed route/query decoding and reject malformed UUIDs with HTTP 422 before authentication or Registry access.\",\"witness\":{\"initial\":\"A project route exists and the Registry is reachable.\",\"events\":[\"A caller sends a request whose project-id path value is not a UUID.\",\"The HTTP boundary, authentication layer, and Registry gateway process the request according to their assigned responsibilities.\"],\"outcomes\":[\"The HTTP boundary rejects the request with HTTP 422 before authentication and makes no Registry call.\",\"Authentication or endpoint processing runs first, or the raw identifier reaches the Registry boundary and is classified as `invalid_uuid`.\"],\"observer\":\"The caller sees a different response, and the Registry operator can observe whether a Registry request occurred.\"},\"unit\":\"30_modules.md:`api`\"},{\"subject\":\"Snapshot request decoding before bearer authentication\",\"kind\":\"unowned sequencing\",\"text\":\"A7 requires that “A body that lacks a required field or carries one of the wrong type is refused by request decoding before the bearer credential is checked,” but State 3 assigns A7 to `snapshot_import` with only `expense_intake` as consumer; `api`, which owns request-body decoding and bearer extraction, is not assigned any part of A7 and states no ordering between them.\",\"question\":\"Which module owns and enforces the required ordering between snapshot body decoding and producer bearer authentication?\",\"options\":[\"`api` owns this A7 boundary-ordering rule\",\"`snapshot_import` receives undecoded input and controls the order\",\"Bearer authentication may precede request decoding\"],\"default_guess\":\"Assign the ordering to `api`: fully decode the snapshot request before extracting or authenticating the producer bearer credential.\",\"witness\":{\"initial\":\"A snapshot-import route is available.\",\"events\":[\"A producer request contains both an invalid bearer credential and a body missing a required snapshot field.\",\"The HTTP route processes body decoding and bearer authentication.\"],\"outcomes\":[\"Body decoding runs first and returns HTTP 422 without checking the bearer credential.\",\"Bearer authentication runs first and returns the concealed authentication failure instead of the decoding response.\"],\"observer\":\"The producer can distinguish the outcomes from the HTTP response.\"},\"unit\":\"30_modules.md:`api`\"},{\"subject\":\"Authorization re-check before binary storage access\",\"kind\":\"dependency contradiction\",\"text\":\"The shared-facts section says “`expense_management` and `photo_management` re-check access and visibility,” and A14 says the owning domain module re-checks authenticated project access, but neither module's `Knows` list includes `authorization_guard`; only `api` and `api_irregular` know both the guard and the binary-owning modules.\",\"question\":\"Does the required re-check mean a fresh call to `authorization_guard`, or only comparison of the record with an `AuthorizedProjectContext` previously produced by the HTTP facade; and which module owns that decision?\",\"options\":[\"The domain module calls `authorization_guard` immediately before storage access\",\"The HTTP facade authorizes and the domain module only checks object project and visibility against the supplied context\",\"The supplied context remains sufficient even if access is revoked after it was issued\"],\"default_guess\":\"Have the facade obtain a fresh `AuthorizedProjectContext`, then have the domain module verify the object's project and visibility against it before calling `binary_storage`.\",\"witness\":{\"initial\":\"A viewer has an active session and grant for a project containing a client-visible document or photo.\",\"events\":[\"`api_irregular` obtains an `AuthorizedProjectContext` for the binary request.\",\"An administrator revokes the viewer's project grant before the owning domain module accesses storage.\",\"The owning domain module performs whatever State 3 means by “re-check access” and requests the binary.\"],\"outcomes\":[\"The prior context is accepted as sufficient and the bytes are returned after revocation.\",\"The domain module performs a fresh authorization check and refuses the binary because the grant is now revoked.\"],\"observer\":\"The viewer sees either the protected binary or a concealed refusal.\"},\"unit\":\"30_modules.md:Facts several modules touch, and their one owner\"}]}",
+ "set_aside": []
+}

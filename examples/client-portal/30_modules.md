@@ -843,7 +843,10 @@ read_binary
 A13 and A23: validation of an `AuditIntent` against the closed catalogue, the
 significant-mutation actions and the result and reason policy, and the append
 of exactly one AuditRecord per occurrence, including the rejected records
-A13 names and service key-version provenance.
+A13 names and service key-version provenance. The one record not written
+through it is the bootstrap's `staff.create`: `staff_bootstrap` builds that
+record itself and `staff_bootstrap_store` inserts it (A29; Factory code
+`application/staff_bootstrap.py`).
 
 ### Knows
 
