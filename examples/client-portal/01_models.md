@@ -70,8 +70,10 @@ The former status, kept:
   "intake boundary" is the authenticated staff request (R0-17), which
   supplies `recognized_document_id` and `intake_id`.
 - Money is `Decimal` with 2 fraction digits, currency always `EUR`; rounding
-  policy is a State 2 rule. Negative amounts never appear in stored records;
-  negative values exist only in derived balances.
+  policy is a State 2 rule. Negative amounts never appear in stored records,
+  with one named exception: an expense allocation amount (M26, M29);
+  otherwise negative values exist only in derived values: balances, and
+  the exact sums over such allocations (never clamped).
 - Timestamps are timezone-aware UTC. Portal-owned event times are distinct
   from source-system times (`captured_at` vs `registry_updated_at` pattern).
 - Secrets (viewer access tokens, session tokens, passwords, reset tokens,
@@ -1439,8 +1441,9 @@ None.
 - Every instruction is explicit; order is irrelevant to equality and
   fingerprinting, which use canonical `(target, section_id, amount)` order.
 - An expense's instruction list must be non-empty and sum to the expense
-  total; an individual amount is not otherwise constrained (zero and
-  negative amounts are accepted).
+  total (at creation the total is positive, so an empty list never sums);
+  an individual amount is not otherwise constrained (zero and negative
+  amounts are accepted and stored, M29).
 
 ### Identity
 
