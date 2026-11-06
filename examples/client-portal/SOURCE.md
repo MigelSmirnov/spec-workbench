@@ -511,9 +511,48 @@ are written.
 
 | topic | evidence | decision |
 |---|---|---|
-| time source of the operations | the accepted contracts (459ac96c) have no clock port; the running modules read the time with `datetime.utcnow()` (`application/*.py` call sites) under `rules.clock_policy` | the contracts stay unchanged; a note that needs the current time names the clock policy as its address (a leaf of `= rules.clock_policy`, e.g. `= rules.clock_policy.capture_source`, `= rules.clock_policy.reuse`; the node itself is not a placement and does not resolve) |
-| `design_closure_gaps.py` `fresh_timestamp_without_source` (35) and `ambient_time_note` (0 at this decision) | report-only fuse; the time source is the clock policy above, not a contract parameter | accepted, report-only; no contract or model change |
+| time source of the operations (revised 2026-11-06, replaces the clock-policy address) | the accepted contracts (459ac96c) have no clock port; the running modules read the time with `datetime.utcnow()` (`application/*.py` call sites); SPEC_STANDARD §15.3.1 (rev 2) and the Factory resolver refuse `= rules.clock_policy.*` in a note (`rules_address_outside_backend_ir`) | the contracts stay unchanged and no clock backend (§6.9) is added; a note that needs the current time states the behaviour: the operation reads the current UTC time once and uses that single instant for every timestamp it writes and every current-time comparison it makes |
+| addresses in notes | SPEC_STANDARD §15.3.1 (rev 2); Factory `resolve_data_address` refuses every non-backend `= rules.*` and every non-persistence `= config.*`, even where the Workbench gate and `check_note_draft` pass them | a note carries only addresses of registered deterministic backend IR and `config.persistence.*_table_name` / `storage_schema_revision`, each checked with the Factory resolver; the 186 carried notes with another address are rewritten: a behaviour rule in words (154), a closed value by its model symbol (5: `AuditAction`, `Capability`, `RegistryFailureKind`, `StaffRole`/`StaffStatus`/`ActorKind`/`AuditEntityKind`/`AuditResult` members), a literal without a models home left out and requested from a data provider (27 notes, requests below) |
+| module- and class-level notes | the gate knows only `module:<name>` tokens of `30_modules.md` (closed at State 3) and no class scope | moved onto the callables they constrain, repeated per callable; the gate behaviour is reported to the coordinator as a tool/document discrepancy (SPEC_STANDARD §2 allows `module_name:`) |
+| `design_closure_gaps.py` `fresh_timestamp_without_source` (36) and `ambient_time_note` (4 after the State 7 notes) | report-only fuse; the time source is the operation's own UTC read stated as behaviour, not a contract parameter | accepted, report-only; no contract or model change |
 | `design_closure_gaps.py` `orphan_read_entity` (17: `BinaryPayload`, `BudgetActivationResult`, `ChallengeIssueView`, `ClientViewerView`, `DocumentMutationResult`, `ExpenseMutationResult`, `PhotoMutationResult`, `PresentedSecret`, `ProjectOverview`, `ServiceCredentialIssueResponse`, `ServicePrincipalView`, `SessionRevocationResult`, `StaffAccountView`, `StaffSessionGrant`, `ViewerCredentialIssueResponse`, `ViewerSessionGrant`, `WorkBalanceResult`) | result and view models built by the operations that return them (accepted contracts and notes of 459ac96c) | accepted, report-only; the State 7 notes of the returning operations state the construction |
 
 If the State 7 gate itself blocks on either class, the notes stop and the
 finding goes back to the coordinator.
+
+### State 7 data-provider structure requests (open, 2026-11-06)
+
+Literal values the accepted code (Factory `23a17dc84205`) contains, with no
+models home and no address legal in a note (§15.3.1, §6.10). The notes of
+the consuming callables state the behaviour and leave the value out; each
+value waits for a data-provider constant (`data_provider_backend`,
+`70_data_provider_closure.json`), not built in this session.
+
+| # | leaf (accepted spec) | value | consumers (module.callable) | code |
+|---|---|---|---|---|
+| 1 | `rules.money_policy.currency` | `EUR` | financial_policy.validate_eur_amount; expense_management.correct_expense; project_tracking.register_work_payment; snapshot_import._validate_snapshot_publication | `application/snapshot_import.py:101`, `domain/budget_management.py:250` |
+| 2 | `rules.money_policy.fraction_digits`, `.rounding` | `2`, `ROUND_HALF_UP` | financial_policy._quantize_money, validate_eur_amount, calculate_completed_work, calculate_work_balance; project_tracking.register_work_payment | `domain/financial_policy.py:14` |
+| 3 | `rules.staff_identity_input_policy.credential_min_codepoints`, `.credential_max_codepoints` | `12`, `128` | staff_identity._validate_new_password | `application/staff_identity.py:47` |
+| 4 | `rules.status_transitions.staff`, `.principal` | transition tables | staff_identity.change_staff_status; service_identity.change_service_principal_status | `application/staff_identity.py:242`, `application/service_identity.py:99` |
+| 5 | `rules.principal_capability_sets` | capability sets per principal kind (members of `Capability`) | authorization_guard._require_capability, authorize_access_management | `application/authorization_guard.py:135-146` |
+| 6 | `rules.audit_significant_mutation_actions` | subset of `AuditAction` | audit_writer._validate_audit_intent | `application/audit_writer.py:75` |
+| 7 | `config.registry_endpoint_env_name` | `REGISTRY_BASE_URL` | registry_gateway._registry_url, validate_project_reference, get_project_context, list_active_projects | `adapters/registry_gateway.py:22` |
+| 8 | `config.registry_timeout_seconds` | `5` | registry_gateway.validate_project_reference, get_project_context, list_active_projects | `adapters/registry_gateway.py:73,103,139` |
+| 9 | `config.registry_request_paths` | `projects`, `projects/{project_id}/validate`, `projects/{project_id}/context` | the three registry_gateway operations | `adapters/registry_gateway.py:68,99,135` |
+| 10 | `rules.supported_external_contract_versions.ocr`, `.snapshot` | `[1]`, `[1]` | expense_intake.create_expense_from_recognition; snapshot_import._validate_snapshot_publication | `application/expense_intake.py:170`, `application/snapshot_import.py:99` |
+| 11 | `config.staff_session_ttl_hours` | `12` | staff_identity.authenticate_staff | `application/staff_identity.py:141` |
+| 12 | `config.viewer_session_ttl_days` | `30` | viewer_access.enter_viewer_access | `application/viewer_access.py:117` |
+| 13 | `rules.binary_delivery_policy.response.content_disposition` | `expense_document` → `attachment`, `progress_photo` → `inline` | api.staff_read_expense_document_endpoint, staff_read_progress_photo_endpoint; api_irregular.viewer_read_expense_document_endpoint, viewer_read_progress_photo_endpoint | `api_irregular.py:131,139` |
+| 14 | `rules.http_transport_policy.security_headers` | header values | transport_guard._apply_security_headers; api_irregular.viewer_restore_session_endpoint | `runtime/transport_guard.py:17-19` |
+| 15 | no-store path set and viewer entry / logout paths (`rules.http_router_backend.routes`, `rules.http_transport_policy.browser_session.logout_path`) | seven canonical paths | transport_guard._requires_no_store, install_transport_guards | `runtime/transport_guard.py:90-98` |
+| 16 | `rules.staff_bootstrap_policy.command_outcomes` | exit codes `0`-`3` | staff_bootstrap_cli.run_bootstrap_cli | `cli/staff_bootstrap.py:19,28,31,34` |
+
+Not requests: the runtime environment variable table (`config.runtime_environment_variables`)
+is lowered by the settings module emitter (`runtime/settings.py`, generated from
+the settings data, §6.11), so `load_runtime_settings` names the table in words.
+The carried prose of 459ac96c still holds literals the notes lint (L2/L3) flags
+(HTTP status codes in service_identity and staff_identity notes, health paths
+and the `/api` prefix in runtime, user-facing message texts in
+authorization_guard and service_identity, default ports in `_normalized_origin`,
+the session secret entropy in `authenticate_staff`); they are carried unchanged
+and belong to the same data-provider work.
