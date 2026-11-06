@@ -221,3 +221,33 @@ def test_note_surface_gate_blocks_unknown_attribute_and_undeclared_callable(tmp_
     assert all(f["severity"] == "block" for f in findings)
     baseline = language.surface_findings(ROOT / "examples" / "cabinet-backend", json.loads((ROOT / "examples" / "cabinet-backend" / "global_spec.json").read_text(encoding="utf-8")))
     assert baseline == []
+
+
+def _with_state_binding(project, parameter, attribute):
+    path = project / "global_spec.json"
+    spec = json.loads(path.read_text(encoding="utf-8"))
+    spec["rules"] = {"http_router_backend": {"wiring": {"state_bindings": {
+        parameter: {"factory_parameter": parameter, "state_attribute": attribute}}}}}
+    path.write_text(json.dumps(spec), encoding="utf-8")
+    return project
+
+
+def test_router_state_binding_names_the_attribute_code_reads(tmp_path):
+    project = _with_state_binding(_project(
+        tmp_path,
+        module_functions={"api": ["handle"]},
+        contracts={"create_app": "(store: PortalStore) -> FastAPI", "handle": "(request: Request) -> None"},
+        notes=["handle: [DEPENDENCY_BOUNDARY] MUST read request.app.state.portal_store before delegating."],
+    ), "store", "portal_store")
+    assert "unknown_app_state_attribute" not in _codes(language.report(project))
+
+
+def test_bound_parameter_name_is_not_an_attribute_once_renamed(tmp_path):
+    project = _with_state_binding(_project(
+        tmp_path,
+        module_functions={"api": ["handle"]},
+        contracts={"create_app": "(store: PortalStore) -> FastAPI", "handle": "(request: Request) -> None"},
+        notes=["handle: [DEPENDENCY_BOUNDARY] MUST read request.app.state.store before delegating."],
+    ), "store", "portal_store")
+    finding = _by_code(language.report(project), "unknown_app_state_attribute")[0]
+    assert finding["bound_attributes"] == ["portal_store"]

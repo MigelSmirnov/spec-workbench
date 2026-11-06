@@ -378,6 +378,21 @@ def dependency_bindings(spec: dict[str, Any]) -> list[dict[str, Any]]:
     }
     if not bound_types:
         return []
+    # The router backend may bind a factory parameter under another
+    # app.state attribute (wiring.state_bindings: {"store": {"factory_parameter":
+    # "store", "state_attribute": "portal_store"}}); the attribute code reads
+    # is then the declared one, not the parameter name.
+    router = (spec.get("rules") or {}).get("http_router_backend")
+    bindings = ((router or {}).get("wiring") or {}).get("state_bindings") if isinstance(router, dict) else None
+    if isinstance(bindings, dict):
+        for binding in bindings.values():
+            if not isinstance(binding, dict):
+                continue
+            parameter = binding.get("factory_parameter")
+            attribute = binding.get("state_attribute")
+            if (isinstance(parameter, str) and isinstance(attribute, str)
+                    and parameter in bound_types and attribute != parameter):
+                bound_types[attribute] = bound_types.pop(parameter)
     service_types = set(bound_types.values())
 
     findings: list[dict[str, Any]] = []
