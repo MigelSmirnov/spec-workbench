@@ -396,3 +396,224 @@ def test_spool_mirror_equals_the_factory_emitter_tables() -> None:
         pytest.skip("no Factory checkout with the keyed_file_spool emitter")
     assert _factory_contract_names(tool, "REQUIRED_CONTRACTS") == set(contracts.required) == SPOOL_REQUIRED
     assert _factory_contract_names(tool, "OPTIONAL_CONTRACTS") == set(contracts.optional)
+
+
+# -- sqlite_unit_of_work_backend/v1 (SPEC_STANDARD §6.12) --------------------
+
+UOW_TRANSACTION = {
+    "connection": "one_per_begin",
+    "schema": "create_on_begin_in_accessor_order",
+    "close": "exactly_once",
+    "commit_failure": "rollback_then_close",
+    "use_after_close": "raise_error_class",
+    "error_translation": "every_exception_to_error_class",
+}
+UOW_BOOTSTRAP_TRANSACTION = {
+    "begin": "exclusive",
+    "driver_autocommit": "disabled",
+    "schema": "create_for_written_repositories",
+    "when_not_empty": "rollback_and_return_false",
+    "close": "exactly_once",
+    "error_translation": "sqlite_database_error_to_error_class",
+}
+
+
+def uow_ir(*, bootstrap: bool = True) -> dict:
+    """The client-portal shape: a store, a transaction, a bootstrap store."""
+    backend = {
+        "kind": "sqlite_unit_of_work_backend",
+        "schema_version": 1,
+        "backend": {"emitter": "python_sqlite_unit_of_work_v1"},
+        "wiring": {
+            "module": "portal_store",
+            "models_module": "core.models",
+            "error_class": "PersistenceError",
+            "store_class": "PortalStore",
+            "transaction_class": "PortalTransaction",
+            "context_interface": "AuditRepositoryContext",
+        },
+        "accessors": [
+            {"accessor": "audit", "repository": "SqliteAuditRepository"},
+            {"accessor": "staff_access", "repository": "SqliteStaffAccessRepository"},
+        ],
+        "unbacked_methods": {"methods": ["get_password_reset"], "reason": "no repository yet"},
+        "transaction": dict(UOW_TRANSACTION),
+    }
+    if bootstrap:
+        backend["bootstrap_store"] = {
+            "module": "staff_bootstrap_store",
+            "class": "SqliteStaffBootstrapStore",
+            "port": "StaffBootstrapPort",
+            "operation": "create_if_empty",
+            "guard_table": {"ref": "config", "path": ["persistence", "staff_account_table_name"]},
+            "writes": [
+                {"parameter": "account", "repository": "SqliteStaffAccessRepository",
+                 "method": "insert_staff_account"},
+                {"parameter": "audit", "repository": "SqliteAuditRepository", "method": "insert_audit"},
+            ],
+            "transaction": dict(UOW_BOOTSTRAP_TRANSACTION),
+        }
+    return backend
+
+
+UOW_CONTRACTS = {
+    "PersistenceError.__init__": "(self) -> None",
+    "PortalStore.__init__": "(self, database_url: str) -> None",
+    "PortalStore.begin": "(self) -> PortalTransaction",
+    "PortalTransaction.__init__": "(self, connection: object) -> None",
+    "PortalTransaction.commit": "(self) -> None",
+    "PortalTransaction.audit": "(self) -> AuditRepository",
+    "PortalTransaction.get_password_reset": "(self, reset_id: str) -> PasswordReset | None",
+    "SqliteStaffBootstrapStore.__init__": "(self, database_url: str) -> None",
+    "SqliteStaffBootstrapStore.create_if_empty": "(self, account: StaffAccount, audit: AuditEntry) -> bool",
+    "SqliteAuditRepository.insert_audit": "(self, entry: AuditEntry) -> None",
+    "StaffBootstrapPort.create_if_empty": "(self, account: StaffAccount, audit: AuditEntry) -> bool",
+    "issue_token": "(staff_id: str) -> str",
+}
+UOW_OWNED = {
+    name for name in UOW_CONTRACTS
+    if name.split(".", 1)[0] in {"PersistenceError", "PortalStore", "PortalTransaction", "SqliteStaffBootstrapStore"}
+}
+
+
+def write_uow(project: Path, backend_ir: dict, *, status: str = "closed",
+              schema: str = "spec_workbench_sqlite_unit_of_work_backend_closure.v1",
+              contracts: dict | None = None) -> None:
+    project.mkdir(exist_ok=True)
+    (project / "70_sqlite_unit_of_work_closure.json").write_text(
+        json.dumps({"schema_version": schema, "status": status, "backend_ir": backend_ir}),
+        encoding="utf-8",
+    )
+    (project / "60_contracts.json").write_text(
+        json.dumps({"contracts": UOW_CONTRACTS if contracts is None else contracts}), encoding="utf-8"
+    )
+
+
+def _uow(project: Path):
+    return next(item for item in deterministic_backends(project) if item.id == "sqlite_unit_of_work")
+
+
+def test_unit_of_work_owns_every_contract_of_its_classes_in_both_modules(tmp_path: Path) -> None:
+    project = tmp_path / "portal"
+    backend_ir = uow_ir()
+    write_uow(project, backend_ir)
+    (project / "global_spec.json").write_text(
+        json.dumps({"rules": {"sqlite_unit_of_work_backend": backend_ir}}), encoding="utf-8"
+    )
+
+    backend = _uow(project)
+    assert backend.structured_addresses(project) == {"rules.sqlite_unit_of_work_backend"}
+    # the repositories, their interfaces, the port and free functions stay outside
+    assert backend.deterministic_method_scopes(project) == UOW_OWNED
+    for module in ("portal_store", "staff_bootstrap_store"):
+        assert backend.module_slice(project, module) == {
+            "enabled": True,
+            "backend_ir": backend_ir,
+            "deterministic_method_scopes": sorted(UOW_OWNED),
+        }
+    assert backend.module_slice(project, "audit_repository") is None
+
+
+def test_unit_of_work_without_bootstrap_store_owns_one_module(tmp_path: Path) -> None:
+    project = tmp_path / "portal"
+    write_uow(project, uow_ir(bootstrap=False))
+
+    backend = _uow(project)
+    assert backend.deterministic_method_scopes(project) == {
+        name for name in UOW_OWNED if not name.startswith("SqliteStaffBootstrapStore.")
+    }
+    assert backend.module_slice(project, "staff_bootstrap_store") is None
+    assert backend.module_slice(project, "portal_store") is not None
+
+
+@pytest.mark.parametrize("mutate", [
+    lambda ir: ir.update(kind="persistence_backend"),
+    lambda ir: ir.pop("wiring"),
+    lambda ir: ir["wiring"].update(module=""),
+    lambda ir: ir["wiring"].pop("store_class"),
+    lambda ir: ir["wiring"].update(store_class="PortalTransaction"),
+    lambda ir: ir.update(bootstrap_store=None),
+    lambda ir: ir["bootstrap_store"].update(module="portal_store"),
+    lambda ir: ir["bootstrap_store"].update(**{"class": "PortalStore"}),
+    lambda ir: ir["bootstrap_store"].pop("class"),
+])
+def test_malformed_unit_of_work_ir_owns_nothing(tmp_path: Path, mutate) -> None:
+    project = tmp_path / "portal"
+    backend_ir = uow_ir()
+    mutate(backend_ir)
+    write_uow(project, backend_ir)
+
+    backend = _uow(project)
+    assert backend.authored_backend(project) is None
+    assert backend.deterministic_method_scopes(project) == set()
+    assert backend.module_slice(project, "portal_store") is None
+
+
+@pytest.mark.parametrize("closure", [
+    {"status": "open"},
+    {"schema": "spec_workbench_keyed_file_spool_backend_closure.v1"},
+])
+def test_unclosed_unit_of_work_closure_owns_nothing(tmp_path: Path, closure: dict) -> None:
+    project = tmp_path / "portal"
+    write_uow(project, uow_ir(), **closure)
+
+    assert _uow(project).deterministic_method_scopes(project) == set()
+
+
+def test_unit_of_work_drifted_from_the_assembled_spec_owns_nothing(tmp_path: Path) -> None:
+    project = tmp_path / "portal"
+    write_uow(project, uow_ir())
+    (project / "global_spec.json").write_text(
+        json.dumps({"rules": {"sqlite_unit_of_work_backend": uow_ir(bootstrap=False)}}), encoding="utf-8"
+    )
+
+    assert _uow(project).deterministic_method_scopes(project) == set()
+
+
+def _standard_612_form() -> dict:
+    """The JSON form block of SPEC_STANDARD §6.12, as written."""
+    text = (Path(__file__).resolve().parents[1] / "skills/spec-authoring/SPEC_STANDARD.md").read_text(
+        encoding="utf-8"
+    )
+    section = text.split("### 6.12 `sqlite_unit_of_work_backend/v1`", 1)[1].split("\n## ", 1)[0]
+    return json.loads(section.split("```json\n", 1)[1].split("```", 1)[0])
+
+
+def test_standard_612_form_is_the_fixture_shape() -> None:
+    form = _standard_612_form()
+    fixture = uow_ir()
+    assert set(form) == set(fixture)
+    assert set(form["wiring"]) == set(fixture["wiring"])
+    assert set(form["bootstrap_store"]) == set(fixture["bootstrap_store"])
+    assert form["transaction"] == UOW_TRANSACTION
+    assert form["bootstrap_store"]["transaction"] == UOW_BOOTSTRAP_TRANSACTION
+
+
+def test_standard_612_form_equals_the_factory_generator_constants() -> None:
+    """The section mirrors the Factory generator, which is the authority on the closed form."""
+    import ast
+
+    from factory_admission_workbench.service import _factory_literal
+    from questions_workbench import documents
+
+    factory = documents.factory_root()
+    tool = factory / "tools/generate_sqlite_unit_of_work_draft.py" if factory is not None else None
+    if tool is None or not tool.is_file():
+        pytest.skip("no Factory checkout with the sqlite_unit_of_work emitter")
+    tree = ast.parse(tool.read_text(encoding="utf-8"))
+
+    def literal(name: str):
+        return _factory_literal(tree, name)
+
+    def frozen(name: str) -> set:
+        return set(literal(name))
+
+    form = _standard_612_form()
+    assert literal("RULE_KEY") == form["kind"]
+    assert literal("EMITTER") == form["backend"]["emitter"]
+    assert frozen("ROOT_KEYS") | frozen("OPTIONAL_ROOT_KEYS") == set(form)
+    assert frozen("OPTIONAL_ROOT_KEYS") == {"unbacked_methods", "bootstrap_store"}
+    assert frozen("WIRING_KEYS") == set(form["wiring"])
+    assert frozen("BOOTSTRAP_KEYS") == set(form["bootstrap_store"])
+    assert literal("UNIT_OF_WORK_TRANSACTION") == form["transaction"]
+    assert literal("BOOTSTRAP_TRANSACTION") == form["bootstrap_store"]["transaction"]

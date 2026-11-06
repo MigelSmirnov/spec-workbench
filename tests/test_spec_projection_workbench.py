@@ -552,6 +552,74 @@ def test_malformed_keyed_file_spool_closure_blocks_projection(tmp_path, monkeypa
     assert "keyed_file_spool_backend" not in projected["rules"]
 
 
+def test_sqlite_unit_of_work_closure_is_projected_into_rules(tmp_path, monkeypatch) -> None:
+    from test_standard_backends import uow_ir
+
+    project = _project(tmp_path)
+    _patch_ready_sources(monkeypatch)
+    # the closure is the only authored statement of the IR; contracts stay State 6's
+    (project / "70_sqlite_unit_of_work_closure.json").write_text(json.dumps({
+        "schema_version": "spec_workbench_sqlite_unit_of_work_backend_closure.v1",
+        "status": "closed",
+        "backend_ir": uow_ir(),
+    }), encoding="utf-8")
+
+    plan = service.build_plan(project)
+    _, projected, findings, source_checks = service._project(project)
+
+    assert findings == []
+    assert projected["rules"]["sqlite_unit_of_work_backend"] == uow_ir()
+    assert "rules.sqlite_unit_of_work_backend" in {row["address"] for row in plan["changes"]}
+    assert {
+        "source": "70_sqlite_unit_of_work_closure.json",
+        "enabled": True,
+        "ready": True,
+        "status": "closed",
+        "errors": 0,
+    } in source_checks
+
+
+def test_implementation_obligations_survive_the_projection(tmp_path, monkeypatch) -> None:
+    """No design artifact owns the section: it is assembly the projection carries unchanged."""
+    project = _project(tmp_path)
+    _patch_ready_sources(monkeypatch)
+    spec_path = project / "global_spec.json"
+    spec = json.loads(spec_path.read_text(encoding="utf-8"))
+    obligations = {
+        "AuditRepositoryContext": {"disposition": "local",
+                                   "implementations": ["PortalTransaction", "SqliteStaffBootstrapStore"]},
+    }
+    spec["implementation_obligations"] = obligations
+    spec_path.write_text(json.dumps(spec), encoding="utf-8")
+
+    _, projected, _, _ = service._project(project)
+
+    assert projected["implementation_obligations"] == obligations
+
+
+@pytest.mark.parametrize("malformed", ["open", "no_wiring"])
+def test_malformed_sqlite_unit_of_work_closure_blocks_projection(tmp_path, monkeypatch, malformed) -> None:
+    from test_standard_backends import uow_ir
+
+    project = _project(tmp_path)
+    _patch_ready_sources(monkeypatch)
+    backend_ir = uow_ir()
+    if malformed == "no_wiring":
+        del backend_ir["wiring"]
+    (project / "70_sqlite_unit_of_work_closure.json").write_text(json.dumps({
+        "schema_version": "spec_workbench_sqlite_unit_of_work_backend_closure.v1",
+        "status": "open" if malformed == "open" else "closed",
+        "backend_ir": backend_ir,
+    }), encoding="utf-8")
+
+    plan = service.build_plan(project)
+
+    assert plan["ready_to_apply"] is False
+    assert [row["code"] for row in plan["findings"]] == ["standard_backend_closure_not_closed"]
+    _, projected, _, _ = service._project(project)
+    assert "sqlite_unit_of_work_backend" not in projected["rules"]
+
+
 # -- imports.module_internal belongs to the imports closure (IMPORTS_WORKBENCH.md §4) --
 
 def _imports_table(project, scopes):
