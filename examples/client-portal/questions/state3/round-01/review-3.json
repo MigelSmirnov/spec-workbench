@@ -1,0 +1,145 @@
+{
+ "open_points": [
+  {
+   "unit": "30_modules.md:`audit_writer`",
+   "subject": "rejection-audit transaction ownership",
+   "kind": "missing owner",
+   "text": "“audit_writer … appends it … in a separate short transaction for a rejection”, but `audit_writer` knows only `models`, while only `portal_store` or `staff_bootstrap_store` may own database transactions",
+   "question": "Which module opens and closes the separate transaction used for a rejected audit record, and how is its AuditRepository supplied to `audit_writer`?",
+   "options": [
+    "The rejecting use case opens the second `portal_store` transaction and passes its AuditRepository to `audit_writer`",
+    "`audit_writer` knows `portal_store` and opens the short transaction itself",
+    "A separate transaction-owning audit module performs rejected writes"
+   ],
+   "default_guess": "Have the rejecting use case open and close the second transaction, with `audit_writer` limited to validation and append on the supplied repository."
+  },
+  {
+   "unit": "30_modules.md:`staff_bootstrap`",
+   "subject": "bootstrap audit construction and validation",
+   "kind": "two owners",
+   "text": "`audit_writer` owns “Record construction and the catalogue checks” and “the append of exactly one AuditRecord per occurrence”, while `staff_bootstrap` owns “build the administrator account and its audit” and cannot know `audit_writer`",
+   "question": "Who constructs and validates the bootstrap `staff.create` AuditRecord before `staff_bootstrap_store` inserts it?",
+   "options": [
+    "`staff_bootstrap` constructs the AuditRecord directly as a special A29 path",
+    "`staff_bootstrap` constructs an AuditIntent and `audit_writer` converts it, requiring a dependency not allowed by the current order",
+    "`staff_bootstrap_store` constructs or validates the record while inserting it"
+   ],
+   "default_guess": "Treat A29 as an explicit special path: `staff_bootstrap` constructs the prescribed record directly and `staff_bootstrap_store` atomically inserts it."
+  },
+  {
+   "unit": "30_modules.md:`service_identity`",
+   "subject": "producer-scope authorization",
+   "kind": "unclear dependency direction",
+   "text": "`service_identity` owns “producer scope” and exposes `authorize_producer_scope`; `authorization_guard` also owns “the guard part of … A12” and exposes `authorize_snapshot_import`, but `authorization_guard` is earlier and may not know `service_identity`, while `snapshot_import` knows only `authorization_guard`",
+   "question": "Which module makes the authoritative `scope_mode`/ProducerProjectGrant decision during snapshot import, and through which permitted dependency is it invoked?",
+   "options": [
+    "`authorization_guard.authorize_snapshot_import` implements the scope decision itself",
+    "`api` first calls `service_identity.authorize_producer_scope` and then calls the guard/import flow",
+    "Move the reusable scope decision to an earlier module that both modules may know"
+   ],
+   "default_guess": "Make `authorization_guard.authorize_snapshot_import` perform the scope decision and limit `service_identity` to lifecycle, authentication, and grant mutation."
+  },
+  {
+   "unit": "30_modules.md:`photo_management`",
+   "subject": "progress-photo ordering",
+   "kind": "contradictory owner",
+   "text": "The decision table gives A27 solely to `derived_views` with no consumers, but `photo_management` says it owns “gallery order (A27)” and exposes `list_progress_photos`",
+   "question": "Which module owns and applies A27 ordering to progress-photo lists, especially the staff-side list that need not pass through `derived_views`?",
+   "options": [
+    "`photo_management` orders every photo list and `derived_views` consumes that order",
+    "`derived_views` alone orders photos, and staff photo-list routes must also use it",
+    "Both modules order their own outputs, making A27 intentionally duplicated"
+   ],
+   "default_guess": "Have `photo_management` return A27-ordered photo records and let `derived_views` project them without redefining the order.",
+   "witness": {
+    "initial": "A project contains two photos with the same `photo_date`; the earlier-published photo has an id that sorts after the later-published photo's id.",
+    "events": [
+     "An operator requests the staff photo list through `api`.",
+     "A viewer requests the project gallery through `api_irregular` and `derived_views`."
+    ],
+    "outcomes": [
+     "Following the `photo_management` section, both lists use publication time and then id, so their order agrees.",
+     "Following the ownership table, only the viewer projection is required to apply A27; the staff list may retain repository or id order and disagree."
+    ],
+    "observer": "The operator and viewer comparing the two chronological lists."
+   }
+  },
+  {
+   "unit": "30_modules.md:`transport_guard`",
+   "subject": "ownership of `/api` prefix removal",
+   "kind": "contradiction",
+   "text": "State 2 A25 says “The public API lives under `/api`, stripped by the deployment proxy”, while `transport_guard` owns “one middleware that strips the `/api` prefix”",
+   "question": "Is `/api` removed by the deployment proxy before the request reaches the process, or by `transport_guard` inside the process, and what path does the inner router receive?",
+   "options": [
+    "The proxy strips `/api`; the middleware receives and preserves an already-unprefixed path",
+    "The proxy forwards `/api`; `transport_guard` strips it",
+    "Both forms are accepted and normalized by the middleware"
+   ],
+   "default_guess": "Let the proxy strip `/api` and have the in-process router and middleware operate on unprefixed paths.",
+   "witness": {
+    "initial": "The service is deployed behind the specified proxy, with the inner login route registered as `/staff/login`.",
+    "events": [
+     "A staff client sends `POST /api/staff/login` to the public endpoint.",
+     "The proxy applies the State 2 instruction and forwards `/staff/login`."
+    ],
+    "outcomes": [
+     "If the proxy owns stripping, the middleware admits `/staff/login` and the login route runs.",
+     "If `transport_guard` requires and strips `/api`, the already-stripped request fails routing or guard processing."
+    ],
+    "observer": "The staff client, which receives the login response in one implementation and an error in the other."
+   }
+  },
+  {
+   "unit": "30_modules.md:`staff_bootstrap_store`",
+   "subject": "SQLite bootstrap lock mode",
+   "kind": "contradiction",
+   "text": "State 2 A29 requires “one immediate write transaction”, while `staff_bootstrap_store` owns “an exclusive write transaction”",
+   "question": "Must bootstrap use SQLite `BEGIN IMMEDIATE` or `BEGIN EXCLUSIVE`?",
+   "options": [
+    "Use an immediate write transaction as A29 states",
+    "Use an exclusive transaction as the State 3 module states"
+   ],
+   "default_guess": "Use `BEGIN IMMEDIATE`, preserving the earlier normative A29 wording while still serializing competing writers.",
+   "witness": {
+    "initial": "The staff table is empty and another process holds a normal read transaction on the portal database.",
+    "events": [
+     "The host operator starts the first-administrator command while that reader remains open."
+    ],
+    "outcomes": [
+     "With an immediate write transaction, bootstrap can reserve the write and existing readers may continue until commit rules require otherwise.",
+     "With an exclusive transaction, bootstrap blocks or fails while the reader holds its lock."
+    ],
+    "observer": "The host operator running bootstrap and the concurrent portal reader."
+   }
+  },
+  {
+   "unit": "30_modules.md:Facts several modules touch, and their one owner",
+   "subject": "binary-download authorization re-check",
+   "kind": "unreachable dependency",
+   "text": "The shared binary rule says `expense_management` and `photo_management` “re-check access and visibility”, and their sections say they own the access re-check, but neither module may know `authorization_guard`; only `api` and `api_irregular` know both sides",
+   "question": "Does the API call `authorization_guard` and pass an `AuthorizedProjectContext` that the owning module merely matches to the record, or must the owning module itself invoke a fresh authorization check before storage access?",
+   "options": [
+    "API modules call the guard; expense/photo modules verify object project and visibility against the trusted context",
+    "Expense/photo modules import and invoke `authorization_guard`, changing their declared `Knows` dependencies",
+    "A separate earlier binary-authorization module performs the combined check"
+   ],
+   "default_guess": "Have the API obtain an `AuthorizedProjectContext`, then have the owning expense/photo module verify project membership and visibility and mint the `AuthorizedBinaryReference`.",
+   "witness": {
+    "initial": "A viewer has a valid session and grant to a project containing a visible expense document.",
+    "events": [
+     "The API resolves the viewer and obtains an authorized project context.",
+     "An administrator revokes the viewer grant before the document module reads storage.",
+     "The viewer's download continues."
+    ],
+    "outcomes": [
+     "If the API guard result is sufficient for the operation, the owning module matches the document to that context and the download completes.",
+     "If “re-check access” means a fresh guard call in the owning module, immediate revocation is observed and the download is refused."
+    ],
+    "observer": "The viewer requesting the document."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"30_modules.md:`audit_writer`\",\"subject\":\"rejection-audit transaction ownership\",\"kind\":\"missing owner\",\"text\":\"“audit_writer … appends it … in a separate short transaction for a rejection”, but `audit_writer` knows only `models`, while only `portal_store` or `staff_bootstrap_store` may own database transactions\",\"question\":\"Which module opens and closes the separate transaction used for a rejected audit record, and how is its AuditRepository supplied to `audit_writer`?\",\"options\":[\"The rejecting use case opens the second `portal_store` transaction and passes its AuditRepository to `audit_writer`\",\"`audit_writer` knows `portal_store` and opens the short transaction itself\",\"A separate transaction-owning audit module performs rejected writes\"],\"default_guess\":\"Have the rejecting use case open and close the second transaction, with `audit_writer` limited to validation and append on the supplied repository.\"},{\"unit\":\"30_modules.md:`staff_bootstrap`\",\"subject\":\"bootstrap audit construction and validation\",\"kind\":\"two owners\",\"text\":\"`audit_writer` owns “Record construction and the catalogue checks” and “the append of exactly one AuditRecord per occurrence”, while `staff_bootstrap` owns “build the administrator account and its audit” and cannot know `audit_writer`\",\"question\":\"Who constructs and validates the bootstrap `staff.create` AuditRecord before `staff_bootstrap_store` inserts it?\",\"options\":[\"`staff_bootstrap` constructs the AuditRecord directly as a special A29 path\",\"`staff_bootstrap` constructs an AuditIntent and `audit_writer` converts it, requiring a dependency not allowed by the current order\",\"`staff_bootstrap_store` constructs or validates the record while inserting it\"],\"default_guess\":\"Treat A29 as an explicit special path: `staff_bootstrap` constructs the prescribed record directly and `staff_bootstrap_store` atomically inserts it.\"},{\"unit\":\"30_modules.md:`service_identity`\",\"subject\":\"producer-scope authorization\",\"kind\":\"unclear dependency direction\",\"text\":\"`service_identity` owns “producer scope” and exposes `authorize_producer_scope`; `authorization_guard` also owns “the guard part of … A12” and exposes `authorize_snapshot_import`, but `authorization_guard` is earlier and may not know `service_identity`, while `snapshot_import` knows only `authorization_guard`\",\"question\":\"Which module makes the authoritative `scope_mode`/ProducerProjectGrant decision during snapshot import, and through which permitted dependency is it invoked?\",\"options\":[\"`authorization_guard.authorize_snapshot_import` implements the scope decision itself\",\"`api` first calls `service_identity.authorize_producer_scope` and then calls the guard/import flow\",\"Move the reusable scope decision to an earlier module that both modules may know\"],\"default_guess\":\"Make `authorization_guard.authorize_snapshot_import` perform the scope decision and limit `service_identity` to lifecycle, authentication, and grant mutation.\"},{\"unit\":\"30_modules.md:`photo_management`\",\"subject\":\"progress-photo ordering\",\"kind\":\"contradictory owner\",\"text\":\"The decision table gives A27 solely to `derived_views` with no consumers, but `photo_management` says it owns “gallery order (A27)” and exposes `list_progress_photos`\",\"question\":\"Which module owns and applies A27 ordering to progress-photo lists, especially the staff-side list that need not pass through `derived_views`?\",\"options\":[\"`photo_management` orders every photo list and `derived_views` consumes that order\",\"`derived_views` alone orders photos, and staff photo-list routes must also use it\",\"Both modules order their own outputs, making A27 intentionally duplicated\"],\"default_guess\":\"Have `photo_management` return A27-ordered photo records and let `derived_views` project them without redefining the order.\",\"witness\":{\"initial\":\"A project contains two photos with the same `photo_date`; the earlier-published photo has an id that sorts after the later-published photo's id.\",\"events\":[\"An operator requests the staff photo list through `api`.\",\"A viewer requests the project gallery through `api_irregular` and `derived_views`.\"],\"outcomes\":[\"Following the `photo_management` section, both lists use publication time and then id, so their order agrees.\",\"Following the ownership table, only the viewer projection is required to apply A27; the staff list may retain repository or id order and disagree.\"],\"observer\":\"The operator and viewer comparing the two chronological lists.\"}},{\"unit\":\"30_modules.md:`transport_guard`\",\"subject\":\"ownership of `/api` prefix removal\",\"kind\":\"contradiction\",\"text\":\"State 2 A25 says “The public API lives under `/api`, stripped by the deployment proxy”, while `transport_guard` owns “one middleware that strips the `/api` prefix”\",\"question\":\"Is `/api` removed by the deployment proxy before the request reaches the process, or by `transport_guard` inside the process, and what path does the inner router receive?\",\"options\":[\"The proxy strips `/api`; the middleware receives and preserves an already-unprefixed path\",\"The proxy forwards `/api`; `transport_guard` strips it\",\"Both forms are accepted and normalized by the middleware\"],\"default_guess\":\"Let the proxy strip `/api` and have the in-process router and middleware operate on unprefixed paths.\",\"witness\":{\"initial\":\"The service is deployed behind the specified proxy, with the inner login route registered as `/staff/login`.\",\"events\":[\"A staff client sends `POST /api/staff/login` to the public endpoint.\",\"The proxy applies the State 2 instruction and forwards `/staff/login`.\"],\"outcomes\":[\"If the proxy owns stripping, the middleware admits `/staff/login` and the login route runs.\",\"If `transport_guard` requires and strips `/api`, the already-stripped request fails routing or guard processing.\"],\"observer\":\"The staff client, which receives the login response in one implementation and an error in the other.\"}},{\"unit\":\"30_modules.md:`staff_bootstrap_store`\",\"subject\":\"SQLite bootstrap lock mode\",\"kind\":\"contradiction\",\"text\":\"State 2 A29 requires “one immediate write transaction”, while `staff_bootstrap_store` owns “an exclusive write transaction”\",\"question\":\"Must bootstrap use SQLite `BEGIN IMMEDIATE` or `BEGIN EXCLUSIVE`?\",\"options\":[\"Use an immediate write transaction as A29 states\",\"Use an exclusive transaction as the State 3 module states\"],\"default_guess\":\"Use `BEGIN IMMEDIATE`, preserving the earlier normative A29 wording while still serializing competing writers.\",\"witness\":{\"initial\":\"The staff table is empty and another process holds a normal read transaction on the portal database.\",\"events\":[\"The host operator starts the first-administrator command while that reader remains open.\"],\"outcomes\":[\"With an immediate write transaction, bootstrap can reserve the write and existing readers may continue until commit rules require otherwise.\",\"With an exclusive transaction, bootstrap blocks or fails while the reader holds its lock.\"],\"observer\":\"The host operator running bootstrap and the concurrent portal reader.\"}},{\"unit\":\"30_modules.md:Facts several modules touch, and their one owner\",\"subject\":\"binary-download authorization re-check\",\"kind\":\"unreachable dependency\",\"text\":\"The shared binary rule says `expense_management` and `photo_management` “re-check access and visibility”, and their sections say they own the access re-check, but neither module may know `authorization_guard`; only `api` and `api_irregular` know both sides\",\"question\":\"Does the API call `authorization_guard` and pass an `AuthorizedProjectContext` that the owning module merely matches to the record, or must the owning module itself invoke a fresh authorization check before storage access?\",\"options\":[\"API modules call the guard; expense/photo modules verify object project and visibility against the trusted context\",\"Expense/photo modules import and invoke `authorization_guard`, changing their declared `Knows` dependencies\",\"A separate earlier binary-authorization module performs the combined check\"],\"default_guess\":\"Have the API obtain an `AuthorizedProjectContext`, then have the owning expense/photo module verify project membership and visibility and mint the `AuthorizedBinaryReference`.\",\"witness\":{\"initial\":\"A viewer has a valid session and grant to a project containing a visible expense document.\",\"events\":[\"The API resolves the viewer and obtains an authorized project context.\",\"An administrator revokes the viewer grant before the document module reads storage.\",\"The viewer's download continues.\"],\"outcomes\":[\"If the API guard result is sufficient for the operation, the owning module matches the document to that context and the download completes.\",\"If “re-check access” means a fresh guard call in the owning module, immediate revocation is observed and the download is refused.\"],\"observer\":\"The viewer requesting the document.\"}}]}",
+ "set_aside": []
+}

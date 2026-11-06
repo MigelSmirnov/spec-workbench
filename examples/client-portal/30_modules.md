@@ -126,15 +126,21 @@ assertion that every module imports every earlier one.
 - **Audit.** The use case that owns a significant action builds its
   `AuditIntent` (action, result, reason, `entity_id` per A23) and passes it to
   `audit_writer`, which validates it and appends it in the caller's
-  transaction for a success, or in a separate short transaction for a
-  rejection. The catalogue and the reason policy are A13's.
+  transaction. The two rejected records of A13 (`snapshot.import`,
+  `staff.login_failed`) are appended and committed in the refused
+  operation's own transaction; every other refusal writes none. The
+  catalogue and the reason policy are A13's.
 - **Binary content.** A client names a document or photo by its portal id,
   never by `file_ref` (A14). `expense_management` and `photo_management`
   re-check access and visibility and hand an `AuthorizedBinaryReference` to
   `binary_storage`, which alone resolves `file_ref` under the local binary
   root, recognises the media type from the content signature and returns
-  `BinaryPayload`. The HTTP modules send its exact bytes. The portal writes
-  no binary content (R0-13, Q12).
+  `BinaryPayload`. The HTTP modules send its exact bytes. The concealment of
+  R0-12 is owned by the module that owns the read: `expense_management`
+  answers every refused document read with its one rejection, and
+  `photo_management` answers an unknown, cross-project or hidden photo with
+  its one validation refusal while a `binary_storage` failure passes
+  through. The portal writes no binary content (R0-13, Q12).
 - **Transport.** Host, origin, body-size, rate-limit, security-header and log
   rules of A25 run once, in `transport_guard`, before any route handler. The
   viewer browser credential is the host-only cookie read only by
@@ -1316,8 +1322,9 @@ list_project_payments
 ### Owns
 
 The ProgressPhoto row of A8: idempotent publication by `intake_id`, caption,
-section and visibility changes, same-project sections, gallery order (A27)
-and the access and visibility re-check before a photo's content is read
+section and visibility changes, same-project sections, the order of the
+staff photo list it returns (accepted `list_progress_photos`; the overview
+gallery's order of A27 is `derived_views`') and the access and visibility re-check before a photo's content is read
 (A14). A photo never sets progress (A20).
 
 ### Knows
@@ -1478,8 +1485,9 @@ create_app
 
 ### Owns
 
-A25 at the request boundary: one middleware that strips the `/api` prefix,
-admits only trusted hosts, checks the mutating viewer origin, bounds the
+A25 at the request boundary: one middleware that reads each path without
+the `/api` prefix (stripped by the deployment proxy, A25; a path still
+carrying it is read the same way), admits only trusted hosts, checks the mutating viewer origin, bounds the
 body, rate-limits viewer entry per client address and route, sets the
 security and `no-store` headers and writes one redacted log line. Factory
 `babd5e5262d9`, `dc351917d376`, `51d19fdf035e`.

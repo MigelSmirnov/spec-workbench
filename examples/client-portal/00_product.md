@@ -569,9 +569,13 @@ An authorized document or photo is answered as its exact stored bytes, never
 inside a JSON envelope or a redirect. Its media type is recognized from the
 content and must be on a closed list per object kind; the download name is
 derived from the object kind and id, never from a stored name or caption. An
-unknown, cross-project, hidden, oversize or unlisted read is answered the same
-way, so the caller cannot tell them apart (Factory `babd5e52`,
-`rules.binary_delivery_policy`).
+unknown, cross-project or hidden read is answered the same way, so the caller
+cannot tell them apart; a refused document read answers that way also when
+its stored content is missing, oversize or unlisted, while a photo whose
+stored content cannot be delivered fails as a storage error (Factory
+`babd5e52`, `rules.binary_delivery_policy`; Factory code
+`domain/photo_management.py`; owner 2026-11-06: current service behaviour
+accepted; technical decisions delegated).
 
 ### R0-13 — The portal's file boundary stays read-only (owner, 2026-11-06; Q12)
 

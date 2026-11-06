@@ -1111,7 +1111,7 @@ no creator; its audit is `staff.create` by the system actor with the created
 `staff_id`, result success. R0-07's "never printed, logged or audited"
 concerns the email and password the command is given: the audit record
 names the created account by its `staff_id` and carries neither. The emptiness check and both inserts run in one
-immediate write transaction, so concurrent attempts create exactly one
+write transaction that no concurrent attempt can interleave, so concurrent attempts create exactly one
 account; when any staff account exists the command refuses with
 `BootstrapAlreadyCompleted` and nothing persists. The password is kept only
 as its hash; email and password are read neither from process arguments nor

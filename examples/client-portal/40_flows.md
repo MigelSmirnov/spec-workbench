@@ -151,8 +151,8 @@ No HTTP route reaches this flow.
 4. `module:staff_bootstrap_store` opens its own connection, ensures the staff
    access and audit tables exist with
    `capability:staff_access_repository.create_staff_access_schema` and
-   `capability:audit_repository.create_audit_schema`, begins an immediate
-   write transaction, checks that the staff table is empty, inserts the account and the audit
+   `capability:audit_repository.create_audit_schema`, begins a write
+   transaction no concurrent attempt can interleave, checks that the staff table is empty, inserts the account and the audit
    and commits once; concurrent attempts create exactly one account.
 
 ### Outcomes

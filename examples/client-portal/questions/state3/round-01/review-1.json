@@ -1,0 +1,183 @@
+{
+ "open_points": [
+  {
+   "subject": "viewer-route composition",
+   "kind": "orphan module",
+   "text": "`api_irregular` owns the viewer endpoints, but no module's `Knows` section includes `api_irregular`; `runtime` composes only \"the inner `api` application\".",
+   "question": "Which module attaches the routes owned by `api_irregular` to the running application?",
+   "options": [
+    "`api` imports and mounts `api_irregular`",
+    "`runtime` mounts `api_irregular` beside `api`",
+    "`api_irregular` is not reachable in the running application"
+   ],
+   "default_guess": "Have `runtime` compose both HTTP modules.",
+   "witness": {
+    "initial": "The service is running and an active viewer credential exists.",
+    "events": [
+     "A viewer sends the documented viewer-entry request.",
+     "`runtime` dispatches the request through the application it composed."
+    ],
+    "outcomes": [
+     "The request reaches `viewer_enter_endpoint`, creates a viewer session and sets the cookie.",
+     "No mounted route owns the request, so it returns a routing failure and no session is created."
+    ],
+    "observer": "The viewer."
+   },
+   "unit": "30_modules.md:`api_irregular`"
+  },
+  {
+   "subject": "session authentication versus project authorization",
+   "kind": "two owners",
+   "text": "`staff_identity` owns \"resolution\" of staff sessions, `viewer_access` owns \"session resolution\", and `service_identity` owns \"bearer authentication\"; `authorization_guard` also owns \"session validity\" and says it \"binds a session to its identity\".",
+   "question": "Does an identity module fully authenticate and produce an actor context that the guard trusts, or must `authorization_guard` independently reload and revalidate the session or credential?",
+   "options": [
+    "Identity modules own authentication; the guard trusts their actor contexts",
+    "The guard revalidates persisted session/principal state for every authorization",
+    "Both checks occur, with an unspecified consistency boundary"
+   ],
+   "default_guess": "Let identity modules authenticate the presented secret, then let the guard reload lifecycle and scope facts needed for authorization.",
+   "witness": {
+    "initial": "A staff token is valid when `resolve_staff_session` produces a `StaffActorContext`.",
+    "events": [
+     "The staff session is revoked before the project operation is authorized.",
+     "The operation presents the previously produced actor context to `authorization_guard`."
+    ],
+    "outcomes": [
+     "The guard trusts the context and authorizes the operation.",
+     "The guard reloads the session, observes revocation and rejects the operation."
+    ],
+    "observer": "The staff caller and the audit/storage observers of the attempted operation."
+   },
+   "unit": "30_modules.md:`authorization_guard`"
+  },
+  {
+   "subject": "producer project-scope decision",
+   "kind": "two owners",
+   "text": "`service_identity` owns \"producer scope\" and exposes `authorize_producer_scope`; `authorization_guard` owns \"project scope (assignment, viewer grant or producer grant)\" and exposes `authorize_snapshot_import`.",
+   "question": "Which module makes the authoritative `scope_mode` and `ProducerProjectGrant` decision for a snapshot import?",
+   "options": [
+    "`service_identity.authorize_producer_scope`",
+    "`authorization_guard.authorize_snapshot_import`",
+    "Both modules perform the decision"
+   ],
+   "default_guess": "Keep the project-operation scope decision in `authorization_guard` and limit `service_identity` to principal, credential and grant lifecycle.",
+   "unit": "30_modules.md:`service_identity`"
+  },
+  {
+   "subject": "binary project-access recheck",
+   "kind": "unclear dependency",
+   "text": "The shared facts say \"`expense_management` and `photo_management` re-check access and visibility\" and A14 says the owning domain module re-checks authenticated project access, but neither module may know `authorization_guard`; only `api` and `api_irregular` know both sides.",
+   "question": "Is a previously produced `AuthorizedProjectContext` sufficient for the owning module's access re-check, or must the owning module invoke `authorization_guard` again immediately before storage access?",
+   "options": [
+    "Verify only that the trusted context, record project and visibility agree",
+    "Invoke `authorization_guard` again inside each owning module",
+    "The HTTP facade performs the only guard call and the owning module checks visibility only"
+   ],
+   "default_guess": "Pass an `AuthorizedProjectContext` into the owning module and define its project-match check as the re-check.",
+   "witness": {
+    "initial": "A viewer is authorized for a visible document and the HTTP facade obtains an `AuthorizedProjectContext`.",
+    "events": [
+     "An administrator revokes the viewer's project grant before `read_expense_document` reads storage.",
+     "The binary-read flow continues."
+    ],
+    "outcomes": [
+     "The owning module trusts the earlier context and returns the bytes.",
+     "The owning module re-runs project authorization and refuses the read."
+    ],
+    "observer": "The viewer."
+   },
+   "unit": "30_modules.md:`expense_management`"
+  },
+  {
+   "subject": "photo gallery ordering",
+   "kind": "two owners",
+   "text": "The decision table gives A27 solely to `derived_views`, while `photo_management` says it owns \"gallery order (A27)\" and exposes `list_progress_photos`.",
+   "question": "Which module owns and applies the normative photo ordering, especially for staff-side photo lists that may not pass through `derived_views`?",
+   "options": [
+    "Only `derived_views` orders photos",
+    "`photo_management` orders every photo list",
+    "`photo_management` supplies an ordered list and `derived_views` orders it again"
+   ],
+   "default_guess": "Assign the ordering once at the module that produces each public projection.",
+   "unit": "30_modules.md:`photo_management`"
+  },
+  {
+   "subject": "auditing rejected significant mutations",
+   "kind": "contradiction",
+   "text": "State 3 says audit appending includes \"rejected significant mutations\" and that a rejection uses \"a separate short transaction\"; State 2 A13 says exactly two rejected actions write records and \"Every other refused operation rolls its transaction back and writes no record.\"",
+   "question": "Must every rejected significant mutation be audited, or only rejected `snapshot.import` plus non-significant `staff.login_failed`?",
+   "options": [
+    "Audit every rejected significant mutation",
+    "Audit only the two rejected outcomes named by A13",
+    "Each owning use case chooses whether rejection is an auditable occurrence"
+   ],
+   "default_guess": "Follow A13's narrowed running-service behavior and audit only its two named rejected outcomes.",
+   "witness": {
+    "initial": "An authenticated administrator submits an invalid viewer-creation mutation.",
+    "events": [
+     "Authorization succeeds.",
+     "Business validation rejects the mutation."
+    ],
+    "outcomes": [
+     "A rejected `viewer.create` audit record is committed in a separate transaction.",
+     "The mutation rolls back and no audit record is written, as A13 states for every other refusal."
+    ],
+    "observer": "An administrator or auditor reading the audit log."
+   },
+   "unit": "30_modules.md:`audit_writer`"
+  },
+  {
+   "subject": "ownership of `/api` prefix removal",
+   "kind": "contradiction",
+   "text": "State 2 A25 says the public API prefix is \"stripped by the deployment proxy\"; State 3 says `transport_guard` is \"one middleware that strips the `/api` prefix\".",
+   "question": "Does the deployment proxy or the application middleware remove `/api`, and what path does the middleware receive?",
+   "options": [
+    "The proxy strips `/api` before the application",
+    "`transport_guard` strips `/api` inside the application",
+    "Both may strip it and the middleware accepts either form"
+   ],
+   "default_guess": "Treat the application as receiving the already stripped path because A25 assigns stripping to the deployment proxy.",
+   "witness": {
+    "initial": "The deployment proxy is configured according to A25 and receives `/api/projects`.",
+    "events": [
+     "The proxy removes `/api` and forwards `/projects`.",
+     "`transport_guard` applies its prefix policy."
+    ],
+    "outcomes": [
+     "The middleware accepts the already stripped path and the route runs.",
+     "The middleware requires or strips `/api`, so `/projects` fails routing or policy checks."
+    ],
+    "observer": "Any API caller."
+   },
+   "unit": "30_modules.md:`transport_guard`"
+  },
+  {
+   "subject": "transport route classification",
+   "kind": "missing dependency owner",
+   "text": "`transport_guard` must \"check the mutating viewer origin\" and \"rate-limit viewer entry per client address and route\", but it may know only `models`, must not own routing, and the relevant route definitions belong to `api_irregular`.",
+   "question": "Who owns the classification of paths into viewer-entry and mutating-viewer routes that the pre-handler transport policy requires?",
+   "options": [
+    "`transport_guard` duplicates a closed path classification",
+    "`api_irregular` exports route metadata consumed by `transport_guard`",
+    "The HTTP composition layer annotates requests before `transport_guard` runs"
+   ],
+   "default_guess": "Define shared closed route metadata owned by the HTTP boundary and consumed by `transport_guard`.",
+   "witness": {
+    "initial": "A viewer has an active cookie session.",
+    "events": [
+     "A foreign-origin client sends the viewer logout request.",
+     "`transport_guard` evaluates the request before route dispatch."
+    ],
+    "outcomes": [
+     "The path is classified as a mutating viewer route and rejected before the handler.",
+     "The path is not recognized by the guard and reaches logout, revoking the session."
+    ],
+    "observer": "The viewer and the foreign-origin caller."
+   },
+   "unit": "30_modules.md:`transport_guard`"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"viewer-route composition\",\"kind\":\"orphan module\",\"text\":\"`api_irregular` owns the viewer endpoints, but no module's `Knows` section includes `api_irregular`; `runtime` composes only \\\"the inner `api` application\\\".\",\"question\":\"Which module attaches the routes owned by `api_irregular` to the running application?\",\"options\":[\"`api` imports and mounts `api_irregular`\",\"`runtime` mounts `api_irregular` beside `api`\",\"`api_irregular` is not reachable in the running application\"],\"default_guess\":\"Have `runtime` compose both HTTP modules.\",\"witness\":{\"initial\":\"The service is running and an active viewer credential exists.\",\"events\":[\"A viewer sends the documented viewer-entry request.\",\"`runtime` dispatches the request through the application it composed.\"],\"outcomes\":[\"The request reaches `viewer_enter_endpoint`, creates a viewer session and sets the cookie.\",\"No mounted route owns the request, so it returns a routing failure and no session is created.\"],\"observer\":\"The viewer.\"},\"unit\":\"30_modules.md:`api_irregular`\"},{\"subject\":\"session authentication versus project authorization\",\"kind\":\"two owners\",\"text\":\"`staff_identity` owns \\\"resolution\\\" of staff sessions, `viewer_access` owns \\\"session resolution\\\", and `service_identity` owns \\\"bearer authentication\\\"; `authorization_guard` also owns \\\"session validity\\\" and says it \\\"binds a session to its identity\\\".\",\"question\":\"Does an identity module fully authenticate and produce an actor context that the guard trusts, or must `authorization_guard` independently reload and revalidate the session or credential?\",\"options\":[\"Identity modules own authentication; the guard trusts their actor contexts\",\"The guard revalidates persisted session/principal state for every authorization\",\"Both checks occur, with an unspecified consistency boundary\"],\"default_guess\":\"Let identity modules authenticate the presented secret, then let the guard reload lifecycle and scope facts needed for authorization.\",\"witness\":{\"initial\":\"A staff token is valid when `resolve_staff_session` produces a `StaffActorContext`.\",\"events\":[\"The staff session is revoked before the project operation is authorized.\",\"The operation presents the previously produced actor context to `authorization_guard`.\"],\"outcomes\":[\"The guard trusts the context and authorizes the operation.\",\"The guard reloads the session, observes revocation and rejects the operation.\"],\"observer\":\"The staff caller and the audit/storage observers of the attempted operation.\"},\"unit\":\"30_modules.md:`authorization_guard`\"},{\"subject\":\"producer project-scope decision\",\"kind\":\"two owners\",\"text\":\"`service_identity` owns \\\"producer scope\\\" and exposes `authorize_producer_scope`; `authorization_guard` owns \\\"project scope (assignment, viewer grant or producer grant)\\\" and exposes `authorize_snapshot_import`.\",\"question\":\"Which module makes the authoritative `scope_mode` and `ProducerProjectGrant` decision for a snapshot import?\",\"options\":[\"`service_identity.authorize_producer_scope`\",\"`authorization_guard.authorize_snapshot_import`\",\"Both modules perform the decision\"],\"default_guess\":\"Keep the project-operation scope decision in `authorization_guard` and limit `service_identity` to principal, credential and grant lifecycle.\",\"unit\":\"30_modules.md:`service_identity`\"},{\"subject\":\"binary project-access recheck\",\"kind\":\"unclear dependency\",\"text\":\"The shared facts say \\\"`expense_management` and `photo_management` re-check access and visibility\\\" and A14 says the owning domain module re-checks authenticated project access, but neither module may know `authorization_guard`; only `api` and `api_irregular` know both sides.\",\"question\":\"Is a previously produced `AuthorizedProjectContext` sufficient for the owning module's access re-check, or must the owning module invoke `authorization_guard` again immediately before storage access?\",\"options\":[\"Verify only that the trusted context, record project and visibility agree\",\"Invoke `authorization_guard` again inside each owning module\",\"The HTTP facade performs the only guard call and the owning module checks visibility only\"],\"default_guess\":\"Pass an `AuthorizedProjectContext` into the owning module and define its project-match check as the re-check.\",\"witness\":{\"initial\":\"A viewer is authorized for a visible document and the HTTP facade obtains an `AuthorizedProjectContext`.\",\"events\":[\"An administrator revokes the viewer's project grant before `read_expense_document` reads storage.\",\"The binary-read flow continues.\"],\"outcomes\":[\"The owning module trusts the earlier context and returns the bytes.\",\"The owning module re-runs project authorization and refuses the read.\"],\"observer\":\"The viewer.\"},\"unit\":\"30_modules.md:`expense_management`\"},{\"subject\":\"photo gallery ordering\",\"kind\":\"two owners\",\"text\":\"The decision table gives A27 solely to `derived_views`, while `photo_management` says it owns \\\"gallery order (A27)\\\" and exposes `list_progress_photos`.\",\"question\":\"Which module owns and applies the normative photo ordering, especially for staff-side photo lists that may not pass through `derived_views`?\",\"options\":[\"Only `derived_views` orders photos\",\"`photo_management` orders every photo list\",\"`photo_management` supplies an ordered list and `derived_views` orders it again\"],\"default_guess\":\"Assign the ordering once at the module that produces each public projection.\",\"unit\":\"30_modules.md:`photo_management`\"},{\"subject\":\"auditing rejected significant mutations\",\"kind\":\"contradiction\",\"text\":\"State 3 says audit appending includes \\\"rejected significant mutations\\\" and that a rejection uses \\\"a separate short transaction\\\"; State 2 A13 says exactly two rejected actions write records and \\\"Every other refused operation rolls its transaction back and writes no record.\\\"\",\"question\":\"Must every rejected significant mutation be audited, or only rejected `snapshot.import` plus non-significant `staff.login_failed`?\",\"options\":[\"Audit every rejected significant mutation\",\"Audit only the two rejected outcomes named by A13\",\"Each owning use case chooses whether rejection is an auditable occurrence\"],\"default_guess\":\"Follow A13's narrowed running-service behavior and audit only its two named rejected outcomes.\",\"witness\":{\"initial\":\"An authenticated administrator submits an invalid viewer-creation mutation.\",\"events\":[\"Authorization succeeds.\",\"Business validation rejects the mutation.\"],\"outcomes\":[\"A rejected `viewer.create` audit record is committed in a separate transaction.\",\"The mutation rolls back and no audit record is written, as A13 states for every other refusal.\"],\"observer\":\"An administrator or auditor reading the audit log.\"},\"unit\":\"30_modules.md:`audit_writer`\"},{\"subject\":\"ownership of `/api` prefix removal\",\"kind\":\"contradiction\",\"text\":\"State 2 A25 says the public API prefix is \\\"stripped by the deployment proxy\\\"; State 3 says `transport_guard` is \\\"one middleware that strips the `/api` prefix\\\".\",\"question\":\"Does the deployment proxy or the application middleware remove `/api`, and what path does the middleware receive?\",\"options\":[\"The proxy strips `/api` before the application\",\"`transport_guard` strips `/api` inside the application\",\"Both may strip it and the middleware accepts either form\"],\"default_guess\":\"Treat the application as receiving the already stripped path because A25 assigns stripping to the deployment proxy.\",\"witness\":{\"initial\":\"The deployment proxy is configured according to A25 and receives `/api/projects`.\",\"events\":[\"The proxy removes `/api` and forwards `/projects`.\",\"`transport_guard` applies its prefix policy.\"],\"outcomes\":[\"The middleware accepts the already stripped path and the route runs.\",\"The middleware requires or strips `/api`, so `/projects` fails routing or policy checks.\"],\"observer\":\"Any API caller.\"},\"unit\":\"30_modules.md:`transport_guard`\"},{\"subject\":\"transport route classification\",\"kind\":\"missing dependency owner\",\"text\":\"`transport_guard` must \\\"check the mutating viewer origin\\\" and \\\"rate-limit viewer entry per client address and route\\\", but it may know only `models`, must not own routing, and the relevant route definitions belong to `api_irregular`.\",\"question\":\"Who owns the classification of paths into viewer-entry and mutating-viewer routes that the pre-handler transport policy requires?\",\"options\":[\"`transport_guard` duplicates a closed path classification\",\"`api_irregular` exports route metadata consumed by `transport_guard`\",\"The HTTP composition layer annotates requests before `transport_guard` runs\"],\"default_guess\":\"Define shared closed route metadata owned by the HTTP boundary and consumed by `transport_guard`.\",\"witness\":{\"initial\":\"A viewer has an active cookie session.\",\"events\":[\"A foreign-origin client sends the viewer logout request.\",\"`transport_guard` evaluates the request before route dispatch.\"],\"outcomes\":[\"The path is classified as a mutating viewer route and rejected before the handler.\",\"The path is not recognized by the guard and reaches logout, revoking the session.\"],\"observer\":\"The viewer and the foreign-origin caller.\"},\"unit\":\"30_modules.md:`transport_guard`\"}]}",
+ "set_aside": []
+}

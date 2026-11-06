@@ -2078,7 +2078,11 @@ HTTP responses.
   `client_visible: bool`, `updated_at: datetime | None`.
 
 Projection from persisted entities to these DTOs is owned by `api` only as a
-security allow-list; it may not compute business totals or authorization.
+security allow-list; it may not compute business totals or authorization. A
+safe view or result that an accepted use case returns itself (the views of
+"Projections and answers" and the mutation results above that a State 5
+operation names as its output) is built by that use case and passed through
+by the HTTP modules unchanged (running service, owner 2026-11-06).
 
 ### Budget results
 
