@@ -741,7 +741,7 @@ grant, or a capability refused, between the route's check and the import
 is recorded as a rejection for that reason; a principal disabled in
 between, or a storage or Registry failure during the import (an HTTP 404
 from the Registry among them, R6), is answered as that failure and records
-nothing. Recording access-refused
+nothing: neither an import result nor an audit record. Recording access-refused
 attempts is a missing feature (Q20). A producer that lost an
 answer re-publishes the same snapshot: identical content is answered as an
 idempotent replay with a new `import_id` naming the same accepted snapshot
