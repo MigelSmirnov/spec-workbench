@@ -88,7 +88,7 @@ snapshot, but must not claim that the client-visible budget was updated.
 
 ### Q12 — The binary intake the design relies on was never built
 
-`spec/30_modules.md` (State 3, "Binary storage boundary") makes
+The former `spec/30_modules.md` (State 3, "Binary storage boundary"; now `30_modules.md` `binary_storage`) makes
 `binary_storage` an opaque read boundary: "OCR/Telegram intake remains
 responsible for placing the binary and supplying a stable reference; the
 portal does not become an upload or recognition system." No such intake

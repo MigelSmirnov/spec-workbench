@@ -19,11 +19,12 @@ former layout under `spec/`.
 | `00_product.md` | State 0, product frame (migrated) |
 | `01_models.md` | State 1, domain models (migrated) |
 | `02_rules.md` | State 2, rules and invariants (migrated) |
+| `30_modules.md`, `30_trace.json` | State 3, module responsibilities and the A1–A32 ownership trace (migrated) |
 | `questions/` | question rounds |
-| `spec/30_modules.md` … `spec/80_assembly.md`, `spec/HANDOFF.md` | States 3–8 of the authoring pass of 2026-07-18/19, not yet migrated |
+| `spec/40_flows.md` … `spec/80_assembly.md`, `spec/HANDOFF.md` | States 4–8 of the authoring pass of 2026-07-18/19, not yet migrated |
 | `baseline/01_product_boundary.md` … `baseline/09_notes.md` | the frozen requirements baseline the authoring pass started from; input, not design |
 | `spec/invariant_ledger.json` | the invariant ledger of 2026-07-19, kept as evidence; its rows are the formal invariants of `02_rules.md` |
-| `open_questions.md` | the owner's open questions Q1–Q18 |
+| `open_questions.md` | the owner's open questions Q1–Q19 |
 | `global_spec.json` | the assembly of 2026-07-19; superseded by the accepted Factory spec (`SOURCE.md`) and replaced when State 8 is reached again |
 
 The next phase is `python tools/design_authoring_next.py examples/client-portal`

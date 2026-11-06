@@ -174,3 +174,21 @@ decided in States 3–7.
 | dependency vulnerability policy | `deploy/requirements.txt` pins | was unresolved; decided under the owner decision of 2026-11-06 (technical decisions delegated) | A32, Q17 |
 | persistence, router and three backend IRs; `rules.role`, `rules.schema_version` | `8387e0a3`, `d1280708`, `300bd11d`…`a6916180314d` | later deterministic closures | "Carried to later closures" |
 
+### Classification of what State 3 carries
+
+The former `spec/30_modules.md` is replaced by `30_modules.md` and
+`30_trace.json`; its module texts are carried module by module, and the
+module list, the public functions and the module imports are those of the
+accepted spec (`module_order`, `module_functions`,
+`imports.module_internal`).
+
+| finding | evidence | classification | owner |
+|---|---|---|---|
+| 20 former modules | former text = accepted `module_order` members | derivable (kept, texts carried) | `30_modules.md` |
+| eleven `*_repository` modules, narrow ports instead of one facade | `af686d7364d2` … `62c73965adb8`, `ced617bd55c9` … `88c1dbbcc3a6`; the former text allowed ports once `kind: interface` materialized | accepted spec change | `30_modules.md` |
+| `staff_challenges` split from `staff_identity` | `f12197b46a82` | accepted spec change | `30_modules.md` |
+| `api_irregular`, `transport_guard`, `runtime_settings`, `runtime` | `f42548473a1a`, `babd5e5262d9`, `38626cc7be12`, `21658368525f` | accepted spec change | `30_modules.md` |
+| `staff_bootstrap`, `staff_bootstrap_store`, `staff_bootstrap_cli` | `6011ac93b143` | accepted spec change | `30_modules.md`, A29 |
+| renamed and reshaped capabilities | accepted `module_functions` | accepted spec change | `30_modules.md` "Changes against the former text" |
+| token-free notices (A10, A11, former `send_staff_security_notice`) have no sender | accepted spec has no sending function; Factory code uses the members only in `core/models.py` | running service kept (owner 2026-11-06); possible missing feature | `30_modules.md`, Q19 |
+| A22, A26, A28 have no single owning module | the rule appears in the notes of many modules, no shared mechanism | `cross_cutting` disposition | `30_trace.json` |
