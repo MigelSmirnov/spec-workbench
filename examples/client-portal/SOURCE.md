@@ -294,7 +294,20 @@ decided in States 3–7.
 | dependency vulnerability policy | `deploy/requirements.txt` pins | was unresolved; decided under the owner decision of 2026-11-06 (technical decisions delegated) | A32, Q17 |
 | persistence, router and three backend IRs; `rules.role`, `rules.schema_version` | `8387e0a3`, `d1280708`, `300bd11d`…`a6916180314d` | later deterministic closures | "Carried to later closures" |
 
-### States 3–4 question rounds (in progress, 2026-11-06)
+### States 3–4 question rounds (closed 2026-11-06)
+
+Closing pass after the coordinator's decisions (`f25e808f`, `e8e3831c`):
+States 0–3 closed (State 0 round-23, State 1 round-25, State 2 round-32,
+State 3 round-11), State 4 closed by rounds 03–15 (blocking 2, 0, 2, 4, 0,
+0, 1, 0, 3, 0, 0, 0, 0). Repairs followed the running code (grant
+admission reads `exists` and `is_active`; duplicate active grants refused
+by the operation; route guard checks the activation capability; per-call
+environment reads of `registry_gateway` and `binary_storage`; expense
+replay conflict 409; overview per-part availability) and kept the trimming
+rule: race and failure details of the import stay in the State 4 flow, not
+in R0-25. State 5 round-01 (blocking 32) is open and not yet repaired.
+
+History of the in-progress pass:
 
 State 3 rounds 01–05 (blocking 6, 5, 1, 0, 0) closed State 3 at `cded5541`;
 repairs (commits `1f338005`, `a5e9eeef`, `9c18621c`) reconciled ownership

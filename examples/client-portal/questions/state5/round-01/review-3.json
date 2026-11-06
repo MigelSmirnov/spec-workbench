@@ -1,0 +1,781 @@
+{
+ "open_points": [
+  {
+   "subject": "verification-secret parsing failure contract",
+   "kind": "unnamed error",
+   "text": "“A malformed envelope is rejected; each caller turns that rejection into its own concealed failure (`AuthenticationRejected`).”",
+   "question": "What exception or result does `parse_verification_secret` produce for a malformed envelope so callers can reliably convert only that failure into `AuthenticationRejected`?",
+   "options": [
+    "Raise a named credential-format exception",
+    "Return a failure value such as `None`",
+    "Raise an unspecified backend exception"
+   ],
+   "default_guess": "Raise a private, named malformed-secret exception.",
+   "unit": "50_public_apis.md:`public_op:credential_security.parse_verification_secret`",
+   "witness": {
+    "initial": "A request contains a malformed bearer token.",
+    "events": [
+     "`staff_identity` calls `parse_verification_secret`.",
+     "The parser detects invalid envelope syntax."
+    ],
+    "outcomes": [
+     "The parser raises a recognizable format exception, which `staff_identity` conceals as 401.",
+     "The parser raises a generic decoding exception, which propagates as 500 because the caller cannot distinguish it from a defect."
+    ],
+    "observer": "The caller sees either 401 or 500."
+   }
+  },
+  {
+   "subject": "EUR amount domain",
+   "kind": "undefined validation",
+   "text": "“Accept one EUR amount under the money policy and return it quantized.”",
+   "question": "Are non-finite Decimal values such as NaN and Infinity rejected as `FinancialValidationError`, and are values with more than two fraction digits accepted and rounded or rejected as not already exact?",
+   "options": [
+    "Reject non-finite values but round finite values to two digits",
+    "Reject non-finite values and any value not already exact to two digits",
+    "Let Decimal quantization behavior propagate"
+   ],
+   "default_guess": "Reject non-finite values and round finite values half-up to two digits.",
+   "unit": "50_public_apis.md:`public_op:financial_policy.validate_eur_amount`",
+   "witness": {
+    "initial": "An authorized payment request supplies Decimal NaN or Decimal('1.005').",
+    "events": [
+     "`register_work_payment` calls `validate_eur_amount`."
+    ],
+    "outcomes": [
+     "Validation rejects the input with `FinancialValidationError`.",
+     "Validation quantizes or lets a Decimal exception escape, producing a stored value or a 500 response."
+    ],
+    "observer": "The staff caller sees a 422, a successful rounded payment, or a 500."
+   }
+  },
+  {
+   "subject": "audit-intent validation failure",
+   "kind": "unnamed error",
+   "text": "“A closed-choice violation of the intent is rejected; a persistence failure propagates untranslated.”",
+   "question": "What declared error represents an invalid `AuditIntent`, and must the owning transaction roll back the business mutation when it occurs?",
+   "options": [
+    "Raise a named audit-validation exception",
+    "Raise a generic model/value exception",
+    "Treat an invalid intent as a programming failure"
+   ],
+   "default_guess": "Raise a named internal audit-validation exception and let the owning transaction roll back.",
+   "unit": "50_public_apis.md:`public_op:audit_writer.append_audit`",
+   "witness": {
+    "initial": "A use case builds a successful audit intent with a forbidden `reason_code`.",
+    "events": [
+     "The use case writes its business replacement in an open transaction.",
+     "It calls `append_audit`."
+    ],
+    "outcomes": [
+     "A declared validation error is raised and the caller rolls back the mutation.",
+     "A generic error escapes or the audit writer silently normalizes the intent."
+    ],
+    "observer": "The owning module and, through it, the HTTP caller see different failure behavior."
+   }
+  },
+  {
+   "subject": "Registry status outside active and archived on staff reads",
+   "kind": "missing error mapping",
+   "text": "“Outputs `AuthorizedProjectContext` … with its accepted Registry status (active or archived)” and “Errors … `RegistryBoundaryError`”, while A5 says a read carrying another status is refused as an invalid Registry answer and that its error is carried to States 5–6.",
+   "question": "Which declared exception does `authorize_staff_project_read` raise when Registry validation succeeds structurally but returns a status other than `active` or `archived`?",
+   "options": [
+    "`RegistryBoundaryError` with `schema_mismatch`",
+    "`ArchivedProjectRejected`",
+    "`AuthorizationRejected`",
+    "An undeclared model-validation failure"
+   ],
+   "default_guess": "Raise `RegistryBoundaryError(kind=schema_mismatch)`.",
+   "unit": "50_public_apis.md:`public_op:authorization_guard.authorize_staff_project_read`",
+   "witness": {
+    "initial": "A valid staff session and assignment exist; Registry returns `exists=true`, status `paused`.",
+    "events": [
+     "Staff requests the project overview.",
+     "The guard decodes the validation answer and must construct `AuthorizedProjectContext`."
+    ],
+    "outcomes": [
+     "The guard translates the unsupported status to a declared Registry boundary failure.",
+     "Construction of the closed status model raises an undeclared validation exception."
+    ],
+    "observer": "The staff caller sees 502 or 500."
+   }
+  },
+  {
+   "subject": "Registry status outside active and archived on viewer reads",
+   "kind": "missing error mapping",
+   "text": "“Outputs `AuthorizedProjectContext` for the persisted viewer” and “Errors … `RegistryBoundaryError`”, while A5 requires an unsupported read status to be refused as an invalid Registry answer.",
+   "question": "Which declared exception does `authorize_viewer_project_read` raise when Registry returns a status outside `active | archived`?",
+   "options": [
+    "`RegistryBoundaryError` with `schema_mismatch`",
+    "`ScopedNotFoundError`",
+    "`AuthorizationRejected`",
+    "An undeclared model-validation failure"
+   ],
+   "default_guess": "Raise `RegistryBoundaryError(kind=schema_mismatch)`.",
+   "unit": "50_public_apis.md:`public_op:authorization_guard.authorize_viewer_project_read`",
+   "witness": {
+    "initial": "A viewer has an active grant; Registry validation returns status `paused`.",
+    "events": [
+     "The viewer opens the project.",
+     "The guard tries to produce the closed-status authorized context."
+    ],
+    "outcomes": [
+     "The request receives the declared Registry failure.",
+     "A DTO validation exception escapes as an internal failure."
+    ],
+    "observer": "The viewer sees 502 or 500."
+   }
+  },
+  {
+   "subject": "malformed staff email login audit",
+   "kind": "contradiction",
+   "text": "State 5 says “`IdentityInputRejected` for an address that does not normalize under A16, before any read or audit”; State 4 says “On every rejection it appends `staff.login_failed`.”",
+   "question": "Does a syntactically invalid login email produce a committed `staff.login_failed` audit record, or is it rejected before auditing?",
+   "options": [
+    "Reject with 422 and write no audit",
+    "Write `staff.login_failed` and then reject",
+    "Conceal it as the same 401 used for credential failures"
+   ],
+   "default_guess": "Follow the State 5 operation text: reject with 422 and no audit.",
+   "unit": "50_public_apis.md:`public_op:staff_identity.authenticate_staff`",
+   "witness": {
+    "initial": "No account has the email ` bad@example.com` because whitespace is forbidden.",
+    "events": [
+     "A caller submits that email and any password to staff login."
+    ],
+    "outcomes": [
+     "The operation returns 422 and writes no audit, as State 5 says.",
+     "The operation commits `staff.login_failed` before rejecting, as State 4 says."
+    ],
+    "observer": "An auditor sees zero or one login-failure record."
+   }
+  },
+  {
+   "subject": "administrator session revocation for an unknown staff id",
+   "kind": "missing existence behavior",
+   "text": "“Revoke every live session of one staff account” and output a result “also when none was live”; the Errors list contains no error for an unknown target account.",
+   "question": "Must the target staff account exist, or does an unknown `staff_id` succeed with `revoked_session_count = 0` and an audit record?",
+   "options": [
+    "Require the account and raise `ScopedNotFoundError` when absent",
+    "Succeed with count zero and audit the requested id",
+    "Succeed with count zero without an audit"
+   ],
+   "default_guess": "Require the target account to exist and otherwise raise `ScopedNotFoundError`.",
+   "unit": "50_public_apis.md:`public_op:staff_identity.revoke_staff_sessions`",
+   "witness": {
+    "initial": "An administrator is authenticated; target UUID has never identified a staff account.",
+    "events": [
+     "The administrator requests sign-out-everywhere for that UUID."
+    ],
+    "outcomes": [
+     "The operation returns a zero-count result and writes `staff.sessions_revoke`.",
+     "The operation raises not found and writes nothing."
+    ],
+    "observer": "The administrator and audit reader see the difference."
+   }
+  },
+  {
+   "subject": "pending-account activation audit",
+   "kind": "internal contradiction",
+   "text": "The operation supports activation from `pending_verification`, says “A13: one `staff.suspend`, `staff.disable` or `staff.reinstate`,” but its State impact says “appends one `AuditRecord`.”",
+   "question": "Which audit action, if any, is written when `pending_verification → active` also verifies the email?",
+   "options": [
+    "Write `staff.email_verified`",
+    "Write `staff.reinstate`",
+    "Change the account with no audit",
+    "Reject activation because no matching action exists"
+   ],
+   "default_guess": "Write `staff.email_verified`, the catalog action matching the effect.",
+   "unit": "50_public_apis.md:`public_op:staff_identity.change_staff_status`",
+   "witness": {
+    "initial": "A newly created staff account is pending and unverified.",
+    "events": [
+     "An administrator changes its status to active."
+    ],
+    "outcomes": [
+     "The account is activated and a `staff.email_verified` audit is appended.",
+     "The account is activated with no audit because the listed status actions contain no activation action."
+    ],
+    "observer": "The account holder can log in in both cases, but an auditor sees different history."
+   }
+  },
+  {
+   "subject": "same-status staff change",
+   "kind": "unspecified no-op",
+   "text": "“Suspend, disable, reinstate or activate one staff account” and “`IdentityInputRejected` for a transition the table does not list.”",
+   "question": "When the requested status equals the persisted status, is the call a successful no-op, an invalid transition, or an audited change?",
+   "options": [
+    "Successful no-op with no audit",
+    "`IdentityInputRejected` with no change",
+    "Rewrite the account and append the corresponding audit"
+   ],
+   "default_guess": "Reject it as a transition not listed in A3.",
+   "unit": "50_public_apis.md:`public_op:staff_identity.change_staff_status`",
+   "witness": {
+    "initial": "A staff account is already suspended.",
+    "events": [
+     "An administrator requests status `suspended` again."
+    ],
+    "outcomes": [
+     "The operation returns the unchanged account without an audit.",
+     "The operation returns 422 because `suspended → suspended` is not in the transition table."
+    ],
+    "observer": "The administrator sees success or rejection."
+   }
+  },
+  {
+   "subject": "assignment of administrators",
+   "kind": "contradiction",
+   "text": "State 5 calls the target “the operator's `staff_id`” and raises not found for “an unknown operator”; State 1 M07 says “The assignment operation accepts any existing staff account. An assignment naming an administrator is stored and audited like any other.”",
+   "question": "May `assign_staff_project` create an assignment for an administrator?",
+   "options": [
+    "Accept any existing staff account, including administrators",
+    "Accept operators only",
+    "Accept administrators but return a no-op rather than storing an assignment"
+   ],
+   "default_guess": "Accept any existing staff account and store the assignment, following M07.",
+   "unit": "50_public_apis.md:`public_op:staff_identity.assign_staff_project`",
+   "witness": {
+    "initial": "An active administrator exists and has no assignment row for an active project.",
+    "events": [
+     "Another administrator assigns that account to the project."
+    ],
+    "outcomes": [
+     "An assignment and audit are stored, although authorization ignores the assignment.",
+     "The request is rejected because the target is not an operator."
+    ],
+    "observer": "The administrator and audit reader see the difference."
+   }
+  },
+  {
+   "subject": "bootstrap return value disclosure",
+   "kind": "contradiction",
+   "text": "The operation outputs “the hash-free `StaffAccountView`,” which contains the email; A29 says the bootstrap email “is never written to … return values.”",
+   "question": "Does `bootstrap_first_administrator` return a `StaffAccountView` containing the supplied email, or must it return a secret-free outcome that omits the email?",
+   "options": [
+    "Return `StaffAccountView` including email",
+    "Return no account value",
+    "Return an identifier-only bootstrap result"
+   ],
+   "default_guess": "Return an identifier-only or success result without the email.",
+   "unit": "50_public_apis.md:`public_op:staff_bootstrap.bootstrap_first_administrator`",
+   "witness": {
+    "initial": "The staff table is empty.",
+    "events": [
+     "The CLI calls bootstrap with `admin@example.com` and a valid password.",
+     "Bootstrap succeeds."
+    ],
+    "outcomes": [
+     "The returned value contains `admin@example.com`.",
+     "The returned value omits the email to satisfy A29."
+    ],
+    "observer": "The CLI module can receive or cannot receive the email in a return value."
+   }
+  },
+  {
+   "subject": "viewer display-name refusal",
+   "kind": "unnamed error",
+   "text": "“Errors: Access-management failures; a display name the model rejects.”",
+   "question": "Which declared exception is raised for an invalid display name, and what makes a display name invalid?",
+   "options": [
+    "`IdentityInputRejected` under an explicit name policy",
+    "A request/model validation error before the operation",
+    "No additional validation beyond being a string"
+   ],
+   "default_guess": "Use `IdentityInputRejected` for a non-blank bounded string policy.",
+   "unit": "50_public_apis.md:`public_op:viewer_access.create_viewer`",
+   "witness": {
+    "initial": "An administrator is authorized.",
+    "events": [
+     "The administrator submits an empty display name."
+    ],
+    "outcomes": [
+     "The request is rejected with a declared 422 error.",
+     "An active viewer with an empty display name is created because M01 gives no name constraint."
+    ],
+    "observer": "The administrator and later viewer listings see the difference."
+   }
+  },
+  {
+   "subject": "archived project error for viewer grants",
+   "kind": "contradiction",
+   "text": "The global convention says “every new grant or assignment for [an archived project] is `ArchivedProjectRejected`”; this operation says an inactive Registry answer becomes `RegistryBoundaryError` and State 4 likewise assigns 502.",
+   "question": "What error must a new viewer grant return when Registry confirms that the project exists but is archived?",
+   "options": [
+    "`ArchivedProjectRejected` mapped to 409",
+    "`RegistryBoundaryError` mapped to 502"
+   ],
+   "default_guess": "Use `RegistryBoundaryError`, following the operation-specific text and earlier A5 exception.",
+   "unit": "50_public_apis.md:`public_op:viewer_access.grant_viewer_project`",
+   "witness": {
+    "initial": "A viewer is active; Registry validation returns `exists=true`, `is_active=false`.",
+    "events": [
+     "An administrator grants the viewer that project."
+    ],
+    "outcomes": [
+     "The operation raises `ArchivedProjectRejected`, producing 409 under the common convention.",
+     "The operation raises `RegistryBoundaryError`, producing 502 under its own contract."
+    ],
+    "observer": "The administrator sees 409 or 502."
+   }
+  },
+  {
+   "subject": "service credential expiry input",
+   "kind": "missing validation",
+   "text": "“Inputs … an optional `expires_at`” with no validity rule or declared input error.",
+   "question": "Which expiry values are permitted: must `expires_at` be a UTC-naive instant strictly after the operation time, and how are aware, past or equal instants handled?",
+   "options": [
+    "Require a UTC-naive future instant and reject other values",
+    "Accept any datetime, including an immediately expired credential",
+    "Normalize aware datetimes to UTC-naive"
+   ],
+   "default_guess": "Require a UTC-naive instant strictly later than the captured creation time.",
+   "unit": "50_public_apis.md:`public_op:service_identity.issue_service_credential`",
+   "witness": {
+    "initial": "An active service principal exists.",
+    "events": [
+     "An administrator requests a credential whose `expires_at` equals yesterday."
+    ],
+    "outcomes": [
+     "The operation rejects the request and creates nothing.",
+     "The operation creates and audits a credential that is unusable immediately."
+    ],
+    "observer": "The administrator sees rejection or receives a one-time secret that can never authenticate."
+   }
+  },
+  {
+   "subject": "producer-scope decision contract",
+   "kind": "ambiguous output/error",
+   "text": "“Outputs: The decision … whether …” but “Errors: Never answers false by swallowing a failure,” while A12 requires a missing grant to produce the scoped not-found rejection.",
+   "question": "Does `authorize_producer_scope` return a boolean, return an authorized context, or raise `ScopedNotFoundError` when scope does not cover the project?",
+   "options": [
+    "Return `True` or `False`",
+    "Raise `ScopedNotFoundError` for a negative scope decision",
+    "Return a typed scope-decision DTO"
+   ],
+   "default_guess": "Raise `ScopedNotFoundError` when scope is absent and otherwise return no value or a positive decision.",
+   "unit": "50_public_apis.md:`public_op:service_identity.authorize_producer_scope`",
+   "witness": {
+    "initial": "A `granted_projects` producer has no grant for project P.",
+    "events": [
+     "The import route calls `authorize_producer_scope` before `authorize_snapshot_import`."
+    ],
+    "outcomes": [
+     "The operation returns `false`, leaving the route to decide whether and how to reject.",
+     "The operation itself raises the scoped not-found rejection required by A12."
+    ],
+    "observer": "The API implementation and producer may see different control flow or even a request that proceeds incorrectly."
+   }
+  },
+  {
+   "subject": "manual-budget creation authorization and archival",
+   "kind": "missing precondition",
+   "text": "“Return the project's one manual budget version, creating it empty when absent” with only persistence errors; it accepts any `AuthorizedProjectContext` and does not require a mutation capability or active Registry status.",
+   "question": "May this operation create a manual budget when passed a read-authorized context, including one for an archived project?",
+   "options": [
+    "Require an active context carrying `portal.budget.manage` before creation",
+    "Create for any authorized context",
+    "Return not configured for read-only or archived contexts without creating"
+   ],
+   "default_guess": "Create only with an active context carrying `portal.budget.manage`; otherwise leave state unchanged.",
+   "unit": "50_public_apis.md:`public_op:budget_management.ensure_manual_budget`",
+   "witness": {
+    "initial": "An archived project has no budget; an operator has an existing assignment and read access.",
+    "events": [
+     "The operator lists recorded progress.",
+     "That path calls `ensure_manual_budget` to obtain plan order."
+    ],
+    "outcomes": [
+     "An inactive manual budget and audit are created in the archived project.",
+     "The read remains non-mutating and no budget is created."
+    ],
+    "observer": "An auditor and later budget reader see the difference."
+   }
+  },
+  {
+   "subject": "unresolved allocation count without an active budget",
+   "kind": "undefined output",
+   "text": "The result includes “the count of allocations whose section is outside the active plan,” even when a newly created manual version is inactive and no active plan exists.",
+   "question": "How is `unresolved_allocation_count` computed when the project has no active budget version?",
+   "options": [
+    "Count every section allocation as unresolved",
+    "Return zero because no active-version comparison exists",
+    "Compute against the returned manual version even though it is inactive"
+   ],
+   "default_guess": "Compute against the returned version for this detail response.",
+   "unit": "50_public_apis.md:`public_op:budget_management.ensure_manual_budget`",
+   "witness": {
+    "initial": "A project has an inactive manual version with section S and an expense allocated to S; no version is active.",
+    "events": [
+     "Staff calls `ensure_manual_budget`."
+    ],
+    "outcomes": [
+     "The returned unresolved count is zero because S is in the returned manual plan.",
+     "The returned unresolved count is one because there is no active plan."
+    ],
+    "observer": "The staff caller sees a different `BudgetVersionDetail`."
+   }
+  },
+  {
+   "subject": "activation of the already-active version",
+   "kind": "unspecified idempotency",
+   "text": "“Make one budget version … active” and “the prior active version becomes inactive and the requested one active,” without stating the result when both are the same row.",
+   "question": "What happens when `version_id` already identifies the active version?",
+   "options": [
+    "Return a successful no-op without audit",
+    "Re-activate it, refresh activation timestamps and append `snapshot.activate`",
+    "Reject it as an invalid transition or conflict"
+   ],
+   "default_guess": "Return a successful no-op without changing timestamps or audit.",
+   "unit": "50_public_apis.md:`public_op:budget_management.activate_budget_version`",
+   "witness": {
+    "initial": "Budget version V is already active.",
+    "events": [
+     "Authorized staff requests activation of V again."
+    ],
+    "outcomes": [
+     "V and its timestamps remain unchanged and no audit is added.",
+     "V receives a new activation time and another `snapshot.activate` audit, or the request is rejected."
+    ],
+    "observer": "The staff caller and auditor see the difference."
+   }
+  },
+  {
+   "subject": "named inactive budget view calculations",
+   "kind": "ambiguous projection basis",
+   "text": "“Derive the budget view of the active or a named version” while the output includes actuals and “allocations outside the active plan.”",
+   "question": "When `version_id` names an inactive version, are section actuals, resolution flags and unresolved counts evaluated against that named version or against the project's currently active version?",
+   "options": [
+    "Evaluate all version-relative values against the named version",
+    "Always evaluate allocation resolution against the active version",
+    "Refuse inactive named versions"
+   ],
+   "default_guess": "Evaluate the view consistently against the named version.",
+   "unit": "50_public_apis.md:`public_op:derived_views.build_budget_view`",
+   "witness": {
+    "initial": "Active version A contains section X; inactive named version B omits X; an included expense is allocated to X.",
+    "events": [
+     "Staff requests `build_budget_view` for B."
+    ],
+    "outcomes": [
+     "B reports the allocation unresolved and excludes it from B's section actuals.",
+     "The operation uses active A for resolution and reports the allocation resolved despite displaying B's plans."
+    ],
+    "observer": "The staff caller sees different totals and unresolved counts."
+   }
+  },
+  {
+   "subject": "zero-total expense correction",
+   "kind": "undefined allocation case",
+   "text": "`correct_expense` accepts a “non-negative” total and a complete allocation list, while every `AllocationInstruction.amount` is strictly positive and allocation sum must equal the total.",
+   "question": "Can an expense be corrected to total zero using an empty allocation list, or must zero be rejected even though the amount policy says non-negative?",
+   "options": [
+    "Allow total zero with an empty allocation set",
+    "Reject total zero because every expense must retain at least one positive allocation",
+    "Allow a zero-valued allocation despite the model"
+   ],
+   "default_guess": "Allow total zero only with an empty allocation set.",
+   "unit": "50_public_apis.md:`public_op:expense_management.correct_expense`",
+   "witness": {
+    "initial": "An expense totals EUR 10 with one allocation.",
+    "events": [
+     "Staff corrects its total to EUR 0 and supplies an empty allocation list."
+    ],
+    "outcomes": [
+     "The correction succeeds with no allocations and preserves the sum invariant.",
+     "The correction is rejected because a complete allocation list must be non-empty."
+    ],
+    "observer": "The staff caller and expense viewer see the difference."
+   }
+  },
+  {
+   "subject": "repeating an inclusion value",
+   "kind": "unspecified no-op",
+   "text": "“Include an expense in, or exclude it from, the project totals” and “appends one `expense.include` or `expense.exclude`.”",
+   "question": "If the requested inclusion flag already equals the stored value, is the request a no-op, an audited update, or a conflict?",
+   "options": [
+    "Successful no-op without audit",
+    "Rewrite timestamps and append the corresponding audit",
+    "Reject as a conflict"
+   ],
+   "default_guess": "Successful no-op without audit.",
+   "unit": "50_public_apis.md:`public_op:expense_management.set_expense_inclusion`",
+   "witness": {
+    "initial": "Expense E is already excluded.",
+    "events": [
+     "Staff requests `included=false` again."
+    ],
+    "outcomes": [
+     "E is returned unchanged and no audit is written.",
+     "`updated_at` changes and another `expense.exclude` audit is written."
+    ],
+    "observer": "An auditor and API caller see different timestamps/history."
+   }
+  },
+  {
+   "subject": "no-op document update",
+   "kind": "unspecified no-op",
+   "text": "“Change the description and client visibility” and “appends one `document.update`.”",
+   "question": "When both supplied values equal the persisted values, does the operation update `updated_at` and append an audit, return unchanged without audit, or reject?",
+   "options": [
+    "Successful no-op without audit",
+    "Audited update with a new timestamp",
+    "Reject as no change"
+   ],
+   "default_guess": "Successful no-op without audit.",
+   "unit": "50_public_apis.md:`public_op:expense_management.update_expense_document`",
+   "witness": {
+    "initial": "A document already has description D and is client-visible.",
+    "events": [
+     "Staff submits D and `client_visible=true` again."
+    ],
+    "outcomes": [
+     "The document remains byte-for-byte unchanged with no audit.",
+     "A replacement with a new `updated_at` and `document.update` audit is committed."
+    ],
+    "observer": "The staff caller and auditor see the difference."
+   }
+  },
+  {
+   "subject": "progress listing mutates budget state",
+   "kind": "contradiction",
+   "text": "The State impact says “Read-only, except the empty manual version `ensure_manual_budget` creates when the project has none,” while the operation is a list/read and archived project records must be immutable.",
+   "question": "Must `list_project_progress` create a manual budget merely to establish ordering, including on archived projects, or must it order without mutating state?",
+   "options": [
+    "Create the manual version and audit as stated",
+    "Remain strictly read-only and derive an order from existing sections/plans",
+    "Create only for active projects and use a non-mutating fallback for archived projects"
+   ],
+   "default_guess": "Remain read-only and use existing plan data without creating a budget.",
+   "unit": "50_public_apis.md:`public_op:project_tracking.list_project_progress`",
+   "witness": {
+    "initial": "An archived project has recorded SectionProgress but no BudgetVersion.",
+    "events": [
+     "Authorized staff lists project progress."
+    ],
+    "outcomes": [
+     "The read creates an inactive manual budget and `budget.manual_version_create` audit.",
+     "The read returns progress without any write."
+    ],
+    "observer": "The auditor and subsequent budget reader see the difference."
+   }
+  },
+  {
+   "subject": "payment list ordering",
+   "kind": "contradiction",
+   "text": "The operation outputs payments “by `payment_date` then `payment_id`, descending”; A27 requires `payment_date` descending, then `recording time` descending, then id descending.",
+   "question": "Which tie-break order is normative for payments sharing a payment date?",
+   "options": [
+    "`payment_date`, `recorded_at`, `payment_id` descending",
+    "`payment_date`, `payment_id` descending"
+   ],
+   "default_guess": "Use A27: date, recording time, then id descending.",
+   "unit": "50_public_apis.md:`public_op:project_tracking.list_project_payments`",
+   "witness": {
+    "initial": "Payments P1 and P2 share a payment date; P1 has the larger UUID but P2 was recorded later.",
+    "events": [
+     "Staff lists project payments."
+    ],
+    "outcomes": [
+     "P2 appears first under A27's recording-time tie-break.",
+     "P1 appears first under the State 5 operation's id tie-break."
+    ],
+    "observer": "The staff caller sees a different list order."
+   }
+  },
+  {
+   "subject": "no-op photo update",
+   "kind": "unspecified no-op",
+   "text": "“Change a photo's caption, section and client visibility” and “appends one `photo.update`.”",
+   "question": "If all supplied values equal the stored photo values, is the call a no-op, an audited timestamp update, or a rejection?",
+   "options": [
+    "Successful no-op without audit",
+    "Audited replacement with new `updated_at`",
+    "Reject as no change"
+   ],
+   "default_guess": "Successful no-op without audit.",
+   "unit": "50_public_apis.md:`public_op:photo_management.update_progress_photo`",
+   "witness": {
+    "initial": "Photo P already has caption C, section S and visibility true.",
+    "events": [
+     "Staff submits C, S and true again."
+    ],
+    "outcomes": [
+     "P is returned unchanged with no audit.",
+     "P gets a new `updated_at` and a `photo.update` audit."
+    ],
+    "observer": "The staff caller and auditor see the difference."
+   }
+  },
+  {
+   "subject": "staff photo list ordering",
+   "kind": "contradiction",
+   "text": "The operation outputs photos “by `photo_date` then `photo_id`, ascending”; A27 requires `photo_date`, then `publication time`, then id ascending.",
+   "question": "Which tie-break order is normative for photos sharing a photo date?",
+   "options": [
+    "`photo_date`, `published_at`, `photo_id` ascending",
+    "`photo_date`, `photo_id` ascending"
+   ],
+   "default_guess": "Use A27: photo date, publication time, then id ascending.",
+   "unit": "50_public_apis.md:`public_op:photo_management.list_progress_photos`",
+   "witness": {
+    "initial": "Photos P1 and P2 share a photo date; P1 has the smaller UUID but P2 was published earlier.",
+    "events": [
+     "Staff lists progress photos."
+    ],
+    "outcomes": [
+     "P2 appears first under A27.",
+     "P1 appears first under the State 5 operation text."
+    ],
+    "observer": "The staff caller sees a different gallery order."
+   }
+  },
+  {
+   "subject": "overview failure containment",
+   "kind": "overbroad error statement",
+   "text": "“Errors: None of its own: every part's failure becomes its availability.”",
+   "question": "Does the overview convert only the enumerated expected read failures (`ScopedNotFoundError`, persistence and Registry failures), or literally every exception including programming/model-validation failures, into availability?",
+   "options": [
+    "Catch only the named expected failures and propagate all others",
+    "Catch every `Exception` and mark the part unavailable",
+    "Catch even `BaseException`"
+   ],
+   "default_guess": "Catch only the specifically classified expected failures.",
+   "unit": "50_public_apis.md:`public_op:derived_views.build_project_overview`",
+   "witness": {
+    "initial": "The budget builder raises an unexpected model-construction error due to a defect.",
+    "events": [
+     "A caller requests the overview."
+    ],
+    "outcomes": [
+     "The request fails with 500, preserving visibility of the defect.",
+     "The overview succeeds with budget marked temporarily unavailable, hiding the defect."
+    ],
+    "observer": "The HTTP caller and operators monitoring failures see the difference."
+   }
+  },
+  {
+   "subject": "overview component operation callers",
+   "kind": "caller contradiction",
+   "text": "State 4 says `build_project_overview` composes the public capabilities `build_budget_view`, `build_expense_view`, `build_progress_view` and `build_payment_view`; each State 5 component operation lists only `module:api` as caller.",
+   "question": "Does `build_project_overview` call those public operations, or must it duplicate/use hidden builder logic because `derived_views` is not an allowed caller?",
+   "options": [
+    "Add `module:derived_views` as a caller of each component operation",
+    "Have the overview use hidden internal builders and leave public operations API-only",
+    "Have the API orchestrate all component calls instead of the overview"
+   ],
+   "default_guess": "Use shared hidden builders, with public operations and the overview delegating to them.",
+   "unit": "50_public_apis.md:`public_op:derived_views.build_project_overview`",
+   "witness": {
+    "initial": "A project has an active budget and expenses.",
+    "events": [
+     "The API calls `build_project_overview`."
+    ],
+    "outcomes": [
+     "The overview invokes the public component operations as State 4 specifies.",
+     "The overview invokes separate hidden implementations because the public contracts exclude it as a caller."
+    ],
+    "observer": "Module-level tests and later implementations observe different call graphs and failure interception."
+   }
+  },
+  {
+   "subject": "viewer-entry origin protection",
+   "kind": "contradiction",
+   "text": "A25 and R0-09 require foreign-origin refusal for “mutating viewer requests”; this operation's middleware effects mention origin rejection only for “a viewer logout,” although viewer entry creates a session.",
+   "question": "Must `POST /auth/viewer/enter` also pass the canonical-public-origin check, or is logout the only viewer route subject to it?",
+   "options": [
+    "Check origin on both viewer entry and logout",
+    "Check origin only on logout",
+    "Treat entry as exempt but state that exception explicitly"
+   ],
+   "default_guess": "Check the canonical origin on both entry and logout because both mutate viewer session state.",
+   "unit": "50_public_apis.md:`public_op:transport_guard.install_transport_guards`",
+   "witness": {
+    "initial": "A browser on a foreign origin possesses a valid viewer capability code.",
+    "events": [
+     "It submits `POST /auth/viewer/enter` to the portal."
+    ],
+    "outcomes": [
+     "The guard rejects it with 403 before credential verification.",
+     "The guard permits it and creates a viewer session because only logout is origin-checked."
+    ],
+    "observer": "The browser and the viewer-session store see the difference."
+   }
+  },
+  {
+   "subject": "route delegation count",
+   "kind": "internal contradiction",
+   "text": "“A route handler … runs the route's `authorize` steps, calls exactly one owning operation” even though authorization steps are themselves public operations and several routes also resolve an identity before authorization.",
+   "question": "Does “exactly one owning operation” exclude authentication and authorization operations, or must each handler make only one public-operation call in total?",
+   "options": [
+    "One business use-case call plus any declared identity/authorization calls",
+    "Exactly one public operation total",
+    "Move identity and authorization inside every owning operation"
+   ],
+   "default_guess": "Interpret it as one business use-case call in addition to the route's declared identity and authorization calls.",
+   "unit": "50_public_apis.md:`public_op:api.create_app`",
+   "witness": {
+    "initial": "A staff member requests a project mutation.",
+    "events": [
+     "The route must resolve the bearer token, authorize the project mutation and invoke the business use case."
+    ],
+    "outcomes": [
+     "The handler makes three public calls, treating only the business call as the one owning operation.",
+     "The handler must fold resolution and authorization into one operation to obey a literal one-call rule."
+    ],
+    "observer": "API and use-case implementers produce incompatible call graphs."
+   }
+  },
+  {
+   "subject": "readiness failure response",
+   "kind": "unspecified health contract",
+   "text": "“Readiness answers the storage failure without disclosing internals.”",
+   "question": "What HTTP status and `HealthStatus` body does `/health/ready` return when the database cannot be opened, and does the transport error handler replace it with an empty 500?",
+   "options": [
+    "Return 503 with a generic not-ready `HealthStatus`",
+    "Return 500 with an empty body",
+    "Return 200 with a non-ready status value"
+   ],
+   "default_guess": "Return 503 with a generic, non-disclosing readiness body.",
+   "unit": "50_public_apis.md:`public_op:runtime.create_runtime_app`",
+   "witness": {
+    "initial": "The service is running but its SQLite file cannot be opened.",
+    "events": [
+     "A monitor requests `/health/ready`."
+    ],
+    "outcomes": [
+     "The monitor receives 503 and a generic not-ready status.",
+     "The monitor receives the default empty 500 or a 200 status object."
+    ],
+    "observer": "The deployment monitor makes a different readiness decision."
+   }
+  },
+  {
+   "subject": "bootstrap storage-failure exit contract",
+   "kind": "contradiction",
+   "text": "The outputs are the closed exit codes 0–3 and A29 calls them a closed external contract, but Errors says “a storage failure propagates.”",
+   "question": "What process exit status is produced for a storage failure, and is it part of the closed deployment-script contract?",
+   "options": [
+    "Map storage failure to an additional documented exit code",
+    "Let an exception escape and accept the runtime's incidental nonzero status",
+    "Map it to one of 0–3"
+   ],
+   "default_guess": "Add a distinct documented nonzero exit code for operational failure.",
+   "unit": "50_public_apis.md:`public_op:staff_bootstrap_cli.run_bootstrap_cli`",
+   "witness": {
+    "initial": "The configured database path is unwritable.",
+    "events": [
+     "The host operator runs the bootstrap CLI with matching valid input."
+    ],
+    "outcomes": [
+     "The command returns a stable documented exit code that deployment scripts can branch on.",
+     "An exception escapes and the shell receives an implementation-dependent status and output."
+    ],
+    "observer": "The host operator and deployment script see the difference."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"verification-secret parsing failure contract\",\"kind\":\"unnamed error\",\"text\":\"“A malformed envelope is rejected; each caller turns that rejection into its own concealed failure (`AuthenticationRejected`).”\",\"question\":\"What exception or result does `parse_verification_secret` produce for a malformed envelope so callers can reliably convert only that failure into `AuthenticationRejected`?\",\"options\":[\"Raise a named credential-format exception\",\"Return a failure value such as `None`\",\"Raise an unspecified backend exception\"],\"default_guess\":\"Raise a private, named malformed-secret exception.\",\"unit\":\"50_public_apis.md:`public_op:credential_security.parse_verification_secret`\",\"witness\":{\"initial\":\"A request contains a malformed bearer token.\",\"events\":[\"`staff_identity` calls `parse_verification_secret`.\",\"The parser detects invalid envelope syntax.\"],\"outcomes\":[\"The parser raises a recognizable format exception, which `staff_identity` conceals as 401.\",\"The parser raises a generic decoding exception, which propagates as 500 because the caller cannot distinguish it from a defect.\"],\"observer\":\"The caller sees either 401 or 500.\"}},{\"subject\":\"EUR amount domain\",\"kind\":\"undefined validation\",\"text\":\"“Accept one EUR amount under the money policy and return it quantized.”\",\"question\":\"Are non-finite Decimal values such as NaN and Infinity rejected as `FinancialValidationError`, and are values with more than two fraction digits accepted and rounded or rejected as not already exact?\",\"options\":[\"Reject non-finite values but round finite values to two digits\",\"Reject non-finite values and any value not already exact to two digits\",\"Let Decimal quantization behavior propagate\"],\"default_guess\":\"Reject non-finite values and round finite values half-up to two digits.\",\"unit\":\"50_public_apis.md:`public_op:financial_policy.validate_eur_amount`\",\"witness\":{\"initial\":\"An authorized payment request supplies Decimal NaN or Decimal('1.005').\",\"events\":[\"`register_work_payment` calls `validate_eur_amount`.\"],\"outcomes\":[\"Validation rejects the input with `FinancialValidationError`.\",\"Validation quantizes or lets a Decimal exception escape, producing a stored value or a 500 response.\"],\"observer\":\"The staff caller sees a 422, a successful rounded payment, or a 500.\"}},{\"subject\":\"audit-intent validation failure\",\"kind\":\"unnamed error\",\"text\":\"“A closed-choice violation of the intent is rejected; a persistence failure propagates untranslated.”\",\"question\":\"What declared error represents an invalid `AuditIntent`, and must the owning transaction roll back the business mutation when it occurs?\",\"options\":[\"Raise a named audit-validation exception\",\"Raise a generic model/value exception\",\"Treat an invalid intent as a programming failure\"],\"default_guess\":\"Raise a named internal audit-validation exception and let the owning transaction roll back.\",\"unit\":\"50_public_apis.md:`public_op:audit_writer.append_audit`\",\"witness\":{\"initial\":\"A use case builds a successful audit intent with a forbidden `reason_code`.\",\"events\":[\"The use case writes its business replacement in an open transaction.\",\"It calls `append_audit`.\"],\"outcomes\":[\"A declared validation error is raised and the caller rolls back the mutation.\",\"A generic error escapes or the audit writer silently normalizes the intent.\"],\"observer\":\"The owning module and, through it, the HTTP caller see different failure behavior.\"}},{\"subject\":\"Registry status outside active and archived on staff reads\",\"kind\":\"missing error mapping\",\"text\":\"“Outputs `AuthorizedProjectContext` … with its accepted Registry status (active or archived)” and “Errors … `RegistryBoundaryError`”, while A5 says a read carrying another status is refused as an invalid Registry answer and that its error is carried to States 5–6.\",\"question\":\"Which declared exception does `authorize_staff_project_read` raise when Registry validation succeeds structurally but returns a status other than `active` or `archived`?\",\"options\":[\"`RegistryBoundaryError` with `schema_mismatch`\",\"`ArchivedProjectRejected`\",\"`AuthorizationRejected`\",\"An undeclared model-validation failure\"],\"default_guess\":\"Raise `RegistryBoundaryError(kind=schema_mismatch)`.\",\"unit\":\"50_public_apis.md:`public_op:authorization_guard.authorize_staff_project_read`\",\"witness\":{\"initial\":\"A valid staff session and assignment exist; Registry returns `exists=true`, status `paused`.\",\"events\":[\"Staff requests the project overview.\",\"The guard decodes the validation answer and must construct `AuthorizedProjectContext`.\"],\"outcomes\":[\"The guard translates the unsupported status to a declared Registry boundary failure.\",\"Construction of the closed status model raises an undeclared validation exception.\"],\"observer\":\"The staff caller sees 502 or 500.\"}},{\"subject\":\"Registry status outside active and archived on viewer reads\",\"kind\":\"missing error mapping\",\"text\":\"“Outputs `AuthorizedProjectContext` for the persisted viewer” and “Errors … `RegistryBoundaryError`”, while A5 requires an unsupported read status to be refused as an invalid Registry answer.\",\"question\":\"Which declared exception does `authorize_viewer_project_read` raise when Registry returns a status outside `active | archived`?\",\"options\":[\"`RegistryBoundaryError` with `schema_mismatch`\",\"`ScopedNotFoundError`\",\"`AuthorizationRejected`\",\"An undeclared model-validation failure\"],\"default_guess\":\"Raise `RegistryBoundaryError(kind=schema_mismatch)`.\",\"unit\":\"50_public_apis.md:`public_op:authorization_guard.authorize_viewer_project_read`\",\"witness\":{\"initial\":\"A viewer has an active grant; Registry validation returns status `paused`.\",\"events\":[\"The viewer opens the project.\",\"The guard tries to produce the closed-status authorized context.\"],\"outcomes\":[\"The request receives the declared Registry failure.\",\"A DTO validation exception escapes as an internal failure.\"],\"observer\":\"The viewer sees 502 or 500.\"}},{\"subject\":\"malformed staff email login audit\",\"kind\":\"contradiction\",\"text\":\"State 5 says “`IdentityInputRejected` for an address that does not normalize under A16, before any read or audit”; State 4 says “On every rejection it appends `staff.login_failed`.”\",\"question\":\"Does a syntactically invalid login email produce a committed `staff.login_failed` audit record, or is it rejected before auditing?\",\"options\":[\"Reject with 422 and write no audit\",\"Write `staff.login_failed` and then reject\",\"Conceal it as the same 401 used for credential failures\"],\"default_guess\":\"Follow the State 5 operation text: reject with 422 and no audit.\",\"unit\":\"50_public_apis.md:`public_op:staff_identity.authenticate_staff`\",\"witness\":{\"initial\":\"No account has the email ` bad@example.com` because whitespace is forbidden.\",\"events\":[\"A caller submits that email and any password to staff login.\"],\"outcomes\":[\"The operation returns 422 and writes no audit, as State 5 says.\",\"The operation commits `staff.login_failed` before rejecting, as State 4 says.\"],\"observer\":\"An auditor sees zero or one login-failure record.\"}},{\"subject\":\"administrator session revocation for an unknown staff id\",\"kind\":\"missing existence behavior\",\"text\":\"“Revoke every live session of one staff account” and output a result “also when none was live”; the Errors list contains no error for an unknown target account.\",\"question\":\"Must the target staff account exist, or does an unknown `staff_id` succeed with `revoked_session_count = 0` and an audit record?\",\"options\":[\"Require the account and raise `ScopedNotFoundError` when absent\",\"Succeed with count zero and audit the requested id\",\"Succeed with count zero without an audit\"],\"default_guess\":\"Require the target account to exist and otherwise raise `ScopedNotFoundError`.\",\"unit\":\"50_public_apis.md:`public_op:staff_identity.revoke_staff_sessions`\",\"witness\":{\"initial\":\"An administrator is authenticated; target UUID has never identified a staff account.\",\"events\":[\"The administrator requests sign-out-everywhere for that UUID.\"],\"outcomes\":[\"The operation returns a zero-count result and writes `staff.sessions_revoke`.\",\"The operation raises not found and writes nothing.\"],\"observer\":\"The administrator and audit reader see the difference.\"}},{\"subject\":\"pending-account activation audit\",\"kind\":\"internal contradiction\",\"text\":\"The operation supports activation from `pending_verification`, says “A13: one `staff.suspend`, `staff.disable` or `staff.reinstate`,” but its State impact says “appends one `AuditRecord`.”\",\"question\":\"Which audit action, if any, is written when `pending_verification → active` also verifies the email?\",\"options\":[\"Write `staff.email_verified`\",\"Write `staff.reinstate`\",\"Change the account with no audit\",\"Reject activation because no matching action exists\"],\"default_guess\":\"Write `staff.email_verified`, the catalog action matching the effect.\",\"unit\":\"50_public_apis.md:`public_op:staff_identity.change_staff_status`\",\"witness\":{\"initial\":\"A newly created staff account is pending and unverified.\",\"events\":[\"An administrator changes its status to active.\"],\"outcomes\":[\"The account is activated and a `staff.email_verified` audit is appended.\",\"The account is activated with no audit because the listed status actions contain no activation action.\"],\"observer\":\"The account holder can log in in both cases, but an auditor sees different history.\"}},{\"subject\":\"same-status staff change\",\"kind\":\"unspecified no-op\",\"text\":\"“Suspend, disable, reinstate or activate one staff account” and “`IdentityInputRejected` for a transition the table does not list.”\",\"question\":\"When the requested status equals the persisted status, is the call a successful no-op, an invalid transition, or an audited change?\",\"options\":[\"Successful no-op with no audit\",\"`IdentityInputRejected` with no change\",\"Rewrite the account and append the corresponding audit\"],\"default_guess\":\"Reject it as a transition not listed in A3.\",\"unit\":\"50_public_apis.md:`public_op:staff_identity.change_staff_status`\",\"witness\":{\"initial\":\"A staff account is already suspended.\",\"events\":[\"An administrator requests status `suspended` again.\"],\"outcomes\":[\"The operation returns the unchanged account without an audit.\",\"The operation returns 422 because `suspended → suspended` is not in the transition table.\"],\"observer\":\"The administrator sees success or rejection.\"}},{\"subject\":\"assignment of administrators\",\"kind\":\"contradiction\",\"text\":\"State 5 calls the target “the operator's `staff_id`” and raises not found for “an unknown operator”; State 1 M07 says “The assignment operation accepts any existing staff account. An assignment naming an administrator is stored and audited like any other.”\",\"question\":\"May `assign_staff_project` create an assignment for an administrator?\",\"options\":[\"Accept any existing staff account, including administrators\",\"Accept operators only\",\"Accept administrators but return a no-op rather than storing an assignment\"],\"default_guess\":\"Accept any existing staff account and store the assignment, following M07.\",\"unit\":\"50_public_apis.md:`public_op:staff_identity.assign_staff_project`\",\"witness\":{\"initial\":\"An active administrator exists and has no assignment row for an active project.\",\"events\":[\"Another administrator assigns that account to the project.\"],\"outcomes\":[\"An assignment and audit are stored, although authorization ignores the assignment.\",\"The request is rejected because the target is not an operator.\"],\"observer\":\"The administrator and audit reader see the difference.\"}},{\"subject\":\"bootstrap return value disclosure\",\"kind\":\"contradiction\",\"text\":\"The operation outputs “the hash-free `StaffAccountView`,” which contains the email; A29 says the bootstrap email “is never written to … return values.”\",\"question\":\"Does `bootstrap_first_administrator` return a `StaffAccountView` containing the supplied email, or must it return a secret-free outcome that omits the email?\",\"options\":[\"Return `StaffAccountView` including email\",\"Return no account value\",\"Return an identifier-only bootstrap result\"],\"default_guess\":\"Return an identifier-only or success result without the email.\",\"unit\":\"50_public_apis.md:`public_op:staff_bootstrap.bootstrap_first_administrator`\",\"witness\":{\"initial\":\"The staff table is empty.\",\"events\":[\"The CLI calls bootstrap with `admin@example.com` and a valid password.\",\"Bootstrap succeeds.\"],\"outcomes\":[\"The returned value contains `admin@example.com`.\",\"The returned value omits the email to satisfy A29.\"],\"observer\":\"The CLI module can receive or cannot receive the email in a return value.\"}},{\"subject\":\"viewer display-name refusal\",\"kind\":\"unnamed error\",\"text\":\"“Errors: Access-management failures; a display name the model rejects.”\",\"question\":\"Which declared exception is raised for an invalid display name, and what makes a display name invalid?\",\"options\":[\"`IdentityInputRejected` under an explicit name policy\",\"A request/model validation error before the operation\",\"No additional validation beyond being a string\"],\"default_guess\":\"Use `IdentityInputRejected` for a non-blank bounded string policy.\",\"unit\":\"50_public_apis.md:`public_op:viewer_access.create_viewer`\",\"witness\":{\"initial\":\"An administrator is authorized.\",\"events\":[\"The administrator submits an empty display name.\"],\"outcomes\":[\"The request is rejected with a declared 422 error.\",\"An active viewer with an empty display name is created because M01 gives no name constraint.\"],\"observer\":\"The administrator and later viewer listings see the difference.\"}},{\"subject\":\"archived project error for viewer grants\",\"kind\":\"contradiction\",\"text\":\"The global convention says “every new grant or assignment for [an archived project] is `ArchivedProjectRejected`”; this operation says an inactive Registry answer becomes `RegistryBoundaryError` and State 4 likewise assigns 502.\",\"question\":\"What error must a new viewer grant return when Registry confirms that the project exists but is archived?\",\"options\":[\"`ArchivedProjectRejected` mapped to 409\",\"`RegistryBoundaryError` mapped to 502\"],\"default_guess\":\"Use `RegistryBoundaryError`, following the operation-specific text and earlier A5 exception.\",\"unit\":\"50_public_apis.md:`public_op:viewer_access.grant_viewer_project`\",\"witness\":{\"initial\":\"A viewer is active; Registry validation returns `exists=true`, `is_active=false`.\",\"events\":[\"An administrator grants the viewer that project.\"],\"outcomes\":[\"The operation raises `ArchivedProjectRejected`, producing 409 under the common convention.\",\"The operation raises `RegistryBoundaryError`, producing 502 under its own contract.\"],\"observer\":\"The administrator sees 409 or 502.\"}},{\"subject\":\"service credential expiry input\",\"kind\":\"missing validation\",\"text\":\"“Inputs … an optional `expires_at`” with no validity rule or declared input error.\",\"question\":\"Which expiry values are permitted: must `expires_at` be a UTC-naive instant strictly after the operation time, and how are aware, past or equal instants handled?\",\"options\":[\"Require a UTC-naive future instant and reject other values\",\"Accept any datetime, including an immediately expired credential\",\"Normalize aware datetimes to UTC-naive\"],\"default_guess\":\"Require a UTC-naive instant strictly later than the captured creation time.\",\"unit\":\"50_public_apis.md:`public_op:service_identity.issue_service_credential`\",\"witness\":{\"initial\":\"An active service principal exists.\",\"events\":[\"An administrator requests a credential whose `expires_at` equals yesterday.\"],\"outcomes\":[\"The operation rejects the request and creates nothing.\",\"The operation creates and audits a credential that is unusable immediately.\"],\"observer\":\"The administrator sees rejection or receives a one-time secret that can never authenticate.\"}},{\"subject\":\"producer-scope decision contract\",\"kind\":\"ambiguous output/error\",\"text\":\"“Outputs: The decision … whether …” but “Errors: Never answers false by swallowing a failure,” while A12 requires a missing grant to produce the scoped not-found rejection.\",\"question\":\"Does `authorize_producer_scope` return a boolean, return an authorized context, or raise `ScopedNotFoundError` when scope does not cover the project?\",\"options\":[\"Return `True` or `False`\",\"Raise `ScopedNotFoundError` for a negative scope decision\",\"Return a typed scope-decision DTO\"],\"default_guess\":\"Raise `ScopedNotFoundError` when scope is absent and otherwise return no value or a positive decision.\",\"unit\":\"50_public_apis.md:`public_op:service_identity.authorize_producer_scope`\",\"witness\":{\"initial\":\"A `granted_projects` producer has no grant for project P.\",\"events\":[\"The import route calls `authorize_producer_scope` before `authorize_snapshot_import`.\"],\"outcomes\":[\"The operation returns `false`, leaving the route to decide whether and how to reject.\",\"The operation itself raises the scoped not-found rejection required by A12.\"],\"observer\":\"The API implementation and producer may see different control flow or even a request that proceeds incorrectly.\"}},{\"subject\":\"manual-budget creation authorization and archival\",\"kind\":\"missing precondition\",\"text\":\"“Return the project's one manual budget version, creating it empty when absent” with only persistence errors; it accepts any `AuthorizedProjectContext` and does not require a mutation capability or active Registry status.\",\"question\":\"May this operation create a manual budget when passed a read-authorized context, including one for an archived project?\",\"options\":[\"Require an active context carrying `portal.budget.manage` before creation\",\"Create for any authorized context\",\"Return not configured for read-only or archived contexts without creating\"],\"default_guess\":\"Create only with an active context carrying `portal.budget.manage`; otherwise leave state unchanged.\",\"unit\":\"50_public_apis.md:`public_op:budget_management.ensure_manual_budget`\",\"witness\":{\"initial\":\"An archived project has no budget; an operator has an existing assignment and read access.\",\"events\":[\"The operator lists recorded progress.\",\"That path calls `ensure_manual_budget` to obtain plan order.\"],\"outcomes\":[\"An inactive manual budget and audit are created in the archived project.\",\"The read remains non-mutating and no budget is created.\"],\"observer\":\"An auditor and later budget reader see the difference.\"}},{\"subject\":\"unresolved allocation count without an active budget\",\"kind\":\"undefined output\",\"text\":\"The result includes “the count of allocations whose section is outside the active plan,” even when a newly created manual version is inactive and no active plan exists.\",\"question\":\"How is `unresolved_allocation_count` computed when the project has no active budget version?\",\"options\":[\"Count every section allocation as unresolved\",\"Return zero because no active-version comparison exists\",\"Compute against the returned manual version even though it is inactive\"],\"default_guess\":\"Compute against the returned version for this detail response.\",\"unit\":\"50_public_apis.md:`public_op:budget_management.ensure_manual_budget`\",\"witness\":{\"initial\":\"A project has an inactive manual version with section S and an expense allocated to S; no version is active.\",\"events\":[\"Staff calls `ensure_manual_budget`.\"],\"outcomes\":[\"The returned unresolved count is zero because S is in the returned manual plan.\",\"The returned unresolved count is one because there is no active plan.\"],\"observer\":\"The staff caller sees a different `BudgetVersionDetail`.\"}},{\"subject\":\"activation of the already-active version\",\"kind\":\"unspecified idempotency\",\"text\":\"“Make one budget version … active” and “the prior active version becomes inactive and the requested one active,” without stating the result when both are the same row.\",\"question\":\"What happens when `version_id` already identifies the active version?\",\"options\":[\"Return a successful no-op without audit\",\"Re-activate it, refresh activation timestamps and append `snapshot.activate`\",\"Reject it as an invalid transition or conflict\"],\"default_guess\":\"Return a successful no-op without changing timestamps or audit.\",\"unit\":\"50_public_apis.md:`public_op:budget_management.activate_budget_version`\",\"witness\":{\"initial\":\"Budget version V is already active.\",\"events\":[\"Authorized staff requests activation of V again.\"],\"outcomes\":[\"V and its timestamps remain unchanged and no audit is added.\",\"V receives a new activation time and another `snapshot.activate` audit, or the request is rejected.\"],\"observer\":\"The staff caller and auditor see the difference.\"}},{\"subject\":\"named inactive budget view calculations\",\"kind\":\"ambiguous projection basis\",\"text\":\"“Derive the budget view of the active or a named version” while the output includes actuals and “allocations outside the active plan.”\",\"question\":\"When `version_id` names an inactive version, are section actuals, resolution flags and unresolved counts evaluated against that named version or against the project's currently active version?\",\"options\":[\"Evaluate all version-relative values against the named version\",\"Always evaluate allocation resolution against the active version\",\"Refuse inactive named versions\"],\"default_guess\":\"Evaluate the view consistently against the named version.\",\"unit\":\"50_public_apis.md:`public_op:derived_views.build_budget_view`\",\"witness\":{\"initial\":\"Active version A contains section X; inactive named version B omits X; an included expense is allocated to X.\",\"events\":[\"Staff requests `build_budget_view` for B.\"],\"outcomes\":[\"B reports the allocation unresolved and excludes it from B's section actuals.\",\"The operation uses active A for resolution and reports the allocation resolved despite displaying B's plans.\"],\"observer\":\"The staff caller sees different totals and unresolved counts.\"}},{\"subject\":\"zero-total expense correction\",\"kind\":\"undefined allocation case\",\"text\":\"`correct_expense` accepts a “non-negative” total and a complete allocation list, while every `AllocationInstruction.amount` is strictly positive and allocation sum must equal the total.\",\"question\":\"Can an expense be corrected to total zero using an empty allocation list, or must zero be rejected even though the amount policy says non-negative?\",\"options\":[\"Allow total zero with an empty allocation set\",\"Reject total zero because every expense must retain at least one positive allocation\",\"Allow a zero-valued allocation despite the model\"],\"default_guess\":\"Allow total zero only with an empty allocation set.\",\"unit\":\"50_public_apis.md:`public_op:expense_management.correct_expense`\",\"witness\":{\"initial\":\"An expense totals EUR 10 with one allocation.\",\"events\":[\"Staff corrects its total to EUR 0 and supplies an empty allocation list.\"],\"outcomes\":[\"The correction succeeds with no allocations and preserves the sum invariant.\",\"The correction is rejected because a complete allocation list must be non-empty.\"],\"observer\":\"The staff caller and expense viewer see the difference.\"}},{\"subject\":\"repeating an inclusion value\",\"kind\":\"unspecified no-op\",\"text\":\"“Include an expense in, or exclude it from, the project totals” and “appends one `expense.include` or `expense.exclude`.”\",\"question\":\"If the requested inclusion flag already equals the stored value, is the request a no-op, an audited update, or a conflict?\",\"options\":[\"Successful no-op without audit\",\"Rewrite timestamps and append the corresponding audit\",\"Reject as a conflict\"],\"default_guess\":\"Successful no-op without audit.\",\"unit\":\"50_public_apis.md:`public_op:expense_management.set_expense_inclusion`\",\"witness\":{\"initial\":\"Expense E is already excluded.\",\"events\":[\"Staff requests `included=false` again.\"],\"outcomes\":[\"E is returned unchanged and no audit is written.\",\"`updated_at` changes and another `expense.exclude` audit is written.\"],\"observer\":\"An auditor and API caller see different timestamps/history.\"}},{\"subject\":\"no-op document update\",\"kind\":\"unspecified no-op\",\"text\":\"“Change the description and client visibility” and “appends one `document.update`.”\",\"question\":\"When both supplied values equal the persisted values, does the operation update `updated_at` and append an audit, return unchanged without audit, or reject?\",\"options\":[\"Successful no-op without audit\",\"Audited update with a new timestamp\",\"Reject as no change\"],\"default_guess\":\"Successful no-op without audit.\",\"unit\":\"50_public_apis.md:`public_op:expense_management.update_expense_document`\",\"witness\":{\"initial\":\"A document already has description D and is client-visible.\",\"events\":[\"Staff submits D and `client_visible=true` again.\"],\"outcomes\":[\"The document remains byte-for-byte unchanged with no audit.\",\"A replacement with a new `updated_at` and `document.update` audit is committed.\"],\"observer\":\"The staff caller and auditor see the difference.\"}},{\"subject\":\"progress listing mutates budget state\",\"kind\":\"contradiction\",\"text\":\"The State impact says “Read-only, except the empty manual version `ensure_manual_budget` creates when the project has none,” while the operation is a list/read and archived project records must be immutable.\",\"question\":\"Must `list_project_progress` create a manual budget merely to establish ordering, including on archived projects, or must it order without mutating state?\",\"options\":[\"Create the manual version and audit as stated\",\"Remain strictly read-only and derive an order from existing sections/plans\",\"Create only for active projects and use a non-mutating fallback for archived projects\"],\"default_guess\":\"Remain read-only and use existing plan data without creating a budget.\",\"unit\":\"50_public_apis.md:`public_op:project_tracking.list_project_progress`\",\"witness\":{\"initial\":\"An archived project has recorded SectionProgress but no BudgetVersion.\",\"events\":[\"Authorized staff lists project progress.\"],\"outcomes\":[\"The read creates an inactive manual budget and `budget.manual_version_create` audit.\",\"The read returns progress without any write.\"],\"observer\":\"The auditor and subsequent budget reader see the difference.\"}},{\"subject\":\"payment list ordering\",\"kind\":\"contradiction\",\"text\":\"The operation outputs payments “by `payment_date` then `payment_id`, descending”; A27 requires `payment_date` descending, then `recording time` descending, then id descending.\",\"question\":\"Which tie-break order is normative for payments sharing a payment date?\",\"options\":[\"`payment_date`, `recorded_at`, `payment_id` descending\",\"`payment_date`, `payment_id` descending\"],\"default_guess\":\"Use A27: date, recording time, then id descending.\",\"unit\":\"50_public_apis.md:`public_op:project_tracking.list_project_payments`\",\"witness\":{\"initial\":\"Payments P1 and P2 share a payment date; P1 has the larger UUID but P2 was recorded later.\",\"events\":[\"Staff lists project payments.\"],\"outcomes\":[\"P2 appears first under A27's recording-time tie-break.\",\"P1 appears first under the State 5 operation's id tie-break.\"],\"observer\":\"The staff caller sees a different list order.\"}},{\"subject\":\"no-op photo update\",\"kind\":\"unspecified no-op\",\"text\":\"“Change a photo's caption, section and client visibility” and “appends one `photo.update`.”\",\"question\":\"If all supplied values equal the stored photo values, is the call a no-op, an audited timestamp update, or a rejection?\",\"options\":[\"Successful no-op without audit\",\"Audited replacement with new `updated_at`\",\"Reject as no change\"],\"default_guess\":\"Successful no-op without audit.\",\"unit\":\"50_public_apis.md:`public_op:photo_management.update_progress_photo`\",\"witness\":{\"initial\":\"Photo P already has caption C, section S and visibility true.\",\"events\":[\"Staff submits C, S and true again.\"],\"outcomes\":[\"P is returned unchanged with no audit.\",\"P gets a new `updated_at` and a `photo.update` audit.\"],\"observer\":\"The staff caller and auditor see the difference.\"}},{\"subject\":\"staff photo list ordering\",\"kind\":\"contradiction\",\"text\":\"The operation outputs photos “by `photo_date` then `photo_id`, ascending”; A27 requires `photo_date`, then `publication time`, then id ascending.\",\"question\":\"Which tie-break order is normative for photos sharing a photo date?\",\"options\":[\"`photo_date`, `published_at`, `photo_id` ascending\",\"`photo_date`, `photo_id` ascending\"],\"default_guess\":\"Use A27: photo date, publication time, then id ascending.\",\"unit\":\"50_public_apis.md:`public_op:photo_management.list_progress_photos`\",\"witness\":{\"initial\":\"Photos P1 and P2 share a photo date; P1 has the smaller UUID but P2 was published earlier.\",\"events\":[\"Staff lists progress photos.\"],\"outcomes\":[\"P2 appears first under A27.\",\"P1 appears first under the State 5 operation text.\"],\"observer\":\"The staff caller sees a different gallery order.\"}},{\"subject\":\"overview failure containment\",\"kind\":\"overbroad error statement\",\"text\":\"“Errors: None of its own: every part's failure becomes its availability.”\",\"question\":\"Does the overview convert only the enumerated expected read failures (`ScopedNotFoundError`, persistence and Registry failures), or literally every exception including programming/model-validation failures, into availability?\",\"options\":[\"Catch only the named expected failures and propagate all others\",\"Catch every `Exception` and mark the part unavailable\",\"Catch even `BaseException`\"],\"default_guess\":\"Catch only the specifically classified expected failures.\",\"unit\":\"50_public_apis.md:`public_op:derived_views.build_project_overview`\",\"witness\":{\"initial\":\"The budget builder raises an unexpected model-construction error due to a defect.\",\"events\":[\"A caller requests the overview.\"],\"outcomes\":[\"The request fails with 500, preserving visibility of the defect.\",\"The overview succeeds with budget marked temporarily unavailable, hiding the defect.\"],\"observer\":\"The HTTP caller and operators monitoring failures see the difference.\"}},{\"subject\":\"overview component operation callers\",\"kind\":\"caller contradiction\",\"text\":\"State 4 says `build_project_overview` composes the public capabilities `build_budget_view`, `build_expense_view`, `build_progress_view` and `build_payment_view`; each State 5 component operation lists only `module:api` as caller.\",\"question\":\"Does `build_project_overview` call those public operations, or must it duplicate/use hidden builder logic because `derived_views` is not an allowed caller?\",\"options\":[\"Add `module:derived_views` as a caller of each component operation\",\"Have the overview use hidden internal builders and leave public operations API-only\",\"Have the API orchestrate all component calls instead of the overview\"],\"default_guess\":\"Use shared hidden builders, with public operations and the overview delegating to them.\",\"unit\":\"50_public_apis.md:`public_op:derived_views.build_project_overview`\",\"witness\":{\"initial\":\"A project has an active budget and expenses.\",\"events\":[\"The API calls `build_project_overview`.\"],\"outcomes\":[\"The overview invokes the public component operations as State 4 specifies.\",\"The overview invokes separate hidden implementations because the public contracts exclude it as a caller.\"],\"observer\":\"Module-level tests and later implementations observe different call graphs and failure interception.\"}},{\"subject\":\"viewer-entry origin protection\",\"kind\":\"contradiction\",\"text\":\"A25 and R0-09 require foreign-origin refusal for “mutating viewer requests”; this operation's middleware effects mention origin rejection only for “a viewer logout,” although viewer entry creates a session.\",\"question\":\"Must `POST /auth/viewer/enter` also pass the canonical-public-origin check, or is logout the only viewer route subject to it?\",\"options\":[\"Check origin on both viewer entry and logout\",\"Check origin only on logout\",\"Treat entry as exempt but state that exception explicitly\"],\"default_guess\":\"Check the canonical origin on both entry and logout because both mutate viewer session state.\",\"unit\":\"50_public_apis.md:`public_op:transport_guard.install_transport_guards`\",\"witness\":{\"initial\":\"A browser on a foreign origin possesses a valid viewer capability code.\",\"events\":[\"It submits `POST /auth/viewer/enter` to the portal.\"],\"outcomes\":[\"The guard rejects it with 403 before credential verification.\",\"The guard permits it and creates a viewer session because only logout is origin-checked.\"],\"observer\":\"The browser and the viewer-session store see the difference.\"}},{\"subject\":\"route delegation count\",\"kind\":\"internal contradiction\",\"text\":\"“A route handler … runs the route's `authorize` steps, calls exactly one owning operation” even though authorization steps are themselves public operations and several routes also resolve an identity before authorization.\",\"question\":\"Does “exactly one owning operation” exclude authentication and authorization operations, or must each handler make only one public-operation call in total?\",\"options\":[\"One business use-case call plus any declared identity/authorization calls\",\"Exactly one public operation total\",\"Move identity and authorization inside every owning operation\"],\"default_guess\":\"Interpret it as one business use-case call in addition to the route's declared identity and authorization calls.\",\"unit\":\"50_public_apis.md:`public_op:api.create_app`\",\"witness\":{\"initial\":\"A staff member requests a project mutation.\",\"events\":[\"The route must resolve the bearer token, authorize the project mutation and invoke the business use case.\"],\"outcomes\":[\"The handler makes three public calls, treating only the business call as the one owning operation.\",\"The handler must fold resolution and authorization into one operation to obey a literal one-call rule.\"],\"observer\":\"API and use-case implementers produce incompatible call graphs.\"}},{\"subject\":\"readiness failure response\",\"kind\":\"unspecified health contract\",\"text\":\"“Readiness answers the storage failure without disclosing internals.”\",\"question\":\"What HTTP status and `HealthStatus` body does `/health/ready` return when the database cannot be opened, and does the transport error handler replace it with an empty 500?\",\"options\":[\"Return 503 with a generic not-ready `HealthStatus`\",\"Return 500 with an empty body\",\"Return 200 with a non-ready status value\"],\"default_guess\":\"Return 503 with a generic, non-disclosing readiness body.\",\"unit\":\"50_public_apis.md:`public_op:runtime.create_runtime_app`\",\"witness\":{\"initial\":\"The service is running but its SQLite file cannot be opened.\",\"events\":[\"A monitor requests `/health/ready`.\"],\"outcomes\":[\"The monitor receives 503 and a generic not-ready status.\",\"The monitor receives the default empty 500 or a 200 status object.\"],\"observer\":\"The deployment monitor makes a different readiness decision.\"}},{\"subject\":\"bootstrap storage-failure exit contract\",\"kind\":\"contradiction\",\"text\":\"The outputs are the closed exit codes 0–3 and A29 calls them a closed external contract, but Errors says “a storage failure propagates.”\",\"question\":\"What process exit status is produced for a storage failure, and is it part of the closed deployment-script contract?\",\"options\":[\"Map storage failure to an additional documented exit code\",\"Let an exception escape and accept the runtime's incidental nonzero status\",\"Map it to one of 0–3\"],\"default_guess\":\"Add a distinct documented nonzero exit code for operational failure.\",\"unit\":\"50_public_apis.md:`public_op:staff_bootstrap_cli.run_bootstrap_cli`\",\"witness\":{\"initial\":\"The configured database path is unwritable.\",\"events\":[\"The host operator runs the bootstrap CLI with matching valid input.\"],\"outcomes\":[\"The command returns a stable documented exit code that deployment scripts can branch on.\",\"An exception escapes and the shell receives an implementation-dependent status and output.\"],\"observer\":\"The host operator and deployment script see the difference.\"}}]}",
+ "set_aside": []
+}
