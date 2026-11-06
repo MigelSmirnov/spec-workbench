@@ -134,9 +134,16 @@ marked as outside the API in `platform/manifest/client_portal.json`.
 
 Observed on 2026-11-05 for viewer `9636b10b-f170-465d-8cf7-fd0c75bc2842`: the
 one-time access code was shown once and missed by the owner; a new code was
-issued. `viewer.issue_credential` leaves older codes valid until revoked, but
-the API exposes no list or read of a viewer's credentials, so the old
+issued. The API exposes no list or read of a viewer's credentials, so the old
 `credential_id` could only be found by reading the portal database.
+
+Corrected 2026-11-06 (owner): issuing a code does **not** leave older codes
+valid. `issue_viewer_access` (Factory `application/viewer_access.py`
+lines 200–217, accepted spec note "MUST revoke every non-revoked prior
+credential") revokes every prior code and every session of the viewer in the
+same transaction, as `01_models.md` M02 designs. The remaining gap is only
+that codes cannot be listed through the API (question 1); question 2 is
+already the service's behaviour.
 
 1. Must the administrative API expose a read projection of a viewer's
    credential metadata (id, created_at, revoked_at; never the secret)?
@@ -259,8 +266,10 @@ no such policy is needed.
 2. If yes: what source is watched, who decides an update, and within what
    time does a fix reach production?
 
-Until it is answered, the State 2 security review records `dependencies`
-UNRESOLVED and State 3 does not start.
+Answered 2026-11-06 (owner: current service behaviour accepted; technical
+decisions delegated): `02_rules.md` A32 — the exact pins are the only
+dependencies, change only through the Factory route, and are checked against
+known vulnerabilities before a deploy; no runtime feature is added.
 
 ### Q18 — Tie-break order of the derived views
 
@@ -276,3 +285,7 @@ equal dates the case and the accepted Factory spec order differently:
 
 The Factory commit calls these values "undeclared", so they were chosen
 without the case text. Which order does the client see?
+
+Answered 2026-11-06 (owner: current service behaviour accepted; technical
+decisions delegated): the accepted `rules.derived_view_ordering` is adopted
+as it is (`02_rules.md` A27).

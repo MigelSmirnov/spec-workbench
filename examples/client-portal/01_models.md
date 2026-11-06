@@ -1878,6 +1878,13 @@ Each is a value; none adds a fact to a model above.
   (R0-09; Factory `35a0a09c`).
 - `HealthStatus` — the liveness and readiness answer (R0-11; Factory
   `21658368`).
+- Orderings — the tie-break orders of expenses, allocations, payments and
+  photos written above (former text) are replaced by `rules.derived_view_ordering`
+  (State 2 A27; Factory `d2c4511e`; owner 2026-11-06: current service
+  behaviour accepted; technical decisions delegated).
+- Timestamps — "timezone-aware UTC" of the modeling conventions is narrowed
+  by State 2 A28: instants are UTC, stored offset-naive (Factory `c92b6878`;
+  owner 2026-11-06).
 
 ## Named in later states
 
@@ -1953,14 +1960,15 @@ The session TTL item is closed by R0-06.
 
 ## Evidence notes
 
-- Q13 (`open_questions.md`) records that issuing a new viewer access code
-  "leaves older codes valid until revoked". The design (M02: "re-issue revokes
-  the previous credential in the same operation"), the accepted Factory spec
-  (`issue_viewer_access`: "MUST revoke every non-revoked prior credential")
-  and the Factory code (`application/viewer_access.py`, `issue_viewer_access`,
-  which revokes every prior credential without `revoked_at`) agree with each
-  other and not with that observation. The migration keeps the design; Q13
-  stays the owner's question (`SOURCE.md`, State 1 findings).
+- Q13 (`open_questions.md`) first recorded that issuing a new viewer access
+  code "leaves older codes valid until revoked". The design (M02: "re-issue
+  revokes the previous credential in the same operation"), the accepted
+  Factory spec (`issue_viewer_access`: "MUST revoke every non-revoked prior
+  credential") and the Factory code (`application/viewer_access.py`
+  lines 200–217, which revoke every prior code and every session of the
+  viewer) agree. Q13 is corrected to that fact (owner 2026-11-06); what stays
+  open there is only that codes cannot be listed through the API, a missing
+  feature this migration does not design.
 
 ## State 1 readiness assessment
 

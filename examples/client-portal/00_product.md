@@ -16,13 +16,12 @@ this case was not updated (`SOURCE.md`, "Divergence"). A migration changes form,
 meaning: nothing in "Decisions" is new to the product; every entry names the
 document or the accepted Factory spec change it comes from.
 
-State 0 is not closed by question rounds: round-01 (2026-11-06,
-`questions/state0/round-01/summary.json`) judged 10 topics blocking, most of
-them about the text of 2026-07-18 (for example operators managing viewers and
-grants against the access-management capability of R2 and R0-08; the
-project-scoped common authorization rule against the unauthenticated reset
-and health answers). They stay open for the owner (`SOURCE.md`, "State 0
-question round").
+Round-01 (2026-11-06, `questions/state0/round-01/summary.json`) judged 10
+topics blocking, most of them about the text of 2026-07-18. The owner decided
+on 2026-11-06 that the current service behaviour is accepted and delegated
+technical decisions; R0-14 to R0-22 resolve the topics in favour of the
+accepted Factory spec and the running service, and the sentences they
+contradicted are narrowed in place with the decision cited.
 
 ## Product statement
 
@@ -99,10 +98,10 @@ Operator and administrator accounts with full account-based authentication:
 
 Roles are `operator` and `administrator`. Roles map to closed capability
 sets; a role or capability is never accepted as a trusted request field.
-Operators hold mutation capabilities for their assigned projects and manage
-client viewers, grants, and access links. Administrators additionally hold
-access-management capabilities (users, assignments, revocation) within their
-administrative area.
+Operators hold mutation capabilities for their assigned projects.
+Administrators additionally hold access-management capabilities (users,
+assignments, client viewers, viewer grants and access links, service
+principals, revocation) within their administrative area (R0-14).
 
 ### ServicePrincipal
 
@@ -128,9 +127,9 @@ PresuPro snapshot producer):
 
 ### Common authorization rule
 
-Every operation checks together: valid active session, active principal,
-access to the concrete `project_id`, required capability, and Registry
-project lifecycle policy. Knowing a `project_id` or URL grants nothing.
+Every project-scoped operation checks together: valid active session, active
+principal, access to the concrete `project_id`, required capability, and
+Registry project lifecycle policy (R0-15). Knowing a `project_id` or URL grants nothing.
 
 ## Budget sources
 
@@ -312,7 +311,8 @@ OCR is an external microservice owning recognition, source pages, provenance,
 confidence, and duplicate detection. Telegram bot is an intake interface
 only. The portal accepts only the versioned confirmed normalized recognition
 contract and prepared photo facts; project selection, expense confirmation,
-and allocation come from the operator or intake process, never from OCR.
+and allocation come from the authenticated operator, never from OCR or the
+intake interface (R0-17).
 
 ### PresuPro (snapshot producer)
 
@@ -356,8 +356,8 @@ Client Portal does not:
 
 Detailed ownership is deferred to later states.
 
-1. Every portal record belongs to exactly one Registry `project_id`; the
-   portal never creates project identity.
+1. Every project-scoped portal record belongs to exactly one Registry
+   `project_id`; the portal never creates project identity (R0-16).
 2. Access requires session + active principal + project grant/assignment +
    capability + Registry lifecycle policy; a UUID or URL alone grants
    nothing.
@@ -439,7 +439,8 @@ Owner decisions of the case and product-level decisions of the accepted
 Factory spec, numbered so that later states can cite them. R0-01 to R0-06
 restate decisions already written above or in the former `spec/HANDOFF.md`;
 R0-07 to R0-12 are carried from accepted Factory spec changes (`SOURCE.md`);
-R0-13 is the owner decision of 2026-11-06 on Q12.
+R0-13 is the owner decision of 2026-11-06 on Q12; R0-14 to R0-22 resolve the
+State 0 question round under the owner decision of 2026-11-06.
 
 ### R0-01 — Sole-trader operating profile (owner, 2026-07-18)
 
@@ -547,6 +548,81 @@ binaries and supplies the references. Until the hand-over between that service
 and the portal is decided (Q12 questions 1–5), operator placement of binaries
 stays the declared temporary route, outside the API.
 
+### R0-14 — Access management is administrator-only (owner 2026-11-06: current service behaviour accepted; technical decisions delegated)
+
+Creating, revoking and re-issuing client viewers, their access links and
+project grants, staff accounts and assignments, service principals, their
+credentials and producer grants all require the access-management capability,
+which only administrators hold (R2). Operators work on the projects assigned to
+them. This is the accepted spec's behaviour: every such route is
+`/admin/…` with `authorize_access_management` (`rules.http_router_backend`).
+Resolves round-01 T12.
+
+### R0-15 — Which operations need no session (owner 2026-11-06: current service behaviour accepted; technical decisions delegated)
+
+The common authorization rule binds project-scoped operations. Without a
+session the portal answers only: staff login, email-verification and
+email-change confirmation, password-reset request and completion, viewer entry
+with an access link, and the liveness and readiness checks (R0-06, R0-11).
+Each of them proves its own authority (credentials, a single-use token, a
+capability secret) or discloses nothing. Producer operations authenticate with
+the bearer credential of R0-09. Resolves round-01 T7.
+
+### R0-16 — Project-scoped records and records without a project (owner 2026-11-06: current service behaviour accepted; technical decisions delegated)
+
+Budget, snapshot, expense, progress, payment and photo records, grants and
+assignments each belong to exactly one Registry project. Principals, their
+sessions, credentials and challenges, email deliveries and the first
+administrator created by R0-07 belong to no project; an audit record names a
+project when its action has one. Resolves round-01 T17.
+
+### R0-17 — Intake decisions come from the authenticated operator (owner 2026-11-06: current service behaviour accepted; technical decisions delegated)
+
+An expense is created when an authenticated staff member with mutation
+capability on the project submits the confirmed recognition result with the
+project and the allocation; a progress photo is published the same way. The
+intake interface and OCR decide nothing. Which principal calls these
+operations for binaries placed by the future intake service is Q12 question 3
+and is not designed here. Resolves round-01 T8.
+
+### R0-18 — A new expense document is client-visible (owner 2026-11-06: current service behaviour accepted; technical decisions delegated)
+
+An expense document is visible to the client from its creation; staff may hide
+it and show it again. A progress photo's visibility is given when it is
+published. This is the running service's behaviour (Factory code
+`application/expense_intake.py`, `client_visible=True`). Resolves round-01
+T10.
+
+### R0-19 — Staff onboarding (owner 2026-11-06: current service behaviour accepted; technical decisions delegated)
+
+An administrator creates a staff account with its email, role and an initial
+password; the account waits in `pending_verification` until its holder
+confirms the email through the challenge an administrator issues; then it can
+log in and change its password (accepted contracts `create_staff_account`,
+`issue_email_verification`, `change_staff_password`). Resolves round-01 T32.
+
+### R0-20 — The recovery override replaces the login email (owner 2026-11-06: current service behaviour accepted; technical decisions delegated)
+
+The exceptional recovery override is an administrator action that replaces a
+staff account's login email with a given address, marks it verified, and is
+audited as `staff.recovery_override` atomically with the change; it is never
+the ordinary email-change path (accepted contract
+`perform_recovery_override`). Recovery of the sole administrator stays a
+deployment-level operation (R0-07). Resolves round-01 T34.
+
+### R0-21 — A producer reads its own import results (owner 2026-11-06: current service behaviour accepted; technical decisions delegated)
+
+A producer reads an earlier import result by its `import_id`; the result is
+returned only to the principal that made the import, and any other request is
+answered as not found (accepted contract `get_snapshot_import_result`).
+Resolves round-01 T41.
+
+### R0-22 — Planned amounts are gross; `tax_mode` is provenance (owner 2026-11-06: current service behaviour accepted; technical decisions delegated)
+
+A snapshot's planned amounts are already gross (IVA included); its `tax_mode`
+is stored as provenance and never triggers recalculation (former State 1
+decision 3, State 2 R9). Resolves round-01 T1.
+
 ## Open questions
 
 Recorded in `open_questions.md`; none is designed by this migration (owner,
@@ -557,7 +633,8 @@ Recorded in `open_questions.md`; none is designed by this migration (owner,
   human activation.
 - Q12 — the hand-over between the future intake service and the portal (the
   boundary itself is decided, R0-13).
-- Q13 — listing a viewer's access codes.
+- Q13 — listing a viewer's access codes (its premise is corrected; issuing a
+  code already revokes the earlier ones).
 - Q14 — replay-safe onboarding of a client.
 - Q16 — the estimate box for the client's own chat agent.
 - Still open from the authoring pass of 2026-07-19: staff MFA; administrative

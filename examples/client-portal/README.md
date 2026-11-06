@@ -18,7 +18,7 @@ former layout under `spec/`.
 | `SOURCE.md` | which text is authoritative, the accepted Factory spec the migration carries, classified evidence |
 | `00_product.md` | State 0, product frame (migrated) |
 | `01_models.md` | State 1, domain models (migrated) |
-| `02_rules.md` | State 2, rules and invariants (migrated; blocked by Q17, Q18) |
+| `02_rules.md` | State 2, rules and invariants (migrated) |
 | `questions/` | question rounds |
 | `spec/30_modules.md` … `spec/80_assembly.md`, `spec/HANDOFF.md` | States 3–8 of the authoring pass of 2026-07-18/19, not yet migrated |
 | `baseline/01_product_boundary.md` … `baseline/09_notes.md` | the frozen requirements baseline the authoring pass started from; input, not design |

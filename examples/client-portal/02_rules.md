@@ -8,11 +8,11 @@ the former text verbatim; the former invariant ledger (`spec/invariant_ledger.js
 kept as evidence) is distributed into each decision's `Formal invariants`; ledger rows
 no table carries form A18–A21. A22–A29 carry the policies the accepted Factory spec
 added after 2026-07-19, each with its Factory commit; A30 is the configuration; A31 is
-the security review.
+the security review; A32 the dependency policy.
 
-**State 2 is blocked.** The security review leaves `dependencies` UNRESOLVED (OQ-17),
-and A27 carries orderings of the accepted Factory spec that disagree with State 1
-(OQ-18). Both are owner questions (`open_questions.md` Q17, Q18).
+OQ-17 (dependencies) and OQ-18 (orderings), raised by this migration, were answered
+by the owner decision of 2026-11-06 (current service behaviour accepted; technical
+decisions delegated): A32 and A27.
 
 The former status, kept:
 
@@ -822,24 +822,23 @@ Normative value: `rules.exception_payload_policy` (Factory `a12937fd`).
 
 `rules.exception_payload_policy`.
 
-## Accepted decision A27 — Derived view orderings (accepted Factory spec, 2026-08-09; blocked, see BLOCK below)
+## Accepted decision A27 — Derived view orderings (accepted Factory spec, 2026-08-09; owner 2026-11-06)
 
 ### Normative rules
 
-The accepted Factory spec orders: expenses by document date descending, then
-creation time descending, then id descending; an expense's allocations by
-creation time ascending, then id ascending; payments by payment date
-descending, then recording time descending, then id descending; photos by
-photo date ascending, then publication time ascending, then id ascending.
-Normative value: `rules.derived_view_ordering` (Factory `d2c4511e`).
+Expenses are ordered by document date descending, then creation time
+descending, then id descending; an expense's allocations by creation time
+ascending, then id ascending; payments by payment date descending, then
+recording time descending, then id descending; photos by photo date
+ascending, then publication time ascending, then id ascending. Normative
+value: `rules.derived_view_ordering` (Factory `d2c4511e`).
 
-BLOCK: State 1 (`01_models.md`, "Projections and answers", former text of
-2026-07-19) orders expenses by `(document_date, expense_id)` descending,
-allocations by `allocation_id`, payments by `(payment_date, payment_id)`
-descending and the gallery by `(photo_date, photo_id)` ascending. The two
-differ whenever two records share a date. The Factory commit calls these
-values "undeclared", so the design text was not seen when they were chosen.
-Which order is the product's is the owner's decision (OQ-18).
+The former State 1 text of 2026-07-19 ordered the same lists by
+`(document_date, expense_id)` descending, `allocation_id`,
+`(payment_date, payment_id)` descending and `(photo_date, photo_id)`
+ascending. The accepted value is adopted as it is and replaces that text
+(owner 2026-11-06: current service behaviour accepted; technical decisions
+delegated; answers OQ-18 and `open_questions.md` Q18).
 
 ### Formal invariants
 
@@ -847,14 +846,12 @@ Which order is the product's is the owner's decision (OQ-18).
 
 ### Required tests
 
-- A derived-view test with two records of equal date per list, once OQ-18 is
-  answered.
+- A derived-view test with two records of equal date per list.
 
 ### Consequence
 
-`rules.derived_view_ordering`; until OQ-18 is answered the case carries the
-accepted Factory value and State 1 keeps its former text, so the two states
-disagree on purpose and visibly.
+`rules.derived_view_ordering`; `01_models.md` "Projections and answers"
+records the replacement.
 
 ## Accepted decision A28 — Clock policy (accepted Factory spec, 2026-08-09)
 
@@ -1007,21 +1004,52 @@ Security review: PERFORMED
 - browser_boundary: APPLICABLE; references: A25; affected: viewer cookie session, CORS, trusted hosts, mutation origin
 - files_artifacts: APPLICABLE; references: A14; affected: M30, M35, binary storage root, and the hand-over of placed binaries that stays Q12 (R0-13)
 - concurrency: APPLICABLE; references: A8, A18, A19, A22, A29; affected: replay identities, single active budget version, bootstrap
-- dependencies: UNRESOLVED; references: OQ-17; affected: deploy/requirements.txt (fastapi, pydantic, argon2-cffi, uvicorn pinned)
+- dependencies: APPLICABLE; references: A32; affected: deploy/requirements.txt (fastapi, pydantic, argon2-cffi, uvicorn pinned)
 
-## Open question OQ-17 — Dependency vulnerability and update policy
+## Accepted decision A32 — Dependency pins and their vulnerability check (owner 2026-11-06: current service behaviour accepted; technical decisions delegated)
 
-The portal is reachable from the internet (R0-09, R0-10) and runs on
-externally maintained libraries, pinned in the Factory deployment
-(`projects/client_portal_sandbox/deploy/requirements.txt`: fastapi, pydantic,
-argon2-cffi, uvicorn). No design state and no accepted spec change records
-how a vulnerability in them is noticed and how pins are updated, and nothing
-says that none is needed. `open_questions.md` Q17.
+### Normative rules
 
-## Open question OQ-18 — Tie-break order of the derived views
+1. The deployed portal runs only the externally maintained libraries pinned
+   exactly in the Factory deployment
+   (`projects/client_portal_sandbox/deploy/requirements.txt`: fastapi,
+   pydantic, argon2-cffi, uvicorn), each a direct import of the deployed
+   source.
+2. A pin changes only through the Factory route, like any other deployed
+   source change; nothing updates a dependency at run time or on the host.
+3. Before a deploy, the pinned versions are checked against a public
+   known-vulnerability database; a pin with a known vulnerability that affects
+   the portal is not deployed until it is updated through the Factory route.
+4. The portal adds no runtime feature for this: no update service, no
+   network call at start, no dependency report on any API.
 
-State 1 and the accepted Factory spec order expenses, allocations, payments
-and photos differently when dates are equal (A27). Which is the product's?
+This describes the existing deployment and answers OQ-17 and
+`open_questions.md` Q17.
+
+### Formal invariants
+
+- Every library the running portal imports from outside its own source is
+  pinned to one exact version in the deployment requirements.
+- No deploy ships a pin with a known vulnerability affecting the portal.
+
+### Required tests
+
+- The deployment requirements contain only `==` pins, one per direct import.
+- The pre-deploy vulnerability check of those pins passes.
+
+### Consequence
+
+No value enters the specification (SPEC_STANDARD 15.3.1: no path to generated
+code); the decision is operational and owned by the Factory deployment route.
+
+## Answered question OQ-17 — Dependency vulnerability and update policy
+
+Answered by A32 (owner 2026-11-06: technical decisions delegated).
+`open_questions.md` Q17.
+
+## Answered question OQ-18 — Tie-break order of the derived views
+
+Answered by A27: the accepted Factory value is adopted (owner 2026-11-06).
 `open_questions.md` Q18.
 
 
@@ -1053,8 +1081,8 @@ The former list, kept:
   ServiceCredential model regardless of transport.
 - External binary deletion/retention after source intake.
 
-Added by the migration: OQ-17 (dependencies) and OQ-18 (derived view
-orderings).
+Added by the migration and answered on 2026-11-06: OQ-17 (dependencies,
+A32) and OQ-18 (derived view orderings, A27).
 
 ## State 2 readiness assessment
 
@@ -1069,5 +1097,5 @@ The former assessment, kept:
 - No invariant is owned by "the whole system"; guard order, cascade
   semantics, and idempotency identities are explicit.
 
-The migration adds: the state is blocked by OQ-17 (security review,
-`dependencies` UNRESOLVED) and by OQ-18 (A27).
+The migration adds: every security category resolves to an accepted
+decision (A31); OQ-17 and OQ-18 are answered.

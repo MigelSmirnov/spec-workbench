@@ -112,9 +112,11 @@ Findings of later states are classified in those states' migrations.
 ### State 0 question round
 
 Round-01 (2026-11-06, `questions/state0/round-01/`, Codex CLI provider) on the
-migrated `00_product.md`: 45 topics, 10 blocking. None is decided by the
-migration; each needs either the owner or a repair of State 0 from a later
-state's accepted text, which is a meaning decision for the owner to confirm.
+migrated `00_product.md`: 45 topics, 10 blocking. Resolved on 2026-11-06 in
+favour of the accepted Factory spec under the owner decision of that day
+("current service behaviour accepted; technical decisions delegated"):
+T1 R0-22, T7 R0-15, T8 R0-17, T10 R0-18, T12 R0-14, T17 R0-16, T32 R0-19,
+T33 R0-09, T34 R0-20, T41 R0-21.
 
 | topic | kind | where the answer may already be | note |
 |---|---|---|---|
@@ -158,7 +160,7 @@ decided in States 3–7.
 | audit significant actions and reason policy | `5677993e` | accepted spec change | A13 |
 | binary delivery from content signature | `babd5e52` | accepted spec change | A14 |
 | transaction guard, audit entity id, immutability, transport, exception payload, clock, bootstrap | `0baceacc`, `0f9ae3ae`, `bd561732`, `38626cc7`…`51d19fdf`, `a12937fd`, `c92b6878`, `6011ac93` | accepted spec change | A22–A26, A28, A29 |
-| derived view tie-break orders | `d2c4511e` against State 1 text | **unresolved**: the accepted value and the recorded design differ | A27, OQ-18, Q18 |
-| Registry active list: `/projects/active` (State 0) against `projects` with decode-side filter | `300bd11d`, `config.registry_request_paths`; Registry v1 `api/runtime.py` serves both | external contract, State 6 | A30 note |
-| dependency vulnerability policy | `deploy/requirements.txt` pins, no decision anywhere | **unresolved** | A31, OQ-17, Q17 |
+| derived view tie-break orders | `d2c4511e` against State 1 text | accepted spec change; was unresolved, answered by the owner decision of 2026-11-06 | A27, Q18 |
+| Registry active list: `/projects/active` (State 0) against `projects` with decode-side filter | `300bd11d`, `config.registry_request_paths`; Registry v1 `api/runtime.py` serves both | accepted spec kept (owner 2026-11-06) | A30, State 6 |
+| dependency vulnerability policy | `deploy/requirements.txt` pins | was unresolved; decided under the owner decision of 2026-11-06 (technical decisions delegated) | A32, Q17 |
 | persistence, router and three backend IRs; `rules.role`, `rules.schema_version` | `8387e0a3`, `d1280708`, `300bd11d`…`a6916180314d` | later deterministic closures | "Carried to later closures" |
