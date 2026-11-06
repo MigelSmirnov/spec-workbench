@@ -731,8 +731,12 @@ access error and recorded nowhere (Factory code `api/router.py`
 attempt that passes these checks is classified — accepted, idempotent replay,
 integrity conflict, or a content rejection — and recorded as a fresh
 immutable import result with a fresh `import_id`; the import request is
-answered with that result, never with the snapshot itself. Recording
-access-refused attempts is a missing feature (Q20). A producer that lost an
+answered with that result, never with the snapshot itself. A project that
+becomes unknown, ungranted or archived, or a capability refused, between
+the route's check and the import is recorded as a rejection for that
+reason; a principal disabled in between, or a storage or Registry failure
+during the import, is answered as that failure and records nothing. Recording access-refused
+attempts is a missing feature (Q20). A producer that lost an
 answer re-publishes the same snapshot: identical content is answered as an
 idempotent replay with a new `import_id` naming the same accepted snapshot
 (accepted notes `_build_import_record`, `import_snapshot`; Factory code

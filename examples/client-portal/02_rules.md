@@ -220,8 +220,9 @@ Only `active` and `archived` are status literals the portal acts on (State 1
 M16). The project guard of A4 reads the validation answer's `exists`
 (false → not found) and, for a mutation, its `status` (anything other than
 `active` → `archived_project`); the grant and assignment operations of
-access management read `exists` and `is_active` instead (A6) and refuse an
-unknown or inactive project, each with its own operation's error (the
+access management decide by `is_active` instead (A6, State 1 M17) and
+refuse an inactive project, `exists` telling only whether the refusal is
+for an unknown or an archived one, each with its own operation's error (the
 table's labels name the refusal, not the error: a new viewer grant answers
 it as a Registry boundary failure, a staff assignment or producer grant as
 the not-found or archived rejection; Factory code

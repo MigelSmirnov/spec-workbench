@@ -1,0 +1,176 @@
+{
+ "open_points": [
+  {
+   "unit": "context",
+   "subject": "duplicate viewer-project grant",
+   "kind": "contradictory failure",
+   "text": "State 1 M04 says \"the second grant is refused (persistence conflict)\", while flow:administer_viewer_access says an active duplicate is \"refused by the operation's own check before any write (403)\" and only a duplicate after revocation is a persistence conflict (500).",
+   "question": "What outcome must grant_viewer_project produce when a grant record for the pair already exists and is still active?",
+   "options": [
+    "Authorization rejection mapped to 403 before writing",
+    "Persistence conflict mapped to 500 for every existing pair"
+   ],
+   "default_guess": "Use the State 4 outcome: reject an active duplicate with 403 and a previously revoked pair with the persistence conflict.",
+   "witness": {
+    "initial": "An active viewer already has an active ProjectViewerGrant for project P.",
+    "events": [
+     "An administrator submits another grant for the same viewer and project P.",
+     "viewer_access finds the existing active grant."
+    ],
+    "outcomes": [
+     "State 4: the operation rejects before writing and the administrator receives 403.",
+     "State 1 M04: the second grant is a persistence conflict and the administrator receives 500."
+    ],
+    "observer": "The administrator and API client see different status codes."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "audit of credentials revoked during access-link reissue",
+   "kind": "contradictory audit ownership",
+   "text": "State 1 M02 says \"Each issued access link is revoked and audited on its own\", but flow:administer_viewer_access step 3 revokes every earlier credential and appends only `viewer.credential_issue`.",
+   "question": "Does reissuing viewer access append a separate `viewer.credential_revoke` audit record for every prior credential it revokes, or only the single issue audit?",
+   "options": [
+    "Append one `viewer.credential_issue` record only",
+    "Append `viewer.credential_revoke` for each prior credential plus `viewer.credential_issue` for the new credential"
+   ],
+   "default_guess": "Append only `viewer.credential_issue`, following the explicit State 4 flow.",
+   "witness": {
+    "initial": "Viewer V has one non-revoked credential C1.",
+    "events": [
+     "An administrator reissues access for V.",
+     "viewer_access revokes C1 and creates C2."
+    ],
+    "outcomes": [
+     "The audit contains only one `viewer.credential_issue` entry for C2.",
+     "The audit contains a `viewer.credential_revoke` entry for C1 and a `viewer.credential_issue` entry for C2."
+    ],
+    "observer": "An auditor reviewing why C1 became revoked sees different histories."
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:administer_viewer_access`",
+   "subject": "credential and grant revocation retries",
+   "kind": "unstated failure outcome",
+   "text": "The flow says `revoke_viewer_access` \"revokes one credential\" and `revoke_viewer_project` revokes \"the addressed active grant\", while Errors specifies only \"unknown credential or grant\" and gives no outcome for an existing credential or grant that is already revoked.",
+   "question": "What must a repeated revocation of an already-revoked viewer credential or project grant do?",
+   "options": [
+    "Return the existing revoked record idempotently",
+    "Treat the revoked record as not found and return 404",
+    "Return a conflict or input rejection"
+   ],
+   "default_guess": "Treat an already-revoked target as not found and return 404 without audit or writes.",
+   "witness": {
+    "initial": "Credential C and grant G exist but are already revoked.",
+    "events": [
+     "An administrator calls revoke_viewer_access for C.",
+     "The administrator calls revoke_viewer_project for G."
+    ],
+    "outcomes": [
+     "Both retries return 404 because only active targets are addressable.",
+     "Both retries succeed idempotently and return the existing revoked records."
+    ],
+    "observer": "The administrator sees success versus failure, and the audit may differ."
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:administer_viewer_access`",
+   "subject": "credential state after viewer revocation",
+   "kind": "ambiguous cascade",
+   "text": "Step 7 says `revoke_viewer` \"revokes the viewer with its sessions and credentials\", whereas A11 describes viewer revocation as making the credential unusable and M01 says credentials are invalidated, without saying their own `revoked_at` and `revoked_by` fields change.",
+   "question": "Does revoking a viewer persistently revoke every ViewerAccessCredential record, or leave credential records non-revoked but unusable because their viewer is revoked?",
+   "options": [
+    "Set revocation fields on every credential",
+    "Leave credential records unchanged and reject them through viewer status"
+   ],
+   "default_guess": "Leave credential records unchanged but unusable, following A11's distinction between viewer revocation and credential revocation.",
+   "witness": {
+    "initial": "Active viewer V has active credential C.",
+    "events": [
+     "An administrator revokes V.",
+     "Later an administrator addresses C with revoke_viewer_access or inspects its stored lifecycle state."
+    ],
+    "outcomes": [
+     "C has revocation fields set by the viewer cascade and a later explicit revoke cannot act on it.",
+     "C still has no revocation fields but cannot authenticate because V is revoked; an explicit credential revoke may still act on it."
+    ],
+    "observer": "An administrator or auditor sees different credential state and potentially a different later revocation result."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "snapshot request decoding versus bearer authentication order",
+   "kind": "contradictory check order",
+   "text": "State 2 A7 says a body with a missing or wrongly typed required field \"is refused by request decoding before the bearer credential is checked\", but flow:import_estimate_snapshot starts with `authenticate_service_principal` and contains no preceding decoding step.",
+   "question": "For the snapshot publication route, does request-body decoding occur before or after producer bearer authentication?",
+   "options": [
+    "Decode first; malformed bodies return 422 even with an invalid bearer credential",
+    "Authenticate first; an invalid bearer credential returns 401 before malformed-body handling"
+   ],
+   "default_guess": "Decode the body before checking the bearer credential, following the explicit A7 ordering.",
+   "witness": {
+    "initial": "No valid producer authentication is present.",
+    "events": [
+     "A caller submits a snapshot request with an invalid bearer credential and a body missing `estimate_id`."
+    ],
+    "outcomes": [
+     "A7 ordering: request decoding stops the call with 422 and authentication is not checked.",
+     "Literal State 4 step order: authentication stops the call with 401 before body validation."
+    ],
+    "observer": "The caller sees a different HTTP status and can infer which check ran first."
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:import_estimate_snapshot`",
+   "subject": "branching between snapshot publication and import-result read",
+   "kind": "ambiguous flow branch",
+   "text": "The Trigger covers either publishing a snapshot \"or\" reading an earlier result, but the Steps are written as one sequence: steps 2–5 perform import authorization and import before step 6 calls `get_snapshot_import_result`.",
+   "question": "Which steps run for a read-import-result request, and must that request skip producer scope, grant, capability and Registry checks as R0-21 requires?",
+   "options": [
+    "Read path runs only bearer authentication and get_snapshot_import_result ownership checking",
+    "Read path also runs the scope/import authorization steps before returning the result"
+   ],
+   "default_guess": "Branch after bearer authentication; the read path runs only step 1 and step 6.",
+   "witness": {
+    "initial": "Producer S created import result I, then its project grant was revoked and the Registry project was archived; S still has a valid bearer credential.",
+    "events": [
+     "S requests import result I by import_id."
+    ],
+    "outcomes": [
+     "Read branch using only steps 1 and 6 returns I because S owns it.",
+     "Literal sequential flow applies steps 2–3 and rejects the request for revoked scope or archived lifecycle."
+    ],
+    "observer": "The producer sees its result versus a 404 or 409 failure."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "access change between the route check and snapshot import",
+   "kind": "contradictory classification",
+   "text": "R0-25 says every attempt that passes the route access checks is classified only as \"accepted, idempotent replay, integrity conflict, or a content rejection\", and that access-refused attempts are recorded nowhere; State 4 step 3 instead says a later access change is classified as an archived, unknown or scope-denied rejection and step 5 records and audits every classified attempt.",
+   "question": "If access passes at the route and is revoked or archived before snapshot_import repeats authorization, must the operation create a rejected SnapshotImportRecord and audit, or return an access error with no record?",
+   "options": [
+    "Create a fresh rejected import result and `snapshot.import` audit for the second-check failure",
+    "Return the access error and record nothing",
+    "Continue using the route authorization and classify only content/replay outcomes"
+   ],
+   "default_guess": "Create a rejected import result for a failure detected by snapshot_import's second check, following State 4 and M20.",
+   "witness": {
+    "initial": "Producer S has a valid credential and active grant for active project P.",
+    "events": [
+     "The route authenticates S and its first authorization check passes.",
+     "An administrator revokes S's grant before snapshot_import repeats authorization.",
+     "snapshot_import performs its second authorization check."
+    ],
+    "outcomes": [
+     "State 4/M20 reading: a fresh import_id records `scope_denied` and one rejected audit is committed.",
+     "R0-25 reading: the request returns the scoped access error and no import or audit record exists."
+    ],
+    "observer": "The producer sees an import result versus an access error; an auditor sees a record versus none."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"context\",\"subject\":\"duplicate viewer-project grant\",\"kind\":\"contradictory failure\",\"text\":\"State 1 M04 says \\\"the second grant is refused (persistence conflict)\\\", while flow:administer_viewer_access says an active duplicate is \\\"refused by the operation's own check before any write (403)\\\" and only a duplicate after revocation is a persistence conflict (500).\",\"question\":\"What outcome must grant_viewer_project produce when a grant record for the pair already exists and is still active?\",\"options\":[\"Authorization rejection mapped to 403 before writing\",\"Persistence conflict mapped to 500 for every existing pair\"],\"default_guess\":\"Use the State 4 outcome: reject an active duplicate with 403 and a previously revoked pair with the persistence conflict.\",\"witness\":{\"initial\":\"An active viewer already has an active ProjectViewerGrant for project P.\",\"events\":[\"An administrator submits another grant for the same viewer and project P.\",\"viewer_access finds the existing active grant.\"],\"outcomes\":[\"State 4: the operation rejects before writing and the administrator receives 403.\",\"State 1 M04: the second grant is a persistence conflict and the administrator receives 500.\"],\"observer\":\"The administrator and API client see different status codes.\"}},{\"unit\":\"context\",\"subject\":\"audit of credentials revoked during access-link reissue\",\"kind\":\"contradictory audit ownership\",\"text\":\"State 1 M02 says \\\"Each issued access link is revoked and audited on its own\\\", but flow:administer_viewer_access step 3 revokes every earlier credential and appends only `viewer.credential_issue`.\",\"question\":\"Does reissuing viewer access append a separate `viewer.credential_revoke` audit record for every prior credential it revokes, or only the single issue audit?\",\"options\":[\"Append one `viewer.credential_issue` record only\",\"Append `viewer.credential_revoke` for each prior credential plus `viewer.credential_issue` for the new credential\"],\"default_guess\":\"Append only `viewer.credential_issue`, following the explicit State 4 flow.\",\"witness\":{\"initial\":\"Viewer V has one non-revoked credential C1.\",\"events\":[\"An administrator reissues access for V.\",\"viewer_access revokes C1 and creates C2.\"],\"outcomes\":[\"The audit contains only one `viewer.credential_issue` entry for C2.\",\"The audit contains a `viewer.credential_revoke` entry for C1 and a `viewer.credential_issue` entry for C2.\"],\"observer\":\"An auditor reviewing why C1 became revoked sees different histories.\"}},{\"unit\":\"40_flows.md:`flow:administer_viewer_access`\",\"subject\":\"credential and grant revocation retries\",\"kind\":\"unstated failure outcome\",\"text\":\"The flow says `revoke_viewer_access` \\\"revokes one credential\\\" and `revoke_viewer_project` revokes \\\"the addressed active grant\\\", while Errors specifies only \\\"unknown credential or grant\\\" and gives no outcome for an existing credential or grant that is already revoked.\",\"question\":\"What must a repeated revocation of an already-revoked viewer credential or project grant do?\",\"options\":[\"Return the existing revoked record idempotently\",\"Treat the revoked record as not found and return 404\",\"Return a conflict or input rejection\"],\"default_guess\":\"Treat an already-revoked target as not found and return 404 without audit or writes.\",\"witness\":{\"initial\":\"Credential C and grant G exist but are already revoked.\",\"events\":[\"An administrator calls revoke_viewer_access for C.\",\"The administrator calls revoke_viewer_project for G.\"],\"outcomes\":[\"Both retries return 404 because only active targets are addressable.\",\"Both retries succeed idempotently and return the existing revoked records.\"],\"observer\":\"The administrator sees success versus failure, and the audit may differ.\"}},{\"unit\":\"40_flows.md:`flow:administer_viewer_access`\",\"subject\":\"credential state after viewer revocation\",\"kind\":\"ambiguous cascade\",\"text\":\"Step 7 says `revoke_viewer` \\\"revokes the viewer with its sessions and credentials\\\", whereas A11 describes viewer revocation as making the credential unusable and M01 says credentials are invalidated, without saying their own `revoked_at` and `revoked_by` fields change.\",\"question\":\"Does revoking a viewer persistently revoke every ViewerAccessCredential record, or leave credential records non-revoked but unusable because their viewer is revoked?\",\"options\":[\"Set revocation fields on every credential\",\"Leave credential records unchanged and reject them through viewer status\"],\"default_guess\":\"Leave credential records unchanged but unusable, following A11's distinction between viewer revocation and credential revocation.\",\"witness\":{\"initial\":\"Active viewer V has active credential C.\",\"events\":[\"An administrator revokes V.\",\"Later an administrator addresses C with revoke_viewer_access or inspects its stored lifecycle state.\"],\"outcomes\":[\"C has revocation fields set by the viewer cascade and a later explicit revoke cannot act on it.\",\"C still has no revocation fields but cannot authenticate because V is revoked; an explicit credential revoke may still act on it.\"],\"observer\":\"An administrator or auditor sees different credential state and potentially a different later revocation result.\"}},{\"unit\":\"context\",\"subject\":\"snapshot request decoding versus bearer authentication order\",\"kind\":\"contradictory check order\",\"text\":\"State 2 A7 says a body with a missing or wrongly typed required field \\\"is refused by request decoding before the bearer credential is checked\\\", but flow:import_estimate_snapshot starts with `authenticate_service_principal` and contains no preceding decoding step.\",\"question\":\"For the snapshot publication route, does request-body decoding occur before or after producer bearer authentication?\",\"options\":[\"Decode first; malformed bodies return 422 even with an invalid bearer credential\",\"Authenticate first; an invalid bearer credential returns 401 before malformed-body handling\"],\"default_guess\":\"Decode the body before checking the bearer credential, following the explicit A7 ordering.\",\"witness\":{\"initial\":\"No valid producer authentication is present.\",\"events\":[\"A caller submits a snapshot request with an invalid bearer credential and a body missing `estimate_id`.\"],\"outcomes\":[\"A7 ordering: request decoding stops the call with 422 and authentication is not checked.\",\"Literal State 4 step order: authentication stops the call with 401 before body validation.\"],\"observer\":\"The caller sees a different HTTP status and can infer which check ran first.\"}},{\"unit\":\"40_flows.md:`flow:import_estimate_snapshot`\",\"subject\":\"branching between snapshot publication and import-result read\",\"kind\":\"ambiguous flow branch\",\"text\":\"The Trigger covers either publishing a snapshot \\\"or\\\" reading an earlier result, but the Steps are written as one sequence: steps 2–5 perform import authorization and import before step 6 calls `get_snapshot_import_result`.\",\"question\":\"Which steps run for a read-import-result request, and must that request skip producer scope, grant, capability and Registry checks as R0-21 requires?\",\"options\":[\"Read path runs only bearer authentication and get_snapshot_import_result ownership checking\",\"Read path also runs the scope/import authorization steps before returning the result\"],\"default_guess\":\"Branch after bearer authentication; the read path runs only step 1 and step 6.\",\"witness\":{\"initial\":\"Producer S created import result I, then its project grant was revoked and the Registry project was archived; S still has a valid bearer credential.\",\"events\":[\"S requests import result I by import_id.\"],\"outcomes\":[\"Read branch using only steps 1 and 6 returns I because S owns it.\",\"Literal sequential flow applies steps 2–3 and rejects the request for revoked scope or archived lifecycle.\"],\"observer\":\"The producer sees its result versus a 404 or 409 failure.\"}},{\"unit\":\"context\",\"subject\":\"access change between the route check and snapshot import\",\"kind\":\"contradictory classification\",\"text\":\"R0-25 says every attempt that passes the route access checks is classified only as \\\"accepted, idempotent replay, integrity conflict, or a content rejection\\\", and that access-refused attempts are recorded nowhere; State 4 step 3 instead says a later access change is classified as an archived, unknown or scope-denied rejection and step 5 records and audits every classified attempt.\",\"question\":\"If access passes at the route and is revoked or archived before snapshot_import repeats authorization, must the operation create a rejected SnapshotImportRecord and audit, or return an access error with no record?\",\"options\":[\"Create a fresh rejected import result and `snapshot.import` audit for the second-check failure\",\"Return the access error and record nothing\",\"Continue using the route authorization and classify only content/replay outcomes\"],\"default_guess\":\"Create a rejected import result for a failure detected by snapshot_import's second check, following State 4 and M20.\",\"witness\":{\"initial\":\"Producer S has a valid credential and active grant for active project P.\",\"events\":[\"The route authenticates S and its first authorization check passes.\",\"An administrator revokes S's grant before snapshot_import repeats authorization.\",\"snapshot_import performs its second authorization check.\"],\"outcomes\":[\"State 4/M20 reading: a fresh import_id records `scope_denied` and one rejected audit is committed.\",\"R0-25 reading: the request returns the scoped access error and no import or audit record exists.\"],\"observer\":\"The producer sees an import result versus an access error; an auditor sees a record versus none.\"}}]}",
+ "set_aside": []
+}
