@@ -13,14 +13,17 @@ to do its work, not the history of the specification:
    units the open units name (A-numbers) or share an identifier with
    (INV-*, model, function and module names), and, when the agreement with
    the earlier states (``context``) is open, the earlier units its change
-   touched. Contradiction bases are quoted from this block, so it carries the
-   passages whole;
+   touched; then, until nothing is added, what those passages name in turn
+   (Entry -> Money). Contradiction bases are quoted from this block, so it
+   carries the passages whole;
 4. the deterministic results at the handoff and 5. the State 2 witness
    material, both given by the instruction (prompts.layer_scope).
 
-Never a pass by omission: when the selection cannot decide what an open unit
-depends on (it names no identifier, or the change of ``context`` cannot be
-read), the round says so and reads the earlier states' texts whole.
+Never a pass by omission: when the selection cannot show what an open unit
+depends on (it names nothing an earlier state defines and nothing earlier
+names what it defines; its own definitions do not count), or the change of
+``context`` cannot be read, the round says so and reads the earlier states'
+texts whole.
 """
 from __future__ import annotations
 
@@ -93,16 +96,17 @@ def _earlier_units(texts: list[tuple[int, str, str]], state: int) -> list[tuple[
     return found
 
 
+def resolves(text: str, exclude: set[str], earlier: list[tuple[int, str, str, str]],
+             definitions: dict[str, set[str]]) -> list[str]:
+    """Keys of the earlier units whose definitions ``text`` names, its own definitions aside."""
+    return [unit[2] for unit in earlier if mentions(text, definitions[unit[2]] - exclude)]
+
+
 def select(texts: list[tuple[int, str, str]], state: int, current: dict[str, dict[str, str]],
            scope: list[str], changed: dict[str, tuple[str, list[str]]],
            referencing: dict[str, list[str]] | None = None) -> Selection:
     selection = Selection()
     open_keys = [key for key in scope if key != units.CONTEXT and key in current]
-    named: set[str] = set()
-    for key in open_keys:
-        if not identifiers(current[key]["text"]) - {key}:  # its own key in its heading names nothing else
-            selection.whole.append(f"{key} names no identifier, so what it depends on cannot be selected")
-        named |= set(DECISION.findall(current[key]["text"]))
     # a closed unit of the layer appears only as a neighbour of an open one,
     # through `referencing` (a closed unit naming a changed decision)
     neighbours = [key for key in current if key not in scope and key != units.CONTEXT
@@ -112,6 +116,25 @@ def select(texts: list[tuple[int, str, str]], state: int, current: dict[str, dic
         if key in open_keys or key in neighbours:
             selection.own.append((key, current[key]["text"]))
     earlier = _earlier_units(texts, state)
+    by_key = {unit[2]: unit for unit in earlier}
+    definitions = {unit[2]: defined(unit[2], unit[3]) for unit in earlier}
+    chosen: list[str] = []
+
+    def take(keys: list[str]) -> None:
+        chosen.extend(k for k in keys if k not in chosen)
+
+    # 1. each open unit's own links: what it names that an earlier unit defines,
+    #    and the earlier units naming what it defines. None found: the input
+    #    cannot be shown to suffice, so the earlier texts are read whole.
+    for key in open_keys:
+        text = current[key]["text"]
+        own = defined(key, text)
+        links = resolves(text, own, earlier, definitions)
+        links += [unit[2] for unit in earlier if own and identifiers(unit[3]) & own and unit[2] not in links]
+        if not links:
+            selection.whole.append(f"{key} names nothing an earlier state defines and nothing earlier names "
+                                   "what it defines, so what it depends on cannot be selected")
+        take(links)
     if units.CONTEXT in scope:
         if units.CONTEXT not in changed:
             selection.whole.append("the agreement with the earlier states is open and its change cannot be "
@@ -120,32 +143,30 @@ def select(texts: list[tuple[int, str, str]], state: int, current: dict[str, dic
             lines = {line[1:].strip() for line in changed[units.CONTEXT][0].splitlines()
                      if line[:1] in "+-" and not line.startswith(("+++", "---"))
                      and line[1:].strip() and not DIFF_HEADER.match(line[1:].strip())}
-            touched = [u for u in earlier if any(line in u[3] for line in lines)]
-            selection.received += [u for u in touched]
+            touched = [u[2] for u in earlier if any(line in u[3] for line in lines)]
+            take(touched)
             # this layer's closed units that speak of what changed below are its neighbours
+            moved = {name for k in touched for name in definitions[k]}
             for key in current:
-                if (key not in open_keys and key not in neighbours and key != units.CONTEXT
-                        and identifiers(current[key]["text"]) & {i for u in touched for i in defined(u[2], u[3])}):
+                if (key not in open_keys and key not in selection.neighbours and key != units.CONTEXT
+                        and mentions(current[key]["text"], moved)):
                     selection.own.append((key, current[key]["text"]))
                     selection.neighbours.append(key)
     if selection.whole:
         selection.received = [(s, name, f"{name}:whole", body) for s, name, body in texts if s < state]
         return selection
-    taken = {u[2] for u in selection.received}
-    own_text = "\n".join(current[key]["text"] for key in open_keys) + "\n" + "\n".join(
-        u[3] for u in selection.received)
-    own_defined = set()
-    for key in open_keys:
-        own_defined |= defined(key, current[key]["text"])
-    for unit in earlier:
-        if unit[2] in taken:
-            continue
-        # the open units name what it defines, or it names what they define
-        if unit[2] in named or mentions(own_text, defined(unit[2], unit[3])) or identifiers(unit[3]) & own_defined:
-            selection.received.append(unit)
-            taken.add(unit[2])
+    # 2. close the selection: a chosen passage brings what it names in turn
+    #    (Entry -> Money, A12 -> A7), by definitions only, until nothing is added
+    frontier = list(chosen)
+    while frontier:
+        key = frontier.pop()
+        found = [k for k in resolves(by_key[key][3], definitions[key], earlier, definitions) if k not in chosen]
+        take(found)
+        frontier += found
     order = {(s, name): i for i, (s, name, _) in enumerate(texts)}
-    selection.received.sort(key=lambda u: order.get((u[0], u[1]), 0))
+    position = {unit[2]: i for i, unit in enumerate(earlier)}
+    selection.received = sorted((by_key[k] for k in chosen),
+                                key=lambda u: (order.get((u[0], u[1]), 0), position[u[2]]))
     return selection
 
 

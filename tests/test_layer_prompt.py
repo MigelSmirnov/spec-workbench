@@ -111,9 +111,45 @@ def test_an_earlier_unit_naming_what_the_open_unit_defines_is_received():
 
 def test_an_open_unit_naming_no_identifier_reads_the_earlier_states_whole():
     selection, text = chosen(["A03"])
-    assert selection.whole and "A03 names no identifier" in selection.whole[0]
+    assert selection.whole and "A03 names nothing an earlier state defines" in selection.whole[0]
     assert "=== 00_product.md (State 0), whole ===" in text and "Model M03" in text
-    assert "whole, because A03 names no identifier" in lp.note(selection, 2)
+    assert "whole, because A03 names nothing an earlier state defines" in lp.note(selection, 2)
+
+
+def test_an_open_unit_whose_only_identifiers_are_its_own_still_reads_the_earlier_states_whole():
+    # review r4504187837: A03 declares INV-003 itself; that resolves nothing below
+    rules = RULES.replace("Entries are kept for ten years.\n",
+                          "Entries are kept for ten years.\n\n### Formal invariants\n\n"
+                          "- INV-003: entries are kept for ten years\n- also `RetentionWindow` applies\n")
+    selection, text = chosen(["A03"], rules=rules)
+    assert selection.whole and "A03 names nothing an earlier state defines" in selection.whole[0]
+    assert "Currency policy" in text and "Model M01 — Entry" in text
+
+
+def test_the_selection_is_closed_over_what_the_chosen_passages_name():
+    # review r4504187842: A01 names Entry; Entry's amount is a Money, defined apart
+    models = MODELS.replace("- `created_at` datetime\n\n## Model M02",
+                            "- `created_at` datetime\n- `amount` Money\n\n## Model M02")
+    models += "\n## Model M04 — Money\n\n- currency EUR, rounded half-even (see A09 below)\n"
+    product = PRODUCT + "\n## Decision A09\n\nRounding follows R0-02.\n"
+    for order in ("models first", "product last"):
+        t = [(0, "00_product.md", product), (1, "01_models.md", models), (2, "02_rules.md", RULES)]
+        if order == "product last":
+            t = [t[1], t[2], t[0]]
+        selection = lp.select(t, 2, units.units(t, 2), ["A01"], {}, None)
+        received = [key for _, _, key, _ in selection.received]
+        assert "01_models.md:Model M04 — Money" in received, order       # Entry -> Money
+        assert "00_product.md:Decision A09" in received, order          # Money -> A09
+        assert "01_models.md:Model M03 — Unrelated" not in received     # shares only created_at
+
+
+def test_an_earlier_decision_brings_the_decision_it_names():
+    later = [(0, "00_product.md", PRODUCT), (1, "01_models.md", MODELS), (2, "02_rules.md", RULES),
+             (3, "30_modules.md", "# State 3\n\n## Module ledger\n\nOwns the rule of A02.\n")]
+    selection = lp.select(later, 3, units.units(later, 3), ["30_modules.md:Module ledger"], {}, None)
+    received = [key for _, _, key, _ in selection.received]
+    assert "A02" in received and "A01" in received                       # A02 -> A01
+    assert "01_models.md:Model M02 — MonthTotal" in received             # A02 -> MonthTotal
 
 
 def test_an_open_agreement_without_its_change_reads_the_earlier_states_whole():
@@ -159,4 +195,50 @@ def test_the_round_of_state_2_reads_its_layer_prompt(tmp_path, monkeypatch):
     instruction, text = provider.asked[0]
     assert "What you read. Not the whole specification" in instruction
     assert "Currency policy" in text            # A03 names nothing: honest fallback, said so
-    assert "their texts whole, because" in instruction and "A03 names no identifier" in instruction
+    assert "their texts whole, because" in instruction
+    assert "A03 names nothing an earlier state defines" in instruction
+
+
+def test_reviewers_and_judge_both_read_the_closed_selection(tmp_path, monkeypatch):
+    models = MODELS.replace("- `created_at` datetime\n\n## Model M02",
+                            "- `created_at` datetime\n- `amount` Money\n\n## Model M02")
+    models += "\n## Model M04 — Money\n\n- MONEY RULE: currency EUR, rounded half-even\n"
+    case = tmp_path / "demo"
+    case.mkdir()
+    for name, body in (("00_product.md", PRODUCT), ("01_models.md", models), ("02_rules.md", RULES)):
+        (case / name).write_text(body, encoding="utf-8")
+    point = {"subject": "A01", "unit": "A01", "kind": "gap", "text": "counted once", "question": "how?"}
+
+    class Provider:
+        name = "fake"
+
+        def __init__(self):
+            self.asked: list[str] = []
+            self.judged: list[str] = []
+            self.reviews = 0
+
+        def complete(self, instruction, text):
+            if instruction.startswith("You judge the topics"):
+                self.judged.append(text)
+                ids = [line.split(":", 1)[0] for line in text.split("=== TOPICS TO JUDGE ===")[1].splitlines()
+                       if line[:1] == "T"]
+                return json.dumps({"judgements": [{"id": i, "kind": "indifferent", "why": "x"} for i in ids]}), {}
+            if instruction.startswith("You receive the open points"):
+                return json.dumps({"groups": [{"topic": "t", "members": [l.split(": ", 1)[0]
+                                                                         for l in text.splitlines()]}]}), {}
+            self.asked.append(text)
+            self.reviews += 1
+            return json.dumps({"open_points": [point] if self.reviews <= 2 else []}), {}
+
+    monkeypatch.setattr(service, "layer_context", lambda case, state: {
+        "state": state, "owns": [], "carries": [], "gate_findings": [], "materials": [], "ready": True,
+        "receives": [], "results": []})
+    # the selection for A01 alone is closed over Entry -> Money; the round below (all units
+    # open, so read whole by the preamble's fallback) shows reviewers and judge read one input
+    t = [(0, "00_product.md", PRODUCT), (1, "01_models.md", models), (2, "02_rules.md", RULES)]
+    selection = lp.select(t, 2, units.units(t, 2), ["A01"], {}, None)
+    assert "MONEY RULE" in lp.render(selection, t, 2)
+    provider = Provider()
+    service.ask_round(case, 2, provider)
+    assert all("MONEY RULE" in text for text in provider.asked)
+    assert provider.judged and "MONEY RULE" in provider.judged[0]
