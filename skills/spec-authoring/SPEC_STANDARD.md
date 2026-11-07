@@ -1242,7 +1242,7 @@ Argon2id (`profile`) над `HMAC-SHA256(pepper, secret)`; проверка —
 детерминированных backend-ов проверяется против политики уже в
 `validate_spec`, до Route B.
 
-### 6.9 `system_clock_backend/v1`, `/v2`, `/v3`, `/v4`
+### 6.9 `system_clock_backend/v1`, `/v2`, `/v3`, `/v4`, `/v5`
 
 Значение, которое возвращают часы, — внешнее наблюдение и от вызова к вызову
 различно; код адаптера часов полностью определён спекой. Поэтому модуль
@@ -1362,6 +1362,45 @@ Argon2id (`profile`) над `HMAC-SHA256(pepper, secret)`; проверка —
 backend отдаёт одно показание на вызов. Модуль, которому выданы часы
 (импорт операции, `imports.module_internal`), читает время только через
 неё; прямое чтение часов хоста — `clock_dependency_bypassed` (§6.8).
+
+Версия 4 не измеряет длительность: её модуль не держит полномочия на
+`elapsed_time`, а полномочие у любого другого модуля требует
+детерминированного backend-а (`elapsed_clock_authority`, §6.8). Дизайну с
+naive UTC мгновениями, который ещё и измеряет длительность, служит версия 5.
+
+Версия 5 (`python_host_naive_utc_and_elapsed_clock_v1`) — операция настенных
+часов версии 4 и одна операция длительности в том же модуле, единственном
+читателе обоих часов хоста:
+
+```json
+{
+  "kind": "system_clock_backend",
+  "schema_version": 5,
+  "backend": {"emitter": "python_host_naive_utc_and_elapsed_clock_v1"},
+  "wiring": {"module": "<module>", "wall_clock_function": "<function>",
+             "elapsed_clock_function": "<function>"},
+  "time": {"policy": "rules.time_source_policy", "read": "per_call",
+           "representation": "naive_utc_datetime"}
+}
+```
+
+Сверх требований версии 4 к `wall_clock` версия 5 требует от `elapsed_time`:
+`authority_modules == ["<module>"]`, ровно один примитив — `time.monotonic`
+или `time.monotonic_ns`, `samples_per_read: 1`, `persisted: false`.
+`module_functions[<module>]` — ровно две операции (порядок не значим);
+контракты `<wall_clock_function>: "() -> datetime"` и
+`<elapsed_clock_function>: "() -> float"` для `time.monotonic` или
+`"() -> int"` для `time.monotonic_ns`. Имена обеих операций различны, не
+ключевые слова Python и не связываемые модулем имена (`annotations`,
+`datetime`, `timezone`, `time`). Lowering: операция настенных часов побайтно
+та же, что в версии 4; операция длительности возвращает показание примитива
+как есть — одно чтение, без пересчёта единиц (секунды `float` или
+наносекунды `int`), без обёртки. Иных функций и классов модуль не содержит;
+обе операции принадлежат эмиттеру. Фокусная проверка доказывает для
+длительности объявленный тип, неубывание и попадание между двумя чтениями
+того же примитива проверяющим. Потребитель, которому выдана операция
+длительности, измеряет время только через неё; прямое чтение примитива —
+`undeclared_elapsed_clock_access` (§6.8).
 
 ### 6.10 `data_provider_backend/v1`
 

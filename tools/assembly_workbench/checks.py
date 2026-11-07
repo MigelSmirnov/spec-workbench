@@ -146,10 +146,14 @@ def _factory_storage_resolver(factory_root: Path | None = None):
     import os
     import sys as _sys
     root = Path(__file__).resolve().parents[2]
-    candidates = [factory_root] if factory_root is not None else []
-    if os.environ.get("SPEC_WORKBENCH_FACTORY_ROOT"):
-        candidates.append(Path(os.environ["SPEC_WORKBENCH_FACTORY_ROOT"]))
-    candidates += [root.parent / "code_factory", root.parent.parent / "code_factory"]
+    # an explicitly chosen root is the only one read: no other checkout stands in for it
+    if factory_root is not None:
+        candidates = [factory_root]
+    else:
+        candidates = []
+        if os.environ.get("SPEC_WORKBENCH_FACTORY_ROOT"):
+            candidates.append(Path(os.environ["SPEC_WORKBENCH_FACTORY_ROOT"]))
+        candidates += [root.parent / "code_factory", root.parent.parent / "code_factory"]
     for candidate in candidates:
         emitter = candidate / "tools" / "generate_postgres_repository_draft.py"
         if emitter.is_file():
@@ -282,6 +286,9 @@ def run(project: Path, name: str, *, factory_root: Path | None = None) -> CheckR
             )
         elif name == "imports":
             report = imports_coverage(project, factory_root=factory_root)
+        elif name == "witness" and factory_root is not None:
+            # the verification checks a witness names are read from the chosen Factory
+            report = design_decision_witness.coverage(project, factory_root)
         else:
             report = function(project)
     except (OSError, ValueError, KeyError, TypeError) as error:
