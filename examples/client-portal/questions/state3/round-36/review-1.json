@@ -1,0 +1,119 @@
+{
+ "open_points": [
+  {
+   "subject": "Registry runtime configuration ownership",
+   "kind": "contradiction",
+   "text": "State 0 says, “The service is configured only by environment variables, which it validates when it starts”; State 2 and State 3 say, “REGISTRY_BASE_URL is read by the Registry gateway at each call, not at start-up” and “registry_gateway reads REGISTRY_BASE_URL at each Registry call.”",
+   "question": "Must REGISTRY_BASE_URL be validated and fixed at startup, or may the service start without it and observe changes to it between Registry calls?",
+   "options": [
+    "Validate and cache it at startup",
+    "Read and validate it independently on every Registry call",
+    "Validate it at startup but still reread it for every call"
+   ],
+   "default_guess": "Use the later, specific rule: start without it and read it on each Registry call.",
+   "witness": {
+    "initial": "REGISTRY_BASE_URL is absent when the portal process starts.",
+    "events": [
+     "The host operator starts the portal.",
+     "An authenticated caller performs an operation requiring Registry validation."
+    ],
+    "outcomes": [
+     "State 0 makes startup fail because an environment configuration value was not validated successfully.",
+     "States 2–3 let startup succeed; only the later Registry call fails with transport_error."
+    ],
+    "observer": "The host operator first, and the API caller if startup succeeds."
+   },
+   "unit": "context"
+  },
+  {
+   "subject": "Bootstrap reuse of staff identity validation",
+   "kind": "missing public dependency",
+   "text": "staff_bootstrap must “normalize and validate the input through staff_identity's input boundary,” while staff_identity “Hides Email normalization, password policy” and its Candidate public capabilities expose no normalization or password-validation operation.",
+   "question": "What public dependency may staff_bootstrap use to apply A16 without reaching into staff_identity internals or independently owning the same validation rules?",
+   "options": [
+    "Expose a public staff-identity input-validation capability",
+    "Duplicate the A16 validation in staff_bootstrap",
+    "Permit staff_bootstrap to import private staff_identity helpers"
+   ],
+   "default_guess": "Expose an explicit public validation capability owned by staff_identity.",
+   "unit": "context"
+  },
+  {
+   "subject": "Document and photo access re-check before binary storage",
+   "kind": "dependency contradiction",
+   "text": "State 2 requires, “The owning domain module re-checks authenticated project access and client-visible eligibility before storage access.” State 3 repeats that expense_management and photo_management perform the access re-check, but neither module Knows authorization_guard; only api_irregular knows both the guard and those modules.",
+   "question": "Does the required re-check mean a fresh authorization_guard decision inside expense_management/photo_management, or only comparison of the object against an AuthorizedProjectContext produced earlier by the API?",
+   "options": [
+    "Add authorization_guard dependencies and perform fresh authorization",
+    "Authorize once in the API, then validate object/project/visibility against the trusted context",
+    "Inject an authorization capability without a direct module dependency"
+   ],
+   "default_guess": "Authorize in the API and have the domain module validate the object against the trusted AuthorizedProjectContext.",
+   "witness": {
+    "initial": "A viewer has an active session and grant, and a visible document exists.",
+    "events": [
+     "api_irregular authorizes the viewer and obtains an AuthorizedProjectContext.",
+     "An administrator revokes the viewer's project grant before the domain binary read begins.",
+     "expense_management is asked to read the document."
+    ],
+    "outcomes": [
+     "A fresh domain-level authorization re-check observes revocation and refuses before storage access.",
+     "A context-only check accepts the earlier authorization evidence and returns the binary."
+    ],
+    "observer": "The viewer requesting the binary."
+   },
+   "unit": "context"
+  },
+  {
+   "subject": "Visibility policy for staff binary reads",
+   "kind": "policy contradiction",
+   "text": "State 1 says, “a viewer's binary request for a document with client_visible = false is refused,” limiting the stated visibility gate to viewers. State 2 says the owning module checks “client-visible eligibility,” and State 3 says expense_management and photo_management re-check “access and visibility” without distinguishing staff from viewers.",
+   "question": "May authorized staff read a hidden ExpenseDocument or ProgressPhoto binary, or does client_visible=false block every principal?",
+   "options": [
+    "client_visible gates viewers only; authorized staff may read hidden binaries",
+    "client_visible gates staff and viewers alike",
+    "Use a separate, explicitly owned staff-visibility rule"
+   ],
+   "default_guess": "Apply client_visible only to viewer reads; permit appropriately authorized staff reads.",
+   "witness": {
+    "initial": "An active project has a document whose client_visible value was changed to false, and an assigned operator has document-read access.",
+    "events": [
+     "The operator requests that document through the staff binary endpoint."
+    ],
+    "outcomes": [
+     "The operator receives the exact stored bytes because hidden means hidden from the client viewer.",
+     "The operator receives the same concealed refusal as a viewer because visibility is required for every binary read."
+    ],
+    "observer": "The operator."
+   },
+   "unit": "context"
+  },
+  {
+   "subject": "Staff-side binary HTTP endpoint ownership",
+   "kind": "owner ambiguity",
+   "text": "api_irregular explicitly owns the viewer's document and photo answers as exact bytes. api is an A14 consumer but says it owns the staff, administrator and producer “HTTP JSON routes,” without naming staff binary response construction.",
+   "question": "Which module owns authenticated staff document/photo download endpoints and their exact-byte headers and disposition?",
+   "options": [
+    "api owns the staff binary endpoints despite the “JSON routes” wording",
+    "api_irregular owns every binary endpoint, including staff endpoints",
+    "No staff binary endpoint exists"
+   ],
+   "default_guess": "api owns staff binary endpoints and delegates authorization and storage work to the domain modules.",
+   "witness": {
+    "initial": "An assigned operator has read access to an active project's visible expense document.",
+    "events": [
+     "The operator requests the document by document_id through the staff API."
+    ],
+    "outcomes": [
+     "api serves an authenticated exact-byte response with the A14 headers.",
+     "No owning staff binary route exists, so the request is unavailable or handled as a JSON route."
+    ],
+    "observer": "The operator and any staff API client."
+   },
+   "unit": "context"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"Registry runtime configuration ownership\",\"kind\":\"contradiction\",\"text\":\"State 0 says, “The service is configured only by environment variables, which it validates when it starts”; State 2 and State 3 say, “REGISTRY_BASE_URL is read by the Registry gateway at each call, not at start-up” and “registry_gateway reads REGISTRY_BASE_URL at each Registry call.”\",\"question\":\"Must REGISTRY_BASE_URL be validated and fixed at startup, or may the service start without it and observe changes to it between Registry calls?\",\"options\":[\"Validate and cache it at startup\",\"Read and validate it independently on every Registry call\",\"Validate it at startup but still reread it for every call\"],\"default_guess\":\"Use the later, specific rule: start without it and read it on each Registry call.\",\"witness\":{\"initial\":\"REGISTRY_BASE_URL is absent when the portal process starts.\",\"events\":[\"The host operator starts the portal.\",\"An authenticated caller performs an operation requiring Registry validation.\"],\"outcomes\":[\"State 0 makes startup fail because an environment configuration value was not validated successfully.\",\"States 2–3 let startup succeed; only the later Registry call fails with transport_error.\"],\"observer\":\"The host operator first, and the API caller if startup succeeds.\"},\"unit\":\"context\"},{\"subject\":\"Bootstrap reuse of staff identity validation\",\"kind\":\"missing public dependency\",\"text\":\"staff_bootstrap must “normalize and validate the input through staff_identity's input boundary,” while staff_identity “Hides Email normalization, password policy” and its Candidate public capabilities expose no normalization or password-validation operation.\",\"question\":\"What public dependency may staff_bootstrap use to apply A16 without reaching into staff_identity internals or independently owning the same validation rules?\",\"options\":[\"Expose a public staff-identity input-validation capability\",\"Duplicate the A16 validation in staff_bootstrap\",\"Permit staff_bootstrap to import private staff_identity helpers\"],\"default_guess\":\"Expose an explicit public validation capability owned by staff_identity.\",\"unit\":\"context\"},{\"subject\":\"Document and photo access re-check before binary storage\",\"kind\":\"dependency contradiction\",\"text\":\"State 2 requires, “The owning domain module re-checks authenticated project access and client-visible eligibility before storage access.” State 3 repeats that expense_management and photo_management perform the access re-check, but neither module Knows authorization_guard; only api_irregular knows both the guard and those modules.\",\"question\":\"Does the required re-check mean a fresh authorization_guard decision inside expense_management/photo_management, or only comparison of the object against an AuthorizedProjectContext produced earlier by the API?\",\"options\":[\"Add authorization_guard dependencies and perform fresh authorization\",\"Authorize once in the API, then validate object/project/visibility against the trusted context\",\"Inject an authorization capability without a direct module dependency\"],\"default_guess\":\"Authorize in the API and have the domain module validate the object against the trusted AuthorizedProjectContext.\",\"witness\":{\"initial\":\"A viewer has an active session and grant, and a visible document exists.\",\"events\":[\"api_irregular authorizes the viewer and obtains an AuthorizedProjectContext.\",\"An administrator revokes the viewer's project grant before the domain binary read begins.\",\"expense_management is asked to read the document.\"],\"outcomes\":[\"A fresh domain-level authorization re-check observes revocation and refuses before storage access.\",\"A context-only check accepts the earlier authorization evidence and returns the binary.\"],\"observer\":\"The viewer requesting the binary.\"},\"unit\":\"context\"},{\"subject\":\"Visibility policy for staff binary reads\",\"kind\":\"policy contradiction\",\"text\":\"State 1 says, “a viewer's binary request for a document with client_visible = false is refused,” limiting the stated visibility gate to viewers. State 2 says the owning module checks “client-visible eligibility,” and State 3 says expense_management and photo_management re-check “access and visibility” without distinguishing staff from viewers.\",\"question\":\"May authorized staff read a hidden ExpenseDocument or ProgressPhoto binary, or does client_visible=false block every principal?\",\"options\":[\"client_visible gates viewers only; authorized staff may read hidden binaries\",\"client_visible gates staff and viewers alike\",\"Use a separate, explicitly owned staff-visibility rule\"],\"default_guess\":\"Apply client_visible only to viewer reads; permit appropriately authorized staff reads.\",\"witness\":{\"initial\":\"An active project has a document whose client_visible value was changed to false, and an assigned operator has document-read access.\",\"events\":[\"The operator requests that document through the staff binary endpoint.\"],\"outcomes\":[\"The operator receives the exact stored bytes because hidden means hidden from the client viewer.\",\"The operator receives the same concealed refusal as a viewer because visibility is required for every binary read.\"],\"observer\":\"The operator.\"},\"unit\":\"context\"},{\"subject\":\"Staff-side binary HTTP endpoint ownership\",\"kind\":\"owner ambiguity\",\"text\":\"api_irregular explicitly owns the viewer's document and photo answers as exact bytes. api is an A14 consumer but says it owns the staff, administrator and producer “HTTP JSON routes,” without naming staff binary response construction.\",\"question\":\"Which module owns authenticated staff document/photo download endpoints and their exact-byte headers and disposition?\",\"options\":[\"api owns the staff binary endpoints despite the “JSON routes” wording\",\"api_irregular owns every binary endpoint, including staff endpoints\",\"No staff binary endpoint exists\"],\"default_guess\":\"api owns staff binary endpoints and delegates authorization and storage work to the domain modules.\",\"witness\":{\"initial\":\"An assigned operator has read access to an active project's visible expense document.\",\"events\":[\"The operator requests the document by document_id through the staff API.\"],\"outcomes\":[\"api serves an authenticated exact-byte response with the A14 headers.\",\"No owning staff binary route exists, so the request is unavailable or handled as a JSON route.\"],\"observer\":\"The operator and any staff API client.\"},\"unit\":\"context\"}]}",
+ "set_aside": []
+}

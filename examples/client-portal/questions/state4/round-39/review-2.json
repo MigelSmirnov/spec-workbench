@@ -1,0 +1,107 @@
+{
+ "open_points": [
+  {
+   "subject": "A28 wall-clock read scope",
+   "kind": "ambiguous cardinality",
+   "text": "“one reading per request” conflicts in scope with “An operation reads the clock once for its own timestamps” and the audit writer exception that “the writer takes it when it appends”",
+   "question": "Does “request” mean one HTTP request, one use-case operation, or one call to system_clock.utc_now, and does audit_writer take an additional reading during the same HTTP request?",
+   "options": [
+    "One wall reading for the entire HTTP request, shared by authorization, use case and audit writer",
+    "One wall reading per use-case operation, with audit_writer taking its own additional reading",
+    "One host-clock read per call to system_clock.utc_now, with no request-wide limit"
+   ],
+   "default_guess": "Treat each use-case operation as taking one wall reading and let audit_writer take the explicitly permitted additional reading.",
+   "witness": {
+    "initial": "An active staff account submits a login request that will create a session and append staff.login.",
+    "events": [
+     "staff_identity.authenticate_staff needs the current instant for the session timestamps and expiry",
+     "audit_writer.append_audit needs occurred_at for the audit record"
+    ],
+    "outcomes": [
+     "Under a request-wide reading, both modules share one wall-clock value and the host wall clock is read once",
+     "Under the per-operation rule and audit exception, staff_identity and audit_writer call utc_now separately and may persist different instants"
+    ],
+    "observer": "A verification harness instrumenting system_clock, and an operator inspecting the persisted session and audit timestamps"
+   },
+   "unit": "context"
+  },
+  {
+   "subject": "wall-clock use in State 4 flows",
+   "kind": "missing flow operation",
+   "text": "“An operation that needs the current instant takes one wall reading from it and reuses it” is added, but the State 4 steps that create, revoke, expire, update or audit records name no capability:system_clock.utc_now call or caller.",
+   "question": "For each affected flow step, which owning operation calls system_clock.utc_now, at what point, and which nested writes and validity comparisons receive that instant?",
+   "options": [
+    "Each owning use-case capability calls utc_now itself once and passes the value to its internal work",
+    "The route delegate calls utc_now once and supplies it to authorization and the owning use case",
+    "A transaction or request coordinator calls utc_now and shares it among all operations in the flow"
+   ],
+   "default_guess": "Have each owning use-case capability call utc_now once immediately before its first time-dependent comparison or record construction, with audit_writer using its documented separate reading.",
+   "witness": {
+    "initial": "A viewer has a live credential, live sessions, and an administrator re-issues the credential.",
+    "events": [
+     "authorization_guard admits the administrator",
+     "viewer_access.issue_viewer_access revokes the old credential and sessions, creates the new credential and appends an audit"
+    ],
+    "outcomes": [
+     "viewer_access explicitly calls system_clock.utc_now once and reuses that instant for all viewer-owned writes",
+     "The route or a transaction coordinator obtains the instant and supplies it to viewer_access"
+    ],
+    "observer": "The State 6 contract author and the flow-reachability verification, which must choose a caller and dependency path for utc_now"
+   },
+   "unit": "context"
+  },
+  {
+   "subject": "viewer-entry elapsed-clock step",
+   "kind": "missing flow operation",
+   "text": "“the transport guard takes the elapsed reading for the viewer-entry window from it,” while flow:viewer_entry_and_session only says the guard “has already rate-limited entry” and names no capability:system_clock.monotonic_seconds call.",
+   "question": "Which transport-guard step calls monotonic_seconds, and is it called only for viewer-entry requests or once for every HTTP request before route classification?",
+   "options": [
+    "transport_guard calls monotonic_seconds once only after identifying a viewer-entry request",
+    "transport_guard calls monotonic_seconds once for every HTTP request and uses it only for viewer-entry rate limiting",
+    "runtime obtains the elapsed reading and passes it to transport_guard"
+   ],
+   "default_guess": "Have transport_guard call monotonic_seconds once only for a request identified as viewer entry, before credential verification.",
+   "witness": {
+    "initial": "The service receives one ordinary health request followed by one viewer-entry request.",
+    "events": [
+     "transport_guard processes the health request",
+     "transport_guard processes and rate-limits the viewer-entry request"
+    ],
+    "outcomes": [
+     "Only the viewer-entry request reads the elapsed clock",
+     "Both requests read the elapsed clock, although only the second reading affects a rate-limit bucket"
+    ],
+    "observer": "A transport-guard verification harness instrumenting system_clock"
+   },
+   "unit": "context"
+  },
+  {
+   "subject": "system_clock failure outcome",
+   "kind": "unstated failure",
+   "text": "The new system_clock capabilities specify returned values but name no failure type or outcome when the host wall or elapsed clock cannot be read.",
+   "question": "What must each flow do if system_clock.utc_now or system_clock.monotonic_seconds fails before or during an operation?",
+   "options": [
+    "Fail the request closed with a declared internal-service failure and leave every transaction unchanged",
+    "Treat clock failure as an unhandled runtime failure",
+    "Refuse service startup or readiness after clock failure",
+    "Use a fallback or retry"
+   ],
+   "default_guess": "Fail closed as a declared internal-service failure; roll back any open transaction and write nothing, with no retry or fallback clock.",
+   "witness": {
+    "initial": "A viewer-entry request reaches transport_guard while the elapsed-clock backend fails.",
+    "events": [
+     "transport_guard attempts to obtain the rate-limit timestamp before verifying the access secret"
+    ],
+    "outcomes": [
+     "The request fails closed with a defined 500-class response and never reaches viewer_access",
+     "The clock exception is unhandled, or the guard proceeds without rate limiting"
+    ],
+    "observer": "The viewer and the runtime operator, who see a controlled response versus an unhandled failure or a request admitted without the required rate limit"
+   },
+   "unit": "context"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A28 wall-clock read scope\",\"kind\":\"ambiguous cardinality\",\"text\":\"“one reading per request” conflicts in scope with “An operation reads the clock once for its own timestamps” and the audit writer exception that “the writer takes it when it appends”\",\"question\":\"Does “request” mean one HTTP request, one use-case operation, or one call to system_clock.utc_now, and does audit_writer take an additional reading during the same HTTP request?\",\"options\":[\"One wall reading for the entire HTTP request, shared by authorization, use case and audit writer\",\"One wall reading per use-case operation, with audit_writer taking its own additional reading\",\"One host-clock read per call to system_clock.utc_now, with no request-wide limit\"],\"default_guess\":\"Treat each use-case operation as taking one wall reading and let audit_writer take the explicitly permitted additional reading.\",\"witness\":{\"initial\":\"An active staff account submits a login request that will create a session and append staff.login.\",\"events\":[\"staff_identity.authenticate_staff needs the current instant for the session timestamps and expiry\",\"audit_writer.append_audit needs occurred_at for the audit record\"],\"outcomes\":[\"Under a request-wide reading, both modules share one wall-clock value and the host wall clock is read once\",\"Under the per-operation rule and audit exception, staff_identity and audit_writer call utc_now separately and may persist different instants\"],\"observer\":\"A verification harness instrumenting system_clock, and an operator inspecting the persisted session and audit timestamps\"},\"unit\":\"context\"},{\"subject\":\"wall-clock use in State 4 flows\",\"kind\":\"missing flow operation\",\"text\":\"“An operation that needs the current instant takes one wall reading from it and reuses it” is added, but the State 4 steps that create, revoke, expire, update or audit records name no capability:system_clock.utc_now call or caller.\",\"question\":\"For each affected flow step, which owning operation calls system_clock.utc_now, at what point, and which nested writes and validity comparisons receive that instant?\",\"options\":[\"Each owning use-case capability calls utc_now itself once and passes the value to its internal work\",\"The route delegate calls utc_now once and supplies it to authorization and the owning use case\",\"A transaction or request coordinator calls utc_now and shares it among all operations in the flow\"],\"default_guess\":\"Have each owning use-case capability call utc_now once immediately before its first time-dependent comparison or record construction, with audit_writer using its documented separate reading.\",\"witness\":{\"initial\":\"A viewer has a live credential, live sessions, and an administrator re-issues the credential.\",\"events\":[\"authorization_guard admits the administrator\",\"viewer_access.issue_viewer_access revokes the old credential and sessions, creates the new credential and appends an audit\"],\"outcomes\":[\"viewer_access explicitly calls system_clock.utc_now once and reuses that instant for all viewer-owned writes\",\"The route or a transaction coordinator obtains the instant and supplies it to viewer_access\"],\"observer\":\"The State 6 contract author and the flow-reachability verification, which must choose a caller and dependency path for utc_now\"},\"unit\":\"context\"},{\"subject\":\"viewer-entry elapsed-clock step\",\"kind\":\"missing flow operation\",\"text\":\"“the transport guard takes the elapsed reading for the viewer-entry window from it,” while flow:viewer_entry_and_session only says the guard “has already rate-limited entry” and names no capability:system_clock.monotonic_seconds call.\",\"question\":\"Which transport-guard step calls monotonic_seconds, and is it called only for viewer-entry requests or once for every HTTP request before route classification?\",\"options\":[\"transport_guard calls monotonic_seconds once only after identifying a viewer-entry request\",\"transport_guard calls monotonic_seconds once for every HTTP request and uses it only for viewer-entry rate limiting\",\"runtime obtains the elapsed reading and passes it to transport_guard\"],\"default_guess\":\"Have transport_guard call monotonic_seconds once only for a request identified as viewer entry, before credential verification.\",\"witness\":{\"initial\":\"The service receives one ordinary health request followed by one viewer-entry request.\",\"events\":[\"transport_guard processes the health request\",\"transport_guard processes and rate-limits the viewer-entry request\"],\"outcomes\":[\"Only the viewer-entry request reads the elapsed clock\",\"Both requests read the elapsed clock, although only the second reading affects a rate-limit bucket\"],\"observer\":\"A transport-guard verification harness instrumenting system_clock\"},\"unit\":\"context\"},{\"subject\":\"system_clock failure outcome\",\"kind\":\"unstated failure\",\"text\":\"The new system_clock capabilities specify returned values but name no failure type or outcome when the host wall or elapsed clock cannot be read.\",\"question\":\"What must each flow do if system_clock.utc_now or system_clock.monotonic_seconds fails before or during an operation?\",\"options\":[\"Fail the request closed with a declared internal-service failure and leave every transaction unchanged\",\"Treat clock failure as an unhandled runtime failure\",\"Refuse service startup or readiness after clock failure\",\"Use a fallback or retry\"],\"default_guess\":\"Fail closed as a declared internal-service failure; roll back any open transaction and write nothing, with no retry or fallback clock.\",\"witness\":{\"initial\":\"A viewer-entry request reaches transport_guard while the elapsed-clock backend fails.\",\"events\":[\"transport_guard attempts to obtain the rate-limit timestamp before verifying the access secret\"],\"outcomes\":[\"The request fails closed with a defined 500-class response and never reaches viewer_access\",\"The clock exception is unhandled, or the guard proceeds without rate limiting\"],\"observer\":\"The viewer and the runtime operator, who see a controlled response versus an unhandled failure or a request admitted without the required rate limit\"},\"unit\":\"context\"}]}",
+ "set_aside": []
+}

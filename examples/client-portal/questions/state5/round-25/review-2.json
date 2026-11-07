@@ -1,0 +1,59 @@
+{
+ "open_points": [
+  {
+   "unit": "context",
+   "subject": "system_clock.utc_now and system_clock.monotonic_seconds",
+   "kind": "missing operation contracts",
+   "text": "State 3 adds candidate public capabilities `utc_now` and `monotonic_seconds`, while State 5 still says \"One public operation per State 3 capability (100...)\" but contains no public operation for either capability.",
+   "question": "What are the State 5 contracts for the two system-clock operations—their callers, inputs, outputs, errors and effects—and does adding them change the declared operation count from 100?",
+   "options": [
+    "Both are zero-input pure operations; `utc_now` returns one offset-naive UTC datetime and `monotonic_seconds` returns one float, with host failures propagating, and their callers are every module whose State 3 `Knows` includes `system_clock`.",
+    "The clock source is supplied as an object or backend input, so these names are methods whose construction and failure contract must also be public.",
+    "They are not public module operations, requiring an explicit exception to State 5's one-operation-per-capability rule and a different fixed caller contract."
+   ],
+   "default_guess": "Specify two zero-input public operations, list the State 3 time-reading modules as callers, propagate host-clock failures, and update the operation count to 102."
+  },
+  {
+   "unit": "context",
+   "subject": "A28 wall-clock read cardinality",
+   "kind": "contradictory cardinality",
+   "text": "State 2 says the wall clock has \"one reading per request\"; State 3 says `system_clock` provides \"One wall reading per call\"; A28 also says each operation reads once and `audit_writer` takes its own reading when it appends.",
+   "question": "Is the wall-clock value cached once for the whole HTTP request, or does every operation—including `audit_writer.append_audit`—make its own `utc_now` call and receive the host value at that call?",
+   "options": [
+    "One wall reading per HTTP request, shared by authorization, the owning use case and audit writer.",
+    "One wall reading per operation; audit append is a separate reading, so a single HTTP request may read the wall clock more than once.",
+    "One wall reading per `system_clock.utc_now` call, with an additional rule identifying exactly which calls within a request must reuse a previously obtained instant."
+   ],
+   "default_guess": "Use one wall reading per operation and a separate audit-writer reading, treating State 3's per-call rule and A28's audit exception as controlling.",
+   "witness": {
+    "initial": "An active administrator performs a mutation that writes a business record and appends its audit record; the host wall clock advances between construction of the business record and the audit append.",
+    "events": [
+     "The HTTP route authorizes the request.",
+     "The owning use case obtains time and writes the business record.",
+     "`audit_writer.append_audit` obtains the audit time and appends the record."
+    ],
+    "outcomes": [
+     "With one request-wide reading, the business timestamp and `AuditRecord.occurred_at` are identical.",
+     "With one reading per operation/call, the audit timestamp is later than the business timestamp."
+    ],
+    "observer": "An administrator or verification test reading the persisted business and audit records."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "A28 system-clock-source verification",
+   "kind": "missing required check",
+   "text": "A28 newly requires that `system_clock` be \"the only reader\" of both host clocks, but its Formal invariants and Required tests still test only equality of timestamps written by multi-write operations and do not state a check for exclusive host-clock access, the elapsed-clock delegation, or the new source operations.",
+   "question": "What required check demonstrates that no module other than `system_clock` reads `datetime.utcnow()` or `time.monotonic()`, and that wall and elapsed readings are obtained through the specified source at the required call points?",
+   "options": [
+    "A structural check rejects host-clock imports or calls outside `system_clock`, plus focused fake-backend tests for both public clock operations and their consumers.",
+    "Consumer tests inject or replace the clock source and prove every time-reading path uses it, including the transport rate limiter.",
+    "The exclusivity rule is intentionally unverified, which must be stated explicitly rather than leaving the existing timestamp-equality checks as its apparent evidence."
+   ],
+   "default_guess": "Add a structural exclusivity check and focused deterministic tests using a replaceable clock backend for wall- and elapsed-clock consumers."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"context\",\"subject\":\"system_clock.utc_now and system_clock.monotonic_seconds\",\"kind\":\"missing operation contracts\",\"text\":\"State 3 adds candidate public capabilities `utc_now` and `monotonic_seconds`, while State 5 still says \\\"One public operation per State 3 capability (100...)\\\" but contains no public operation for either capability.\",\"question\":\"What are the State 5 contracts for the two system-clock operations—their callers, inputs, outputs, errors and effects—and does adding them change the declared operation count from 100?\",\"options\":[\"Both are zero-input pure operations; `utc_now` returns one offset-naive UTC datetime and `monotonic_seconds` returns one float, with host failures propagating, and their callers are every module whose State 3 `Knows` includes `system_clock`.\",\"The clock source is supplied as an object or backend input, so these names are methods whose construction and failure contract must also be public.\",\"They are not public module operations, requiring an explicit exception to State 5's one-operation-per-capability rule and a different fixed caller contract.\"],\"default_guess\":\"Specify two zero-input public operations, list the State 3 time-reading modules as callers, propagate host-clock failures, and update the operation count to 102.\"},{\"unit\":\"context\",\"subject\":\"A28 wall-clock read cardinality\",\"kind\":\"contradictory cardinality\",\"text\":\"State 2 says the wall clock has \\\"one reading per request\\\"; State 3 says `system_clock` provides \\\"One wall reading per call\\\"; A28 also says each operation reads once and `audit_writer` takes its own reading when it appends.\",\"question\":\"Is the wall-clock value cached once for the whole HTTP request, or does every operation—including `audit_writer.append_audit`—make its own `utc_now` call and receive the host value at that call?\",\"options\":[\"One wall reading per HTTP request, shared by authorization, the owning use case and audit writer.\",\"One wall reading per operation; audit append is a separate reading, so a single HTTP request may read the wall clock more than once.\",\"One wall reading per `system_clock.utc_now` call, with an additional rule identifying exactly which calls within a request must reuse a previously obtained instant.\"],\"default_guess\":\"Use one wall reading per operation and a separate audit-writer reading, treating State 3's per-call rule and A28's audit exception as controlling.\",\"witness\":{\"initial\":\"An active administrator performs a mutation that writes a business record and appends its audit record; the host wall clock advances between construction of the business record and the audit append.\",\"events\":[\"The HTTP route authorizes the request.\",\"The owning use case obtains time and writes the business record.\",\"`audit_writer.append_audit` obtains the audit time and appends the record.\"],\"outcomes\":[\"With one request-wide reading, the business timestamp and `AuditRecord.occurred_at` are identical.\",\"With one reading per operation/call, the audit timestamp is later than the business timestamp.\"],\"observer\":\"An administrator or verification test reading the persisted business and audit records.\"}},{\"unit\":\"context\",\"subject\":\"A28 system-clock-source verification\",\"kind\":\"missing required check\",\"text\":\"A28 newly requires that `system_clock` be \\\"the only reader\\\" of both host clocks, but its Formal invariants and Required tests still test only equality of timestamps written by multi-write operations and do not state a check for exclusive host-clock access, the elapsed-clock delegation, or the new source operations.\",\"question\":\"What required check demonstrates that no module other than `system_clock` reads `datetime.utcnow()` or `time.monotonic()`, and that wall and elapsed readings are obtained through the specified source at the required call points?\",\"options\":[\"A structural check rejects host-clock imports or calls outside `system_clock`, plus focused fake-backend tests for both public clock operations and their consumers.\",\"Consumer tests inject or replace the clock source and prove every time-reading path uses it, including the transport rate limiter.\",\"The exclusivity rule is intentionally unverified, which must be stated explicitly rather than leaving the existing timestamp-equality checks as its apparent evidence.\"],\"default_guess\":\"Add a structural exclusivity check and focused deterministic tests using a replaceable clock backend for wall- and elapsed-clock consumers.\"}]}",
+ "set_aside": []
+}

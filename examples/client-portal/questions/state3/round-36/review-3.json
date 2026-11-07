@@ -1,0 +1,107 @@
+{
+ "open_points": [
+  {
+   "subject": "project access check for binary reads",
+   "kind": "contradictory ownership",
+   "text": "“expense_management and photo_management re-check access and visibility” / “The owning domain module re-checks authenticated project access” conflicts with both modules’ Knows lists, which omit authorization_guard, and with their Must not own authorization clauses.",
+   "question": "Which module owns the final project-access check for read_expense_document and read_progress_photo, and must it revalidate the session, principal, grant or assignment, capability, and Registry lifecycle immediately before storage access?",
+   "options": [
+    "api/api_irregular calls authorization_guard and the domain module trusts the resulting AuthorizedProjectContext",
+    "expense_management/photo_management call authorization_guard themselves",
+    "the HTTP module performs authentication and project authorization while the domain module checks only object-project association and visibility"
+   ],
+   "default_guess": "Have the HTTP module obtain a fresh AuthorizedProjectContext immediately before calling the domain module; let the domain module check object-project association and visibility.",
+   "witness": {
+    "initial": "A viewer has an active session and grant, and a visible document belongs to that project.",
+    "events": [
+     "api_irregular authorizes the viewer project read and obtains an AuthorizedProjectContext",
+     "an administrator revokes the viewer grant before expense_management reads the document",
+     "the viewer's request continues to the binary-read operation"
+    ],
+    "outcomes": [
+     "The domain module rechecks current project access, observes the revoked grant, and refuses the binary.",
+     "The domain module trusts the previously issued context, checks only document visibility and project equality, and returns the binary."
+    ],
+    "observer": "The viewer making the binary request"
+   },
+   "unit": "context"
+  },
+  {
+   "subject": "session and bearer validation boundary",
+   "kind": "overlapping ownership",
+   "text": "authorization_guard owns “session validity, active principal” and “reads the persisted role and binds a session to its identity”, while staff_identity owns staff-session “resolution”, viewer_access owns viewer-session “resolution”, and service_identity owns “bearer authentication”.",
+   "question": "After an identity module produces StaffActorContext, ViewerActorContext, or ServiceActorContext, does authorization_guard re-read and validate the current session or credential and principal records, or are those contexts conclusive authentication evidence for the remainder of the request?",
+   "options": [
+    "Identity modules authenticate once and authorization_guard trusts the actor context",
+    "Identity modules verify the presented secret, then authorization_guard re-reads lifecycle and principal state",
+    "authorization_guard owns the complete authentication check and identity modules only issue and revoke credentials"
+   ],
+   "default_guess": "Let identity modules verify the presented secret and produce the actor context, then have authorization_guard re-read the referenced lifecycle and principal state for project authorization.",
+   "witness": {
+    "initial": "A staff session is active and an operator has an active project assignment.",
+    "events": [
+     "staff_identity resolves the bearer token into a StaffActorContext",
+     "an administrator suspends the account and revokes its sessions",
+     "authorization_guard is then asked to authorize a project read using the already-produced context"
+    ],
+    "outcomes": [
+     "The guard re-reads session and account state and refuses the request.",
+     "The guard treats StaffActorContext as conclusive authentication evidence and allows the request after checking assignment, capability, and Registry state."
+    ],
+    "observer": "The suspended operator"
+   },
+   "unit": "context"
+  },
+  {
+   "subject": "staff progress-photo list ordering",
+   "kind": "missing decision",
+   "text": "photo_management owns “the order of the staff photo list it returns”, but the order is not stated; the same sentence says A27’s defined photo order belongs to derived_views’ overview gallery, and the A27 ownership table lists no photo_management consumer.",
+   "question": "What deterministic ordering must list_progress_photos use for the staff-side list?",
+   "options": [
+    "The A27 order: photo_date ascending, published_at ascending, photo_id ascending",
+    "The former State 1 order: photo_date ascending, photo_id ascending",
+    "A different explicitly defined staff-list order"
+   ],
+   "default_guess": "Use the A27 photo order for both the staff list and the overview gallery.",
+   "witness": {
+    "initial": "Two photos have the same photo_date; the first published photo has a lexicographically larger photo_id than the second.",
+    "events": [
+     "A staff member calls list_progress_photos"
+    ],
+    "outcomes": [
+     "The photos are ordered by published_at, so the first published photo appears first.",
+     "The photos are ordered by photo_id as the tie-breaker, so the second published photo appears first."
+    ],
+    "observer": "The staff caller"
+   },
+   "unit": "context"
+  },
+  {
+   "subject": "schema initialization for first-administrator bootstrap",
+   "kind": "missing dependency owner",
+   "text": "portal_store owns “schema creation through the repositories”, while staff_bootstrap_store owns the bootstrap connection and inserts but must not use PortalStore or PortalTransaction; staff_bootstrap_cli also has no dependency on portal_store, and no prerequisite says the schema already exists.",
+   "question": "Who creates or verifies the staff and audit schemas before the bootstrap command performs its empty-table check on a fresh deployment?",
+   "options": [
+    "staff_bootstrap_store creates the required schemas through the repositories",
+    "the command requires runtime or a deployment step to initialize the full schema first",
+    "staff_bootstrap_cli invokes a separate schema-initialization capability before constructing the bootstrap store"
+   ],
+   "default_guess": "Require an explicit deployment schema-initialization step before bootstrap, leaving schema creation owned by portal_store.",
+   "witness": {
+    "initial": "A fresh deployment points at a SQLite path where no database file or tables exist.",
+    "events": [
+     "The host operator runs staff_bootstrap_cli before starting the HTTP runtime"
+    ],
+    "outcomes": [
+     "The bootstrap path creates the required staff and audit schemas and successfully creates the first administrator.",
+     "The bootstrap path assumes initialized schemas and fails with a persistence error; the operator must start another component or run an unstated initialization step first."
+    ],
+    "observer": "The host operator running the mandatory bootstrap command"
+   },
+   "unit": "context"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"project access check for binary reads\",\"kind\":\"contradictory ownership\",\"text\":\"“expense_management and photo_management re-check access and visibility” / “The owning domain module re-checks authenticated project access” conflicts with both modules’ Knows lists, which omit authorization_guard, and with their Must not own authorization clauses.\",\"question\":\"Which module owns the final project-access check for read_expense_document and read_progress_photo, and must it revalidate the session, principal, grant or assignment, capability, and Registry lifecycle immediately before storage access?\",\"options\":[\"api/api_irregular calls authorization_guard and the domain module trusts the resulting AuthorizedProjectContext\",\"expense_management/photo_management call authorization_guard themselves\",\"the HTTP module performs authentication and project authorization while the domain module checks only object-project association and visibility\"],\"default_guess\":\"Have the HTTP module obtain a fresh AuthorizedProjectContext immediately before calling the domain module; let the domain module check object-project association and visibility.\",\"witness\":{\"initial\":\"A viewer has an active session and grant, and a visible document belongs to that project.\",\"events\":[\"api_irregular authorizes the viewer project read and obtains an AuthorizedProjectContext\",\"an administrator revokes the viewer grant before expense_management reads the document\",\"the viewer's request continues to the binary-read operation\"],\"outcomes\":[\"The domain module rechecks current project access, observes the revoked grant, and refuses the binary.\",\"The domain module trusts the previously issued context, checks only document visibility and project equality, and returns the binary.\"],\"observer\":\"The viewer making the binary request\"},\"unit\":\"context\"},{\"subject\":\"session and bearer validation boundary\",\"kind\":\"overlapping ownership\",\"text\":\"authorization_guard owns “session validity, active principal” and “reads the persisted role and binds a session to its identity”, while staff_identity owns staff-session “resolution”, viewer_access owns viewer-session “resolution”, and service_identity owns “bearer authentication”.\",\"question\":\"After an identity module produces StaffActorContext, ViewerActorContext, or ServiceActorContext, does authorization_guard re-read and validate the current session or credential and principal records, or are those contexts conclusive authentication evidence for the remainder of the request?\",\"options\":[\"Identity modules authenticate once and authorization_guard trusts the actor context\",\"Identity modules verify the presented secret, then authorization_guard re-reads lifecycle and principal state\",\"authorization_guard owns the complete authentication check and identity modules only issue and revoke credentials\"],\"default_guess\":\"Let identity modules verify the presented secret and produce the actor context, then have authorization_guard re-read the referenced lifecycle and principal state for project authorization.\",\"witness\":{\"initial\":\"A staff session is active and an operator has an active project assignment.\",\"events\":[\"staff_identity resolves the bearer token into a StaffActorContext\",\"an administrator suspends the account and revokes its sessions\",\"authorization_guard is then asked to authorize a project read using the already-produced context\"],\"outcomes\":[\"The guard re-reads session and account state and refuses the request.\",\"The guard treats StaffActorContext as conclusive authentication evidence and allows the request after checking assignment, capability, and Registry state.\"],\"observer\":\"The suspended operator\"},\"unit\":\"context\"},{\"subject\":\"staff progress-photo list ordering\",\"kind\":\"missing decision\",\"text\":\"photo_management owns “the order of the staff photo list it returns”, but the order is not stated; the same sentence says A27’s defined photo order belongs to derived_views’ overview gallery, and the A27 ownership table lists no photo_management consumer.\",\"question\":\"What deterministic ordering must list_progress_photos use for the staff-side list?\",\"options\":[\"The A27 order: photo_date ascending, published_at ascending, photo_id ascending\",\"The former State 1 order: photo_date ascending, photo_id ascending\",\"A different explicitly defined staff-list order\"],\"default_guess\":\"Use the A27 photo order for both the staff list and the overview gallery.\",\"witness\":{\"initial\":\"Two photos have the same photo_date; the first published photo has a lexicographically larger photo_id than the second.\",\"events\":[\"A staff member calls list_progress_photos\"],\"outcomes\":[\"The photos are ordered by published_at, so the first published photo appears first.\",\"The photos are ordered by photo_id as the tie-breaker, so the second published photo appears first.\"],\"observer\":\"The staff caller\"},\"unit\":\"context\"},{\"subject\":\"schema initialization for first-administrator bootstrap\",\"kind\":\"missing dependency owner\",\"text\":\"portal_store owns “schema creation through the repositories”, while staff_bootstrap_store owns the bootstrap connection and inserts but must not use PortalStore or PortalTransaction; staff_bootstrap_cli also has no dependency on portal_store, and no prerequisite says the schema already exists.\",\"question\":\"Who creates or verifies the staff and audit schemas before the bootstrap command performs its empty-table check on a fresh deployment?\",\"options\":[\"staff_bootstrap_store creates the required schemas through the repositories\",\"the command requires runtime or a deployment step to initialize the full schema first\",\"staff_bootstrap_cli invokes a separate schema-initialization capability before constructing the bootstrap store\"],\"default_guess\":\"Require an explicit deployment schema-initialization step before bootstrap, leaving schema creation owned by portal_store.\",\"witness\":{\"initial\":\"A fresh deployment points at a SQLite path where no database file or tables exist.\",\"events\":[\"The host operator runs staff_bootstrap_cli before starting the HTTP runtime\"],\"outcomes\":[\"The bootstrap path creates the required staff and audit schemas and successfully creates the first administrator.\",\"The bootstrap path assumes initialized schemas and fails with a persistence error; the operator must start another component or run an unstated initialization step first.\"],\"observer\":\"The host operator running the mandatory bootstrap command\"},\"unit\":\"context\"}]}",
+ "set_aside": []
+}

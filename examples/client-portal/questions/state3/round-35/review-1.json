@@ -1,0 +1,123 @@
+{
+ "open_points": [
+  {
+   "unit": "context",
+   "subject": "producer project-scope authorization",
+   "kind": "two owners and unusable dependency direction",
+   "text": "`service_identity` owns “A12 … producer scope” and exposes `authorize_producer_scope`, while `authorization_guard` owns “the guard part of … A12” and exposes `authorize_snapshot_import`; `authorization_guard` precedes `service_identity` and may not know it.",
+   "question": "Which module makes the authoritative producer-scope decision for an import, and does the other module consume that decision or repeat it?",
+   "options": [
+    "`service_identity` decides scope and supplies trusted evidence to `authorization_guard`",
+    "`authorization_guard` decides scope directly from persisted principal and grant records",
+    "Both check scope, with a specified order and concurrency meaning"
+   ],
+   "default_guess": "Make `authorization_guard` the sole final scope checker because it already owns the ordered project guard and can read the records through `portal_store`.",
+   "witness": {
+    "initial": "A `granted_projects` producer has a valid credential and an active grant for project P.",
+    "events": [
+     "The producer authenticates through `service_identity`.",
+     "An administrator revokes the grant.",
+     "The producer's import proceeds through the project authorization step."
+    ],
+    "outcomes": [
+     "An implementation treating the earlier `service_identity` scope decision as authoritative accepts the import.",
+     "An implementation treating `authorization_guard.authorize_snapshot_import` as authoritative observes the revocation and refuses the import."
+    ],
+    "observer": "The producer sees an accepted import result or a concealed scope refusal."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "binary-read authorization",
+   "kind": "required knowledge missing from module dependencies",
+   "text": "A14 says “The owning domain module re-checks authenticated project access,” and State 3 says `expense_management` and `photo_management` “re-check access and visibility,” but neither module's `Knows` list includes `authorization_guard`; each knows only `models`, storage/audit/persistence dependencies.",
+   "question": "How can the owning binary-read module perform the required current access re-check: must it call `authorization_guard`, receive freshly authorized evidence from the API, or treat an earlier `AuthorizedProjectContext` as sufficient?",
+   "options": [
+    "Add an allowed dependency from both owning modules to `authorization_guard`",
+    "The API performs the sole fresh guard and passes trusted authorization evidence",
+    "The owning modules independently reimplement the access check from `portal_store`"
+   ],
+   "default_guess": "Have each binary-read operation call the common authorization guard immediately before checking visibility and reading storage.",
+   "witness": {
+    "initial": "A viewer has a valid session and grant for project P, whose visible document D exists.",
+    "events": [
+     "The API resolves the viewer and performs an initial project guard.",
+     "An administrator revokes the viewer's grant before D is handed to binary storage.",
+     "The owning document module processes the read."
+    ],
+    "outcomes": [
+     "An implementation that trusts the earlier context returns D.",
+     "An implementation that performs the stated current access re-check refuses D because revocation is immediate."
+    ],
+    "observer": "The viewer receives either the protected bytes or the concealed refusal."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "binary runtime configuration authority",
+   "kind": "contradictory configuration ownership",
+   "text": "State 3 says environment values are “read once, by `runtime_settings`, into `RuntimeSettings`,” and `runtime_settings` owns loading `BINARY_MAX_READ_BYTES` plus startup consistency, but also says `binary_storage` reads `BINARY_STORAGE_ROOT` and `BINARY_MAX_READ_BYTES` “at each binary read.”",
+   "question": "After startup, is the authoritative binary root/read limit the validated `RuntimeSettings` value or the environment value re-read by `binary_storage` for each request?",
+   "options": [
+    "Use only the startup-loaded immutable settings",
+    "Re-read both environment variables for every binary read",
+    "Validate at startup and re-read later, with an explicit rule for changed values"
+   ],
+   "default_guess": "Use the immutable startup-loaded settings for every read.",
+   "witness": {
+    "initial": "The service starts with `BINARY_MAX_READ_BYTES` set to 10 MB and successfully validates that setting.",
+    "events": [
+     "After startup, the process environment value is changed to 1 MB.",
+     "An authorized caller requests a valid 5 MB document."
+    ],
+    "outcomes": [
+     "An implementation using `RuntimeSettings` returns the document.",
+     "An implementation following the per-read environment rule rejects the document as oversized."
+    ],
+    "observer": "The authorized caller sees bytes or a storage failure."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "same-project section validation",
+   "kind": "conflicting invariant owner",
+   "text": "State 2 places INV-036 at `validate_project_section`; State 3 exposes that capability from `budget_management`, maps A19 primarily to `expense_management`, says `expense_management` owns “same-project targets,” and separately says `project_tracking` owns “section and project checks” while calling `budget_management`.",
+   "question": "Which single module owns the fact that a `PortalSection` belongs to a project, and which modules must delegate to it for expense allocations, progress updates and photo section associations?",
+   "options": [
+    "`budget_management.validate_project_section` is the sole policy owner",
+    "Each consuming module independently validates section ownership through its repository",
+    "The repository port owns and returns a typed same-project validation result"
+   ],
+   "default_guess": "Treat `budget_management.validate_project_section` as the single owner and require all section-using modules to delegate to it."
+  },
+  {
+   "unit": "context",
+   "subject": "archived-project progress read that creates a manual budget",
+   "kind": "split operation and transaction ownership",
+   "text": "A5 requires `project_tracking.list_project_progress` to create an empty manual budget when none exists, including for an archived project; State 3 gives manual-budget creation and its audit to `budget_management`, gives the progress-list operation to `project_tracking`, and says each use case that owns an operation opens and closes its own transaction.",
+   "question": "Which module owns this exceptional read-with-write operation, and are manual-budget creation, its audit, and the progress read one transaction or separate transactions?",
+   "options": [
+    "`project_tracking` owns one transaction and invokes transaction-local budget creation",
+    "`budget_management.ensure_manual_budget` commits first, then `project_tracking` performs a separate read",
+    "`budget_management` owns the whole exceptional progress-read flow"
+   ],
+   "default_guess": "Let `project_tracking` own one transaction containing creation, audit and the resulting progress read.",
+   "witness": {
+    "initial": "Archived project P has no manual budget and no progress rows.",
+    "events": [
+     "A staff member requests P's progress list.",
+     "The empty manual budget and its required audit are prepared.",
+     "A persistence failure occurs while reading the progress rows."
+    ],
+    "outcomes": [
+     "With one transaction, the failure rolls back the new budget and audit.",
+     "With separate `budget_management` and `project_tracking` transactions, the budget and audit remain committed although the progress request failed."
+    ],
+    "observer": "A later staff read or audit inspection sees either no prior change or an already-created manual budget and audit record."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"context\",\"subject\":\"producer project-scope authorization\",\"kind\":\"two owners and unusable dependency direction\",\"text\":\"`service_identity` owns “A12 … producer scope” and exposes `authorize_producer_scope`, while `authorization_guard` owns “the guard part of … A12” and exposes `authorize_snapshot_import`; `authorization_guard` precedes `service_identity` and may not know it.\",\"question\":\"Which module makes the authoritative producer-scope decision for an import, and does the other module consume that decision or repeat it?\",\"options\":[\"`service_identity` decides scope and supplies trusted evidence to `authorization_guard`\",\"`authorization_guard` decides scope directly from persisted principal and grant records\",\"Both check scope, with a specified order and concurrency meaning\"],\"default_guess\":\"Make `authorization_guard` the sole final scope checker because it already owns the ordered project guard and can read the records through `portal_store`.\",\"witness\":{\"initial\":\"A `granted_projects` producer has a valid credential and an active grant for project P.\",\"events\":[\"The producer authenticates through `service_identity`.\",\"An administrator revokes the grant.\",\"The producer's import proceeds through the project authorization step.\"],\"outcomes\":[\"An implementation treating the earlier `service_identity` scope decision as authoritative accepts the import.\",\"An implementation treating `authorization_guard.authorize_snapshot_import` as authoritative observes the revocation and refuses the import.\"],\"observer\":\"The producer sees an accepted import result or a concealed scope refusal.\"}},{\"unit\":\"context\",\"subject\":\"binary-read authorization\",\"kind\":\"required knowledge missing from module dependencies\",\"text\":\"A14 says “The owning domain module re-checks authenticated project access,” and State 3 says `expense_management` and `photo_management` “re-check access and visibility,” but neither module's `Knows` list includes `authorization_guard`; each knows only `models`, storage/audit/persistence dependencies.\",\"question\":\"How can the owning binary-read module perform the required current access re-check: must it call `authorization_guard`, receive freshly authorized evidence from the API, or treat an earlier `AuthorizedProjectContext` as sufficient?\",\"options\":[\"Add an allowed dependency from both owning modules to `authorization_guard`\",\"The API performs the sole fresh guard and passes trusted authorization evidence\",\"The owning modules independently reimplement the access check from `portal_store`\"],\"default_guess\":\"Have each binary-read operation call the common authorization guard immediately before checking visibility and reading storage.\",\"witness\":{\"initial\":\"A viewer has a valid session and grant for project P, whose visible document D exists.\",\"events\":[\"The API resolves the viewer and performs an initial project guard.\",\"An administrator revokes the viewer's grant before D is handed to binary storage.\",\"The owning document module processes the read.\"],\"outcomes\":[\"An implementation that trusts the earlier context returns D.\",\"An implementation that performs the stated current access re-check refuses D because revocation is immediate.\"],\"observer\":\"The viewer receives either the protected bytes or the concealed refusal.\"}},{\"unit\":\"context\",\"subject\":\"binary runtime configuration authority\",\"kind\":\"contradictory configuration ownership\",\"text\":\"State 3 says environment values are “read once, by `runtime_settings`, into `RuntimeSettings`,” and `runtime_settings` owns loading `BINARY_MAX_READ_BYTES` plus startup consistency, but also says `binary_storage` reads `BINARY_STORAGE_ROOT` and `BINARY_MAX_READ_BYTES` “at each binary read.”\",\"question\":\"After startup, is the authoritative binary root/read limit the validated `RuntimeSettings` value or the environment value re-read by `binary_storage` for each request?\",\"options\":[\"Use only the startup-loaded immutable settings\",\"Re-read both environment variables for every binary read\",\"Validate at startup and re-read later, with an explicit rule for changed values\"],\"default_guess\":\"Use the immutable startup-loaded settings for every read.\",\"witness\":{\"initial\":\"The service starts with `BINARY_MAX_READ_BYTES` set to 10 MB and successfully validates that setting.\",\"events\":[\"After startup, the process environment value is changed to 1 MB.\",\"An authorized caller requests a valid 5 MB document.\"],\"outcomes\":[\"An implementation using `RuntimeSettings` returns the document.\",\"An implementation following the per-read environment rule rejects the document as oversized.\"],\"observer\":\"The authorized caller sees bytes or a storage failure.\"}},{\"unit\":\"context\",\"subject\":\"same-project section validation\",\"kind\":\"conflicting invariant owner\",\"text\":\"State 2 places INV-036 at `validate_project_section`; State 3 exposes that capability from `budget_management`, maps A19 primarily to `expense_management`, says `expense_management` owns “same-project targets,” and separately says `project_tracking` owns “section and project checks” while calling `budget_management`.\",\"question\":\"Which single module owns the fact that a `PortalSection` belongs to a project, and which modules must delegate to it for expense allocations, progress updates and photo section associations?\",\"options\":[\"`budget_management.validate_project_section` is the sole policy owner\",\"Each consuming module independently validates section ownership through its repository\",\"The repository port owns and returns a typed same-project validation result\"],\"default_guess\":\"Treat `budget_management.validate_project_section` as the single owner and require all section-using modules to delegate to it.\"},{\"unit\":\"context\",\"subject\":\"archived-project progress read that creates a manual budget\",\"kind\":\"split operation and transaction ownership\",\"text\":\"A5 requires `project_tracking.list_project_progress` to create an empty manual budget when none exists, including for an archived project; State 3 gives manual-budget creation and its audit to `budget_management`, gives the progress-list operation to `project_tracking`, and says each use case that owns an operation opens and closes its own transaction.\",\"question\":\"Which module owns this exceptional read-with-write operation, and are manual-budget creation, its audit, and the progress read one transaction or separate transactions?\",\"options\":[\"`project_tracking` owns one transaction and invokes transaction-local budget creation\",\"`budget_management.ensure_manual_budget` commits first, then `project_tracking` performs a separate read\",\"`budget_management` owns the whole exceptional progress-read flow\"],\"default_guess\":\"Let `project_tracking` own one transaction containing creation, audit and the resulting progress read.\",\"witness\":{\"initial\":\"Archived project P has no manual budget and no progress rows.\",\"events\":[\"A staff member requests P's progress list.\",\"The empty manual budget and its required audit are prepared.\",\"A persistence failure occurs while reading the progress rows.\"],\"outcomes\":[\"With one transaction, the failure rolls back the new budget and audit.\",\"With separate `budget_management` and `project_tracking` transactions, the budget and audit remain committed although the progress request failed.\"],\"observer\":\"A later staff read or audit inspection sees either no prior change or an already-created manual budget and audit record.\"}}]}",
+ "set_aside": []
+}

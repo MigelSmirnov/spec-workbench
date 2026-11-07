@@ -1,0 +1,189 @@
+Module: snapshot_import
+Target path: application/snapshot_import.py
+Target file: snapshot_import.py
+
+IMPORTS (every listed symbol is available; import the ones the module uses):
+from __future__ import annotations
+from datetime import datetime
+from decimal import Decimal
+from uuid import UUID
+from uuid import uuid4
+
+from adapters.portal_store import PortalStore, PortalTransaction
+from application.audit_writer import append_audit
+from application.authorization_guard import ArchivedProjectRejected, AuthorizationRejected, ScopedNotFoundError, authorize_snapshot_import
+from core.models import ActorKind, ApprovedEstimateSnapshot, AuditAction, AuditEntityKind, AuditIntent, AuditRecord, AuditResult, AuthorizedProjectContext, ImportOutcome, ImportRejectReason, ProducerScopeMode, ProducerSourceType, ServiceActorContext, SnapshotImportRecord, SnapshotImportRepository, SnapshotPublication, SnapshotSectionData, ProjectReference, ProjectContext
+from core.system_clock import utc_now
+from domain.financial_policy import FinancialValidationError, validate_eur_amount
+
+CONTRACTS (function signatures — follow exactly):
+def _build_approved_snapshot(publication: SnapshotPublication, actor: ServiceActorContext, fingerprint: str, received_at: datetime) -> ApprovedEstimateSnapshot
+def _build_import_record(publication: SnapshotPublication, actor: ServiceActorContext, outcome: ImportOutcome, reject_reason: ImportRejectReason | None, fingerprint: str, snapshot_id: UUID | None, occurred_at: datetime) -> SnapshotImportRecord
+def _canonical_snapshot_fingerprint(publication: SnapshotPublication) -> str
+def _classify_snapshot_replay(existing: ApprovedEstimateSnapshot, fingerprint: str) -> ImportOutcome
+def _validate_snapshot_publication(publication: SnapshotPublication) -> None
+def get_snapshot_import_result(store: PortalStore, actor: ServiceActorContext, import_id: UUID) -> SnapshotImportRecord
+def import_snapshot(store: PortalStore, actor: ServiceActorContext, publication: SnapshotPublication) -> SnapshotImportRecord
+# SnapshotContentRejected
+def __init__(self, reason: ImportRejectReason) -> None
+# PortalStore
+def __init__(self, database_url: str) -> None
+# PortalStore
+def begin(self) -> PortalTransaction
+# PortalTransaction
+def __init__(self, connection: object) -> None
+# PortalTransaction
+def audit(self) -> AuditRepository
+# PortalTransaction
+def commit(self) -> None
+# PortalTransaction
+def get_snapshot_import(self, import_id: UUID) -> SnapshotImportRecord | None
+# PortalTransaction
+def insert_snapshot(self, snapshot: ApprovedEstimateSnapshot) -> None
+# PortalTransaction
+def insert_snapshot_import(self, record: SnapshotImportRecord) -> None
+# PortalTransaction
+def rollback(self) -> None
+# PortalTransaction
+def snapshot_imports(self) -> SnapshotImportRepository
+# SnapshotImportRepository
+def get_snapshot_by_identity(self, project_id: UUID, estimate_id: UUID, estimate_version: int) -> ApprovedEstimateSnapshot | None
+# SnapshotImportRepository
+def get_snapshot_import(self, import_id: UUID) -> SnapshotImportRecord | None
+# SnapshotImportRepository
+def insert_snapshot(self, snapshot: ApprovedEstimateSnapshot) -> None
+# SnapshotImportRepository
+def insert_snapshot_import(self, record: SnapshotImportRecord) -> None
+
+IMPORTED FUNCTION SIGNATURES (these come from the imports above):
+def append_audit(repository: AuditRepository, intent: AuditIntent) -> AuditRecord
+def authorize_snapshot_import(store: PortalStore, actor: ServiceActorContext, project_id: UUID) -> AuthorizedProjectContext
+def validate_eur_amount(currency: str, amount: Decimal, strictly_positive: bool = False) -> Decimal
+def utc_now() -> datetime
+
+OWNED FUNCTIONS REQUIRED (must be defined as top-level functions):
+- _build_approved_snapshot: (publication: SnapshotPublication, actor: ServiceActorContext, fingerprint: str, received_at: datetime) -> ApprovedEstimateSnapshot
+- _build_import_record: (publication: SnapshotPublication, actor: ServiceActorContext, outcome: ImportOutcome, reject_reason: ImportRejectReason | None, fingerprint: str, snapshot_id: UUID | None, occurred_at: datetime) -> SnapshotImportRecord
+- _canonical_snapshot_fingerprint: (publication: SnapshotPublication) -> str
+- _classify_snapshot_replay: (existing: ApprovedEstimateSnapshot, fingerprint: str) -> ImportOutcome
+- _validate_snapshot_publication: (publication: SnapshotPublication) -> None
+- get_snapshot_import_result: (store: PortalStore, actor: ServiceActorContext, import_id: UUID) -> SnapshotImportRecord
+- import_snapshot: (store: PortalStore, actor: ServiceActorContext, publication: SnapshotPublication) -> SnapshotImportRecord
+
+STATIC GATE CONTRACT (deterministic checks; a violating candidate is rejected without repair):
+- Reflective attribute access is rejected: never call getattr, hasattr,
+  setattr, delattr, or vars; every declared field and operation is
+  addressed directly by name, including in try/finally cleanup.
+- A definition whose parameter list differs from its declared contract
+  signature is rejected; keep names and order exactly.
+- A constructed record accepted by a declared insert_*/upsert_*/append_*
+  operation must reach a call or return; a built-and-dropped record is
+  rejected.
+- Instantiating a spec-declared interface is rejected; construct the
+  module-owned concrete class instead.
+- A stub, placeholder, or fail-closed body for a contracted callable is
+  rejected; implement the complete specified behavior.
+- A top-level import of a package outside the Python standard library and
+  this project's own modules is rejected unless IMPORTS lists it; a note
+  never adds a package to IMPORTS.
+- A model is constructed with values of its declared field types; a field
+  typed tuple[...] receives a tuple, built with tuple(...) where the items
+  were collected in a list, never the list itself.
+- A value passed to a model field is narrowed at the call itself: a name
+  seeded with None, set on some branches and passed later under a test of
+  another name is rejected; build the value where it is obtained and pass
+  it there, or test that same name for None at the call.
+
+OWNED CLASSES REQUIRED (must be defined locally, not merely referenced):
+- SnapshotContentRejected: define locally with methods __init__
+
+CONCRETE IMPLEMENTATION OBLIGATIONS:
+No local concrete-to-interface obligations.
+
+REQUIREMENTS (notes — implement these):
+- _build_approved_snapshot: [PROVENANCE] MUST copy publication identity/content, actor service principal and key_version, fingerprint, and received_at into a new immutable snapshot without Registry name/address fields.
+- _build_approved_snapshot: [FIELD_ASSIGNMENT] MUST assign a fresh uuid4 snapshot_id and return the exact new immutable ApprovedEstimateSnapshot; UUID(int=0), publication-derived IDs, and repository-generated replacement identities are forbidden.
+- _build_import_record: [FIELD_ASSIGNMENT] MUST record publication identity, actor/key_version, outcome, reject_reason, fingerprint, snapshot_id, and occurred_at without token secret or mutable provider state.
+- _build_import_record: [FIELD_ASSIGNMENT] MUST assign a fresh uuid4 import_id for every persisted import attempt and return that exact immutable SnapshotImportRecord; UUID(int=0), snapshot_id reuse as import_id, and repository-generated replacement identities are forbidden.
+- _canonical_snapshot_fingerprint: [DETERMINISM_OR_ORDERING] MUST hash the complete canonical publication content independent of input collection/hash iteration order and exclude receipt clock or actor credentials.
+- _classify_snapshot_replay: [BEHAVIOR] MUST return ImportOutcome.IDEMPOTENT_REPLAY only for an equal content_fingerprint and ImportOutcome.INTEGRITY_CONFLICT otherwise, the replay identity being project_id, estimate_id, estimate_version and content_fingerprint.
+- _validate_snapshot_publication: [VALIDATION_ERROR] MUST accept only a snapshot contract version in the supported snapshot contract versions [1], the currency EUR and R9 values, complete closed DTO fields, and project identity without consulting mutable PresuPro state.
+- _validate_snapshot_publication: [VALIDATION_ERROR] MUST convert every content rejection deterministically into SnapshotContentRejected carrying the matching ImportRejectReason as reason: an unsupported envelope version MUST use UNSUPPORTED_CONTRACT_VERSION, a currency other than EUR MUST use CURRENCY_MISMATCH, an invalid negative or non-R9 section amount with EUR MUST use INVALID_SECTIONS, and missing or incomplete closed DTO fields MUST use INCOMPLETE_CONTENT; the reason field alone lets import_snapshot persist the rejection instead of leaking FinancialValidationError, and the rejection MUST NOT be signalled through the message text of a bare ValueError.
+- get_snapshot_import_result: [SECURITY_BOUNDARY] MUST return the addressed immutable record only when its service_principal_id matches actor and MUST otherwise raise ScopedNotFoundError.
+- get_snapshot_import_result: [RETURN_SHAPE] MUST return exactly one immutable SnapshotImportRecord matching import_id and actor.service_principal_id, never an empty record.
+- get_snapshot_import_result: [DEPENDENCY_BOUNDARY] MUST open one read transaction with store.begin(), which returns a PortalTransaction, obtain one SnapshotImportRepository through tx.snapshot_imports(), call only get_snapshot_import(import_id), rollback exactly once before return or re-raise, and make no direct legacy snapshot persistence call.
+- import_snapshot: [DEPENDENCY_BOUNDARY] MUST call authorize_snapshot_import before opening its snapshot persistence transaction and MUST NOT call authorize_producer_scope; after authorization classification it MUST use exactly one non-overlapping transaction, one tx.snapshot_imports() repository, and tx.audit(), with no direct legacy snapshot persistence call and no budget, section, or plan materialization.
+- import_snapshot: [ORCHESTRATION] MUST compute one fingerprint and occurred_at per attempt; authentication failures and non-catalog infrastructure failures MUST re-raise without persistence, while archived, unknown/scoped, content-validation, accepted, idempotent_replay, and integrity_conflict outcomes MUST each append exactly one fresh immutable SnapshotImportRecord plus exactly one AuditAction.SNAPSHOT_IMPORT audit atomically and commit once.
+- import_snapshot: [PROVENANCE] For a new accepted publication MUST create and insert one fresh ApprovedEstimateSnapshot, then insert a fresh ACCEPTED record referencing that exact snapshot_id; for equal fingerprint replay MUST insert a fresh IDEMPOTENT_REPLAY record referencing the exact existing snapshot without inserting a snapshot; for differing fingerprint replay MUST insert a fresh INTEGRITY_CONFLICT record with no snapshot_id and MUST NOT insert or alter a snapshot.
+- import_snapshot: [VALIDATION_ERROR] Transaction guards MUST catch BaseException, rollback exactly once only before successful commit, and re-raise the original failure; snapshot, import record, and audit writes MUST always commit or rollback together.
+- import_snapshot: [ORCHESTRATION] Every AuditAction.SNAPSHOT_IMPORT audit MUST use entity_kind SNAPSHOT_IMPORT and entity_id equal to str(record.import_id); SUCCESS outcomes ACCEPTED and IDEMPOTENT_REPLAY MUST use reason_code None, REJECTED catalog outcomes MUST use their non-blank ImportRejectReason value, and INTEGRITY_CONFLICT MUST use AuditResult.REJECTED with reason_code equal to the non-blank ImportOutcome.INTEGRITY_CONFLICT value.
+- import_snapshot: [ORCHESTRATION] MUST call authorize_snapshot_import exactly once inside a classification try block before store.begin; ArchivedProjectRejected MUST classify ARCHIVED_PROJECT, ScopedNotFoundError MUST classify UNKNOWN_PROJECT, and AuthorizationRejected MUST classify SCOPE_DENIED, then the single later persistence transaction MUST append that rejection record and audit. These three catalog exceptions MUST NOT escape merely because authorization precedes store.begin, and authorize_snapshot_import MUST NOT be called inside the persistence transaction.
+- import_snapshot: [ORCHESTRATION] In the ACCEPTED branch repo.insert_snapshot(snapshot) MUST be invoked exactly once before the one repo.insert_snapshot_import(record) call; duplicate insertion of the same snapshot, retry-on-constraint, upsert, replace, and a second accepted-snapshot write are forbidden.
+- import_snapshot: [ORCHESTRATION] MUST classify a content rejection from the reason field of SnapshotContentRejected and MUST NOT read, compare, or persist the text of any exception message; this leaves the archived, unknown/scoped and scope-denied classifications by exception type unchanged.
+- import_snapshot: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it writes and every current-time comparison it makes; it MUST NOT read a host clock itself.
+- SnapshotContentRejected.__init__: [FIELD_ASSIGNMENT] MUST expose exactly the supplied ImportRejectReason as reason, and MUST carry no PresuPro payload value, section amount, or project identity beyond that reason.
+
+MODEL DATA DEFINITIONS (READ-ONLY SPEC DATA, NOT CODE):
+No = models.* spec data addresses referenced by notes.
+
+MODEL DATA ADDRESSES (SPEC DATA, NOT IMPORT PATHS):
+No = models.* spec data addresses referenced by notes.
+
+IMPORTED MODEL OWNERSHIP (DO NOT REDEFINE):
+Imported runtime model symbols are owned by their source modules listed in IMPORTS; use them as imported and do not redefine them here.
+
+RUNTIME MODEL SURFACE (CORE.MODELS IMPORTS):
+These are imported runtime symbols from core.models. Use the listed enum member names and model fields exactly.
+- ActorKind enum members: SERVICE='service', STAFF='staff', SYSTEM='system', VIEWER='viewer'
+- ApprovedEstimateSnapshot fields (exact, no others exist): approved_at: datetime, approved_by: str, content_fingerprint: str, contract_version: int, currency: str, estimate_id: UUID, estimate_version: int, project_id: UUID, published_at: datetime, received_at: datetime, received_from: UUID, received_key_version: int, sections: list[SnapshotSectionData], snapshot_id: UUID, source_system: str, tax_mode: str
+- AuditAction enum members: BUDGET_MANUAL_VERSION_CREATE='budget.manual_version_create', BUDGET_SECTION_PLAN_EDIT='budget.section_plan_edit', DOCUMENT_UPDATE='document.update', EXPENSE_ALLOCATE='expense.allocate', EXPENSE_CORRECT='expense.correct', EXPENSE_CREATE='expense.create', EXPENSE_EXCLUDE='expense.exclude', EXPENSE_INCLUDE='expense.include', GRANT_CREATE='grant.create', GRANT_REVOKE='grant.revoke', PAYMENT_REGISTER='payment.register', PHOTO_PUBLISH='photo.publish', PHOTO_UPDATE='photo.update', PRINCIPAL_CREATE='principal.create', PRINCIPAL_CREDENTIAL_ISSUE='principal.credential_issue', PRINCIPAL_CREDENTIAL_REVOKE='principal.credential_revoke', PRINCIPAL_DISABLE='principal.disable', PRINCIPAL_ENABLE='principal.enable', PRODUCER_GRANT_CREATE='producer_grant.create', PRODUCER_GRANT_REVOKE='producer_grant.revoke', PROGRESS_UPDATE='progress.update', SNAPSHOT_ACTIVATE='snapshot.activate', SNAPSHOT_IMPORT='snapshot.import', STAFF_ASSIGNMENT_CREATE='staff_assignment.create', STAFF_ASSIGNMENT_REVOKE='staff_assignment.revoke', STAFF_CREATE='staff.create', STAFF_DISABLE='staff.disable', STAFF_LOGIN='staff.login', STAFF_LOGIN_FAILED='staff.login_failed', STAFF_LOGOUT='staff.logout', STAFF_RECOVERY_OVERRIDE='staff.recovery_override', STAFF_REINSTATE='staff.reinstate', STAFF_SESSIONS_REVOKE='staff.sessions_revoke', STAFF_SUSPEND='staff.suspend', VIEWER_CREATE='viewer.create', VIEWER_CREDENTIAL_ISSUE='viewer.credential_issue', VIEWER_CREDENTIAL_REVOKE='viewer.credential_revoke', VIEWER_REVOKE='viewer.revoke'
+- AuditEntityKind enum members: BUDGET_VERSION='budget_version', EXPENSE='expense', EXPENSE_ALLOCATION='expense_allocation', EXPENSE_DOCUMENT='expense_document', PRODUCER_GRANT='producer_grant', PROGRESS_PHOTO='progress_photo', SECTION_PLAN='section_plan', SECTION_PROGRESS='section_progress', SERVICE_CREDENTIAL='service_credential', SERVICE_PRINCIPAL='service_principal', SNAPSHOT_IMPORT='snapshot_import', STAFF_ACCOUNT='staff_account', STAFF_ASSIGNMENT='staff_assignment', STAFF_SESSION='staff_session', VIEWER='viewer', VIEWER_CREDENTIAL='viewer_credential', VIEWER_GRANT='viewer_grant', WORK_PAYMENT='work_payment'
+- AuditIntent fields (exact, no others exist): action: AuditAction, actor_id: UUID | None, actor_kind: ActorKind, entity_id: str | None, entity_kind: AuditEntityKind | None, key_version: int | None, project_id: UUID | None, reason_code: str | None, result: AuditResult
+- AuditRecord fields (exact, no others exist): action: AuditAction, actor_id: UUID | None, actor_kind: ActorKind, audit_id: UUID, entity_id: str | None, entity_kind: AuditEntityKind | None, key_version: int | None, occurred_at: datetime, project_id: UUID | None, reason_code: str | None, result: AuditResult
+- AuditResult enum members: REJECTED='rejected', SUCCESS='success'
+- AuthorizedProjectContext fields (exact, no others exist): actor_id: UUID, actor_kind: ActorKind, capability: Capability, key_version: int | None, project_id: UUID, registry_status: RegistryProjectStatus
+- ImportOutcome enum members: ACCEPTED='accepted', IDEMPOTENT_REPLAY='idempotent_replay', INTEGRITY_CONFLICT='integrity_conflict', REJECTED='rejected'
+- ImportRejectReason enum members: ARCHIVED_PROJECT='archived_project', CURRENCY_MISMATCH='currency_mismatch', INCOMPLETE_CONTENT='incomplete_content', INVALID_SECTIONS='invalid_sections', SCOPE_DENIED='scope_denied', UNKNOWN_PROJECT='unknown_project', UNSUPPORTED_CONTRACT_VERSION='unsupported_contract_version'
+- ProducerScopeMode enum members: ALL_PROJECTS='all_projects', GRANTED_PROJECTS='granted_projects'
+- ProducerSourceType enum members: ESTIMATE_PRODUCER='estimate_producer'
+- ProjectContext fields (exact, no others exist): address: str, created_at: datetime, customer_ref: str | None, project: ProjectReference, registry_updated_at: datetime
+- ProjectReference fields (exact, no others exist): display_name: str, project_id: UUID, status: str
+- ServiceActorContext fields (exact, no others exist): key_version: int, scope_mode: ProducerScopeMode, service_principal_id: UUID, source_type: ProducerSourceType
+- SnapshotImportRecord fields (exact, no others exist): content_fingerprint: str, contract_version: int, estimate_id: UUID, estimate_version: int, import_id: UUID, key_version: int, occurred_at: datetime, outcome: ImportOutcome, project_id: UUID, reject_reason: ImportRejectReason | None, service_principal_id: UUID, snapshot_id: UUID | None
+- SnapshotImportRepository operations (exact, no others exist):
+    get_snapshot_by_identity(self, project_id: UUID, estimate_id: UUID, estimate_version: int) -> ApprovedEstimateSnapshot | None
+    get_snapshot_import(self, import_id: UUID) -> SnapshotImportRecord | None
+    insert_snapshot(self, snapshot: ApprovedEstimateSnapshot) -> None
+    insert_snapshot_import(self, record: SnapshotImportRecord) -> None
+- SnapshotPublication fields (exact, no others exist): approved_at: datetime, approved_by: str, contract_version: int, currency: str, estimate_id: UUID, estimate_version: int, project_id: UUID, published_at: datetime, sections: list[SnapshotSectionData], source_system: str, tax_mode: str
+- SnapshotSectionData fields (exact, no others exist): display_name: str, material_planned: Decimal, sort_order: int, source_section_code: str, source_section_id: str, work_planned: Decimal
+
+MODULE-LOCAL EXCEPTION EXPORTS:
+If any exception class is listed here, define it in this file at top level.
+Do not import these classes from core.errors or any other module.
+No module-local exception exports required.
+
+FUNCTION ORDER (define in this order):
+_build_approved_snapshot, _build_import_record, _canonical_snapshot_fingerprint, _classify_snapshot_replay, _validate_snapshot_publication, get_snapshot_import_result, import_snapshot
+
+MODELS CONTEXT:
+Runtime models live in core.models. Use IMPORTS and IMPORTED MODEL
+OWNERSHIP for runtime model symbols; do not reproduce model schemas
+or import from a top-level models module.
+
+Generate the complete snapshot_import.py file.
+Every owned function listed above must be implemented exactly once at module top level.
+Define every class and method listed in OWNED CLASSES REQUIRED in this file.
+For every local binding in CONCRETE IMPLEMENTATION OBLIGATIONS, inherit the declared interface and implement its complete method surface with non-placeholder bodies.
+If this is the models module, emit every enum/model in MODEL DEFINITIONS exactly once.
+If this is not the models module, do not emit Pydantic model classes, enums, create_model calls, or local model schema shadows.
+Do not invent model fields or enum values not present in the imported runtime models.
+Use only the IMPORTS listed above plus required standard library imports.
+Import from IMPORTS every symbol the module uses, including symbols used only in annotations, and annotate each parameter with the type its CONTRACTS signature declares, never object or nothing.
+Never import from a top-level models module or models.*; runtime models live in core.models only when listed in IMPORTS.
+`models.<name>` in notes is a canonical spec data address, not an importable Python module.
+When one owner module provides a function and core.models provides a DTO with a similar name, split the imports by source exactly as listed in IMPORTS.
+Construct imported runtime models only with the fields listed in IMPORTED MODEL SURFACE; models are frozen and forbid extra fields, so an invented keyword argument fails at runtime.
+Read from a model value only the fields listed for its type; never use getattr(value, name, default) to probe for a field that is not declared.
+Never assign to an attribute of a model value (models are frozen): derive a changed value with value.model_copy(update={...}) or construct a new instance.
+Define every class listed in MODULE-LOCAL EXCEPTION EXPORTS in this file.

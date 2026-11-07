@@ -1,0 +1,127 @@
+{
+ "open_points": [
+  {
+   "unit": "context",
+   "subject": "system_clock public operations",
+   "kind": "missing operation contracts",
+   "text": "State 3 adds `system_clock` with candidate public capabilities `utc_now` and `monotonic_seconds`, while State 5 says \"One public operation per State 3 capability (100)\" but defines neither operation.",
+   "question": "Are `utc_now` and `monotonic_seconds` public module operations, and if so what are their exact callers, inputs, outputs, errors and effects?",
+   "options": [
+    "Export two public operations returning an offset-naive UTC datetime and a monotonic float, with backend failures propagated.",
+    "Keep the clock behind a private or injected object and remove the two names from the public-capability set."
+   ],
+   "default_guess": "Export both zero-input public operations, with no effects beyond one host-clock read and backend failures propagated.",
+   "witness": {
+    "initial": "State 6 must give `audit_writer` and `transport_guard` a way to obtain time from the new sole clock source.",
+    "events": [
+     "A later agent writes `audit_writer` to obtain a wall-clock instant.",
+     "Another later agent writes `transport_guard` to obtain an elapsed-clock reading."
+    ],
+    "outcomes": [
+     "They import and call public functions `system_clock.utc_now()` and `system_clock.monotonic_seconds()`.",
+     "They invent an injected clock object or private backend because State 5 exposes no such operations."
+    ],
+    "observer": "The assembler, direct module callers and contract tests see incompatible public surfaces."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "A28 wall-clock read cardinality",
+   "kind": "ambiguous scope",
+   "text": "The changed A28 says both \"An operation reads the clock once for its own timestamps\" and \"the wall clock gives the instant: ... one reading per request\"; it also retains the exception that `audit_writer` takes its own instant.",
+   "question": "Does \"one reading per request\" mean one reading for the whole HTTP request, or one host-clock reading for each call made by each operation participating in that request?",
+   "options": [
+    "One wall reading for the entire HTTP request, shared by authorization, use case and audit writer.",
+    "One reading per operation or clock-source call; a single HTTP request may therefore cause several readings."
+   ],
+   "default_guess": "Treat “request” as a request to `system_clock`; each operation reads once, and `audit_writer` performs its separate read.",
+   "witness": {
+    "initial": "An active staff session is close to expiry, and a mutation will write an event timestamp and append an audit record.",
+    "events": [
+     "A staff HTTP request begins just before the session expiry.",
+     "Session resolution checks the time.",
+     "The owning use case writes its change after the host wall clock advances.",
+     "`audit_writer` appends the audit after another advance."
+    ],
+    "outcomes": [
+     "One HTTP-request reading is reused, so session validity, the business timestamp and audit time all use the initial instant.",
+     "Each operation reads separately, so the session is checked at the first instant, the business record uses a later instant and the audit uses its own later instant."
+    ],
+    "observer": "Staff and audit readers can observe different persisted timestamps, and expiry-boundary requests may be treated differently."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "A28 elapsed-clock retention",
+   "kind": "contradiction",
+   "text": "The changed A28 says an elapsed-clock reading \"is never stored\", while A25 and State 5 require persistent in-memory viewer-entry attempt buckets that measure a rate-limit window across requests.",
+   "question": "Does \"never stored\" prohibit only durable persistence and conversion into business records, or also prohibit retaining elapsed readings or values derived from them in the in-memory rate-limit buckets?",
+   "options": [
+    "It means never durably persisted; the limiter may retain elapsed readings or derived window boundaries in memory.",
+    "It prohibits any retention, including in-memory bucket timestamps, so the rate-limit algorithm must avoid retaining readings."
+   ],
+   "default_guess": "Interpret it as never durably persisted and allow the bounded in-memory limiter to retain elapsed values.",
+   "witness": {
+    "initial": "One network address has made an entry attempt near the end of the configured rate-limit window.",
+    "events": [
+     "`transport_guard` records the first attempt.",
+     "The same address makes another attempt after the window may have expired."
+    ],
+    "outcomes": [
+     "The guard retains the earlier monotonic reading, determines that it is outside the window and admits the new attempt.",
+     "The guard obeys the literal no-storage rule and lacks the retained elapsed value needed by the specified window algorithm, leading it to reset or refuse by another invented rule."
+    ],
+    "observer": "The viewer browser sees either the entry route or a 429 response."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "PLAT-REG-004 Registry linkage decoding",
+   "kind": "overbroad contradiction",
+   "text": "The added check says \"an import or request carrying its own status or project facts is refused at decoding\", but snapshot imports and project-scoped requests are required to carry their target `project_id`.",
+   "question": "Which exact request fields count as forbidden client-supplied Registry status or project facts, and is the required `project_id` explicitly excluded?",
+   "options": [
+    "Only Registry-owned context fields such as status, display name, address and customer reference are forbidden; the target `project_id` remains required.",
+    "Every client-supplied project fact, including `project_id`, is forbidden, which makes the documented project-scoped requests and snapshot import impossible."
+   ],
+   "default_guess": "Allow the typed `project_id` selector and forbid a closed set of Registry-owned context fields plus unknown fields.",
+   "witness": {
+    "initial": "An authenticated producer is authorized to import for an active Registry project.",
+    "events": [
+     "The producer submits the documented `SnapshotPublication`, including its required `project_id` and no Registry context fields."
+    ],
+    "outcomes": [
+     "Decoding accepts the required identifier and the route validates it against Registry.",
+     "Decoding treats the identifier as a client-supplied project fact and refuses the request before Registry is called."
+    ],
+    "observer": "The producer sees either normal import processing or a decoding refusal."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "create_expense_from_recognition invalid-boundary inputs",
+   "kind": "layering contradiction",
+   "text": "The added INV-031 check requires an unconfirmed, incomplete, unsupported-version or provider-carrying result to be \"refused at decoding, by `create_expense_from_recognition` and over HTTP\", while State 5 fixes that operation's input as an already typed `ConfirmedRecognitionPublication`, whose status has only `confirmed` and which has no provider field.",
+   "question": "Must `create_expense_from_recognition` itself accept and decode raw external recognition data, or does model/HTTP decoding reject unconfirmed and provider-specific shapes before the typed operation can be called?",
+   "options": [
+    "The operation accepts a raw boundary request and performs decoding and projection itself.",
+    "The operation accepts only `ConfirmedRecognitionPublication`; invalid external shapes are rejected by model or HTTP decoding before invocation, with separate direct-operation tests limited to constructible typed values."
+   ],
+   "default_guess": "Keep the typed operation input and treat the added phrase as requiring equivalent model-boundary and HTTP checks, not raw mappings accepted by the operation.",
+   "witness": {
+    "initial": "No expense exists for recognized document `R1`.",
+    "events": [
+     "A direct module caller supplies a recognition mapping for `R1` with `recognition_status=\"draft\"` and a provider-specific field."
+    ],
+    "outcomes": [
+     "`create_expense_from_recognition` accepts the raw mapping as an input boundary and raises its declared validation refusal without writes.",
+     "The typed model decoder rejects the mapping before `create_expense_from_recognition` is invoked, so the operation itself has no such input or declared outcome."
+    ],
+    "observer": "Focused module tests and later callers observe different operation signatures and error ownership."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"context\",\"subject\":\"system_clock public operations\",\"kind\":\"missing operation contracts\",\"text\":\"State 3 adds `system_clock` with candidate public capabilities `utc_now` and `monotonic_seconds`, while State 5 says \\\"One public operation per State 3 capability (100)\\\" but defines neither operation.\",\"question\":\"Are `utc_now` and `monotonic_seconds` public module operations, and if so what are their exact callers, inputs, outputs, errors and effects?\",\"options\":[\"Export two public operations returning an offset-naive UTC datetime and a monotonic float, with backend failures propagated.\",\"Keep the clock behind a private or injected object and remove the two names from the public-capability set.\"],\"default_guess\":\"Export both zero-input public operations, with no effects beyond one host-clock read and backend failures propagated.\",\"witness\":{\"initial\":\"State 6 must give `audit_writer` and `transport_guard` a way to obtain time from the new sole clock source.\",\"events\":[\"A later agent writes `audit_writer` to obtain a wall-clock instant.\",\"Another later agent writes `transport_guard` to obtain an elapsed-clock reading.\"],\"outcomes\":[\"They import and call public functions `system_clock.utc_now()` and `system_clock.monotonic_seconds()`.\",\"They invent an injected clock object or private backend because State 5 exposes no such operations.\"],\"observer\":\"The assembler, direct module callers and contract tests see incompatible public surfaces.\"}},{\"unit\":\"context\",\"subject\":\"A28 wall-clock read cardinality\",\"kind\":\"ambiguous scope\",\"text\":\"The changed A28 says both \\\"An operation reads the clock once for its own timestamps\\\" and \\\"the wall clock gives the instant: ... one reading per request\\\"; it also retains the exception that `audit_writer` takes its own instant.\",\"question\":\"Does \\\"one reading per request\\\" mean one reading for the whole HTTP request, or one host-clock reading for each call made by each operation participating in that request?\",\"options\":[\"One wall reading for the entire HTTP request, shared by authorization, use case and audit writer.\",\"One reading per operation or clock-source call; a single HTTP request may therefore cause several readings.\"],\"default_guess\":\"Treat “request” as a request to `system_clock`; each operation reads once, and `audit_writer` performs its separate read.\",\"witness\":{\"initial\":\"An active staff session is close to expiry, and a mutation will write an event timestamp and append an audit record.\",\"events\":[\"A staff HTTP request begins just before the session expiry.\",\"Session resolution checks the time.\",\"The owning use case writes its change after the host wall clock advances.\",\"`audit_writer` appends the audit after another advance.\"],\"outcomes\":[\"One HTTP-request reading is reused, so session validity, the business timestamp and audit time all use the initial instant.\",\"Each operation reads separately, so the session is checked at the first instant, the business record uses a later instant and the audit uses its own later instant.\"],\"observer\":\"Staff and audit readers can observe different persisted timestamps, and expiry-boundary requests may be treated differently.\"}},{\"unit\":\"context\",\"subject\":\"A28 elapsed-clock retention\",\"kind\":\"contradiction\",\"text\":\"The changed A28 says an elapsed-clock reading \\\"is never stored\\\", while A25 and State 5 require persistent in-memory viewer-entry attempt buckets that measure a rate-limit window across requests.\",\"question\":\"Does \\\"never stored\\\" prohibit only durable persistence and conversion into business records, or also prohibit retaining elapsed readings or values derived from them in the in-memory rate-limit buckets?\",\"options\":[\"It means never durably persisted; the limiter may retain elapsed readings or derived window boundaries in memory.\",\"It prohibits any retention, including in-memory bucket timestamps, so the rate-limit algorithm must avoid retaining readings.\"],\"default_guess\":\"Interpret it as never durably persisted and allow the bounded in-memory limiter to retain elapsed values.\",\"witness\":{\"initial\":\"One network address has made an entry attempt near the end of the configured rate-limit window.\",\"events\":[\"`transport_guard` records the first attempt.\",\"The same address makes another attempt after the window may have expired.\"],\"outcomes\":[\"The guard retains the earlier monotonic reading, determines that it is outside the window and admits the new attempt.\",\"The guard obeys the literal no-storage rule and lacks the retained elapsed value needed by the specified window algorithm, leading it to reset or refuse by another invented rule.\"],\"observer\":\"The viewer browser sees either the entry route or a 429 response.\"}},{\"unit\":\"context\",\"subject\":\"PLAT-REG-004 Registry linkage decoding\",\"kind\":\"overbroad contradiction\",\"text\":\"The added check says \\\"an import or request carrying its own status or project facts is refused at decoding\\\", but snapshot imports and project-scoped requests are required to carry their target `project_id`.\",\"question\":\"Which exact request fields count as forbidden client-supplied Registry status or project facts, and is the required `project_id` explicitly excluded?\",\"options\":[\"Only Registry-owned context fields such as status, display name, address and customer reference are forbidden; the target `project_id` remains required.\",\"Every client-supplied project fact, including `project_id`, is forbidden, which makes the documented project-scoped requests and snapshot import impossible.\"],\"default_guess\":\"Allow the typed `project_id` selector and forbid a closed set of Registry-owned context fields plus unknown fields.\",\"witness\":{\"initial\":\"An authenticated producer is authorized to import for an active Registry project.\",\"events\":[\"The producer submits the documented `SnapshotPublication`, including its required `project_id` and no Registry context fields.\"],\"outcomes\":[\"Decoding accepts the required identifier and the route validates it against Registry.\",\"Decoding treats the identifier as a client-supplied project fact and refuses the request before Registry is called.\"],\"observer\":\"The producer sees either normal import processing or a decoding refusal.\"}},{\"unit\":\"context\",\"subject\":\"create_expense_from_recognition invalid-boundary inputs\",\"kind\":\"layering contradiction\",\"text\":\"The added INV-031 check requires an unconfirmed, incomplete, unsupported-version or provider-carrying result to be \\\"refused at decoding, by `create_expense_from_recognition` and over HTTP\\\", while State 5 fixes that operation's input as an already typed `ConfirmedRecognitionPublication`, whose status has only `confirmed` and which has no provider field.\",\"question\":\"Must `create_expense_from_recognition` itself accept and decode raw external recognition data, or does model/HTTP decoding reject unconfirmed and provider-specific shapes before the typed operation can be called?\",\"options\":[\"The operation accepts a raw boundary request and performs decoding and projection itself.\",\"The operation accepts only `ConfirmedRecognitionPublication`; invalid external shapes are rejected by model or HTTP decoding before invocation, with separate direct-operation tests limited to constructible typed values.\"],\"default_guess\":\"Keep the typed operation input and treat the added phrase as requiring equivalent model-boundary and HTTP checks, not raw mappings accepted by the operation.\",\"witness\":{\"initial\":\"No expense exists for recognized document `R1`.\",\"events\":[\"A direct module caller supplies a recognition mapping for `R1` with `recognition_status=\\\"draft\\\"` and a provider-specific field.\"],\"outcomes\":[\"`create_expense_from_recognition` accepts the raw mapping as an input boundary and raises its declared validation refusal without writes.\",\"The typed model decoder rejects the mapping before `create_expense_from_recognition` is invoked, so the operation itself has no such input or declared outcome.\"],\"observer\":\"Focused module tests and later callers observe different operation signatures and error ownership.\"}}]}",
+ "set_aside": []
+}

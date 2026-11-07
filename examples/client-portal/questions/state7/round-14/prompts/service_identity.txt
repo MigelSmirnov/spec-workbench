@@ -1,0 +1,249 @@
+Module: service_identity
+Target path: application/service_identity.py
+Target file: service_identity.py
+
+IMPORTS (every listed symbol is available; import the ones the module uses):
+from __future__ import annotations
+from datetime import datetime
+from uuid import UUID
+from uuid import uuid4
+
+from adapters.portal_store import PortalStore, PortalTransaction
+from adapters.registry_gateway import validate_project_reference
+from application.audit_writer import append_audit
+from application.authorization_guard import ArchivedProjectRejected, AuthenticationRejected, AuthorizationRejected, ScopedNotFoundError, authorize_access_management, conceal_authentication_failure
+from core.models import ActorKind, AuditAction, AuditEntityKind, AuditIntent, AuditRecord, AuditResult, GrantStatus, IssuedSecret, PresentedSecret, PrincipalStatus, ProducerProjectGrant, ProducerScopeMode, ProducerSourceType, ProjectValidationResult, ServiceActorContext, ServiceCredential, ServiceCredentialIssue, ServiceIdentityRepository, ServicePrincipal, StaffActorContext, StaffRole
+from core.system_clock import utc_now
+from security.credential_security import issue_verification_secret, parse_verification_secret, verify_secret
+
+CONTRACTS (function signatures — follow exactly):
+def _credential_is_usable(credential: ServiceCredential, principal: ServicePrincipal, checked_at: datetime) -> bool
+def _next_key_version(repository: ServiceIdentityRepository, principal_id: UUID) -> int
+def authenticate_service_principal(store: PortalStore, secret: str) -> ServiceActorContext
+def authorize_producer_scope(store: PortalStore, actor: ServiceActorContext, project_id: UUID) -> bool
+def change_service_principal_status(store: PortalStore, administrator: StaffActorContext, principal_id: UUID, new_status: PrincipalStatus) -> ServicePrincipal
+def create_service_principal(store: PortalStore, administrator: StaffActorContext, name: str, source_type: ProducerSourceType, scope_mode: ProducerScopeMode) -> ServicePrincipal
+def grant_producer_project(store: PortalStore, administrator: StaffActorContext, principal_id: UUID, project_id: UUID) -> ProducerProjectGrant
+def issue_service_credential(store: PortalStore, administrator: StaffActorContext, principal_id: UUID, expires_at: datetime | None = None) -> ServiceCredentialIssue
+def revoke_producer_project(store: PortalStore, administrator: StaffActorContext, grant_id: UUID) -> ProducerProjectGrant
+def revoke_service_credential(store: PortalStore, administrator: StaffActorContext, credential_id: UUID) -> ServiceCredential
+# ServiceIdentityRepository
+def get_producer_grant(self, principal_id: UUID, project_id: UUID) -> ProducerProjectGrant | None
+# ServiceIdentityRepository
+def get_producer_grant_by_id(self, grant_id: UUID) -> ProducerProjectGrant | None
+# ServiceIdentityRepository
+def get_service_credential(self, credential_id: UUID) -> ServiceCredential | None
+# ServiceIdentityRepository
+def get_service_principal(self, principal_id: UUID) -> ServicePrincipal | None
+# ServiceIdentityRepository
+def insert_producer_grant(self, grant: ProducerProjectGrant) -> None
+# ServiceIdentityRepository
+def insert_service_credential(self, credential: ServiceCredential) -> None
+# ServiceIdentityRepository
+def insert_service_principal(self, principal: ServicePrincipal) -> None
+# ServiceIdentityRepository
+def list_service_credentials(self, principal_id: UUID) -> list[ServiceCredential]
+# ServiceIdentityRepository
+def update_producer_grant(self, grant: ProducerProjectGrant) -> None
+# ServiceIdentityRepository
+def update_service_credential(self, credential: ServiceCredential) -> None
+# ServiceIdentityRepository
+def update_service_principal(self, principal: ServicePrincipal) -> None
+# PortalStore
+def __init__(self, database_url: str) -> None
+# PortalStore
+def begin(self) -> PortalTransaction
+# PortalTransaction
+def __init__(self, connection: object) -> None
+# PortalTransaction
+def audit(self) -> AuditRepository
+# PortalTransaction
+def commit(self) -> None
+# PortalTransaction
+def rollback(self) -> None
+# PortalTransaction
+def service_identity(self) -> ServiceIdentityRepository
+# AuthenticationRejected
+def __init__(self) -> None
+
+IMPORTED FUNCTION SIGNATURES (these come from the imports above):
+def append_audit(repository: AuditRepository, intent: AuditIntent) -> AuditRecord
+def authorize_access_management(store: PortalStore, actor: StaffActorContext) -> StaffActorContext
+def conceal_authentication_failure() -> AuthenticationRejected
+def issue_verification_secret(record_id: UUID, entropy_bytes: int) -> IssuedSecret
+def parse_verification_secret(token: str) -> PresentedSecret
+def verify_secret(secret: str, verification_hash: str) -> bool
+def validate_project_reference(project_id: UUID) -> ProjectValidationResult
+def utc_now() -> datetime
+
+OWNED FUNCTIONS REQUIRED (must be defined as top-level functions):
+- _credential_is_usable: (credential: ServiceCredential, principal: ServicePrincipal, checked_at: datetime) -> bool
+- _next_key_version: (repository: ServiceIdentityRepository, principal_id: UUID) -> int
+- authenticate_service_principal: (store: PortalStore, secret: str) -> ServiceActorContext
+- authorize_producer_scope: (store: PortalStore, actor: ServiceActorContext, project_id: UUID) -> bool
+- change_service_principal_status: (store: PortalStore, administrator: StaffActorContext, principal_id: UUID, new_status: PrincipalStatus) -> ServicePrincipal
+- create_service_principal: (store: PortalStore, administrator: StaffActorContext, name: str, source_type: ProducerSourceType, scope_mode: ProducerScopeMode) -> ServicePrincipal
+- grant_producer_project: (store: PortalStore, administrator: StaffActorContext, principal_id: UUID, project_id: UUID) -> ProducerProjectGrant
+- issue_service_credential: (store: PortalStore, administrator: StaffActorContext, principal_id: UUID, expires_at: datetime | None = None) -> ServiceCredentialIssue
+- revoke_producer_project: (store: PortalStore, administrator: StaffActorContext, grant_id: UUID) -> ProducerProjectGrant
+- revoke_service_credential: (store: PortalStore, administrator: StaffActorContext, credential_id: UUID) -> ServiceCredential
+
+STATIC GATE CONTRACT (deterministic checks; a violating candidate is rejected without repair):
+- Reflective attribute access is rejected: never call getattr, hasattr,
+  setattr, delattr, or vars; every declared field and operation is
+  addressed directly by name, including in try/finally cleanup.
+- A definition whose parameter list differs from its declared contract
+  signature is rejected; keep names and order exactly.
+- A constructed record accepted by a declared insert_*/upsert_*/append_*
+  operation must reach a call or return; a built-and-dropped record is
+  rejected.
+- Instantiating a spec-declared interface is rejected; construct the
+  module-owned concrete class instead.
+- A stub, placeholder, or fail-closed body for a contracted callable is
+  rejected; implement the complete specified behavior.
+- A top-level import of a package outside the Python standard library and
+  this project's own modules is rejected unless IMPORTS lists it; a note
+  never adds a package to IMPORTS.
+- A model is constructed with values of its declared field types; a field
+  typed tuple[...] receives a tuple, built with tuple(...) where the items
+  were collected in a list, never the list itself.
+- A value passed to a model field is narrowed at the call itself: a name
+  seeded with None, set on some branches and passed later under a test of
+  another name is rejected; build the value where it is obtained and pass
+  it there, or test that same name for None at the call.
+
+OWNED CLASSES REQUIRED (must be defined locally, not merely referenced):
+No owned local classes required.
+
+CONCRETE IMPLEMENTATION OBLIGATIONS:
+No local concrete-to-interface obligations.
+
+REQUIREMENTS (notes — implement these):
+- _credential_is_usable: [BEHAVIOR] MUST be true only when the principal status is ACTIVE, the credential is unrevoked, and checked_at is before expires_at when present.
+- _next_key_version: [BEHAVIOR] MUST return one greater than the greatest persisted key_version for principal_id, or 1 when none exist, within the issuing transaction.
+- _next_key_version: [RETURN_SHAPE] MUST derive the next key version from the credentials the repository it is given reports for that principal: 1 when there are none, otherwise one more than the highest key_version present, counting revoked and expired credentials too so a version is never reused. It MUST NOT open, commit, roll back or close a transaction.
+- authenticate_service_principal: [SECURITY_BOUNDARY] MUST verify the selected credential secret, expiry, revocation, and active principal before returning trusted source_type, scope_mode, and key_version; failures reveal no selector state.
+- authenticate_service_principal: [DEPENDENCY_BOUNDARY] MUST open its transaction with an explicit assignment, never as a context manager, reach principal and credential persistence only through tx.service_identity(), use no legacy transaction-level service method, and close the transaction exactly once. It writes nothing, so it closes the transaction with exactly one tx.rollback() after its last read and never commits; a failure rolls back only while the local open flag still marks the transaction open.
+- authenticate_service_principal: [SECURITY_BOUNDARY] MUST verify the parsed secret component against the credential's stored hash, never the presented secret as a whole: the secret is a selector-and-secret envelope, the selector addresses the credential, and the stored hash covers only the secret component, so verifying the envelope rejects every correct credential. The same parsed value MUST supply both parts — the selector for the lookup and the secret for the comparison.
+- authenticate_service_principal: [VALIDATION_ERROR] MUST raise the concealed authentication rejection for every genuine authentication outcome and for nothing else. A secret it cannot parse is such an outcome, not a defect: the value arrives from an unauthenticated caller, so a malformed envelope is the ordinary shape of a bad credential and MUST be concealed exactly like an unknown credential, a wrong secret, a revoked or expired credential, or a principal that is not active — letting the parse failure escape tells an attacker which of their guesses was even well formed. A failure of the store, by contrast, MUST propagate unchanged, because concealing a broken database as a refused login makes it invisible; and no accepted outcome may be told apart from another by the caller.
+- authenticate_service_principal: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it writes and every current-time comparison it makes; it MUST NOT read a host clock itself.
+- authenticate_service_principal: [DEPENDENCY_BOUNDARY] MUST parse the presented credential before opening any transaction. A malformed envelope MUST raise the concealed AuthenticationRejected while no transaction exists; only a successfully parsed selector may be followed by store.begin(), so the malformed-input path cannot leak an open transaction.
+- authorize_producer_scope: [SECURITY_BOUNDARY] MUST admit any active project for ProducerScopeMode.ALL_PROJECTS and only a project with an active grant for ProducerScopeMode.GRANTED_PROJECTS, decide before any content validation, and use trusted actor scope and active persisted grants only.
+- authorize_producer_scope: [DEPENDENCY_BOUNDARY] MUST open its transaction with an explicit assignment, never as a context manager, read the producer grant only through tx.service_identity(), use no legacy transaction-level service method, and close the transaction exactly once; it writes nothing, so it rolls back once after its read and never commits.
+- authorize_producer_scope: [FORBIDDEN_ACTION] MUST NOT answer false by swallowing a failure. A principal scoped to all projects is decided by reading the project validation result's declared active field directly, without a defensive attribute lookup with a default; a principal scoped to granted projects is decided by an active, unrevoked grant for exactly this principal and project. A persistence or registry failure MUST propagate unchanged, because a scope answer of false that actually means "something broke" silently denies a producer that is entitled to publish and reports it as policy.
+- change_service_principal_status: [BEHAVIOR] MUST allow only the transitions the principal status transition table lists: active to disabled and disabled to active; revoke every service credential of a principal it disables, and append AuditAction.PRINCIPAL_DISABLE or AuditAction.PRINCIPAL_ENABLE atomically.
+- change_service_principal_status: [DEPENDENCY_BOUNDARY] MUST complete its authorization check before it opens a transaction, never while one is open, because the check opens a transaction of its own and a second one nested inside this transaction is forbidden. It MUST then open its transaction with an explicit assignment, never as a context manager, reach service principal, credential and producer-grant persistence only through tx.service_identity(), append audits only through tx.audit(), use no legacy transaction-level service method, and close the transaction exactly once: a successful write commits once, a failure rolls back only while the local open flag still marks the transaction open and re-raises the original failure unchanged.
+- change_service_principal_status: [VALIDATION_ERROR] MUST re-raise the original failure unchanged and MUST NOT substitute a translated persistence error for it. Translating every failure turns a rejection the api maps to 404 or 403 into a 500 and hides a defect from every caller and every gate; only a genuine storage failure is a persistence error.
+- change_service_principal_status: [DEPENDENCY_BOUNDARY] MUST treat every persisted record as immutable: assigning to a field of a value read from the repository raises, because instances are frozen. It MUST build a replacement instance carrying the changed fields and hand that to the repository. Disabling an active principal produces a replacement carrying DISABLED status, disabled_at and disabled_by, and a replacement of every credential of that principal that is not already revoked for a disabled service principal; enabling a disabled one produces a replacement with ACTIVE status and disabled_at and disabled_by cleared, and revives no credential.
+- change_service_principal_status: [FIELD_ASSIGNMENT] MUST append exactly one audit through tx.audit() naming the transition it performed — AuditAction.PRINCIPAL_DISABLE or AuditAction.PRINCIPAL_ENABLE — with entity_id equal to the canonical string of the principal identifier, never the UUID object, and reason_code None. A request for the status the principal already holds changes nothing and appends no audit.
+- change_service_principal_status: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it writes and every current-time comparison it makes; it MUST NOT read a host clock itself.
+- create_service_principal: [ORCHESTRATION] MUST authorize access management, persist the closed source_type/scope_mode principal, and append AuditAction.PRINCIPAL_CREATE atomically.
+- create_service_principal: [DEPENDENCY_BOUNDARY] MUST complete its authorization check before it opens a transaction, never while one is open, because the check opens a transaction of its own and a second one nested inside this transaction is forbidden. It MUST then open its transaction with an explicit assignment, never as a context manager, reach service principal, credential and producer-grant persistence only through tx.service_identity(), append audits only through tx.audit(), use no legacy transaction-level service method, and close the transaction exactly once: a successful write commits once, a failure rolls back only while the local open flag still marks the transaction open and re-raises the original failure unchanged.
+- create_service_principal: [VALIDATION_ERROR] MUST re-raise the original failure unchanged and MUST NOT substitute a translated persistence error for it. Translating every failure turns a rejection the api maps to 404 or 403 into a 500 and hides a defect from every caller and every gate; only a genuine storage failure is a persistence error.
+- create_service_principal: [FIELD_ASSIGNMENT] MUST assign a fresh uuid4 service_principal_id to the new ServicePrincipal, together with ACTIVE status, the supplied name, source_type and scope_mode, the current created_at and the authorized administrator's staff_id as created_by, and None disabled_at and disabled_by. service_principal_id is a required identity: a fixed placeholder value makes the second principal collide with the first.
+- create_service_principal: [FIELD_ASSIGNMENT] MUST append exactly one AuditAction.PRINCIPAL_CREATE success audit through tx.audit() with entity_id equal to the canonical string of the new service_principal_id, never the UUID object, and reason_code None.
+- create_service_principal: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it writes and every current-time comparison it makes; it MUST NOT read a host clock itself.
+- grant_producer_project: [ORCHESTRATION] MUST authorize access management, validate the same active Registry UUID with validate_project_reference before the transaction, reject an existing active pair, and append AuditAction.PRODUCER_GRANT_CREATE atomically.
+- grant_producer_project: [DEPENDENCY_BOUNDARY] MUST complete its authorization check before it opens a transaction, never while one is open, because the check opens a transaction of its own and a second one nested inside this transaction is forbidden. It MUST then open its transaction with an explicit assignment, never as a context manager, reach service principal, credential and producer-grant persistence only through tx.service_identity(), append audits only through tx.audit(), use no legacy transaction-level service method, and close the transaction exactly once: a successful write commits once, a failure rolls back only while the local open flag still marks the transaction open and re-raises the original failure unchanged.
+- grant_producer_project: [VALIDATION_ERROR] MUST re-raise the original failure unchanged and MUST NOT substitute a translated persistence error for it. Translating every failure turns a rejection the api maps to 404 or 403 into a 500 and hides a defect from every caller and every gate; only a genuine storage failure is a persistence error.
+- grant_producer_project: [FIELD_ASSIGNMENT] MUST assign a fresh uuid4 grant_id to the new ProducerProjectGrant, with ACTIVE status, the validated project_id, the current created_at, the authorized administrator's staff_id as created_by, and None revoked_at and revoked_by; a fixed placeholder identity makes the second grant collide with the first.
+- grant_producer_project: [FIELD_ASSIGNMENT] MUST append exactly one AuditAction.PRODUCER_GRANT_CREATE success audit through tx.audit() with entity_id equal to the canonical string of the new grant_id, never the UUID object, carrying the project_id and reason_code None.
+- grant_producer_project: [VALIDATION_ERROR] MUST decide the project from the validation result alone, reading its declared exists and is_active fields directly: a project the registry does not know is a scoped not-found rejection, and a project it knows but reports inactive is the archived rejection. It MUST NOT reach those values through a defensive attribute lookup with a default, which turns every validation into "not active" and refuses every grant while looking like a registry answer rather than a defect, and it MUST NOT ask the registry for a second, richer answer to decide the same thing twice. That call MUST happen while no transaction of this function is open, because a transaction must never stay open across a network call.
+- grant_producer_project: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it writes and every current-time comparison it makes; it MUST NOT read a host clock itself.
+- issue_service_credential: [SECURITY_BOUNDARY] MUST allocate the next key_version, persist only verification_hash, append AuditAction.PRINCIPAL_CREDENTIAL_ISSUE atomically, and expose plaintext exactly once in ServiceCredentialIssue.
+- issue_service_credential: [DEPENDENCY_BOUNDARY] MUST complete its authorization check before it opens a transaction, never while one is open, because the check opens a transaction of its own and a second one nested inside this transaction is forbidden. It MUST then open its transaction with an explicit assignment, never as a context manager, reach service principal, credential and producer-grant persistence only through tx.service_identity(), append audits only through tx.audit(), use no legacy transaction-level service method, and close the transaction exactly once: a successful write commits once, a failure rolls back only while the local open flag still marks the transaction open and re-raises the original failure unchanged.
+- issue_service_credential: [VALIDATION_ERROR] MUST re-raise the original failure unchanged and MUST NOT substitute a translated persistence error for it. Translating every failure turns a rejection the api maps to 404 or 403 into a 500 and hides a defect from every caller and every gate; only a genuine storage failure is a persistence error.
+- issue_service_credential: [SECURITY_BOUNDARY] MUST generate a fresh uuid4 credential_id, issue the credential secret for that same credential_id, store the issued verification hash and never the plaintext, and return the plaintext only inside ServiceCredentialIssue. Issuing the secret for a placeholder identity, or storing the credential under an identity the returned secret does not carry, makes authentication unable to find it and every producer login fail.
+- issue_service_credential: [FIELD_ASSIGNMENT] MUST append exactly one AuditAction.PRINCIPAL_CREDENTIAL_ISSUE success audit through tx.audit() with entity_id equal to the canonical string of the new credential_id, never the UUID object, carrying the credential's key_version and reason_code None.
+- issue_service_credential: [FIELD_ASSIGNMENT] MUST take the two values it needs from the issued secret by their declared names: the plaintext is what ServiceCredentialIssue carries back to the caller once, and the verification hash is what the credential stores. The issued secret exposes exactly those two and nothing else, so reading any other attribute of it raises at the moment a credential is issued and no producer can ever be given one.
+- issue_service_credential: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it writes and every current-time comparison it makes; it MUST NOT read a host clock itself.
+- issue_service_credential: [VALIDATION_ERROR] MUST issue a credential only when the addressed ServicePrincipal has ACTIVE status. A principal with any other status MUST raise AuthorizationRejected without generating a secret, inserting a credential, or appending an audit, and the open transaction MUST close.
+- revoke_producer_project: [ORCHESTRATION] MUST revoke only the addressed active grant and append AuditAction.PRODUCER_GRANT_REVOKE atomically.
+- revoke_producer_project: [DEPENDENCY_BOUNDARY] MUST complete its authorization check before it opens a transaction, never while one is open, because the check opens a transaction of its own and a second one nested inside this transaction is forbidden. It MUST then open its transaction with an explicit assignment, never as a context manager, reach service principal, credential and producer-grant persistence only through tx.service_identity(), append audits only through tx.audit(), use no legacy transaction-level service method, and close the transaction exactly once: a successful write commits once, a failure rolls back only while the local open flag still marks the transaction open and re-raises the original failure unchanged.
+- revoke_producer_project: [VALIDATION_ERROR] MUST re-raise the original failure unchanged and MUST NOT substitute a translated persistence error for it. Translating every failure turns a rejection the api maps to 404 or 403 into a 500 and hides a defect from every caller and every gate; only a genuine storage failure is a persistence error.
+- revoke_producer_project: [DEPENDENCY_BOUNDARY] MUST treat every persisted record as immutable: it builds a replacement grant carrying REVOKED status, revoked_at and revoked_by and hands that to the repository, leaving the value it read untouched and touching no other grant of that principal.
+- revoke_producer_project: [FIELD_ASSIGNMENT] MUST append exactly one AuditAction.PRODUCER_GRANT_REVOKE success audit through tx.audit() with entity_id equal to the canonical string of the revoked grant_id, never the UUID object, carrying that grant's project_id and reason_code None.
+- revoke_producer_project: [VALIDATION_ERROR] MUST answer with the scoped not-found rejection whenever the grant cannot be revoked — it does not exist, or it exists but is already revoked — and MUST NOT tell those two apart. A grant that is already revoked is no longer a revocable target, so reporting it differently would let a caller probe which grant identifiers were ever issued while adding nothing an administrator can act on.
+- revoke_producer_project: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it writes and every current-time comparison it makes; it MUST NOT read a host clock itself.
+- revoke_producer_project: [VALIDATION_ERROR] MUST treat a grant as revocable only when its status is ACTIVE and revoked_at is None. A missing grant or any persisted grant that fails either positive condition MUST raise the same ScopedNotFoundError without mutation or audit; the implementation MUST NOT replace the positive ACTIVE requirement with an enumeration of currently known non-active statuses.
+- revoke_service_credential: [ORCHESTRATION] MUST revoke the addressed credential without revoking overlapping credentials and append AuditAction.PRINCIPAL_CREDENTIAL_REVOKE atomically.
+- revoke_service_credential: [DEPENDENCY_BOUNDARY] MUST complete its authorization check before it opens a transaction, never while one is open, because the check opens a transaction of its own and a second one nested inside this transaction is forbidden. It MUST then open its transaction with an explicit assignment, never as a context manager, reach service principal, credential and producer-grant persistence only through tx.service_identity(), append audits only through tx.audit(), use no legacy transaction-level service method, and close the transaction exactly once: a successful write commits once, a failure rolls back only while the local open flag still marks the transaction open and re-raises the original failure unchanged.
+- revoke_service_credential: [VALIDATION_ERROR] MUST re-raise the original failure unchanged and MUST NOT substitute a translated persistence error for it. Translating every failure turns a rejection the api maps to 404 or 403 into a 500 and hides a defect from every caller and every gate; only a genuine storage failure is a persistence error.
+- revoke_service_credential: [DEPENDENCY_BOUNDARY] MUST treat every persisted record as immutable: it builds a replacement credential carrying revoked_at and revoked_by and hands that to the repository, leaving the value it read untouched. An already revoked credential is rejected rather than revoked again.
+- revoke_service_credential: [FIELD_ASSIGNMENT] MUST append exactly one AuditAction.PRINCIPAL_CREDENTIAL_REVOKE success audit through tx.audit() with entity_id equal to the canonical string of the revoked credential_id, never the UUID object, carrying that credential's key_version and reason_code None.
+- revoke_service_credential: [VALIDATION_ERROR] MUST answer with the scoped not-found rejection whenever the credential cannot be revoked — it does not exist, or it exists but is already revoked — and MUST NOT tell those two apart, for the same reason its grant counterpart does not: an already revoked credential is no longer a revocable target, and a distinguishable answer turns the revocation surface into a way to enumerate credential identifiers.
+- revoke_service_credential: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it writes and every current-time comparison it makes; it MUST NOT read a host clock itself.
+
+MODEL DATA DEFINITIONS (READ-ONLY SPEC DATA, NOT CODE):
+No = models.* spec data addresses referenced by notes.
+
+MODEL DATA ADDRESSES (SPEC DATA, NOT IMPORT PATHS):
+No = models.* spec data addresses referenced by notes.
+
+IMPORTED MODEL OWNERSHIP (DO NOT REDEFINE):
+Imported runtime model symbols are owned by their source modules listed in IMPORTS; use them as imported and do not redefine them here.
+
+RUNTIME MODEL SURFACE (CORE.MODELS IMPORTS):
+These are imported runtime symbols from core.models. Use the listed enum member names and model fields exactly.
+- ActorKind enum members: SERVICE='service', STAFF='staff', SYSTEM='system', VIEWER='viewer'
+- AuditAction enum members: BUDGET_MANUAL_VERSION_CREATE='budget.manual_version_create', BUDGET_SECTION_PLAN_EDIT='budget.section_plan_edit', DOCUMENT_UPDATE='document.update', EXPENSE_ALLOCATE='expense.allocate', EXPENSE_CORRECT='expense.correct', EXPENSE_CREATE='expense.create', EXPENSE_EXCLUDE='expense.exclude', EXPENSE_INCLUDE='expense.include', GRANT_CREATE='grant.create', GRANT_REVOKE='grant.revoke', PAYMENT_REGISTER='payment.register', PHOTO_PUBLISH='photo.publish', PHOTO_UPDATE='photo.update', PRINCIPAL_CREATE='principal.create', PRINCIPAL_CREDENTIAL_ISSUE='principal.credential_issue', PRINCIPAL_CREDENTIAL_REVOKE='principal.credential_revoke', PRINCIPAL_DISABLE='principal.disable', PRINCIPAL_ENABLE='principal.enable', PRODUCER_GRANT_CREATE='producer_grant.create', PRODUCER_GRANT_REVOKE='producer_grant.revoke', PROGRESS_UPDATE='progress.update', SNAPSHOT_ACTIVATE='snapshot.activate', SNAPSHOT_IMPORT='snapshot.import', STAFF_ASSIGNMENT_CREATE='staff_assignment.create', STAFF_ASSIGNMENT_REVOKE='staff_assignment.revoke', STAFF_CREATE='staff.create', STAFF_DISABLE='staff.disable', STAFF_LOGIN='staff.login', STAFF_LOGIN_FAILED='staff.login_failed', STAFF_LOGOUT='staff.logout', STAFF_RECOVERY_OVERRIDE='staff.recovery_override', STAFF_REINSTATE='staff.reinstate', STAFF_SESSIONS_REVOKE='staff.sessions_revoke', STAFF_SUSPEND='staff.suspend', VIEWER_CREATE='viewer.create', VIEWER_CREDENTIAL_ISSUE='viewer.credential_issue', VIEWER_CREDENTIAL_REVOKE='viewer.credential_revoke', VIEWER_REVOKE='viewer.revoke'
+- AuditEntityKind enum members: BUDGET_VERSION='budget_version', EXPENSE='expense', EXPENSE_ALLOCATION='expense_allocation', EXPENSE_DOCUMENT='expense_document', PRODUCER_GRANT='producer_grant', PROGRESS_PHOTO='progress_photo', SECTION_PLAN='section_plan', SECTION_PROGRESS='section_progress', SERVICE_CREDENTIAL='service_credential', SERVICE_PRINCIPAL='service_principal', SNAPSHOT_IMPORT='snapshot_import', STAFF_ACCOUNT='staff_account', STAFF_ASSIGNMENT='staff_assignment', STAFF_SESSION='staff_session', VIEWER='viewer', VIEWER_CREDENTIAL='viewer_credential', VIEWER_GRANT='viewer_grant', WORK_PAYMENT='work_payment'
+- AuditIntent fields (exact, no others exist): action: AuditAction, actor_id: UUID | None, actor_kind: ActorKind, entity_id: str | None, entity_kind: AuditEntityKind | None, key_version: int | None, project_id: UUID | None, reason_code: str | None, result: AuditResult
+- AuditRecord fields (exact, no others exist): action: AuditAction, actor_id: UUID | None, actor_kind: ActorKind, audit_id: UUID, entity_id: str | None, entity_kind: AuditEntityKind | None, key_version: int | None, occurred_at: datetime, project_id: UUID | None, reason_code: str | None, result: AuditResult
+- AuditResult enum members: REJECTED='rejected', SUCCESS='success'
+- GrantStatus enum members: ACTIVE='active', REVOKED='revoked'
+- IssuedSecret fields (exact, no others exist): plaintext: str, verification_hash: str
+- PresentedSecret fields (exact, no others exist): record_id: UUID, secret: str
+- PrincipalStatus enum members: ACTIVE='active', DISABLED='disabled'
+- ProducerProjectGrant fields (exact, no others exist): created_at: datetime, created_by: UUID, grant_id: UUID, project_id: UUID, revoked_at: datetime | None, revoked_by: UUID | None, service_principal_id: UUID, status: GrantStatus
+- ProducerScopeMode enum members: ALL_PROJECTS='all_projects', GRANTED_PROJECTS='granted_projects'
+- ProducerSourceType enum members: ESTIMATE_PRODUCER='estimate_producer'
+- ProjectValidationResult fields (exact, no others exist): exists: bool, failure: str | None, is_active: bool, project_id: UUID, status: str | None
+- ServiceActorContext fields (exact, no others exist): key_version: int, scope_mode: ProducerScopeMode, service_principal_id: UUID, source_type: ProducerSourceType
+- ServiceCredential fields (exact, no others exist): created_at: datetime, created_by: UUID, credential_id: UUID, expires_at: datetime | None, key_version: int, revoked_at: datetime | None, revoked_by: UUID | None, secret_hash: str, service_principal_id: UUID
+- ServiceCredentialIssue fields (exact, no others exist): credential: ServiceCredential, secret: str
+- ServiceIdentityRepository operations (exact, no others exist):
+    get_producer_grant(self, principal_id: UUID, project_id: UUID) -> ProducerProjectGrant | None
+    get_producer_grant_by_id(self, grant_id: UUID) -> ProducerProjectGrant | None
+    get_service_credential(self, credential_id: UUID) -> ServiceCredential | None
+    get_service_principal(self, principal_id: UUID) -> ServicePrincipal | None
+    insert_producer_grant(self, grant: ProducerProjectGrant) -> None
+    insert_service_credential(self, credential: ServiceCredential) -> None
+    insert_service_principal(self, principal: ServicePrincipal) -> None
+    list_service_credentials(self, principal_id: UUID) -> list[ServiceCredential]
+    update_producer_grant(self, grant: ProducerProjectGrant) -> None
+    update_service_credential(self, credential: ServiceCredential) -> None
+    update_service_principal(self, principal: ServicePrincipal) -> None
+- ServicePrincipal fields (exact, no others exist): created_at: datetime, created_by: UUID, disabled_at: datetime | None, disabled_by: UUID | None, name: str, scope_mode: ProducerScopeMode, service_principal_id: UUID, source_type: ProducerSourceType, status: PrincipalStatus
+- StaffActorContext fields (exact, no others exist): role: StaffRole, session_id: UUID, staff_id: UUID
+- StaffRole enum members: ADMINISTRATOR='administrator', OPERATOR='operator'
+
+MODULE-LOCAL EXCEPTION EXPORTS:
+If any exception class is listed here, define it in this file at top level.
+Do not import these classes from core.errors or any other module.
+No module-local exception exports required.
+
+FUNCTION ORDER (define in this order):
+_credential_is_usable, _next_key_version, authenticate_service_principal, authorize_producer_scope, change_service_principal_status, create_service_principal, grant_producer_project, issue_service_credential, revoke_producer_project, revoke_service_credential
+
+MODELS CONTEXT:
+Runtime models live in core.models. Use IMPORTS and IMPORTED MODEL
+OWNERSHIP for runtime model symbols; do not reproduce model schemas
+or import from a top-level models module.
+
+Generate the complete service_identity.py file.
+Every owned function listed above must be implemented exactly once at module top level.
+Define every class and method listed in OWNED CLASSES REQUIRED in this file.
+For every local binding in CONCRETE IMPLEMENTATION OBLIGATIONS, inherit the declared interface and implement its complete method surface with non-placeholder bodies.
+If this is the models module, emit every enum/model in MODEL DEFINITIONS exactly once.
+If this is not the models module, do not emit Pydantic model classes, enums, create_model calls, or local model schema shadows.
+Do not invent model fields or enum values not present in the imported runtime models.
+Use only the IMPORTS listed above plus required standard library imports.
+Import from IMPORTS every symbol the module uses, including symbols used only in annotations, and annotate each parameter with the type its CONTRACTS signature declares, never object or nothing.
+Never import from a top-level models module or models.*; runtime models live in core.models only when listed in IMPORTS.
+`models.<name>` in notes is a canonical spec data address, not an importable Python module.
+When one owner module provides a function and core.models provides a DTO with a similar name, split the imports by source exactly as listed in IMPORTS.
+Construct imported runtime models only with the fields listed in IMPORTED MODEL SURFACE; models are frozen and forbid extra fields, so an invented keyword argument fails at runtime.
+Read from a model value only the fields listed for its type; never use getattr(value, name, default) to probe for a field that is not declared.
+Never assign to an attribute of a model value (models are frozen): derive a changed value with value.model_copy(update={...}) or construct a new instance.
+Define every class listed in MODULE-LOCAL EXCEPTION EXPORTS in this file.

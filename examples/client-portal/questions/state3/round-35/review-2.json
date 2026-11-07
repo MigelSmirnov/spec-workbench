@@ -1,0 +1,133 @@
+{
+ "open_points": [
+  {
+   "subject": "binary runtime configuration ownership",
+   "kind": "contradictory ownership",
+   "text": "“Environment values are read once, by `runtime_settings`, into `RuntimeSettings`; other modules read ... the settings they are handed, never the environment, with two exceptions ... `binary_storage` reads `BINARY_STORAGE_ROOT` and `BINARY_MAX_READ_BYTES` at each binary read” conflicts with `runtime_settings` owning startup validation “including the startup consistency of the binary bounds” and State 0 R0-10 saying configuration is validated when the service starts.",
+   "question": "After startup, are the validated `RuntimeSettings` or newly re-read environment values authoritative for the binary root and read limit, and which module owns that decision?",
+   "options": [
+    "`runtime_settings` owns immutable startup values handed to `binary_storage`",
+    "`binary_storage` owns per-read environment lookup and may observe changes or missing values",
+    "Startup settings are validated, but every read deliberately revalidates and uses the current environment"
+   ],
+   "default_guess": "Use the startup-validated `RuntimeSettings` for binary reads.",
+   "witness": {
+    "initial": "The service starts with a valid binary root and a 10 MB read limit.",
+    "events": [
+     "The host operator changes `BINARY_MAX_READ_BYTES` to 1 MB, or removes it, without restarting the service.",
+     "A permitted client requests a 5 MB document."
+    ],
+    "outcomes": [
+     "The request succeeds because the startup `RuntimeSettings` remain authoritative.",
+     "The request is refused because `binary_storage` rereads the changed or missing environment value."
+    ],
+    "observer": "The client requesting the document and the operator changing configuration"
+   },
+   "unit": "context"
+  },
+  {
+   "subject": "document and photo binary authorization",
+   "kind": "missing dependency",
+   "text": "The shared binary-content rule says “`expense_management` and `photo_management` re-check access and visibility,” and A14 says the owning domain module re-checks authenticated project access, but the exact `Knows` lists for both modules omit `authorization_guard`.",
+   "question": "Which module performs the final project authorization immediately before storage access, and how can the owning expense/photo module invoke or verify that decision without an allowed dependency on `authorization_guard`?",
+   "options": [
+    "Add an allowed dependency from both owning modules to `authorization_guard`",
+    "The HTTP facade performs the re-check and passes a freshly authorized context",
+    "The owning modules trust a previously produced `AuthorizedProjectContext` and only re-check record project and visibility"
+   ],
+   "default_guess": "Have each owning module call `authorization_guard` immediately before producing `AuthorizedBinaryReference`.",
+   "witness": {
+    "initial": "A viewer has a valid session, an active project grant, and a visible document.",
+    "events": [
+     "The viewer starts a document request and the HTTP layer initially authorizes it.",
+     "An administrator revokes the project grant before the document module reaches storage.",
+     "The document module performs its stated pre-storage checks."
+    ],
+    "outcomes": [
+     "A fresh guard check observes revocation and refuses the binary.",
+     "The module trusts the earlier context, checks only record visibility, and returns the bytes."
+    ],
+    "observer": "The viewer and the administrator who revoked access"
+   },
+   "unit": "context"
+  },
+  {
+   "subject": "producer project-scope authorization",
+   "kind": "two owners",
+   "text": "The ownership table makes A12’s primary owner `service_identity`, whose public surface includes `authorize_producer_scope`, while `authorization_guard` says it owns “producer grant” project scope and exposes `authorize_snapshot_import`; dependency order prevents `authorization_guard` from knowing the later `service_identity` module.",
+   "question": "Which capability is authoritative for producer scope during snapshot import, and what distinct responsibility remains for the other capability?",
+   "options": [
+    "`authorization_guard.authorize_snapshot_import` owns the complete request-time scope decision",
+    "`service_identity.authorize_producer_scope` owns scope and is called separately by the API",
+    "Both checks are required, with a specified order and division of checks"
+   ],
+   "default_guess": "Treat `authorization_guard.authorize_snapshot_import` as the sole request-time scope decision and keep `service_identity` responsible for producer records and authentication.",
+   "unit": "context"
+  },
+  {
+   "subject": "first-administrator database initialization",
+   "kind": "unowned prerequisite",
+   "text": "`portal_store` owns “schema creation through the repositories,” but `staff_bootstrap_store` must not own or use `PortalStore`, `staff_bootstrap_cli` does not know `portal_store`, and no bootstrap module is assigned responsibility for ensuring the staff and audit schemas exist before the empty-deployment inserts.",
+   "question": "Who creates or verifies the staff and audit schemas when the first-administrator command is run against a new database, and what required ordering exists between application startup and bootstrap?",
+   "options": [
+    "`staff_bootstrap_store` creates the required schemas before its exclusive transaction",
+    "The command requires a prior runtime/schema-initialization step",
+    "`staff_bootstrap_cli` invokes a separate schema initializer before constructing the bootstrap store"
+   ],
+   "default_guess": "Let `staff_bootstrap_store` ensure the two required schemas before performing the serialized create-if-empty operation.",
+   "witness": {
+    "initial": "A new deployment points at a database file that does not yet exist, and no staff account exists.",
+    "events": [
+     "Before starting the HTTP service, the host operator runs the required first-administrator command."
+    ],
+    "outcomes": [
+     "The bootstrap path creates the required schemas and successfully creates the administrator.",
+     "The command fails because only `portal_store` creates schemas and no permitted bootstrap dependency invoked it."
+    ],
+    "observer": "The host operator and deployment automation branching on the command exit code"
+   },
+   "unit": "context"
+  },
+  {
+   "subject": "bootstrap use of staff input policy",
+   "kind": "missing public boundary",
+   "text": "`staff_identity` owns A16’s exact email normalization and password validation, while `staff_bootstrap` must “normalize and validate the input through `staff_identity`'s input boundary”; however, `staff_identity`'s candidate public capabilities expose no normalization or password-validation operation.",
+   "question": "Through what owned public interface does `staff_bootstrap` apply the exact A16 input policy without duplicating or importing private staff-identity implementation details?",
+   "options": [
+    "Expose dedicated normalization and password-validation capabilities from `staff_identity`",
+    "Move the reusable input policy to `credential_security` or another earlier policy module",
+    "Permit `staff_bootstrap` to import specified private helpers from `staff_identity`"
+   ],
+   "default_guess": "Expose explicit reusable validation capabilities owned by `staff_identity`.",
+   "unit": "context"
+  },
+  {
+   "subject": "transactions across use-case module calls",
+   "kind": "unclear transaction ownership",
+   "text": "The state says “The use case that owns an operation opens its transaction ... and closes it exactly once,” but later use-case modules know and call other transaction-owning use-case modules, including `project_tracking` → `budget_management` for the progress read that may create an empty manual budget. Only authorization is explicitly required to finish its own transaction before the caller opens one.",
+   "question": "When one use-case module invokes another during one product operation, is there one caller-owned transaction shared with the callee or two sequential transactions, and which module owns rollback of the combined effects?",
+   "options": [
+    "The outer operation owns one transaction and calls transaction-aware internal capabilities of the callee",
+    "Each public use case completes its own transaction before the caller opens another",
+    "Cross-use-case calls are limited to pure validation helpers that open no transaction"
+   ],
+   "default_guess": "Use one outer transaction with explicitly transaction-aware internal capabilities for required nested behavior.",
+   "witness": {
+    "initial": "An archived project has no manual budget version and no recorded progress.",
+    "events": [
+     "A staff member invokes `list_project_progress`, the exceptional read that must create the empty manual budget.",
+     "The budget creation succeeds, but a later progress-row read raises a persistence failure."
+    ],
+    "outcomes": [
+     "One shared transaction rolls back, so no manual budget remains after the failed operation.",
+     "The nested budget operation committed its own transaction, so the manual budget remains even though the progress operation failed."
+    ],
+    "observer": "The staff member on the next progress read and an operator inspecting the project budget"
+   },
+   "unit": "context"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"binary runtime configuration ownership\",\"kind\":\"contradictory ownership\",\"text\":\"“Environment values are read once, by `runtime_settings`, into `RuntimeSettings`; other modules read ... the settings they are handed, never the environment, with two exceptions ... `binary_storage` reads `BINARY_STORAGE_ROOT` and `BINARY_MAX_READ_BYTES` at each binary read” conflicts with `runtime_settings` owning startup validation “including the startup consistency of the binary bounds” and State 0 R0-10 saying configuration is validated when the service starts.\",\"question\":\"After startup, are the validated `RuntimeSettings` or newly re-read environment values authoritative for the binary root and read limit, and which module owns that decision?\",\"options\":[\"`runtime_settings` owns immutable startup values handed to `binary_storage`\",\"`binary_storage` owns per-read environment lookup and may observe changes or missing values\",\"Startup settings are validated, but every read deliberately revalidates and uses the current environment\"],\"default_guess\":\"Use the startup-validated `RuntimeSettings` for binary reads.\",\"witness\":{\"initial\":\"The service starts with a valid binary root and a 10 MB read limit.\",\"events\":[\"The host operator changes `BINARY_MAX_READ_BYTES` to 1 MB, or removes it, without restarting the service.\",\"A permitted client requests a 5 MB document.\"],\"outcomes\":[\"The request succeeds because the startup `RuntimeSettings` remain authoritative.\",\"The request is refused because `binary_storage` rereads the changed or missing environment value.\"],\"observer\":\"The client requesting the document and the operator changing configuration\"},\"unit\":\"context\"},{\"subject\":\"document and photo binary authorization\",\"kind\":\"missing dependency\",\"text\":\"The shared binary-content rule says “`expense_management` and `photo_management` re-check access and visibility,” and A14 says the owning domain module re-checks authenticated project access, but the exact `Knows` lists for both modules omit `authorization_guard`.\",\"question\":\"Which module performs the final project authorization immediately before storage access, and how can the owning expense/photo module invoke or verify that decision without an allowed dependency on `authorization_guard`?\",\"options\":[\"Add an allowed dependency from both owning modules to `authorization_guard`\",\"The HTTP facade performs the re-check and passes a freshly authorized context\",\"The owning modules trust a previously produced `AuthorizedProjectContext` and only re-check record project and visibility\"],\"default_guess\":\"Have each owning module call `authorization_guard` immediately before producing `AuthorizedBinaryReference`.\",\"witness\":{\"initial\":\"A viewer has a valid session, an active project grant, and a visible document.\",\"events\":[\"The viewer starts a document request and the HTTP layer initially authorizes it.\",\"An administrator revokes the project grant before the document module reaches storage.\",\"The document module performs its stated pre-storage checks.\"],\"outcomes\":[\"A fresh guard check observes revocation and refuses the binary.\",\"The module trusts the earlier context, checks only record visibility, and returns the bytes.\"],\"observer\":\"The viewer and the administrator who revoked access\"},\"unit\":\"context\"},{\"subject\":\"producer project-scope authorization\",\"kind\":\"two owners\",\"text\":\"The ownership table makes A12’s primary owner `service_identity`, whose public surface includes `authorize_producer_scope`, while `authorization_guard` says it owns “producer grant” project scope and exposes `authorize_snapshot_import`; dependency order prevents `authorization_guard` from knowing the later `service_identity` module.\",\"question\":\"Which capability is authoritative for producer scope during snapshot import, and what distinct responsibility remains for the other capability?\",\"options\":[\"`authorization_guard.authorize_snapshot_import` owns the complete request-time scope decision\",\"`service_identity.authorize_producer_scope` owns scope and is called separately by the API\",\"Both checks are required, with a specified order and division of checks\"],\"default_guess\":\"Treat `authorization_guard.authorize_snapshot_import` as the sole request-time scope decision and keep `service_identity` responsible for producer records and authentication.\",\"unit\":\"context\"},{\"subject\":\"first-administrator database initialization\",\"kind\":\"unowned prerequisite\",\"text\":\"`portal_store` owns “schema creation through the repositories,” but `staff_bootstrap_store` must not own or use `PortalStore`, `staff_bootstrap_cli` does not know `portal_store`, and no bootstrap module is assigned responsibility for ensuring the staff and audit schemas exist before the empty-deployment inserts.\",\"question\":\"Who creates or verifies the staff and audit schemas when the first-administrator command is run against a new database, and what required ordering exists between application startup and bootstrap?\",\"options\":[\"`staff_bootstrap_store` creates the required schemas before its exclusive transaction\",\"The command requires a prior runtime/schema-initialization step\",\"`staff_bootstrap_cli` invokes a separate schema initializer before constructing the bootstrap store\"],\"default_guess\":\"Let `staff_bootstrap_store` ensure the two required schemas before performing the serialized create-if-empty operation.\",\"witness\":{\"initial\":\"A new deployment points at a database file that does not yet exist, and no staff account exists.\",\"events\":[\"Before starting the HTTP service, the host operator runs the required first-administrator command.\"],\"outcomes\":[\"The bootstrap path creates the required schemas and successfully creates the administrator.\",\"The command fails because only `portal_store` creates schemas and no permitted bootstrap dependency invoked it.\"],\"observer\":\"The host operator and deployment automation branching on the command exit code\"},\"unit\":\"context\"},{\"subject\":\"bootstrap use of staff input policy\",\"kind\":\"missing public boundary\",\"text\":\"`staff_identity` owns A16’s exact email normalization and password validation, while `staff_bootstrap` must “normalize and validate the input through `staff_identity`'s input boundary”; however, `staff_identity`'s candidate public capabilities expose no normalization or password-validation operation.\",\"question\":\"Through what owned public interface does `staff_bootstrap` apply the exact A16 input policy without duplicating or importing private staff-identity implementation details?\",\"options\":[\"Expose dedicated normalization and password-validation capabilities from `staff_identity`\",\"Move the reusable input policy to `credential_security` or another earlier policy module\",\"Permit `staff_bootstrap` to import specified private helpers from `staff_identity`\"],\"default_guess\":\"Expose explicit reusable validation capabilities owned by `staff_identity`.\",\"unit\":\"context\"},{\"subject\":\"transactions across use-case module calls\",\"kind\":\"unclear transaction ownership\",\"text\":\"The state says “The use case that owns an operation opens its transaction ... and closes it exactly once,” but later use-case modules know and call other transaction-owning use-case modules, including `project_tracking` → `budget_management` for the progress read that may create an empty manual budget. Only authorization is explicitly required to finish its own transaction before the caller opens one.\",\"question\":\"When one use-case module invokes another during one product operation, is there one caller-owned transaction shared with the callee or two sequential transactions, and which module owns rollback of the combined effects?\",\"options\":[\"The outer operation owns one transaction and calls transaction-aware internal capabilities of the callee\",\"Each public use case completes its own transaction before the caller opens another\",\"Cross-use-case calls are limited to pure validation helpers that open no transaction\"],\"default_guess\":\"Use one outer transaction with explicitly transaction-aware internal capabilities for required nested behavior.\",\"witness\":{\"initial\":\"An archived project has no manual budget version and no recorded progress.\",\"events\":[\"A staff member invokes `list_project_progress`, the exceptional read that must create the empty manual budget.\",\"The budget creation succeeds, but a later progress-row read raises a persistence failure.\"],\"outcomes\":[\"One shared transaction rolls back, so no manual budget remains after the failed operation.\",\"The nested budget operation committed its own transaction, so the manual budget remains even though the progress operation failed.\"],\"observer\":\"The staff member on the next progress read and an operator inspecting the project budget\"},\"unit\":\"context\"}]}",
+ "set_aside": []
+}

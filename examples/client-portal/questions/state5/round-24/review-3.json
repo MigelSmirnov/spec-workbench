@@ -1,0 +1,121 @@
+{
+ "open_points": [
+  {
+   "unit": "context",
+   "subject": "system_clock public operations",
+   "kind": "missing operation contracts",
+   "text": "One public operation per State 3 capability (100; ...); system_clock Candidate public capabilities: utc_now, monotonic_seconds",
+   "question": "Are utc_now and monotonic_seconds public State 5 operations, and if so what are their exact inputs, outputs, errors, effects and caller lists; if they are not, how do the newly listed time-reading modules obtain time from system_clock?",
+   "options": [
+    "Add two public operations, making the State 5 total 102, with no inputs and datetime/float outputs",
+    "Treat system_clock as an injected object or exported class whose methods are fixed only in State 6",
+    "Treat the capabilities as private despite the one-operation-per-capability rule"
+   ],
+   "default_guess": "Add utc_now and monotonic_seconds as no-input public operations, list every time-reading module as a caller, declare them pure apart from reading their host clock, and let backend failures propagate."
+  },
+  {
+   "unit": "context",
+   "subject": "A28 clock reading cardinality",
+   "kind": "contradictory read count",
+   "text": "the wall clock gives the instant: ... one reading per request ...; An operation reads the clock once for its own timestamps ...; The one exception is the occurred_at of an audit record appended through the audit writer: the writer takes it when it appends",
+   "question": "Does “one reading per request” mean one reading for the entire HTTP request, one reading for each use-case operation, or one host-clock read for each call to utc_now, especially when a mutation and audit_writer both need a time?",
+   "options": [
+    "One wall reading for the whole HTTP request, shared with the audit writer",
+    "One reading by the owning use case plus a separate audit-writer reading in the same HTTP request",
+    "One reading for every call to utc_now, with callers responsible for invoking it once per operation"
+   ],
+   "default_guess": "Use one reading per operation and a separate audit-writer reading, treating “per request” in the new paragraph as “per clock-source call.”",
+   "witness": {
+    "initial": "An authenticated administrator performs a successful audited mutation while the host wall clock advances between the business write and audit append.",
+    "events": [
+     "The HTTP route calls the owning mutation use case.",
+     "The use case obtains a wall time and writes its business record.",
+     "audit_writer appends the required audit record later in the same HTTP request."
+    ],
+    "outcomes": [
+     "The whole request has one wall reading, so the business timestamp and audit occurred_at are identical and audit_writer does not take a new reading.",
+     "The mutation and audit_writer each take their operation's reading, so audit occurred_at may differ from the business timestamp."
+    ],
+    "observer": "A repository reader or focused clock-policy test comparing the persisted business and audit timestamps."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "validate_project_reference on exists=false",
+   "kind": "contradictory error boundary",
+   "text": "the production validate_project_reference, answered over HTTP, refuses a UUID the Registry answers 404 or exists=false for an administrator, an operator, a viewer and both producer scopes",
+   "question": "When Registry returns a successful decoded ProjectValidationResult with exists=false, must validate_project_reference return that result for its caller to classify, or must the gateway itself refuse with RegistryBoundaryError/not_found?",
+   "options": [
+    "Return ProjectValidationResult with exists=false; each caller produces its operation-specific refusal",
+    "Raise RegistryBoundaryError(kind=not_found) inside validate_project_reference",
+    "Use different behavior depending on the principal or calling operation"
+   ],
+   "default_guess": "Return the decoded exists=false result and let each caller apply A5, because A6 and the State 5 operation explicitly classify exists=false as a caller decision rather than a gateway failure.",
+   "witness": {
+    "initial": "Registry is reachable and answers HTTP 200 for a typed UUID with exists=false.",
+    "events": [
+     "An administrator attempts to assign a staff account to that UUID.",
+     "staff_identity calls registry_gateway.validate_project_reference."
+    ],
+    "outcomes": [
+     "The gateway returns ProjectValidationResult; staff_identity raises ScopedNotFoundError and HTTP answers 404.",
+     "The gateway refuses exists=false as RegistryBoundaryError and HTTP answers 502."
+    ],
+    "observer": "The administrator and the HTTP contract test."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "INV-044 missing progress derivation",
+   "kind": "invariant contradiction",
+   "text": "a section without a progress record reads completion None ... It records, without asserting, that the completed_work_value of a section without progress reads 0; that half of “missing data is presented explicitly” has no witness",
+   "question": "For a section with planned work but no SectionProgress record, is completed_work_value a confirmed numeric zero or unavailable/missing, and what assertion is required to close INV-044 rather than merely record the current zero?",
+   "options": [
+    "completion_percent is None but completed_work_value is Decimal zero as a defined exception",
+    "Both completion_percent and completed_work_value represent missing data explicitly",
+    "The budget and progress views use different representations"
+   ],
+   "default_guess": "Keep completion_percent=None and define completed_work_value=0 as an explicit formula convention, then narrow INV-044 so this is not described as fabricated missing data and assert it directly.",
+   "witness": {
+    "initial": "An active budget has one section with work_planned=100.00 and no SectionProgress row.",
+    "events": [
+     "A viewer reads the budget view.",
+     "The same viewer reads the progress view."
+    ],
+    "outcomes": [
+     "Both views expose completion_percent=null and completed_work_value=0.00.",
+     "The views expose the missing completion and completed-work value as unavailable rather than numeric zero."
+    ],
+    "observer": "The viewer and the INV-044 verification check."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "create_expense_from_recognition provider-field rejection",
+   "kind": "boundary contradiction",
+   "text": "an unconfirmed, incomplete, unsupported-version or provider-carrying result is refused at decoding, by create_expense_from_recognition and over HTTP",
+   "question": "How can create_expense_from_recognition itself receive and refuse a provider-carrying result when its State 5 input is the already-decoded ConfirmedRecognitionPublication model, which has no provider field and whose provider fields are said never to cross the boundary?",
+   "options": [
+    "Unknown provider fields are rejected only by request/model decoding before the operation is called",
+    "The operation accepts a raw recognition request shape and performs projection itself",
+    "The decoded model preserves forbidden-field presence solely so the operation can reject it"
+   ],
+   "default_guess": "Reject provider fields during strict request/model decoding and do not call create_expense_from_recognition; revise the required check so the direct operation test covers only invalid states representable by its declared input.",
+   "witness": {
+    "initial": "The expense tables are empty and a valid authenticated operator has an authorized project context.",
+    "events": [
+     "A caller submits all valid recognition fields plus provider=\"example-ocr\".",
+     "The API decoder constructs, or attempts to construct, the input passed to create_expense_from_recognition."
+    ],
+    "outcomes": [
+     "Strict decoding rejects the extra provider field before the operation runs and every table stays unchanged.",
+     "Decoding drops the unknown provider field, the operation receives an ordinary ConfirmedRecognitionPublication and creates the expense because it cannot know the field was present."
+    ],
+    "observer": "The HTTP caller, direct operation test and database observer."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"context\",\"subject\":\"system_clock public operations\",\"kind\":\"missing operation contracts\",\"text\":\"One public operation per State 3 capability (100; ...); system_clock Candidate public capabilities: utc_now, monotonic_seconds\",\"question\":\"Are utc_now and monotonic_seconds public State 5 operations, and if so what are their exact inputs, outputs, errors, effects and caller lists; if they are not, how do the newly listed time-reading modules obtain time from system_clock?\",\"options\":[\"Add two public operations, making the State 5 total 102, with no inputs and datetime/float outputs\",\"Treat system_clock as an injected object or exported class whose methods are fixed only in State 6\",\"Treat the capabilities as private despite the one-operation-per-capability rule\"],\"default_guess\":\"Add utc_now and monotonic_seconds as no-input public operations, list every time-reading module as a caller, declare them pure apart from reading their host clock, and let backend failures propagate.\"},{\"unit\":\"context\",\"subject\":\"A28 clock reading cardinality\",\"kind\":\"contradictory read count\",\"text\":\"the wall clock gives the instant: ... one reading per request ...; An operation reads the clock once for its own timestamps ...; The one exception is the occurred_at of an audit record appended through the audit writer: the writer takes it when it appends\",\"question\":\"Does “one reading per request” mean one reading for the entire HTTP request, one reading for each use-case operation, or one host-clock read for each call to utc_now, especially when a mutation and audit_writer both need a time?\",\"options\":[\"One wall reading for the whole HTTP request, shared with the audit writer\",\"One reading by the owning use case plus a separate audit-writer reading in the same HTTP request\",\"One reading for every call to utc_now, with callers responsible for invoking it once per operation\"],\"default_guess\":\"Use one reading per operation and a separate audit-writer reading, treating “per request” in the new paragraph as “per clock-source call.”\",\"witness\":{\"initial\":\"An authenticated administrator performs a successful audited mutation while the host wall clock advances between the business write and audit append.\",\"events\":[\"The HTTP route calls the owning mutation use case.\",\"The use case obtains a wall time and writes its business record.\",\"audit_writer appends the required audit record later in the same HTTP request.\"],\"outcomes\":[\"The whole request has one wall reading, so the business timestamp and audit occurred_at are identical and audit_writer does not take a new reading.\",\"The mutation and audit_writer each take their operation's reading, so audit occurred_at may differ from the business timestamp.\"],\"observer\":\"A repository reader or focused clock-policy test comparing the persisted business and audit timestamps.\"}},{\"unit\":\"context\",\"subject\":\"validate_project_reference on exists=false\",\"kind\":\"contradictory error boundary\",\"text\":\"the production validate_project_reference, answered over HTTP, refuses a UUID the Registry answers 404 or exists=false for an administrator, an operator, a viewer and both producer scopes\",\"question\":\"When Registry returns a successful decoded ProjectValidationResult with exists=false, must validate_project_reference return that result for its caller to classify, or must the gateway itself refuse with RegistryBoundaryError/not_found?\",\"options\":[\"Return ProjectValidationResult with exists=false; each caller produces its operation-specific refusal\",\"Raise RegistryBoundaryError(kind=not_found) inside validate_project_reference\",\"Use different behavior depending on the principal or calling operation\"],\"default_guess\":\"Return the decoded exists=false result and let each caller apply A5, because A6 and the State 5 operation explicitly classify exists=false as a caller decision rather than a gateway failure.\",\"witness\":{\"initial\":\"Registry is reachable and answers HTTP 200 for a typed UUID with exists=false.\",\"events\":[\"An administrator attempts to assign a staff account to that UUID.\",\"staff_identity calls registry_gateway.validate_project_reference.\"],\"outcomes\":[\"The gateway returns ProjectValidationResult; staff_identity raises ScopedNotFoundError and HTTP answers 404.\",\"The gateway refuses exists=false as RegistryBoundaryError and HTTP answers 502.\"],\"observer\":\"The administrator and the HTTP contract test.\"}},{\"unit\":\"context\",\"subject\":\"INV-044 missing progress derivation\",\"kind\":\"invariant contradiction\",\"text\":\"a section without a progress record reads completion None ... It records, without asserting, that the completed_work_value of a section without progress reads 0; that half of “missing data is presented explicitly” has no witness\",\"question\":\"For a section with planned work but no SectionProgress record, is completed_work_value a confirmed numeric zero or unavailable/missing, and what assertion is required to close INV-044 rather than merely record the current zero?\",\"options\":[\"completion_percent is None but completed_work_value is Decimal zero as a defined exception\",\"Both completion_percent and completed_work_value represent missing data explicitly\",\"The budget and progress views use different representations\"],\"default_guess\":\"Keep completion_percent=None and define completed_work_value=0 as an explicit formula convention, then narrow INV-044 so this is not described as fabricated missing data and assert it directly.\",\"witness\":{\"initial\":\"An active budget has one section with work_planned=100.00 and no SectionProgress row.\",\"events\":[\"A viewer reads the budget view.\",\"The same viewer reads the progress view.\"],\"outcomes\":[\"Both views expose completion_percent=null and completed_work_value=0.00.\",\"The views expose the missing completion and completed-work value as unavailable rather than numeric zero.\"],\"observer\":\"The viewer and the INV-044 verification check.\"}},{\"unit\":\"context\",\"subject\":\"create_expense_from_recognition provider-field rejection\",\"kind\":\"boundary contradiction\",\"text\":\"an unconfirmed, incomplete, unsupported-version or provider-carrying result is refused at decoding, by create_expense_from_recognition and over HTTP\",\"question\":\"How can create_expense_from_recognition itself receive and refuse a provider-carrying result when its State 5 input is the already-decoded ConfirmedRecognitionPublication model, which has no provider field and whose provider fields are said never to cross the boundary?\",\"options\":[\"Unknown provider fields are rejected only by request/model decoding before the operation is called\",\"The operation accepts a raw recognition request shape and performs projection itself\",\"The decoded model preserves forbidden-field presence solely so the operation can reject it\"],\"default_guess\":\"Reject provider fields during strict request/model decoding and do not call create_expense_from_recognition; revise the required check so the direct operation test covers only invalid states representable by its declared input.\",\"witness\":{\"initial\":\"The expense tables are empty and a valid authenticated operator has an authorized project context.\",\"events\":[\"A caller submits all valid recognition fields plus provider=\\\"example-ocr\\\".\",\"The API decoder constructs, or attempts to construct, the input passed to create_expense_from_recognition.\"],\"outcomes\":[\"Strict decoding rejects the extra provider field before the operation runs and every table stays unchanged.\",\"Decoding drops the unknown provider field, the operation receives an ordinary ConfirmedRecognitionPublication and creates the expense because it cannot know the field was present.\"],\"observer\":\"The HTTP caller, direct operation test and database observer.\"}}]}",
+ "set_aside": []
+}

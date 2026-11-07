@@ -1,0 +1,156 @@
+{
+ "open_points": [
+  {
+   "unit": "context",
+   "subject": "system_clock public operations",
+   "kind": "missing operation contracts",
+   "text": "State 3 adds `system_clock` with candidate public capabilities `utc_now` and `monotonic_seconds`, while State 5 says “One public operation per State 3 capability (100)” but defines neither operation.",
+   "question": "Are `utc_now` and `monotonic_seconds` public module operations, and if so what are their complete State 5 inputs, outputs, errors, effects and callers—and should the operation count be 102 rather than 100?",
+   "options": [
+    "Export two zero-input operations returning an offset-naive UTC datetime and a monotonic float",
+    "Treat the clock as an injected object with methods rather than module operations",
+    "Keep the clock internal and remove the claim that every State 3 capability has a State 5 operation"
+   ],
+   "default_guess": "Export two zero-input operations and increase the operation count to 102.",
+   "witness": {
+    "initial": "State 6 is being written from the accepted texts, and `authorization_guard` needs the current instant.",
+    "events": [
+     "One implementer follows the State 3 capability list and imports `system_clock.utc_now()`.",
+     "Another follows State 5's complete operation list and supplies no public `system_clock` operation, expecting a clock dependency to be injected or generated later."
+    ],
+    "outcomes": [
+     "The authorization module calls a zero-argument public function.",
+     "The authorization module requires a different, undeclared clock interface and the two modules do not compose."
+    ],
+    "observer": "The State 6 assembler or any test replacing the clock source"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "A28 wall-clock read scope",
+   "kind": "contradictory cardinality",
+   "text": "The changed A28 text says both “one reading per request” and “How many readings an operation takes ... stay the rules above”; the earlier rule says “An operation reads the clock once,” while `system_clock` says “One wall reading per call” and audit writing takes its own reading.",
+   "question": "Is the wall-clock instant captured once for the whole HTTP request, once for each operation participating in that request, or once for every call to `system_clock.utc_now`?",
+   "options": [
+    "One instant for the entire HTTP request, passed to every participating operation",
+    "One instant per use-case/guard operation, so one HTTP request may read several times",
+    "One instant per direct `utc_now` call, with callers responsible for avoiding extra calls"
+   ],
+   "default_guess": "One reading per operation, including the audit writer as its explicitly named separate operation.",
+   "witness": {
+    "initial": "A staff session expires at 12:00:00; an HTTP mutation request starts just before that instant.",
+    "events": [
+     "`staff_identity.resolve_staff_session` checks the session at 11:59:59.999.",
+     "The authorization guard runs after 12:00:00 and needs the current time.",
+     "The mutation later appends an audit record, whose writer is required to take its own time."
+    ],
+    "outcomes": [
+     "With one request-wide reading, the guard reuses 11:59:59.999 and admits the mutation; the audit writer cannot take a distinct reading without violating “one reading per request.”",
+     "With one reading per operation, the guard reads 12:00:00 and rejects the request as expired; an admitted request could also have an audit time distinct from the mutation time."
+    ],
+    "observer": "The staff caller sees success versus authentication rejection, and persisted timestamps can differ"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "Registry validation of exists=false",
+   "kind": "operation contradiction",
+   "text": "The added PLAT-REG-001 check says “the production `validate_project_reference` ... refuses a UUID the Registry answers 404 or `exists=false` for,” but State 5 says it outputs a decoded `ProjectValidationResult`; A6 also says a decoded `exists=false` answer is returned and interpreted by the caller.",
+   "question": "Does `validate_project_reference` return a successful typed result with `exists=false`, or raise/refuse at the gateway boundary?",
+   "options": [
+    "Return `ProjectValidationResult(exists=false)` and let each caller apply its specified not-found policy",
+    "Raise `RegistryBoundaryError(not_found)` for both HTTP 404 and a successful response carrying `exists=false`",
+    "Use different behavior depending on the calling principal or operation"
+   ],
+   "default_guess": "Return the typed `exists=false` result; only HTTP 404 is a gateway error.",
+   "witness": {
+    "initial": "Registry answers HTTP 200 for project P with `project_id=P`, `exists=false`, and `is_active=false`.",
+    "events": [
+     "An administrator attempts to assign a staff account to P.",
+     "`staff_identity` calls `validate_project_reference`."
+    ],
+    "outcomes": [
+     "Under the added check's wording, the gateway itself refuses, naturally producing its boundary error path.",
+     "Under A6 and the State 5 operation, the gateway returns the result and `assign_staff_project` produces its caller-owned scoped-not-found rejection."
+    ],
+    "observer": "The administrator sees the gateway-mapped 502 path versus the assignment's 404 path"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "INV-031 provider-field rejection",
+   "kind": "boundary ambiguity",
+   "text": "The added check requires “a ... provider-carrying result [to be] refused at decoding, by `create_expense_from_recognition` and over HTTP,” while the State 5 operation accepts an already typed `ConfirmedRecognitionPublication`, whose declared fields contain no provider field.",
+   "question": "What direct input can carry a provider field to `create_expense_from_recognition`, and which layer must reject it rather than discard or ignore it?",
+   "options": [
+    "The publication model rejects unknown fields before the operation can be called",
+    "The operation accepts a raw recognition command and performs strict decoding itself",
+    "Only HTTP decoding rejects unknown fields; direct typed calls cannot express this case"
+   ],
+   "default_guess": "Make the publication/request decoding strict so provider fields are rejected before the typed operation call; direct operation tests should use a decoding boundary rather than an impossible typed value.",
+   "witness": {
+    "initial": "A recognition payload otherwise satisfies the confirmed version-1 contract but also contains `provider=\"vendor-x\"`.",
+    "events": [
+     "A direct application caller constructs or decodes the payload and invokes `create_expense_from_recognition`.",
+     "An HTTP caller submits the same JSON."
+    ],
+    "outcomes": [
+     "A strict model decoder rejects both before the operation receives a publication.",
+     "A projection decoder drops the unknown provider field, after which the operation accepts and persists the business fields; only an independently strict HTTP model might reject it."
+    ],
+    "observer": "The direct-call verification and HTTP caller see rejection versus successful expense creation"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "INV-044 missing-progress completed-work value",
+   "kind": "invariant contradiction",
+   "text": "The added check says it “records, without asserting, that the `completed_work_value` of a section without progress reads 0; that half of ‘missing data is presented explicitly’ has no witness,” while INV-044 says missing data is never replaced by zero unless zero is confirmed.",
+   "question": "For a section with planned work but no `SectionProgress`, must `completed_work_value` be zero, absent/unavailable, or represented by zero together with a separate explicit missing-progress marker—and what must the required test assert?",
+   "options": [
+    "Return zero and treat `completion_percent=None` as the explicit missing-data marker",
+    "Make completed-work value absent or unavailable when progress is missing",
+    "Keep zero but narrow INV-044 expressly so this derived value is an exception"
+   ],
+   "default_guess": "Return zero with `completion_percent=None`, and explicitly narrow and test the invariant for that representation.",
+   "witness": {
+    "initial": "An active budget has one section with `work_planned=100.00` and no `SectionProgress` row.",
+    "events": [
+     "A viewer requests the budget or progress view."
+    ],
+    "outcomes": [
+     "Following the recorded behavior and M32, the view contains `completion_percent=null` and `completed_work_value=0.00`.",
+     "Following INV-044 literally, the missing measurement cannot be replaced by zero, so completed work must be absent or the view must be unavailable."
+    ],
+    "observer": "The viewer and any invariant test inspecting the derived view"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "DEP-002 release-gate freshness",
+   "kind": "undefined acceptance threshold",
+   "text": "The added DEP-002 check requires “a fresh public advisory snapshot” and “a recent passing verdict” but defines neither `fresh` nor `recent`.",
+   "question": "What maximum advisory age and verdict age allow the deployment to start, and from which trusted timestamps are those ages measured?",
+   "options": [
+    "Fixed maximum ages encoded in the deployment policy",
+    "Freshness determined solely by successful retrieval during the current deploy",
+    "Freshness delegated to the vulnerability-data provider or scanning tool"
+   ],
+   "default_guess": "Require a successful advisory refresh and a passing scan during the current deployment of the exact image content id.",
+   "witness": {
+    "initial": "An image has a passing vulnerability verdict produced 24 hours ago from an advisory snapshot fetched 24 hours ago; no newer advisory data can currently be obtained.",
+    "events": [
+     "The deployment gate evaluates that image and verdict."
+    ],
+    "outcomes": [
+     "An implementation treating 24 hours as recent starts the service.",
+     "An implementation requiring a current-deploy refresh or a shorter age refuses to start it."
+    ],
+    "observer": "The deployment operator sees the service start or remain gated"
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"context\",\"subject\":\"system_clock public operations\",\"kind\":\"missing operation contracts\",\"text\":\"State 3 adds `system_clock` with candidate public capabilities `utc_now` and `monotonic_seconds`, while State 5 says “One public operation per State 3 capability (100)” but defines neither operation.\",\"question\":\"Are `utc_now` and `monotonic_seconds` public module operations, and if so what are their complete State 5 inputs, outputs, errors, effects and callers—and should the operation count be 102 rather than 100?\",\"options\":[\"Export two zero-input operations returning an offset-naive UTC datetime and a monotonic float\",\"Treat the clock as an injected object with methods rather than module operations\",\"Keep the clock internal and remove the claim that every State 3 capability has a State 5 operation\"],\"default_guess\":\"Export two zero-input operations and increase the operation count to 102.\",\"witness\":{\"initial\":\"State 6 is being written from the accepted texts, and `authorization_guard` needs the current instant.\",\"events\":[\"One implementer follows the State 3 capability list and imports `system_clock.utc_now()`.\",\"Another follows State 5's complete operation list and supplies no public `system_clock` operation, expecting a clock dependency to be injected or generated later.\"],\"outcomes\":[\"The authorization module calls a zero-argument public function.\",\"The authorization module requires a different, undeclared clock interface and the two modules do not compose.\"],\"observer\":\"The State 6 assembler or any test replacing the clock source\"}},{\"unit\":\"context\",\"subject\":\"A28 wall-clock read scope\",\"kind\":\"contradictory cardinality\",\"text\":\"The changed A28 text says both “one reading per request” and “How many readings an operation takes ... stay the rules above”; the earlier rule says “An operation reads the clock once,” while `system_clock` says “One wall reading per call” and audit writing takes its own reading.\",\"question\":\"Is the wall-clock instant captured once for the whole HTTP request, once for each operation participating in that request, or once for every call to `system_clock.utc_now`?\",\"options\":[\"One instant for the entire HTTP request, passed to every participating operation\",\"One instant per use-case/guard operation, so one HTTP request may read several times\",\"One instant per direct `utc_now` call, with callers responsible for avoiding extra calls\"],\"default_guess\":\"One reading per operation, including the audit writer as its explicitly named separate operation.\",\"witness\":{\"initial\":\"A staff session expires at 12:00:00; an HTTP mutation request starts just before that instant.\",\"events\":[\"`staff_identity.resolve_staff_session` checks the session at 11:59:59.999.\",\"The authorization guard runs after 12:00:00 and needs the current time.\",\"The mutation later appends an audit record, whose writer is required to take its own time.\"],\"outcomes\":[\"With one request-wide reading, the guard reuses 11:59:59.999 and admits the mutation; the audit writer cannot take a distinct reading without violating “one reading per request.”\",\"With one reading per operation, the guard reads 12:00:00 and rejects the request as expired; an admitted request could also have an audit time distinct from the mutation time.\"],\"observer\":\"The staff caller sees success versus authentication rejection, and persisted timestamps can differ\"}},{\"unit\":\"context\",\"subject\":\"Registry validation of exists=false\",\"kind\":\"operation contradiction\",\"text\":\"The added PLAT-REG-001 check says “the production `validate_project_reference` ... refuses a UUID the Registry answers 404 or `exists=false` for,” but State 5 says it outputs a decoded `ProjectValidationResult`; A6 also says a decoded `exists=false` answer is returned and interpreted by the caller.\",\"question\":\"Does `validate_project_reference` return a successful typed result with `exists=false`, or raise/refuse at the gateway boundary?\",\"options\":[\"Return `ProjectValidationResult(exists=false)` and let each caller apply its specified not-found policy\",\"Raise `RegistryBoundaryError(not_found)` for both HTTP 404 and a successful response carrying `exists=false`\",\"Use different behavior depending on the calling principal or operation\"],\"default_guess\":\"Return the typed `exists=false` result; only HTTP 404 is a gateway error.\",\"witness\":{\"initial\":\"Registry answers HTTP 200 for project P with `project_id=P`, `exists=false`, and `is_active=false`.\",\"events\":[\"An administrator attempts to assign a staff account to P.\",\"`staff_identity` calls `validate_project_reference`.\"],\"outcomes\":[\"Under the added check's wording, the gateway itself refuses, naturally producing its boundary error path.\",\"Under A6 and the State 5 operation, the gateway returns the result and `assign_staff_project` produces its caller-owned scoped-not-found rejection.\"],\"observer\":\"The administrator sees the gateway-mapped 502 path versus the assignment's 404 path\"}},{\"unit\":\"context\",\"subject\":\"INV-031 provider-field rejection\",\"kind\":\"boundary ambiguity\",\"text\":\"The added check requires “a ... provider-carrying result [to be] refused at decoding, by `create_expense_from_recognition` and over HTTP,” while the State 5 operation accepts an already typed `ConfirmedRecognitionPublication`, whose declared fields contain no provider field.\",\"question\":\"What direct input can carry a provider field to `create_expense_from_recognition`, and which layer must reject it rather than discard or ignore it?\",\"options\":[\"The publication model rejects unknown fields before the operation can be called\",\"The operation accepts a raw recognition command and performs strict decoding itself\",\"Only HTTP decoding rejects unknown fields; direct typed calls cannot express this case\"],\"default_guess\":\"Make the publication/request decoding strict so provider fields are rejected before the typed operation call; direct operation tests should use a decoding boundary rather than an impossible typed value.\",\"witness\":{\"initial\":\"A recognition payload otherwise satisfies the confirmed version-1 contract but also contains `provider=\\\"vendor-x\\\"`.\",\"events\":[\"A direct application caller constructs or decodes the payload and invokes `create_expense_from_recognition`.\",\"An HTTP caller submits the same JSON.\"],\"outcomes\":[\"A strict model decoder rejects both before the operation receives a publication.\",\"A projection decoder drops the unknown provider field, after which the operation accepts and persists the business fields; only an independently strict HTTP model might reject it.\"],\"observer\":\"The direct-call verification and HTTP caller see rejection versus successful expense creation\"}},{\"unit\":\"context\",\"subject\":\"INV-044 missing-progress completed-work value\",\"kind\":\"invariant contradiction\",\"text\":\"The added check says it “records, without asserting, that the `completed_work_value` of a section without progress reads 0; that half of ‘missing data is presented explicitly’ has no witness,” while INV-044 says missing data is never replaced by zero unless zero is confirmed.\",\"question\":\"For a section with planned work but no `SectionProgress`, must `completed_work_value` be zero, absent/unavailable, or represented by zero together with a separate explicit missing-progress marker—and what must the required test assert?\",\"options\":[\"Return zero and treat `completion_percent=None` as the explicit missing-data marker\",\"Make completed-work value absent or unavailable when progress is missing\",\"Keep zero but narrow INV-044 expressly so this derived value is an exception\"],\"default_guess\":\"Return zero with `completion_percent=None`, and explicitly narrow and test the invariant for that representation.\",\"witness\":{\"initial\":\"An active budget has one section with `work_planned=100.00` and no `SectionProgress` row.\",\"events\":[\"A viewer requests the budget or progress view.\"],\"outcomes\":[\"Following the recorded behavior and M32, the view contains `completion_percent=null` and `completed_work_value=0.00`.\",\"Following INV-044 literally, the missing measurement cannot be replaced by zero, so completed work must be absent or the view must be unavailable.\"],\"observer\":\"The viewer and any invariant test inspecting the derived view\"}},{\"unit\":\"context\",\"subject\":\"DEP-002 release-gate freshness\",\"kind\":\"undefined acceptance threshold\",\"text\":\"The added DEP-002 check requires “a fresh public advisory snapshot” and “a recent passing verdict” but defines neither `fresh` nor `recent`.\",\"question\":\"What maximum advisory age and verdict age allow the deployment to start, and from which trusted timestamps are those ages measured?\",\"options\":[\"Fixed maximum ages encoded in the deployment policy\",\"Freshness determined solely by successful retrieval during the current deploy\",\"Freshness delegated to the vulnerability-data provider or scanning tool\"],\"default_guess\":\"Require a successful advisory refresh and a passing scan during the current deployment of the exact image content id.\",\"witness\":{\"initial\":\"An image has a passing vulnerability verdict produced 24 hours ago from an advisory snapshot fetched 24 hours ago; no newer advisory data can currently be obtained.\",\"events\":[\"The deployment gate evaluates that image and verdict.\"],\"outcomes\":[\"An implementation treating 24 hours as recent starts the service.\",\"An implementation requiring a current-deploy refresh or a shorter age refuses to start it.\"],\"observer\":\"The deployment operator sees the service start or remain gated\"}}]}",
+ "set_aside": []
+}

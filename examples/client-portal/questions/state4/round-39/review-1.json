@@ -1,0 +1,82 @@
+{
+ "open_points": [
+  {
+   "unit": "context",
+   "subject": "A28 wall-clock read cardinality",
+   "kind": "contradiction",
+   "text": "“the wall clock gives the instant: ... one reading per request” contradicts “An operation reads the clock once for its own timestamps” and “the audit writer: the writer takes it when it appends.”",
+   "question": "Does one HTTP request receive one shared wall instant, or may each operation in that request—including the audit writer—call system_clock.utc_now separately?",
+   "options": [
+    "One wall reading shared by every operation and audit append in the request",
+    "One wall reading per operation, with a separate audit-writer reading",
+    "One wall reading per use-case operation, but the audit receives the use-case instant"
+   ],
+   "default_guess": "Use one reading per operation and a separate audit-writer reading, preserving the explicit audit exception.",
+   "witness": {
+    "initial": "An active staff account submits valid credentials and the wall clock advances between session creation and audit append.",
+    "events": [
+     "staff_identity.authenticate_staff creates a session and needs created_at/expires_at",
+     "audit_writer.append_audit creates the staff.login AuditRecord"
+    ],
+    "outcomes": [
+     "Both records use the single request instant because A28 permits one wall reading per request",
+     "The session uses authenticate_staff's instant and the audit uses append_audit's later instant because A28 assigns readings per operation and explicitly gives the writer its own reading"
+    ],
+    "observer": "An administrator or test reading the persisted session and audit timestamps"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "State 4 flows that require the current wall instant",
+   "kind": "missing flow operation",
+   "text": "“Only system_clock reads the host clocks ... An operation that needs the current instant takes one wall reading from it and reuses it,” but no State 4 flow names capability:system_clock.utc_now, its caller, or its position in the operation.",
+   "question": "For each time-consuming operation in audit_writer, authorization_guard, staff_identity, staff_bootstrap, viewer_access, service_identity, snapshot_import, budget_management, expense_intake, expense_management, project_tracking and photo_management, where does the owning operation call utc_now relative to validation, expiry checks, repository reads and writes?",
+   "options": [
+    "Each owning operation calls utc_now at entry and reuses it",
+    "Each owning operation calls utc_now after validation but before its first time comparison or timestamp construction",
+    "A route or outer caller reads utc_now and passes the instant into the owning operation"
+   ],
+   "default_guess": "Have each owning operation call utc_now immediately before its first current-time comparison or construction of portal-owned timestamps and reuse that instant.",
+   "witness": {
+    "initial": "A valid viewer credential exists and expires or is revoked while an entry request is being processed; the clock crosses a relevant boundary between validation and persistence.",
+    "events": [
+     "api_irregular calls viewer_access.enter_viewer_access",
+     "viewer_access validates the credential and creates a ViewerSession with created_at and expires_at"
+    ],
+    "outcomes": [
+     "viewer_access reads utc_now before validation, so the credential is evaluated at the earlier instant and the session timestamps derive from it",
+     "viewer_access reads utc_now after validation, so the same request is refused or receives later session timestamps"
+    ],
+    "observer": "The viewer, and a persistence test inspecting whether a session was created and its timestamps"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "Viewer-entry elapsed-clock step",
+   "kind": "missing capability call",
+   "text": "“the transport guard takes the elapsed reading for the viewer-entry window from it,” while flow:viewer_entry_and_session only says “module:transport_guard has already rate-limited entry per client address” and never names capability:system_clock.monotonic_seconds.",
+   "question": "When and by whom is monotonic_seconds called in the transport-guard sequence, including whether non-entry requests call it and whether the reading occurs before bucket lookup, eviction, limit testing or bucket update?",
+   "options": [
+    "transport_guard calls monotonic_seconds only for viewer-entry requests, before all bucket work",
+    "transport_guard calls it once for every request and uses it only for viewer-entry requests",
+    "transport_guard calls it for viewer entry after locating or evicting buckets but before testing and updating the selected bucket"
+   ],
+   "default_guess": "Call monotonic_seconds once only for a viewer-entry request, immediately before rate-limit bucket processing.",
+   "witness": {
+    "initial": "A client-address bucket is at the limit and its oldest attempt is exactly at the window boundary.",
+    "events": [
+     "The client sends another viewer-entry request",
+     "transport_guard canonicalizes the route, obtains elapsed time, expires or retains old bucket entries, tests the limit and possibly calls viewer_access"
+    ],
+    "outcomes": [
+     "The elapsed reading is taken before bucket processing; the oldest entry falls outside the window and verification proceeds",
+     "The reading is taken later or bucket expiry is evaluated using another moment; the oldest entry remains and the request is refused before verification"
+    ],
+    "observer": "The viewer receiving either the normal entry result or the concealed rate-limit refusal"
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"context\",\"subject\":\"A28 wall-clock read cardinality\",\"kind\":\"contradiction\",\"text\":\"“the wall clock gives the instant: ... one reading per request” contradicts “An operation reads the clock once for its own timestamps” and “the audit writer: the writer takes it when it appends.”\",\"question\":\"Does one HTTP request receive one shared wall instant, or may each operation in that request—including the audit writer—call system_clock.utc_now separately?\",\"options\":[\"One wall reading shared by every operation and audit append in the request\",\"One wall reading per operation, with a separate audit-writer reading\",\"One wall reading per use-case operation, but the audit receives the use-case instant\"],\"default_guess\":\"Use one reading per operation and a separate audit-writer reading, preserving the explicit audit exception.\",\"witness\":{\"initial\":\"An active staff account submits valid credentials and the wall clock advances between session creation and audit append.\",\"events\":[\"staff_identity.authenticate_staff creates a session and needs created_at/expires_at\",\"audit_writer.append_audit creates the staff.login AuditRecord\"],\"outcomes\":[\"Both records use the single request instant because A28 permits one wall reading per request\",\"The session uses authenticate_staff's instant and the audit uses append_audit's later instant because A28 assigns readings per operation and explicitly gives the writer its own reading\"],\"observer\":\"An administrator or test reading the persisted session and audit timestamps\"}},{\"unit\":\"context\",\"subject\":\"State 4 flows that require the current wall instant\",\"kind\":\"missing flow operation\",\"text\":\"“Only system_clock reads the host clocks ... An operation that needs the current instant takes one wall reading from it and reuses it,” but no State 4 flow names capability:system_clock.utc_now, its caller, or its position in the operation.\",\"question\":\"For each time-consuming operation in audit_writer, authorization_guard, staff_identity, staff_bootstrap, viewer_access, service_identity, snapshot_import, budget_management, expense_intake, expense_management, project_tracking and photo_management, where does the owning operation call utc_now relative to validation, expiry checks, repository reads and writes?\",\"options\":[\"Each owning operation calls utc_now at entry and reuses it\",\"Each owning operation calls utc_now after validation but before its first time comparison or timestamp construction\",\"A route or outer caller reads utc_now and passes the instant into the owning operation\"],\"default_guess\":\"Have each owning operation call utc_now immediately before its first current-time comparison or construction of portal-owned timestamps and reuse that instant.\",\"witness\":{\"initial\":\"A valid viewer credential exists and expires or is revoked while an entry request is being processed; the clock crosses a relevant boundary between validation and persistence.\",\"events\":[\"api_irregular calls viewer_access.enter_viewer_access\",\"viewer_access validates the credential and creates a ViewerSession with created_at and expires_at\"],\"outcomes\":[\"viewer_access reads utc_now before validation, so the credential is evaluated at the earlier instant and the session timestamps derive from it\",\"viewer_access reads utc_now after validation, so the same request is refused or receives later session timestamps\"],\"observer\":\"The viewer, and a persistence test inspecting whether a session was created and its timestamps\"}},{\"unit\":\"context\",\"subject\":\"Viewer-entry elapsed-clock step\",\"kind\":\"missing capability call\",\"text\":\"“the transport guard takes the elapsed reading for the viewer-entry window from it,” while flow:viewer_entry_and_session only says “module:transport_guard has already rate-limited entry per client address” and never names capability:system_clock.monotonic_seconds.\",\"question\":\"When and by whom is monotonic_seconds called in the transport-guard sequence, including whether non-entry requests call it and whether the reading occurs before bucket lookup, eviction, limit testing or bucket update?\",\"options\":[\"transport_guard calls monotonic_seconds only for viewer-entry requests, before all bucket work\",\"transport_guard calls it once for every request and uses it only for viewer-entry requests\",\"transport_guard calls it for viewer entry after locating or evicting buckets but before testing and updating the selected bucket\"],\"default_guess\":\"Call monotonic_seconds once only for a viewer-entry request, immediately before rate-limit bucket processing.\",\"witness\":{\"initial\":\"A client-address bucket is at the limit and its oldest attempt is exactly at the window boundary.\",\"events\":[\"The client sends another viewer-entry request\",\"transport_guard canonicalizes the route, obtains elapsed time, expires or retains old bucket entries, tests the limit and possibly calls viewer_access\"],\"outcomes\":[\"The elapsed reading is taken before bucket processing; the oldest entry falls outside the window and verification proceeds\",\"The reading is taken later or bucket expiry is evaluated using another moment; the oldest entry remains and the request is refused before verification\"],\"observer\":\"The viewer receiving either the normal entry result or the concealed rate-limit refusal\"}}]}",
+ "set_aside": []
+}

@@ -1,0 +1,132 @@
+{
+ "open_points": [
+  {
+   "unit": "context",
+   "subject": "system_clock public operations",
+   "kind": "missing operation contracts",
+   "text": "State 3 adds `system_clock` with candidate public capabilities `utc_now` and `monotonic_seconds`, while State 5 still says “One public operation per State 3 capability (100)” and defines neither operation.",
+   "question": "What are the State 5 contracts for `system_clock.utc_now` and `system_clock.monotonic_seconds`, including their callers, inputs, outputs, errors and effects, and does the operation count become 102?",
+   "options": [
+    "Add two public operations returning respectively an offset-naive UTC datetime and a monotonic float, with every time-reading module named as a caller.",
+    "Treat the capabilities as private implementation details despite State 5's one-operation-per-capability rule.",
+    "Replace them with a clock object or dependency passed to consumers, requiring different callers and inputs."
+   ],
+   "default_guess": "Add two pure public operations, one host-clock read per call, and update the operation count and caller lists.",
+   "witness": {
+    "initial": "A staff login must create a session and an audit record with timestamps.",
+    "events": [
+     "The State 6 author implements every State 3 candidate capability as a State 5 public operation.",
+     "Another State 6 author implements only operations actually specified in State 5."
+    ],
+    "outcomes": [
+     "The staff identity and audit modules call specified `system_clock.utc_now` operations and no module reads the host clock directly.",
+     "No callable clock contract exists, so consumers either read `datetime.utcnow()` directly or invent their own clock interface."
+    ],
+    "observer": "State 6 signature generation, module dependency checks and clock-focused tests"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "A28 clock reading scope",
+   "kind": "contradictory cardinality",
+   "text": "A28 says “one reading per request” for each host clock, `system_clock` says “One wall reading per call” and “one elapsed reading per call”, while the unchanged rule says “An operation reads the clock once for its own timestamps” and audit append takes its own instant.",
+   "question": "Does “request” mean one HTTP request, one application operation, or one call to the clock source when several operations and the audit writer run during one HTTP request?",
+   "options": [
+    "One wall reading for the entire HTTP request, shared by authorization, use case and audit writer.",
+    "One wall reading per application operation, with `audit_writer.append_audit` taking its separate reading.",
+    "One host reading per call to `utc_now`, allowing every consumer call to produce a different instant."
+   ],
+   "default_guess": "Interpret request as a call to the clock source and retain one reading per operation plus the audit-writer exception.",
+   "witness": {
+    "initial": "An administrator request issues a viewer credential; the use case writes credential and revocation timestamps and calls `append_audit`.",
+    "events": [
+     "The HTTP request is admitted.",
+     "`issue_viewer_access` obtains its operation instant.",
+     "`append_audit` obtains the audit instant."
+    ],
+    "outcomes": [
+     "If one reading means one HTTP request, the credential changes and audit share the same instant.",
+     "If readings are per operation/call, the credential changes share one instant but the audit can have a later instant, as the audit exception says."
+    ],
+    "observer": "The persisted credential, session and audit timestamps and the A28 verification tests"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "INV-031 recognition decoding and create_expense_from_recognition",
+   "kind": "unrepresentable invalid input",
+   "text": "The added check requires “an unconfirmed, incomplete, unsupported-version or provider-carrying result [to be] refused at decoding, by `create_expense_from_recognition` and over HTTP”, but State 5 fixes that operation's input as a `ConfirmedRecognitionPublication`, whose closed fields cannot represent an unconfirmed or provider-carrying result.",
+   "question": "What input reaches the direct operation check for forbidden recognition status/provider fields, and which layer and declared exception must refuse it?",
+   "options": [
+    "The operation accepts a raw recognition request DTO that includes status and rejects forbidden or extra fields with `ExpenseValidationError`.",
+    "Strict request-model construction rejects such values before `create_expense_from_recognition`, so no direct operation invocation exists for those cases.",
+    "The typed publication preserves unknown fields so the operation can inspect and reject them."
+   ],
+   "default_guess": "Keep the typed operation input and test invalid wire shapes at strict decoding; test unsupported versions and incomplete typed values at the operation.",
+   "witness": {
+    "initial": "An active assigned operator may mutate an active project and supplies otherwise valid recognition and allocations.",
+    "events": [
+     "A direct module caller or HTTP caller supplies recognition data with `recognition_status` set to an unconfirmed value or an added `provider` field."
+    ],
+    "outcomes": [
+     "A strict DTO decoder refuses the value before `create_expense_from_recognition` can be called.",
+     "A permissive decoder discards the unsupported field, constructs `ConfirmedRecognitionPublication`, and the operation creates the expense because it cannot observe the forbidden value."
+    ],
+    "observer": "The HTTP caller, the focused direct-operation test and the expense tables"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "PLAT-REG-004 request decoding",
+   "kind": "undefined forbidden input",
+   "text": "The added linkage check says “an import or request carrying its own status or project facts is refused at decoding”, but it does not define “project facts”; valid snapshot imports and project-scoped requests necessarily carry `project_id`.",
+   "question": "Which exact request fields count as client-supplied Registry context and must be rejected, without rejecting the required project identity and legitimate portal-owned fields?",
+   "options": [
+    "Reject a closed set of Registry-owned fields such as status, display name, address, customer reference and Registry timestamps, while accepting `project_id`.",
+    "Reject any project-related field other than a path-selected `project_id`.",
+    "Reject every unknown request field through a global strict-extra-fields decoding policy."
+   ],
+   "default_guess": "Define and reject the Registry-owned context fields explicitly while retaining `project_id` as identity only.",
+   "witness": {
+    "initial": "A producer has a valid credential and grant for an active Registry project.",
+    "events": [
+     "The producer publishes a valid snapshot containing the required `project_id` and an extra `status: archived` field.",
+     "The Registry currently answers that project as active."
+    ],
+    "outcomes": [
+     "A decoder treating `status` as forbidden client-supplied Registry context refuses the request before any Registry call.",
+     "A decoder that ignores unknown fields discards `status`, consults Registry and admits the import using the live active answer."
+    ],
+    "observer": "The producer, Registry request log, import records and snapshot tables"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "missing progress in budget and progress views",
+   "kind": "contradictory output semantics",
+   "text": "The added INV-044 check records that “the `completed_work_value` of a section without progress reads 0”, while INV-044 says “missing data is presented explicitly, never replaced by zero unless zero is confirmed” and State 0 says unavailable data is “never fabricated or replaced by silent zeros.”",
+   "question": "For a section with planned work but no `SectionProgress`, must `completed_work_value` be numeric zero or explicitly unavailable?",
+   "options": [
+    "Return `completion_percent = None` and `completed_work_value = 0` as the defined mathematical contribution of absent progress.",
+    "Make completed work unavailable, requiring the view field to become optional or gain an availability marker.",
+    "Omit the section from completed-work derivation until progress is recorded."
+   ],
+   "default_guess": "Return `completion_percent = None` and zero completed-work value, but explicitly declare zero to be the defined derivation rather than a claim of recorded 0% progress.",
+   "witness": {
+    "initial": "An active budget has one section with `work_planned = 1000.00` and no `SectionProgress` row.",
+    "events": [
+     "A viewer requests the project overview.",
+     "`build_budget_view` and `build_progress_view` derive the section."
+    ],
+    "outcomes": [
+     "The views return `completion_percent: null` and `completed_work_value: 0.00`, as the added check records.",
+     "The views mark completed work unavailable or omit its value because no zero progress was confirmed."
+    ],
+    "observer": "The viewer and the budget/progress derivation checks"
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"context\",\"subject\":\"system_clock public operations\",\"kind\":\"missing operation contracts\",\"text\":\"State 3 adds `system_clock` with candidate public capabilities `utc_now` and `monotonic_seconds`, while State 5 still says “One public operation per State 3 capability (100)” and defines neither operation.\",\"question\":\"What are the State 5 contracts for `system_clock.utc_now` and `system_clock.monotonic_seconds`, including their callers, inputs, outputs, errors and effects, and does the operation count become 102?\",\"options\":[\"Add two public operations returning respectively an offset-naive UTC datetime and a monotonic float, with every time-reading module named as a caller.\",\"Treat the capabilities as private implementation details despite State 5's one-operation-per-capability rule.\",\"Replace them with a clock object or dependency passed to consumers, requiring different callers and inputs.\"],\"default_guess\":\"Add two pure public operations, one host-clock read per call, and update the operation count and caller lists.\",\"witness\":{\"initial\":\"A staff login must create a session and an audit record with timestamps.\",\"events\":[\"The State 6 author implements every State 3 candidate capability as a State 5 public operation.\",\"Another State 6 author implements only operations actually specified in State 5.\"],\"outcomes\":[\"The staff identity and audit modules call specified `system_clock.utc_now` operations and no module reads the host clock directly.\",\"No callable clock contract exists, so consumers either read `datetime.utcnow()` directly or invent their own clock interface.\"],\"observer\":\"State 6 signature generation, module dependency checks and clock-focused tests\"}},{\"unit\":\"context\",\"subject\":\"A28 clock reading scope\",\"kind\":\"contradictory cardinality\",\"text\":\"A28 says “one reading per request” for each host clock, `system_clock` says “One wall reading per call” and “one elapsed reading per call”, while the unchanged rule says “An operation reads the clock once for its own timestamps” and audit append takes its own instant.\",\"question\":\"Does “request” mean one HTTP request, one application operation, or one call to the clock source when several operations and the audit writer run during one HTTP request?\",\"options\":[\"One wall reading for the entire HTTP request, shared by authorization, use case and audit writer.\",\"One wall reading per application operation, with `audit_writer.append_audit` taking its separate reading.\",\"One host reading per call to `utc_now`, allowing every consumer call to produce a different instant.\"],\"default_guess\":\"Interpret request as a call to the clock source and retain one reading per operation plus the audit-writer exception.\",\"witness\":{\"initial\":\"An administrator request issues a viewer credential; the use case writes credential and revocation timestamps and calls `append_audit`.\",\"events\":[\"The HTTP request is admitted.\",\"`issue_viewer_access` obtains its operation instant.\",\"`append_audit` obtains the audit instant.\"],\"outcomes\":[\"If one reading means one HTTP request, the credential changes and audit share the same instant.\",\"If readings are per operation/call, the credential changes share one instant but the audit can have a later instant, as the audit exception says.\"],\"observer\":\"The persisted credential, session and audit timestamps and the A28 verification tests\"}},{\"unit\":\"context\",\"subject\":\"INV-031 recognition decoding and create_expense_from_recognition\",\"kind\":\"unrepresentable invalid input\",\"text\":\"The added check requires “an unconfirmed, incomplete, unsupported-version or provider-carrying result [to be] refused at decoding, by `create_expense_from_recognition` and over HTTP”, but State 5 fixes that operation's input as a `ConfirmedRecognitionPublication`, whose closed fields cannot represent an unconfirmed or provider-carrying result.\",\"question\":\"What input reaches the direct operation check for forbidden recognition status/provider fields, and which layer and declared exception must refuse it?\",\"options\":[\"The operation accepts a raw recognition request DTO that includes status and rejects forbidden or extra fields with `ExpenseValidationError`.\",\"Strict request-model construction rejects such values before `create_expense_from_recognition`, so no direct operation invocation exists for those cases.\",\"The typed publication preserves unknown fields so the operation can inspect and reject them.\"],\"default_guess\":\"Keep the typed operation input and test invalid wire shapes at strict decoding; test unsupported versions and incomplete typed values at the operation.\",\"witness\":{\"initial\":\"An active assigned operator may mutate an active project and supplies otherwise valid recognition and allocations.\",\"events\":[\"A direct module caller or HTTP caller supplies recognition data with `recognition_status` set to an unconfirmed value or an added `provider` field.\"],\"outcomes\":[\"A strict DTO decoder refuses the value before `create_expense_from_recognition` can be called.\",\"A permissive decoder discards the unsupported field, constructs `ConfirmedRecognitionPublication`, and the operation creates the expense because it cannot observe the forbidden value.\"],\"observer\":\"The HTTP caller, the focused direct-operation test and the expense tables\"}},{\"unit\":\"context\",\"subject\":\"PLAT-REG-004 request decoding\",\"kind\":\"undefined forbidden input\",\"text\":\"The added linkage check says “an import or request carrying its own status or project facts is refused at decoding”, but it does not define “project facts”; valid snapshot imports and project-scoped requests necessarily carry `project_id`.\",\"question\":\"Which exact request fields count as client-supplied Registry context and must be rejected, without rejecting the required project identity and legitimate portal-owned fields?\",\"options\":[\"Reject a closed set of Registry-owned fields such as status, display name, address, customer reference and Registry timestamps, while accepting `project_id`.\",\"Reject any project-related field other than a path-selected `project_id`.\",\"Reject every unknown request field through a global strict-extra-fields decoding policy.\"],\"default_guess\":\"Define and reject the Registry-owned context fields explicitly while retaining `project_id` as identity only.\",\"witness\":{\"initial\":\"A producer has a valid credential and grant for an active Registry project.\",\"events\":[\"The producer publishes a valid snapshot containing the required `project_id` and an extra `status: archived` field.\",\"The Registry currently answers that project as active.\"],\"outcomes\":[\"A decoder treating `status` as forbidden client-supplied Registry context refuses the request before any Registry call.\",\"A decoder that ignores unknown fields discards `status`, consults Registry and admits the import using the live active answer.\"],\"observer\":\"The producer, Registry request log, import records and snapshot tables\"}},{\"unit\":\"context\",\"subject\":\"missing progress in budget and progress views\",\"kind\":\"contradictory output semantics\",\"text\":\"The added INV-044 check records that “the `completed_work_value` of a section without progress reads 0”, while INV-044 says “missing data is presented explicitly, never replaced by zero unless zero is confirmed” and State 0 says unavailable data is “never fabricated or replaced by silent zeros.”\",\"question\":\"For a section with planned work but no `SectionProgress`, must `completed_work_value` be numeric zero or explicitly unavailable?\",\"options\":[\"Return `completion_percent = None` and `completed_work_value = 0` as the defined mathematical contribution of absent progress.\",\"Make completed work unavailable, requiring the view field to become optional or gain an availability marker.\",\"Omit the section from completed-work derivation until progress is recorded.\"],\"default_guess\":\"Return `completion_percent = None` and zero completed-work value, but explicitly declare zero to be the defined derivation rather than a claim of recorded 0% progress.\",\"witness\":{\"initial\":\"An active budget has one section with `work_planned = 1000.00` and no `SectionProgress` row.\",\"events\":[\"A viewer requests the project overview.\",\"`build_budget_view` and `build_progress_view` derive the section.\"],\"outcomes\":[\"The views return `completion_percent: null` and `completed_work_value: 0.00`, as the added check records.\",\"The views mark completed work unavailable or omit its value because no zero progress was confirmed.\"],\"observer\":\"The viewer and the budget/progress derivation checks\"}}]}",
+ "set_aside": []
+}

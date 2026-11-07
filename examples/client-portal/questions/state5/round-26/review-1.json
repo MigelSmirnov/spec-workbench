@@ -1,0 +1,108 @@
+{
+ "open_points": [
+  {
+   "unit": "context",
+   "subject": "system_clock.utc_now and system_clock.monotonic_seconds",
+   "kind": "missing operation contracts",
+   "text": "State 3 adds `system_clock` with candidate public capabilities `utc_now` and `monotonic_seconds`, while State 5 still says “One public operation per State 3 capability (100)” and defines neither operation.",
+   "question": "Are `utc_now` and `monotonic_seconds` public module operations, and if so what are their exact callers, inputs, outputs, errors and effects—and should the State 5 operation count become 102?",
+   "options": [
+    "Add both as State 5 public operations with explicit contracts and callers.",
+    "Treat them as private implementation functions and exempt them from the one-operation-per-capability rule.",
+    "Expose a different clock interface and revise the State 3 candidate capabilities."
+   ],
+   "default_guess": "Add two pure public operations: `utc_now() -> offset-naive UTC datetime` and `monotonic_seconds() -> float`, with no declared domain errors and the clock-consuming modules as callers.",
+   "witness": {
+    "initial": "An authenticated administrator issues a viewer credential, so `viewer_access` and `audit_writer` both need current wall time.",
+    "events": [
+     "`viewer_access.issue_viewer_access` needs an operation timestamp.",
+     "`audit_writer.append_audit` needs its independently captured audit timestamp.",
+     "A State 6 author derives interfaces from State 5."
+    ],
+    "outcomes": [
+     "The author adds and imports `system_clock.utc_now`, because State 3 names it as a public capability.",
+     "The author treats clock access as an unlisted private/global dependency, because State 5 exposes no clock operation."
+    ],
+    "observer": "State 6 contract authors, dependency tests and any caller that substitutes a deterministic clock."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "A28 wall-clock read cardinality",
+   "kind": "contradictory cardinality",
+   "text": "The changed text says “the wall clock gives the instant … one reading per request,” while the unchanged policy says “An operation reads the clock once” and “the `occurred_at` of an audit record … the writer takes it when it appends.”",
+   "question": "Does “one reading per request” mean one host-clock read for an entire HTTP request, one read for each use-case operation, or one read for each call to `system_clock.utc_now`? In particular, must an audited mutation and `append_audit` share one instant or take two readings?",
+   "options": [
+    "One wall reading per HTTP request, shared by the use case and audit writer.",
+    "One wall reading by each operation, so the use case and audit writer take separate readings.",
+    "One host reading per `utc_now` call, with callers responsible for their own reuse."
+   ],
+   "default_guess": "Interpret it as one host reading per `utc_now` call and preserve the existing separate audit-writer reading.",
+   "witness": {
+    "initial": "A viewer has an active credential and session; an administrator reissues the credential.",
+    "events": [
+     "The HTTP request invokes `issue_viewer_access`, which timestamps the revoked credential, revoked session and new credential.",
+     "The operation invokes `append_audit`, which supplies `AuditRecord.occurred_at`."
+    ],
+    "outcomes": [
+     "Only one wall-clock read occurs for the HTTP request, so the audit must reuse the mutation instant.",
+     "The mutation operation reads once and the audit writer reads again at append, so `occurred_at` may differ from the mutation timestamps."
+    ],
+    "observer": "The administrator reading audit history and a focused test counting clock-backend calls or comparing persisted timestamps."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "INV-031 recognition decoding and create_expense_from_recognition",
+   "kind": "boundary contradiction",
+   "text": "The added check requires “an unconfirmed, incomplete, unsupported-version or provider-carrying result [to be] refused at decoding, by `create_expense_from_recognition` and over HTTP,” but State 5 declares that operation’s input as a typed `ConfirmedRecognitionPublication`, whose status has only `confirmed` and which has no provider field.",
+   "question": "Must `create_expense_from_recognition` itself accept and validate an untrusted wire-shaped recognition payload, or may it accept only the already-decoded `ConfirmedRecognitionPublication` and leave unconfirmed/provider-carrying shapes unable to reach the operation?",
+   "options": [
+    "The operation accepts the raw boundary request and performs all recognition decoding itself.",
+    "The operation accepts only `ConfirmedRecognitionPublication`; invalid status, missing fields and provider fields are rejected before it is called.",
+    "Provide separate decoder and use-case operations, and assign each required rejection to one of them."
+   ],
+   "default_guess": "Keep the use case typed and reject forbidden wire shapes in a separate request-to-domain decoder before calling it.",
+   "witness": {
+    "initial": "An otherwise valid expense request contains `recognition_status=\"unconfirmed\"` and a `provider` field.",
+    "events": [
+     "A direct module consumer or focused test submits the payload to the recognition-expense boundary.",
+     "The HTTP route submits the same payload."
+    ],
+    "outcomes": [
+     "Both calls reach `create_expense_from_recognition`, which classifies and rejects the raw fields as `ExpenseValidationError`.",
+     "Typed decoding rejects the payload before `create_expense_from_recognition`; the operation has no representable input on which to perform the required rejection."
+    ],
+    "observer": "The focused INV-031 test and any non-HTTP caller of the public operation."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "INV-044 completed work for a section without progress",
+   "kind": "invariant contradiction",
+   "text": "INV-044 says “missing data is presented explicitly, never replaced by zero unless zero is confirmed,” while the added check records that “the `completed_work_value` of a section without progress reads 0”; State 1 likewise makes completion `None` but completed work value zero.",
+   "question": "When a section has planned work but no progress record, is its completed-work value the numeric zero or an explicitly unavailable value?",
+   "options": [
+    "Return `completion_percent=None` and `completed_work_value=0`.",
+    "Return both completion and completed-work value as unavailable.",
+    "Distinguish an unavailable completed-work measurement from a confirmed zero measurement in the view model."
+   ],
+   "default_guess": "Follow the concrete current DTO and model text: completion is `None`, while completed-work value is numeric zero; narrow INV-044 so it does not prohibit this derived identity value.",
+   "witness": {
+    "initial": "An active budget contains one section with `work_planned=100.00`; no `SectionProgress` row exists.",
+    "events": [
+     "A viewer requests the project overview.",
+     "`build_progress_view` and `build_budget_view` derive that section."
+    ],
+    "outcomes": [
+     "The views show `completion_percent=null` and `completed_work_value=0.00`, as M32 and the added check indicate.",
+     "The views must expose completed-work value as unavailable because zero has not been confirmed, as INV-044 and State 0 invariant 11 require."
+    ],
+    "observer": "The viewer and any consumer calculating or displaying project completion."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"context\",\"subject\":\"system_clock.utc_now and system_clock.monotonic_seconds\",\"kind\":\"missing operation contracts\",\"text\":\"State 3 adds `system_clock` with candidate public capabilities `utc_now` and `monotonic_seconds`, while State 5 still says “One public operation per State 3 capability (100)” and defines neither operation.\",\"question\":\"Are `utc_now` and `monotonic_seconds` public module operations, and if so what are their exact callers, inputs, outputs, errors and effects—and should the State 5 operation count become 102?\",\"options\":[\"Add both as State 5 public operations with explicit contracts and callers.\",\"Treat them as private implementation functions and exempt them from the one-operation-per-capability rule.\",\"Expose a different clock interface and revise the State 3 candidate capabilities.\"],\"default_guess\":\"Add two pure public operations: `utc_now() -> offset-naive UTC datetime` and `monotonic_seconds() -> float`, with no declared domain errors and the clock-consuming modules as callers.\",\"witness\":{\"initial\":\"An authenticated administrator issues a viewer credential, so `viewer_access` and `audit_writer` both need current wall time.\",\"events\":[\"`viewer_access.issue_viewer_access` needs an operation timestamp.\",\"`audit_writer.append_audit` needs its independently captured audit timestamp.\",\"A State 6 author derives interfaces from State 5.\"],\"outcomes\":[\"The author adds and imports `system_clock.utc_now`, because State 3 names it as a public capability.\",\"The author treats clock access as an unlisted private/global dependency, because State 5 exposes no clock operation.\"],\"observer\":\"State 6 contract authors, dependency tests and any caller that substitutes a deterministic clock.\"}},{\"unit\":\"context\",\"subject\":\"A28 wall-clock read cardinality\",\"kind\":\"contradictory cardinality\",\"text\":\"The changed text says “the wall clock gives the instant … one reading per request,” while the unchanged policy says “An operation reads the clock once” and “the `occurred_at` of an audit record … the writer takes it when it appends.”\",\"question\":\"Does “one reading per request” mean one host-clock read for an entire HTTP request, one read for each use-case operation, or one read for each call to `system_clock.utc_now`? In particular, must an audited mutation and `append_audit` share one instant or take two readings?\",\"options\":[\"One wall reading per HTTP request, shared by the use case and audit writer.\",\"One wall reading by each operation, so the use case and audit writer take separate readings.\",\"One host reading per `utc_now` call, with callers responsible for their own reuse.\"],\"default_guess\":\"Interpret it as one host reading per `utc_now` call and preserve the existing separate audit-writer reading.\",\"witness\":{\"initial\":\"A viewer has an active credential and session; an administrator reissues the credential.\",\"events\":[\"The HTTP request invokes `issue_viewer_access`, which timestamps the revoked credential, revoked session and new credential.\",\"The operation invokes `append_audit`, which supplies `AuditRecord.occurred_at`.\"],\"outcomes\":[\"Only one wall-clock read occurs for the HTTP request, so the audit must reuse the mutation instant.\",\"The mutation operation reads once and the audit writer reads again at append, so `occurred_at` may differ from the mutation timestamps.\"],\"observer\":\"The administrator reading audit history and a focused test counting clock-backend calls or comparing persisted timestamps.\"}},{\"unit\":\"context\",\"subject\":\"INV-031 recognition decoding and create_expense_from_recognition\",\"kind\":\"boundary contradiction\",\"text\":\"The added check requires “an unconfirmed, incomplete, unsupported-version or provider-carrying result [to be] refused at decoding, by `create_expense_from_recognition` and over HTTP,” but State 5 declares that operation’s input as a typed `ConfirmedRecognitionPublication`, whose status has only `confirmed` and which has no provider field.\",\"question\":\"Must `create_expense_from_recognition` itself accept and validate an untrusted wire-shaped recognition payload, or may it accept only the already-decoded `ConfirmedRecognitionPublication` and leave unconfirmed/provider-carrying shapes unable to reach the operation?\",\"options\":[\"The operation accepts the raw boundary request and performs all recognition decoding itself.\",\"The operation accepts only `ConfirmedRecognitionPublication`; invalid status, missing fields and provider fields are rejected before it is called.\",\"Provide separate decoder and use-case operations, and assign each required rejection to one of them.\"],\"default_guess\":\"Keep the use case typed and reject forbidden wire shapes in a separate request-to-domain decoder before calling it.\",\"witness\":{\"initial\":\"An otherwise valid expense request contains `recognition_status=\\\"unconfirmed\\\"` and a `provider` field.\",\"events\":[\"A direct module consumer or focused test submits the payload to the recognition-expense boundary.\",\"The HTTP route submits the same payload.\"],\"outcomes\":[\"Both calls reach `create_expense_from_recognition`, which classifies and rejects the raw fields as `ExpenseValidationError`.\",\"Typed decoding rejects the payload before `create_expense_from_recognition`; the operation has no representable input on which to perform the required rejection.\"],\"observer\":\"The focused INV-031 test and any non-HTTP caller of the public operation.\"}},{\"unit\":\"context\",\"subject\":\"INV-044 completed work for a section without progress\",\"kind\":\"invariant contradiction\",\"text\":\"INV-044 says “missing data is presented explicitly, never replaced by zero unless zero is confirmed,” while the added check records that “the `completed_work_value` of a section without progress reads 0”; State 1 likewise makes completion `None` but completed work value zero.\",\"question\":\"When a section has planned work but no progress record, is its completed-work value the numeric zero or an explicitly unavailable value?\",\"options\":[\"Return `completion_percent=None` and `completed_work_value=0`.\",\"Return both completion and completed-work value as unavailable.\",\"Distinguish an unavailable completed-work measurement from a confirmed zero measurement in the view model.\"],\"default_guess\":\"Follow the concrete current DTO and model text: completion is `None`, while completed-work value is numeric zero; narrow INV-044 so it does not prohibit this derived identity value.\",\"witness\":{\"initial\":\"An active budget contains one section with `work_planned=100.00`; no `SectionProgress` row exists.\",\"events\":[\"A viewer requests the project overview.\",\"`build_progress_view` and `build_budget_view` derive that section.\"],\"outcomes\":[\"The views show `completion_percent=null` and `completed_work_value=0.00`, as M32 and the added check indicate.\",\"The views must expose completed-work value as unavailable because zero has not been confirmed, as INV-044 and State 0 invariant 11 require.\"],\"observer\":\"The viewer and any consumer calculating or displaying project completion.\"}}]}",
+ "set_aside": []
+}

@@ -1,0 +1,125 @@
+{
+ "open_points": [
+  {
+   "unit": "context",
+   "subject": "system_clock public operations",
+   "kind": "missing operation contracts",
+   "text": "State 3 adds `system_clock` with candidate public capabilities `utc_now` and `monotonic_seconds`, while State 5 says \"One public operation per State 3 capability (100)\" but defines neither operation.",
+   "question": "Are `utc_now` and `monotonic_seconds` public operations, and if so what are their callers, inputs, outputs, errors and effects?",
+   "options": [
+    "Add two State 5 operations, making 102 operations, with fixed contracts",
+    "Treat them as private implementation details and retain 100 public operations"
+   ],
+   "default_guess": "Expose two no-input operations returning an offset-naive UTC datetime and a monotonic float, propagating host-clock failures.",
+   "witness": {
+    "initial": "State 6 is being authored from States 0–5, with `audit_writer` needing wall time and `transport_guard` needing elapsed time.",
+    "events": [
+     "One agent follows the State 3 capability list and generates public contracts for `utc_now` and `monotonic_seconds`.",
+     "Another agent follows the State 5 inventory and generates no public `system_clock` operations."
+    ],
+    "outcomes": [
+     "Clock consumers import and call the two generated operations.",
+     "Clock consumers have no specified callable contract and either invent a private surface or fail integration."
+    ],
+    "observer": "The State 6 assembler and clock-consuming modules"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "Registry validation of exists=false",
+   "kind": "contradictory output/error",
+   "text": "The added linkage check says production `validate_project_reference` \"refuses a UUID the Registry answers 404 or `exists=false` for\", while A6 says \"`exists=false` (read by the caller, A5; not a gateway failure)\" and State 5 says the operation outputs the decoded `ProjectValidationResult`.",
+   "question": "When Registry returns a successful validation response with `exists=false`, must `validate_project_reference` return that result or raise a refusal itself?",
+   "options": [
+    "Return `ProjectValidationResult`; each caller translates `exists=false`",
+    "Raise `RegistryBoundaryError(not_found)` in the gateway"
+   ],
+   "default_guess": "Return the decoded result because the existing gateway contract explicitly assigns the lifecycle decision to its caller.",
+   "witness": {
+    "initial": "Registry is reachable and answers HTTP 200 for project P with `project_id=P`, `exists=false`, `is_active=false`.",
+    "events": [
+     "`staff_identity.assign_staff_project` calls `registry_gateway.validate_project_reference(P)`."
+    ],
+    "outcomes": [
+     "The gateway returns `ProjectValidationResult` and `staff_identity` raises its caller-owned `ScopedNotFoundError`.",
+     "The gateway itself refuses with `RegistryBoundaryError(not_found)` as the new linkage-check wording requires."
+    ],
+    "observer": "The administrator sees HTTP 404 in the first implementation and HTTP 502 in the second"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "create_expense_from_recognition boundary validation",
+   "kind": "contradictory validation layer",
+   "text": "The added check requires an unconfirmed or provider-carrying result to be refused \"at decoding, by `create_expense_from_recognition` and over HTTP\", but State 5 gives that operation a `ConfirmedRecognitionPublication`, whose closed model has only `confirmed` status and no provider field.",
+   "question": "Must the public operation accept a broader raw recognition shape so it can reject unconfirmed/provider fields itself, or does strict DTO decoding reject those shapes before the operation is called?",
+   "options": [
+    "Keep `ConfirmedRecognitionPublication` as the input and test rejection at model/request decoding only",
+    "Broaden the operation input so `create_expense_from_recognition` performs these rejections"
+   ],
+   "default_guess": "Keep the typed input and assign rejection of fields outside that type to decoding.",
+   "witness": {
+    "initial": "No expense exists and a direct module caller has recognition data that is otherwise valid but includes `provider=\"x\"`.",
+    "events": [
+     "The caller attempts `create_expense_from_recognition` with that data."
+    ],
+    "outcomes": [
+     "Strict construction of `ConfirmedRecognitionPublication` fails before the operation is entered.",
+     "The operation accepts a broader input, enters, detects `provider`, and raises its declared expense validation error."
+    ],
+    "observer": "The focused operation test sees a different call boundary and exception owner"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "missing progress and completed_work_value",
+   "kind": "invariant contradiction",
+   "text": "The new INV-044 passage says a section without progress has `completed_work_value` 0, while INV-044 says missing data is \"never replaced by zero unless zero is confirmed\" and the same passage acknowledges that this half has no witness.",
+   "question": "For a section with planned work but no progress record, is completed work a confirmed numeric zero or unavailable missing data?",
+   "options": [
+    "Return numeric 0 while exposing `completion_percent=None`",
+    "Represent completed work as unavailable rather than zero"
+   ],
+   "default_guess": "Return 0 with `completion_percent=None`, matching M32 and the newly recorded behavior.",
+   "witness": {
+    "initial": "Project P has an active budget section with `work_planned=100.00` and no `SectionProgress` row.",
+    "events": [
+     "An authorized viewer requests P's project overview.",
+     "`derived_views` builds the progress and budget section projections."
+    ],
+    "outcomes": [
+     "The projections expose missing completion and do not substitute an unconfirmed completed-work zero.",
+     "The projections expose `completion_percent=None` and `completed_work_value=0.00`."
+    ],
+    "observer": "The viewer sees the different completed-work value"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "dependency release gate freshness",
+   "kind": "undefined acceptance threshold",
+   "text": "The added DEP-002 check requires \"a fresh public advisory snapshot\" and \"a recent passing verdict\" but defines neither freshness nor recency.",
+   "question": "What maximum advisory-snapshot age and verdict age admit deployment, and from which timestamps are those ages measured?",
+   "options": [
+    "Use fixed maximum ages defined by deployment policy",
+    "Require a newly fetched snapshot and verdict during every deployment",
+    "Let the deployment implementation choose its own freshness windows"
+   ],
+   "default_guess": "Require a successful scan during the current deployment against an advisory snapshot fetched during that deployment.",
+   "witness": {
+    "initial": "Image I has a passing verdict bound to its content id from eight days ago, based on an advisory snapshot from the same day; the advisory service is currently reachable and I is unchanged.",
+    "events": [
+     "The deployment process attempts to start image I."
+    ],
+    "outcomes": [
+     "An implementation treating 30 days as recent starts I.",
+     "An implementation treating 24 hours as recent refuses to start I and reruns or waits for the gate."
+    ],
+    "observer": "The deployment operator sees the service start or remain stopped"
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"context\",\"subject\":\"system_clock public operations\",\"kind\":\"missing operation contracts\",\"text\":\"State 3 adds `system_clock` with candidate public capabilities `utc_now` and `monotonic_seconds`, while State 5 says \\\"One public operation per State 3 capability (100)\\\" but defines neither operation.\",\"question\":\"Are `utc_now` and `monotonic_seconds` public operations, and if so what are their callers, inputs, outputs, errors and effects?\",\"options\":[\"Add two State 5 operations, making 102 operations, with fixed contracts\",\"Treat them as private implementation details and retain 100 public operations\"],\"default_guess\":\"Expose two no-input operations returning an offset-naive UTC datetime and a monotonic float, propagating host-clock failures.\",\"witness\":{\"initial\":\"State 6 is being authored from States 0–5, with `audit_writer` needing wall time and `transport_guard` needing elapsed time.\",\"events\":[\"One agent follows the State 3 capability list and generates public contracts for `utc_now` and `monotonic_seconds`.\",\"Another agent follows the State 5 inventory and generates no public `system_clock` operations.\"],\"outcomes\":[\"Clock consumers import and call the two generated operations.\",\"Clock consumers have no specified callable contract and either invent a private surface or fail integration.\"],\"observer\":\"The State 6 assembler and clock-consuming modules\"}},{\"unit\":\"context\",\"subject\":\"Registry validation of exists=false\",\"kind\":\"contradictory output/error\",\"text\":\"The added linkage check says production `validate_project_reference` \\\"refuses a UUID the Registry answers 404 or `exists=false` for\\\", while A6 says \\\"`exists=false` (read by the caller, A5; not a gateway failure)\\\" and State 5 says the operation outputs the decoded `ProjectValidationResult`.\",\"question\":\"When Registry returns a successful validation response with `exists=false`, must `validate_project_reference` return that result or raise a refusal itself?\",\"options\":[\"Return `ProjectValidationResult`; each caller translates `exists=false`\",\"Raise `RegistryBoundaryError(not_found)` in the gateway\"],\"default_guess\":\"Return the decoded result because the existing gateway contract explicitly assigns the lifecycle decision to its caller.\",\"witness\":{\"initial\":\"Registry is reachable and answers HTTP 200 for project P with `project_id=P`, `exists=false`, `is_active=false`.\",\"events\":[\"`staff_identity.assign_staff_project` calls `registry_gateway.validate_project_reference(P)`.\"],\"outcomes\":[\"The gateway returns `ProjectValidationResult` and `staff_identity` raises its caller-owned `ScopedNotFoundError`.\",\"The gateway itself refuses with `RegistryBoundaryError(not_found)` as the new linkage-check wording requires.\"],\"observer\":\"The administrator sees HTTP 404 in the first implementation and HTTP 502 in the second\"}},{\"unit\":\"context\",\"subject\":\"create_expense_from_recognition boundary validation\",\"kind\":\"contradictory validation layer\",\"text\":\"The added check requires an unconfirmed or provider-carrying result to be refused \\\"at decoding, by `create_expense_from_recognition` and over HTTP\\\", but State 5 gives that operation a `ConfirmedRecognitionPublication`, whose closed model has only `confirmed` status and no provider field.\",\"question\":\"Must the public operation accept a broader raw recognition shape so it can reject unconfirmed/provider fields itself, or does strict DTO decoding reject those shapes before the operation is called?\",\"options\":[\"Keep `ConfirmedRecognitionPublication` as the input and test rejection at model/request decoding only\",\"Broaden the operation input so `create_expense_from_recognition` performs these rejections\"],\"default_guess\":\"Keep the typed input and assign rejection of fields outside that type to decoding.\",\"witness\":{\"initial\":\"No expense exists and a direct module caller has recognition data that is otherwise valid but includes `provider=\\\"x\\\"`.\",\"events\":[\"The caller attempts `create_expense_from_recognition` with that data.\"],\"outcomes\":[\"Strict construction of `ConfirmedRecognitionPublication` fails before the operation is entered.\",\"The operation accepts a broader input, enters, detects `provider`, and raises its declared expense validation error.\"],\"observer\":\"The focused operation test sees a different call boundary and exception owner\"}},{\"unit\":\"context\",\"subject\":\"missing progress and completed_work_value\",\"kind\":\"invariant contradiction\",\"text\":\"The new INV-044 passage says a section without progress has `completed_work_value` 0, while INV-044 says missing data is \\\"never replaced by zero unless zero is confirmed\\\" and the same passage acknowledges that this half has no witness.\",\"question\":\"For a section with planned work but no progress record, is completed work a confirmed numeric zero or unavailable missing data?\",\"options\":[\"Return numeric 0 while exposing `completion_percent=None`\",\"Represent completed work as unavailable rather than zero\"],\"default_guess\":\"Return 0 with `completion_percent=None`, matching M32 and the newly recorded behavior.\",\"witness\":{\"initial\":\"Project P has an active budget section with `work_planned=100.00` and no `SectionProgress` row.\",\"events\":[\"An authorized viewer requests P's project overview.\",\"`derived_views` builds the progress and budget section projections.\"],\"outcomes\":[\"The projections expose missing completion and do not substitute an unconfirmed completed-work zero.\",\"The projections expose `completion_percent=None` and `completed_work_value=0.00`.\"],\"observer\":\"The viewer sees the different completed-work value\"}},{\"unit\":\"context\",\"subject\":\"dependency release gate freshness\",\"kind\":\"undefined acceptance threshold\",\"text\":\"The added DEP-002 check requires \\\"a fresh public advisory snapshot\\\" and \\\"a recent passing verdict\\\" but defines neither freshness nor recency.\",\"question\":\"What maximum advisory-snapshot age and verdict age admit deployment, and from which timestamps are those ages measured?\",\"options\":[\"Use fixed maximum ages defined by deployment policy\",\"Require a newly fetched snapshot and verdict during every deployment\",\"Let the deployment implementation choose its own freshness windows\"],\"default_guess\":\"Require a successful scan during the current deployment against an advisory snapshot fetched during that deployment.\",\"witness\":{\"initial\":\"Image I has a passing verdict bound to its content id from eight days ago, based on an advisory snapshot from the same day; the advisory service is currently reachable and I is unchanged.\",\"events\":[\"The deployment process attempts to start image I.\"],\"outcomes\":[\"An implementation treating 30 days as recent starts I.\",\"An implementation treating 24 hours as recent refuses to start I and reruns or waits for the gate.\"],\"observer\":\"The deployment operator sees the service start or remain stopped\"}}]}",
+ "set_aside": []
+}
