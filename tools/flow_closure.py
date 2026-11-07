@@ -207,11 +207,18 @@ def _note_calls(project: Path, owners: dict[str, str], contracts: dict[str, Any]
     of the scope's own contract (``store.begin()`` with ``store: PortalStore``).
     """
     path = project / NOTES_FILE
-    calls: dict[str, set[str]] = {}
     if not path.is_file():
-        return calls
+        return {}
+    return note_call_edges(path.read_text(encoding="utf-8").split("\n"), owners, contracts)
+
+
+def note_call_edges(lines: list[str], owners: dict[str, str],
+                    contracts: dict[str, Any] | None = None) -> dict[str, set[str]]:
+    """The calls a list of note lines (``scope: body``) obliges: scope -> callees."""
+    calls: dict[str, set[str]] = {}
     contracts = contracts or {}
-    for line in path.read_text(encoding="utf-8").split("\n"):
+    for line in lines:
+        line = str(line)
         if ":" not in line or line.startswith("#"):
             continue
         scope, body = line.split(":", 1)

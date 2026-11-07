@@ -304,7 +304,8 @@ def _time_source_findings(project: Path, rows: list[dict[str, Any]]) -> list[dic
     except (OSError, ValueError):
         spec = None
     sources = design_closure_gaps.clock_consumers(project, spec)
-    return design_closure_gaps.fresh_timestamp_findings(models, contracts, func_module, impacts, sources)
+    through = design_closure_gaps.calls_supplying_time(project, spec, models, contracts, func_module, sources)
+    return design_closure_gaps.fresh_timestamp_findings(models, contracts, func_module, impacts, sources, through)
 
 
 NOTES_FILE = "80_notes.md"

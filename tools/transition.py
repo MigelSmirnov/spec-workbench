@@ -129,15 +129,20 @@ def _contract_rows(project: Path) -> tuple[dict[str, Any], dict[str, str]]:
     return contracts, func_module
 
 
+def _spec_or_none(project: Path) -> dict[str, Any] | None:
+    import design_closure_gaps
+
+    try:
+        return design_closure_gaps.load_spec(project)
+    except (OSError, ValueError):
+        return None
+
+
 def _time_authorities(project: Path) -> set[str]:
     """Modules with a declared source: policy authorities and module-level clock consumers."""
     import design_closure_gaps
 
-    try:
-        spec = design_closure_gaps.load_spec(project)
-    except (OSError, ValueError):
-        spec = None
-    return design_closure_gaps.time_sources(project, spec)
+    return design_closure_gaps.time_sources(project, _spec_or_none(project))
 
 
 def check_model_closure(project: Path) -> dict[str, Any]:
@@ -161,8 +166,11 @@ def check_time_source(project: Path) -> dict[str, Any]:
                             f"{len(mutating)} mutating public operation(s): whether their returned timestamps have a "
                             f"source needs the model closure ({CLOSURE_GLOB}), and there is none")
     contracts, func_module = _contract_rows(project)
+    sources = _time_authorities(project)
+    through = design_closure_gaps.calls_supplying_time(project, _spec_or_none(project), models, contracts,
+                                                       func_module, sources)
     findings = [{**f, "severity": "error"} for f in design_closure_gaps.fresh_timestamp_findings(
-        models, contracts, func_module, impacts, _time_authorities(project))]
+        models, contracts, func_module, impacts, sources, through)]
     return _report("open" if findings else "closed", findings, mutating_operations=len(mutating))
 
 
@@ -180,8 +188,11 @@ def check_ambient_time(project: Path) -> dict[str, Any]:
     contracts, func_module = _contract_rows(project)
     notes = [line for line in notes_path.read_text(encoding="utf-8").splitlines()
              if line.strip() and not line.startswith("#")]
+    sources = _time_authorities(project)
+    through = design_closure_gaps.calls_supplying_time(project, _spec_or_none(project), models, contracts,
+                                                       func_module, sources, notes)
     findings = [{**f, "severity": "error"} for f in design_closure_gaps.ambient_time_findings(
-        models, contracts, func_module, notes, _time_authorities(project))]
+        models, contracts, func_module, notes, sources, through)]
     return _report("open" if findings else "closed", findings)
 
 
