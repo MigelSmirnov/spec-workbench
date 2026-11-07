@@ -221,6 +221,11 @@ the challenges (owner 2026-11-07, A3 "Carried changes").
 - PLAT-REG-003: a focused test at `_authorize_project_operation` showing the invariant holds; a violating input is refused and changes nothing.
 - PLAT-REG-004: a focused test at `_authorize_project_operation` showing the invariant holds; a violating input is refused and changes nothing.
 - Witnesses, the focused Factory verification checks that assert it: INV-001, INV-017, PLAT-REG-003 [witness: verification:authorization_guard_client_portal]; INV-004 [witness: verification:staff_identity_uow_client_portal].
+- PLAT-REG-004: the Registry linkage check: the guard's request has no field
+  for Registry context; an import or request carrying its own status or
+  project facts is refused at decoding, before any Registry call, and writes
+  nothing; the same project is admitted or refused as the Registry answers
+  at that moment [witness: verification:registry_linkage_client_portal].
 
 ### Consequence
 
@@ -287,6 +292,20 @@ accepted; technical decisions delegated.
 - PLAT-REG-006: a focused test at `get_project_context` showing the invariant holds; a violating input is refused and changes nothing.
 - PLAT-REG-007: a focused test at `create_viewer` showing the invariant holds; a violating input is refused and changes nothing.
 - Witnesses, the focused Factory verification checks that assert it: PLAT-REG-006 [witness: verification:authorization_guard_client_portal]; PLAT-REG-006 [witness: verification:derived_views_uow_client_portal].
+- PLAT-REG-001, PLAT-REG-002, PLAT-REG-007: the Registry linkage check.
+  PLAT-REG-001: the production `validate_project_reference`, answered over
+  HTTP, refuses a UUID the Registry answers 404 or `exists=false` for an
+  administrator, an operator, a viewer and both producer scopes, and in a
+  viewer grant, an operator assignment and a producer grant, writing
+  nothing; no service code generates a project id, the gateway only reads,
+  and every project id the portal stores is one the Registry issued.
+  PLAT-REG-002: an answer about another UUID is refused as
+  `identity_mismatch` by `validate_project_reference` and
+  `get_project_context`; of two projects with one display name and address,
+  access to one is never access to the other. PLAT-REG-007: `create_viewer`
+  stores the display name as written without asking the Registry, and a
+  grant and a Registry read with another `customer_ref` leave it unchanged
+  [witness: verification:registry_linkage_client_portal].
 
 ### Consequence
 
@@ -424,6 +443,12 @@ accepted; technical decisions delegated.
 ### Required tests
 
 - INV-031: a focused test at `_project_expense_intake` showing the invariant holds; a violating input is refused and changes nothing.
+- INV-031: the expense recognition check: an unconfirmed, incomplete,
+  unsupported-version or provider-carrying result is refused at decoding, by
+  `create_expense_from_recognition` and over HTTP, with every table
+  unchanged; the accepted result persists only its business fields, and no
+  model or table carries a confidence, provider or raw field
+  [witness: verification:expense_recognition_projection_client_portal].
 
 ### Consequence
 
@@ -511,6 +536,14 @@ behaviour accepted; technical decisions delegated.
 - INV-041: a check against the rules table at `calculate_overall_progress` showing the invariant holds; a violating input is refused and changes nothing.
 - INV-044: the ledger's property at `calculate_material_balance` showing the invariant holds; a violating input is refused and changes nothing.
 - Witnesses, the focused Factory verification checks that assert it: INV-037 [witness: verification:project_tracking_audit_writer_sqlite_uow_client_portal]; INV-037 [witness: verification:snapshot_import_sqlite_uow_client_portal]; INV-041 [witness: verification:derived_views_uow_client_portal].
+- INV-044 (partial): the budget derivation check:
+  `calculate_material_balance` and the budget view show an overspent section
+  as a negative remaining, a section without a progress record reads
+  completion `None`, and a project without a budget reads its views as not
+  configured. It records, without asserting, that the `completed_work_value`
+  of a section without progress reads 0; that half of "missing data is
+  presented explicitly" has no witness
+  [witness: verification:budget_derivation_client_portal].
 
 ### Consequence
 
@@ -586,6 +619,11 @@ The accepted Factory spec revokes the sessions of a suspended or disabled staff 
 - INV-006: a check against the rules table at `_authorize_project_operation` showing the invariant holds; a violating input is refused and changes nothing.
 - INV-008: a focused test at `issue_viewer_access` showing the invariant holds; a violating input is refused and changes nothing.
 - Witnesses, the focused Factory verification checks that assert it: INV-005 [witness: verification:end_to_end_walkthrough_client_portal]; INV-005, INV-006 [witness: verification:authorization_guard_client_portal]; INV-006 [witness: verification:staff_identity_uow_client_portal]; INV-006 [witness: verification:service_identity_consumer_uow_client_portal].
+- INV-008: the viewer credential re-issue check: after each re-issue exactly
+  one credential is live, the previous one is revoked by the administrator,
+  and neither its secret nor a session it opened is accepted; a re-issue
+  failing at its audit append leaves every table unchanged
+  [witness: verification:viewer_credential_reissue_client_portal].
 
 ### Consequence
 
@@ -775,6 +813,12 @@ The table is rules data: `rules.binary_delivery_policy` (SPEC_STANDARD 15.3.1, a
 
 - INV-054: the ledger's property at `list_active_projects` showing the invariant holds; a violating input is refused and changes nothing.
 - INV-055: a focused test at `_ordered_project_items` showing the invariant holds; a violating input is refused and changes nothing.
+- INV-054, INV-055: the Registry linkage check: `list_active_projects`
+  returns the active Registry facts unchanged, ordered by `project_id` for a
+  shuffled, a reversed and an ascending upstream answer;
+  `list_viewer_projects` orders by casefolded display name, then
+  `project_id`, display names unchanged
+  [witness: verification:registry_linkage_client_portal].
 
 ### Consequence
 
@@ -882,6 +926,18 @@ The former ledger rows INV-020…INV-029 that no table of R1–R17 carries. Thei
 - INV-027: a focused test at `build_budget_view` showing the invariant holds; a violating input is refused and changes nothing.
 - INV-028: a focused test at `PortalTransaction.commit` showing the invariant holds; a violating input is refused and changes nothing.
 - Witnesses, the focused Factory verification checks that assert it: INV-022, INV-023, INV-024, INV-025 [witness: verification:budget_management_sqlite_uow_client_portal]; INV-020 [witness: verification:snapshot_import_sqlite_uow_client_portal].
+- INV-026, INV-027, INV-028: the budget derivation check. INV-026: an
+  accepted import stores the published planned values and rewrites no budget
+  version, plan or expense; a changed re-publication is a conflict that
+  changes nothing; expense operations never move a plan. INV-027: no table
+  has a derived-value column, reading the views writes nothing, and after
+  each change of an owning record (inclusion, allocations, progress,
+  payment, plan) the next read equals a recomputation from the stored rows.
+  INV-028: no service code deletes or replaces a portal section and no store
+  surface removes one; activating a budget version without an allocated
+  section is refused and writes nothing, and the activation keeps the
+  sections progress references
+  [witness: verification:budget_derivation_client_portal].
 
 ### Consequence
 
@@ -926,6 +982,13 @@ The former ledger row INV-040; product text of State 0 ("Operator management") a
 ### Required tests
 
 - INV-040: a focused test at `set_section_progress` showing the invariant holds; a violating input is refused and changes nothing.
+- INV-040: the progress manual value check: an administrator and an assigned
+  operator are admitted to `portal.progress.manage`, a viewer and a producer
+  are refused; `set_section_progress` stores 0, 37 and 100 and refuses
+  values outside [0, 100] and non-integers with every table unchanged;
+  publishing and updating photos leave `section_progress` and the progress
+  view unchanged
+  [witness: verification:progress_manual_value_client_portal].
 
 ### Consequence
 
@@ -947,6 +1010,11 @@ The former ledger rows INV-050 and INV-052; product text of State 0 ("Derived va
 - INV-050: a focused test at `build_project_overview` showing the invariant holds; a violating input is refused and changes nothing.
 - INV-052: a focused test at `PortalTransaction.commit` showing the invariant holds; a violating input is refused and changes nothing.
 - Witnesses, the focused Factory verification checks that assert it: INV-052 [witness: verification:snapshot_import_sqlite_uow_client_portal].
+- INV-050: the budget derivation check: the project overview is equal for
+  staff and viewer and on repeated reads, equal records inserted in either
+  order (ties of sort order, dates and amounts) derive equal values, and the
+  budget and payment views equal a recomputation from the owning records
+  [witness: verification:budget_derivation_client_portal].
 
 ### Consequence
 
