@@ -1365,11 +1365,12 @@ This describes the existing deployment and answers OQ-17 and
 ### Required tests
 
 - The deployment requirements contain only `==` pins, one per direct import.
-- The pre-deploy vulnerability check of those pins passes: every distribution
-  pip resolves for the deployment requirements on the image target is matched
-  against a fresh public advisory snapshot; a listed version blocks, and stale,
-  missing or unmatchable data does not pass
-  [witness: verification:dependency_vulnerability_client_portal].
+- The pre-deploy vulnerability check of those pins passes: the deploy step
+  judges every distribution installed in the built image, bound to its
+  content id, against a fresh public advisory snapshot, and starts the
+  service only on a recent passing verdict about that same image; a listed
+  version, stale, missing or unmatchable data, or another image does not
+  start it [witness: verification:dependency_release_gate_client_portal].
 
 ### Consequence
 
