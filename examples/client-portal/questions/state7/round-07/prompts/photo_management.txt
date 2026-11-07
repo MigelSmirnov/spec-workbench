@@ -1,0 +1,209 @@
+Module: photo_management
+Target path: domain/photo_management.py
+Target file: photo_management.py
+
+IMPORTS (every listed symbol is available; import the ones the module uses):
+from __future__ import annotations
+from datetime import datetime
+from uuid import UUID
+from uuid import uuid4
+
+from adapters.binary_storage import read_binary
+from adapters.portal_store import PortalStore, PortalTransaction
+from application.audit_writer import append_audit
+from core.models import ActorKind, AuditAction, AuditEntityKind, AuditIntent, AuditRecord, AuditResult, AuthorizedBinaryReference, AuthorizedProjectContext, BinaryObjectKind, BinaryPayload, Capability, PhotoMutationResult, PhotoPublication, PhotoView, PortalSection, ProgressPhoto, ProgressPhotoRepository, ProgressPhotoView, ProjectContext, ProjectReference, ProjectSectionRepository, RegistryProjectStatus
+
+CONTRACTS (function signatures — follow exactly):
+def _authorize_photo_reference(store: PortalStore, context: AuthorizedProjectContext, photo_id: UUID) -> AuthorizedBinaryReference
+def _classify_photo_replay(existing: ProgressPhoto, publication: PhotoPublication) -> ProgressPhoto
+def _ordered_photos(photos: list[ProgressPhoto]) -> list[ProgressPhoto]
+def _photo_mutation_result(photo: ProgressPhoto, replayed: bool) -> PhotoMutationResult
+def list_progress_photos(store: PortalStore, context: AuthorizedProjectContext) -> list[ProgressPhotoView]
+def publish_progress_photo(store: PortalStore, context: AuthorizedProjectContext, publication: PhotoPublication) -> PhotoMutationResult
+def read_progress_photo(store: PortalStore, context: AuthorizedProjectContext, photo_id: UUID) -> BinaryPayload
+def update_progress_photo(store: PortalStore, context: AuthorizedProjectContext, photo_id: UUID, caption: str | None, section_id: UUID | None, client_visible: bool) -> PhotoMutationResult
+# PortalStore
+def __init__(self, database_url: str) -> None
+# PortalStore
+def begin(self) -> PortalTransaction
+# PortalTransaction
+def __init__(self, connection: object) -> None
+# PortalTransaction
+def audit(self) -> AuditRepository
+# PortalTransaction
+def commit(self) -> None
+# PortalTransaction
+def get_progress_photo(self, photo_id: UUID) -> ProgressPhoto | None
+# PortalTransaction
+def get_progress_photo_by_intake_id(self, intake_id: str) -> ProgressPhoto | None
+# PortalTransaction
+def get_project_section(self, project_id: UUID, section_id: UUID) -> PortalSection | None
+# PortalTransaction
+def insert_progress_photo(self, photo: ProgressPhoto) -> None
+# PortalTransaction
+def list_project_photos(self, project_id: UUID) -> list[ProgressPhoto]
+# PortalTransaction
+def progress_photos(self) -> ProgressPhotoRepository
+# PortalTransaction
+def project_sections(self) -> ProjectSectionRepository
+# PortalTransaction
+def rollback(self) -> None
+# PortalTransaction
+def update_progress_photo(self, photo: ProgressPhoto) -> None
+# ProjectSectionRepository
+def get_project_section(self, project_id: UUID, section_id: UUID) -> PortalSection | None
+# ProjectSectionRepository
+def insert_project_sections(self, sections: list[PortalSection]) -> None
+# ProjectSectionRepository
+def list_project_sections(self, project_id: UUID) -> list[PortalSection]
+# ProgressPhotoRepository
+def get_progress_photo(self, photo_id: UUID) -> ProgressPhoto | None
+# ProgressPhotoRepository
+def get_progress_photo_by_intake_id(self, intake_id: str) -> ProgressPhoto | None
+# ProgressPhotoRepository
+def insert_progress_photo(self, photo: ProgressPhoto) -> None
+# ProgressPhotoRepository
+def list_project_photos(self, project_id: UUID) -> list[ProgressPhoto]
+# ProgressPhotoRepository
+def update_progress_photo(self, photo: ProgressPhoto) -> None
+
+IMPORTED FUNCTION SIGNATURES (these come from the imports above):
+def append_audit(repository: AuditRepository, intent: AuditIntent) -> AuditRecord
+def read_binary(reference: AuthorizedBinaryReference) -> BinaryPayload
+
+OWNED FUNCTIONS REQUIRED (must be defined as top-level functions):
+- _authorize_photo_reference: (store: PortalStore, context: AuthorizedProjectContext, photo_id: UUID) -> AuthorizedBinaryReference
+- _classify_photo_replay: (existing: ProgressPhoto, publication: PhotoPublication) -> ProgressPhoto
+- _ordered_photos: (photos: list[ProgressPhoto]) -> list[ProgressPhoto]
+- _photo_mutation_result: (photo: ProgressPhoto, replayed: bool) -> PhotoMutationResult
+- list_progress_photos: (store: PortalStore, context: AuthorizedProjectContext) -> list[ProgressPhotoView]
+- publish_progress_photo: (store: PortalStore, context: AuthorizedProjectContext, publication: PhotoPublication) -> PhotoMutationResult
+- read_progress_photo: (store: PortalStore, context: AuthorizedProjectContext, photo_id: UUID) -> BinaryPayload
+- update_progress_photo: (store: PortalStore, context: AuthorizedProjectContext, photo_id: UUID, caption: str | None, section_id: UUID | None, client_visible: bool) -> PhotoMutationResult
+
+STATIC GATE CONTRACT (deterministic checks; a violating candidate is rejected without repair):
+- Reflective attribute access is rejected: never call getattr, hasattr,
+  setattr, delattr, or vars; every declared field and operation is
+  addressed directly by name, including in try/finally cleanup.
+- A definition whose parameter list differs from its declared contract
+  signature is rejected; keep names and order exactly.
+- A constructed record accepted by a declared insert_*/upsert_*/append_*
+  operation must reach a call or return; a built-and-dropped record is
+  rejected.
+- Instantiating a spec-declared interface is rejected; construct the
+  module-owned concrete class instead.
+- A stub, placeholder, or fail-closed body for a contracted callable is
+  rejected; implement the complete specified behavior.
+- A top-level import of a package outside the Python standard library and
+  this project's own modules is rejected unless IMPORTS lists it; a note
+  never adds a package to IMPORTS.
+- A model is constructed with values of its declared field types; a field
+  typed tuple[...] receives a tuple, built with tuple(...) where the items
+  were collected in a list, never the list itself.
+- A value passed to a model field is narrowed at the call itself: a name
+  seeded with None, set on some branches and passed later under a test of
+  another name is rejected; build the value where it is obtained and pass
+  it there, or test that same name for None at the call.
+
+OWNED CLASSES REQUIRED (must be defined locally, not merely referenced):
+No owned local classes with contracted methods required; module-local exception exports are listed separately.
+
+CONCRETE IMPLEMENTATION OBLIGATIONS:
+No local concrete-to-interface obligations.
+
+REQUIREMENTS (notes — implement these):
+- _authorize_photo_reference: [SECURITY_BOUNDARY] MUST require the photo's project_id to equal the context's project_id and client visibility for viewer context, then return the sole trusted file_ref carrier.
+- _authorize_photo_reference: [DEPENDENCY_BOUNDARY] MUST open exactly one transaction, read the photo only through tx.progress_photos().get_progress_photo with photo_id, and close that read transaction by exactly one rollback immediately after the read, marking it closed before it evaluates project scope or client visibility and before it raises PhotoValidationError; leaving the transaction open on any path, committing it, and using a legacy transaction-level photo method are forbidden.
+- _authorize_photo_reference: [VALIDATION_ERROR] The transaction guard MUST close its transaction exactly once, roll back on failure only while the transaction is still open, and re-raise PhotoValidationError unchanged; substituting a translated persistence error for it is forbidden, because the caller and the api error map treat the two as different outcomes.
+- _classify_photo_replay: [BEHAVIOR] MUST return existing only when the same intake_id publication content agrees: project_id, section_id, caption, client_visible, file_ref and photo_date are equal (intake_source is not persisted and is not compared); conflict raises PhotoConflictError without mutation, intake_id being the replay identity.
+- _ordered_photos: [DETERMINISM_OR_ORDERING] MUST return every input photo exactly once ordered by photo_date ascending then photo_id ascending.
+- _photo_mutation_result: [FIELD_PROJECTION] MUST copy photo_id, client_visible, updated_at and set replayed exactly from the argument; it MUST omit file_ref.
+- list_progress_photos: [SECURITY_BOUNDARY] MUST return project-scoped photos only, exclude non-client-visible items for viewer context, and order chronologically by photo_date then photo_id. It MUST project each eligible record onto ProgressPhotoView, so the storage file_ref and the recognition intake_id never leave this module: this function is the only photo list an HTTP route returns, and a storage location in a JSON body would defeat the binary delivery boundary, which hands stored bytes out only through the binary routes.
+- list_progress_photos: [DETERMINISM_OR_ORDERING] MUST return every eligible photo as a ProgressPhotoView in `(photo_date, photo_id)` ascending order; an empty list means no eligible photos.
+- list_progress_photos: [DEPENDENCY_BOUNDARY] MUST open exactly one transaction, read only through tx.progress_photos().list_project_photos with context.project_id, and close that read transaction by exactly one rollback immediately after the read, marking it closed before it filters viewer visibility or orders the result; visibility filtering and ordering belong to this function, not to persistence, and it MUST NOT use a legacy transaction-level photo method.
+- list_progress_photos: [VALIDATION_ERROR] The transaction guard MUST close its transaction exactly once, roll back on failure only while the transaction is still open, and re-raise the original failure unchanged; substituting a translated persistence error for a domain failure is forbidden.
+- publish_progress_photo: [ORCHESTRATION] MUST apply intake_id replay, and for a new intake_id validate optional section project scope, persist one file_ref-backed photo, and append AuditAction.PHOTO_PUBLISH atomically; it MUST NOT set progress or financial values.
+- publish_progress_photo: [DEPENDENCY_BOUNDARY] Once publication.project_id equals context.project_id, MUST open exactly one transaction with store.begin(), which returns a PortalTransaction, read the replay candidate only through tx.progress_photos().get_progress_photo_by_intake_id with publication.intake_id, resolve a supplied section only through tx.project_sections().get_project_section with context.project_id inside that same transaction, insert only through tx.progress_photos().insert_progress_photo, append the audit only through tx.audit(), and on success commit exactly once (a replay or a validation failure closes it by rollback instead); it MUST NOT call validate_project_section, open a second transaction while its own is active, or use a legacy transaction-level photo or project-section method. These are ProgressPhotoRepository and ProjectSectionRepository operations; the same-named legacy PortalTransaction methods are never called.
+- publish_progress_photo: [FIELD_ASSIGNMENT] MUST assign a fresh uuid4 photo_id to a newly published photo and store publication.intake_id unchanged as the sole replay identity; deriving photo_id by parsing intake_id as a UUID is forbidden, because intake_id is a free-form string and a non-UUID value would fail before any domain rule was evaluated.
+- publish_progress_photo: [FIELD_ASSIGNMENT] For a newly published photo MUST append exactly one AuditAction.PHOTO_PUBLISH success audit through tx.audit() with entity_kind PROGRESS_PHOTO, entity_id equal to the canonical string of the persisted photo_id, and reason_code None; a non-null reason_code on a success audit is rejected by the audit writer and MUST NOT be supplied.
+- publish_progress_photo: [RETURN_SHAPE] When a photo already exists for publication.intake_id, MUST close that read transaction by exactly one rollback, marking it closed before the replay content comparison, then return the PhotoMutationResult that _photo_mutation_result projects from the matching existing ProgressPhoto with replayed true, never the ProgressPhoto itself; a cross-project match or any content disagreement MUST raise PhotoConflictError. Neither replay path may insert a row, update a row, or append an audit.
+- publish_progress_photo: [VALIDATION_ERROR] MUST raise PhotoValidationError when publication.project_id differs from context.project_id before opening any transaction, and when the supplied section is missing or belongs to another project after the scoped read. The transaction guard MUST close its transaction exactly once, roll back on failure only while the transaction is still open, and re-raise the original failure unchanged; substituting a translated persistence error for PhotoValidationError or PhotoConflictError is forbidden.
+- read_progress_photo: [SECURITY_BOUNDARY] MUST authorize photo project and client_visible rule before constructing AuthorizedBinaryReference and calling read_binary.
+- update_progress_photo: [ORCHESTRATION] MUST validate optional section project scope, change only caption/section/client_visible/updated_at/updated_by, and append AuditAction.PHOTO_UPDATE atomically without changing file_ref, progress, or finance.
+- update_progress_photo: [DEPENDENCY_BOUNDARY] MUST open exactly one transaction, read the photo only through tx.progress_photos().get_progress_photo with photo_id, resolve a supplied section only through tx.project_sections().get_project_section with context.project_id inside that same transaction, write only through tx.progress_photos().update_progress_photo, append the audit only through tx.audit(), and on success commit exactly once (a replay or a validation failure closes it by rollback instead); it MUST NOT call validate_project_section, open a second transaction while its own is active, or use a legacy transaction-level photo or project-section method. These are ProgressPhotoRepository and ProjectSectionRepository operations; the same-named legacy PortalTransaction methods are never called.
+- update_progress_photo: [FIELD_ASSIGNMENT] MUST append exactly one AuditAction.PHOTO_UPDATE success audit through tx.audit() with entity_kind PROGRESS_PHOTO, entity_id equal to the canonical string of the updated photo_id, and reason_code None; a non-null reason_code on a success audit is rejected by the audit writer and MUST NOT be supplied.
+- update_progress_photo: [VALIDATION_ERROR] MUST raise PhotoValidationError when no photo matches photo_id, when the matched photo belongs to another project, and when the supplied section is missing or belongs to another project; the write MUST NOT commit in any of those cases. The transaction guard MUST close its transaction exactly once, roll back on failure only while the transaction is still open, and re-raise the original failure unchanged; substituting a translated persistence error for PhotoValidationError is forbidden.
+- update_progress_photo: [DEPENDENCY_BOUNDARY] MUST carry the changed caption, section_id, client_visible, updated_at and updated_by by constructing a replacement ProgressPhoto from the one it read. It MUST NOT assign to any field of the photo returned by the repository or of any other model instance it received, because model instances are frozen and such an assignment fails at runtime.
+
+MODEL DATA DEFINITIONS (READ-ONLY SPEC DATA, NOT CODE):
+No = models.* spec data addresses referenced by notes.
+
+MODEL DATA ADDRESSES (SPEC DATA, NOT IMPORT PATHS):
+No = models.* spec data addresses referenced by notes.
+
+IMPORTED MODEL OWNERSHIP (DO NOT REDEFINE):
+Imported runtime model symbols are owned by their source modules listed in IMPORTS; use them as imported and do not redefine them here.
+
+RUNTIME MODEL SURFACE (CORE.MODELS IMPORTS):
+These are imported runtime symbols from core.models. Use the listed enum member names and model fields exactly.
+- ActorKind enum members: SERVICE='service', STAFF='staff', SYSTEM='system', VIEWER='viewer'
+- AuditAction enum members: BUDGET_MANUAL_VERSION_CREATE='budget.manual_version_create', BUDGET_SECTION_PLAN_EDIT='budget.section_plan_edit', DOCUMENT_UPDATE='document.update', EXPENSE_ALLOCATE='expense.allocate', EXPENSE_CORRECT='expense.correct', EXPENSE_CREATE='expense.create', EXPENSE_EXCLUDE='expense.exclude', EXPENSE_INCLUDE='expense.include', GRANT_CREATE='grant.create', GRANT_REVOKE='grant.revoke', PAYMENT_REGISTER='payment.register', PHOTO_PUBLISH='photo.publish', PHOTO_UPDATE='photo.update', PRINCIPAL_CREATE='principal.create', PRINCIPAL_CREDENTIAL_ISSUE='principal.credential_issue', PRINCIPAL_CREDENTIAL_REVOKE='principal.credential_revoke', PRINCIPAL_DISABLE='principal.disable', PRINCIPAL_ENABLE='principal.enable', PRODUCER_GRANT_CREATE='producer_grant.create', PRODUCER_GRANT_REVOKE='producer_grant.revoke', PROGRESS_UPDATE='progress.update', SNAPSHOT_ACTIVATE='snapshot.activate', SNAPSHOT_IMPORT='snapshot.import', STAFF_ASSIGNMENT_CREATE='staff_assignment.create', STAFF_ASSIGNMENT_REVOKE='staff_assignment.revoke', STAFF_CREATE='staff.create', STAFF_DISABLE='staff.disable', STAFF_LOGIN='staff.login', STAFF_LOGIN_FAILED='staff.login_failed', STAFF_LOGOUT='staff.logout', STAFF_RECOVERY_OVERRIDE='staff.recovery_override', STAFF_REINSTATE='staff.reinstate', STAFF_SESSIONS_REVOKE='staff.sessions_revoke', STAFF_SUSPEND='staff.suspend', VIEWER_CREATE='viewer.create', VIEWER_CREDENTIAL_ISSUE='viewer.credential_issue', VIEWER_CREDENTIAL_REVOKE='viewer.credential_revoke', VIEWER_REVOKE='viewer.revoke'
+- AuditEntityKind enum members: BUDGET_VERSION='budget_version', EXPENSE='expense', EXPENSE_ALLOCATION='expense_allocation', EXPENSE_DOCUMENT='expense_document', PRODUCER_GRANT='producer_grant', PROGRESS_PHOTO='progress_photo', SECTION_PLAN='section_plan', SECTION_PROGRESS='section_progress', SERVICE_CREDENTIAL='service_credential', SERVICE_PRINCIPAL='service_principal', SNAPSHOT_IMPORT='snapshot_import', STAFF_ACCOUNT='staff_account', STAFF_ASSIGNMENT='staff_assignment', STAFF_SESSION='staff_session', VIEWER='viewer', VIEWER_CREDENTIAL='viewer_credential', VIEWER_GRANT='viewer_grant', WORK_PAYMENT='work_payment'
+- AuditIntent fields (exact, no others exist): action: AuditAction, actor_id: UUID | None, actor_kind: ActorKind, entity_id: str | None, entity_kind: AuditEntityKind | None, key_version: int | None, project_id: UUID | None, reason_code: str | None, result: AuditResult
+- AuditRecord fields (exact, no others exist): action: AuditAction, actor_id: UUID | None, actor_kind: ActorKind, audit_id: UUID, entity_id: str | None, entity_kind: AuditEntityKind | None, key_version: int | None, occurred_at: datetime, project_id: UUID | None, reason_code: str | None, result: AuditResult
+- AuditResult enum members: REJECTED='rejected', SUCCESS='success'
+- AuthorizedBinaryReference fields (exact, no others exist): file_ref: str, object_id: UUID, object_kind: BinaryObjectKind, project_context: AuthorizedProjectContext
+- AuthorizedProjectContext fields (exact, no others exist): actor_id: UUID, actor_kind: ActorKind, capability: Capability, key_version: int | None, project_id: UUID, registry_status: RegistryProjectStatus
+- BinaryObjectKind enum members: EXPENSE_DOCUMENT='expense_document', PROGRESS_PHOTO='progress_photo'
+- BinaryPayload fields (exact, no others exist): content: bytes, content_length: int, download_name: str, media_type: str
+- Capability enum members: PORTAL_ACCESS_MANAGE='portal.access.manage', PORTAL_BUDGET_MANAGE='portal.budget.manage', PORTAL_BUDGET_READ='portal.budget.read', PORTAL_ESTIMATE_SNAPSHOT_ACTIVATE='portal.estimate_snapshot.activate', PORTAL_ESTIMATE_SNAPSHOT_IMPORT='portal.estimate_snapshot.import', PORTAL_ESTIMATE_SNAPSHOT_READ_IMPORT_RESULT='portal.estimate_snapshot.read_import_result', PORTAL_EXPENSE_MANAGE='portal.expense.manage', PORTAL_EXPENSE_READ='portal.expense.read', PORTAL_PAYMENT_MANAGE='portal.payment.manage', PORTAL_PAYMENT_READ='portal.payment.read', PORTAL_PHOTO_MANAGE='portal.photo.manage', PORTAL_PHOTO_READ='portal.photo.read', PORTAL_PROGRESS_MANAGE='portal.progress.manage', PORTAL_PROGRESS_READ='portal.progress.read', PORTAL_PROJECT_READ='portal.project.read'
+- PhotoMutationResult fields (exact, no others exist): client_visible: bool, photo_id: UUID, replayed: bool, updated_at: datetime | None
+- PhotoPublication fields (exact, no others exist): caption: str | None, client_visible: bool, file_ref: str, intake_id: str, intake_source: str, photo_date: datetime, project_id: UUID, section_id: UUID | None
+- PhotoView fields (exact, no others exist): caption: str | None, photo_date: datetime, photo_id: UUID, section_display_name: str | None, section_id: UUID | None
+- PortalSection fields (exact, no others exist): created_at: datetime, created_by_id: UUID, created_by_kind: ActorKind, project_id: UUID, section_id: UUID, source_key: str | None
+- ProgressPhoto fields (exact, no others exist): caption: str | None, client_visible: bool, file_ref: str, intake_id: str, photo_date: datetime, photo_id: UUID, project_id: UUID, published_at: datetime, published_by: UUID, section_id: UUID | None, updated_at: datetime | None, updated_by: UUID | None
+- ProgressPhotoRepository operations (exact, no others exist):
+    get_progress_photo(self, photo_id: UUID) -> ProgressPhoto | None
+    get_progress_photo_by_intake_id(self, intake_id: str) -> ProgressPhoto | None
+    insert_progress_photo(self, photo: ProgressPhoto) -> None
+    list_project_photos(self, project_id: UUID) -> list[ProgressPhoto]
+    update_progress_photo(self, photo: ProgressPhoto) -> None
+- ProgressPhotoView fields (exact, no others exist): caption: str | None, client_visible: bool, photo_date: datetime, photo_id: UUID, project_id: UUID, published_at: datetime, section_id: UUID | None, updated_at: datetime | None
+- ProjectContext fields (exact, no others exist): address: str, created_at: datetime, customer_ref: str | None, project: ProjectReference, registry_updated_at: datetime
+- ProjectReference fields (exact, no others exist): display_name: str, project_id: UUID, status: str
+- ProjectSectionRepository operations (exact, no others exist):
+    get_project_section(self, project_id: UUID, section_id: UUID) -> PortalSection | None
+    insert_project_sections(self, sections: list[PortalSection]) -> None
+    list_project_sections(self, project_id: UUID) -> list[PortalSection]
+- RegistryProjectStatus enum members: ACTIVE='active', ARCHIVED='archived'
+
+MODULE-LOCAL EXCEPTION EXPORTS:
+If any exception class is listed here, define it in this file at top level.
+Do not import these classes from core.errors or any other module.
+- class PhotoConflictError(Exception): pass
+- class PhotoValidationError(Exception): pass
+
+FUNCTION ORDER (define in this order):
+_authorize_photo_reference, _classify_photo_replay, _ordered_photos, _photo_mutation_result, list_progress_photos, publish_progress_photo, read_progress_photo, update_progress_photo
+
+MODELS CONTEXT:
+Runtime models live in core.models. Use IMPORTS and IMPORTED MODEL
+OWNERSHIP for runtime model symbols; do not reproduce model schemas
+or import from a top-level models module.
+
+Generate the complete photo_management.py file.
+Every owned function listed above must be implemented exactly once at module top level.
+Define every class and method listed in OWNED CLASSES REQUIRED in this file.
+For every local binding in CONCRETE IMPLEMENTATION OBLIGATIONS, inherit the declared interface and implement its complete method surface with non-placeholder bodies.
+If this is the models module, emit every enum/model in MODEL DEFINITIONS exactly once.
+If this is not the models module, do not emit Pydantic model classes, enums, create_model calls, or local model schema shadows.
+Do not invent model fields or enum values not present in the imported runtime models.
+Use only the IMPORTS listed above plus required standard library imports.
+Import from IMPORTS every symbol the module uses, including symbols used only in annotations, and annotate each parameter with the type its CONTRACTS signature declares, never object or nothing.
+Never import from a top-level models module or models.*; runtime models live in core.models only when listed in IMPORTS.
+`models.<name>` in notes is a canonical spec data address, not an importable Python module.
+When one owner module provides a function and core.models provides a DTO with a similar name, split the imports by source exactly as listed in IMPORTS.
+Construct imported runtime models only with the fields listed in IMPORTED MODEL SURFACE; models are frozen and forbid extra fields, so an invented keyword argument fails at runtime.
+Read from a model value only the fields listed for its type; never use getattr(value, name, default) to probe for a field that is not declared.
+Never assign to an attribute of a model value (models are frozen): derive a changed value with value.model_copy(update={...}) or construct a new instance.
+Define every class listed in MODULE-LOCAL EXCEPTION EXPORTS in this file.
