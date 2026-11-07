@@ -18,6 +18,13 @@ kept (owner 2026-11-06: current service behaviour accepted; technical
 decisions delegated); every such case is listed in "Changes against the former
 text" at the end.
 
+On 2026-11-07 the owner removed the staff email challenges (`00_product.md`
+R0-23): the former `flow:deferred_staff_challenges`, its six routes
+(`rules.http_router_backend` has 50 routes, the accepted spec 56) and the
+email modules are gone, and staff login and session resolution accept an
+active account without a separate verified-email condition (`02_rules.md`
+A3).
+
 ## Conventions every flow follows
 
 - **Entry.** Every HTTP request first passes the transport guard of A25 (one
@@ -50,8 +57,7 @@ text" at the end.
 - **Failure translation.** A use case raises one declared failure; the route
   table's `error_policy` maps it once to a status with an empty body
   (authentication 401, authorization 403, not found and concealed binary 404,
-  archived project and conflicts 409, input 422, challenge 400 and 429,
-  Registry 502, persistence and storage 500). No failure becomes a success,
+  archived project and conflicts 409, input 422, Registry 502, persistence and storage 500). No failure becomes a success,
   an empty list or a zero, with two exceptions: the viewer's project list
   leaves out a project whose context cannot be obtained
   (`flow:viewer_reads_projects`), and the project overview answers a failed
@@ -104,7 +110,6 @@ creates every repository schema when a transaction begins. Crossing models:
    `capability:snapshot_import_repository.create_snapshot_import_schema`,
    `capability:expense_repository.create_expense_schema`,
    `capability:progress_photo_repository.create_progress_photo_schema`,
-   `capability:email_delivery_repository.create_email_delivery_schema`,
    `capability:staff_access_repository.create_staff_access_schema`,
    `capability:viewer_access_repository.create_client_access_schema` and
    `capability:service_identity_repository.create_producer_identity_schema`
@@ -155,9 +160,9 @@ No HTTP route reaches this flow.
    bootstrap store.
 3. `capability:staff_bootstrap.bootstrap_first_administrator` normalizes and
    validates the email and password, hashes the password with
-   `capability:credential_security.hash_password`, and builds one active,
-   verified administrator with no creator and its `staff.create` audit with
-   the system actor.
+   `capability:credential_security.hash_password`, and builds one active
+   administrator with `email_verified_at` set and no creator, and its
+   `staff.create` audit with the system actor.
 4. `module:staff_bootstrap_store` opens its own connection, ensures the staff
    access and audit tables exist with
    `capability:staff_access_repository.create_staff_access_schema` and
@@ -167,7 +172,7 @@ No HTTP route reaches this flow.
 
 ### Outcomes
 
-- One active verified administrator and one `staff.create` audit; exit code 0.
+- One active administrator and one `staff.create` audit; exit code 0.
   Produced by `module:staff_bootstrap` and `module:staff_bootstrap_store`.
 
 ### Errors
@@ -198,8 +203,7 @@ authentication failure and the access-management check (A1, A11).
 ### Steps
 
 1. `capability:staff_identity.authenticate_staff` normalizes the email,
-   accepts only an active account with a verified email and a matching
-   password (`capability:credential_security.verify_password`), issues a
+   accepts only an active account and a matching password (`capability:credential_security.verify_password`), issues a
    session secret for a fresh session id
    (`capability:credential_security.issue_verification_secret`), stores only
    its hash with a fixed expiry of `config` staff session TTL, and appends
@@ -214,7 +218,7 @@ authentication failure and the access-management check (A1, A11).
    `capability:staff_identity.resolve_staff_session` parses the selector,
    verifies the secret part (`capability:credential_security.parse_verification_secret`,
    `capability:credential_security.verify_secret`), the expiry, the
-   revocation, the active account and its verified email, and returns the
+   revocation and the active account, and returns the
    `StaffActorContext`.
 4. `capability:staff_identity.change_staff_password` verifies the current
    password and stores the new hash; it writes no audit record (State 1: no
@@ -236,56 +240,10 @@ authentication failure and the access-management check (A1, A11).
 ### Errors
 
 - Malformed login email: `IdentityInputRejected` (422), no audit.
-- Unknown email, wrong password, unverified, pending, suspended or disabled
-  account, malformed, expired or revoked token: one concealed authentication
+- Unknown email, wrong password, pending, suspended or disabled account, malformed, expired or revoked token: one concealed authentication
   failure (401).
 - A non-administrator revoking sessions: authorization failure (403).
 - A storage failure rolls back the whole operation, audit included (500).
-
-## `flow:deferred_staff_challenges`
-
-### Trigger
-
-A caller uses an email-challenge route: an administrator issues an email
-verification, a staff member requests an email change, anyone confirms a
-verification or change, requests or completes a password reset.
-
-### Boundary
-
-`module:staff_challenges` owns these operations. In the accepted service they
-are deferred (R0-23, Q19): no challenge repository exists, so they read,
-write, audit and deliver nothing, and `module:email_delivery_gateway` is
-called by none of them. The A10 policy stays the design they follow once
-built.
-
-### Steps
-
-1. `capability:staff_challenges.issue_email_verification`,
-   `capability:staff_challenges.request_email_change`,
-   `capability:staff_challenges.confirm_email_verification`,
-   `capability:staff_challenges.confirm_email_change` and
-   `capability:staff_challenges.complete_password_reset` reject before
-   parsing any token through the concealed authentication failure.
-2. `capability:staff_challenges.request_password_reset` normalizes the
-   address, answers identically for every value — malformed, unknown or known —
-   and does nothing else.
-3. The delivery the A10 design hands a challenge to once it is built,
-   `capability:email_delivery_gateway.deliver_email_message`, exists in the
-   accepted service and is imported by `module:staff_challenges`, but no step
-   of this flow calls it: no challenge is issued, so nothing is delivered
-   (R0-23, Q19).
-
-### Outcomes
-
-- Password-reset request: accepted (202) with no body and no effect. Produced
-  by `module:staff_challenges`.
-- Nothing is stored or sent; no email is verified by these routes. Staff
-  onboarding uses the administrator activation of
-  `flow:administer_staff_accounts` instead (R0-19).
-
-### Errors
-
-- Every other challenge route: the concealed authentication failure (401).
 
 ## `flow:administer_staff_accounts`
 
@@ -329,8 +287,8 @@ projects. `module:credential_security` hashes the initial password.
    addressed active assignment without consulting the Registry and appends
    `staff_assignment.revoke`; the next guard check observes it.
 7. `capability:staff_identity.perform_recovery_override` replaces the login
-   email with the given normalized address, marks it verified and appends
-   `staff.recovery_override` atomically.
+   email with the given normalized address, sets `email_verified_at` and
+   appends `staff.recovery_override` atomically.
 
 ### Outcomes
 
@@ -875,8 +833,9 @@ Each is the accepted Factory spec, kept under the owner decision of
 2026-11-06 (current service behaviour accepted; technical decisions
 delegated):
 
-- **Email challenges (former F2) are deferred** (R0-23): the routes exist and
-  change nothing; onboarding is the administrator activation (R0-19).
+- **No email challenges (former F2)**: deferred in the accepted spec, removed
+  by the owner on 2026-11-07 with their routes (R0-23); onboarding is the
+  administrator activation (R0-19).
 - **Viewer list (former F3)** leaves out a project whose context cannot be
   obtained instead of failing the whole list (Factory `00ac72f18d9c`).
 - **Viewer session** travels in a host-only cookie read by `api_irregular`
@@ -897,13 +856,12 @@ delegated):
 - **Schema creation named in the flows that run it** (added with State 5 on
   2026-11-06): every `portal_store` transaction and the bootstrap store create
   any missing table through the repositories' schema functions (accepted notes
-  `PortalStore.begin`, `SqliteStaffBootstrapStore.create_if_empty`); the
-  email gateway exists uncalled while challenges are deferred. The behaviour
-  is unchanged; the flows now name the capabilities State 5 owns.
+  `PortalStore.begin`, `SqliteStaffBootstrapStore.create_if_empty`). The
+  behaviour is unchanged; the flows now name the capabilities State 5 owns.
 
 ## Deferred features (not designed here)
 
 Q11 candidate budget version from a snapshot, Q12 upload service (the
 read-only boundary of R0-13 is a constraint), Q13 listing of a viewer's codes,
-Q14 replay-safe client onboarding, Q16 estimate box, Q19 email challenges and
-notices.
+Q14 replay-safe client onboarding, Q16 estimate box. Q19, the email
+challenges, is closed: the owner removed them on 2026-11-07 (R0-23).

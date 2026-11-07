@@ -1,0 +1,84 @@
+{
+ "open_points": [
+  {
+   "subject": "producer project-scope authorization",
+   "kind": "two owners",
+   "text": "The decision table makes A12's primary owner `service_identity` and `authorization_guard` a consumer; `authorization_guard` then says it owns \"project scope (assignment, viewer grant or producer grant)\" and \"the guard part of A5 and A12\", while `service_identity` says it owns \"A12\" and exposes `authorize_producer_scope`.",
+   "question": "Which module makes the authoritative producer-scope decision for snapshot import, and does the other module call it, repeat it, or trust its result?",
+   "options": [
+    "`service_identity` owns producer scope and `authorization_guard` consumes its decision",
+    "`authorization_guard` owns and evaluates producer scope directly",
+    "Both evaluate scope, with an explicit required ordering and recheck rule"
+   ],
+   "default_guess": "Make `authorization_guard` the sole owner of the per-import scope decision and leave `service_identity` owning principal, credential and grant lifecycle.",
+   "witness": {
+    "initial": "An active `granted_projects` producer has an active grant for project P and a valid bearer credential.",
+    "events": [
+     "The producer starts an import and is authenticated by `service_identity`.",
+     "One scope-owning module approves P.",
+     "An administrator concurrently revokes the producer grant before the other possible scope check.",
+     "The import route continues."
+    ],
+    "outcomes": [
+     "The earlier `service_identity` scope result is authoritative, so the import proceeds.",
+     "`authorization_guard` owns or repeats the scope check, observes the revocation and refuses the import without an import record."
+    ],
+    "observer": "The producer sees success versus scoped-not-found; administrators also see different snapshot and audit state."
+   },
+   "unit": "context"
+  },
+  {
+   "subject": "binary-read project authorization",
+   "kind": "missing dependency",
+   "text": "A14 says \"The owning domain module re-checks authenticated project access\" and State 3 says `expense_management` and `photo_management` \"re-check access and visibility\", but their exact `Knows` lists omit `authorization_guard`; `api_irregular` knows all three modules.",
+   "question": "Does each binary-owning module invoke the full authorization guard, or does the HTTP module authorize once and pass an `AuthorizedProjectContext` whose object/project match is all the domain module re-checks?",
+   "options": [
+    "Add/use a domain-to-`authorization_guard` dependency for a fresh full check",
+    "The API performs the full guard and the domain module only validates the trusted context against the record",
+    "Pass a guard capability into the domain module without a module import"
+   ],
+   "default_guess": "Have the API obtain a fresh `AuthorizedProjectContext`, then require the domain module to validate that context against the object project and visibility before creating `AuthorizedBinaryReference`.",
+   "witness": {
+    "initial": "A viewer session and grant authorize document D in project P.",
+    "events": [
+     "`api_irregular` authorizes the request and obtains a trusted project context.",
+     "An administrator revokes the viewer's grant before the document module reads D.",
+     "The document module performs the text's required access re-check."
+    ],
+    "outcomes": [
+     "If the domain module trusts the earlier context and checks only object/project equality and visibility, it delivers D.",
+     "If \"re-checks authenticated project access\" means invoking `authorization_guard` again, it observes the revoked grant and refuses D."
+    ],
+    "observer": "The viewer receives either the binary or the concealed refusal."
+   },
+   "unit": "context"
+  },
+  {
+   "subject": "allocation-sum invariant at transaction commit",
+   "kind": "no owner",
+   "text": "State 2 requires INV-032 to be tested \"at `PortalTransaction.commit`\" and to hold \"at every commit point\"; State 3 makes `portal_store` the owner of `PortalTransaction` but says it \"Must not own Business validation\", while `expense_repository` \"Must not own The allocation-sum rule\" and `expense_management` owns the rule only as a use-case responsibility.",
+   "question": "Which module owns the commit-time enforcement that prevents any transaction from committing an Expense whose allocation sum differs from its total?",
+   "options": [
+    "`portal_store` validates this invariant before commit",
+    "`expense_repository` or its SQLite schema enforces it at storage level",
+    "There is no commit-time enforcement; every writing use case, including `expense_intake`, must validate before calling commit"
+   ],
+   "default_guess": "Enforce it in every expense-writing use case and add an explicit storage-level invariant owner if `PortalTransaction.commit` must independently reject violations.",
+   "witness": {
+    "initial": "A transaction contains an Expense with total 100.00 and replacement allocations totaling 90.00.",
+    "events": [
+     "A caller reaches `PortalTransaction.commit` after a missed or bypassed use-case validation."
+    ],
+    "outcomes": [
+     "Following the State 2 landing, commit detects the mismatch and rolls back.",
+     "Following State 3's prohibition on business validation in `portal_store` and `expense_repository`, commit persists the inconsistent aggregate."
+    ],
+    "observer": "Staff and viewers later see financial totals that either remain unchanged or contain an expense whose allocations do not equal its total."
+   },
+   "unit": "context"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"producer project-scope authorization\",\"kind\":\"two owners\",\"text\":\"The decision table makes A12's primary owner `service_identity` and `authorization_guard` a consumer; `authorization_guard` then says it owns \\\"project scope (assignment, viewer grant or producer grant)\\\" and \\\"the guard part of A5 and A12\\\", while `service_identity` says it owns \\\"A12\\\" and exposes `authorize_producer_scope`.\",\"question\":\"Which module makes the authoritative producer-scope decision for snapshot import, and does the other module call it, repeat it, or trust its result?\",\"options\":[\"`service_identity` owns producer scope and `authorization_guard` consumes its decision\",\"`authorization_guard` owns and evaluates producer scope directly\",\"Both evaluate scope, with an explicit required ordering and recheck rule\"],\"default_guess\":\"Make `authorization_guard` the sole owner of the per-import scope decision and leave `service_identity` owning principal, credential and grant lifecycle.\",\"witness\":{\"initial\":\"An active `granted_projects` producer has an active grant for project P and a valid bearer credential.\",\"events\":[\"The producer starts an import and is authenticated by `service_identity`.\",\"One scope-owning module approves P.\",\"An administrator concurrently revokes the producer grant before the other possible scope check.\",\"The import route continues.\"],\"outcomes\":[\"The earlier `service_identity` scope result is authoritative, so the import proceeds.\",\"`authorization_guard` owns or repeats the scope check, observes the revocation and refuses the import without an import record.\"],\"observer\":\"The producer sees success versus scoped-not-found; administrators also see different snapshot and audit state.\"},\"unit\":\"context\"},{\"subject\":\"binary-read project authorization\",\"kind\":\"missing dependency\",\"text\":\"A14 says \\\"The owning domain module re-checks authenticated project access\\\" and State 3 says `expense_management` and `photo_management` \\\"re-check access and visibility\\\", but their exact `Knows` lists omit `authorization_guard`; `api_irregular` knows all three modules.\",\"question\":\"Does each binary-owning module invoke the full authorization guard, or does the HTTP module authorize once and pass an `AuthorizedProjectContext` whose object/project match is all the domain module re-checks?\",\"options\":[\"Add/use a domain-to-`authorization_guard` dependency for a fresh full check\",\"The API performs the full guard and the domain module only validates the trusted context against the record\",\"Pass a guard capability into the domain module without a module import\"],\"default_guess\":\"Have the API obtain a fresh `AuthorizedProjectContext`, then require the domain module to validate that context against the object project and visibility before creating `AuthorizedBinaryReference`.\",\"witness\":{\"initial\":\"A viewer session and grant authorize document D in project P.\",\"events\":[\"`api_irregular` authorizes the request and obtains a trusted project context.\",\"An administrator revokes the viewer's grant before the document module reads D.\",\"The document module performs the text's required access re-check.\"],\"outcomes\":[\"If the domain module trusts the earlier context and checks only object/project equality and visibility, it delivers D.\",\"If \\\"re-checks authenticated project access\\\" means invoking `authorization_guard` again, it observes the revoked grant and refuses D.\"],\"observer\":\"The viewer receives either the binary or the concealed refusal.\"},\"unit\":\"context\"},{\"subject\":\"allocation-sum invariant at transaction commit\",\"kind\":\"no owner\",\"text\":\"State 2 requires INV-032 to be tested \\\"at `PortalTransaction.commit`\\\" and to hold \\\"at every commit point\\\"; State 3 makes `portal_store` the owner of `PortalTransaction` but says it \\\"Must not own Business validation\\\", while `expense_repository` \\\"Must not own The allocation-sum rule\\\" and `expense_management` owns the rule only as a use-case responsibility.\",\"question\":\"Which module owns the commit-time enforcement that prevents any transaction from committing an Expense whose allocation sum differs from its total?\",\"options\":[\"`portal_store` validates this invariant before commit\",\"`expense_repository` or its SQLite schema enforces it at storage level\",\"There is no commit-time enforcement; every writing use case, including `expense_intake`, must validate before calling commit\"],\"default_guess\":\"Enforce it in every expense-writing use case and add an explicit storage-level invariant owner if `PortalTransaction.commit` must independently reject violations.\",\"witness\":{\"initial\":\"A transaction contains an Expense with total 100.00 and replacement allocations totaling 90.00.\",\"events\":[\"A caller reaches `PortalTransaction.commit` after a missed or bypassed use-case validation.\"],\"outcomes\":[\"Following the State 2 landing, commit detects the mismatch and rolls back.\",\"Following State 3's prohibition on business validation in `portal_store` and `expense_repository`, commit persists the inconsistent aggregate.\"],\"observer\":\"Staff and viewers later see financial totals that either remain unchanged or contain an expense whose allocations do not equal its total.\"},\"unit\":\"context\"}]}",
+ "set_aside": []
+}

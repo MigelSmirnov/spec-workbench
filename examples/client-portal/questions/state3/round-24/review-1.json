@@ -1,0 +1,133 @@
+{
+ "open_points": [
+  {
+   "subject": "models owned by the models module",
+   "kind": "contradictory model set",
+   "text": "`models` owns \"The State 1 records M01–M37\", while State 1 says \"the former models M08–M12 ... are removed.\"",
+   "question": "Does `models` own only the models actually defined in State 1, or must M08–M12 still exist despite their removal?",
+   "options": [
+    "Own only the defined models and treat M01–M37 as an inclusive label with gaps",
+    "Reintroduce placeholder or runtime models M08–M12"
+   ],
+   "default_guess": "Own only the models actually defined; M08–M12 remain absent.",
+   "witness": {
+    "initial": "A later agent generates the shared model module solely from States 1 and 3.",
+    "events": [
+     "The agent reads the State 3 ownership range M01–M37.",
+     "The agent also reads State 1's explicit removal of M08–M12."
+    ],
+    "outcomes": [
+     "The generated module omits all email-challenge and delivery models.",
+     "The generated module includes placeholders or retained definitions for M08–M12."
+    ],
+    "observer": "A compiler, schema generator, or later module author sees different available model types."
+   },
+   "unit": "context"
+  },
+  {
+   "subject": "staff and viewer session validation",
+   "kind": "two owners",
+   "text": "`staff_identity` owns \"resolution\" of staff sessions and `viewer_access` owns viewer \"session resolution\", but `authorization_guard` owns \"session validity\" and \"reads the persisted role and binds a session to its identity\"; State 1 also calls actor contexts \"evidence of completed authentication/authorization.\"",
+   "question": "When a project operation receives an actor context, does `authorization_guard` trust the completed session resolution, or must it load and validate the session and principal again?",
+   "options": [
+    "Identity modules fully resolve sessions; the guard trusts their actor contexts",
+    "The guard reloads session and principal state for every project operation",
+    "Identity modules parse/verify the token, while the guard performs a separately specified second lifecycle check"
+   ],
+   "default_guess": "Have the identity module authenticate the presented token, then have the guard reload current session and principal state before project authorization.",
+   "witness": {
+    "initial": "A staff session is active and an API request has already obtained a `StaffActorContext`.",
+    "events": [
+     "An administrator revokes all sessions for that account.",
+     "The pending request begins its project authorization using the previously produced context."
+    ],
+    "outcomes": [
+     "The guard trusts the context and the project operation proceeds.",
+     "The guard reloads the session, observes revocation, and rejects the operation."
+    ],
+    "observer": "The staff caller and, for a mutation, readers of the affected project state see the difference."
+   },
+   "unit": "context"
+  },
+  {
+   "subject": "producer project-scope authorization",
+   "kind": "overlapping ownership and unusable dependency",
+   "text": "The decision table makes `service_identity` the primary owner of A12 and `service_identity` owns \"producer scope\" with `authorize_producer_scope`, while `authorization_guard` owns \"project scope ... producer grant\" and `authorize_snapshot_import`. The dependency order places `authorization_guard` before `service_identity`, so it cannot delegate to the stated primary owner.",
+   "question": "Which module makes the authoritative `scope_mode`/`ProducerProjectGrant` decision for an import, and how may the other module consume that decision without duplicating it?",
+   "options": [
+    "`service_identity` decides scope before calling `authorization_guard`",
+    "`authorization_guard` owns the scope decision and `authorize_producer_scope` is removed",
+    "Both check scope independently, with an explicit rule for changes between checks"
+   ],
+   "default_guess": "Make `authorization_guard` the sole scope decision point and keep `service_identity` responsible only for principal, credential, and grant lifecycle.",
+   "witness": {
+    "initial": "A `granted_projects` producer has an active credential and an active grant for project P.",
+    "events": [
+     "The producer is authenticated and one module approves its scope for P.",
+     "An administrator revokes the producer grant.",
+     "The import proceeds to the other module's authorization step."
+    ],
+    "outcomes": [
+     "The earlier scope result is trusted and the import can be classified or accepted.",
+     "The grant is checked again and the route returns the concealed scoped-not-found result with no import record."
+    ],
+    "observer": "The producer sees either an import result or an access refusal; audit and snapshot storage may also differ."
+   },
+   "unit": "context"
+  },
+  {
+   "subject": "authorization of expense-document and progress-photo binary reads",
+   "kind": "missing dependency",
+   "text": "A14 says \"The owning domain module re-checks authenticated project access\", and State 3 says `expense_management` and `photo_management` \"re-check access and visibility\"; neither module's `Knows` list includes `authorization_guard`, `viewer_access`, `staff_identity`, or `service_identity`.",
+   "question": "What trusted input or allowed dependency lets the owning binary module re-check current project access rather than merely trust an earlier `AuthorizedProjectContext`?",
+   "options": [
+    "Add an allowed dependency on `authorization_guard`",
+    "Define that matching a previously issued `AuthorizedProjectContext` to the object is the entire re-check",
+    "Move the current-access re-check to the HTTP module and narrow the owning module's responsibility to project/object matching and visibility"
+   ],
+   "default_guess": "Pass an `AuthorizedProjectContext` from the guard and define the owning module's check as object-project matching plus visibility, without a second authentication lookup.",
+   "witness": {
+    "initial": "A viewer has an active grant and a visible expense document; the API has obtained an authorized project context.",
+    "events": [
+     "An administrator revokes the viewer's project grant.",
+     "The request then calls `read_expense_document` with the earlier context."
+    ],
+    "outcomes": [
+     "The document module trusts the context, confirms project and visibility, and returns the bytes.",
+     "The document module re-checks current access, observes the revoked grant, and returns the concealed refusal."
+    ],
+    "observer": "The viewer sees either the binary or the concealed rejection."
+   },
+   "unit": "context"
+  },
+  {
+   "subject": "empty manual budget creation during a staff progress read",
+   "kind": "unclear operation and transaction owner",
+   "text": "State 0/A5 require that `project_tracking.list_project_progress` creates an empty manual budget when none exists, while State 3 gives `budget_management` ownership of \"the manual budget\" and `ensure_manual_budget`; it also says \"The use case that owns an operation opens its transaction\" without naming the owner of this composite read-with-write.",
+   "question": "Which module owns the progress-read side effect, its transaction, and the `budget.manual_version_create` audit: `project_tracking`, `budget_management`, or a specified composition of both?",
+   "options": [
+    "`project_tracking` owns one composite transaction and uses a transaction-scoped budget capability",
+    "`project_tracking` first calls `budget_management.ensure_manual_budget` as a separate operation and transaction",
+    "`budget_management` owns the whole progress-list operation and delegates progress loading"
+   ],
+   "default_guess": "Let `project_tracking` own one composite transaction while `budget_management` supplies transaction-scoped manual-budget logic and the audit intent.",
+   "witness": {
+    "initial": "An archived project with an existing staff assignment has no manual budget and no progress records.",
+    "events": [
+     "The staff member requests the progress list.",
+     "The empty manual budget is created as required.",
+     "A later progress-row read fails before the response is produced."
+    ],
+    "outcomes": [
+     "One composite transaction rolls back, leaving no manual budget.",
+     "A separate `ensure_manual_budget` transaction has already committed, so the empty manual budget remains despite the failed progress response."
+    ],
+    "observer": "A later staff or viewer budget read sees whether the manual budget now exists; audit readers may also see a creation record."
+   },
+   "unit": "context"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"models owned by the models module\",\"kind\":\"contradictory model set\",\"text\":\"`models` owns \\\"The State 1 records M01–M37\\\", while State 1 says \\\"the former models M08–M12 ... are removed.\\\"\",\"question\":\"Does `models` own only the models actually defined in State 1, or must M08–M12 still exist despite their removal?\",\"options\":[\"Own only the defined models and treat M01–M37 as an inclusive label with gaps\",\"Reintroduce placeholder or runtime models M08–M12\"],\"default_guess\":\"Own only the models actually defined; M08–M12 remain absent.\",\"witness\":{\"initial\":\"A later agent generates the shared model module solely from States 1 and 3.\",\"events\":[\"The agent reads the State 3 ownership range M01–M37.\",\"The agent also reads State 1's explicit removal of M08–M12.\"],\"outcomes\":[\"The generated module omits all email-challenge and delivery models.\",\"The generated module includes placeholders or retained definitions for M08–M12.\"],\"observer\":\"A compiler, schema generator, or later module author sees different available model types.\"},\"unit\":\"context\"},{\"subject\":\"staff and viewer session validation\",\"kind\":\"two owners\",\"text\":\"`staff_identity` owns \\\"resolution\\\" of staff sessions and `viewer_access` owns viewer \\\"session resolution\\\", but `authorization_guard` owns \\\"session validity\\\" and \\\"reads the persisted role and binds a session to its identity\\\"; State 1 also calls actor contexts \\\"evidence of completed authentication/authorization.\\\"\",\"question\":\"When a project operation receives an actor context, does `authorization_guard` trust the completed session resolution, or must it load and validate the session and principal again?\",\"options\":[\"Identity modules fully resolve sessions; the guard trusts their actor contexts\",\"The guard reloads session and principal state for every project operation\",\"Identity modules parse/verify the token, while the guard performs a separately specified second lifecycle check\"],\"default_guess\":\"Have the identity module authenticate the presented token, then have the guard reload current session and principal state before project authorization.\",\"witness\":{\"initial\":\"A staff session is active and an API request has already obtained a `StaffActorContext`.\",\"events\":[\"An administrator revokes all sessions for that account.\",\"The pending request begins its project authorization using the previously produced context.\"],\"outcomes\":[\"The guard trusts the context and the project operation proceeds.\",\"The guard reloads the session, observes revocation, and rejects the operation.\"],\"observer\":\"The staff caller and, for a mutation, readers of the affected project state see the difference.\"},\"unit\":\"context\"},{\"subject\":\"producer project-scope authorization\",\"kind\":\"overlapping ownership and unusable dependency\",\"text\":\"The decision table makes `service_identity` the primary owner of A12 and `service_identity` owns \\\"producer scope\\\" with `authorize_producer_scope`, while `authorization_guard` owns \\\"project scope ... producer grant\\\" and `authorize_snapshot_import`. The dependency order places `authorization_guard` before `service_identity`, so it cannot delegate to the stated primary owner.\",\"question\":\"Which module makes the authoritative `scope_mode`/`ProducerProjectGrant` decision for an import, and how may the other module consume that decision without duplicating it?\",\"options\":[\"`service_identity` decides scope before calling `authorization_guard`\",\"`authorization_guard` owns the scope decision and `authorize_producer_scope` is removed\",\"Both check scope independently, with an explicit rule for changes between checks\"],\"default_guess\":\"Make `authorization_guard` the sole scope decision point and keep `service_identity` responsible only for principal, credential, and grant lifecycle.\",\"witness\":{\"initial\":\"A `granted_projects` producer has an active credential and an active grant for project P.\",\"events\":[\"The producer is authenticated and one module approves its scope for P.\",\"An administrator revokes the producer grant.\",\"The import proceeds to the other module's authorization step.\"],\"outcomes\":[\"The earlier scope result is trusted and the import can be classified or accepted.\",\"The grant is checked again and the route returns the concealed scoped-not-found result with no import record.\"],\"observer\":\"The producer sees either an import result or an access refusal; audit and snapshot storage may also differ.\"},\"unit\":\"context\"},{\"subject\":\"authorization of expense-document and progress-photo binary reads\",\"kind\":\"missing dependency\",\"text\":\"A14 says \\\"The owning domain module re-checks authenticated project access\\\", and State 3 says `expense_management` and `photo_management` \\\"re-check access and visibility\\\"; neither module's `Knows` list includes `authorization_guard`, `viewer_access`, `staff_identity`, or `service_identity`.\",\"question\":\"What trusted input or allowed dependency lets the owning binary module re-check current project access rather than merely trust an earlier `AuthorizedProjectContext`?\",\"options\":[\"Add an allowed dependency on `authorization_guard`\",\"Define that matching a previously issued `AuthorizedProjectContext` to the object is the entire re-check\",\"Move the current-access re-check to the HTTP module and narrow the owning module's responsibility to project/object matching and visibility\"],\"default_guess\":\"Pass an `AuthorizedProjectContext` from the guard and define the owning module's check as object-project matching plus visibility, without a second authentication lookup.\",\"witness\":{\"initial\":\"A viewer has an active grant and a visible expense document; the API has obtained an authorized project context.\",\"events\":[\"An administrator revokes the viewer's project grant.\",\"The request then calls `read_expense_document` with the earlier context.\"],\"outcomes\":[\"The document module trusts the context, confirms project and visibility, and returns the bytes.\",\"The document module re-checks current access, observes the revoked grant, and returns the concealed refusal.\"],\"observer\":\"The viewer sees either the binary or the concealed rejection.\"},\"unit\":\"context\"},{\"subject\":\"empty manual budget creation during a staff progress read\",\"kind\":\"unclear operation and transaction owner\",\"text\":\"State 0/A5 require that `project_tracking.list_project_progress` creates an empty manual budget when none exists, while State 3 gives `budget_management` ownership of \\\"the manual budget\\\" and `ensure_manual_budget`; it also says \\\"The use case that owns an operation opens its transaction\\\" without naming the owner of this composite read-with-write.\",\"question\":\"Which module owns the progress-read side effect, its transaction, and the `budget.manual_version_create` audit: `project_tracking`, `budget_management`, or a specified composition of both?\",\"options\":[\"`project_tracking` owns one composite transaction and uses a transaction-scoped budget capability\",\"`project_tracking` first calls `budget_management.ensure_manual_budget` as a separate operation and transaction\",\"`budget_management` owns the whole progress-list operation and delegates progress loading\"],\"default_guess\":\"Let `project_tracking` own one composite transaction while `budget_management` supplies transaction-scoped manual-budget logic and the audit intent.\",\"witness\":{\"initial\":\"An archived project with an existing staff assignment has no manual budget and no progress records.\",\"events\":[\"The staff member requests the progress list.\",\"The empty manual budget is created as required.\",\"A later progress-row read fails before the response is produced.\"],\"outcomes\":[\"One composite transaction rolls back, leaving no manual budget.\",\"A separate `ensure_manual_budget` transaction has already committed, so the empty manual budget remains despite the failed progress response.\"],\"observer\":\"A later staff or viewer budget read sees whether the manual budget now exists; audit readers may also see a creation record.\"},\"unit\":\"context\"}]}",
+ "set_aside": []
+}

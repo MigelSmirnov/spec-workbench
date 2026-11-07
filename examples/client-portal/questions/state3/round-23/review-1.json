@@ -1,0 +1,97 @@
+{
+ "open_points": [
+  {
+   "unit": "context",
+   "subject": "producer project-scope authorization",
+   "kind": "dual ownership and blocked dependency",
+   "text": "The decision table makes `service_identity` the primary owner of A12, and `service_identity` says it owns “producer scope” and exposes `authorize_producer_scope`; but `authorization_guard` says it owns “project scope (assignment, viewer grant or producer grant)” and exposes `authorize_snapshot_import`. The dependency order permits `service_identity` to know `authorization_guard`, but forbids `authorization_guard` from knowing `service_identity`; `api` may know both.",
+   "question": "Which module makes the authoritative `scope_mode`/`ProducerProjectGrant` decision for snapshot import, and what is the permitted call direction between the generic guard and producer-specific scope logic?",
+   "options": [
+    "`service_identity` owns producer scope and calls a scope-neutral authorization guard",
+    "`authorization_guard` owns and implements producer scope directly",
+    "`api` calls both in a specified order"
+   ],
+   "default_guess": "Make `service_identity` the sole owner of producer-specific scope and have it use the generic guard for the remaining checks."
+  },
+  {
+   "unit": "context",
+   "subject": "session and active-principal validation",
+   "kind": "overlapping ownership",
+   "text": "`authorization_guard` owns “session validity, active principal” and “binds a session to its identity,” while `staff_identity` owns staff-session “resolution,” `viewer_access` owns viewer-session “resolution,” and `service_identity` owns bearer authentication and credential usability. State 1 also says actor contexts are produced only by resolving a valid active session or credential.",
+   "question": "After an identity module produces an actor context, does `authorization_guard` trust that evidence or reload and revalidate the session or credential and principal; consequently, which module owns the validity decision and its race semantics?",
+   "options": [
+    "Identity modules make the sole authentication-validity decision and the guard trusts actor contexts",
+    "The guard reloads and revalidates current session/principal state for every project operation",
+    "Identity modules validate secrets while the guard performs a separately specified current-state recheck"
+   ],
+   "default_guess": "Let identity modules validate the presented secret and let the guard recheck current persisted lifecycle and scope state.",
+   "witness": {
+    "initial": "An operator has an active session and an active assignment to project P.",
+    "events": [
+     "The API resolves the session through `staff_identity` and obtains a `StaffActorContext`.",
+     "An administrator suspends the account before project authorization completes.",
+     "The operator's request reaches the project guard."
+    ],
+    "outcomes": [
+     "The resolved actor context remains authoritative for this request, so the operation proceeds.",
+     "The guard reloads the session/account, observes suspension, and rejects the operation."
+    ],
+    "observer": "The operator sees success or an authentication rejection."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "binary-read project authorization",
+   "kind": "missing dependency direction",
+   "text": "The shared binary section and A14 require `expense_management` and `photo_management` to “re-check authenticated project access,” but neither module may know `authorization_guard`; `api_irregular` instead knows and delegates to both the guard and the owning binary module. The text does not say whether an `AuthorizedProjectContext` is sufficient evidence or whether a live authorization check is required inside the owning module.",
+   "question": "Who performs the required binary-read project-access recheck, and does the owning document/photo module validate only the supplied authorized context against the object or re-run current grant/session authorization through the guard?",
+   "options": [
+    "The HTTP facade obtains an `AuthorizedProjectContext`, and the owning module checks only object project and visibility against it",
+    "The owning module must invoke `authorization_guard`, requiring a new dependency",
+    "A separate authorized-binary orchestration module performs both checks"
+   ],
+   "default_guess": "Have the facade obtain an authorized context and require the owning module to verify that context's project against the object plus visibility before producing `AuthorizedBinaryReference`.",
+   "witness": {
+    "initial": "A viewer has a valid session and grant for project P, which contains a visible document.",
+    "events": [
+     "`api_irregular` authorizes the viewer and obtains an `AuthorizedProjectContext`.",
+     "An administrator revokes the viewer's grant.",
+     "The document read reaches `expense_management`."
+    ],
+    "outcomes": [
+     "`expense_management` treats the supplied context as sufficient and returns the binary.",
+     "`expense_management` performs a live access recheck and returns the concealed binary-access rejection."
+    ],
+    "observer": "The viewer sees either the file or the concealed refusal."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "binary storage environment configuration",
+   "kind": "contradictory configuration ownership",
+   "text": "State 0 R0-10 says environment configuration is validated when the service starts; State 2 A30 says `BINARY_MAX_READ_BYTES` is required and “an invalid or missing required variable stops start-up”; State 3 says environment values are read once by `runtime_settings` and that it validates binary-bound consistency at startup, but also makes `binary_storage` an exception that reads `BINARY_STORAGE_ROOT` and `BINARY_MAX_READ_BYTES` “at each binary read,” refusing only that call when either is missing or unusable.",
+   "question": "Are the binary root and read limit immutable startup settings owned by `runtime_settings`, or live per-read environment values owned by `binary_storage`; if both are read, which value is authoritative after startup?",
+   "options": [
+    "Validate and capture both at startup; `binary_storage` receives the captured settings",
+    "Read both only at each binary request; missing values do not prevent startup",
+    "Validate at startup and deliberately re-read on every request, with specified precedence and change semantics"
+   ],
+   "default_guess": "Validate and capture both at startup and pass the immutable values to `binary_storage`.",
+   "witness": {
+    "initial": "The service starts with `BINARY_STORAGE_ROOT` set to directory A and a valid read limit.",
+    "events": [
+     "After startup, the host changes the root to directory B or removes the variable.",
+     "An authorized client requests an existing binary stored under directory A."
+    ],
+    "outcomes": [
+     "Using startup `RuntimeSettings`, the service reads and returns the object from A.",
+     "Re-reading the environment, the service reads from B or rejects the request because the variable is absent."
+    ],
+    "observer": "The requesting client sees the original binary, a different storage result, or a storage-unavailable error."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"context\",\"subject\":\"producer project-scope authorization\",\"kind\":\"dual ownership and blocked dependency\",\"text\":\"The decision table makes `service_identity` the primary owner of A12, and `service_identity` says it owns “producer scope” and exposes `authorize_producer_scope`; but `authorization_guard` says it owns “project scope (assignment, viewer grant or producer grant)” and exposes `authorize_snapshot_import`. The dependency order permits `service_identity` to know `authorization_guard`, but forbids `authorization_guard` from knowing `service_identity`; `api` may know both.\",\"question\":\"Which module makes the authoritative `scope_mode`/`ProducerProjectGrant` decision for snapshot import, and what is the permitted call direction between the generic guard and producer-specific scope logic?\",\"options\":[\"`service_identity` owns producer scope and calls a scope-neutral authorization guard\",\"`authorization_guard` owns and implements producer scope directly\",\"`api` calls both in a specified order\"],\"default_guess\":\"Make `service_identity` the sole owner of producer-specific scope and have it use the generic guard for the remaining checks.\"},{\"unit\":\"context\",\"subject\":\"session and active-principal validation\",\"kind\":\"overlapping ownership\",\"text\":\"`authorization_guard` owns “session validity, active principal” and “binds a session to its identity,” while `staff_identity` owns staff-session “resolution,” `viewer_access` owns viewer-session “resolution,” and `service_identity` owns bearer authentication and credential usability. State 1 also says actor contexts are produced only by resolving a valid active session or credential.\",\"question\":\"After an identity module produces an actor context, does `authorization_guard` trust that evidence or reload and revalidate the session or credential and principal; consequently, which module owns the validity decision and its race semantics?\",\"options\":[\"Identity modules make the sole authentication-validity decision and the guard trusts actor contexts\",\"The guard reloads and revalidates current session/principal state for every project operation\",\"Identity modules validate secrets while the guard performs a separately specified current-state recheck\"],\"default_guess\":\"Let identity modules validate the presented secret and let the guard recheck current persisted lifecycle and scope state.\",\"witness\":{\"initial\":\"An operator has an active session and an active assignment to project P.\",\"events\":[\"The API resolves the session through `staff_identity` and obtains a `StaffActorContext`.\",\"An administrator suspends the account before project authorization completes.\",\"The operator's request reaches the project guard.\"],\"outcomes\":[\"The resolved actor context remains authoritative for this request, so the operation proceeds.\",\"The guard reloads the session/account, observes suspension, and rejects the operation.\"],\"observer\":\"The operator sees success or an authentication rejection.\"}},{\"unit\":\"context\",\"subject\":\"binary-read project authorization\",\"kind\":\"missing dependency direction\",\"text\":\"The shared binary section and A14 require `expense_management` and `photo_management` to “re-check authenticated project access,” but neither module may know `authorization_guard`; `api_irregular` instead knows and delegates to both the guard and the owning binary module. The text does not say whether an `AuthorizedProjectContext` is sufficient evidence or whether a live authorization check is required inside the owning module.\",\"question\":\"Who performs the required binary-read project-access recheck, and does the owning document/photo module validate only the supplied authorized context against the object or re-run current grant/session authorization through the guard?\",\"options\":[\"The HTTP facade obtains an `AuthorizedProjectContext`, and the owning module checks only object project and visibility against it\",\"The owning module must invoke `authorization_guard`, requiring a new dependency\",\"A separate authorized-binary orchestration module performs both checks\"],\"default_guess\":\"Have the facade obtain an authorized context and require the owning module to verify that context's project against the object plus visibility before producing `AuthorizedBinaryReference`.\",\"witness\":{\"initial\":\"A viewer has a valid session and grant for project P, which contains a visible document.\",\"events\":[\"`api_irregular` authorizes the viewer and obtains an `AuthorizedProjectContext`.\",\"An administrator revokes the viewer's grant.\",\"The document read reaches `expense_management`.\"],\"outcomes\":[\"`expense_management` treats the supplied context as sufficient and returns the binary.\",\"`expense_management` performs a live access recheck and returns the concealed binary-access rejection.\"],\"observer\":\"The viewer sees either the file or the concealed refusal.\"}},{\"unit\":\"context\",\"subject\":\"binary storage environment configuration\",\"kind\":\"contradictory configuration ownership\",\"text\":\"State 0 R0-10 says environment configuration is validated when the service starts; State 2 A30 says `BINARY_MAX_READ_BYTES` is required and “an invalid or missing required variable stops start-up”; State 3 says environment values are read once by `runtime_settings` and that it validates binary-bound consistency at startup, but also makes `binary_storage` an exception that reads `BINARY_STORAGE_ROOT` and `BINARY_MAX_READ_BYTES` “at each binary read,” refusing only that call when either is missing or unusable.\",\"question\":\"Are the binary root and read limit immutable startup settings owned by `runtime_settings`, or live per-read environment values owned by `binary_storage`; if both are read, which value is authoritative after startup?\",\"options\":[\"Validate and capture both at startup; `binary_storage` receives the captured settings\",\"Read both only at each binary request; missing values do not prevent startup\",\"Validate at startup and deliberately re-read on every request, with specified precedence and change semantics\"],\"default_guess\":\"Validate and capture both at startup and pass the immutable values to `binary_storage`.\",\"witness\":{\"initial\":\"The service starts with `BINARY_STORAGE_ROOT` set to directory A and a valid read limit.\",\"events\":[\"After startup, the host changes the root to directory B or removes the variable.\",\"An authorized client requests an existing binary stored under directory A.\"],\"outcomes\":[\"Using startup `RuntimeSettings`, the service reads and returns the object from A.\",\"Re-reading the environment, the service reads from B or rejects the request because the variable is absent.\"],\"observer\":\"The requesting client sees the original binary, a different storage result, or a storage-unavailable error.\"}}]}",
+ "set_aside": []
+}

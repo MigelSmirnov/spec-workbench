@@ -14,6 +14,11 @@ OQ-17 (dependencies) and OQ-18 (orderings), raised by this migration, were answe
 by the owner decision of 2026-11-06 (current service behaviour accepted; technical
 decisions delegated): A32 and A27.
 
+On 2026-11-07 the owner removed the staff email challenges (`00_product.md` R0-23):
+A10 states that the portal has none; the challenge rows of A3, A11 and A13, the
+challenge settings of A30 and the invariants INV-010, INV-011, INV-012, INV-013 and
+INV-016 are removed, and A3/A4 no longer require a verified email to authenticate.
+
 The former status, kept:
 
 > **Authoring pass State 2. Builds on `00_product.md` and `10_models.md`
@@ -31,6 +36,9 @@ The former status, kept:
 >    email-gateway decision): anyone may submit an email address; the response
 >    never reveals whether an account exists; a token is issued and delivered
 >    only for an existing verified address.
+>
+>    *Withdrawn by the owner on 2026-11-07 (`00_product.md` R0-23): the portal
+>    has no password reset and sends no email.*
 > 3. **Config default values below were confirmed by the product owner on
 >    2026-07-19.** They remain runtime knobs, not architecture.
 
@@ -50,7 +58,7 @@ landings:
 
 | ID range | Area | Owning responsibility | Expected landing |
 | --- | --- | --- | --- |
-| INV-001…INV-016 | IAM: sessions, capabilities, secrets, challenges | authorization guard; authentication flows; credential storage; email challenge flow | notes (+ rules for capability/transition tables; properties where pure) |
+| INV-001…INV-015 | IAM: sessions, capabilities, secrets (INV-010…INV-013 and INV-016, the email challenges, removed 2026-11-07, R0-23) | authorization guard; authentication flows; credential storage | notes (+ rules for capability/transition tables; properties where pure) |
 | INV-017 | Operator project scope | staff assignment management; authorization guard | notes + database uniqueness constraint |
 | INV-018…INV-019 | Staff login identifiers and new passwords | staff identity | rules + notes/properties |
 | PLAT-REG-001…007 | Registry platform contract | Registry gateway; project-scoped use cases | rules (status tables) + notes |
@@ -133,14 +141,21 @@ BudgetVersionStatus: inactive → active → inactive (re-activation allowed
                   each activation sets activated_at/activated_by and clears
                   deactivated_at, each deactivation sets deactivated_at and
                   keeps activated_at/activated_by of the last activation)
-Challenges/tokens: issued → consumed | expired | revoked (all terminal)
 ```
 
 Transitions outside these tables are rejected.
 
+### Carried changes
+
+The row `Challenges/tokens: issued → consumed | expired | revoked` is removed
+with the challenges, and authentication no longer requires a verified email
+besides `active` status (owner 2026-11-07, `00_product.md` R0-23). Every path
+into `active` records the email as verified (activation, R0-07), so the answer
+to every account stays the one the accepted spec gave.
+
 ### Formal invariants
 
-- INV-014: a staff account authenticates only in active status with a verified email; pending_verification cannot log in
+- INV-014: a staff account authenticates only in active status; pending_verification cannot log in
 
 ### Required tests
 
@@ -155,8 +170,7 @@ The table is rules data: `rules.status_transitions` (SPEC_STANDARD 15.3.1, a rul
 ### Normative rules
 
 Every project-scoped operation evaluates, in order: valid unexpired
-unrevoked session → principal status `active` (and verified email for
-staff) → project access (viewer grant / staff assignment semantics / producer
+unrevoked session → principal status `active` → project access (viewer grant / staff assignment semantics / producer
 scope) → required capability from R2 → Registry lifecycle policy (R5).
 First failure wins; failures are indistinguishable to the caller regarding
 account/project existence beyond what their own access already proves.
@@ -184,12 +198,14 @@ common authorization rule), with the exceptions State 0 fixes:
 The exceptions are those of State 0 R0-09, R0-21 and R0-24 and of the
 accepted notes `revoke_viewer_project`, `revoke_staff_project_assignment`,
 `revoke_producer_project`, `get_snapshot_import_result` (owner 2026-11-06:
-current service behaviour accepted; technical decisions delegated).
+current service behaviour accepted; technical decisions delegated). The
+"(and verified email for staff)" of the active-principal step is removed with
+the challenges (owner 2026-11-07, A3 "Carried changes").
 
 ### Formal invariants
 
-- INV-001: every project-scoped operation passes the guard sequence: valid session, active principal (verified email for staff), project access, required capability, Registry lifecycle policy; first failure wins
-- INV-004: authentication and challenge flows never reveal account or viewer existence; auth failures never expose project data
+- INV-001: every project-scoped operation passes the guard sequence: valid session, active principal, project access, required capability, Registry lifecycle policy; first failure wins
+- INV-004: authentication flows never reveal account or viewer existence; auth failures never expose project data
 - INV-017: an operator may access a project only through one active StaffProjectAssignment; revocation blocks the next project-scoped authorization check immediately; current administrators derive project scope from the single administrative area policy
 - PLAT-REG-003: a linked mutation succeeds only after server-side typed validation reports the same UUID as active
 - PLAT-REG-004: client-supplied Registry context is never authoritative
@@ -492,50 +508,41 @@ behaviour accepted; technical decisions delegated.
 
 The table is rules data: `rules.money_policy` (SPEC_STANDARD 15.3.1, a rules table). The owning functions named in the tests carry it by address.
 
-## Accepted decision A10 — R10. Email challenge policy
+## Accepted decision A10 — R10. No email challenges (owner 2026-11-07)
 
 ### Normative rules
 
-| Purpose | Model | TTL config key | Issued by |
-| --- | --- | --- | --- |
-| email verification | `EmailVerificationChallenge` | `email_verification_ttl_hours` | administrator |
-| email change | `PendingEmailChange` | `email_change_ttl_hours` | account or administrator |
-| password reset | `PasswordResetToken` | `password_reset_ttl_minutes` | self-service or administrator |
-
-Common policy: purpose-bound (a token is consumable only by its own flow);
-single-use; revocable; plaintext exists only in the delivered message;
-issuing a new challenge of the same purpose revokes outstanding ones for
-that account; per-account issuing is rate-limited
-(`email_challenge_rate_limit_per_hour`); delivery outcome never affects
-challenge validity; flow responses never reveal account existence.
-
-Notification kinds sent without tokens: `password_changed_notice` (to the
-account email), `email_changed_notice` (to the previous email),
-`account_security_notice` (suspension/disabling).
+The portal has no staff email challenge: no email verification, no email
+change confirmed at a new address, no password-reset token and no security
+notification, and it sends no email (`00_product.md` R0-03, R0-23). A staff
+account's email is its login identifier only. The administrative recovery
+override (R0-20) is the one operation that replaces a login email; it is an
+exceptional flow with its own audit action (A13).
 
 ### Carried changes
 
-In the accepted Factory spec (sha256 `459ac96c…`) the challenge operations are deferred: they "remain inert while StaffChallengeRepository is deferred", answer with the concealed rejection (a password-reset request with nothing) and read, write, audit and deliver nothing; no function sends the three notification kinds. The running service is kept (owner 2026-11-06: current service behaviour accepted; technical decisions delegated; `00_product.md` R0-23); the policy above is the design the operations follow once built (`open_questions.md` Q19).
+The former R10 (email challenge policy: purpose-bound single-use
+`EmailVerificationChallenge`, `PendingEmailChange` and `PasswordResetToken`
+with TTLs, a per-account rate limit, delivery as telemetry, three token-free
+notices) was deferred in the accepted Factory spec (sha256 `459ac96c…`: the
+operations "remain inert while StaffChallengeRepository is deferred") and is
+removed by the owner on 2026-11-07: "remove the staff email/password challenge
+feature from the spec. There are no human staff; the owner opens portal
+sessions himself and an agent works through cabinet_kernel; no e-mails are
+ever needed." With it go `rules.email_challenge_policy` and the invariants
+INV-010, INV-012, INV-013 and INV-016 (`open_questions.md` Q19, closed).
 
 ### Formal invariants
 
-- INV-010: challenge tokens are purpose-bound, single-use, time-limited, revocable; replay and cross-flow use are rejected
-- INV-012: a new email becomes the login identifier only when its PendingEmailChange is consumed; the previous address is notified after completion
-- INV-013: email delivery success or failure never confirms address ownership or affects challenge validity
-- INV-015: administrative recovery override is an exceptional flow with enhanced audit, never the primary email-change mechanism
-- INV-016: issuing a new challenge of one purpose revokes outstanding challenges of that purpose for the account; issuing is rate-limited per account
+- INV-015: administrative recovery override is an exceptional flow with enhanced audit
 
 ### Required tests
 
-- INV-010: a check against the rules table at `_issue_challenge` showing the invariant holds; a violating input is refused and changes nothing.
-- INV-012: a focused test at `confirm_email_change` showing the invariant holds; a violating input is refused and changes nothing.
-- INV-013: a focused test at `deliver_email_message` showing the invariant holds; a violating input is refused and changes nothing.
 - INV-015: a focused test at `perform_recovery_override` showing the invariant holds; a violating input is refused and changes nothing.
-- INV-016: a check against the rules table at `_issue_challenge` showing the invariant holds; a violating input is refused and changes nothing.
 
 ### Consequence
 
-The table is rules data: `rules.email_challenge_policy` (SPEC_STANDARD 15.3.1, a rules table). The owning functions named in the tests carry it by address.
+No value: the invariant is behaviour of `perform_recovery_override` and lands as its note (State 7).
 
 ## Accepted decision A11 — R11. Revocation cascade table
 
@@ -547,7 +554,7 @@ The table is rules data: `rules.email_challenge_policy` (SPEC_STANDARD 15.3.1, a
 | ViewerAccessCredential | new entries impossible; existing sessions invalid |
 | ProjectViewerGrant | that project disappears from the viewer's scope; other grants unaffected |
 | StaffProjectAssignment | that project disappears from the staff account's scope; other assignments unaffected |
-| StaffAccount suspended/disabled | all staff sessions invalid; outstanding challenges revoked; security notice sent |
+| StaffAccount suspended/disabled | all staff sessions invalid |
 | ServicePrincipal disabled | all its credentials unusable |
 | ServiceCredential | that credential unusable; other credentials of the principal unaffected (rotation overlap) |
 
@@ -556,21 +563,19 @@ observes it; no grace period.
 
 ### Carried changes
 
-The accepted Factory spec revokes the sessions and outstanding challenges of a suspended or disabled staff account but sends no security notice (A10 "Carried changes", `00_product.md` R0-23, `open_questions.md` Q19).
+The accepted Factory spec revokes the sessions of a suspended or disabled staff account and sends no security notice; the former "outstanding challenges revoked; security notice sent" and INV-011 (password reset) are removed with the challenges (owner 2026-11-07, A10, `00_product.md` R0-23).
 
 ### Formal invariants
 
 - INV-005: a revoked grant, credential, viewer, or session blocks the next authorization check immediately, per the revocation cascade table
 - INV-006: a suspended or disabled staff account and a disabled service principal have no valid sessions or usable credentials
 - INV-008: at most one non-revoked ViewerAccessCredential per viewer; re-issue revokes the previous credential atomically
-- INV-011: successful password reset revokes all active staff sessions and all outstanding reset tokens of the account and sends a password-changed notice
 
 ### Required tests
 
 - INV-005: a check against the rules table at `_authorize_project_operation` showing the invariant holds; a violating input is refused and changes nothing.
 - INV-006: a check against the rules table at `_authorize_project_operation` showing the invariant holds; a violating input is refused and changes nothing.
 - INV-008: a focused test at `issue_viewer_access` showing the invariant holds; a violating input is refused and changes nothing.
-- INV-011: a focused test at `complete_password_reset` showing the invariant holds; a violating input is refused and changes nothing.
 
 ### Consequence
 
@@ -624,9 +629,6 @@ grant.create grant.revoke
 staff_assignment.create staff_assignment.revoke
 staff.create staff.login staff.login_failed staff.logout
 staff.sessions_revoke staff.suspend staff.reinstate staff.disable
-staff.email_verification_issue staff.email_verified
-staff.email_change_request staff.email_changed
-staff.password_reset_request staff.password_reset_complete
 staff.recovery_override
 principal.create principal.disable principal.enable
 principal.credential_issue principal.credential_revoke
@@ -653,9 +655,7 @@ The significant mutations (`rules.audit_significant_mutation_actions`) are
 exactly: `viewer.create viewer.revoke viewer.credential_issue
 viewer.credential_revoke grant.create grant.revoke staff_assignment.create
 staff_assignment.revoke staff.create staff.suspend staff.reinstate
-staff.disable staff.email_change_request staff.email_changed
-staff.password_reset_request staff.password_reset_complete
-staff.recovery_override principal.create principal.disable principal.enable
+staff.disable staff.recovery_override principal.create principal.disable principal.enable
 principal.credential_issue principal.credential_revoke
 producer_grant.create producer_grant.revoke budget.section_plan_edit
 budget.manual_version_create snapshot.import snapshot.activate
@@ -684,6 +684,12 @@ constrain the reason of a rejected record that is written (note of
 `application/snapshot_import.py`, `application/staff_identity.py`). Owner
 2026-11-06: current service behaviour accepted; technical decisions
 delegated.
+
+The six challenge actions `staff.email_verification_issue`,
+`staff.email_verified`, `staff.email_change_request`, `staff.email_changed`,
+`staff.password_reset_request` and `staff.password_reset_complete`, which no
+operation of the accepted service wrote, leave the catalog and the significant
+set with the challenges (owner 2026-11-07, A10, `00_product.md` R0-23).
 
 The accepted Factory spec adds two policies beside the catalog (Factory `5677993e`, 2026-07-22): `rules.audit_significant_mutation_actions`, the closed subset of the catalog called significant mutations (listed above), and `rules.audit_result_reason_policy`: a success carries no `reason_code`, a rejected significant mutation carries a non-blank one, a rejected non-significant action may carry one.
 
@@ -780,9 +786,9 @@ The table is rules data: `rules.project_list_ordering` (SPEC_STANDARD 15.3.1, a 
   password service is a separate explicit boundary, not an implicit network
   call during hashing.
 - Password plaintext is accepted only by login, account creation, the
-  holder's password change and the bootstrap command (the reset completion
-  is inert, R0-23) and handed immediately to `credential_security`; it never
-  enters audit or delivery records.
+  holder's password change and the bootstrap command (there is no password
+  reset, R0-23) and handed immediately to `credential_security`; it never
+  enters audit records.
 
 ### Carried changes
 
@@ -809,7 +815,7 @@ The table is rules data: `rules.staff_identity_input_policy` (SPEC_STANDARD 15.3
 
 ### Normative rules
 
-- Every portal-issued session/challenge/viewer/service plaintext token encodes
+- Every portal-issued session/viewer/service plaintext token encodes
   a public record UUID selector plus a random secret generated with configured
   entropy.
 - Parsing yields PresentedSecret. The store looks up only by the UUID; the
@@ -823,7 +829,7 @@ The table is rules data: `rules.staff_identity_input_policy` (SPEC_STANDARD 15.3
 
 ### Formal invariants
 
-- INV-003: passwords, session tokens, viewer access tokens, service credentials, and challenge tokens are stored only in verification/hash form and never logged
+- INV-003: passwords, session tokens, viewer access tokens and service credentials are stored only in verification/hash form and never logged
 
 ### Required tests
 
@@ -1152,8 +1158,8 @@ the instants are UTC, their stored form is offset-naive.
 ### Normative rules
 
 R0-07 made exact. The local command creates the single first staff account
-on an empty staff table: role administrator, status active, email verified,
-no creator; its audit is `staff.create` by the system actor with the created
+on an empty staff table: role administrator, status active, `email_verified_at`
+set, no creator; its audit is `staff.create` by the system actor with the created
 `staff_id`, result success. R0-07's "never printed, logged or audited"
 concerns the email and password the command is given: the audit record
 names the created account by its `staff_id` and carries neither. The emptiness check and both inserts run in one
@@ -1197,14 +1203,8 @@ Runtime knobs with confirmed defaults (deployment values may differ):
 ```text
 registry_endpoint_env_name            = REGISTRY_BASE_URL
 registry_timeout_seconds               = 5
-email_gateway_url_env_name             = EMAIL_GATEWAY_URL
-email_gateway_timeout_seconds         = 10
 staff_session_ttl_hours                = 12
 viewer_session_ttl_days                = 30
-email_verification_ttl_hours           = 72
-email_change_ttl_hours                 = 24
-password_reset_ttl_minutes             = 60
-email_challenge_rate_limit_per_hour    = 5
 credential_entropy_bytes               = 32
 credential_hash_scheme                 = argon2id (library defaults; fixed in source, not a deployment value)
 binary_read_limit_env_name             = BINARY_MAX_READ_BYTES (required positive integer)
@@ -1220,6 +1220,9 @@ to States 6–7.
 
 ### Carried changes
 
+- The email gateway endpoint and timeout, the three challenge lifetimes and the
+  challenge rate limit of the former configuration are removed with the
+  challenges (owner 2026-11-07, A10, `00_product.md` R0-23).
 - `credential_hash_scheme`: its parameters are those of the running
   service's pinned hashing library (A32), carried to States 6–7; a change
   of them is a Factory route change (A32). Owner 2026-11-06: current
@@ -1279,7 +1282,7 @@ State 3 may start only when no category is UNRESOLVED.
 Security review: PERFORMED
 
 - authentication_credential_abuse: APPLICABLE; references: A3, A4, A10, A11, A16, A17, A25; affected: M01-M15, staff login, viewer entry, producer bearer authentication
-- secrets: APPLICABLE; references: A16, A17, A25, A29; affected: M02, M03, M05, M06, M08-M10, M14, issued secrets, logs
+- secrets: APPLICABLE; references: A16, A17, A25, A29; affected: M02, M03, M05, M06, M14, issued secrets, logs
 - authorization: APPLICABLE; references: A1, A2, A4, A5, A11, A12; affected: every project-scoped operation, administrator routes
 - injection_interpreted_input: APPLICABLE; references: A5, A16, A30; affected: Registry request paths and identifiers, staff email input, persisted queries
 - external_callbacks_webhooks: APPLICABLE; references: A3, A7, A8, A12, A25; affected: M18, M25, M34, snapshot publication, recognition intake
@@ -1350,7 +1353,8 @@ they are deterministic backend IR, authored after State 6 contracts.
 
 - `rules.persistence_backend` (`persistence_backend/v2`, Factory `d1280708`)
   — persistence closure (`70_persistence_closure.json`).
-- `rules.http_router_backend` (56 routes, Factory `300bd11d` … `a6916180314d`)
+- `rules.http_router_backend` (50 routes since the six challenge routes left on
+  2026-11-07, A10; 56 in the accepted spec, Factory `300bd11d` … `a6916180314d`)
   — router closure and router context (`70_router_closure.json`,
   `70_router_context.json`).
 - `rules.credential_security_backend`, `rules.binary_storage_backend`,

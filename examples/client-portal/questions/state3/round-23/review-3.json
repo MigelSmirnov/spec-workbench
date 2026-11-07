@@ -1,0 +1,85 @@
+{
+ "open_points": [
+  {
+   "unit": "context",
+   "subject": "session and credential resolution ownership",
+   "kind": "double ownership",
+   "text": "`authorization_guard` owns “session validity” and “reads the persisted role and binds a session to its identity”, while `staff_identity` owns `resolve_staff_session`, `viewer_access` owns `resolve_viewer_session`, and `service_identity` owns bearer authentication; the identity modules may know `authorization_guard`, but `authorization_guard` may not know them.",
+   "question": "Which module performs the authoritative current-state authentication check and produces each actor context, and does `authorization_guard` reload session, principal, credential and role state or trust an already-resolved context?",
+   "options": [
+    "Identity modules resolve authentication once and `authorization_guard` trusts their actor contexts",
+    "`authorization_guard` independently reloads and validates authentication state",
+    "Identity modules resolve credentials while `authorization_guard` rechecks selected lifecycle state"
+   ],
+   "default_guess": "Identity modules authenticate and produce contexts; `authorization_guard` rechecks all state needed for immediate revocation.",
+   "witness": {
+    "initial": "A staff session is valid and its account is active.",
+    "events": [
+     "`staff_identity` resolves the session and produces a `StaffActorContext`.",
+     "An administrator suspends the account and commits the session-revocation cascade.",
+     "The caller presents the previously produced context for a project read."
+    ],
+    "outcomes": [
+     "The guard trusts the resolved context and permits the read.",
+     "The guard reloads current account/session state and rejects the read immediately."
+    ],
+    "observer": "The suspended staff member and the administrator"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "producer project-scope authorization",
+   "kind": "owner-direction conflict",
+   "text": "The decision table makes `service_identity` the primary owner of A12 and `authorization_guard` a consumer; `service_identity` owns producer scope and exposes `authorize_producer_scope`, but `authorization_guard` also owns producer-grant scope and exposes `authorize_snapshot_import`. Dependency order permits `service_identity` to know `authorization_guard`, not the reverse.",
+   "question": "Where is the single authoritative implementation of producer scope, and how can the other module use it without reversing the declared dependency or duplicating the rule?",
+   "options": [
+    "`authorization_guard` owns and evaluates producer scope; `service_identity.authorize_producer_scope` is removed or delegates to it",
+    "`service_identity` owns scope and `authorization_guard` is allowed to depend on it",
+    "Both evaluate scope independently with an explicit division of occasions"
+   ],
+   "default_guess": "Make `authorization_guard` the sole evaluator because it already owns the ordered project guard and is earlier in the dependency graph.",
+   "witness": {
+    "initial": "A `granted_projects` producer has an active credential and an active grant for project P.",
+    "events": [
+     "The producer is authenticated by `service_identity`.",
+     "One implementation evaluates scope through `service_identity.authorize_producer_scope`; another evaluates it inside `authorization_guard.authorize_snapshot_import`.",
+     "The grant is revoked between the two possible checks, then the producer submits an import for P."
+    ],
+    "outcomes": [
+     "The earlier successful scope result is trusted and the import proceeds.",
+     "The guard reads the revoked grant and refuses the import as scoped-not-found."
+    ],
+    "observer": "The producer, which either receives an import result or an access refusal"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "binary-read project authorization",
+   "kind": "missing dependency",
+   "text": "The shared binary text and both management modules say `expense_management` and `photo_management` “re-check access and visibility” before reading content, but their `Knows` lists omit `authorization_guard`; they know only `models`, `binary_storage`, `audit_writer` and `portal_store`. `AuthorizedProjectContext` is evidence of an earlier completed authorization, not a mechanism for rechecking current access.",
+   "question": "Does each binary-owning module perform a fresh authorization check, or does it only verify object project and visibility against a context authorized by the API; if fresh authorization is required, through which allowed dependency is it performed?",
+   "options": [
+    "Add an allowed dependency from both management modules to `authorization_guard`",
+    "Define the API/irregular API guard call as the access re-check and limit management modules to project/visibility checks",
+    "Let management modules reproduce current grant/session checks through `portal_store`"
+   ],
+   "default_guess": "Have the API obtain a fresh `AuthorizedProjectContext` immediately before calling the management module, and have the management module recheck object project and visibility only.",
+   "witness": {
+    "initial": "A viewer has an active session and grant for project P; document D in P is client-visible.",
+    "events": [
+     "The API authorizes the viewer for P and obtains an `AuthorizedProjectContext`.",
+     "An administrator revokes the viewer's grant.",
+     "The binary-read call continues with the previously obtained context."
+    ],
+    "outcomes": [
+     "The owning module treats the context as sufficient, verifies D's project and visibility, and returns the bytes.",
+     "The owning module performs the promised fresh access check and refuses the read because the grant is revoked."
+    ],
+    "observer": "The viewer requesting D and the administrator expecting immediate revocation"
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"context\",\"subject\":\"session and credential resolution ownership\",\"kind\":\"double ownership\",\"text\":\"`authorization_guard` owns “session validity” and “reads the persisted role and binds a session to its identity”, while `staff_identity` owns `resolve_staff_session`, `viewer_access` owns `resolve_viewer_session`, and `service_identity` owns bearer authentication; the identity modules may know `authorization_guard`, but `authorization_guard` may not know them.\",\"question\":\"Which module performs the authoritative current-state authentication check and produces each actor context, and does `authorization_guard` reload session, principal, credential and role state or trust an already-resolved context?\",\"options\":[\"Identity modules resolve authentication once and `authorization_guard` trusts their actor contexts\",\"`authorization_guard` independently reloads and validates authentication state\",\"Identity modules resolve credentials while `authorization_guard` rechecks selected lifecycle state\"],\"default_guess\":\"Identity modules authenticate and produce contexts; `authorization_guard` rechecks all state needed for immediate revocation.\",\"witness\":{\"initial\":\"A staff session is valid and its account is active.\",\"events\":[\"`staff_identity` resolves the session and produces a `StaffActorContext`.\",\"An administrator suspends the account and commits the session-revocation cascade.\",\"The caller presents the previously produced context for a project read.\"],\"outcomes\":[\"The guard trusts the resolved context and permits the read.\",\"The guard reloads current account/session state and rejects the read immediately.\"],\"observer\":\"The suspended staff member and the administrator\"}},{\"unit\":\"context\",\"subject\":\"producer project-scope authorization\",\"kind\":\"owner-direction conflict\",\"text\":\"The decision table makes `service_identity` the primary owner of A12 and `authorization_guard` a consumer; `service_identity` owns producer scope and exposes `authorize_producer_scope`, but `authorization_guard` also owns producer-grant scope and exposes `authorize_snapshot_import`. Dependency order permits `service_identity` to know `authorization_guard`, not the reverse.\",\"question\":\"Where is the single authoritative implementation of producer scope, and how can the other module use it without reversing the declared dependency or duplicating the rule?\",\"options\":[\"`authorization_guard` owns and evaluates producer scope; `service_identity.authorize_producer_scope` is removed or delegates to it\",\"`service_identity` owns scope and `authorization_guard` is allowed to depend on it\",\"Both evaluate scope independently with an explicit division of occasions\"],\"default_guess\":\"Make `authorization_guard` the sole evaluator because it already owns the ordered project guard and is earlier in the dependency graph.\",\"witness\":{\"initial\":\"A `granted_projects` producer has an active credential and an active grant for project P.\",\"events\":[\"The producer is authenticated by `service_identity`.\",\"One implementation evaluates scope through `service_identity.authorize_producer_scope`; another evaluates it inside `authorization_guard.authorize_snapshot_import`.\",\"The grant is revoked between the two possible checks, then the producer submits an import for P.\"],\"outcomes\":[\"The earlier successful scope result is trusted and the import proceeds.\",\"The guard reads the revoked grant and refuses the import as scoped-not-found.\"],\"observer\":\"The producer, which either receives an import result or an access refusal\"}},{\"unit\":\"context\",\"subject\":\"binary-read project authorization\",\"kind\":\"missing dependency\",\"text\":\"The shared binary text and both management modules say `expense_management` and `photo_management` “re-check access and visibility” before reading content, but their `Knows` lists omit `authorization_guard`; they know only `models`, `binary_storage`, `audit_writer` and `portal_store`. `AuthorizedProjectContext` is evidence of an earlier completed authorization, not a mechanism for rechecking current access.\",\"question\":\"Does each binary-owning module perform a fresh authorization check, or does it only verify object project and visibility against a context authorized by the API; if fresh authorization is required, through which allowed dependency is it performed?\",\"options\":[\"Add an allowed dependency from both management modules to `authorization_guard`\",\"Define the API/irregular API guard call as the access re-check and limit management modules to project/visibility checks\",\"Let management modules reproduce current grant/session checks through `portal_store`\"],\"default_guess\":\"Have the API obtain a fresh `AuthorizedProjectContext` immediately before calling the management module, and have the management module recheck object project and visibility only.\",\"witness\":{\"initial\":\"A viewer has an active session and grant for project P; document D in P is client-visible.\",\"events\":[\"The API authorizes the viewer for P and obtains an `AuthorizedProjectContext`.\",\"An administrator revokes the viewer's grant.\",\"The binary-read call continues with the previously obtained context.\"],\"outcomes\":[\"The owning module treats the context as sufficient, verifies D's project and visibility, and returns the bytes.\",\"The owning module performs the promised fresh access check and refuses the read because the grant is revoked.\"],\"observer\":\"The viewer requesting D and the administrator expecting immediate revocation\"}}]}",
+ "set_aside": []
+}

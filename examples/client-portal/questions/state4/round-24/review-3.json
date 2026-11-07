@@ -1,0 +1,160 @@
+{
+ "open_points": [
+  {
+   "unit": "context",
+   "subject": "binary storage environment ownership",
+   "kind": "contradictory configuration lifetime",
+   "text": "State 4 says `module:runtime_settings` owns reading the environment, once, into `RuntimeSettings`; State 3 says `binary_storage` reads `BINARY_STORAGE_ROOT` and `BINARY_MAX_READ_BYTES` at each binary read and refuses that call when either value is missing or unusable.",
+   "question": "Are binary-storage settings captured and validated once at startup, or read and validated independently for every binary request?",
+   "options": [
+    "Capture them once in RuntimeSettings and fail startup when required values are invalid",
+    "Read them from the environment on every binary read and fail only that read",
+    "Validate at startup but also reread them for every binary request"
+   ],
+   "default_guess": "Follow the explicit current-service exception in State 3 and reread them for each binary operation.",
+   "witness": {
+    "initial": "The service process has otherwise valid configuration, but the binary root is absent or unusable.",
+    "events": [
+     "The deployment process starts the service.",
+     "A monitor requests liveness.",
+     "An authorized caller later requests a document binary."
+    ],
+    "outcomes": [
+     "Startup is refused by runtime_settings, so neither health nor binary routes are served.",
+     "The service starts and health succeeds; only the later binary request fails in binary_storage."
+    ],
+    "observer": "The deployment operator and the authorized binary caller"
+   }
+  },
+  {
+   "unit": "40_flows.md:Status",
+   "subject": "bootstrap email and password validation",
+   "kind": "unnamed capability",
+   "text": "The bootstrap flow says `bootstrap_first_administrator` \"normalizes and validates the email and password\" through the staff identity input boundary, but `staff_identity` offers no named normalization or new-password-validation capability, and `staff_bootstrap` is not assigned ownership of A16.",
+   "question": "What named capability may `staff_bootstrap` call to apply exactly the same A16 normalization and password validation as staff account creation?",
+   "options": [
+    "Expose reusable validation capabilities from staff_identity",
+    "Move the shared pure input policy to credential_security or another named owner",
+    "Let staff_bootstrap duplicate the validation rules locally"
+   ],
+   "default_guess": "Expose narrow reusable validation capabilities from staff_identity.",
+   "witness": {
+    "initial": "The staff table is empty and the host operator supplies an email or password on an A16 boundary case.",
+    "events": [
+     "staff_bootstrap_cli collects the values.",
+     "staff_bootstrap must validate them before creating the first administrator."
+    ],
+    "outcomes": [
+     "Bootstrap uses the exact staff_identity rules and rejects the value with exit code 2.",
+     "Bootstrap independently reimplements the rules and may accept a value that HTTP staff creation rejects, or reject one it accepts."
+    ],
+    "observer": "The host operator and later staff login caller"
+   }
+  },
+  {
+   "unit": "40_flows.md:Status",
+   "subject": "bootstrap configuration and storage failures",
+   "kind": "failure outcome missing",
+   "text": "The flow resolves runtime settings, opens the bootstrap database, creates schemas and commits, but its Errors section assigns exit codes only to confirmation mismatch, rejected identity input and an already-completed bootstrap; A29 simultaneously calls the exit-code set closed.",
+   "question": "What externally observable outcome and exit code apply when runtime settings cannot be loaded or bootstrap storage/schema/commit fails?",
+   "options": [
+    "Add closed exit codes for configuration and storage failures",
+    "Map those failures onto one of exit codes 1–3",
+    "Treat them as uncaught process failures outside the closed exit-code contract"
+   ],
+   "default_guess": "Add distinct closed nonzero exit codes for configuration and storage failures.",
+   "witness": {
+    "initial": "The staff table is empty, but the configured SQLite database cannot be opened.",
+    "events": [
+     "The host operator runs the bootstrap command and supplies matching valid credentials.",
+     "staff_bootstrap_cli loads settings and attempts to construct or use staff_bootstrap_store."
+    ],
+    "outcomes": [
+     "The command returns a newly specified deterministic exit code for storage failure.",
+     "The exception escapes and the shell receives an implementation-dependent exit status, despite the declared closed contract."
+    ],
+    "observer": "The host operator or deployment script"
+   }
+  },
+  {
+   "unit": "40_flows.md:Status",
+   "subject": "duplicate producer project grant",
+   "kind": "failure outcome missing",
+   "text": "`grant_producer_project` is described only as requiring an active Registry project and appending `producer_grant.create`; its Errors section gives no outcome for a duplicate pair, although M15 requires one grant record per `(service_principal_id, project_id)` and says an active duplicate is refused before insertion while a post-revocation duplicate reaches the persistence constraint.",
+   "question": "What declared failures and HTTP outcomes apply to an active duplicate producer grant and to an attempt to recreate a revoked producer grant?",
+   "options": [
+    "Use the viewer/staff pattern: active duplicate 403 and revoked-pair persistence conflict 500",
+    "Return 409 for both duplicate states",
+    "Return 422 for an active duplicate and 409 for a terminal revoked pair"
+   ],
+   "default_guess": "Use the already documented viewer/staff pattern: 403 while active and 500 after revocation.",
+   "witness": {
+    "initial": "A granted-projects service principal already has an active grant for project P.",
+    "events": [
+     "An administrator calls grant_producer_project again for the same principal and P.",
+     "The administrator revokes the original grant.",
+     "The administrator calls grant_producer_project a third time for the same pair."
+    ],
+    "outcomes": [
+     "The second call is rejected by an application check and the third by the unique persistence constraint, with distinct mapped statuses.",
+     "Both calls are treated as an ordinary conflict or input error by a careful implementer seeking consistent API semantics."
+    ],
+    "observer": "The administrator calling the producer-grant routes"
+   }
+  },
+  {
+   "unit": "40_flows.md:Status",
+   "subject": "transport-guard refusals",
+   "kind": "failure outcomes missing",
+   "text": "The conventions say only that \"A refusal there reaches no route\"; the flows do not state the response produced for an untrusted host, oversized body, foreign-origin viewer sign-out, or rate-limited viewer entry, and the route error policy cannot map them because no route is reached.",
+   "question": "Which module produces each transport refusal response, and what status and safe body does each condition return?",
+   "options": [
+    "Define a condition-specific closed mapping in transport_guard",
+    "Use one concealed response for every transport refusal",
+    "Delegate these responses to framework defaults"
+   ],
+   "default_guess": "Have transport_guard produce a closed condition-specific mapping, including 413 for body size and 429 for entry rate limiting, with safe empty bodies.",
+   "witness": {
+    "initial": "The service is running and the viewer-entry rate bucket for one client address is exhausted.",
+    "events": [
+     "The client sends another viewer-entry request from that address.",
+     "transport_guard refuses it before credential verification."
+    ],
+    "outcomes": [
+     "The caller receives a deterministic explicitly specified rate-limit response.",
+     "The caller receives whichever status, body and headers the chosen middleware or framework implementation happens to generate."
+    ],
+    "observer": "The browser client and any proxy monitoring response codes"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "rechecking authorization before protected binary storage access",
+   "kind": "required operation unavailable",
+   "text": "A14 and State 3 say the owning expense/photo module re-checks authenticated project access before storage access, but those modules do not know `authorization_guard`; State 4 authorizes only in the route and then says the owning module checks that the record belongs to the project and is visible before calling `binary_storage`.",
+   "question": "Must the owning binary-read use case repeat session, principal, grant/assignment and Registry authorization, and if so through what allowed module capability?",
+   "options": [
+    "Add authorization_guard as a dependency and reauthorize inside each binary-read use case",
+    "Define the route-produced AuthorizedProjectContext as sufficient evidence and narrow \"re-checks access\" to record/project/visibility checks",
+    "Move the entire authorization and binary-read orchestration to a module that may depend on both owners"
+   ],
+   "default_guess": "Treat AuthorizedProjectContext as sufficient evidence for the request and explicitly define the owning module's re-check as record project membership and visibility only.",
+   "witness": {
+    "initial": "A viewer has an active session and grant to project P, whose visible document D exists.",
+    "events": [
+     "The route authorizes the viewer for P and obtains an AuthorizedProjectContext.",
+     "An administrator revokes the grant before the expense module reaches storage access.",
+     "The expense module processes the request for D."
+    ],
+    "outcomes": [
+     "The module trusts the already-issued context, verifies D belongs to P and is visible, and returns the bytes.",
+     "The module repeats current authorization, observes the revoked grant and returns the concealed not-found response."
+    ],
+    "observer": "The viewer requesting the document"
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"context\",\"subject\":\"binary storage environment ownership\",\"kind\":\"contradictory configuration lifetime\",\"text\":\"State 4 says `module:runtime_settings` owns reading the environment, once, into `RuntimeSettings`; State 3 says `binary_storage` reads `BINARY_STORAGE_ROOT` and `BINARY_MAX_READ_BYTES` at each binary read and refuses that call when either value is missing or unusable.\",\"question\":\"Are binary-storage settings captured and validated once at startup, or read and validated independently for every binary request?\",\"options\":[\"Capture them once in RuntimeSettings and fail startup when required values are invalid\",\"Read them from the environment on every binary read and fail only that read\",\"Validate at startup but also reread them for every binary request\"],\"default_guess\":\"Follow the explicit current-service exception in State 3 and reread them for each binary operation.\",\"witness\":{\"initial\":\"The service process has otherwise valid configuration, but the binary root is absent or unusable.\",\"events\":[\"The deployment process starts the service.\",\"A monitor requests liveness.\",\"An authorized caller later requests a document binary.\"],\"outcomes\":[\"Startup is refused by runtime_settings, so neither health nor binary routes are served.\",\"The service starts and health succeeds; only the later binary request fails in binary_storage.\"],\"observer\":\"The deployment operator and the authorized binary caller\"}},{\"unit\":\"40_flows.md:Status\",\"subject\":\"bootstrap email and password validation\",\"kind\":\"unnamed capability\",\"text\":\"The bootstrap flow says `bootstrap_first_administrator` \\\"normalizes and validates the email and password\\\" through the staff identity input boundary, but `staff_identity` offers no named normalization or new-password-validation capability, and `staff_bootstrap` is not assigned ownership of A16.\",\"question\":\"What named capability may `staff_bootstrap` call to apply exactly the same A16 normalization and password validation as staff account creation?\",\"options\":[\"Expose reusable validation capabilities from staff_identity\",\"Move the shared pure input policy to credential_security or another named owner\",\"Let staff_bootstrap duplicate the validation rules locally\"],\"default_guess\":\"Expose narrow reusable validation capabilities from staff_identity.\",\"witness\":{\"initial\":\"The staff table is empty and the host operator supplies an email or password on an A16 boundary case.\",\"events\":[\"staff_bootstrap_cli collects the values.\",\"staff_bootstrap must validate them before creating the first administrator.\"],\"outcomes\":[\"Bootstrap uses the exact staff_identity rules and rejects the value with exit code 2.\",\"Bootstrap independently reimplements the rules and may accept a value that HTTP staff creation rejects, or reject one it accepts.\"],\"observer\":\"The host operator and later staff login caller\"}},{\"unit\":\"40_flows.md:Status\",\"subject\":\"bootstrap configuration and storage failures\",\"kind\":\"failure outcome missing\",\"text\":\"The flow resolves runtime settings, opens the bootstrap database, creates schemas and commits, but its Errors section assigns exit codes only to confirmation mismatch, rejected identity input and an already-completed bootstrap; A29 simultaneously calls the exit-code set closed.\",\"question\":\"What externally observable outcome and exit code apply when runtime settings cannot be loaded or bootstrap storage/schema/commit fails?\",\"options\":[\"Add closed exit codes for configuration and storage failures\",\"Map those failures onto one of exit codes 1–3\",\"Treat them as uncaught process failures outside the closed exit-code contract\"],\"default_guess\":\"Add distinct closed nonzero exit codes for configuration and storage failures.\",\"witness\":{\"initial\":\"The staff table is empty, but the configured SQLite database cannot be opened.\",\"events\":[\"The host operator runs the bootstrap command and supplies matching valid credentials.\",\"staff_bootstrap_cli loads settings and attempts to construct or use staff_bootstrap_store.\"],\"outcomes\":[\"The command returns a newly specified deterministic exit code for storage failure.\",\"The exception escapes and the shell receives an implementation-dependent exit status, despite the declared closed contract.\"],\"observer\":\"The host operator or deployment script\"}},{\"unit\":\"40_flows.md:Status\",\"subject\":\"duplicate producer project grant\",\"kind\":\"failure outcome missing\",\"text\":\"`grant_producer_project` is described only as requiring an active Registry project and appending `producer_grant.create`; its Errors section gives no outcome for a duplicate pair, although M15 requires one grant record per `(service_principal_id, project_id)` and says an active duplicate is refused before insertion while a post-revocation duplicate reaches the persistence constraint.\",\"question\":\"What declared failures and HTTP outcomes apply to an active duplicate producer grant and to an attempt to recreate a revoked producer grant?\",\"options\":[\"Use the viewer/staff pattern: active duplicate 403 and revoked-pair persistence conflict 500\",\"Return 409 for both duplicate states\",\"Return 422 for an active duplicate and 409 for a terminal revoked pair\"],\"default_guess\":\"Use the already documented viewer/staff pattern: 403 while active and 500 after revocation.\",\"witness\":{\"initial\":\"A granted-projects service principal already has an active grant for project P.\",\"events\":[\"An administrator calls grant_producer_project again for the same principal and P.\",\"The administrator revokes the original grant.\",\"The administrator calls grant_producer_project a third time for the same pair.\"],\"outcomes\":[\"The second call is rejected by an application check and the third by the unique persistence constraint, with distinct mapped statuses.\",\"Both calls are treated as an ordinary conflict or input error by a careful implementer seeking consistent API semantics.\"],\"observer\":\"The administrator calling the producer-grant routes\"}},{\"unit\":\"40_flows.md:Status\",\"subject\":\"transport-guard refusals\",\"kind\":\"failure outcomes missing\",\"text\":\"The conventions say only that \\\"A refusal there reaches no route\\\"; the flows do not state the response produced for an untrusted host, oversized body, foreign-origin viewer sign-out, or rate-limited viewer entry, and the route error policy cannot map them because no route is reached.\",\"question\":\"Which module produces each transport refusal response, and what status and safe body does each condition return?\",\"options\":[\"Define a condition-specific closed mapping in transport_guard\",\"Use one concealed response for every transport refusal\",\"Delegate these responses to framework defaults\"],\"default_guess\":\"Have transport_guard produce a closed condition-specific mapping, including 413 for body size and 429 for entry rate limiting, with safe empty bodies.\",\"witness\":{\"initial\":\"The service is running and the viewer-entry rate bucket for one client address is exhausted.\",\"events\":[\"The client sends another viewer-entry request from that address.\",\"transport_guard refuses it before credential verification.\"],\"outcomes\":[\"The caller receives a deterministic explicitly specified rate-limit response.\",\"The caller receives whichever status, body and headers the chosen middleware or framework implementation happens to generate.\"],\"observer\":\"The browser client and any proxy monitoring response codes\"}},{\"unit\":\"context\",\"subject\":\"rechecking authorization before protected binary storage access\",\"kind\":\"required operation unavailable\",\"text\":\"A14 and State 3 say the owning expense/photo module re-checks authenticated project access before storage access, but those modules do not know `authorization_guard`; State 4 authorizes only in the route and then says the owning module checks that the record belongs to the project and is visible before calling `binary_storage`.\",\"question\":\"Must the owning binary-read use case repeat session, principal, grant/assignment and Registry authorization, and if so through what allowed module capability?\",\"options\":[\"Add authorization_guard as a dependency and reauthorize inside each binary-read use case\",\"Define the route-produced AuthorizedProjectContext as sufficient evidence and narrow \\\"re-checks access\\\" to record/project/visibility checks\",\"Move the entire authorization and binary-read orchestration to a module that may depend on both owners\"],\"default_guess\":\"Treat AuthorizedProjectContext as sufficient evidence for the request and explicitly define the owning module's re-check as record project membership and visibility only.\",\"witness\":{\"initial\":\"A viewer has an active session and grant to project P, whose visible document D exists.\",\"events\":[\"The route authorizes the viewer for P and obtains an AuthorizedProjectContext.\",\"An administrator revokes the grant before the expense module reaches storage access.\",\"The expense module processes the request for D.\"],\"outcomes\":[\"The module trusts the already-issued context, verifies D belongs to P and is visible, and returns the bytes.\",\"The module repeats current authorization, observes the revoked grant and returns the concealed not-found response.\"],\"observer\":\"The viewer requesting the document\"}}]}",
+ "set_aside": []
+}

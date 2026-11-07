@@ -1,0 +1,107 @@
+{
+ "open_points": [
+  {
+   "unit": "context",
+   "subject": "Registry configuration and startup validation",
+   "kind": "contradiction",
+   "text": "R0-10 says the service is configured only by environment variables, \"which it validates when it starts\"; A30 says `REGISTRY_BASE_URL` \"is no required start-up variable\" and its absence fails only Registry calls.",
+   "question": "Must a missing or unusable `REGISTRY_BASE_URL` stop startup, or may the service start and translate a later Registry call to `transport_error`?",
+   "options": [
+    "Refuse startup during environment validation",
+    "Start successfully and fail only Registry-dependent calls"
+   ],
+   "default_guess": "Follow A30's more specific rule: start successfully and return `transport_error` when a Registry call is attempted.",
+   "witness": {
+    "initial": "A deployment has every otherwise-required setting but no `REGISTRY_BASE_URL`.",
+    "events": [
+     "The host operator starts the portal.",
+     "An API caller later invokes a project-scoped operation requiring Registry validation."
+    ],
+    "outcomes": [
+     "Under R0-10, startup is refused because the environment configuration is invalid.",
+     "Under A30, startup succeeds; the later operation fails with `RegistryFailureKind.transport_error`."
+    ],
+    "observer": "The host operator at startup and the later API caller."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "Expense-document binary failure concealment",
+   "kind": "contradictory refusal policy",
+   "text": "R0-12 says an expense-document read with missing, oversize, or unlisted stored content is answered the same way as an unknown, cross-project, or hidden read; A14 instead says a missing source object is an \"explicit unavailable/not-found failure\" and that oversize or unlisted content is rejected, without preserving the document-specific indistinguishable answer.",
+   "question": "For an already-authorized expense document whose bytes are missing, oversized, or of an unlisted type, must the response be indistinguishable from an unknown/hidden document, or expose an explicit storage/content failure?",
+   "options": [
+    "Use the same concealed refusal as unknown, cross-project, and hidden document reads",
+    "Return an explicit storage-unavailable, size-limit, or media-type failure",
+    "Conceal some storage failures but expose others"
+   ],
+   "default_guess": "Apply R0-12's object-specific rule and conceal all three document delivery failures; retain explicit storage-unavailable errors for photos.",
+   "witness": {
+    "initial": "A viewer has an active grant to an active project. A client-visible ExpenseDocument record exists, but its `file_ref` resolves to no bytes.",
+    "events": [
+     "The viewer requests that document by `document_id`.",
+     "The viewer also requests a nonexistent `document_id` in the same project."
+    ],
+    "outcomes": [
+     "R0-12 gives both requests the same concealed refusal, revealing no distinction.",
+     "A14 can be implemented to return an explicit storage-unavailable response for the existing document and a concealed not-found response for the nonexistent one."
+    ],
+    "observer": "The viewer, who can infer that the first document record exists."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "Normalized OCR item validation in expense creation",
+   "kind": "missing carried rule",
+   "text": "M24 requires a non-empty item list, unique `line_id` values, `quantity > 0`, and non-negative prices and totals; M27 says the adapter validates complete items. A7's ordered expense checks omit normalized-item validation entirely while claiming INV-031 requires a complete normalized result.",
+   "question": "Which normalized-item conditions are enforced, at what stage relative to request decoding, authorization, allocation validation, and replay, and what refusal is returned when one fails?",
+   "options": [
+    "Validate all M24 conditions before authorization",
+    "Validate all M24 conditions after the project guard but before allocation and replay checks",
+    "Validate them at another specified point in A7's sequence",
+    "Do not validate them because the items are discarded"
+   ],
+   "default_guess": "Validate every M24 condition after the project guard and before allocation and replay checks, returning the same empty-body HTTP 422 used for other intake-content failures.",
+   "witness": {
+    "initial": "An operator is authorized for an active project and submits a confirmed version-1 EUR recognition with a positive total and valid allocations, but two normalized items have the same `line_id`. The `recognized_document_id` is new.",
+    "events": [
+     "The operator submits the expense-creation request."
+    ],
+    "outcomes": [
+     "Following M24 and M27, the adapter rejects the publication and stores no expense.",
+     "Following only A7's enumerated checks, the request passes because items are discarded and an Expense and ExpenseDocument are created."
+    ],
+    "observer": "The operator sees rejection versus creation, and subsequent readers see whether the expense exists."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "Audit-writer failure during a significant mutation",
+   "kind": "unanswered carried question",
+   "text": "M36 says, \"Audit failures must not silently vanish; the owning-flow policy lands in State 2.\" A13 requires one AuditRecord per catalog action and A22 defines transaction closing, but neither states whether the business mutation and audit append share one atomic transaction or what happens when audit persistence fails.",
+   "question": "If audit persistence fails during an otherwise valid significant mutation, must the business mutation roll back, or may it commit while the operation reports or records the audit failure separately?",
+   "options": [
+    "Business mutation and audit append are atomic; audit failure rolls back everything",
+    "Business mutation may commit, but the caller receives an audit failure",
+    "Business mutation commits and audit recovery is attempted later through a specified mechanism"
+   ],
+   "default_guess": "Make the business mutation and its required audit append atomic and roll back both when the audit append fails.",
+   "witness": {
+    "initial": "An authorized staff member may update a photo in an active project, and the audit repository fails while appending the required `photo.update` record.",
+    "events": [
+     "The staff member changes the photo caption.",
+     "The owning flow writes the changed photo.",
+     "Appending the audit record fails."
+    ],
+    "outcomes": [
+     "With atomic audit ownership, the transaction rolls back and the old caption remains.",
+     "With a separately committed business write, the new caption remains while the request fails or the required audit record is absent."
+    ],
+    "observer": "The staff member on a subsequent read and an auditor inspecting the audit trail."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"context\",\"subject\":\"Registry configuration and startup validation\",\"kind\":\"contradiction\",\"text\":\"R0-10 says the service is configured only by environment variables, \\\"which it validates when it starts\\\"; A30 says `REGISTRY_BASE_URL` \\\"is no required start-up variable\\\" and its absence fails only Registry calls.\",\"question\":\"Must a missing or unusable `REGISTRY_BASE_URL` stop startup, or may the service start and translate a later Registry call to `transport_error`?\",\"options\":[\"Refuse startup during environment validation\",\"Start successfully and fail only Registry-dependent calls\"],\"default_guess\":\"Follow A30's more specific rule: start successfully and return `transport_error` when a Registry call is attempted.\",\"witness\":{\"initial\":\"A deployment has every otherwise-required setting but no `REGISTRY_BASE_URL`.\",\"events\":[\"The host operator starts the portal.\",\"An API caller later invokes a project-scoped operation requiring Registry validation.\"],\"outcomes\":[\"Under R0-10, startup is refused because the environment configuration is invalid.\",\"Under A30, startup succeeds; the later operation fails with `RegistryFailureKind.transport_error`.\"],\"observer\":\"The host operator at startup and the later API caller.\"}},{\"unit\":\"context\",\"subject\":\"Expense-document binary failure concealment\",\"kind\":\"contradictory refusal policy\",\"text\":\"R0-12 says an expense-document read with missing, oversize, or unlisted stored content is answered the same way as an unknown, cross-project, or hidden read; A14 instead says a missing source object is an \\\"explicit unavailable/not-found failure\\\" and that oversize or unlisted content is rejected, without preserving the document-specific indistinguishable answer.\",\"question\":\"For an already-authorized expense document whose bytes are missing, oversized, or of an unlisted type, must the response be indistinguishable from an unknown/hidden document, or expose an explicit storage/content failure?\",\"options\":[\"Use the same concealed refusal as unknown, cross-project, and hidden document reads\",\"Return an explicit storage-unavailable, size-limit, or media-type failure\",\"Conceal some storage failures but expose others\"],\"default_guess\":\"Apply R0-12's object-specific rule and conceal all three document delivery failures; retain explicit storage-unavailable errors for photos.\",\"witness\":{\"initial\":\"A viewer has an active grant to an active project. A client-visible ExpenseDocument record exists, but its `file_ref` resolves to no bytes.\",\"events\":[\"The viewer requests that document by `document_id`.\",\"The viewer also requests a nonexistent `document_id` in the same project.\"],\"outcomes\":[\"R0-12 gives both requests the same concealed refusal, revealing no distinction.\",\"A14 can be implemented to return an explicit storage-unavailable response for the existing document and a concealed not-found response for the nonexistent one.\"],\"observer\":\"The viewer, who can infer that the first document record exists.\"}},{\"unit\":\"context\",\"subject\":\"Normalized OCR item validation in expense creation\",\"kind\":\"missing carried rule\",\"text\":\"M24 requires a non-empty item list, unique `line_id` values, `quantity > 0`, and non-negative prices and totals; M27 says the adapter validates complete items. A7's ordered expense checks omit normalized-item validation entirely while claiming INV-031 requires a complete normalized result.\",\"question\":\"Which normalized-item conditions are enforced, at what stage relative to request decoding, authorization, allocation validation, and replay, and what refusal is returned when one fails?\",\"options\":[\"Validate all M24 conditions before authorization\",\"Validate all M24 conditions after the project guard but before allocation and replay checks\",\"Validate them at another specified point in A7's sequence\",\"Do not validate them because the items are discarded\"],\"default_guess\":\"Validate every M24 condition after the project guard and before allocation and replay checks, returning the same empty-body HTTP 422 used for other intake-content failures.\",\"witness\":{\"initial\":\"An operator is authorized for an active project and submits a confirmed version-1 EUR recognition with a positive total and valid allocations, but two normalized items have the same `line_id`. The `recognized_document_id` is new.\",\"events\":[\"The operator submits the expense-creation request.\"],\"outcomes\":[\"Following M24 and M27, the adapter rejects the publication and stores no expense.\",\"Following only A7's enumerated checks, the request passes because items are discarded and an Expense and ExpenseDocument are created.\"],\"observer\":\"The operator sees rejection versus creation, and subsequent readers see whether the expense exists.\"}},{\"unit\":\"context\",\"subject\":\"Audit-writer failure during a significant mutation\",\"kind\":\"unanswered carried question\",\"text\":\"M36 says, \\\"Audit failures must not silently vanish; the owning-flow policy lands in State 2.\\\" A13 requires one AuditRecord per catalog action and A22 defines transaction closing, but neither states whether the business mutation and audit append share one atomic transaction or what happens when audit persistence fails.\",\"question\":\"If audit persistence fails during an otherwise valid significant mutation, must the business mutation roll back, or may it commit while the operation reports or records the audit failure separately?\",\"options\":[\"Business mutation and audit append are atomic; audit failure rolls back everything\",\"Business mutation may commit, but the caller receives an audit failure\",\"Business mutation commits and audit recovery is attempted later through a specified mechanism\"],\"default_guess\":\"Make the business mutation and its required audit append atomic and roll back both when the audit append fails.\",\"witness\":{\"initial\":\"An authorized staff member may update a photo in an active project, and the audit repository fails while appending the required `photo.update` record.\",\"events\":[\"The staff member changes the photo caption.\",\"The owning flow writes the changed photo.\",\"Appending the audit record fails.\"],\"outcomes\":[\"With atomic audit ownership, the transaction rolls back and the old caption remains.\",\"With a separately committed business write, the new caption remains while the request fails or the required audit record is absent.\"],\"observer\":\"The staff member on a subsequent read and an auditor inspecting the audit trail.\"}}]}",
+ "set_aside": []
+}

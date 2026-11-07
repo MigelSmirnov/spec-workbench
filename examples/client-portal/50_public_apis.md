@@ -11,7 +11,9 @@ contracts and notes of each operation and the route table
 `rules.http_router_backend`. Builds on States 0–4: `00_product.md`,
 `01_models.md`, `02_rules.md` (A1–A32), `30_modules.md` and `40_flows.md`.
 
-One public operation per State 3 capability (108), each proven by the State 4
+One public operation per State 3 capability (100; the eight operations of the
+email challenges and their delivery left with them on 2026-11-07,
+`00_product.md` R0-23), each proven by the State 4
 flows `50_api_plan.json` names. An operation is what another module, the
 HTTP route table or the host may call; everything else a module does is
 hidden. Inputs and outputs name State 1 models; exact Python signatures are
@@ -37,14 +39,14 @@ text" at the end.
 - **Store.** A use case receives the one `PortalStore` and opens its own
   `PortalTransaction` through it; it reaches a table only through the narrow
   port the transaction hands out (`tx.staff_access()`, `tx.expenses()` …).
-  `PortalStore`, `PortalTransaction`, the eleven `Sqlite*Repository` classes
+  `PortalStore`, `PortalTransaction`, the ten `Sqlite*Repository` classes
   and `SqliteStaffBootstrapStore` are exported classes, not operations: their
   methods are State 6 contracts and the persistence closure's.
 - **Transactions.** The operation that opens a transaction closes it exactly
   once under the transaction guard of A22: an explicit open flag, rollback
   only while it is open, the original failure re-raised unchanged. A guard
   check that opens its own transaction closes it before its caller opens one.
-  Registry and email network calls happen with no portal transaction open.
+  Registry network calls happen with no portal transaction open.
 - **Audit.** A significant success and its audit record commit in one
   transaction through `audit_writer.append_audit` (A13, A23); an idempotent
   replay writes no second creation audit. The audited action, result, reason
@@ -68,10 +70,7 @@ text" at the end.
   | `IdentityInputRejected` | `staff_identity` | 422 |
   | `BudgetValidationError`, `ExpenseValidationError`, `PhotoValidationError`, `TrackingValidationError`, `FinancialValidationError` | owning module | 422 |
   | `BudgetConflictError`, `ExpenseConflictError`, `PhotoConflictError`, `TrackingConflictError` | owning module | 409 |
-  | `ChallengeRejected` | `staff_challenges` | 400 |
-  | `ChallengeRateLimited` | `staff_challenges` | 429 |
   | `RegistryBoundaryError` | `registry_gateway` | 502 |
-  | `EmailDeliveryError` | `email_delivery_gateway` | 502 |
   | `PersistenceError` | `portal_store` | 500 |
   | `BinaryStorageError` | `binary_storage` | 500 |
 
@@ -104,7 +103,7 @@ text" at the end.
 
 ### Callers
 
-`module:staff_bootstrap`, `module:staff_challenges`, `module:staff_identity`, `module:viewer_access`.
+`module:staff_bootstrap`, `module:staff_identity`, `module:viewer_access`.
 
 ### Inputs
 
@@ -175,7 +174,7 @@ Pure; no store access.
 
 ### Callers
 
-`module:service_identity`, `module:staff_challenges`, `module:staff_identity`, `module:viewer_access`.
+`module:service_identity`, `module:staff_identity`, `module:viewer_access`.
 
 ### Inputs
 
@@ -212,7 +211,7 @@ Pure; no store access.
 
 ### Callers
 
-`module:service_identity`, `module:staff_challenges`, `module:staff_identity`, `module:viewer_access`.
+`module:service_identity`, `module:staff_identity`, `module:viewer_access`.
 
 ### Inputs
 
@@ -248,7 +247,7 @@ Pure; no store access.
 
 ### Callers
 
-`module:service_identity`, `module:staff_challenges`, `module:staff_identity`, `module:viewer_access`.
+`module:service_identity`, `module:staff_identity`, `module:viewer_access`.
 
 ### Inputs
 
@@ -717,42 +716,6 @@ A driver failure propagates to the connection owner.
 Creates the table when absent; never drops, alters, commits, rolls back or
 closes.
 
-## `public_op:email_delivery_repository.create_email_delivery_schema`
-
-### Owner
-
-`module:email_delivery_repository`. Create the email-delivery table on the caller's connection, if missing.
-
-### Callers
-
-`module:portal_store`.
-
-### Inputs
-
-An open SQLite connection owned by the caller.
-
-### Outputs
-
-None: the table `config.persistence.email_delivery_table_name` exists, one
-column per `EmailDeliveryRecord` field, `delivery_id` the key.
-
-### Observable effect
-
-None beyond the table.
-
-### Enforces
-
-A10 (delivery telemetry), A30. Idempotent.
-
-### Errors
-
-A driver failure propagates to the connection owner.
-
-### State impact
-
-Creates the table when absent; never drops, alters, commits, rolls back or
-closes.
-
 ## `public_op:staff_access_repository.create_staff_access_schema`
 
 ### Owner
@@ -984,44 +947,6 @@ failure.
 
 None in the portal.
 
-## `public_op:email_delivery_gateway.deliver_email_message`
-
-### Owner
-
-`module:email_delivery_gateway`. Send one email message through the provider and record the attempt and its outcome.
-
-### Callers
-
-`module:staff_challenges`.
-
-### Inputs
-
-The `PortalStore` and one `EmailDeliveryRequest`.
-
-### Outputs
-
-The persisted `EmailDeliveryRecord` of the accepted outcome.
-
-### Observable effect
-
-One provider call, made with no portal transaction open. While challenges are
-deferred no current operation calls it (R0-23, Q19).
-
-### Enforces
-
-A10 and R0-03: delivery is telemetry; it never marks a challenge valid,
-consumed or verified. A22: one transaction inserts and commits the pending
-record before the call, one further transaction writes the outcome.
-
-### Errors
-
-`EmailDeliveryError` for a provider failure, after the failed outcome is
-recorded; a persistence failure propagates unchanged.
-
-### State impact
-
-Writes one `EmailDeliveryRecord` (pending, then accepted or failed).
-
 ## `public_op:binary_storage.read_binary`
 
 ### Owner
@@ -1070,7 +995,7 @@ Read-only.
 
 ### Callers
 
-`module:budget_management`, `module:expense_intake`, `module:expense_management`, `module:photo_management`, `module:project_tracking`, `module:service_identity`, `module:snapshot_import`, `module:staff_challenges`, `module:staff_identity`, `module:viewer_access`.
+`module:budget_management`, `module:expense_intake`, `module:expense_management`, `module:photo_management`, `module:project_tracking`, `module:service_identity`, `module:snapshot_import`, `module:staff_identity`, `module:viewer_access`.
 
 ### Inputs
 
@@ -1109,7 +1034,7 @@ Appends one `AuditRecord`; never commits or rolls back.
 
 ### Callers
 
-`module:api`, `module:service_identity`, `module:staff_challenges`, `module:staff_identity`, `module:viewer_access`.
+`module:api`, `module:service_identity`, `module:staff_identity`, `module:viewer_access`.
 
 ### Inputs
 
@@ -1268,7 +1193,7 @@ Read-only.
 
 ### Callers
 
-`module:api`, `module:service_identity`, `module:staff_challenges`, `module:staff_identity`, `module:viewer_access`.
+`module:api`, `module:service_identity`, `module:staff_identity`, `module:viewer_access`.
 
 ### Inputs
 
@@ -1378,10 +1303,10 @@ normalized, exactly one audit on every outcome — `staff.login` success or
 `staff.login_failed` rejected with no reason code. The success audit names
 the signed-in account as both actor and entity. A rejection audit names the
 account the normalized address matched as both actor and entity, also when
-the account is not active, not verified or the password is wrong; actor and
+the account is not active or the password is wrong; actor and
 entity are empty only when no account matched, and the actor kind is staff
-in every case. Only an active, verified
-account with a matching password signs in.
+in every case. Only an active account with a matching password signs in;
+no verified-email condition applies (owner 2026-11-07, A3).
 
 ### Errors
 
@@ -1422,7 +1347,8 @@ None.
 
 A17: the parsed secret, not the envelope, is verified against the stored
 hash; A4 `valid_session` and `active_principal`: the session exists, is not
-revoked or expired, and its account is active with a verified email. One read
+revoked or expired, and its account is active (no verified-email condition,
+owner 2026-11-07, A3). One read
 transaction, rolled back after the two reads (A22).
 
 ### Errors
@@ -1536,8 +1462,7 @@ None beyond the change and the audit.
 
 A3 (`rules.status_transitions`) from the persisted status; A11
 (`rules.revocation_cascades`): suspension and disabling revoke every live
-session at the same timestamp; challenges have no storage while deferred
-(R0-23). R0-19: activation from `pending_verification` records
+session at the same timestamp. R0-19: activation from `pending_verification` records
 `email_verified_at`; reinstatement from `suspended` keeps it. A13: one
 `staff.suspend` for suspension, `staff.disable` for disabling, and
 `staff.reinstate` for every change to `active`, the activation of a
@@ -1609,7 +1534,7 @@ initial password and the `StaffRole`.
 ### Outputs
 
 The hash-free `StaffAccountView` of the new account, `pending_verification`
-with no verified email.
+with `email_verified` false.
 
 ### Observable effect
 
@@ -1724,7 +1649,8 @@ and the replacement email.
 
 ### Outputs
 
-The hash-free `StaffAccountView` with the replacement email, verified.
+The hash-free `StaffAccountView` with the replacement email and
+`email_verified` true.
 
 ### Observable effect
 
@@ -1732,7 +1658,7 @@ None.
 
 ### Enforces
 
-R0-20 (administrator-only, not the ordinary email change), A16 for the
+R0-20 (administrator-only, the one email change, A10), A16 for the
 replacement, A13 (enhanced `staff.recovery_override` audit in the same
 transaction).
 
@@ -1785,214 +1711,6 @@ written; a storage failure propagates unchanged.
 ### State impact
 
 Through the port: one `StaffAccount` and one `AuditRecord`, both or neither.
-
-## `public_op:staff_challenges.issue_email_verification`
-
-### Owner
-
-`module:staff_challenges`. Refuse, while challenges are deferred, an administrator's request for an email-verification challenge.
-
-### Callers
-
-`module:api`.
-
-### Inputs
-
-The `PortalStore`, the administrator's `StaffActorContext` and the
-`staff_id`.
-
-### Outputs
-
-None while deferred: no `ChallengeIssueView` is fabricated.
-
-### Observable effect
-
-None.
-
-### Enforces
-
-R0-23 and Q19: the operation is inert until a challenge repository exists;
-the A10 policy is the design it follows once built.
-
-### Errors
-
-`AuthenticationRejected`, before authorization or any input check.
-
-### State impact
-
-None: no transaction, read, write, audit or delivery.
-
-## `public_op:staff_challenges.confirm_email_verification`
-
-### Owner
-
-`module:staff_challenges`. Refuse, while challenges are deferred, a presented email-verification token.
-
-### Callers
-
-`module:api`.
-
-### Inputs
-
-The `PortalStore` and the token.
-
-### Outputs
-
-None while deferred.
-
-### Observable effect
-
-None.
-
-### Enforces
-
-R0-23, Q19; no email is verified by this route (R0-19).
-
-### Errors
-
-`AuthenticationRejected`, before the token is parsed.
-
-### State impact
-
-None.
-
-## `public_op:staff_challenges.request_email_change`
-
-### Owner
-
-`module:staff_challenges`. Refuse, while challenges are deferred, a staff member's request to change their email.
-
-### Callers
-
-`module:api`.
-
-### Inputs
-
-The `PortalStore`, the `StaffActorContext` and the new email.
-
-### Outputs
-
-None while deferred.
-
-### Observable effect
-
-None.
-
-### Enforces
-
-R0-23, Q19.
-
-### Errors
-
-`AuthenticationRejected`, before authorization or normalization.
-
-### State impact
-
-None.
-
-## `public_op:staff_challenges.confirm_email_change`
-
-### Owner
-
-`module:staff_challenges`. Refuse, while challenges are deferred, a presented email-change token.
-
-### Callers
-
-`module:api`.
-
-### Inputs
-
-The `PortalStore` and the token.
-
-### Outputs
-
-None while deferred.
-
-### Observable effect
-
-None.
-
-### Enforces
-
-R0-23, Q19.
-
-### Errors
-
-`AuthenticationRejected`, before the token is parsed.
-
-### State impact
-
-None.
-
-## `public_op:staff_challenges.request_password_reset`
-
-### Owner
-
-`module:staff_challenges`. Accept a password-reset request with one identical answer for every address.
-
-### Callers
-
-`module:api`.
-
-### Inputs
-
-The `PortalStore` and the presented email.
-
-### Outputs
-
-None, on every path (202 with no body).
-
-### Observable effect
-
-None while deferred: no challenge is issued and nothing is sent.
-
-### Enforces
-
-R0-06 and R0-15 (an unauthenticated surface that discloses no existence):
-the address is normalized and a rejected normalization is swallowed, so a
-malformed, unknown and known address are answered alike. R0-23.
-
-### Errors
-
-None for any presented value.
-
-### State impact
-
-None.
-
-## `public_op:staff_challenges.complete_password_reset`
-
-### Owner
-
-`module:staff_challenges`. Refuse, while challenges are deferred, a password-reset completion.
-
-### Callers
-
-`module:api`.
-
-### Inputs
-
-The `PortalStore`, the token and the new password.
-
-### Outputs
-
-None while deferred.
-
-### Observable effect
-
-None.
-
-### Enforces
-
-R0-23, Q19: no password is hashed or changed.
-
-### Errors
-
-`AuthenticationRejected`, before the token or the password is examined.
-
-### State impact
-
-None.
 
 ## `public_op:viewer_access.create_viewer`
 
@@ -4273,19 +3991,19 @@ Each is the accepted Factory spec, kept under the owner decision of
 2026-11-06 (current service behaviour accepted; technical decisions
 delegated):
 
-- **One operation per State 3 capability** (108) instead of per-module
-  tables. Added: the eleven repository schema
+- **One operation per State 3 capability** (108 in the accepted spec, 100
+  since 2026-11-07) instead of per-module tables. Added: the repository schema
   functions, `staff_bootstrap`, `staff_bootstrap_cli`, the seven
   `api_irregular` viewer endpoints, `transport_guard`, `runtime_settings`,
   `runtime`, `describe_viewer_session`, `sign_out_viewer`,
   `create_staff_account`, `resolve_staff_session`, `change_staff_password`
   and `perform_recovery_override` as routed operations (Factory
   `3080ef0dbe73`, `35a0a09ccbb1`, `38626cc7be12`, `6011ac93b143`).
-- **`staff_challenges` split from `staff_identity`** (Factory
-  `f12197b46a82`), and its operations inert (R0-23): the former outputs
-  `ChallengeIssueView` and `StaffAccount` are never produced; the email gateway
-  is uncalled. The former `create_staff_account` with a verification challenge
-  is the administrator activation of R0-19.
+- **No email challenges.** The accepted spec split them into
+  `staff_challenges` (Factory `f12197b46a82`) and kept its operations inert;
+  the owner removed them on 2026-11-07 with `deliver_email_message` and
+  `create_email_delivery_schema` (R0-23). The former `create_staff_account`
+  with a verification challenge is the administrator activation of R0-19.
 - **Narrow ports** instead of the `PortalStore` facade surface (Factory
   `af686d7364d2` … `88c1dbbcc3a6`); `PortalStore`, `PortalTransaction` and the
   repository classes are exported classes, not operations.
@@ -4304,6 +4022,7 @@ delegated):
   failures are one `BinaryAccessRejected`, a photo's are not.
 - **Errors are the closed exception set of the route table** instead of the
   former families `DomainValidationRejected` and `DomainConflict`.
-- **Route table** is `rules.http_router_backend` (56 routes, 49 table and 7
-  irregular) instead of the former `rules.http_route_catalog`; administrator
-  project discovery `GET /admin/projects` is added (R0-08).
+- **Route table** is `rules.http_router_backend` (50 routes: 43 table and 7
+  irregular; the accepted spec had 56 and 49 until the six challenge routes
+  left on 2026-11-07, R0-23) instead of the former `rules.http_route_catalog`;
+  administrator project discovery `GET /admin/projects` is added (R0-08).

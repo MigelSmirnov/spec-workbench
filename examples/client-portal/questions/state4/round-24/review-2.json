@@ -1,0 +1,130 @@
+{
+ "open_points": [
+  {
+   "unit": "40_flows.md:Status",
+   "subject": "bootstrap_first_administrator infrastructure failures",
+   "kind": "failure outcome missing",
+   "text": "Step 2 loads and validates runtime settings and step 4 opens and commits a database transaction, but the Errors section assigns exit codes only to confirmation mismatch, rejected identity input, and an already-completed bootstrap.",
+   "question": "What observable command outcome and exit code apply when runtime configuration, password hashing, schema creation, database opening, insertion, or commit fails?",
+   "options": [
+    "Map every infrastructure failure to one of the existing exit codes 1–3",
+    "Add or otherwise define a distinct infrastructure-failure command outcome"
+   ],
+   "default_guess": "Use a distinct nonzero infrastructure-failure exit code and disclose no sensitive detail.",
+   "witness": {
+    "initial": "The staff table is empty, but the configured SQLite database cannot be opened.",
+    "events": [
+     "The host operator supplies matching valid credentials.",
+     "staff_bootstrap_cli loads settings and invokes the bootstrap store.",
+     "staff_bootstrap_store fails while opening the database."
+    ],
+    "outcomes": [
+     "The command exits with code 2 by treating the failure as an input rejection.",
+     "The exception escapes or the command uses an unlisted infrastructure exit code."
+    ],
+    "observer": "The host operator and deployment script"
+   }
+  },
+  {
+   "unit": "40_flows.md:Status",
+   "subject": "change_staff_password rejection",
+   "kind": "failure outcome missing",
+   "text": "`change_staff_password` verifies the current password and stores the new hash, but the flow's Errors section gives no outcome for a wrong current password or a new password rejected by A16.",
+   "question": "How does the staff password-change route answer a wrong current password, and how does it answer an invalid new password?",
+   "options": [
+    "Conceal the wrong current password as authentication failure and return input rejection for an invalid new password",
+    "Return input rejection for both cases"
+   ],
+   "default_guess": "Return concealed 401 for a wrong current password and 422 for an invalid new password.",
+   "witness": {
+    "initial": "An active staff session exists for an account with password P.",
+    "events": [
+     "The holder submits a password-change request with current password X, where X is not P, and a valid new password.",
+     "staff_identity verifies the supplied current password and rejects it."
+    ],
+    "outcomes": [
+     "The route answers the concealed authentication failure, 401.",
+     "The route answers an input rejection, 422."
+    ],
+    "observer": "The authenticated staff caller"
+   }
+  },
+  {
+   "unit": "40_flows.md:Status",
+   "subject": "concurrent producer access change during snapshot import",
+   "kind": "failure outcome missing",
+   "text": "Step 3 says the import repeats authorization and classifies only an `archived`, `unknown` or `scope-denied` change, but it gives no outcome when the principal becomes disabled or its credential becomes revoked after step 1 or step 2.",
+   "question": "If producer authentication or principal status ceases to be valid between the route check and the import's repeated authorization, is the attempt unrecorded and raised, or classified into a fresh import result; and which error or reject reason applies?",
+   "options": [
+    "Raise an authentication or authorization failure and record no import result or audit",
+    "Create a rejected SnapshotImportRecord and snapshot.import audit using a specified reject reason"
+   ],
+   "default_guess": "Raise the concealed authentication failure and record nothing because M20 has no reject reason for a disabled principal or revoked credential.",
+   "witness": {
+    "initial": "An active producer has a valid bearer credential and is authorized to import for an active project.",
+    "events": [
+     "The producer request passes authentication and the route's first authorization.",
+     "An administrator disables the service principal before import_snapshot repeats authorization.",
+     "snapshot_import performs the repeated authorization."
+    ],
+    "outcomes": [
+     "The request fails without an import_id or audit record.",
+     "The attempt is classified, receives an import_id, and writes a rejected import audit."
+    ],
+    "observer": "The producer and an auditor"
+   }
+  },
+  {
+   "unit": "40_flows.md:Status",
+   "subject": "duplicate producer project grant",
+   "kind": "failure outcome missing",
+   "text": "`grant_producer_project` is described as validating and creating a grant, while its Errors section does not state the outcome for an already-active grant or for attempting the same pair after its terminal grant was revoked.",
+   "question": "What failure and HTTP result apply to a second ProducerProjectGrant for the same principal and project, both before and after revocation?",
+   "options": [
+    "Refuse an active duplicate as authorization rejection and let a post-revocation duplicate surface as persistence failure, matching the staff/viewer flows",
+    "Use one explicit conflict or validation outcome for both duplicate cases"
+   ],
+   "default_guess": "Match the documented staff/viewer behavior: 403 for an active duplicate and 500 for the unique-constraint failure after revocation.",
+   "witness": {
+    "initial": "A granted_projects service principal has a ProducerProjectGrant for project P, later revoked.",
+    "events": [
+     "An administrator requests another grant for the same principal and P.",
+     "service_identity reaches either an application duplicate check or the repository uniqueness constraint."
+    ],
+    "outcomes": [
+     "The route returns an explicit conflict or validation error without treating it as storage failure.",
+     "The unique `(service_principal_id, project_id)` constraint surfaces as persistence failure, 500."
+    ],
+    "observer": "The administrator"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "security-safe IAM administration responses",
+   "kind": "contradictory boundary output",
+   "text": "State 1 says, “These are the only IAM shapes serializable by HTTP handlers; persisted entities containing `password_hash`, `token_hash`, or `secret_hash` are never HTTP responses,” while State 4 declares outcomes such as “the revoked session,” `ClientViewer`, `ViewerCredentialIssue`, “the revoked credential,” `ProjectViewerGrant`, `ServicePrincipal`, `ServiceCredentialIssue`, and `ProducerProjectGrant`. Several have no listed security-safe response DTO.",
+   "question": "What exact security-safe HTTP result is returned for session, credential, assignment and grant creation or revocation operations whose State 4 outcome is a persisted entity but State 1 supplies no permitted response shape?",
+   "options": [
+    "Define safe response DTOs or no-content results for every such administration operation",
+    "Allow the persisted entities named by State 4 to cross the HTTP boundary despite State 1's allow-list"
+   ],
+   "default_guess": "Return an existing safe view where one exists and define minimal safe DTOs or no-content responses for the remaining operations; never serialize hashes.",
+   "witness": {
+    "initial": "A viewer has an active access credential containing `secret_hash`.",
+    "events": [
+     "An administrator invokes revoke_viewer_access.",
+     "viewer_access returns the revoked ViewerAccessCredential as State 4's outcome.",
+     "api constructs the HTTP response."
+    ],
+    "outcomes": [
+     "The API serializes the returned persisted credential, contrary to State 1's response allow-list and potentially exposing `secret_hash`.",
+     "The API returns a newly invented safe revocation projection or an empty success response."
+    ],
+    "observer": "The administrator HTTP client"
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"40_flows.md:Status\",\"subject\":\"bootstrap_first_administrator infrastructure failures\",\"kind\":\"failure outcome missing\",\"text\":\"Step 2 loads and validates runtime settings and step 4 opens and commits a database transaction, but the Errors section assigns exit codes only to confirmation mismatch, rejected identity input, and an already-completed bootstrap.\",\"question\":\"What observable command outcome and exit code apply when runtime configuration, password hashing, schema creation, database opening, insertion, or commit fails?\",\"options\":[\"Map every infrastructure failure to one of the existing exit codes 1–3\",\"Add or otherwise define a distinct infrastructure-failure command outcome\"],\"default_guess\":\"Use a distinct nonzero infrastructure-failure exit code and disclose no sensitive detail.\",\"witness\":{\"initial\":\"The staff table is empty, but the configured SQLite database cannot be opened.\",\"events\":[\"The host operator supplies matching valid credentials.\",\"staff_bootstrap_cli loads settings and invokes the bootstrap store.\",\"staff_bootstrap_store fails while opening the database.\"],\"outcomes\":[\"The command exits with code 2 by treating the failure as an input rejection.\",\"The exception escapes or the command uses an unlisted infrastructure exit code.\"],\"observer\":\"The host operator and deployment script\"}},{\"unit\":\"40_flows.md:Status\",\"subject\":\"change_staff_password rejection\",\"kind\":\"failure outcome missing\",\"text\":\"`change_staff_password` verifies the current password and stores the new hash, but the flow's Errors section gives no outcome for a wrong current password or a new password rejected by A16.\",\"question\":\"How does the staff password-change route answer a wrong current password, and how does it answer an invalid new password?\",\"options\":[\"Conceal the wrong current password as authentication failure and return input rejection for an invalid new password\",\"Return input rejection for both cases\"],\"default_guess\":\"Return concealed 401 for a wrong current password and 422 for an invalid new password.\",\"witness\":{\"initial\":\"An active staff session exists for an account with password P.\",\"events\":[\"The holder submits a password-change request with current password X, where X is not P, and a valid new password.\",\"staff_identity verifies the supplied current password and rejects it.\"],\"outcomes\":[\"The route answers the concealed authentication failure, 401.\",\"The route answers an input rejection, 422.\"],\"observer\":\"The authenticated staff caller\"}},{\"unit\":\"40_flows.md:Status\",\"subject\":\"concurrent producer access change during snapshot import\",\"kind\":\"failure outcome missing\",\"text\":\"Step 3 says the import repeats authorization and classifies only an `archived`, `unknown` or `scope-denied` change, but it gives no outcome when the principal becomes disabled or its credential becomes revoked after step 1 or step 2.\",\"question\":\"If producer authentication or principal status ceases to be valid between the route check and the import's repeated authorization, is the attempt unrecorded and raised, or classified into a fresh import result; and which error or reject reason applies?\",\"options\":[\"Raise an authentication or authorization failure and record no import result or audit\",\"Create a rejected SnapshotImportRecord and snapshot.import audit using a specified reject reason\"],\"default_guess\":\"Raise the concealed authentication failure and record nothing because M20 has no reject reason for a disabled principal or revoked credential.\",\"witness\":{\"initial\":\"An active producer has a valid bearer credential and is authorized to import for an active project.\",\"events\":[\"The producer request passes authentication and the route's first authorization.\",\"An administrator disables the service principal before import_snapshot repeats authorization.\",\"snapshot_import performs the repeated authorization.\"],\"outcomes\":[\"The request fails without an import_id or audit record.\",\"The attempt is classified, receives an import_id, and writes a rejected import audit.\"],\"observer\":\"The producer and an auditor\"}},{\"unit\":\"40_flows.md:Status\",\"subject\":\"duplicate producer project grant\",\"kind\":\"failure outcome missing\",\"text\":\"`grant_producer_project` is described as validating and creating a grant, while its Errors section does not state the outcome for an already-active grant or for attempting the same pair after its terminal grant was revoked.\",\"question\":\"What failure and HTTP result apply to a second ProducerProjectGrant for the same principal and project, both before and after revocation?\",\"options\":[\"Refuse an active duplicate as authorization rejection and let a post-revocation duplicate surface as persistence failure, matching the staff/viewer flows\",\"Use one explicit conflict or validation outcome for both duplicate cases\"],\"default_guess\":\"Match the documented staff/viewer behavior: 403 for an active duplicate and 500 for the unique-constraint failure after revocation.\",\"witness\":{\"initial\":\"A granted_projects service principal has a ProducerProjectGrant for project P, later revoked.\",\"events\":[\"An administrator requests another grant for the same principal and P.\",\"service_identity reaches either an application duplicate check or the repository uniqueness constraint.\"],\"outcomes\":[\"The route returns an explicit conflict or validation error without treating it as storage failure.\",\"The unique `(service_principal_id, project_id)` constraint surfaces as persistence failure, 500.\"],\"observer\":\"The administrator\"}},{\"unit\":\"context\",\"subject\":\"security-safe IAM administration responses\",\"kind\":\"contradictory boundary output\",\"text\":\"State 1 says, “These are the only IAM shapes serializable by HTTP handlers; persisted entities containing `password_hash`, `token_hash`, or `secret_hash` are never HTTP responses,” while State 4 declares outcomes such as “the revoked session,” `ClientViewer`, `ViewerCredentialIssue`, “the revoked credential,” `ProjectViewerGrant`, `ServicePrincipal`, `ServiceCredentialIssue`, and `ProducerProjectGrant`. Several have no listed security-safe response DTO.\",\"question\":\"What exact security-safe HTTP result is returned for session, credential, assignment and grant creation or revocation operations whose State 4 outcome is a persisted entity but State 1 supplies no permitted response shape?\",\"options\":[\"Define safe response DTOs or no-content results for every such administration operation\",\"Allow the persisted entities named by State 4 to cross the HTTP boundary despite State 1's allow-list\"],\"default_guess\":\"Return an existing safe view where one exists and define minimal safe DTOs or no-content responses for the remaining operations; never serialize hashes.\",\"witness\":{\"initial\":\"A viewer has an active access credential containing `secret_hash`.\",\"events\":[\"An administrator invokes revoke_viewer_access.\",\"viewer_access returns the revoked ViewerAccessCredential as State 4's outcome.\",\"api constructs the HTTP response.\"],\"outcomes\":[\"The API serializes the returned persisted credential, contrary to State 1's response allow-list and potentially exposing `secret_hash`.\",\"The API returns a newly invented safe revocation projection or an empty success response.\"],\"observer\":\"The administrator HTTP client\"}}]}",
+ "set_aside": []
+}

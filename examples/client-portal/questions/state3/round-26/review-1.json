@@ -1,0 +1,136 @@
+{
+ "open_points": [
+  {
+   "unit": "context",
+   "subject": "session and principal validation",
+   "kind": "double ownership",
+   "text": "`authorization_guard` owns “session validity, active principal” and “reads the persisted role and binds a session to its identity”; meanwhile `staff_identity` owns “resolution” of staff sessions, `viewer_access` owns viewer-session resolution, and `service_identity` owns bearer authentication. State 1 also says actor contexts are produced only by resolving a valid active session or credential.",
+   "question": "Does an identity module completely validate the session or credential and principal status, leaving `authorization_guard` to trust the resulting actor context, or must `authorization_guard` reload and revalidate those facts for every project operation?",
+   "options": [
+    "Identity modules are the sole owners of authentication validity; the guard trusts actor contexts.",
+    "The guard is the sole owner and identity modules only parse or identify credentials.",
+    "Identity modules authenticate initially and the guard independently revalidates current session, credential, role, and principal state."
+   ],
+   "default_guess": "Identity modules produce validated actor contexts, and the guard reloads only project scope and lifecycle facts.",
+   "witness": {
+    "initial": "A staff session is valid and its account is active.",
+    "events": [
+     "`staff_identity` resolves the session and returns a StaffActorContext.",
+     "An administrator suspends the account before the project operation reaches `authorization_guard`.",
+     "The staff request attempts an expense mutation."
+    ],
+    "outcomes": [
+     "The guard trusts the already-issued actor context and the mutation proceeds.",
+     "The guard reloads session/account state and refuses the mutation."
+    ],
+    "observer": "The staff caller and the administrator reviewing the resulting expense and audit records."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "producer project scope",
+   "kind": "overlapping owners and reversed dependency",
+   "text": "The decision table makes `service_identity` the primary owner of A12 and `authorization_guard` a consumer. `service_identity` owns “producer scope” and exposes `authorize_producer_scope`, while `authorization_guard` owns “project scope … producer grant” and exposes `authorize_snapshot_import`. The dependency order places `authorization_guard` before `service_identity`, and its `Knows` list does not include `service_identity`.",
+   "question": "Which module makes the authoritative `all_projects` versus active `ProducerProjectGrant` decision for snapshot import, and how may the other module use that decision without violating the declared dependency direction?",
+   "options": [
+    "`authorization_guard` owns and performs the scope decision; `authorize_producer_scope` is removed or limited to a non-authoritative helper.",
+    "`service_identity` owns the scope decision and `authorization_guard` must depend on it, changing the declared dependency direction.",
+    "Both check scope independently, with an explicit rule for which result and check time controls."
+   ],
+   "default_guess": "Keep the authoritative import-scope check in `authorization_guard` and limit `service_identity` to managing principals, credentials, and grants.",
+   "witness": {
+    "initial": "A `granted_projects` producer has a valid credential and an active grant for project P.",
+    "events": [
+     "An import request is authenticated.",
+     "One module checks the grant and accepts it.",
+     "An administrator revokes the grant before the other possible scope check.",
+     "The import continues."
+    ],
+    "outcomes": [
+     "The first accepted scope decision controls and the import is classified.",
+     "The later scope decision controls and the import is refused before classification."
+    ],
+    "observer": "The producer, which either receives an import result with an `import_id` or an access refusal with no record."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "binary-read authorization",
+   "kind": "impossible dependency",
+   "text": "A14 and “Binary content” say `expense_management` and `photo_management` re-check authenticated project access before producing `AuthorizedBinaryReference`. Their `Knows` lists omit `authorization_guard` and `registry_gateway`; `expense_management` knows only `models`, `financial_policy`, `binary_storage`, `audit_writer`, and `portal_store`, while `photo_management` knows only `models`, `binary_storage`, `audit_writer`, and `portal_store`. The HTTP modules, not the owning domain modules, are allowed to know `authorization_guard`.",
+   "question": "Who performs the required current project-access and Registry-lifecycle check for a document or photo read: the HTTP module before calling the owner, or the owning domain module; and if it is the owner, through what permitted dependency?",
+   "options": [
+    "The HTTP module obtains an AuthorizedProjectContext and the owner only checks object project and visibility against it.",
+    "The owner calls `authorization_guard`, requiring new declared dependencies.",
+    "The owner duplicates grant, session, capability, and lifecycle policy locally."
+   ],
+   "default_guess": "The HTTP module obtains an AuthorizedProjectContext; the owning module validates object project and visibility against that trusted context without duplicating authorization policy.",
+   "witness": {
+    "initial": "A viewer has a valid session and grant to a project containing a visible photo.",
+    "events": [
+     "`api_irregular` obtains an AuthorizedProjectContext while Registry is available.",
+     "Registry becomes unavailable before `photo_management.read_progress_photo` runs.",
+     "The viewer requests the photo bytes."
+    ],
+    "outcomes": [
+     "The owner treats the context as completed authorization, checks the photo locally, and returns the bytes.",
+     "The owner interprets “re-check access” as requiring a fresh lifecycle check and refuses because it cannot reach Registry."
+    ],
+    "observer": "The viewer and the Registry operator observing whether a second Registry call is made."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "missing expense-document binary",
+   "kind": "contradiction",
+   "text": "State 2 A14 says, “A missing source object is an explicit unavailable/not-found failure.” State 0 R0-12 says a refused expense-document read has the same concealed answer when “its stored content is missing, oversize or unlisted,” and State 3 assigns that concealment to `expense_management`.",
+   "question": "When an otherwise authorized expense document points to missing stored content, must the caller receive an explicit storage-unavailable/not-found error or the same concealed rejection used for unknown, cross-project, and hidden documents?",
+   "options": [
+    "Return an explicit unavailable/not-found storage failure as A14 states.",
+    "Return the concealed document-access rejection as R0-12 and State 3 state."
+   ],
+   "default_guess": "Use the concealed document-access rejection, because R0-12 is the more specific document policy and State 3 explicitly assigns it to `expense_management`.",
+   "witness": {
+    "initial": "A viewer is authorized for project P, the ExpenseDocument is client-visible, and its `file_ref` resolves to no file.",
+    "events": [
+     "The viewer requests the document by `document_id`.",
+     "Authorization and visibility checks pass.",
+     "`binary_storage` reports that the source object is missing."
+    ],
+    "outcomes": [
+     "The endpoint returns an explicit storage-unavailable/not-found failure under A14.",
+     "The endpoint returns the same concealed rejection as for an unknown or hidden document under R0-12."
+    ],
+    "observer": "The viewer, who can distinguish a known missing binary from an unknown or hidden document only in the first outcome."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "binary read limit configuration",
+   "kind": "split ownership",
+   "text": "`runtime_settings` owns loading and validating environment values once at startup, including “startup consistency of the binary bounds”; `binary_storage` nevertheless reads `BINARY_MAX_READ_BYTES` from the environment at every binary read. A14 also requires the storage read bound to be no larger than the response ceiling declared at startup. `binary_storage` cannot know `runtime_settings` or `transport_guard`, and `transport_guard` knows only `models`.",
+   "question": "If `BINARY_MAX_READ_BYTES` changes after startup, which value is authoritative, and which module ensures that the live storage bound remains no larger than the startup response ceiling?",
+   "options": [
+    "The startup RuntimeSettings value remains authoritative; per-call environment reads must equal it or are ignored.",
+    "The per-call environment value is authoritative, and each call rejects it if it exceeds the startup ceiling supplied to `binary_storage`.",
+    "The per-call environment value is authoritative even when it exceeds the startup ceiling."
+   ],
+   "default_guess": "Use the startup validated value for the process lifetime and do not allow a per-call reread to change the effective bound.",
+   "witness": {
+    "initial": "The service starts with a validated response ceiling and `BINARY_MAX_READ_BYTES` of 1 MB.",
+    "events": [
+     "A host operator changes the process-visible `BINARY_MAX_READ_BYTES` to 10 MB without restarting.",
+     "An authorized caller requests a valid 5 MB photo."
+    ],
+    "outcomes": [
+     "`binary_storage` follows the new per-call value and returns the 5 MB payload.",
+     "The startup ceiling remains authoritative, so the read is rejected or bounded at 1 MB."
+    ],
+    "observer": "The caller and the transport layer emitting or refusing the response."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"context\",\"subject\":\"session and principal validation\",\"kind\":\"double ownership\",\"text\":\"`authorization_guard` owns “session validity, active principal” and “reads the persisted role and binds a session to its identity”; meanwhile `staff_identity` owns “resolution” of staff sessions, `viewer_access` owns viewer-session resolution, and `service_identity` owns bearer authentication. State 1 also says actor contexts are produced only by resolving a valid active session or credential.\",\"question\":\"Does an identity module completely validate the session or credential and principal status, leaving `authorization_guard` to trust the resulting actor context, or must `authorization_guard` reload and revalidate those facts for every project operation?\",\"options\":[\"Identity modules are the sole owners of authentication validity; the guard trusts actor contexts.\",\"The guard is the sole owner and identity modules only parse or identify credentials.\",\"Identity modules authenticate initially and the guard independently revalidates current session, credential, role, and principal state.\"],\"default_guess\":\"Identity modules produce validated actor contexts, and the guard reloads only project scope and lifecycle facts.\",\"witness\":{\"initial\":\"A staff session is valid and its account is active.\",\"events\":[\"`staff_identity` resolves the session and returns a StaffActorContext.\",\"An administrator suspends the account before the project operation reaches `authorization_guard`.\",\"The staff request attempts an expense mutation.\"],\"outcomes\":[\"The guard trusts the already-issued actor context and the mutation proceeds.\",\"The guard reloads session/account state and refuses the mutation.\"],\"observer\":\"The staff caller and the administrator reviewing the resulting expense and audit records.\"}},{\"unit\":\"context\",\"subject\":\"producer project scope\",\"kind\":\"overlapping owners and reversed dependency\",\"text\":\"The decision table makes `service_identity` the primary owner of A12 and `authorization_guard` a consumer. `service_identity` owns “producer scope” and exposes `authorize_producer_scope`, while `authorization_guard` owns “project scope … producer grant” and exposes `authorize_snapshot_import`. The dependency order places `authorization_guard` before `service_identity`, and its `Knows` list does not include `service_identity`.\",\"question\":\"Which module makes the authoritative `all_projects` versus active `ProducerProjectGrant` decision for snapshot import, and how may the other module use that decision without violating the declared dependency direction?\",\"options\":[\"`authorization_guard` owns and performs the scope decision; `authorize_producer_scope` is removed or limited to a non-authoritative helper.\",\"`service_identity` owns the scope decision and `authorization_guard` must depend on it, changing the declared dependency direction.\",\"Both check scope independently, with an explicit rule for which result and check time controls.\"],\"default_guess\":\"Keep the authoritative import-scope check in `authorization_guard` and limit `service_identity` to managing principals, credentials, and grants.\",\"witness\":{\"initial\":\"A `granted_projects` producer has a valid credential and an active grant for project P.\",\"events\":[\"An import request is authenticated.\",\"One module checks the grant and accepts it.\",\"An administrator revokes the grant before the other possible scope check.\",\"The import continues.\"],\"outcomes\":[\"The first accepted scope decision controls and the import is classified.\",\"The later scope decision controls and the import is refused before classification.\"],\"observer\":\"The producer, which either receives an import result with an `import_id` or an access refusal with no record.\"}},{\"unit\":\"context\",\"subject\":\"binary-read authorization\",\"kind\":\"impossible dependency\",\"text\":\"A14 and “Binary content” say `expense_management` and `photo_management` re-check authenticated project access before producing `AuthorizedBinaryReference`. Their `Knows` lists omit `authorization_guard` and `registry_gateway`; `expense_management` knows only `models`, `financial_policy`, `binary_storage`, `audit_writer`, and `portal_store`, while `photo_management` knows only `models`, `binary_storage`, `audit_writer`, and `portal_store`. The HTTP modules, not the owning domain modules, are allowed to know `authorization_guard`.\",\"question\":\"Who performs the required current project-access and Registry-lifecycle check for a document or photo read: the HTTP module before calling the owner, or the owning domain module; and if it is the owner, through what permitted dependency?\",\"options\":[\"The HTTP module obtains an AuthorizedProjectContext and the owner only checks object project and visibility against it.\",\"The owner calls `authorization_guard`, requiring new declared dependencies.\",\"The owner duplicates grant, session, capability, and lifecycle policy locally.\"],\"default_guess\":\"The HTTP module obtains an AuthorizedProjectContext; the owning module validates object project and visibility against that trusted context without duplicating authorization policy.\",\"witness\":{\"initial\":\"A viewer has a valid session and grant to a project containing a visible photo.\",\"events\":[\"`api_irregular` obtains an AuthorizedProjectContext while Registry is available.\",\"Registry becomes unavailable before `photo_management.read_progress_photo` runs.\",\"The viewer requests the photo bytes.\"],\"outcomes\":[\"The owner treats the context as completed authorization, checks the photo locally, and returns the bytes.\",\"The owner interprets “re-check access” as requiring a fresh lifecycle check and refuses because it cannot reach Registry.\"],\"observer\":\"The viewer and the Registry operator observing whether a second Registry call is made.\"}},{\"unit\":\"context\",\"subject\":\"missing expense-document binary\",\"kind\":\"contradiction\",\"text\":\"State 2 A14 says, “A missing source object is an explicit unavailable/not-found failure.” State 0 R0-12 says a refused expense-document read has the same concealed answer when “its stored content is missing, oversize or unlisted,” and State 3 assigns that concealment to `expense_management`.\",\"question\":\"When an otherwise authorized expense document points to missing stored content, must the caller receive an explicit storage-unavailable/not-found error or the same concealed rejection used for unknown, cross-project, and hidden documents?\",\"options\":[\"Return an explicit unavailable/not-found storage failure as A14 states.\",\"Return the concealed document-access rejection as R0-12 and State 3 state.\"],\"default_guess\":\"Use the concealed document-access rejection, because R0-12 is the more specific document policy and State 3 explicitly assigns it to `expense_management`.\",\"witness\":{\"initial\":\"A viewer is authorized for project P, the ExpenseDocument is client-visible, and its `file_ref` resolves to no file.\",\"events\":[\"The viewer requests the document by `document_id`.\",\"Authorization and visibility checks pass.\",\"`binary_storage` reports that the source object is missing.\"],\"outcomes\":[\"The endpoint returns an explicit storage-unavailable/not-found failure under A14.\",\"The endpoint returns the same concealed rejection as for an unknown or hidden document under R0-12.\"],\"observer\":\"The viewer, who can distinguish a known missing binary from an unknown or hidden document only in the first outcome.\"}},{\"unit\":\"context\",\"subject\":\"binary read limit configuration\",\"kind\":\"split ownership\",\"text\":\"`runtime_settings` owns loading and validating environment values once at startup, including “startup consistency of the binary bounds”; `binary_storage` nevertheless reads `BINARY_MAX_READ_BYTES` from the environment at every binary read. A14 also requires the storage read bound to be no larger than the response ceiling declared at startup. `binary_storage` cannot know `runtime_settings` or `transport_guard`, and `transport_guard` knows only `models`.\",\"question\":\"If `BINARY_MAX_READ_BYTES` changes after startup, which value is authoritative, and which module ensures that the live storage bound remains no larger than the startup response ceiling?\",\"options\":[\"The startup RuntimeSettings value remains authoritative; per-call environment reads must equal it or are ignored.\",\"The per-call environment value is authoritative, and each call rejects it if it exceeds the startup ceiling supplied to `binary_storage`.\",\"The per-call environment value is authoritative even when it exceeds the startup ceiling.\"],\"default_guess\":\"Use the startup validated value for the process lifetime and do not allow a per-call reread to change the effective bound.\",\"witness\":{\"initial\":\"The service starts with a validated response ceiling and `BINARY_MAX_READ_BYTES` of 1 MB.\",\"events\":[\"A host operator changes the process-visible `BINARY_MAX_READ_BYTES` to 10 MB without restarting.\",\"An authorized caller requests a valid 5 MB photo.\"],\"outcomes\":[\"`binary_storage` follows the new per-call value and returns the 5 MB payload.\",\"The startup ceiling remains authoritative, so the read is rejected or bounded at 1 MB.\"],\"observer\":\"The caller and the transport layer emitting or refusing the response.\"}}]}",
+ "set_aside": []
+}

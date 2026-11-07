@@ -39,6 +39,12 @@ producer's grant (R0-21: it does not). Round-07 judged 1: the first
 administrator against "only administrators create staff accounts" (R0-14
 names the R0-07 exception).
 
+On 2026-11-07 the owner removed the staff email challenges from the product
+(R0-23): the portal has no email verification, email change or password-reset
+challenge, no email delivery boundary, and sends no email. The sentences that
+described the deferred challenges are removed or narrowed in place, citing
+R0-23; R0-03 is withdrawn by the same decision.
+
 ## Product statement
 
 Client Portal is a backend service with an HTTP JSON API that gives a
@@ -98,16 +104,13 @@ Revocation semantics:
 Operator and administrator accounts with full account-based authentication:
 
 - mandatory unique normalized email as login identifier plus password stored
-  only as a secure hash; an account authenticates only once its email is
-  verified, and an administrator's activation of a pending account marks it
-  verified (R0-19);
-- the email challenges — email verification by its holder, email change
-  confirmed at the new address, the password-reset token delivered by email —
-  and the token-free security notifications are designed (State 2 A10) but
-  deferred in the accepted service: their operations change nothing and send
-  nothing (R0-23, Q19);
+  only as a secure hash; an account authenticates only while it is active,
+  and an administrator activates a pending account (R0-19);
+- no email challenge and no email: the portal has no email verification, no
+  email change confirmed at a new address, no password-reset token and no
+  security notification, and sends no message to any address (R0-23);
 - an administrative recovery override exists only as an exceptional, heavily
-  audited process, never the primary mechanism (R0-20);
+  audited process (R0-20);
 - managed sessions with expiry, revocation, and sign-out-everywhere;
 - suspending or disabling an account invalidates its active sessions;
 - login failures never reveal whether an email exists.
@@ -309,9 +312,7 @@ Conceptual records (physical storage undecided at this state; decided by R0-10):
 
 - client viewers, viewer access credentials (verification form), viewer
   sessions, project viewer grants;
-- staff accounts, staff sessions; email verification challenges, pending
-  email changes, password-reset tokens (all challenge secrets in
-  verification form); email delivery records;
+- staff accounts, staff sessions;
 - service principals, service credentials (verification form), producer
   scopes;
 - manual budgets with ordered budget sections;
@@ -357,19 +358,6 @@ producer exists, projects use the manual source; connecting the producer
 later changes no portal architecture. Estimate calculation, mutable estimate
 lifecycle, and factura remain PresuPro/Holded concerns outside the portal.
 
-### Email Delivery Gateway
-
-Delivery-only boundary for staff-account mail: email-verification,
-email-change, and password-reset challenges plus security notifications,
-all deferred in the accepted service (R0-23), so the gateway is called by no
-operation of the running portal. The
-portal owns challenge creation, purpose binding, expiry, single-use
-semantics, revocation, rate limits, verification-form token storage, message
-kind and addressing, and audit; the gateway only delivers messages. The
-portal never trusts the gateway with authorization decisions or challenge
-validity, and delivery success or failure never counts as address
-confirmation.
-
 ## Explicit non-goals
 
 Client Portal does not:
@@ -387,7 +375,9 @@ Client Portal does not:
   separate integration);
 - store document or photo binaries inside business records;
 - use one shared secret for integrations or accept roles/capabilities from
-  request data.
+  request data;
+- send email or any other message to a staff member, a client or any address
+  (R0-23).
 
 ## Product invariants visible at State 0
 
@@ -401,9 +391,8 @@ Detailed ownership is deferred to later states.
    alone grants nothing. The operations without a session are those of R0-15.
 3. Viewer capabilities are read-only; roles and capabilities are never
    trusted request fields; no shared secrets; credentials, session tokens,
-   access tokens, challenge tokens, and passwords are stored only in
-   verification or hash form and never logged; challenge tokens are
-   purpose-bound, single-use, and time-limited.
+   access tokens, and passwords are stored only in verification or hash form
+   and never logged.
 4. Revoked membership/grant blocks new requests immediately; a disabled
    account or principal blocks everything; auth failures reveal neither
    account existence nor project data; all project-scoped queries are bounded
@@ -495,11 +484,13 @@ this few-project profile (former HANDOFF key decisions 1 and 14).
 `StaffAccount`, `ClientViewer` and `ServicePrincipal` as written under
 "Principals" (former HANDOFF key decision 2).
 
-### R0-03 — The Email Delivery Gateway is a mandatory external boundary (owner, 2026-07-18)
+### R0-03 — Withdrawn: no Email Delivery Gateway (owner 2026-11-07, replacing owner 2026-07-18)
 
-As written under "External systems — Email Delivery Gateway" (former HANDOFF
-key decision 3). Administrative recovery is an exceptional, heavily audited
-flow.
+The owner decision of 2026-07-18 (former HANDOFF key decision 3) made an Email
+Delivery Gateway a mandatory external boundary for the staff email challenges.
+The owner withdrew it on 2026-11-07 together with the challenges (R0-23): the
+portal has no email boundary. Administrative recovery stays an exceptional,
+heavily audited flow (R0-20).
 
 ### R0-04 — Snapshot import is a push contract owned by the portal (owner, 2026-07-18)
 
@@ -512,14 +503,13 @@ Backend and JSON API only; money is EUR, gross (IVA included), decimal,
 rounded half up to two places; an Expense is created only through OCR intake
 (former HANDOFF key decision 5; "Currency policy").
 
-### R0-06 — Sessions, self-service reset and configuration defaults (owner, 2026-07-19)
+### R0-06 — Sessions and configuration defaults (owner, 2026-07-19; narrowed by owner 2026-11-07)
 
-Sessions have a fixed expiry with no sliding renewal; a staff member may
-request a password reset without authentication, and the request never reveals
-whether the address exists; the defaults are a staff session of 12 hours, a
-viewer session of 30 days, email verification 72 hours, email change 24 hours,
-password reset 60 minutes, 5 challenges per hour per account, and password
-hashing with argon2id (former HANDOFF, "Product-owner confirmation received").
+Sessions have a fixed expiry with no sliding renewal; the defaults are a staff
+session of 12 hours, a viewer session of 30 days, and password hashing with
+argon2id (former HANDOFF, "Product-owner confirmation received"). The
+self-service password reset and the challenge lifetimes and rate limit the
+decision of 2026-07-19 also set were removed with the challenges (R0-23).
 This closes the session-lifetime item of "Unresolved decisions for later
 states".
 
@@ -527,7 +517,7 @@ states".
 
 An empty deployment cannot acquire its first operator through the API, because
 creating a staff account needs an authorized administrator. The host operator
-runs a local administrative command that creates exactly one active, verified
+runs a local administrative command that creates exactly one active
 administrator when no staff account exists, and is refused once any exists. The
 command is not an HTTP route and does not appear in the API description; the
 email and password are its inputs, read neither from process arguments nor
@@ -613,15 +603,11 @@ Resolves round-01 T12 and round-07 T9.
 ### R0-15 — Which operations need no session (owner 2026-11-06: current service behaviour accepted; technical decisions delegated)
 
 The common authorization rule binds project-scoped operations. Without a
-session the portal answers only: staff login, email-verification and
-email-change confirmation, password-reset request and completion, viewer entry
-with an access link, and the liveness and readiness checks (R0-06, R0-11).
-Staff login proves the account's credentials and viewer entry proves the
-capability secret of the access link. While the email challenges are deferred
-(R0-23), the email-verification and email-change confirmations and
-password-reset completion accept no token as authority: each answers with the
-concealed authentication rejection; the password-reset request answers as
-usual and does nothing; the liveness and readiness checks disclose nothing.
+session the portal answers only: staff login, viewer entry with an access
+link, and the liveness and readiness checks (R0-11). Staff login proves the
+account's credentials and viewer entry proves the capability secret of the
+access link; the liveness and readiness checks disclose nothing. The portal
+has no email-challenge or password-reset operation (R0-23).
 Producer operations authenticate with the bearer credential of R0-09.
 Resolves round-01 T7 and round-04 T3.
 
@@ -629,7 +615,7 @@ Resolves round-01 T7 and round-04 T3.
 
 Budget, snapshot, expense, progress, payment and photo records, grants and
 assignments each belong to exactly one Registry project. Principals, their
-sessions, credentials and challenges, email deliveries and the first
+sessions and credentials and the first
 administrator created by R0-07 belong to no project; an audit record names a
 project when its action has one. Resolves round-01 T17.
 
@@ -660,22 +646,19 @@ password the administrator chooses and submits in that creation request; the
 account is `pending_verification`, and the portal keeps only the password's
 hash. The administrator hands the initial password to the holder outside the
 portal: no portal answer or message carries it back, and nothing logs it.
-While the email challenges are deferred
-(R0-23), the administrator then activates the account
-(`pending_verification` → `active`), which marks its email verified; the
-holder logs in with the initial password and changes it (accepted contracts
-`create_staff_account`, `change_staff_status`, `change_staff_password`).
-Resolves round-01 T32, round-03 T23 and round-04 T31; the text of round-02 had the holder
-confirm the email through a challenge, which the accepted service does not
-carry out.
+The administrator then activates the account (`pending_verification` →
+`active`); the holder logs in with the initial password and changes it
+(accepted contracts `create_staff_account`, `change_staff_status`,
+`change_staff_password`). No email is sent and no challenge is confirmed on
+the way (R0-23). Resolves round-01 T32, round-03 T23 and round-04 T31.
 
 ### R0-20 — The recovery override replaces the login email (owner 2026-11-06: current service behaviour accepted; technical decisions delegated)
 
 The exceptional recovery override is an administrator action that replaces a
-staff account's login email with a given address, marks it verified, and is
-audited as `staff.recovery_override` atomically with the change; it is never
-the ordinary email-change path (accepted contract
-`perform_recovery_override`). No product operation recovers a sole administrator who has lost both password
+staff account's login email with a given address, sets its "email verified" mark (R0-23), and is
+audited as `staff.recovery_override` atomically with the change; it is the
+one operation that changes a login email, and an exceptional one (accepted
+contract `perform_recovery_override`). No product operation recovers a sole administrator who has lost both password
 and email: the bootstrap command of R0-07 refuses once any staff account
 exists, and such a recovery stays a host-level operation outside the product
 (owner 2026-11-06: current service behaviour accepted; technical decisions
@@ -698,17 +681,29 @@ A snapshot's planned amounts are already gross (IVA included); its `tax_mode`
 is stored as provenance and never triggers recalculation (former State 1
 decision 3, State 2 R9). Resolves round-01 T1.
 
-### R0-23 — Email challenges and notices are deferred (owner 2026-11-06: current service behaviour accepted; technical decisions delegated)
+### R0-23 — No staff email challenges and no email (owner 2026-11-07)
 
-In the accepted spec (sha256 `459ac96c…`) the challenge operations "remain
-inert while StaffChallengeRepository is deferred": issuing an email
-verification, confirming it, requesting and confirming an email change, and
-completing a password reset each answer with the concealed authentication
-rejection and read, write, audit and deliver nothing; a password-reset request
-answers as usual and does nothing. No token-free notice is sent. Building
-them is a missing feature, outside the migration (`open_questions.md` Q19).
-The policy of State 2 A10 stays the design these operations follow once they
-are built.
+The owner decided on 2026-11-07 to remove the staff email challenge feature
+because no email is ever needed (the decision in the owner's words:
+`SOURCE.md`, deviation of 2026-11-07). The portal therefore has no email
+verification, no email change confirmed at a new address, no password reset,
+no security notification and no email delivery, and sends no email to any
+address. A staff account's email is its login identifier only. The principals,
+staff roles, staff login and logout, staff administration, viewers, producers
+and the first-administrator command are unchanged.
+
+A staff account keeps a recorded "email verified" mark: the administrator's
+activation, the first administrator's creation (R0-07) and the recovery
+override (R0-20) set it, and the account view shows it. The mark grants and
+refuses nothing; an account signs in while it is active.
+
+A staff member who has lost the password has no recovery inside the product:
+the password changes only through its holder presenting the current one.
+
+This replaces the decision of 2026-11-06 that kept the challenges as a
+deferred feature (accepted spec sha256 `459ac96c…`, where they answered with
+the concealed rejection and changed nothing) and closes `open_questions.md`
+Q19.
 
 ### R0-24 — Archival freezes a project's records, not the revocation of access to it (owner 2026-11-06: current service behaviour accepted; technical decisions delegated)
 
@@ -763,7 +758,8 @@ idempotent replay with a new `import_id` naming the same accepted snapshot
 ## Open questions
 
 Recorded in `open_questions.md`; none is designed by this migration (owner,
-2026-11-06).
+2026-11-06). Q19, the email challenges, is closed by the owner's removal of
+2026-11-07 (R0-23).
 
 - Q10 — recovery after a lost one-time service credential response.
 - Q11 — what turns an accepted snapshot into a candidate budget version for
@@ -774,8 +770,6 @@ Recorded in `open_questions.md`; none is designed by this migration (owner,
   code already revokes the earlier ones).
 - Q14 — replay-safe onboarding of a client.
 - Q16 — the estimate box for the client's own chat agent.
-- Q19 — the email challenges and security notices the accepted service does
-  not carry out (R0-23).
 - Q20 — recording snapshot import attempts the import route refuses on
   access (R0-25).
 - Still open from the authoring pass of 2026-07-19: staff MFA; administrative

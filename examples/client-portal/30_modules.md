@@ -19,6 +19,12 @@ accepted spec disagree, the accepted spec is kept (owner 2026-11-06: current
 service behaviour accepted; technical decisions delegated); every such case is
 listed in "Changes against the former text" below.
 
+On 2026-11-07 the owner removed the staff email challenges (`00_product.md`
+R0-23). Three modules leave with them: `staff_challenges` (added by the
+Factory), the repository `email_delivery_repository` (one of the eleven) and
+`email_delivery_gateway` (one of the former 20). The case runs 36 modules: 19
+of the former text and 17 added ones, ten of them repositories.
+
 A module owns one hidden mechanism and has one reason to change; its public
 surface is smaller than what it hides. Each accepted decision has one primary
 owner, the module that holds the decision's central mechanism, and consumers,
@@ -31,21 +37,21 @@ the one mapping; `30_trace.json` records the same:
 |---|---|---|
 | A1 | `authorization_guard` | `models`, `staff_identity`, `viewer_access`, `service_identity` |
 | A2 | `authorization_guard` | `models`, `staff_identity`, `service_identity` |
-| A3 | `staff_identity` | `viewer_access`, `service_identity`, `budget_management`, `staff_challenges`, `staff_access_repository` |
+| A3 | `staff_identity` | `viewer_access`, `service_identity`, `budget_management`, `staff_access_repository` |
 | A4 | `authorization_guard` | `registry_gateway`, `api`, `api_irregular` |
 | A5 | `authorization_guard` | `registry_gateway`, `staff_identity`, `viewer_access`, `service_identity`, `derived_views` |
 | A6 | `registry_gateway` | `authorization_guard`, `derived_views` |
 | A7 | `snapshot_import` | `expense_intake` |
 | A8 | `snapshot_import` | `expense_intake`, `project_tracking`, `photo_management`, `progress_photo_repository` |
 | A9 | `financial_policy` | `expense_intake`, `expense_management`, `snapshot_import`, `budget_management`, `project_tracking`, `derived_views` |
-| A10 | `staff_challenges` | `credential_security`, `email_delivery_gateway`, `staff_identity`, `email_delivery_repository` |
-| A11 | `authorization_guard` | `staff_identity`, `viewer_access`, `service_identity`, `staff_challenges` |
+| A10 | `staff_identity` | — |
+| A11 | `authorization_guard` | `staff_identity`, `viewer_access`, `service_identity` |
 | A12 | `service_identity` | `authorization_guard`, `snapshot_import` |
-| A13 | `audit_writer` | `audit_repository`, `staff_identity`, `staff_challenges`, `viewer_access`, `service_identity`, `snapshot_import`, `budget_management`, `expense_intake`, `expense_management`, `project_tracking`, `photo_management`, `staff_bootstrap` |
+| A13 | `audit_writer` | `audit_repository`, `staff_identity`, `viewer_access`, `service_identity`, `snapshot_import`, `budget_management`, `expense_intake`, `expense_management`, `project_tracking`, `photo_management`, `staff_bootstrap` |
 | A14 | `binary_storage` | `expense_management`, `photo_management`, `api`, `api_irregular`, `runtime_settings`, `transport_guard` |
 | A15 | `derived_views` | `registry_gateway` |
-| A16 | `staff_identity` | `staff_access_repository`, `staff_challenges`, `staff_bootstrap` |
-| A17 | `credential_security` | `staff_identity`, `staff_challenges`, `viewer_access`, `service_identity` |
+| A16 | `staff_identity` | `staff_access_repository`, `staff_bootstrap` |
+| A17 | `credential_security` | `staff_identity`, `viewer_access`, `service_identity` |
 | A18 | `budget_management` | `snapshot_import`, `derived_views`, `budget_repository`, `snapshot_import_repository`, `project_section_repository` |
 | A19 | `expense_management` | `expense_intake`, `derived_views`, `budget_management` |
 | A20 | `project_tracking` | `photo_management` |
@@ -58,7 +64,7 @@ the one mapping; `30_trace.json` records the same:
 | A27 | `derived_views` | — |
 | A28 | cross-cutting | every module that writes a timestamp (listed in `30_trace.json`) |
 | A29 | `staff_bootstrap` | `staff_bootstrap_store`, `staff_bootstrap_cli`, `staff_identity`, `credential_security` |
-| A30 | `runtime_settings` | `registry_gateway`, `email_delivery_gateway`, `staff_identity`, `staff_challenges`, `viewer_access`, `credential_security`, `binary_storage`, the eleven repositories, `staff_bootstrap_store` |
+| A30 | `runtime_settings` | `registry_gateway`, `staff_identity`, `viewer_access`, `credential_security`, `binary_storage`, the ten repositories, `staff_bootstrap_store` |
 | A31 | evidence record | — |
 | A32 | deployment process | — |
 
@@ -79,17 +85,15 @@ models
 credential_security, financial_policy
 audit_repository, project_tracking_repository, project_section_repository,
   budget_repository, snapshot_import_repository, expense_repository,
-  progress_photo_repository, email_delivery_repository,
-  staff_access_repository, viewer_access_repository,
+  progress_photo_repository, staff_access_repository, viewer_access_repository,
   service_identity_repository
 portal_store
 staff_bootstrap_store
-registry_gateway, email_delivery_gateway, binary_storage
+registry_gateway, binary_storage
 audit_writer
 authorization_guard
 staff_identity
 staff_bootstrap
-staff_challenges
 viewer_access, service_identity
 snapshot_import, budget_management
 expense_management
@@ -122,7 +126,7 @@ assertion that every module imports every earlier one.
   (A30); the table and column layout is the persistence closure's.
 - **Transactions.** The use case that owns an operation opens its transaction
   through `portal_store`, closes it exactly once and guards it as A22 requires.
-  Registry and email network I/O happen outside any open portal transaction;
+  Registry network I/O happens outside any open portal transaction;
   an authorization check that opens its own transaction completes before the
   caller opens one, never inside it.
 - **Audit.** The use case that owns a significant action builds its
@@ -171,17 +175,14 @@ delegated):
   `kind: interface` materialization"; it did (Factory `af686d7364d2` …
   `62c73965adb8`, `ced617bd55c9` … `88c1dbbcc3a6`). Persistence is sqlite3,
   not SQLAlchemy (Factory `d1280708714f`).
-- **`staff_challenges` split from `staff_identity`** (Factory
-  `f12197b46a82`): email verification, email change and password reset
-  leave `staff_identity`.
-- **Email challenges deferred, notices without a sender.** In the accepted
-  spec the challenge operations of `staff_challenges` "remain inert while
-  StaffChallengeRepository is deferred" (`00_product.md` R0-23), and the
-  former `staff_identity` capability `send_staff_security_notice` and the
-  token-free notice kinds of A10 (A11 "security notice sent") have no sending
-  function; `EmailMessageKind` keeps the members. No module sends a notice.
-  The running service is kept; building both is a missing feature for the
-  owner (`open_questions.md` Q19).
+- **No email challenges, no email modules** (owner 2026-11-07,
+  `00_product.md` R0-23). The accepted spec split the challenges into
+  `staff_challenges` (Factory `f12197b46a82`) and kept them inert while
+  `StaffChallengeRepository` was deferred; the former `staff_identity`
+  capability `send_staff_security_notice` had no sending function. The owner
+  removed the feature: `staff_challenges`, `email_delivery_gateway`,
+  `email_delivery_repository`, `send_staff_security_notice` and every
+  challenge and delivery model leave the design. No module sends email.
 - **Renamed or reshaped capabilities**, as accepted: `authorize_project_read`
   is `authorize_staff_project_read` and `authorize_viewer_project_read`;
   `authorize_project_mutation` is `authorize_staff_project_mutation`;
@@ -214,7 +215,7 @@ Nothing.
 
 ### Must not own
 
-Repository lookup, runtime configuration, Registry, email or storage I/O,
+Repository lookup, runtime configuration, Registry or storage I/O,
 authorization, cross-record uniqueness or any lifecycle transition.
 
 ### Depth assessment
@@ -529,46 +530,13 @@ create_progress_photo_schema
 SqliteProgressPhotoRepository
 ```
 
-## `email_delivery_repository`
-
-### Owns
-
-The SQLite implementation of the `EmailDeliveryRepository` port (the port itself is a `models` interface): EmailDeliveryRecord rows, the delivery
-telemetry of A10. Factory `e12ed74d6628`.
-
-### Knows
-
-`models`.
-
-### Must not own
-
-Challenge validity, provider calls or any transaction.
-
-### Hides
-
-SQL, row shape and serialization of delivery rows.
-
-### Depth assessment
-
-- kind: deep
-- hidden mechanism: the email-delivery table on a borrowed connection
-
-### Candidate public capabilities
-
-```text
-create_email_delivery_schema
-SqliteEmailDeliveryRepository
-```
-
 ## `staff_access_repository`
 
 ### Owns
 
 The SQLite implementation of the `StaffAccessRepository` port (the port itself is a `models` interface): staff accounts, staff sessions and
 assignments, with the storage form of A16 (exact match on the normalized
-email) and of the assignment uniqueness of A3. Factory `fd7905625fe7`. The
-`StaffChallengeRepository` port of State 1 has no implementation in the
-accepted spec; it is the deferred part of R0-23.
+email) and of the assignment uniqueness of A3. Factory `fd7905625fe7`.
 
 ### Knows
 
@@ -672,7 +640,7 @@ hands out. `rules.persistence_backend` (Factory `d1280708714f`).
 
 ### Knows
 
-`models` and the eleven repositories.
+`models` and the ten repositories.
 
 ### Must not own
 
@@ -769,42 +737,6 @@ RegistryBoundaryError
 list_active_projects
 validate_project_reference
 get_project_context
-```
-
-## `email_delivery_gateway`
-
-### Owns
-
-Delivery-only communication with the configured email gateway (A10, A30):
-record the pending delivery and commit it, call the provider with no
-transaction open, record the accepted or failed outcome, and translate a
-provider failure to `EmailDeliveryError`. Its only caller is
-`staff_challenges`, deferred in the accepted service (R0-23).
-
-### Knows
-
-`models`, `portal_store`.
-
-### Must not own
-
-Challenge issue or validity, account existence, authorization or token
-storage. Accepted delivery is never verified ownership.
-
-### Hides
-
-The provider request, its timeout and the two-transaction recording around
-it.
-
-### Depth assessment
-
-- kind: deep
-- hidden mechanism: delivery attempt recording around one provider call
-
-### Candidate public capabilities
-
-```text
-EmailDeliveryError
-deliver_email_message
 ```
 
 ## `binary_storage`
@@ -932,10 +864,10 @@ authorize_snapshot_import
 
 A16 and the staff rows of A3 and A11: staff account creation by an
 administrator, login and staff session issue, resolution and sign-out,
-session revocation, status transitions with their cascade (sessions and
-outstanding challenges revoked), password change, project assignment and its
-revocation, and the administrative recovery override (Factory
-`3080ef0dbe73`). Session TTL is A30's.
+session revocation, status transitions with their cascade (sessions
+revoked), password change, project assignment and its revocation, and the
+administrative recovery override, the one replacement of a login email (A10,
+Factory `3080ef0dbe73`). Session TTL is A30's.
 
 ### Knows
 
@@ -944,9 +876,9 @@ revocation, and the administrative recovery override (Factory
 
 ### Must not own
 
-Email challenges (`staff_challenges`), email transport, project
-authorization, viewer or service credentials, HTTP cookies or headers, or
-role-capability tables. It sends no notice.
+Sending email or any other message (the portal sends none, A10), project
+authorization, viewer or service credentials, HTTP cookies or headers, or role-capability tables. It
+sends no notice.
 
 ### Hides
 
@@ -1008,54 +940,6 @@ the password.
 ```text
 bootstrap_first_administrator
 BootstrapAlreadyCompleted
-```
-
-## `staff_challenges`
-
-### Owns
-
-A10: email verification, email change and password reset challenges —
-purpose binding, TTL, single use, revocation of outstanding challenges of the
-same purpose, per-account rate limit, existence-hiding answers, and delivery
-after commit through `email_delivery_gateway` whose outcome never affects
-validity. Factory `f12197b46a82`.
-
-In the accepted service its public operations are deferred (R0-23): each
-answers the concealed rejection, or nothing for a password-reset request, and
-reads, writes, audits and delivers nothing. The mechanism above is the design
-they follow once built (Q19); the surface is the accepted one.
-
-### Knows
-
-`models`, `credential_security`, `authorization_guard`, `audit_writer`,
-`portal_store`, `email_delivery_gateway`, `staff_identity`.
-
-### Must not own
-
-Email provider transport, staff sessions, account status or the token-free
-notices (no module sends them; Q19).
-
-### Hides
-
-Challenge issue and consumption per purpose, message construction and the
-after-commit delivery.
-
-### Depth assessment
-
-- kind: deep
-- hidden mechanism: purpose-bound single-use email challenges
-
-### Candidate public capabilities
-
-```text
-ChallengeRejected
-ChallengeRateLimited
-issue_email_verification
-confirm_email_verification
-request_email_change
-confirm_email_change
-request_password_reset
-complete_password_reset
 ```
 
 ## `viewer_access`
@@ -1469,7 +1353,7 @@ version and the administrator project list are the accepted ones (Factory
 `models`, `staff_identity`, `viewer_access`, `service_identity`,
 `authorization_guard`, `snapshot_import`, `budget_management`,
 `expense_intake`, `expense_management`, `project_tracking`,
-`photo_management`, `derived_views`, `portal_store`, `staff_challenges`,
+`photo_management`, `derived_views`, `portal_store`,
 `financial_policy`, `registry_gateway`, `api_irregular` (the running router
 mounts the seven viewer endpoints, Factory code `api/router.py` 22; the
 accepted `imports.module_internal` lacks this edge, see `SOURCE.md`).
@@ -1487,7 +1371,7 @@ Framework request and response mechanics.
 ### Depth assessment
 
 - kind: facade
-- delegates to: `staff_identity`, `staff_challenges`, `viewer_access`,
+- delegates to: `staff_identity`, `viewer_access`,
   `service_identity`, `authorization_guard`, `snapshot_import`,
   `budget_management`, `expense_intake`, `expense_management`,
   `project_tracking`, `photo_management`, `derived_views`

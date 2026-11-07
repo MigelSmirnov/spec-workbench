@@ -1,0 +1,153 @@
+{
+ "open_points": [
+  {
+   "unit": "40_flows.md:Status",
+   "subject": "bootstrap_first_administrator infrastructure failures",
+   "kind": "unmapped failure",
+   "text": "It resolves the database through capability:runtime_settings.load_runtime_settings and builds the bootstrap store. ... Exit codes are a closed external contract: 0 account created, 1 confirmation did not match, 2 identity input rejected, 3 bootstrap already completed.",
+   "question": "What outcome and exit code apply when runtime settings cannot be loaded or the bootstrap database/schema transaction fails?",
+   "options": [
+    "Map the failure to one of exit codes 1–3",
+    "Add a distinct infrastructure-failure exit code",
+    "Let the command terminate without a contract exit code"
+   ],
+   "default_guess": "Add a distinct nonzero infrastructure-failure exit code.",
+   "witness": {
+    "initial": "The staff table is empty, but the configured database cannot be opened.",
+    "events": [
+     "The host operator supplies matching valid email and password inputs.",
+     "staff_bootstrap_cli loads settings and constructs the bootstrap store.",
+     "staff_bootstrap_store fails while opening the database before checking emptiness."
+    ],
+    "outcomes": [
+     "The CLI maps the storage failure to one of the documented exit codes.",
+     "The CLI propagates the failure or uses a new, undocumented exit code."
+    ],
+    "observer": "The host operator and deployment script"
+   }
+  },
+  {
+   "unit": "40_flows.md:Status",
+   "subject": "change_staff_password current-password rejection",
+   "kind": "unstated failure outcome",
+   "text": "capability:staff_identity.change_staff_password verifies the current password and stores the new hash",
+   "question": "What declared failure and HTTP outcome result when an authenticated holder presents an incorrect current password?",
+   "options": [
+    "Concealed authentication failure (401)",
+    "Input rejection (422)",
+    "Authorization failure (403)"
+   ],
+   "default_guess": "Concealed authentication failure (401).",
+   "witness": {
+    "initial": "An active staff account has a valid session and password P.",
+    "events": [
+     "The holder calls the password-change route through that valid session.",
+     "The holder supplies an incorrect current password Q and a valid new password."
+    ],
+    "outcomes": [
+     "The request receives the concealed 401 authentication answer.",
+     "The request receives a 422 validation answer."
+    ],
+    "observer": "The authenticated staff caller"
+   }
+  },
+  {
+   "unit": "40_flows.md:Status",
+   "subject": "revoke_staff_sessions target existence",
+   "kind": "unstated failure outcome",
+   "text": "An administrator, checked by capability:authorization_guard.authorize_access_management, calls capability:staff_identity.revoke_staff_sessions for one account",
+   "question": "What happens when the supplied staff_id names no account?",
+   "options": [
+    "Return not found (404)",
+    "Succeed with revoked_session_count = 0",
+    "Return an input or authorization rejection"
+   ],
+   "default_guess": "Return not found (404).",
+   "witness": {
+    "initial": "An administrator has a valid session; no staff account has id X.",
+    "events": [
+     "The administrator calls revoke_staff_sessions for X."
+    ],
+    "outcomes": [
+     "The operation rejects X as not found and writes no audit.",
+     "The operation succeeds with a zero revocation count and appends staff.sessions_revoke."
+    ],
+    "observer": "The administrator and the audit reader"
+   }
+  },
+  {
+   "unit": "40_flows.md:Status",
+   "subject": "duplicate active ProducerProjectGrant",
+   "kind": "unstated failure outcome",
+   "text": "capability:service_identity.grant_producer_project requires the project known and active ... and appends producer_grant.create",
+   "question": "Which declared failure and HTTP status apply when the principal already has an active grant for that project?",
+   "options": [
+    "Authorization rejection (403), matching the other active duplicate grant/assignment flows",
+    "Conflict (409)",
+    "Input rejection (422)"
+   ],
+   "default_guess": "Authorization rejection (403), matching the viewer-grant and staff-assignment flows.",
+   "witness": {
+    "initial": "An active granted_projects producer already has an active grant for project P.",
+    "events": [
+     "An administrator calls grant_producer_project again for the same producer and P."
+    ],
+    "outcomes": [
+     "The operation refuses the active duplicate as an authorization rejection (403).",
+     "The operation refuses it as a domain conflict (409)."
+    ],
+    "observer": "The administrator calling the API"
+   }
+  },
+  {
+   "unit": "40_flows.md:Status",
+   "subject": "invalid ServicePrincipal status transition",
+   "kind": "unstated failure outcome",
+   "text": "capability:service_identity.change_service_principal_status disables or enables it",
+   "question": "What declared failure and HTTP outcome apply when the requested change is outside the A3 transition table, such as disabling an already disabled principal?",
+   "options": [
+    "Input rejection (422), matching invalid staff transitions",
+    "Conflict (409)",
+    "Idempotent success with no transition"
+   ],
+   "default_guess": "Input rejection (422).",
+   "witness": {
+    "initial": "Service principal S is disabled.",
+    "events": [
+     "An administrator requests that S be disabled again."
+    ],
+    "outcomes": [
+     "The request is rejected as invalid input (422), because A3 rejects transitions outside its table.",
+     "The request is treated as an idempotent success or as a conflict (409)."
+    ],
+    "observer": "The administrator and the audit reader"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "get_snapshot_import_result authorization path",
+   "kind": "ambiguous contradiction",
+   "text": "The route calls capability:service_identity.authorize_producer_scope ... then capability:authorization_guard.authorize_snapshot_import ... capability:snapshot_import.get_snapshot_import_result returns a record only to the principal that made it.",
+   "question": "Are the scope, project-grant and Registry checks in steps 2–3 limited to publication, or are they also applied to the import-result read route despite R0-21 and A4 saying that read rechecks neither grant nor Registry?",
+   "options": [
+    "Result reads authenticate the bearer and check record ownership only",
+    "Result reads also repeat producer scope, project grant and Registry lifecycle checks"
+   ],
+   "default_guess": "Apply steps 2–5 only to publication; result reads use bearer authentication plus ownership only.",
+   "witness": {
+    "initial": "Producer S created import result I for project P; afterward its grant for P was revoked and P was archived.",
+    "events": [
+     "S presents a still-usable credential and requests I by import_id."
+    ],
+    "outcomes": [
+     "R0-21/A4 return I because S made the import and result reads do not recheck the grant or Registry.",
+     "A literal application of flow steps 2–3 refuses the request because S no longer has project scope or P is archived."
+    ],
+    "observer": "The producer reading its prior import result"
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"40_flows.md:Status\",\"subject\":\"bootstrap_first_administrator infrastructure failures\",\"kind\":\"unmapped failure\",\"text\":\"It resolves the database through capability:runtime_settings.load_runtime_settings and builds the bootstrap store. ... Exit codes are a closed external contract: 0 account created, 1 confirmation did not match, 2 identity input rejected, 3 bootstrap already completed.\",\"question\":\"What outcome and exit code apply when runtime settings cannot be loaded or the bootstrap database/schema transaction fails?\",\"options\":[\"Map the failure to one of exit codes 1–3\",\"Add a distinct infrastructure-failure exit code\",\"Let the command terminate without a contract exit code\"],\"default_guess\":\"Add a distinct nonzero infrastructure-failure exit code.\",\"witness\":{\"initial\":\"The staff table is empty, but the configured database cannot be opened.\",\"events\":[\"The host operator supplies matching valid email and password inputs.\",\"staff_bootstrap_cli loads settings and constructs the bootstrap store.\",\"staff_bootstrap_store fails while opening the database before checking emptiness.\"],\"outcomes\":[\"The CLI maps the storage failure to one of the documented exit codes.\",\"The CLI propagates the failure or uses a new, undocumented exit code.\"],\"observer\":\"The host operator and deployment script\"}},{\"unit\":\"40_flows.md:Status\",\"subject\":\"change_staff_password current-password rejection\",\"kind\":\"unstated failure outcome\",\"text\":\"capability:staff_identity.change_staff_password verifies the current password and stores the new hash\",\"question\":\"What declared failure and HTTP outcome result when an authenticated holder presents an incorrect current password?\",\"options\":[\"Concealed authentication failure (401)\",\"Input rejection (422)\",\"Authorization failure (403)\"],\"default_guess\":\"Concealed authentication failure (401).\",\"witness\":{\"initial\":\"An active staff account has a valid session and password P.\",\"events\":[\"The holder calls the password-change route through that valid session.\",\"The holder supplies an incorrect current password Q and a valid new password.\"],\"outcomes\":[\"The request receives the concealed 401 authentication answer.\",\"The request receives a 422 validation answer.\"],\"observer\":\"The authenticated staff caller\"}},{\"unit\":\"40_flows.md:Status\",\"subject\":\"revoke_staff_sessions target existence\",\"kind\":\"unstated failure outcome\",\"text\":\"An administrator, checked by capability:authorization_guard.authorize_access_management, calls capability:staff_identity.revoke_staff_sessions for one account\",\"question\":\"What happens when the supplied staff_id names no account?\",\"options\":[\"Return not found (404)\",\"Succeed with revoked_session_count = 0\",\"Return an input or authorization rejection\"],\"default_guess\":\"Return not found (404).\",\"witness\":{\"initial\":\"An administrator has a valid session; no staff account has id X.\",\"events\":[\"The administrator calls revoke_staff_sessions for X.\"],\"outcomes\":[\"The operation rejects X as not found and writes no audit.\",\"The operation succeeds with a zero revocation count and appends staff.sessions_revoke.\"],\"observer\":\"The administrator and the audit reader\"}},{\"unit\":\"40_flows.md:Status\",\"subject\":\"duplicate active ProducerProjectGrant\",\"kind\":\"unstated failure outcome\",\"text\":\"capability:service_identity.grant_producer_project requires the project known and active ... and appends producer_grant.create\",\"question\":\"Which declared failure and HTTP status apply when the principal already has an active grant for that project?\",\"options\":[\"Authorization rejection (403), matching the other active duplicate grant/assignment flows\",\"Conflict (409)\",\"Input rejection (422)\"],\"default_guess\":\"Authorization rejection (403), matching the viewer-grant and staff-assignment flows.\",\"witness\":{\"initial\":\"An active granted_projects producer already has an active grant for project P.\",\"events\":[\"An administrator calls grant_producer_project again for the same producer and P.\"],\"outcomes\":[\"The operation refuses the active duplicate as an authorization rejection (403).\",\"The operation refuses it as a domain conflict (409).\"],\"observer\":\"The administrator calling the API\"}},{\"unit\":\"40_flows.md:Status\",\"subject\":\"invalid ServicePrincipal status transition\",\"kind\":\"unstated failure outcome\",\"text\":\"capability:service_identity.change_service_principal_status disables or enables it\",\"question\":\"What declared failure and HTTP outcome apply when the requested change is outside the A3 transition table, such as disabling an already disabled principal?\",\"options\":[\"Input rejection (422), matching invalid staff transitions\",\"Conflict (409)\",\"Idempotent success with no transition\"],\"default_guess\":\"Input rejection (422).\",\"witness\":{\"initial\":\"Service principal S is disabled.\",\"events\":[\"An administrator requests that S be disabled again.\"],\"outcomes\":[\"The request is rejected as invalid input (422), because A3 rejects transitions outside its table.\",\"The request is treated as an idempotent success or as a conflict (409).\"],\"observer\":\"The administrator and the audit reader\"}},{\"unit\":\"context\",\"subject\":\"get_snapshot_import_result authorization path\",\"kind\":\"ambiguous contradiction\",\"text\":\"The route calls capability:service_identity.authorize_producer_scope ... then capability:authorization_guard.authorize_snapshot_import ... capability:snapshot_import.get_snapshot_import_result returns a record only to the principal that made it.\",\"question\":\"Are the scope, project-grant and Registry checks in steps 2–3 limited to publication, or are they also applied to the import-result read route despite R0-21 and A4 saying that read rechecks neither grant nor Registry?\",\"options\":[\"Result reads authenticate the bearer and check record ownership only\",\"Result reads also repeat producer scope, project grant and Registry lifecycle checks\"],\"default_guess\":\"Apply steps 2–5 only to publication; result reads use bearer authentication plus ownership only.\",\"witness\":{\"initial\":\"Producer S created import result I for project P; afterward its grant for P was revoked and P was archived.\",\"events\":[\"S presents a still-usable credential and requests I by import_id.\"],\"outcomes\":[\"R0-21/A4 return I because S made the import and result reads do not recheck the grant or Registry.\",\"A literal application of flow steps 2–3 refuses the request because S no longer has project scope or P is archived.\"],\"observer\":\"The producer reading its prior import result\"}}]}",
+ "set_aside": []
+}

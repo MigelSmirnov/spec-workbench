@@ -1,0 +1,321 @@
+{
+ "open_points": [
+  {
+   "subject": "Overall progress when planned work exists but no progress is recorded",
+   "kind": "contradiction",
+   "text": "State 0 says overall progress is “unavailable when no planned work cost exists”; A9 excludes every section without a recorded progress value from both sums and makes progress unavailable whenever that reduced denominator is zero.",
+   "question": "When the active budget has positive planned work but no section has a progress record, is overall progress unavailable or zero?",
+   "options": [
+    "Treat missing progress as absent from the calculation, yielding unavailable as A9 says.",
+    "Treat missing progress as zero completion, yielding 0%, because planned work cost exists under State 0."
+   ],
+   "default_guess": "Return unavailable, following the more specific A9 formula.",
+   "witness": {
+    "initial": "An active budget has one section with work_planned = EUR 1,000 and no SectionProgress record.",
+    "events": [
+     "A viewer reads the project progress view."
+    ],
+    "outcomes": [
+     "A9 excludes the section, the denominator is zero, and overall_progress_percent is unavailable.",
+     "State 0's stated unavailable condition is false because planned work cost exists, so the section contributes zero completion and overall progress is 0%."
+    ],
+    "observer": "The viewer reading overall progress."
+   },
+   "unit": "context"
+  },
+  {
+   "subject": "WorkPayment replay across projects",
+   "kind": "conflicting replay equality",
+   "text": "M33 says “Replay with equal amount, date and description returns the existing record”; A8 says a WorkPayment replay returns the record only when “a registration [is] equal to the stored payment,” whose stored fields include project_id.",
+   "question": "Must project_id match when an existing payment_id is replayed?",
+   "options": [
+    "Compare only amount, payment_date and description, as M33 explicitly lists.",
+    "Compare project_id as well as amount, payment_date and description, because it is part of the stored payment."
+   ],
+   "default_guess": "Require project_id to match; otherwise return an idempotency conflict.",
+   "witness": {
+    "initial": "Payment ID X is stored for project A with amount 100, date D and description Z; an operator is authorized for projects A and B.",
+    "events": [
+     "The operator registers payment ID X for project B with the same amount 100, date D and description Z."
+    ],
+    "outcomes": [
+     "M33's listed equality fields match, so the existing project-A payment is returned.",
+     "The registration differs from the stored payment in project_id, so the request is an idempotency conflict and returns no payment."
+    ],
+    "observer": "The operator, and any project-B caller receiving or not receiving a project-A record."
+   },
+   "unit": "context"
+  },
+  {
+   "subject": "Semantic validation of normalized OCR items",
+   "kind": "missing validation precedence",
+   "text": "M24 requires a non-empty item list, unique line_id values, quantity > 0, unit_price >= 0 and line_total >= 0; A7 says only that missing or wrongly typed fields are refused before authentication and omits these semantic item checks from its ordered expense-intake checks.",
+   "question": "Are M24/M25 semantic item constraints enforced during request decoding before authentication, or by the authenticated OCR adapter/use case after the project guard?",
+   "options": [
+    "Enforce all item constraints during request decoding, before authentication.",
+    "Decode their shapes first, then enforce non-emptiness, uniqueness and numeric bounds after the project guard."
+   ],
+   "default_guess": "Enforce them as boundary-model validation before authentication.",
+   "witness": {
+    "initial": "A request has an invalid staff session and a syntactically well-typed recognition body whose normalized_items list is empty.",
+    "events": [
+     "The caller submits the expense-creation request."
+    ],
+    "outcomes": [
+     "The boundary enforces M25's non-empty rule first and returns the decoding/validation refusal without checking the session.",
+     "The body decodes, the project guard runs first, and the caller receives the concealed authentication refusal."
+    ],
+    "observer": "The HTTP caller."
+   },
+   "unit": "context"
+  },
+  {
+   "subject": "Staff session HTTP transport",
+   "kind": "missing transport rule",
+   "text": "R0-09 and A25 specify that viewer sessions use only a browser cookie and service principals use only a bearer header, but neither text says how a StaffSession token is carried on HTTP requests.",
+   "question": "How must staff clients present a StaffSession token, and which alternative transports must be refused?",
+   "options": [
+    "Use an Authorization bearer header only.",
+    "Use a secure HTTP-only cookie only.",
+    "Accept either a bearer header or a cookie."
+   ],
+   "default_guess": "Use an Authorization bearer header only.",
+   "witness": {
+    "initial": "A staff member has logged in and received a valid StaffSession token.",
+    "events": [
+     "The staff client calls a project-read route with the token only in an Authorization bearer header."
+    ],
+    "outcomes": [
+     "The route authenticates the staff session because bearer is the required staff transport.",
+     "The route refuses the request because staff sessions are cookie-only or use another unspecified transport."
+    ],
+    "observer": "The staff API client."
+   },
+   "unit": "context"
+  },
+  {
+   "subject": "Service credential rotation overlap",
+   "kind": "missing lifecycle rule",
+   "text": "State 0 requires service credentials to be “rotatable with an overlap period”; M14 permits several credentials to be valid simultaneously and gives each an optional expires_at, but State 2 defines no rotation action, overlap duration, or effect on the prior credential.",
+   "question": "When a replacement service credential is issued, what determines when the previous credential stops working?",
+   "options": [
+    "Issuance automatically sets or shortens the previous credential's expiry to a configured overlap deadline.",
+    "Both credentials remain valid until an administrator explicitly revokes one or its independently supplied expires_at arrives.",
+    "Issuance immediately revokes the previous credential, despite the stated overlap requirement."
+   ],
+   "default_guess": "Keep both credentials independently valid until explicit revocation or their existing expiry.",
+   "witness": {
+    "initial": "A service principal has one non-expiring valid credential.",
+    "events": [
+     "An administrator issues a replacement credential.",
+     "After the intended rotation window, the producer calls the import route using the old credential without any explicit revocation."
+    ],
+    "outcomes": [
+     "The old credential has automatically expired at the end of the overlap period and authentication fails.",
+     "The old credential remains valid indefinitely because issuance did not alter it."
+    ],
+    "observer": "The producer and the administrator responsible for credential rotation."
+   },
+   "unit": "context"
+  },
+  {
+   "subject": "Audit-write failure and business mutation atomicity",
+   "kind": "missing failure policy",
+   "text": "M36 says “Audit failures must not silently vanish; the owning-flow policy lands in State 2,” while State 2 requires one AuditRecord per catalog action but never states whether the audit append and the business mutation share one atomic commit or what happens when the audit writer fails.",
+   "question": "Must every audited business mutation roll back when its AuditRecord cannot be appended?",
+   "options": [
+    "Business data and audit are committed atomically; an audit failure rolls back the entire action.",
+    "The business mutation may commit and the audit failure is reported or retried separately.",
+    "The operation may fail after the business mutation commits, leaving the caller uncertain whether the change occurred."
+   ],
+   "default_guess": "Commit the business mutation and its audit record atomically, rolling both back on audit failure.",
+   "witness": {
+    "initial": "An authorized administrator starts a photo visibility update; the photo repository write can succeed, but the audit append fails.",
+    "events": [
+     "The administrator submits the update.",
+     "The business change is staged.",
+     "The audit writer raises a persistence error."
+    ],
+    "outcomes": [
+     "The transaction rolls back, the photo remains unchanged, and the persistence error is returned.",
+     "The photo update commits without its required photo.update audit record, with the audit failure handled separately or merely returned."
+    ],
+    "observer": "The administrator, subsequent photo readers, and an auditor."
+   },
+   "unit": "context"
+  },
+  {
+   "subject": "Binary delivery failure concealment by object kind",
+   "kind": "incomplete reconciliation",
+   "text": "R0-12 says an expense document with missing, oversize or unlisted stored content is answered the same way as an unknown, cross-project or hidden read, while an undeliverable photo is an explicit storage-unavailable error; A14 instead generically says a missing object is an “explicit unavailable/not-found failure” and oversize content “is rejected,” without fixing the document/photo distinction.",
+   "question": "Which exact failure class must each object kind return for missing, oversize or unlisted stored content?",
+   "options": [
+    "Conceal every such document failure as the same not-found response used for unknown or hidden documents, but return storage-unavailable for photos.",
+    "Return storage-unavailable for missing content and a distinct rejection for oversize/unlisted content for both object kinds.",
+    "Use not-found for missing content for both object kinds and a separate rejection for oversize/unlisted content."
+   ],
+   "default_guess": "Apply R0-12's object-kind distinction: concealed not-found for documents and explicit storage-unavailable for photos.",
+   "witness": {
+    "initial": "An authorized viewer can access a visible expense document and a visible progress photo, but both referenced files are missing from storage.",
+    "events": [
+     "The viewer downloads the document.",
+     "The viewer downloads the photo."
+    ],
+    "outcomes": [
+     "R0-12 conceals the document failure as not found but exposes the photo failure as storage unavailable.",
+     "A generic A14 implementation returns the same explicit unavailable or not-found class for both objects."
+    ],
+    "observer": "The viewer making the two download requests."
+   },
+   "unit": "context"
+  },
+  {
+   "subject": "Binary visibility checks for staff",
+   "kind": "ambiguous authorization condition",
+   "text": "A14 says the owning module re-checks “client-visible eligibility” before storage access; State 1 says specifically that “a viewer's binary request” is refused when client_visible=false and provides staff-side views, leaving staff access to hidden binaries unstated in A14.",
+   "question": "Does client_visible=false block only viewers, or does it also block authorized staff from downloading the binary?",
+   "options": [
+    "Apply client_visible only to ClientViewer requests; authorized staff may read hidden objects.",
+    "Require client_visible=true for every principal, including staff.",
+    "Use separate object-kind rules for staff document and photo reads."
+   ],
+   "default_guess": "Apply client_visible only to viewers; authorized staff may inspect hidden objects.",
+   "witness": {
+    "initial": "An active-project expense document exists with client_visible=false; an assigned operator has expense.read capability.",
+    "events": [
+     "The operator requests the document binary by document_id."
+    ],
+    "outcomes": [
+     "The operator is authorized because client visibility restricts only viewers, and receives the bytes.",
+     "A14's literal client-visible eligibility check rejects the operator because the document is hidden."
+    ],
+    "observer": "The operator."
+   },
+   "unit": "context"
+  },
+  {
+   "subject": "Registry failure-category precedence",
+   "kind": "overlapping translation conditions",
+   "text": "A6 maps “HTTP 404 answer” to not_found and an “undecodable/invalid response body” to schema_mismatch, but says the order is the accepted gateway's and carries it to later states rather than stating whether non-success response bodies are decoded.",
+   "question": "When one Registry response satisfies both a status condition and a body condition, which failure kind wins?",
+   "options": [
+    "Classify the HTTP status before decoding its body, so a malformed HTTP 404 is not_found.",
+    "Decode every response body first, so a malformed HTTP 404 is schema_mismatch.",
+    "Define precedence separately for each Registry endpoint."
+   ],
+   "default_guess": "Classify non-success HTTP status before attempting to decode the body.",
+   "witness": {
+    "initial": "The Registry connection succeeds and the requested project is arbitrary.",
+    "events": [
+     "The portal calls a Registry endpoint.",
+     "Registry returns HTTP 404 with a body that is invalid for the expected response schema."
+    ],
+    "outcomes": [
+     "The HTTP 404 row wins and the gateway raises RegistryFailureKind.not_found.",
+     "The invalid-body row wins and the gateway raises RegistryFailureKind.schema_mismatch."
+    ],
+    "observer": "The calling portal use case and its HTTP error mapper."
+   },
+   "unit": "context"
+  },
+  {
+   "subject": "Registry-check precedence for staff assignments and producer grants",
+   "kind": "missing authorization order",
+   "text": "R0-08 explicitly says a denied viewer-grant authorization stops before Registry is asked, but A4 excludes access management from its project-operation sequence and A5 states the Registry checks for staff-assignment and producer-grant creation without saying whether their administrator authorization is evaluated first.",
+   "question": "For staff-assignment and producer-grant creation, must administrator session/principal/capability checks complete before any Registry call?",
+   "options": [
+    "Authorize the administrator completely before calling Registry, matching the viewer-grant rule.",
+    "Validate the project with Registry before authorizing the administrator.",
+    "Permit each creation use case to choose its own order."
+   ],
+   "default_guess": "Authorize the administrator first for every access-management creation.",
+   "witness": {
+    "initial": "The Registry is unavailable, and the caller has an invalid administrator session.",
+    "events": [
+     "The caller attempts to create a staff project assignment."
+    ],
+    "outcomes": [
+     "Authorization is checked first; the request is refused without a Registry call.",
+     "Registry validation is attempted first; the Registry receives a call and the caller gets a transport failure instead of the authentication refusal."
+    ],
+    "observer": "The caller and the Registry operator observing whether a request was made."
+   },
+   "unit": "context"
+  },
+  {
+   "subject": "Standalone expense re-allocation refusal precedence",
+   "kind": "missing check order",
+   "text": "A7 specifies the ordered checks for expense creation and correction, but M29 also defines a separate re-allocation action and State 2 gives no order between loading the expense and validating the replacement instruction list.",
+   "question": "After the project guard passes, does standalone re-allocation validate the expense first or the replacement allocations first?",
+   "options": [
+    "Load and verify the expense before checking non-emptiness, sum and section targets.",
+    "Validate the replacement allocation list before loading the expense.",
+    "Use the same order as correction: expense before allocation instructions, after any applicable total check."
+   ],
+   "default_guess": "Load and verify the expense first, then validate the replacement allocations.",
+   "witness": {
+    "initial": "The caller is authorized for an active project, but the supplied expense_id does not exist and the replacement allocation list is empty.",
+    "events": [
+     "The caller submits the standalone re-allocation command."
+    ],
+    "outcomes": [
+     "Expense lookup wins and the operation returns the no/wrong-project conflict described for expense mutations.",
+     "Allocation validation wins and the operation returns the invalid-allocation rejection."
+    ],
+    "observer": "The staff caller."
+   },
+   "unit": "context"
+  },
+  {
+   "subject": "WorkPayment validation versus replay classification",
+   "kind": "missing check precedence",
+   "text": "M33 requires amount > 0 and A8 defines conflict for a non-equal registration using an existing payment_id, but State 2 never orders payment field validation against replay lookup/classification.",
+   "question": "When a payment_id already exists and the new registration is itself invalid, is it rejected as invalid input or classified as an idempotency conflict?",
+   "options": [
+    "Validate amount and other command fields before replay classification.",
+    "Look up and classify payment_id replay before validating differing fields.",
+    "Return the existing payment whenever its stored fields are valid, regardless of invalid supplied differences."
+   ],
+   "default_guess": "Validate the command first, then perform replay classification.",
+   "witness": {
+    "initial": "Payment ID X already identifies a valid stored payment.",
+    "events": [
+     "An authorized operator registers X again with amount -1 and otherwise well-typed fields."
+    ],
+    "outcomes": [
+     "The positive-amount rule is checked first and the command is rejected as invalid input.",
+     "Replay is checked first; because the supplied registration differs from the stored payment, it is returned as an idempotency conflict."
+    ],
+    "observer": "The operator."
+   },
+   "unit": "context"
+  },
+  {
+   "subject": "ProgressPhoto validation versus replay classification",
+   "kind": "missing check precedence",
+   "text": "M35 requires an optional section to belong to the photo's project, while A8 says any publication whose kept fields differ from the photo now stored is a replay conflict; State 2 does not order section validation against intake_id replay classification.",
+   "question": "For an existing intake_id, does an invalid section reference produce a section-validation refusal or a replay conflict?",
+   "options": [
+    "Validate project and section references before replay classification.",
+    "Classify intake_id replay first and return conflict for any differing publication.",
+    "For exact replays, skip reference validation; validate references only when creating a new photo."
+   ],
+   "default_guess": "Validate the publication's section reference before replay classification.",
+   "witness": {
+    "initial": "A photo with intake_id X exists in project A; the caller is authorized for active project A.",
+    "events": [
+     "The caller republishes intake_id X but supplies a section_id belonging to project B."
+    ],
+    "outcomes": [
+     "The cross-project section invariant is checked first and the publication is rejected as an invalid section reference.",
+     "A8's replay comparison is checked first and the publication is rejected as an intake-id conflict."
+    ],
+    "observer": "The staff caller."
+   },
+   "unit": "context"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"Overall progress when planned work exists but no progress is recorded\",\"kind\":\"contradiction\",\"text\":\"State 0 says overall progress is “unavailable when no planned work cost exists”; A9 excludes every section without a recorded progress value from both sums and makes progress unavailable whenever that reduced denominator is zero.\",\"question\":\"When the active budget has positive planned work but no section has a progress record, is overall progress unavailable or zero?\",\"options\":[\"Treat missing progress as absent from the calculation, yielding unavailable as A9 says.\",\"Treat missing progress as zero completion, yielding 0%, because planned work cost exists under State 0.\"],\"default_guess\":\"Return unavailable, following the more specific A9 formula.\",\"witness\":{\"initial\":\"An active budget has one section with work_planned = EUR 1,000 and no SectionProgress record.\",\"events\":[\"A viewer reads the project progress view.\"],\"outcomes\":[\"A9 excludes the section, the denominator is zero, and overall_progress_percent is unavailable.\",\"State 0's stated unavailable condition is false because planned work cost exists, so the section contributes zero completion and overall progress is 0%.\"],\"observer\":\"The viewer reading overall progress.\"},\"unit\":\"context\"},{\"subject\":\"WorkPayment replay across projects\",\"kind\":\"conflicting replay equality\",\"text\":\"M33 says “Replay with equal amount, date and description returns the existing record”; A8 says a WorkPayment replay returns the record only when “a registration [is] equal to the stored payment,” whose stored fields include project_id.\",\"question\":\"Must project_id match when an existing payment_id is replayed?\",\"options\":[\"Compare only amount, payment_date and description, as M33 explicitly lists.\",\"Compare project_id as well as amount, payment_date and description, because it is part of the stored payment.\"],\"default_guess\":\"Require project_id to match; otherwise return an idempotency conflict.\",\"witness\":{\"initial\":\"Payment ID X is stored for project A with amount 100, date D and description Z; an operator is authorized for projects A and B.\",\"events\":[\"The operator registers payment ID X for project B with the same amount 100, date D and description Z.\"],\"outcomes\":[\"M33's listed equality fields match, so the existing project-A payment is returned.\",\"The registration differs from the stored payment in project_id, so the request is an idempotency conflict and returns no payment.\"],\"observer\":\"The operator, and any project-B caller receiving or not receiving a project-A record.\"},\"unit\":\"context\"},{\"subject\":\"Semantic validation of normalized OCR items\",\"kind\":\"missing validation precedence\",\"text\":\"M24 requires a non-empty item list, unique line_id values, quantity > 0, unit_price >= 0 and line_total >= 0; A7 says only that missing or wrongly typed fields are refused before authentication and omits these semantic item checks from its ordered expense-intake checks.\",\"question\":\"Are M24/M25 semantic item constraints enforced during request decoding before authentication, or by the authenticated OCR adapter/use case after the project guard?\",\"options\":[\"Enforce all item constraints during request decoding, before authentication.\",\"Decode their shapes first, then enforce non-emptiness, uniqueness and numeric bounds after the project guard.\"],\"default_guess\":\"Enforce them as boundary-model validation before authentication.\",\"witness\":{\"initial\":\"A request has an invalid staff session and a syntactically well-typed recognition body whose normalized_items list is empty.\",\"events\":[\"The caller submits the expense-creation request.\"],\"outcomes\":[\"The boundary enforces M25's non-empty rule first and returns the decoding/validation refusal without checking the session.\",\"The body decodes, the project guard runs first, and the caller receives the concealed authentication refusal.\"],\"observer\":\"The HTTP caller.\"},\"unit\":\"context\"},{\"subject\":\"Staff session HTTP transport\",\"kind\":\"missing transport rule\",\"text\":\"R0-09 and A25 specify that viewer sessions use only a browser cookie and service principals use only a bearer header, but neither text says how a StaffSession token is carried on HTTP requests.\",\"question\":\"How must staff clients present a StaffSession token, and which alternative transports must be refused?\",\"options\":[\"Use an Authorization bearer header only.\",\"Use a secure HTTP-only cookie only.\",\"Accept either a bearer header or a cookie.\"],\"default_guess\":\"Use an Authorization bearer header only.\",\"witness\":{\"initial\":\"A staff member has logged in and received a valid StaffSession token.\",\"events\":[\"The staff client calls a project-read route with the token only in an Authorization bearer header.\"],\"outcomes\":[\"The route authenticates the staff session because bearer is the required staff transport.\",\"The route refuses the request because staff sessions are cookie-only or use another unspecified transport.\"],\"observer\":\"The staff API client.\"},\"unit\":\"context\"},{\"subject\":\"Service credential rotation overlap\",\"kind\":\"missing lifecycle rule\",\"text\":\"State 0 requires service credentials to be “rotatable with an overlap period”; M14 permits several credentials to be valid simultaneously and gives each an optional expires_at, but State 2 defines no rotation action, overlap duration, or effect on the prior credential.\",\"question\":\"When a replacement service credential is issued, what determines when the previous credential stops working?\",\"options\":[\"Issuance automatically sets or shortens the previous credential's expiry to a configured overlap deadline.\",\"Both credentials remain valid until an administrator explicitly revokes one or its independently supplied expires_at arrives.\",\"Issuance immediately revokes the previous credential, despite the stated overlap requirement.\"],\"default_guess\":\"Keep both credentials independently valid until explicit revocation or their existing expiry.\",\"witness\":{\"initial\":\"A service principal has one non-expiring valid credential.\",\"events\":[\"An administrator issues a replacement credential.\",\"After the intended rotation window, the producer calls the import route using the old credential without any explicit revocation.\"],\"outcomes\":[\"The old credential has automatically expired at the end of the overlap period and authentication fails.\",\"The old credential remains valid indefinitely because issuance did not alter it.\"],\"observer\":\"The producer and the administrator responsible for credential rotation.\"},\"unit\":\"context\"},{\"subject\":\"Audit-write failure and business mutation atomicity\",\"kind\":\"missing failure policy\",\"text\":\"M36 says “Audit failures must not silently vanish; the owning-flow policy lands in State 2,” while State 2 requires one AuditRecord per catalog action but never states whether the audit append and the business mutation share one atomic commit or what happens when the audit writer fails.\",\"question\":\"Must every audited business mutation roll back when its AuditRecord cannot be appended?\",\"options\":[\"Business data and audit are committed atomically; an audit failure rolls back the entire action.\",\"The business mutation may commit and the audit failure is reported or retried separately.\",\"The operation may fail after the business mutation commits, leaving the caller uncertain whether the change occurred.\"],\"default_guess\":\"Commit the business mutation and its audit record atomically, rolling both back on audit failure.\",\"witness\":{\"initial\":\"An authorized administrator starts a photo visibility update; the photo repository write can succeed, but the audit append fails.\",\"events\":[\"The administrator submits the update.\",\"The business change is staged.\",\"The audit writer raises a persistence error.\"],\"outcomes\":[\"The transaction rolls back, the photo remains unchanged, and the persistence error is returned.\",\"The photo update commits without its required photo.update audit record, with the audit failure handled separately or merely returned.\"],\"observer\":\"The administrator, subsequent photo readers, and an auditor.\"},\"unit\":\"context\"},{\"subject\":\"Binary delivery failure concealment by object kind\",\"kind\":\"incomplete reconciliation\",\"text\":\"R0-12 says an expense document with missing, oversize or unlisted stored content is answered the same way as an unknown, cross-project or hidden read, while an undeliverable photo is an explicit storage-unavailable error; A14 instead generically says a missing object is an “explicit unavailable/not-found failure” and oversize content “is rejected,” without fixing the document/photo distinction.\",\"question\":\"Which exact failure class must each object kind return for missing, oversize or unlisted stored content?\",\"options\":[\"Conceal every such document failure as the same not-found response used for unknown or hidden documents, but return storage-unavailable for photos.\",\"Return storage-unavailable for missing content and a distinct rejection for oversize/unlisted content for both object kinds.\",\"Use not-found for missing content for both object kinds and a separate rejection for oversize/unlisted content.\"],\"default_guess\":\"Apply R0-12's object-kind distinction: concealed not-found for documents and explicit storage-unavailable for photos.\",\"witness\":{\"initial\":\"An authorized viewer can access a visible expense document and a visible progress photo, but both referenced files are missing from storage.\",\"events\":[\"The viewer downloads the document.\",\"The viewer downloads the photo.\"],\"outcomes\":[\"R0-12 conceals the document failure as not found but exposes the photo failure as storage unavailable.\",\"A generic A14 implementation returns the same explicit unavailable or not-found class for both objects.\"],\"observer\":\"The viewer making the two download requests.\"},\"unit\":\"context\"},{\"subject\":\"Binary visibility checks for staff\",\"kind\":\"ambiguous authorization condition\",\"text\":\"A14 says the owning module re-checks “client-visible eligibility” before storage access; State 1 says specifically that “a viewer's binary request” is refused when client_visible=false and provides staff-side views, leaving staff access to hidden binaries unstated in A14.\",\"question\":\"Does client_visible=false block only viewers, or does it also block authorized staff from downloading the binary?\",\"options\":[\"Apply client_visible only to ClientViewer requests; authorized staff may read hidden objects.\",\"Require client_visible=true for every principal, including staff.\",\"Use separate object-kind rules for staff document and photo reads.\"],\"default_guess\":\"Apply client_visible only to viewers; authorized staff may inspect hidden objects.\",\"witness\":{\"initial\":\"An active-project expense document exists with client_visible=false; an assigned operator has expense.read capability.\",\"events\":[\"The operator requests the document binary by document_id.\"],\"outcomes\":[\"The operator is authorized because client visibility restricts only viewers, and receives the bytes.\",\"A14's literal client-visible eligibility check rejects the operator because the document is hidden.\"],\"observer\":\"The operator.\"},\"unit\":\"context\"},{\"subject\":\"Registry failure-category precedence\",\"kind\":\"overlapping translation conditions\",\"text\":\"A6 maps “HTTP 404 answer” to not_found and an “undecodable/invalid response body” to schema_mismatch, but says the order is the accepted gateway's and carries it to later states rather than stating whether non-success response bodies are decoded.\",\"question\":\"When one Registry response satisfies both a status condition and a body condition, which failure kind wins?\",\"options\":[\"Classify the HTTP status before decoding its body, so a malformed HTTP 404 is not_found.\",\"Decode every response body first, so a malformed HTTP 404 is schema_mismatch.\",\"Define precedence separately for each Registry endpoint.\"],\"default_guess\":\"Classify non-success HTTP status before attempting to decode the body.\",\"witness\":{\"initial\":\"The Registry connection succeeds and the requested project is arbitrary.\",\"events\":[\"The portal calls a Registry endpoint.\",\"Registry returns HTTP 404 with a body that is invalid for the expected response schema.\"],\"outcomes\":[\"The HTTP 404 row wins and the gateway raises RegistryFailureKind.not_found.\",\"The invalid-body row wins and the gateway raises RegistryFailureKind.schema_mismatch.\"],\"observer\":\"The calling portal use case and its HTTP error mapper.\"},\"unit\":\"context\"},{\"subject\":\"Registry-check precedence for staff assignments and producer grants\",\"kind\":\"missing authorization order\",\"text\":\"R0-08 explicitly says a denied viewer-grant authorization stops before Registry is asked, but A4 excludes access management from its project-operation sequence and A5 states the Registry checks for staff-assignment and producer-grant creation without saying whether their administrator authorization is evaluated first.\",\"question\":\"For staff-assignment and producer-grant creation, must administrator session/principal/capability checks complete before any Registry call?\",\"options\":[\"Authorize the administrator completely before calling Registry, matching the viewer-grant rule.\",\"Validate the project with Registry before authorizing the administrator.\",\"Permit each creation use case to choose its own order.\"],\"default_guess\":\"Authorize the administrator first for every access-management creation.\",\"witness\":{\"initial\":\"The Registry is unavailable, and the caller has an invalid administrator session.\",\"events\":[\"The caller attempts to create a staff project assignment.\"],\"outcomes\":[\"Authorization is checked first; the request is refused without a Registry call.\",\"Registry validation is attempted first; the Registry receives a call and the caller gets a transport failure instead of the authentication refusal.\"],\"observer\":\"The caller and the Registry operator observing whether a request was made.\"},\"unit\":\"context\"},{\"subject\":\"Standalone expense re-allocation refusal precedence\",\"kind\":\"missing check order\",\"text\":\"A7 specifies the ordered checks for expense creation and correction, but M29 also defines a separate re-allocation action and State 2 gives no order between loading the expense and validating the replacement instruction list.\",\"question\":\"After the project guard passes, does standalone re-allocation validate the expense first or the replacement allocations first?\",\"options\":[\"Load and verify the expense before checking non-emptiness, sum and section targets.\",\"Validate the replacement allocation list before loading the expense.\",\"Use the same order as correction: expense before allocation instructions, after any applicable total check.\"],\"default_guess\":\"Load and verify the expense first, then validate the replacement allocations.\",\"witness\":{\"initial\":\"The caller is authorized for an active project, but the supplied expense_id does not exist and the replacement allocation list is empty.\",\"events\":[\"The caller submits the standalone re-allocation command.\"],\"outcomes\":[\"Expense lookup wins and the operation returns the no/wrong-project conflict described for expense mutations.\",\"Allocation validation wins and the operation returns the invalid-allocation rejection.\"],\"observer\":\"The staff caller.\"},\"unit\":\"context\"},{\"subject\":\"WorkPayment validation versus replay classification\",\"kind\":\"missing check precedence\",\"text\":\"M33 requires amount > 0 and A8 defines conflict for a non-equal registration using an existing payment_id, but State 2 never orders payment field validation against replay lookup/classification.\",\"question\":\"When a payment_id already exists and the new registration is itself invalid, is it rejected as invalid input or classified as an idempotency conflict?\",\"options\":[\"Validate amount and other command fields before replay classification.\",\"Look up and classify payment_id replay before validating differing fields.\",\"Return the existing payment whenever its stored fields are valid, regardless of invalid supplied differences.\"],\"default_guess\":\"Validate the command first, then perform replay classification.\",\"witness\":{\"initial\":\"Payment ID X already identifies a valid stored payment.\",\"events\":[\"An authorized operator registers X again with amount -1 and otherwise well-typed fields.\"],\"outcomes\":[\"The positive-amount rule is checked first and the command is rejected as invalid input.\",\"Replay is checked first; because the supplied registration differs from the stored payment, it is returned as an idempotency conflict.\"],\"observer\":\"The operator.\"},\"unit\":\"context\"},{\"subject\":\"ProgressPhoto validation versus replay classification\",\"kind\":\"missing check precedence\",\"text\":\"M35 requires an optional section to belong to the photo's project, while A8 says any publication whose kept fields differ from the photo now stored is a replay conflict; State 2 does not order section validation against intake_id replay classification.\",\"question\":\"For an existing intake_id, does an invalid section reference produce a section-validation refusal or a replay conflict?\",\"options\":[\"Validate project and section references before replay classification.\",\"Classify intake_id replay first and return conflict for any differing publication.\",\"For exact replays, skip reference validation; validate references only when creating a new photo.\"],\"default_guess\":\"Validate the publication's section reference before replay classification.\",\"witness\":{\"initial\":\"A photo with intake_id X exists in project A; the caller is authorized for active project A.\",\"events\":[\"The caller republishes intake_id X but supplies a section_id belonging to project B.\"],\"outcomes\":[\"The cross-project section invariant is checked first and the publication is rejected as an invalid section reference.\",\"A8's replay comparison is checked first and the publication is rejected as an intake-id conflict.\"],\"observer\":\"The staff caller.\"},\"unit\":\"context\"}]}",
+ "set_aside": []
+}

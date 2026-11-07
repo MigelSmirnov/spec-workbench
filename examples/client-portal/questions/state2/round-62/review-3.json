@@ -1,0 +1,173 @@
+{
+ "open_points": [
+  {
+   "unit": "context",
+   "subject": "Expense currency rejection",
+   "kind": "contradiction",
+   "text": "State 0 says foreign-currency input is \"rejected with an explicit error\" and A9 says \"any other currency at any boundary → explicit typed rejection (`currency_mismatch`)\"; A7 says expense refusals including a non-EUR total answer \"HTTP 422 with an empty body\" and the failed check is not observable.",
+   "question": "Must a non-EUR expense response expose the typed `currency_mismatch` error, or must it be an undifferentiated empty 422 response?",
+   "options": [
+    "Return an explicit `currency_mismatch` error.",
+    "Return HTTP 422 with an empty body and expose no typed reason."
+   ],
+   "default_guess": "Follow A7's operation-specific rule and return the empty 422 response.",
+   "witness": {
+    "initial": "An active operator is assigned to an active project and has a valid session.",
+    "events": [
+     "The operator submits an otherwise valid confirmed expense publication whose currency is USD."
+    ],
+    "outcomes": [
+     "The caller receives an explicit typed `currency_mismatch` error.",
+     "The caller receives HTTP 422 with an empty body, indistinguishable from other validation failures."
+    ],
+    "observer": "The operator API caller."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "Project-operation authorization versus request decoding",
+   "kind": "precedence contradiction",
+   "text": "A4 says \"Every project-scoped operation evaluates, in order\" beginning with session or bearer authentication, while A7 says a malformed snapshot or correction body \"is refused by request decoding before the bearer credential is checked\" or \"before the guard.\"",
+   "question": "For a malformed project-scoped request carrying invalid or absent authentication, does decoding fail first, or does the A4 authentication-first sequence apply first?",
+   "options": [
+    "Decode the request first and return the decoding failure without authenticating.",
+    "Authenticate first and return the concealed authentication failure before exposing body validity."
+   ],
+   "default_guess": "Treat transport decoding as outside the project operation and apply the explicit A7 decoding-first behavior.",
+   "witness": {
+    "initial": "No valid producer credential is supplied.",
+    "events": [
+     "A caller submits a snapshot-import request missing a required field."
+    ],
+    "outcomes": [
+     "Request decoding wins and the caller receives HTTP 422; authentication is never checked.",
+     "A4's first check wins and the caller receives the concealed bearer-authentication rejection."
+    ],
+    "observer": "The unauthenticated API caller."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "Registry endpoint configuration at startup",
+   "kind": "contradiction",
+   "text": "R0-10 says environment configuration is validated when the service starts, while A6/A30 say `REGISTRY_BASE_URL` \"is no required start-up variable,\" is read at each Registry call, and its absence becomes `transport_error`.",
+   "question": "Must a missing or unusable `REGISTRY_BASE_URL` stop startup, or may the service start and fail only Registry-dependent calls?",
+   "options": [
+    "Reject startup because an environment setting is missing or invalid.",
+    "Start successfully and translate later Registry calls to `transport_error`."
+   ],
+   "default_guess": "Follow A30's specific exception: start successfully and fail Registry calls at use time.",
+   "witness": {
+    "initial": "A deployment has every required setting except `REGISTRY_BASE_URL`.",
+    "events": [
+     "The host starts the portal.",
+     "A caller later invokes a project-scoped operation."
+    ],
+    "outcomes": [
+     "Startup is refused during environment validation, so no API is available.",
+     "Startup succeeds; the later operation fails with Registry `transport_error`."
+    ],
+    "observer": "The deployment operator, and later the API caller."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "Staff suspension and existing sessions",
+   "kind": "cascade ambiguity",
+   "text": "M06 says staff sessions are \"revoked by ... suspension/disabling,\" but A11 states only that a suspended or disabled account makes \"all staff sessions invalid\"; A3 permits the account to be reinstated.",
+   "question": "Does suspension persistently set `revoked_at` on every existing session, or does account status merely make those sessions temporarily unusable so they resume after reinstatement?",
+   "options": [
+    "Revoke all existing sessions permanently; reinstatement requires a new login.",
+    "Leave session records unrevoked; they become usable again after reinstatement if unexpired."
+   ],
+   "default_guess": "Persistently revoke every session, following M06 and the State 0 statement that suspension invalidates active sessions.",
+   "witness": {
+    "initial": "An active staff account has an unexpired, unrevoked session.",
+    "events": [
+     "An administrator suspends the account.",
+     "The administrator reinstates it before the session expires.",
+     "The staff member retries the old session token."
+    ],
+    "outcomes": [
+     "The old session remains revoked and the request is refused.",
+     "The old session becomes valid again and the request proceeds."
+    ],
+    "observer": "The reinstated staff member."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "Service-principal disablement and existing credentials",
+   "kind": "cascade ambiguity",
+   "text": "M13 says disabling a principal \"revokes every credential\" and re-enabling \"restores none of them,\" while A11 says only that disabling makes all credentials \"unusable\" and A4 separately checks active principal status after credential authentication.",
+   "question": "Does disabling persistently revoke every ServiceCredential, or only make credentials unusable while the principal remains disabled?",
+   "options": [
+    "Set every credential revoked; re-enabling requires a newly issued credential.",
+    "Keep credentials unrevoked; re-enabling restores any otherwise valid credential."
+   ],
+   "default_guess": "Persistently revoke all credentials, following M13's explicit re-enable semantics.",
+   "witness": {
+    "initial": "An active service principal has an unexpired, unrevoked bearer credential.",
+    "events": [
+     "An administrator disables the principal.",
+     "The administrator re-enables it.",
+     "The producer retries the old bearer credential."
+    ],
+    "outcomes": [
+     "The credential remains revoked and authentication fails until a new credential is issued.",
+     "The old credential works again because the principal is active."
+    ],
+    "observer": "The producer."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "Missing section progress and completed-work value",
+   "kind": "contradiction",
+   "text": "State 0 and A9/INV-044 say missing data is explicit and is never replaced by zero unless zero is confirmed; M32 says a section with no progress record has `completion_percent = None` but \"a completed work value of zero.\"",
+   "question": "When planned work exists but no progress has ever been recorded, is the section's completed-work value unavailable or exactly zero?",
+   "options": [
+    "Expose missing completion and completed-work value as unavailable.",
+    "Expose missing completion as `None` but completed-work value as zero."
+   ],
+   "default_guess": "Use M32's specific rule: `completion_percent = None` with completed-work value zero, and document it as a named exception to the general missing-data rule.",
+   "witness": {
+    "initial": "The active budget contains a section with positive `work_planned` and no SectionProgress record.",
+    "events": [
+     "A viewer reads the budget or progress view."
+    ],
+    "outcomes": [
+     "The completed-work value is unavailable because the formula lacks a completion percentage.",
+     "The completion percentage is absent but the completed-work value is returned as EUR 0.00."
+    ],
+    "observer": "The viewer."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "Missing stored expense-document binary",
+   "kind": "refusal contradiction",
+   "text": "R0-12 says an expense document whose stored content is missing is answered the same way as an unknown, cross-project, or hidden read, while A14 says a missing source object is an \"explicit unavailable/not-found failure.\"",
+   "question": "For an otherwise authorized expense-document record whose binary is missing, must the response be the concealed not-found response, or an explicit storage-unavailable response?",
+   "options": [
+    "Return the same concealed not-found response used for unknown or hidden documents.",
+    "Return an explicit storage-unavailable failure identifying a delivery problem."
+   ],
+   "default_guess": "Use the concealed not-found response for expense documents and reserve explicit storage-unavailable for progress photos, following R0-12's object-specific distinction.",
+   "witness": {
+    "initial": "A visible ExpenseDocument record exists and the caller is authorized, but its `file_ref` resolves to no stored bytes.",
+    "events": [
+     "The caller requests the document binary."
+    ],
+    "outcomes": [
+     "The response is indistinguishable from an unknown, cross-project, or hidden document.",
+     "The response explicitly reports storage unavailability."
+    ],
+    "observer": "The authenticated binary caller."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"context\",\"subject\":\"Expense currency rejection\",\"kind\":\"contradiction\",\"text\":\"State 0 says foreign-currency input is \\\"rejected with an explicit error\\\" and A9 says \\\"any other currency at any boundary → explicit typed rejection (`currency_mismatch`)\\\"; A7 says expense refusals including a non-EUR total answer \\\"HTTP 422 with an empty body\\\" and the failed check is not observable.\",\"question\":\"Must a non-EUR expense response expose the typed `currency_mismatch` error, or must it be an undifferentiated empty 422 response?\",\"options\":[\"Return an explicit `currency_mismatch` error.\",\"Return HTTP 422 with an empty body and expose no typed reason.\"],\"default_guess\":\"Follow A7's operation-specific rule and return the empty 422 response.\",\"witness\":{\"initial\":\"An active operator is assigned to an active project and has a valid session.\",\"events\":[\"The operator submits an otherwise valid confirmed expense publication whose currency is USD.\"],\"outcomes\":[\"The caller receives an explicit typed `currency_mismatch` error.\",\"The caller receives HTTP 422 with an empty body, indistinguishable from other validation failures.\"],\"observer\":\"The operator API caller.\"}},{\"unit\":\"context\",\"subject\":\"Project-operation authorization versus request decoding\",\"kind\":\"precedence contradiction\",\"text\":\"A4 says \\\"Every project-scoped operation evaluates, in order\\\" beginning with session or bearer authentication, while A7 says a malformed snapshot or correction body \\\"is refused by request decoding before the bearer credential is checked\\\" or \\\"before the guard.\\\"\",\"question\":\"For a malformed project-scoped request carrying invalid or absent authentication, does decoding fail first, or does the A4 authentication-first sequence apply first?\",\"options\":[\"Decode the request first and return the decoding failure without authenticating.\",\"Authenticate first and return the concealed authentication failure before exposing body validity.\"],\"default_guess\":\"Treat transport decoding as outside the project operation and apply the explicit A7 decoding-first behavior.\",\"witness\":{\"initial\":\"No valid producer credential is supplied.\",\"events\":[\"A caller submits a snapshot-import request missing a required field.\"],\"outcomes\":[\"Request decoding wins and the caller receives HTTP 422; authentication is never checked.\",\"A4's first check wins and the caller receives the concealed bearer-authentication rejection.\"],\"observer\":\"The unauthenticated API caller.\"}},{\"unit\":\"context\",\"subject\":\"Registry endpoint configuration at startup\",\"kind\":\"contradiction\",\"text\":\"R0-10 says environment configuration is validated when the service starts, while A6/A30 say `REGISTRY_BASE_URL` \\\"is no required start-up variable,\\\" is read at each Registry call, and its absence becomes `transport_error`.\",\"question\":\"Must a missing or unusable `REGISTRY_BASE_URL` stop startup, or may the service start and fail only Registry-dependent calls?\",\"options\":[\"Reject startup because an environment setting is missing or invalid.\",\"Start successfully and translate later Registry calls to `transport_error`.\"],\"default_guess\":\"Follow A30's specific exception: start successfully and fail Registry calls at use time.\",\"witness\":{\"initial\":\"A deployment has every required setting except `REGISTRY_BASE_URL`.\",\"events\":[\"The host starts the portal.\",\"A caller later invokes a project-scoped operation.\"],\"outcomes\":[\"Startup is refused during environment validation, so no API is available.\",\"Startup succeeds; the later operation fails with Registry `transport_error`.\"],\"observer\":\"The deployment operator, and later the API caller.\"}},{\"unit\":\"context\",\"subject\":\"Staff suspension and existing sessions\",\"kind\":\"cascade ambiguity\",\"text\":\"M06 says staff sessions are \\\"revoked by ... suspension/disabling,\\\" but A11 states only that a suspended or disabled account makes \\\"all staff sessions invalid\\\"; A3 permits the account to be reinstated.\",\"question\":\"Does suspension persistently set `revoked_at` on every existing session, or does account status merely make those sessions temporarily unusable so they resume after reinstatement?\",\"options\":[\"Revoke all existing sessions permanently; reinstatement requires a new login.\",\"Leave session records unrevoked; they become usable again after reinstatement if unexpired.\"],\"default_guess\":\"Persistently revoke every session, following M06 and the State 0 statement that suspension invalidates active sessions.\",\"witness\":{\"initial\":\"An active staff account has an unexpired, unrevoked session.\",\"events\":[\"An administrator suspends the account.\",\"The administrator reinstates it before the session expires.\",\"The staff member retries the old session token.\"],\"outcomes\":[\"The old session remains revoked and the request is refused.\",\"The old session becomes valid again and the request proceeds.\"],\"observer\":\"The reinstated staff member.\"}},{\"unit\":\"context\",\"subject\":\"Service-principal disablement and existing credentials\",\"kind\":\"cascade ambiguity\",\"text\":\"M13 says disabling a principal \\\"revokes every credential\\\" and re-enabling \\\"restores none of them,\\\" while A11 says only that disabling makes all credentials \\\"unusable\\\" and A4 separately checks active principal status after credential authentication.\",\"question\":\"Does disabling persistently revoke every ServiceCredential, or only make credentials unusable while the principal remains disabled?\",\"options\":[\"Set every credential revoked; re-enabling requires a newly issued credential.\",\"Keep credentials unrevoked; re-enabling restores any otherwise valid credential.\"],\"default_guess\":\"Persistently revoke all credentials, following M13's explicit re-enable semantics.\",\"witness\":{\"initial\":\"An active service principal has an unexpired, unrevoked bearer credential.\",\"events\":[\"An administrator disables the principal.\",\"The administrator re-enables it.\",\"The producer retries the old bearer credential.\"],\"outcomes\":[\"The credential remains revoked and authentication fails until a new credential is issued.\",\"The old credential works again because the principal is active.\"],\"observer\":\"The producer.\"}},{\"unit\":\"context\",\"subject\":\"Missing section progress and completed-work value\",\"kind\":\"contradiction\",\"text\":\"State 0 and A9/INV-044 say missing data is explicit and is never replaced by zero unless zero is confirmed; M32 says a section with no progress record has `completion_percent = None` but \\\"a completed work value of zero.\\\"\",\"question\":\"When planned work exists but no progress has ever been recorded, is the section's completed-work value unavailable or exactly zero?\",\"options\":[\"Expose missing completion and completed-work value as unavailable.\",\"Expose missing completion as `None` but completed-work value as zero.\"],\"default_guess\":\"Use M32's specific rule: `completion_percent = None` with completed-work value zero, and document it as a named exception to the general missing-data rule.\",\"witness\":{\"initial\":\"The active budget contains a section with positive `work_planned` and no SectionProgress record.\",\"events\":[\"A viewer reads the budget or progress view.\"],\"outcomes\":[\"The completed-work value is unavailable because the formula lacks a completion percentage.\",\"The completion percentage is absent but the completed-work value is returned as EUR 0.00.\"],\"observer\":\"The viewer.\"}},{\"unit\":\"context\",\"subject\":\"Missing stored expense-document binary\",\"kind\":\"refusal contradiction\",\"text\":\"R0-12 says an expense document whose stored content is missing is answered the same way as an unknown, cross-project, or hidden read, while A14 says a missing source object is an \\\"explicit unavailable/not-found failure.\\\"\",\"question\":\"For an otherwise authorized expense-document record whose binary is missing, must the response be the concealed not-found response, or an explicit storage-unavailable response?\",\"options\":[\"Return the same concealed not-found response used for unknown or hidden documents.\",\"Return an explicit storage-unavailable failure identifying a delivery problem.\"],\"default_guess\":\"Use the concealed not-found response for expense documents and reserve explicit storage-unavailable for progress photos, following R0-12's object-specific distinction.\",\"witness\":{\"initial\":\"A visible ExpenseDocument record exists and the caller is authorized, but its `file_ref` resolves to no stored bytes.\",\"events\":[\"The caller requests the document binary.\"],\"outcomes\":[\"The response is indistinguishable from an unknown, cross-project, or hidden document.\",\"The response explicitly reports storage unavailability.\"],\"observer\":\"The authenticated binary caller.\"}}]}",
+ "set_aside": []
+}

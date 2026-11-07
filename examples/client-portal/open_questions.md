@@ -311,7 +311,14 @@ function at all; the former State 3 gave `staff_identity` a
 Kept for now (owner 2026-11-06: current service behaviour accepted; technical
 decisions delegated): `00_product.md` R0-19 and R0-23; an administrator
 activates a new staff account, no State 3 module sends a notice, and A10
-stays the design the challenges follow once built. Open for the owner.
+stays the design the challenges follow once built.
+
+Closed 2026-11-07 by the owner: "remove the staff email/password challenge
+feature from the spec. There are no human staff; the owner opens portal
+sessions himself and an agent works through cabinet_kernel; no e-mails are
+ever needed." Answer to 1: no. The challenges, the email delivery and A10 are
+removed from the design (`00_product.md` R0-03, R0-23; `SOURCE.md`, deviation
+of 2026-11-07).
 
 ### Q20 — Access-refused snapshot imports are not recorded
 

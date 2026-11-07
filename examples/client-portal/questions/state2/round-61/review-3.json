@@ -1,0 +1,173 @@
+{
+ "open_points": [
+  {
+   "subject": "Project authorization and request decoding precedence",
+   "kind": "contradictory check order",
+   "text": "A4 says, “Every project-scoped operation evaluates, in order: valid unexpired unrevoked session … First failure wins,” while A7 says a malformed snapshot body “is refused by request decoding before the bearer credential is checked” and a malformed expense correction is “refused by request decoding before the guard.”",
+   "question": "When both authentication and request decoding would fail, which failure must win?",
+   "options": [
+    "Authenticate first and return the concealed authentication failure",
+    "Decode first and return the request-shape failure"
+   ],
+   "default_guess": "Apply the more specific A7 rule and decode before authentication.",
+   "witness": {
+    "initial": "No valid producer credential exists.",
+    "events": [
+     "An unauthenticated caller submits a snapshot-import request whose body is missing a required field."
+    ],
+    "outcomes": [
+     "A4 makes the invalid bearer credential the first failure and conceals the authentication failure.",
+     "A7 returns the request-decoding failure before checking the bearer credential."
+    ],
+    "observer": "The unauthenticated caller"
+   },
+   "unit": "context"
+  },
+  {
+   "subject": "HTTP error representation for expense validation",
+   "kind": "response-contract contradiction",
+   "text": "State 0 says, “Application resources and commands use JSON. The only non-JSON response is an authenticated binary download,” while A7 says expense validation refusals answer “HTTP 422 with an empty body.”",
+   "question": "Must an expense-validation 422 contain a JSON error representation, or must it have no body?",
+   "options": [
+    "Return a JSON error body",
+    "Return HTTP 422 with an empty body"
+   ],
+   "default_guess": "Return the empty 422 required by the operation-specific A7 rule.",
+   "witness": {
+    "initial": "An authenticated operator has mutation access to an active project.",
+    "events": [
+     "The operator submits an expense intake whose allocations do not sum to the total."
+    ],
+    "outcomes": [
+     "The API returns a JSON error because binary downloads are the only permitted non-JSON responses.",
+     "The API returns HTTP 422 with an empty body as A7 requires."
+    ],
+    "observer": "The operator's API client"
+   },
+   "unit": "context"
+  },
+  {
+   "subject": "Foreign-currency expense rejection",
+   "kind": "error-contract contradiction",
+   "text": "State 0 says an expense carrying another currency “is rejected with an explicit error,” and A9 says any non-EUR currency at any boundary yields an “explicit typed rejection (`currency_mismatch`)”; A7 says every expense refusal before replay answers “HTTP 422 with an empty body.”",
+   "question": "Is `currency_mismatch` exposed to the expense caller, or is every pre-replay validation cause concealed behind an empty 422?",
+   "options": [
+    "Expose the typed `currency_mismatch` error",
+    "Return an empty HTTP 422 without exposing the cause",
+    "Classify it internally as `currency_mismatch` but conceal that classification at HTTP"
+   ],
+   "default_guess": "Classify it internally as `currency_mismatch` and return the empty 422 required by A7.",
+   "witness": {
+    "initial": "An authenticated operator has mutation access to an active project.",
+    "events": [
+     "The operator submits an otherwise valid confirmed recognition publication with currency `USD`."
+    ],
+    "outcomes": [
+     "The caller receives an explicit typed `currency_mismatch` error.",
+     "The caller receives an empty HTTP 422 indistinguishable from other validation failures."
+    ],
+    "observer": "The operator's API client"
+   },
+   "unit": "context"
+  },
+  {
+   "subject": "Registry active-project listing endpoint",
+   "kind": "external-contract contradiction",
+   "text": "State 0 calls `/projects/active` part of the “confirmed HTTP boundary”; A30 says the fixed path is `projects`, notes that the accepted service reads `projects`, and then says which endpoint is called is recorded in State 6 rather than decided here.",
+   "question": "Which Registry path must the active-project listing call: `/projects/active` or `/projects` followed by portal-side filtering?",
+   "options": [
+    "Call `/projects/active`",
+    "Call `/projects` and retain only active references"
+   ],
+   "default_guess": "Call `/projects` and filter, matching the accepted running-service behavior named in A30.",
+   "witness": {
+    "initial": "Registry exposes different observable behavior for `/projects` and `/projects/active`, such as supporting only one of them.",
+    "events": [
+     "An administrator requests the list of active Registry projects through the portal."
+    ],
+    "outcomes": [
+     "The portal calls `/projects/active` under the State 0 confirmed contract.",
+     "The portal calls `/projects` and filters active references under A30."
+    ],
+    "observer": "The administrator and the Registry operator"
+   },
+   "unit": "context"
+  },
+  {
+   "subject": "Overall progress with planned work but no progress records",
+   "kind": "formula contradiction",
+   "text": "State 0 and State 1 say overall progress is unavailable when no planned work cost exists or when total planned work is zero; A9 excludes every section without a recorded progress value from both sums, making the denominator zero even when planned work exists.",
+   "question": "If an active budget has positive planned work but no section has a progress record, is overall progress zero or unavailable?",
+   "options": [
+    "Return 0% using the planned-work denominator and zero completed work",
+    "Return unavailable because no recorded-progress section contributes to A9's denominator"
+   ],
+   "default_guess": "Return unavailable, following A9's explicit summation rule.",
+   "witness": {
+    "initial": "An active budget has one section with `work_planned = 100.00`; the section has no SectionProgress record.",
+    "events": [
+     "A viewer reads the project progress view."
+    ],
+    "outcomes": [
+     "Overall progress is available as 0%, because planned work exists and completed work is zero.",
+     "Overall progress is unavailable because A9 leaves the section out of both sums and the denominator is zero."
+    ],
+    "observer": "The viewer"
+   },
+   "unit": "context"
+  },
+  {
+   "subject": "Expense-document binary delivery failures",
+   "kind": "refusal-mapping conflict",
+   "text": "R0-12 says an expense-document read with missing, oversize, or unlisted stored content is answered the same way as an unknown, cross-project, or hidden read; A14 says a missing source object is an “explicit unavailable/not-found failure” and separately says oversize and unlisted content are rejected, without fixing the concealed document response.",
+   "question": "What exact externally visible failure must an authorized expense-document request receive when storage is missing, oversize, or has an unlisted media type?",
+   "options": [
+    "Use the same concealed not-found response as unknown, cross-project, and hidden documents",
+    "Expose a storage-unavailable response",
+    "Expose distinct oversize or unsupported-media responses"
+   ],
+   "default_guess": "Use the concealed document-not-found response for all three cases, following the more specific R0-12 rule.",
+   "witness": {
+    "initial": "A client-visible ExpenseDocument exists and the viewer is authorized for its project, but its stored object is missing.",
+    "events": [
+     "The viewer requests the document binary by `document_id`."
+    ],
+    "outcomes": [
+     "The response is indistinguishable from an unknown or hidden document.",
+     "The response explicitly reports storage unavailability or not-found after authorization."
+    ],
+    "observer": "The viewer"
+   },
+   "unit": "context"
+  },
+  {
+   "subject": "Audit failure atomicity for significant mutations",
+   "kind": "carried question unanswered",
+   "text": "M36 says, “Audit failures must not silently vanish; the owning-flow policy lands in State 2.” A13 requires exactly one audit record for catalog actions, while A22 defines transaction closing but never states that the business mutation and its required audit append share one atomic transaction or what happens when the append fails.",
+   "question": "If writing the required audit record fails, must the business mutation roll back, or may the mutation commit without its audit record?",
+   "options": [
+    "Business mutation and audit append are atomic; audit failure rolls back both",
+    "The business mutation may commit and the audit failure is propagated or handled separately",
+    "Retry or repair the audit after committing the business mutation"
+   ],
+   "default_guess": "Place the mutation and audit append in the same transaction and roll back both on audit failure.",
+   "witness": {
+    "initial": "An active project contains an expense that an authorized operator may correct.",
+    "events": [
+     "The operator submits a valid correction.",
+     "The expense repository write succeeds.",
+     "Appending the required `expense.correct` AuditRecord fails."
+    ],
+    "outcomes": [
+     "The transaction rolls back, leaving both the expense and audit unchanged.",
+     "The corrected expense remains committed without the required audit record."
+    ],
+    "observer": "The operator on the immediate response and an auditor on a later read"
+   },
+   "unit": "context"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"Project authorization and request decoding precedence\",\"kind\":\"contradictory check order\",\"text\":\"A4 says, “Every project-scoped operation evaluates, in order: valid unexpired unrevoked session … First failure wins,” while A7 says a malformed snapshot body “is refused by request decoding before the bearer credential is checked” and a malformed expense correction is “refused by request decoding before the guard.”\",\"question\":\"When both authentication and request decoding would fail, which failure must win?\",\"options\":[\"Authenticate first and return the concealed authentication failure\",\"Decode first and return the request-shape failure\"],\"default_guess\":\"Apply the more specific A7 rule and decode before authentication.\",\"witness\":{\"initial\":\"No valid producer credential exists.\",\"events\":[\"An unauthenticated caller submits a snapshot-import request whose body is missing a required field.\"],\"outcomes\":[\"A4 makes the invalid bearer credential the first failure and conceals the authentication failure.\",\"A7 returns the request-decoding failure before checking the bearer credential.\"],\"observer\":\"The unauthenticated caller\"},\"unit\":\"context\"},{\"subject\":\"HTTP error representation for expense validation\",\"kind\":\"response-contract contradiction\",\"text\":\"State 0 says, “Application resources and commands use JSON. The only non-JSON response is an authenticated binary download,” while A7 says expense validation refusals answer “HTTP 422 with an empty body.”\",\"question\":\"Must an expense-validation 422 contain a JSON error representation, or must it have no body?\",\"options\":[\"Return a JSON error body\",\"Return HTTP 422 with an empty body\"],\"default_guess\":\"Return the empty 422 required by the operation-specific A7 rule.\",\"witness\":{\"initial\":\"An authenticated operator has mutation access to an active project.\",\"events\":[\"The operator submits an expense intake whose allocations do not sum to the total.\"],\"outcomes\":[\"The API returns a JSON error because binary downloads are the only permitted non-JSON responses.\",\"The API returns HTTP 422 with an empty body as A7 requires.\"],\"observer\":\"The operator's API client\"},\"unit\":\"context\"},{\"subject\":\"Foreign-currency expense rejection\",\"kind\":\"error-contract contradiction\",\"text\":\"State 0 says an expense carrying another currency “is rejected with an explicit error,” and A9 says any non-EUR currency at any boundary yields an “explicit typed rejection (`currency_mismatch`)”; A7 says every expense refusal before replay answers “HTTP 422 with an empty body.”\",\"question\":\"Is `currency_mismatch` exposed to the expense caller, or is every pre-replay validation cause concealed behind an empty 422?\",\"options\":[\"Expose the typed `currency_mismatch` error\",\"Return an empty HTTP 422 without exposing the cause\",\"Classify it internally as `currency_mismatch` but conceal that classification at HTTP\"],\"default_guess\":\"Classify it internally as `currency_mismatch` and return the empty 422 required by A7.\",\"witness\":{\"initial\":\"An authenticated operator has mutation access to an active project.\",\"events\":[\"The operator submits an otherwise valid confirmed recognition publication with currency `USD`.\"],\"outcomes\":[\"The caller receives an explicit typed `currency_mismatch` error.\",\"The caller receives an empty HTTP 422 indistinguishable from other validation failures.\"],\"observer\":\"The operator's API client\"},\"unit\":\"context\"},{\"subject\":\"Registry active-project listing endpoint\",\"kind\":\"external-contract contradiction\",\"text\":\"State 0 calls `/projects/active` part of the “confirmed HTTP boundary”; A30 says the fixed path is `projects`, notes that the accepted service reads `projects`, and then says which endpoint is called is recorded in State 6 rather than decided here.\",\"question\":\"Which Registry path must the active-project listing call: `/projects/active` or `/projects` followed by portal-side filtering?\",\"options\":[\"Call `/projects/active`\",\"Call `/projects` and retain only active references\"],\"default_guess\":\"Call `/projects` and filter, matching the accepted running-service behavior named in A30.\",\"witness\":{\"initial\":\"Registry exposes different observable behavior for `/projects` and `/projects/active`, such as supporting only one of them.\",\"events\":[\"An administrator requests the list of active Registry projects through the portal.\"],\"outcomes\":[\"The portal calls `/projects/active` under the State 0 confirmed contract.\",\"The portal calls `/projects` and filters active references under A30.\"],\"observer\":\"The administrator and the Registry operator\"},\"unit\":\"context\"},{\"subject\":\"Overall progress with planned work but no progress records\",\"kind\":\"formula contradiction\",\"text\":\"State 0 and State 1 say overall progress is unavailable when no planned work cost exists or when total planned work is zero; A9 excludes every section without a recorded progress value from both sums, making the denominator zero even when planned work exists.\",\"question\":\"If an active budget has positive planned work but no section has a progress record, is overall progress zero or unavailable?\",\"options\":[\"Return 0% using the planned-work denominator and zero completed work\",\"Return unavailable because no recorded-progress section contributes to A9's denominator\"],\"default_guess\":\"Return unavailable, following A9's explicit summation rule.\",\"witness\":{\"initial\":\"An active budget has one section with `work_planned = 100.00`; the section has no SectionProgress record.\",\"events\":[\"A viewer reads the project progress view.\"],\"outcomes\":[\"Overall progress is available as 0%, because planned work exists and completed work is zero.\",\"Overall progress is unavailable because A9 leaves the section out of both sums and the denominator is zero.\"],\"observer\":\"The viewer\"},\"unit\":\"context\"},{\"subject\":\"Expense-document binary delivery failures\",\"kind\":\"refusal-mapping conflict\",\"text\":\"R0-12 says an expense-document read with missing, oversize, or unlisted stored content is answered the same way as an unknown, cross-project, or hidden read; A14 says a missing source object is an “explicit unavailable/not-found failure” and separately says oversize and unlisted content are rejected, without fixing the concealed document response.\",\"question\":\"What exact externally visible failure must an authorized expense-document request receive when storage is missing, oversize, or has an unlisted media type?\",\"options\":[\"Use the same concealed not-found response as unknown, cross-project, and hidden documents\",\"Expose a storage-unavailable response\",\"Expose distinct oversize or unsupported-media responses\"],\"default_guess\":\"Use the concealed document-not-found response for all three cases, following the more specific R0-12 rule.\",\"witness\":{\"initial\":\"A client-visible ExpenseDocument exists and the viewer is authorized for its project, but its stored object is missing.\",\"events\":[\"The viewer requests the document binary by `document_id`.\"],\"outcomes\":[\"The response is indistinguishable from an unknown or hidden document.\",\"The response explicitly reports storage unavailability or not-found after authorization.\"],\"observer\":\"The viewer\"},\"unit\":\"context\"},{\"subject\":\"Audit failure atomicity for significant mutations\",\"kind\":\"carried question unanswered\",\"text\":\"M36 says, “Audit failures must not silently vanish; the owning-flow policy lands in State 2.” A13 requires exactly one audit record for catalog actions, while A22 defines transaction closing but never states that the business mutation and its required audit append share one atomic transaction or what happens when the append fails.\",\"question\":\"If writing the required audit record fails, must the business mutation roll back, or may the mutation commit without its audit record?\",\"options\":[\"Business mutation and audit append are atomic; audit failure rolls back both\",\"The business mutation may commit and the audit failure is propagated or handled separately\",\"Retry or repair the audit after committing the business mutation\"],\"default_guess\":\"Place the mutation and audit append in the same transaction and roll back both on audit failure.\",\"witness\":{\"initial\":\"An active project contains an expense that an authorized operator may correct.\",\"events\":[\"The operator submits a valid correction.\",\"The expense repository write succeeds.\",\"Appending the required `expense.correct` AuditRecord fails.\"],\"outcomes\":[\"The transaction rolls back, leaving both the expense and audit unchanged.\",\"The corrected expense remains committed without the required audit record.\"],\"observer\":\"The operator on the immediate response and an auditor on a later read\"},\"unit\":\"context\"}]}",
+ "set_aside": []
+}

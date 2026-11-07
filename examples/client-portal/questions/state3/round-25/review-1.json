@@ -1,0 +1,156 @@
+{
+ "open_points": [
+  {
+   "subject": "project authentication and authorization boundary",
+   "kind": "double ownership",
+   "text": "`authorization_guard` owns “session validity, active principal” and “reads the persisted role and binds a session to its identity”, while `staff_identity` owns “resolution and sign-out”, `viewer_access` owns “viewer entry and session resolution”, and `service_identity` owns “bearer authentication”; `authorization_guard` may not know those later modules.",
+   "question": "Does an actor context conclusively prove authentication for the rest of one request, or must `authorization_guard` reload and revalidate the session or credential and principal?",
+   "options": [
+    "Identity modules authenticate once and `authorization_guard` trusts their actor contexts.",
+    "`authorization_guard` independently reloads and revalidates authentication state.",
+    "Authentication-state lookup moves behind an earlier shared port used by both responsibilities."
+   ],
+   "default_guess": "Treat actor contexts as authentication evidence and let `authorization_guard` own only project scope, capability, and Registry checks.",
+   "witness": {
+    "initial": "A staff session is valid when `resolve_staff_session` creates a `StaffActorContext`.",
+    "events": [
+     "The session expires or is revoked before the project authorization check runs.",
+     "The API passes the previously produced actor context to `authorize_staff_project_read`."
+    ],
+    "outcomes": [
+     "The guard trusts the actor context and permits the project read.",
+     "The guard reloads the session because it owns session validity and rejects the read."
+    ],
+    "observer": "The staff caller sees either project data or an authentication rejection."
+   },
+   "unit": "context"
+  },
+  {
+   "subject": "producer project scope",
+   "kind": "double ownership",
+   "text": "`service_identity` owns “producer scope” and exposes `authorize_producer_scope`, while `authorization_guard` owns “project scope … producer grant” and exposes `authorize_snapshot_import`; A12 names `service_identity` as primary owner and `authorization_guard` as a consumer.",
+   "question": "Which module makes the authoritative `all_projects` versus active-`ProducerProjectGrant` decision for an import, and is the other module required to call or trust it?",
+   "options": [
+    "`service_identity.authorize_producer_scope` decides scope before the guard.",
+    "`authorization_guard.authorize_snapshot_import` decides scope directly from persistence.",
+    "One module produces a trusted scope result consumed by the other."
+   ],
+   "default_guess": "Make `authorization_guard` the only runtime scope checker and remove the overlapping service-identity authorization capability.",
+   "witness": {
+    "initial": "A `granted_projects` producer has an active credential and an active grant for project P.",
+    "events": [
+     "One scope check succeeds.",
+     "An administrator revokes the grant before the second possible scope check.",
+     "The producer imports a snapshot for P."
+    ],
+    "outcomes": [
+     "The earlier service-identity result is authoritative, so the import proceeds.",
+     "The authorization guard reloads the grant and returns the scoped not-found rejection."
+    ],
+    "observer": "The producer sees either an import result or a concealed scope rejection."
+   },
+   "unit": "context"
+  },
+  {
+   "subject": "first-administrator input validation",
+   "kind": "missing interface",
+   "text": "`staff_bootstrap` must “normalize and validate the input through `staff_identity`'s input boundary”, but `staff_identity` exposes no normalization or password-validation capability and lists those rules only as hidden mechanisms.",
+   "question": "What public dependency may `staff_bootstrap` use for the staff email and new-password policy without duplicating a mechanism owned by `staff_identity`?",
+   "options": [
+    "Expose a staff-identity input-validation capability.",
+    "Move the reusable validation policy to an earlier module.",
+    "Permit `staff_bootstrap` to duplicate the validation rules."
+   ],
+   "default_guess": "Expose one validation capability from `staff_identity` for bootstrap use.",
+   "unit": "context"
+  },
+  {
+   "subject": "archived-project progress read side effect",
+   "kind": "unclear owner",
+   "text": "A5 requires `project_tracking.list_project_progress` to create an empty manual budget for an archived project, while `budget_management` owns manual-budget creation and each use case owns and closes the transaction it opens exactly once.",
+   "question": "Which module owns this exceptional creation, and how does `list_project_progress` invoke it without either bypassing `budget_management` or composing two independently owned transactions?",
+   "options": [
+    "`project_tracking` creates the budget directly in its own transaction.",
+    "`budget_management` exposes a transaction-aware internal capability used by `project_tracking`.",
+    "`project_tracking` calls `ensure_manual_budget` as a separate committed operation before its read transaction."
+   ],
+   "default_guess": "Give `project_tracking` a transaction-aware budget-management capability so creation, audit, and the progress read use one owning transaction.",
+   "unit": "context"
+  },
+  {
+   "subject": "activation with unresolved allocations",
+   "kind": "contradiction",
+   "text": "State 1 says “activation is refused while any is unresolved”; State 3 says `budget_management` owns activation “with the atomic switch of the active version, and the count of expense allocations left without a current section after a switch.”",
+   "question": "When allocations target sections absent from the candidate version, is activation rejected before the switch or completed with a nonzero unresolved count?",
+   "options": [
+    "Reject activation and leave the current version unchanged.",
+    "Activate the candidate and report the remaining unresolved allocations."
+   ],
+   "default_guess": "Reject activation before changing the active version.",
+   "witness": {
+    "initial": "Budget version V1 is active; an expense allocation targets section S; candidate version V2 has no plan for S.",
+    "events": [
+     "An operator requests activation of V2."
+    ],
+    "outcomes": [
+     "Activation is refused and V1 remains active, as State 1 requires.",
+     "V2 becomes active and the result reports one unresolved allocation, as State 3 can be read."
+    ],
+    "observer": "The operator and client subsequently see different active budgets."
+   },
+   "unit": "context"
+  },
+  {
+   "subject": "missing expense-document binary",
+   "kind": "contradiction",
+   "text": "A14 says “A missing source object is an explicit unavailable/not-found failure”, while R0-12 and State 3 require document storage failures to be concealed by `expense_management` as the same rejection used for unknown, cross-project, or hidden documents.",
+   "question": "What failure must an authorized document download return when its business record exists and is visible but its stored binary is missing?",
+   "options": [
+    "An explicit storage-unavailable or not-found error.",
+    "The concealed `BinaryAccessRejected` response used for unauthorized or unknown documents."
+   ],
+   "default_guess": "Use the concealed document-read rejection required by R0-12, while retaining explicit storage errors for photos.",
+   "witness": {
+    "initial": "A visible ExpenseDocument exists for an accessible project, but the file referenced by `file_ref` is absent.",
+    "events": [
+     "An authorized viewer requests the document binary.",
+     "`binary_storage` reports the missing object to `expense_management`."
+    ],
+    "outcomes": [
+     "The caller receives an explicit storage-unavailable/not-found failure under A14.",
+     "The caller receives the indistinguishable concealed document rejection under R0-12 and State 3."
+    ],
+    "observer": "The authorized viewer can or cannot distinguish missing storage from an inaccessible document."
+   },
+   "unit": "context"
+  },
+  {
+   "subject": "binary runtime configuration",
+   "kind": "contradictory ownership",
+   "text": "State 3 says environment values are read once by `runtime_settings`, and `runtime_settings` validates binary-bound consistency at startup, but also says `binary_storage` reads `BINARY_STORAGE_ROOT` and `BINARY_MAX_READ_BYTES` at each read and independently refuses missing or unusable values.",
+   "question": "After startup, is the authoritative binary root and read limit the validated `RuntimeSettings` value or the environment value reread by `binary_storage`, and how is the startup response-ceiling consistency preserved?",
+   "options": [
+    "Use only the startup `RuntimeSettings` values.",
+    "Reread the environment per binary request and revalidate all related bounds.",
+    "Use the startup ceiling but allow only a per-read limit no greater than it."
+   ],
+   "default_guess": "Use the immutable startup `RuntimeSettings` values for every binary read.",
+   "witness": {
+    "initial": "The service starts with a validated 1 MB binary read limit and matching response ceiling.",
+    "events": [
+     "After startup, the environment variable is changed to 10 MB.",
+     "An authorized caller requests a 5 MB stored document."
+    ],
+    "outcomes": [
+     "The startup settings remain authoritative and the read is rejected.",
+     "`binary_storage` uses the reread environment value and returns the 5 MB document despite the 1 MB startup ceiling."
+    ],
+    "observer": "The binary-download caller sees either a rejection or the document bytes."
+   },
+   "unit": "context"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"project authentication and authorization boundary\",\"kind\":\"double ownership\",\"text\":\"`authorization_guard` owns “session validity, active principal” and “reads the persisted role and binds a session to its identity”, while `staff_identity` owns “resolution and sign-out”, `viewer_access` owns “viewer entry and session resolution”, and `service_identity` owns “bearer authentication”; `authorization_guard` may not know those later modules.\",\"question\":\"Does an actor context conclusively prove authentication for the rest of one request, or must `authorization_guard` reload and revalidate the session or credential and principal?\",\"options\":[\"Identity modules authenticate once and `authorization_guard` trusts their actor contexts.\",\"`authorization_guard` independently reloads and revalidates authentication state.\",\"Authentication-state lookup moves behind an earlier shared port used by both responsibilities.\"],\"default_guess\":\"Treat actor contexts as authentication evidence and let `authorization_guard` own only project scope, capability, and Registry checks.\",\"witness\":{\"initial\":\"A staff session is valid when `resolve_staff_session` creates a `StaffActorContext`.\",\"events\":[\"The session expires or is revoked before the project authorization check runs.\",\"The API passes the previously produced actor context to `authorize_staff_project_read`.\"],\"outcomes\":[\"The guard trusts the actor context and permits the project read.\",\"The guard reloads the session because it owns session validity and rejects the read.\"],\"observer\":\"The staff caller sees either project data or an authentication rejection.\"},\"unit\":\"context\"},{\"subject\":\"producer project scope\",\"kind\":\"double ownership\",\"text\":\"`service_identity` owns “producer scope” and exposes `authorize_producer_scope`, while `authorization_guard` owns “project scope … producer grant” and exposes `authorize_snapshot_import`; A12 names `service_identity` as primary owner and `authorization_guard` as a consumer.\",\"question\":\"Which module makes the authoritative `all_projects` versus active-`ProducerProjectGrant` decision for an import, and is the other module required to call or trust it?\",\"options\":[\"`service_identity.authorize_producer_scope` decides scope before the guard.\",\"`authorization_guard.authorize_snapshot_import` decides scope directly from persistence.\",\"One module produces a trusted scope result consumed by the other.\"],\"default_guess\":\"Make `authorization_guard` the only runtime scope checker and remove the overlapping service-identity authorization capability.\",\"witness\":{\"initial\":\"A `granted_projects` producer has an active credential and an active grant for project P.\",\"events\":[\"One scope check succeeds.\",\"An administrator revokes the grant before the second possible scope check.\",\"The producer imports a snapshot for P.\"],\"outcomes\":[\"The earlier service-identity result is authoritative, so the import proceeds.\",\"The authorization guard reloads the grant and returns the scoped not-found rejection.\"],\"observer\":\"The producer sees either an import result or a concealed scope rejection.\"},\"unit\":\"context\"},{\"subject\":\"first-administrator input validation\",\"kind\":\"missing interface\",\"text\":\"`staff_bootstrap` must “normalize and validate the input through `staff_identity`'s input boundary”, but `staff_identity` exposes no normalization or password-validation capability and lists those rules only as hidden mechanisms.\",\"question\":\"What public dependency may `staff_bootstrap` use for the staff email and new-password policy without duplicating a mechanism owned by `staff_identity`?\",\"options\":[\"Expose a staff-identity input-validation capability.\",\"Move the reusable validation policy to an earlier module.\",\"Permit `staff_bootstrap` to duplicate the validation rules.\"],\"default_guess\":\"Expose one validation capability from `staff_identity` for bootstrap use.\",\"unit\":\"context\"},{\"subject\":\"archived-project progress read side effect\",\"kind\":\"unclear owner\",\"text\":\"A5 requires `project_tracking.list_project_progress` to create an empty manual budget for an archived project, while `budget_management` owns manual-budget creation and each use case owns and closes the transaction it opens exactly once.\",\"question\":\"Which module owns this exceptional creation, and how does `list_project_progress` invoke it without either bypassing `budget_management` or composing two independently owned transactions?\",\"options\":[\"`project_tracking` creates the budget directly in its own transaction.\",\"`budget_management` exposes a transaction-aware internal capability used by `project_tracking`.\",\"`project_tracking` calls `ensure_manual_budget` as a separate committed operation before its read transaction.\"],\"default_guess\":\"Give `project_tracking` a transaction-aware budget-management capability so creation, audit, and the progress read use one owning transaction.\",\"unit\":\"context\"},{\"subject\":\"activation with unresolved allocations\",\"kind\":\"contradiction\",\"text\":\"State 1 says “activation is refused while any is unresolved”; State 3 says `budget_management` owns activation “with the atomic switch of the active version, and the count of expense allocations left without a current section after a switch.”\",\"question\":\"When allocations target sections absent from the candidate version, is activation rejected before the switch or completed with a nonzero unresolved count?\",\"options\":[\"Reject activation and leave the current version unchanged.\",\"Activate the candidate and report the remaining unresolved allocations.\"],\"default_guess\":\"Reject activation before changing the active version.\",\"witness\":{\"initial\":\"Budget version V1 is active; an expense allocation targets section S; candidate version V2 has no plan for S.\",\"events\":[\"An operator requests activation of V2.\"],\"outcomes\":[\"Activation is refused and V1 remains active, as State 1 requires.\",\"V2 becomes active and the result reports one unresolved allocation, as State 3 can be read.\"],\"observer\":\"The operator and client subsequently see different active budgets.\"},\"unit\":\"context\"},{\"subject\":\"missing expense-document binary\",\"kind\":\"contradiction\",\"text\":\"A14 says “A missing source object is an explicit unavailable/not-found failure”, while R0-12 and State 3 require document storage failures to be concealed by `expense_management` as the same rejection used for unknown, cross-project, or hidden documents.\",\"question\":\"What failure must an authorized document download return when its business record exists and is visible but its stored binary is missing?\",\"options\":[\"An explicit storage-unavailable or not-found error.\",\"The concealed `BinaryAccessRejected` response used for unauthorized or unknown documents.\"],\"default_guess\":\"Use the concealed document-read rejection required by R0-12, while retaining explicit storage errors for photos.\",\"witness\":{\"initial\":\"A visible ExpenseDocument exists for an accessible project, but the file referenced by `file_ref` is absent.\",\"events\":[\"An authorized viewer requests the document binary.\",\"`binary_storage` reports the missing object to `expense_management`.\"],\"outcomes\":[\"The caller receives an explicit storage-unavailable/not-found failure under A14.\",\"The caller receives the indistinguishable concealed document rejection under R0-12 and State 3.\"],\"observer\":\"The authorized viewer can or cannot distinguish missing storage from an inaccessible document.\"},\"unit\":\"context\"},{\"subject\":\"binary runtime configuration\",\"kind\":\"contradictory ownership\",\"text\":\"State 3 says environment values are read once by `runtime_settings`, and `runtime_settings` validates binary-bound consistency at startup, but also says `binary_storage` reads `BINARY_STORAGE_ROOT` and `BINARY_MAX_READ_BYTES` at each read and independently refuses missing or unusable values.\",\"question\":\"After startup, is the authoritative binary root and read limit the validated `RuntimeSettings` value or the environment value reread by `binary_storage`, and how is the startup response-ceiling consistency preserved?\",\"options\":[\"Use only the startup `RuntimeSettings` values.\",\"Reread the environment per binary request and revalidate all related bounds.\",\"Use the startup ceiling but allow only a per-read limit no greater than it.\"],\"default_guess\":\"Use the immutable startup `RuntimeSettings` values for every binary read.\",\"witness\":{\"initial\":\"The service starts with a validated 1 MB binary read limit and matching response ceiling.\",\"events\":[\"After startup, the environment variable is changed to 10 MB.\",\"An authorized caller requests a 5 MB stored document.\"],\"outcomes\":[\"The startup settings remain authoritative and the read is rejected.\",\"`binary_storage` uses the reread environment value and returns the 5 MB document despite the 1 MB startup ceiling.\"],\"observer\":\"The binary-download caller sees either a rejection or the document bytes.\"},\"unit\":\"context\"}]}",
+ "set_aside": []
+}

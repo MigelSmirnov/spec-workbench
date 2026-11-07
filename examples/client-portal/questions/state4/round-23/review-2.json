@@ -1,0 +1,135 @@
+{
+ "open_points": [
+  {
+   "subject": "bootstrap infrastructure failures and exit-code contract",
+   "kind": "missing failure outcome",
+   "text": "It resolves the database through `capability:runtime_settings.load_runtime_settings` and builds the bootstrap store.",
+   "question": "What exit outcome applies when configuration loading, password hashing, database opening, schema creation, insertion, or commit fails, given the earlier claim that bootstrap exit codes are a closed external contract containing only 0–3?",
+   "options": [
+    "Add a distinct closed infrastructure-failure exit code",
+    "Map infrastructure failure to one of 1–3",
+    "Allow an uncaught failure and an implementation-dependent process exit outside the closed contract"
+   ],
+   "default_guess": "Add a distinct nonzero infrastructure-failure exit code without exposing sensitive details.",
+   "witness": {
+    "initial": "The staff table is empty, but the configured SQLite location cannot be opened.",
+    "events": [
+     "The host operator enters matching credentials.",
+     "The CLI loads settings and invokes the bootstrap store.",
+     "The store fails while opening the database."
+    ],
+    "outcomes": [
+     "The command exits with an implementation-dependent uncaught-exception status, despite the earlier closed exit-code contract.",
+     "The command maps the failure to an existing code such as 2 or 3, making deployment scripts misclassify the failure."
+    ],
+    "observer": "The host operator and deployment scripts branching on the exit code."
+   },
+   "unit": "context"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"bootstrap staff-input validation capability\",\"kind\":\"unnamed capability\",\"text\":\"`capability:staff_bootstrap.bootstrap_first_administrator` normalizes and validates the email and password\",\"question\":\"Which callable capability performs staff email normalization and new-password validation for bootstrap, given that `staff_identity` exposes no such capability and `create_staff_account` is an administrator-backed persistence operation?\",\"options\":[\"Expose a validation capability from `staff_identity`\",\"Make `staff_bootstrap` own duplicate normalization and password-policy logic\",\"Use `create_staff_account` logic through an unstated internal interface\"],\"default_guess\":\"Expose side-effect-free staff identity input validation from `staff_identity` and call it from `staff_bootstrap`.\",\"witness\":{\"initial\":\"The deployment has no staff accounts, and the host operator supplies an email differing only by case plus a policy-invalid password.\",\"events\":[\"The host operator runs `run_bootstrap_cli`.\",\"`staff_bootstrap.bootstrap_first_administrator` must normalize and validate before hashing or opening the bootstrap write.\"],\"outcomes\":[\"Bootstrap calls a shared `staff_identity` validator, so bootstrap and HTTP account creation apply identical rules.\",\"Bootstrap reimplements the rules locally, allowing the two entry paths to diverge when validation changes.\"],\"observer\":\"The host operator, through the bootstrap exit code and whether an account is created.\"},\"unit\":\"40_flows.md:Status: Status\"},{\"subject\":\"bootstrap infrastructure failures and exit-code contract\",\"kind\":\"missing failure outcome\",\"text\":\"It resolves the database through `capability:runtime_settings.load_runtime_settings` and builds the bootstrap store.\",\"question\":\"What exit outcome applies when configuration loading, password hashing, database opening, schema creation, insertion, or commit fails, given the earlier claim that bootstrap exit codes are a closed external contract containing only 0–3?\",\"options\":[\"Add a distinct closed infrastructure-failure exit code\",\"Map infrastructure failure to one of 1–3\",\"Allow an uncaught failure and an implementation-dependent process exit outside the closed contract\"],\"default_guess\":\"Add a distinct nonzero infrastructure-failure exit code without exposing sensitive details.\",\"witness\":{\"initial\":\"The staff table is empty, but the configured SQLite location cannot be opened.\",\"events\":[\"The host operator enters matching credentials.\",\"The CLI loads settings and invokes the bootstrap store.\",\"The store fails while opening the database.\"],\"outcomes\":[\"The command exits with an implementation-dependent uncaught-exception status, despite the earlier closed exit-code contract.\",\"The command maps the failure to an existing code such as 2 or 3, making deployment scripts misclassify the failure.\"],\"observer\":\"The host operator and deployment scripts branching on the exit code.\"},\"unit\":\"context\"},{\"subject\":\"producer-project grant duplicate and terminal-pair failures\",\"kind\":\"missing failure outcome\",\"text\":\"`capability:service_identity.grant_producer_project` requires the project known and active ... and appends `producer_grant.create`\",\"question\":\"What declared failure and HTTP status result when the producer already has an active grant, or when the same principal/project pair has a revoked terminal grant?\",\"options\":[\"Use the viewer/staff precedent: 403 for an active duplicate and 500 persistence conflict after revocation\",\"Return 409 conflict for either duplicate state\",\"Return 422 input rejection for either duplicate state\"],\"default_guess\":\"Follow the explicitly documented viewer/staff behavior: 403 for an active duplicate and 500 for the terminal-pair persistence conflict.\",\"witness\":{\"initial\":\"A `granted_projects` service principal has a revoked grant for project P; P is active in Registry.\",\"events\":[\"An administrator submits another grant for the same principal and P.\",\"Authorization and Registry validation succeed.\",\"`service_identity` reaches the one-record-per-pair constraint.\"],\"outcomes\":[\"The route exposes the storage conflict as 500, matching the viewer and staff flows.\",\"The use case recognizes the terminal pair and returns a domain conflict such as 409.\"],\"observer\":\"The administrator calling the producer-grant route.\"},\"unit\":\"40_flows.md:Status: Status\"},{\"subject\":\"issuing credentials for a disabled service principal\",\"kind\":\"unstated lifecycle outcome\",\"text\":\"`capability:service_identity.issue_service_credential` stores the hash of a new secret with the next key version\",\"question\":\"May an administrator issue a credential while the target service principal is disabled, and if not, what declared failure does the operation return?\",\"options\":[\"Issue it successfully but keep it unusable until the principal is enabled\",\"Reject issuance while disabled\",\"Issue it and make it usable despite the disabled status\"],\"default_guess\":\"Reject issuance while the principal is disabled with an input or lifecycle conflict.\",\"witness\":{\"initial\":\"A service principal is disabled and all of its old credentials have been revoked.\",\"events\":[\"An administrator requests a new service credential for that disabled principal.\"],\"outcomes\":[\"A new secret is returned and its credential remains unusable until re-enablement.\",\"The request is rejected and no credential or audit record is written.\"],\"observer\":\"The administrator receiving either a one-time secret or an error.\"},\"unit\":\"40_flows.md:Status: Status\"},{\"subject\":\"empty manual budget created by progress listing\",\"kind\":\"unnamed owner and operation\",\"text\":\"the progress list first creates the empty manual budget version when the project has none, an archived one included\",\"question\":\"Which module capability creates and audits the empty manual budget during `list_project_progress`, and how is it invoked without a nested transaction or the normal mutation authorization that archived projects fail?\",\"options\":[\"`project_tracking.list_project_progress` calls a special read-triggered capability of `budget_management` before opening its read transaction\",\"`budget_management.ensure_manual_budget` accepts the read context and owns the creation and audit\",\"`project_tracking` writes the budget and audit directly despite `budget_management` ownership\"],\"default_guess\":\"Have `list_project_progress` invoke `budget_management.ensure_manual_budget` in a separate, explicitly archived-safe transaction before reading progress.\",\"witness\":{\"initial\":\"An archived project has no manual budget version and no progress records; an assigned operator may read it.\",\"events\":[\"The operator requests the progress list.\",\"The read guard admits the archived project.\",\"The flow must create a manual budget version and its `budget.manual_version_create` audit before returning the empty progress list.\"],\"outcomes\":[\"`budget_management` performs an archived-safe creation and audit, then `project_tracking` reads progress.\",\"`project_tracking` creates the budget itself or attempts a nested call, changing ownership or violating the transaction rule.\"],\"observer\":\"Maintainers and tests observing transaction boundaries, audit ownership, and the newly persisted budget.\"},\"unit\":\"40_flows.md:Status: Status\"}]}",
+ "set_aside": [
+  {
+   "subject": "bootstrap staff-input validation capability",
+   "kind": "unnamed capability",
+   "text": "`capability:staff_bootstrap.bootstrap_first_administrator` normalizes and validates the email and password",
+   "question": "Which callable capability performs staff email normalization and new-password validation for bootstrap, given that `staff_identity` exposes no such capability and `create_staff_account` is an administrator-backed persistence operation?",
+   "options": [
+    "Expose a validation capability from `staff_identity`",
+    "Make `staff_bootstrap` own duplicate normalization and password-policy logic",
+    "Use `create_staff_account` logic through an unstated internal interface"
+   ],
+   "default_guess": "Expose side-effect-free staff identity input validation from `staff_identity` and call it from `staff_bootstrap`.",
+   "witness": {
+    "initial": "The deployment has no staff accounts, and the host operator supplies an email differing only by case plus a policy-invalid password.",
+    "events": [
+     "The host operator runs `run_bootstrap_cli`.",
+     "`staff_bootstrap.bootstrap_first_administrator` must normalize and validate before hashing or opening the bootstrap write."
+    ],
+    "outcomes": [
+     "Bootstrap calls a shared `staff_identity` validator, so bootstrap and HTTP account creation apply identical rules.",
+     "Bootstrap reimplements the rules locally, allowing the two entry paths to diverge when validation changes."
+    ],
+    "observer": "The host operator, through the bootstrap exit code and whether an account is created."
+   },
+   "unit": "40_flows.md:Status: Status"
+  },
+  {
+   "subject": "producer-project grant duplicate and terminal-pair failures",
+   "kind": "missing failure outcome",
+   "text": "`capability:service_identity.grant_producer_project` requires the project known and active ... and appends `producer_grant.create`",
+   "question": "What declared failure and HTTP status result when the producer already has an active grant, or when the same principal/project pair has a revoked terminal grant?",
+   "options": [
+    "Use the viewer/staff precedent: 403 for an active duplicate and 500 persistence conflict after revocation",
+    "Return 409 conflict for either duplicate state",
+    "Return 422 input rejection for either duplicate state"
+   ],
+   "default_guess": "Follow the explicitly documented viewer/staff behavior: 403 for an active duplicate and 500 for the terminal-pair persistence conflict.",
+   "witness": {
+    "initial": "A `granted_projects` service principal has a revoked grant for project P; P is active in Registry.",
+    "events": [
+     "An administrator submits another grant for the same principal and P.",
+     "Authorization and Registry validation succeed.",
+     "`service_identity` reaches the one-record-per-pair constraint."
+    ],
+    "outcomes": [
+     "The route exposes the storage conflict as 500, matching the viewer and staff flows.",
+     "The use case recognizes the terminal pair and returns a domain conflict such as 409."
+    ],
+    "observer": "The administrator calling the producer-grant route."
+   },
+   "unit": "40_flows.md:Status: Status"
+  },
+  {
+   "subject": "issuing credentials for a disabled service principal",
+   "kind": "unstated lifecycle outcome",
+   "text": "`capability:service_identity.issue_service_credential` stores the hash of a new secret with the next key version",
+   "question": "May an administrator issue a credential while the target service principal is disabled, and if not, what declared failure does the operation return?",
+   "options": [
+    "Issue it successfully but keep it unusable until the principal is enabled",
+    "Reject issuance while disabled",
+    "Issue it and make it usable despite the disabled status"
+   ],
+   "default_guess": "Reject issuance while the principal is disabled with an input or lifecycle conflict.",
+   "witness": {
+    "initial": "A service principal is disabled and all of its old credentials have been revoked.",
+    "events": [
+     "An administrator requests a new service credential for that disabled principal."
+    ],
+    "outcomes": [
+     "A new secret is returned and its credential remains unusable until re-enablement.",
+     "The request is rejected and no credential or audit record is written."
+    ],
+    "observer": "The administrator receiving either a one-time secret or an error."
+   },
+   "unit": "40_flows.md:Status: Status"
+  },
+  {
+   "subject": "empty manual budget created by progress listing",
+   "kind": "unnamed owner and operation",
+   "text": "the progress list first creates the empty manual budget version when the project has none, an archived one included",
+   "question": "Which module capability creates and audits the empty manual budget during `list_project_progress`, and how is it invoked without a nested transaction or the normal mutation authorization that archived projects fail?",
+   "options": [
+    "`project_tracking.list_project_progress` calls a special read-triggered capability of `budget_management` before opening its read transaction",
+    "`budget_management.ensure_manual_budget` accepts the read context and owns the creation and audit",
+    "`project_tracking` writes the budget and audit directly despite `budget_management` ownership"
+   ],
+   "default_guess": "Have `list_project_progress` invoke `budget_management.ensure_manual_budget` in a separate, explicitly archived-safe transaction before reading progress.",
+   "witness": {
+    "initial": "An archived project has no manual budget version and no progress records; an assigned operator may read it.",
+    "events": [
+     "The operator requests the progress list.",
+     "The read guard admits the archived project.",
+     "The flow must create a manual budget version and its `budget.manual_version_create` audit before returning the empty progress list."
+    ],
+    "outcomes": [
+     "`budget_management` performs an archived-safe creation and audit, then `project_tracking` reads progress.",
+     "`project_tracking` creates the budget itself or attempts a nested call, changing ownership or violating the transaction rule."
+    ],
+    "observer": "Maintainers and tests observing transaction boundaries, audit ownership, and the newly persisted budget."
+   },
+   "unit": "40_flows.md:Status: Status"
+  }
+ ]
+}

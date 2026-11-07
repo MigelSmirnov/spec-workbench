@@ -41,13 +41,12 @@ The former status, kept:
 >    email-change mechanism; recovery of the sole administrator stays a
 >    deployment-level operation.
 >
->    *In the running service (R0-19, R0-23):* none of these challenges,
->    deliveries or notifications exists. The challenge operations are inert,
->    no operation calls the gateway, and no notice is sent; an administrator
->    activates a new account, which marks its email verified, and the holder
->    changes the initial password. Models M08–M12 describe the deferred
->    design (Q19); no operation of the running portal creates or consumes
->    their records.
+>    *Withdrawn by the owner on 2026-11-07 (R0-03, R0-23):* the portal has no
+>    email challenge, no email delivery and no notification, and sends no
+>    email; an administrator activates a new account and the holder changes
+>    the initial password. The former models M08–M12 (`PasswordResetToken`,
+>    `EmailVerificationChallenge`, `PendingEmailChange`,
+>    `EmailDeliveryRecord`, `EmailDeliveryRequest`) are removed.
 > 2. **Administrator is a superset of operator.** Role and principal-type
 >    capability sets are static catalog data (`rules`); there is no runtime
 >    capability editing. Only assignments (grants, scopes) are mutable data.
@@ -76,8 +75,8 @@ The former status, kept:
   the sums over such allocations (never clamped).
 - Timestamps are timezone-aware UTC. Portal-owned event times are distinct
   from source-system times (`captured_at` vs `registry_updated_at` pattern).
-- Secrets (viewer access tokens, session tokens, passwords, reset tokens,
-  service credentials) are stored **only** in verification form
+- Secrets (viewer access tokens, session tokens, passwords, service
+  credentials) are stored **only** in verification form
   (`*_hash`); plaintext of a secret the portal issues exists only in the
   issuing response, and plaintext a caller presents or chooses (a password
   at login, account creation, password change or bootstrap; a session token,
@@ -315,16 +314,17 @@ None.
   `updated_at`.
 - **Lifecycle:** `pending_verification → active ↔ suspended → disabled`
   (disabled terminal), with one second entry: the first administrator of
-  R0-07 is created directly `active` with a verified email and
-  `created_by = None`. An account authenticates only in `active` status
-  with a verified email. Suspension and disabling invalidate active
-  sessions; no notification is sent (R0-23).
+  R0-07 is created directly `active` with `email_verified_at` set and
+  `created_by = None`. `pending_verification` means awaiting the
+  administrator's activation; no email is verified (R0-23). An account
+  authenticates only in `active` status; `email_verified_at` decides no
+  access. Suspension and disabling invalidate active sessions; no
+  notification is sent (R0-23).
 - **Created/modified by:** an administrator creates the account (in
   `pending_verification`, with the initial password of R0-19), changes its
   status — activation `pending_verification → active` sets
   `email_verified_at` (R0-19) — and replaces its email by the recovery
-  override, the only email change of the running service (the
-  `PendingEmailChange` path is deferred, R0-23). The holder changes only
+  override, the only email change (R0-20, R0-23). The holder changes only
   their own `password_hash`, by presenting the current password; that change
   revokes the holder's other sessions and keeps the one it is made through.
   `role` is set at creation and never changes: no operation changes a role.
@@ -336,7 +336,10 @@ Repaired to the running service (accepted `create_staff_account`,
 `rules.staff_bootstrap_policy`; R0-07, R0-19, R0-23; owner 2026-11-06:
 current service behaviour accepted; technical decisions delegated). The
 notification of suspension and disabling and the email change through
-`PendingEmailChange` are the deferred challenges and notices (Q19).
+`PendingEmailChange` are removed with the challenges (owner 2026-11-07,
+R0-23). Since then authentication decides on `active` status alone: the
+accepted spec also required `email_verified_at`, which every path into
+`active` sets (activation, R0-07), so no account's answer changes.
 - **Must not contain:** plaintext credentials, capability lists (roles map to
   static capability sets in `rules`), Registry customer data.
 
@@ -347,7 +350,7 @@ entity
 ### Identity evidence
 
 - Substitution: Two staff members are never interchangeable; sessions, assignments and audit name one account.
-- Continuity: The account is the same staff member across verification, suspension, email change and disabling.
+- Continuity: The account is the same staff member across activation, suspension, the recovery override's email replacement and disabling.
 
 ### Source of truth
 
@@ -379,14 +382,12 @@ None.
   current one included; an administrator may apply it to its own account,
   and an operator is signed out everywhere by an administrator), the holder's own
   password change (every other session of the account), and
-  suspension/disabling. Password reset revokes nothing in the running
-  service: its completion is inert (R0-23).
+  suspension/disabling. No password reset exists (R0-23).
 
 ### Carried changes
 
 Repaired to the accepted `sign_out_staff`, `revoke_staff_sessions`,
-`change_staff_password`, `change_staff_status`, `complete_password_reset`
-(inert) and R0-23 (owner 2026-11-06: current service behaviour accepted;
+`change_staff_password`, `change_staff_status` and R0-23 (owner 2026-11-06: current service behaviour accepted;
 technical decisions delegated).
 
 ### Identity
@@ -480,264 +481,6 @@ Backend-owned record of the portal.
 ### Persistence candidate
 
 Durable persistence candidate.
-
-### Open questions
-
-None.
-
-## Model M08 — PasswordResetToken
-
-### Meaning
-
-- **Kind:** persisted entity (secret in verification form).
-- **Fields:** `token_id: UUID`, `staff_id: UUID`, `token_hash: str`,
-  `created_at`, `created_by: UUID | None` (issuing administrator; `None`
-  for a self-service request), `expires_at`, `used_at | None`,
-  `revoked_at | None`.
-- **Rules:** purpose-bound (a reset token is never consumable by another
-  flow); single-use; expired/used/revoked tokens are permanently unusable;
-  successful use revokes the staff account's active sessions and all other
-  outstanding reset tokens of that account and triggers a
-  password-changed notification; a self-service request for an unknown or
-  unverified email produces no observable difference in the response.
-- **Created by (deferred design, R0-23, Q19):** self-service request or
-  administrator; delivered only through the email gateway. In the running
-  service no operation creates or consumes a PasswordResetToken: requesting
-  and completing a reset are inert, and the rules above take effect only
-  when Q19 is designed.
-
-### Carried changes
-
-The present-tense producers are marked deferred: accepted `staff_challenges`
-notes "remain inert while StaffChallengeRepository is deferred" (R0-23; owner
-2026-11-06: current service behaviour accepted; technical decisions
-delegated).
-
-### Identity
-
-entity
-
-### Identity evidence
-
-- Substitution: Each reset token is consumed, expired or revoked on its own.
-- Continuity: A token stays the same record from issue to use, expiry or revocation.
-
-### Source of truth
-
-Backend-owned record of the portal.
-
-### Lifecycle candidate
-
-issued → used | expired | revoked (Meaning).
-
-### Persistence candidate
-
-Durable persistence candidate.
-
-### Open questions
-
-None.
-
-## Model M09 — EmailVerificationChallenge
-
-### Meaning
-
-- **Kind:** persisted entity (secret in verification form).
-- **Purpose:** confirm ownership of the initial account email before the
-  account can authenticate.
-- **Fields:** `challenge_id: UUID`, `staff_id: UUID`, `email: str` (the
-  address being verified), `token_hash: str`, `created_at`,
-  `created_by: UUID`, `expires_at`, `consumed_at | None`,
-  `revoked_at | None`.
-- **Rules:** purpose-bound; single-use; consuming sets
-  `email_verified_at` and moves the account
-  `pending_verification → active`; an expired challenge requires an
-  administrator to issue a new one (which revokes outstanding ones);
-  replay is rejected; delivery success/failure never substitutes for
-  consumption.
-- **Created by (deferred design, R0-23, Q19):** administrator (at account
-  creation or re-issue). In the running service no operation creates or
-  consumes an EmailVerificationChallenge: account creation issues none,
-  issuing and confirming a verification are inert, and the administrator's
-  activation of the account (M05) is what sets `email_verified_at` and moves
-  it `pending_verification → active`.
-
-### Carried changes
-
-Marked deferred as M08 (R0-19, R0-23; accepted `change_staff_status`; owner
-2026-11-06: current service behaviour accepted; technical decisions
-delegated).
-
-### Identity
-
-entity
-
-### Identity evidence
-
-- Substitution: Each challenge is consumed or revoked on its own; a new one revokes outstanding ones.
-- Continuity: A challenge stays the same record from issue to consumption, expiry or revocation.
-
-### Source of truth
-
-Backend-owned record of the portal.
-
-### Lifecycle candidate
-
-issued → consumed | expired | revoked (Meaning).
-
-### Persistence candidate
-
-Durable persistence candidate.
-
-### Open questions
-
-None.
-
-## Model M10 — PendingEmailChange
-
-### Meaning
-
-- **Kind:** persisted entity (secret in verification form).
-- **Purpose:** staged change of the login email, completed only by proving
-  ownership of the new address.
-- **Fields:** `change_id: UUID`, `staff_id: UUID`, `new_email: str`
-  (normalized), `token_hash: str` (delivered to the new address),
-  `created_at`, `requested_by: UUID` (the account itself or an
-  administrator), `expires_at`, `consumed_at | None`, `revoked_at | None`.
-- **Rules:** purpose-bound; single-use; at most one outstanding change per
-  account (a new request revokes the previous one); uniqueness of
-  `new_email` against existing accounts is checked at request and again at
-  consumption; the new email becomes the login identifier only at
-  consumption; the old address receives an email-changed notification
-  after completion; delivery failure never confirms the address.
-- **Created by (deferred design, R0-23, Q19):** the staff account or an
-  administrator. In the running service no operation creates or consumes a
-  PendingEmailChange: requesting and confirming an email change are inert,
-  and the only email change is the administrator's recovery override (M05).
-
-### Carried changes
-
-Marked deferred as M08 (R0-23; accepted `perform_recovery_override`; owner
-2026-11-06: current service behaviour accepted; technical decisions
-delegated).
-
-### Identity
-
-entity
-
-### Identity evidence
-
-- Substitution: Each staged change is consumed or revoked on its own; a new request revokes the previous one.
-- Continuity: A change stays the same record from request to consumption, expiry or revocation.
-
-### Source of truth
-
-Backend-owned record of the portal.
-
-### Lifecycle candidate
-
-requested → consumed | expired | revoked (Meaning).
-
-### Persistence candidate
-
-Durable persistence candidate.
-
-### Open questions
-
-None.
-
-## Model M11 — EmailDeliveryRecord
-
-### Meaning
-
-- **Kind:** persisted entity.
-- **Purpose:** operational visibility of outbound mail; never proof of
-  address ownership or challenge validity.
-- **Fields:** `delivery_id: UUID`,
-  `message_kind: EmailMessageKind (email_verification |
-  email_change_confirmation | password_reset | password_changed_notice |
-  email_changed_notice | account_security_notice)`,
-  `recipient_email: str`, `challenge_ref: UUID | None` (the related
-  challenge/change/reset record, when the message carries a token link),
-  `requested_at`, `gateway_ref: str | None`,
-  `outcome: DeliveryOutcome (pending | accepted | failed)`,
-  `failure_reason: str | None`, `updated_at`.
-- **Rules:** never stores token plaintext; outcome is informational for
-  staff (re-issue decisions) and audit; challenge validity is decided only
-  by the challenge records.
-- **Created by (deferred design, R0-23, Q19):** the email
-  challenge/notification flow. Modified by: the gateway-result handler only.
-  In the running service no operation creates or modifies an
-  EmailDeliveryRecord, since no challenge or notice is sent.
-
-### Carried changes
-
-Marked deferred as M08 (R0-23; owner 2026-11-06: current service behaviour
-accepted; technical decisions delegated).
-
-### Identity
-
-entity
-
-### Identity evidence
-
-- Substitution: Each outbound message is one record; two messages to one address are two deliveries.
-- Continuity: A delivery stays the same record while its outcome moves from pending to accepted or failed.
-
-### Source of truth
-
-Backend-owned record of the portal.
-
-### Lifecycle candidate
-
-`pending → accepted | failed` (Meaning).
-
-### Persistence candidate
-
-Durable persistence candidate.
-
-### Open questions
-
-None.
-
-## Model M12 — EmailDeliveryRequest
-
-### Meaning
-
-- **Kind:** transient delivery-only DTO.
-- **Fields:** `delivery_id: UUID`, `message_kind: EmailMessageKind`,
-  `recipient_email: str`, `challenge_ref: UUID | None`,
-  `token: str | None` `[required exactly for token-carrying message kinds]`.
-- **Rules:** consumed only by `email_delivery_gateway`; plaintext token is
-  never persisted/logged, and the DTO conveys no challenge validity.
-- **In the running service (R0-23, Q19):** no operation builds or sends an
-  EmailDeliveryRequest; the gateway is called by no operation.
-
-### Carried changes
-
-Marked deferred as M08 (R0-23; owner 2026-11-06: current service behaviour
-accepted; technical decisions delegated).
-
-### Identity
-
-value
-
-### Identity evidence
-
-- Substitution: Two requests with equal content ask the gateway for the same delivery; the delivery's identity is the EmailDeliveryRecord it names.
-- Continuity: No independent continuity: it exists for the one action that carries it.
-
-### Source of truth
-
-The portal's challenge and notification flow (deferred, R0-23); it conveys no challenge validity.
-
-### Lifecycle candidate
-
-None; a value has no independent lifecycle.
-
-### Persistence candidate
-
-Transient, never persisted or logged.
 
 ### Open questions
 
@@ -2102,10 +1845,6 @@ HTTP responses.
   `disabled_at: datetime | None`.
 - `SessionRevocationResult` — `staff_id: UUID`,
   `revoked_session_count: int`, `revoked_at: datetime`.
-- `ChallengeIssueView` — `challenge_ref: UUID`,
-  `message_kind: EmailMessageKind`, `expires_at: datetime`,
-  `delivery_id: UUID`, `delivery_outcome: DeliveryOutcome`. It contains no
-  token or hash; delivery outcome is not verification.
 - `ViewerCredentialIssueResponse` — `credential_id: UUID`, `viewer_id: UUID`,
   `secret: str` (shown once), `created_at: datetime`.
 - `ServiceCredentialIssueResponse` — `credential_id: UUID`,
@@ -2321,7 +2060,8 @@ State 1; each is carried by the state named.
 - Request bodies of the HTTP API (`StaffLoginRequest`, `ViewerEnterRequest`,
   `ViewerCreateRequest`, `ServicePrincipalCreateRequest`,
   `RecognitionExpenseCreateRequest`, `WorkPaymentRegistrationRequest` and
-  their siblings, 26 in all) — inbound commands, State 5 and the State 6
+  their siblings, 20 in all since the removal of 2026-11-07, R0-23) —
+  inbound commands, State 5 and the State 6
   model closure (Factory `38626cc7`, `3080ef0d`, `9eab4d94`).
 - Repository ports and the unit of work (`AuditRepository`,
   `ProjectTrackingRepository`, … `ViewerAccessRepository`,
@@ -2350,19 +2090,17 @@ The former "Candidate constants and catalogs (→ State 2)", kept:
   BudgetVersionStatus, AllocationTargetKind, ImportOutcome,
   ImportRejectReason, ActorKind, AuditAction, AuditEntityKind, AuditResult,
   RegistryFailureKind, RegistryProjectStatus (`active | archived`),
-  Capability (the closed R1 values), EmailMessageKind, DeliveryOutcome,
-  ViewAvailability, WorkBalanceLabel, RecognitionStatus, BinaryObjectKind,
+  Capability (the closed R1 values), ViewAvailability, WorkBalanceLabel, RecognitionStatus, BinaryObjectKind,
   AuthorizationPrincipalKind.
 - `AuditEntityKind` is the closed set derived from the accepted audit catalog
   and existing entities: `viewer | viewer_credential | viewer_grant |
-  staff_account | staff_session | staff_assignment | email_challenge |
+  staff_account | staff_session | staff_assignment |
   service_principal | service_credential | producer_grant | budget_version |
   section_plan | snapshot_import | expense | expense_document |
   expense_allocation | section_progress | work_payment | progress_photo`.
   Assembly MUST NOT invent a generic entity kind or accept arbitrary strings.
-- Config candidates: Registry base URL and timeout, email gateway endpoint
-  and timeout, staff/viewer session TTLs, challenge TTLs (verification,
-  email change, password reset), email challenge rate limits, credential
+- Config candidates: Registry base URL and timeout, staff/viewer session
+  TTLs, credential
   entropy parameters, hashing parameters, binary read size limit.
 - Rules candidates: money rounding policy, Registry failure translation
   table, accepted OCR `contract_version` set, accepted snapshot

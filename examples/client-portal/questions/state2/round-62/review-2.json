@@ -1,0 +1,335 @@
+{
+ "open_points": [
+  {
+   "subject": "M36 AuditRecord owning-flow policy",
+   "kind": "unresolved carried question",
+   "text": "State 1 says, “Audit failures must not silently vanish; the owning-flow policy lands in State 2.” State 2 requires one audit record but never says whether failure to append it aborts and rolls back the business change.",
+   "question": "When the business records can be written but the required audit append fails, must the entire action roll back, or may the business change commit without its audit record?",
+   "options": [
+    "Roll back the business change and surface the audit failure",
+    "Commit the business change and report or retry the missing audit separately"
+   ],
+   "default_guess": "Keep the business mutation and its required audit record in one transaction, rolling both back if the audit append fails.",
+   "witness": {
+    "initial": "An active project has an included expense, and the audit repository will fail on its next append.",
+    "events": [
+     "An authorized operator corrects the expense.",
+     "The expense write succeeds, but appending expense.correct fails."
+    ],
+    "outcomes": [
+     "The transaction rolls back, so the expense remains unchanged.",
+     "The corrected expense commits without the required audit record."
+    ],
+    "observer": "The operator on a subsequent read and an auditor inspecting the ledger."
+   },
+   "unit": "context"
+  },
+  {
+   "subject": "State 0 Audit versus A13 audit catalog",
+   "kind": "contradictory audit condition",
+   "text": "State 0 says, “An action is recorded when it completes” and that storage or Registry failures before completion are not recorded. A13 formally says, “every action in the audit catalog writes exactly one AuditRecord,” while also saying that every refused operation other than classified snapshot imports and failed logins writes no record.",
+   "question": "Does a refused occurrence of a catalog action count as an action that must write one rejected audit record, or is audit required only for completed actions plus the two named rejected cases?",
+   "options": [
+    "Every attempted catalog action, including refusals, writes exactly one record",
+    "Only successful completions and the two expressly named rejected cases write records"
+   ],
+   "default_guess": "Audit successful catalog actions plus classified snapshot-import rejections and staff.login_failed; write nothing for other refusals.",
+   "witness": {
+    "initial": "An administrator is authenticated, but submits a viewer.create request that domain validation refuses.",
+    "events": [
+     "The administrator attempts viewer creation.",
+     "The use case refuses before creating a viewer."
+    ],
+    "outcomes": [
+     "A rejected viewer.create AuditRecord is written under the formal every-action invariant.",
+     "No audit record is written under the explicit refused-operation rule and State 0 completion rule."
+    ],
+    "observer": "An auditor querying the audit ledger."
+   },
+   "unit": "context"
+  },
+  {
+   "subject": "Missing SectionProgress in derived values",
+   "kind": "direct contradiction",
+   "text": "State 0 requires missing data to be explicit and “never fabricated or replaced by silent zeros,” and A9 repeats that missing data is “never replaced by zero unless zero is confirmed.” M32 instead says that a section without a progress record has “a completed work value of zero.”",
+   "question": "When planned work exists but no SectionProgress record exists, is completed work value unavailable or exactly zero?",
+   "options": [
+    "Expose completion_percent and completed_work_value as unavailable",
+    "Expose completion_percent as null but completed_work_value as zero"
+   ],
+   "default_guess": "Use completion_percent = null and completed_work_value = 0 because M32 states that case specifically, while preserving the null percentage as the missing-data signal.",
+   "witness": {
+    "initial": "The active budget has one section with work_planned = EUR 100.00 and no SectionProgress record.",
+    "events": [
+     "A viewer opens the project overview."
+    ],
+    "outcomes": [
+     "The section reports missing completion and an unavailable completed-work value.",
+     "The section reports completion_percent = null and completed_work_value = EUR 0.00."
+    ],
+    "observer": "The viewer and any client consuming BudgetView or ProgressView."
+   },
+   "unit": "context"
+  },
+  {
+   "subject": "ServiceCredential rotation overlap",
+   "kind": "missing lifecycle rule",
+   "text": "State 0 requires credentials to be “rotatable with an overlap period.” M14 only says that several credentials may be valid simultaneously, expires_at is optional, and each credential is independently revocable; State 2 supplies no overlap duration or rotation effect on the old credential.",
+   "question": "When an administrator rotates a service credential, what happens to the old credential and how is the overlap period bounded?",
+   "options": [
+    "Issue the new credential and automatically set or shorten the old credential's expiry to a defined overlap deadline",
+    "Issue an additional credential and leave the old one valid until an administrator explicitly revokes it",
+    "Revoke the old credential immediately, providing no overlap"
+   ],
+   "default_guess": "Issue a new credential and leave the old one valid until explicit revocation, because no overlap duration is defined.",
+   "witness": {
+    "initial": "An active producer has one non-expiring credential.",
+    "events": [
+     "An administrator rotates the producer credential.",
+     "The producer continues using the old credential after the new one is issued."
+    ],
+    "outcomes": [
+     "The old credential stops working after an automatically defined overlap deadline.",
+     "The old credential remains usable indefinitely until explicit revocation."
+    ],
+    "observer": "The producer and the administrator managing credential rotation."
+   },
+   "unit": "context"
+  },
+  {
+   "subject": "RuntimeSettings and environment configuration",
+   "kind": "missing carried model closure",
+   "text": "State 1 says RuntimeSettings and RuntimeEnvironment are carried to State 2. A30 refers to “the closed table of environment variables, their types, requiredness, normalization and per-environment defaults,” but does not include that table. Earlier texts require environment configuration for the SQLite file, binary root, trusted hosts and origins, while A25 additionally refers to public origin and request/response bounds.",
+   "question": "What is the complete environment-variable contract, including names, types, requiredness, normalization, defaults and cross-field validation?",
+   "options": [
+    "Require explicit variables for the database path, binary root, trusted hosts, public origin, CORS origins and all transport bounds",
+    "Provide defaults for some or all of those values",
+    "Use different variable names or combine several settings into one value"
+   ],
+   "default_guess": "Require explicit database path, binary root, trusted-host and public-origin settings; default CORS to disabled; require every size bound to be a positive integer.",
+   "witness": {
+    "initial": "A deployment supplies DB and binary paths but no trusted-host, public-origin, CORS or JSON-body-limit variables.",
+    "events": [
+     "The service reads its environment at startup."
+    ],
+    "outcomes": [
+     "Startup is refused because one or more unspecified settings are required.",
+     "Startup succeeds using implementer-chosen defaults and variable names."
+    ],
+    "observer": "The deployment operator."
+   },
+   "unit": "context"
+  },
+  {
+   "subject": "Viewer-entry rate limit",
+   "kind": "missing configuration and algorithm",
+   "text": "R0-09 requires viewer entry to be rate limited. A25 says its algorithm, bound and answer are those of an accepted transport guard and use A30 values, but A30 lists no viewer-entry rate-limit values.",
+   "question": "What rate, time window, burst behavior, memory bound, eviction policy and refusal response apply to viewer entry?",
+   "options": [
+    "A fixed-window counter with a specified attempts-per-window limit",
+    "A token bucket with a specified capacity and refill rate",
+    "Another bounded algorithm with different treatment of bursts and stored client addresses"
+   ],
+   "default_guess": "Use a bounded per-address fixed-window limiter and return the same concealed authentication refusal used for invalid access codes.",
+   "witness": {
+    "initial": "One network address has made several failed viewer-entry attempts near a window boundary.",
+    "events": [
+     "The same address makes one more entry attempt with a valid viewer code."
+    ],
+    "outcomes": [
+     "The attempt is rate-limited before code verification and no session is created.",
+     "The attempt is within an implementer-chosen bound or refill rule, so the code is verified and a session is created."
+    ],
+    "observer": "The viewer attempting entry."
+   },
+   "unit": "context"
+  },
+  {
+   "subject": "Staff email normalization and syntax",
+   "kind": "omitted accepted rule",
+   "text": "A16 says, “The exact syntax check and casefolding are those of the accepted _normalize_staff_email, carried to States 6–7,” but those checks are not stated in the supplied texts even though normalized unique email is part of M05 and was carried to State 2.",
+   "question": "Which email syntax is accepted, and exactly how is Unicode casefolding applied to the local and domain parts before uniqueness and lookup?",
+   "options": [
+    "Apply a specified standards-based mailbox parser, then casefold the entire address",
+    "Use a narrower ASCII-oriented syntax and casefold both parts",
+    "Casefold only the domain or otherwise preserve local-part case"
+   ],
+   "default_guess": "Reject whitespace and malformed single-address forms, then Unicode-casefold the entire supplied address without provider-specific rewriting.",
+   "witness": {
+    "initial": "No staff account exists for an address containing a non-ASCII local-part character whose Unicode casefold changes its spelling.",
+    "events": [
+     "An administrator creates the account.",
+     "The holder later logs in using the casefold-equivalent spelling."
+    ],
+    "outcomes": [
+     "Creation and login succeed because the spelling is accepted and normalized to the same key.",
+     "Creation is rejected, or login fails because the local part was validated or normalized differently."
+    ],
+    "observer": "The administrator and staff account holder."
+   },
+   "unit": "context"
+  },
+  {
+   "subject": "New-password validation",
+   "kind": "omitted accepted rule",
+   "text": "A16 requires no “NUL/control characters” but says, “The exact control set is that of the accepted _validate_new_password, carried to States 6–7.” The texts do not define whether control includes only Unicode Cc or also format, line, paragraph, surrogate and other categories.",
+   "question": "Exactly which Unicode code points make a new password invalid, and how are the 12–128 code points counted?",
+   "options": [
+    "Reject NUL and every Unicode Cc character only",
+    "Reject all Unicode control/format/separator categories selected by a stated table",
+    "Use a library-specific control predicate and code-point counting behavior"
+   ],
+   "default_guess": "Count Python Unicode code points and reject NUL plus every character in Unicode category Cc.",
+   "witness": {
+    "initial": "An administrator chooses a 12-code-point initial password containing U+200E LEFT-TO-RIGHT MARK.",
+    "events": [
+     "The administrator submits staff account creation with that password."
+    ],
+    "outcomes": [
+     "The password is accepted and hashed because U+200E is a format character, not Cc.",
+     "The password is rejected because the implementation treats Unicode format characters as controls."
+    ],
+    "observer": "The administrator creating the account."
+   },
+   "unit": "context"
+  },
+  {
+   "subject": "Credential hashing parameters and dependency pin",
+   "kind": "unresolved carried configuration",
+   "text": "State 1 carries hashing parameters to State 2. A30 specifies “argon2id (library defaults; fixed in source)” and A32 refers to pinned versions “of that file,” but neither the Argon2 time, memory, parallelism, salt and hash lengths nor the pinned argon2-cffi version appears in the text.",
+   "question": "Which exact Argon2id parameters and library version define password and verification-secret hashes?",
+   "options": [
+    "Use explicitly fixed Argon2id parameters independent of library defaults",
+    "Use the defaults of a named exact argon2-cffi version",
+    "Use whichever defaults are supplied by the installed version"
+   ],
+   "default_guess": "Pin one argon2-cffi version and fix all Argon2id parameters explicitly in source so upgrades cannot silently change new hashes.",
+   "unit": "context"
+  },
+  {
+   "subject": "Registry failure translation precedence",
+   "kind": "missing precedence",
+   "text": "M17 carries the Registry translation table to State 2. A6 gives the table but says, “which transport condition counts as which kind, and the order the gateway tests them in, are the accepted gateway's … carried to States 6–7.”",
+   "question": "When one transport exception satisfies more than one category, which RegistryFailureKind wins?",
+   "options": [
+    "Classify timeout subclasses as timeout before the general transport_error check",
+    "Classify all connection-layer exceptions, including timeouts, as transport_error",
+    "Use distinct connect-timeout and read-timeout treatment"
+   ],
+   "default_guess": "Check timeout first, then classify remaining connection failures as transport_error.",
+   "witness": {
+    "initial": "A Registry call raises a timeout exception that is also a subclass of the HTTP client's general transport exception.",
+    "events": [
+     "A project-scoped read calls Registry validation.",
+     "The overlapping exception is translated."
+    ],
+    "outcomes": [
+     "The operation fails with RegistryFailureKind.timeout.",
+     "The operation fails with RegistryFailureKind.transport_error."
+    ],
+    "observer": "The API error mapper, telemetry and tests inspecting the typed failure."
+   },
+   "unit": "context"
+  },
+  {
+   "subject": "Snapshot and expense fingerprinting",
+   "kind": "missing canonicalization contract",
+   "text": "A8 says canonicalization and digesting are the owning functions' accepted behavior “carried … to States 6–7,” but M19, M20, M27 and M28 rely on those fingerprints to distinguish replay from integrity conflict.",
+   "question": "What exact fields, type encodings, Unicode treatment, decimal and timestamp normalization, collection ordering, serialization and digest algorithm define each fingerprint?",
+   "options": [
+    "Hash a specified canonical typed serialization with a named digest algorithm",
+    "Hash canonical JSON with specified number, timestamp and Unicode rules",
+    "Hash implementation-native tuples or representations"
+   ],
+   "default_guess": "Use versioned canonical JSON over the explicitly listed fields, normalize decimals and UTC timestamps, sort only collections declared order-insensitive, preserve significant string code points, and digest with SHA-256.",
+   "witness": {
+    "initial": "A snapshot accepted by one deployed version has a stored fingerprint.",
+    "events": [
+     "The service is upgraded to an independently implemented version using another reasonable canonicalization or digest.",
+     "The producer republishes content that is equal under the domain models."
+    ],
+    "outcomes": [
+     "The new implementation reproduces the stored fingerprint and returns idempotent_replay.",
+     "The new fingerprint differs and the service returns integrity_conflict."
+    ],
+    "observer": "The producer reading the import result."
+   },
+   "unit": "context"
+  },
+  {
+   "subject": "Boundary handling of monetary scale",
+   "kind": "ambiguous validation versus rounding",
+   "text": "R0-05 says money is “rounded half up to two places.” A9 says ROUND_HALF_UP applies “at derivation boundaries” and that stored amounts are already two-digit exact, while A7 rejects a snapshot section amount that is not “a valid EUR amount” without defining whether extra fractional digits are rounded or refused.",
+   "question": "What happens when an input monetary amount has more than two fractional digits?",
+   "options": [
+    "Reject it as an invalid EUR amount",
+    "Round it half-up to two digits before validation, storage and fingerprinting",
+    "Accept its exact scale internally and round only derived outputs"
+   ],
+   "default_guess": "Reject boundary amounts with more than two fractional digits; use half-up rounding only for calculations that produce additional precision.",
+   "witness": {
+    "initial": "An authorized producer submits an otherwise valid snapshot with material_planned = 1.005 EUR.",
+    "events": [
+     "The import passes authorization and reaches content validation."
+    ],
+    "outcomes": [
+     "The attempt is accepted with 1.01 EUR stored and fingerprinted.",
+     "The attempt is classified as rejected with invalid_sections."
+    ],
+    "observer": "The producer reading the import result and later clients reading the budget."
+   },
+   "unit": "context"
+  },
+  {
+   "subject": "Source-supplied timestamp representation",
+   "kind": "contradictory timestamp policy",
+   "text": "State 1 says timestamps are timezone-aware UTC. A28 says persisted timestamps are UTC and offset-naive, but also says source-supplied times are “kept as supplied” and leaves their accepted forms and checks to States 6–7. ApprovedEstimateSnapshot persists approved_at and published_at from the source.",
+   "question": "Must source timestamps be supplied in UTC, may other offsets be accepted, and are accepted source timestamps persisted as aware values, normalized to naive UTC, or preserved with their original offset?",
+   "options": [
+    "Require a UTC offset and persist the instant as offset-naive UTC",
+    "Accept any explicit offset, normalize it to offset-naive UTC, and preserve only the instant",
+    "Preserve the supplied timezone-aware representation despite the offset-naive persistence rule"
+   ],
+   "default_guess": "Require an explicit offset, normalize the instant to UTC, and persist it as offset-naive UTC.",
+   "witness": {
+    "initial": "An authorized producer submits approved_at as 2026-11-07T12:00:00+02:00.",
+    "events": [
+     "The snapshot is accepted and persisted."
+    ],
+    "outcomes": [
+     "The stored value is naive 2026-11-07T10:00:00 under A28's persistence rule.",
+     "The stored value remains aware 2026-11-07T12:00:00+02:00 because source time is kept as supplied."
+    ],
+    "observer": "Repository consumers, replay fingerprinting and API serialization."
+   },
+   "unit": "context"
+  },
+  {
+   "subject": "Client visibility of hidden progress photos",
+   "kind": "missing read rule",
+   "text": "State 0 lets staff manage a progress photo's visibility and describes the client's chronological gallery. M35 stores client_visible, but PhotoView omits it and neither the derived-view rules nor State 2 states whether hidden photos are removed from a viewer's gallery or only blocked at binary download.",
+   "question": "Does client_visible=false exclude a photo from viewer photo listings, or does the viewer still receive its metadata while only the binary is refused?",
+   "options": [
+    "Exclude hidden photos entirely from viewer galleries",
+    "Return hidden photo metadata in the gallery but refuse its binary",
+    "Use different staff and viewer projections with an explicit visibility field for staff only"
+   ],
+   "default_guess": "Exclude hidden photos from viewer galleries while retaining them in staff listings.",
+   "witness": {
+    "initial": "A project has one active viewer grant and one progress photo whose client_visible value was changed to false.",
+    "events": [
+     "The viewer requests the project overview or photo gallery."
+    ],
+    "outcomes": [
+     "The hidden photo is absent from the returned list.",
+     "A PhotoView containing its date, caption and section is returned, although its binary cannot be downloaded."
+    ],
+    "observer": "The client viewer."
+   },
+   "unit": "context"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"M36 AuditRecord owning-flow policy\",\"kind\":\"unresolved carried question\",\"text\":\"State 1 says, “Audit failures must not silently vanish; the owning-flow policy lands in State 2.” State 2 requires one audit record but never says whether failure to append it aborts and rolls back the business change.\",\"question\":\"When the business records can be written but the required audit append fails, must the entire action roll back, or may the business change commit without its audit record?\",\"options\":[\"Roll back the business change and surface the audit failure\",\"Commit the business change and report or retry the missing audit separately\"],\"default_guess\":\"Keep the business mutation and its required audit record in one transaction, rolling both back if the audit append fails.\",\"witness\":{\"initial\":\"An active project has an included expense, and the audit repository will fail on its next append.\",\"events\":[\"An authorized operator corrects the expense.\",\"The expense write succeeds, but appending expense.correct fails.\"],\"outcomes\":[\"The transaction rolls back, so the expense remains unchanged.\",\"The corrected expense commits without the required audit record.\"],\"observer\":\"The operator on a subsequent read and an auditor inspecting the ledger.\"},\"unit\":\"context\"},{\"subject\":\"State 0 Audit versus A13 audit catalog\",\"kind\":\"contradictory audit condition\",\"text\":\"State 0 says, “An action is recorded when it completes” and that storage or Registry failures before completion are not recorded. A13 formally says, “every action in the audit catalog writes exactly one AuditRecord,” while also saying that every refused operation other than classified snapshot imports and failed logins writes no record.\",\"question\":\"Does a refused occurrence of a catalog action count as an action that must write one rejected audit record, or is audit required only for completed actions plus the two named rejected cases?\",\"options\":[\"Every attempted catalog action, including refusals, writes exactly one record\",\"Only successful completions and the two expressly named rejected cases write records\"],\"default_guess\":\"Audit successful catalog actions plus classified snapshot-import rejections and staff.login_failed; write nothing for other refusals.\",\"witness\":{\"initial\":\"An administrator is authenticated, but submits a viewer.create request that domain validation refuses.\",\"events\":[\"The administrator attempts viewer creation.\",\"The use case refuses before creating a viewer.\"],\"outcomes\":[\"A rejected viewer.create AuditRecord is written under the formal every-action invariant.\",\"No audit record is written under the explicit refused-operation rule and State 0 completion rule.\"],\"observer\":\"An auditor querying the audit ledger.\"},\"unit\":\"context\"},{\"subject\":\"Missing SectionProgress in derived values\",\"kind\":\"direct contradiction\",\"text\":\"State 0 requires missing data to be explicit and “never fabricated or replaced by silent zeros,” and A9 repeats that missing data is “never replaced by zero unless zero is confirmed.” M32 instead says that a section without a progress record has “a completed work value of zero.”\",\"question\":\"When planned work exists but no SectionProgress record exists, is completed work value unavailable or exactly zero?\",\"options\":[\"Expose completion_percent and completed_work_value as unavailable\",\"Expose completion_percent as null but completed_work_value as zero\"],\"default_guess\":\"Use completion_percent = null and completed_work_value = 0 because M32 states that case specifically, while preserving the null percentage as the missing-data signal.\",\"witness\":{\"initial\":\"The active budget has one section with work_planned = EUR 100.00 and no SectionProgress record.\",\"events\":[\"A viewer opens the project overview.\"],\"outcomes\":[\"The section reports missing completion and an unavailable completed-work value.\",\"The section reports completion_percent = null and completed_work_value = EUR 0.00.\"],\"observer\":\"The viewer and any client consuming BudgetView or ProgressView.\"},\"unit\":\"context\"},{\"subject\":\"ServiceCredential rotation overlap\",\"kind\":\"missing lifecycle rule\",\"text\":\"State 0 requires credentials to be “rotatable with an overlap period.” M14 only says that several credentials may be valid simultaneously, expires_at is optional, and each credential is independently revocable; State 2 supplies no overlap duration or rotation effect on the old credential.\",\"question\":\"When an administrator rotates a service credential, what happens to the old credential and how is the overlap period bounded?\",\"options\":[\"Issue the new credential and automatically set or shorten the old credential's expiry to a defined overlap deadline\",\"Issue an additional credential and leave the old one valid until an administrator explicitly revokes it\",\"Revoke the old credential immediately, providing no overlap\"],\"default_guess\":\"Issue a new credential and leave the old one valid until explicit revocation, because no overlap duration is defined.\",\"witness\":{\"initial\":\"An active producer has one non-expiring credential.\",\"events\":[\"An administrator rotates the producer credential.\",\"The producer continues using the old credential after the new one is issued.\"],\"outcomes\":[\"The old credential stops working after an automatically defined overlap deadline.\",\"The old credential remains usable indefinitely until explicit revocation.\"],\"observer\":\"The producer and the administrator managing credential rotation.\"},\"unit\":\"context\"},{\"subject\":\"RuntimeSettings and environment configuration\",\"kind\":\"missing carried model closure\",\"text\":\"State 1 says RuntimeSettings and RuntimeEnvironment are carried to State 2. A30 refers to “the closed table of environment variables, their types, requiredness, normalization and per-environment defaults,” but does not include that table. Earlier texts require environment configuration for the SQLite file, binary root, trusted hosts and origins, while A25 additionally refers to public origin and request/response bounds.\",\"question\":\"What is the complete environment-variable contract, including names, types, requiredness, normalization, defaults and cross-field validation?\",\"options\":[\"Require explicit variables for the database path, binary root, trusted hosts, public origin, CORS origins and all transport bounds\",\"Provide defaults for some or all of those values\",\"Use different variable names or combine several settings into one value\"],\"default_guess\":\"Require explicit database path, binary root, trusted-host and public-origin settings; default CORS to disabled; require every size bound to be a positive integer.\",\"witness\":{\"initial\":\"A deployment supplies DB and binary paths but no trusted-host, public-origin, CORS or JSON-body-limit variables.\",\"events\":[\"The service reads its environment at startup.\"],\"outcomes\":[\"Startup is refused because one or more unspecified settings are required.\",\"Startup succeeds using implementer-chosen defaults and variable names.\"],\"observer\":\"The deployment operator.\"},\"unit\":\"context\"},{\"subject\":\"Viewer-entry rate limit\",\"kind\":\"missing configuration and algorithm\",\"text\":\"R0-09 requires viewer entry to be rate limited. A25 says its algorithm, bound and answer are those of an accepted transport guard and use A30 values, but A30 lists no viewer-entry rate-limit values.\",\"question\":\"What rate, time window, burst behavior, memory bound, eviction policy and refusal response apply to viewer entry?\",\"options\":[\"A fixed-window counter with a specified attempts-per-window limit\",\"A token bucket with a specified capacity and refill rate\",\"Another bounded algorithm with different treatment of bursts and stored client addresses\"],\"default_guess\":\"Use a bounded per-address fixed-window limiter and return the same concealed authentication refusal used for invalid access codes.\",\"witness\":{\"initial\":\"One network address has made several failed viewer-entry attempts near a window boundary.\",\"events\":[\"The same address makes one more entry attempt with a valid viewer code.\"],\"outcomes\":[\"The attempt is rate-limited before code verification and no session is created.\",\"The attempt is within an implementer-chosen bound or refill rule, so the code is verified and a session is created.\"],\"observer\":\"The viewer attempting entry.\"},\"unit\":\"context\"},{\"subject\":\"Staff email normalization and syntax\",\"kind\":\"omitted accepted rule\",\"text\":\"A16 says, “The exact syntax check and casefolding are those of the accepted _normalize_staff_email, carried to States 6–7,” but those checks are not stated in the supplied texts even though normalized unique email is part of M05 and was carried to State 2.\",\"question\":\"Which email syntax is accepted, and exactly how is Unicode casefolding applied to the local and domain parts before uniqueness and lookup?\",\"options\":[\"Apply a specified standards-based mailbox parser, then casefold the entire address\",\"Use a narrower ASCII-oriented syntax and casefold both parts\",\"Casefold only the domain or otherwise preserve local-part case\"],\"default_guess\":\"Reject whitespace and malformed single-address forms, then Unicode-casefold the entire supplied address without provider-specific rewriting.\",\"witness\":{\"initial\":\"No staff account exists for an address containing a non-ASCII local-part character whose Unicode casefold changes its spelling.\",\"events\":[\"An administrator creates the account.\",\"The holder later logs in using the casefold-equivalent spelling.\"],\"outcomes\":[\"Creation and login succeed because the spelling is accepted and normalized to the same key.\",\"Creation is rejected, or login fails because the local part was validated or normalized differently.\"],\"observer\":\"The administrator and staff account holder.\"},\"unit\":\"context\"},{\"subject\":\"New-password validation\",\"kind\":\"omitted accepted rule\",\"text\":\"A16 requires no “NUL/control characters” but says, “The exact control set is that of the accepted _validate_new_password, carried to States 6–7.” The texts do not define whether control includes only Unicode Cc or also format, line, paragraph, surrogate and other categories.\",\"question\":\"Exactly which Unicode code points make a new password invalid, and how are the 12–128 code points counted?\",\"options\":[\"Reject NUL and every Unicode Cc character only\",\"Reject all Unicode control/format/separator categories selected by a stated table\",\"Use a library-specific control predicate and code-point counting behavior\"],\"default_guess\":\"Count Python Unicode code points and reject NUL plus every character in Unicode category Cc.\",\"witness\":{\"initial\":\"An administrator chooses a 12-code-point initial password containing U+200E LEFT-TO-RIGHT MARK.\",\"events\":[\"The administrator submits staff account creation with that password.\"],\"outcomes\":[\"The password is accepted and hashed because U+200E is a format character, not Cc.\",\"The password is rejected because the implementation treats Unicode format characters as controls.\"],\"observer\":\"The administrator creating the account.\"},\"unit\":\"context\"},{\"subject\":\"Credential hashing parameters and dependency pin\",\"kind\":\"unresolved carried configuration\",\"text\":\"State 1 carries hashing parameters to State 2. A30 specifies “argon2id (library defaults; fixed in source)” and A32 refers to pinned versions “of that file,” but neither the Argon2 time, memory, parallelism, salt and hash lengths nor the pinned argon2-cffi version appears in the text.\",\"question\":\"Which exact Argon2id parameters and library version define password and verification-secret hashes?\",\"options\":[\"Use explicitly fixed Argon2id parameters independent of library defaults\",\"Use the defaults of a named exact argon2-cffi version\",\"Use whichever defaults are supplied by the installed version\"],\"default_guess\":\"Pin one argon2-cffi version and fix all Argon2id parameters explicitly in source so upgrades cannot silently change new hashes.\",\"unit\":\"context\"},{\"subject\":\"Registry failure translation precedence\",\"kind\":\"missing precedence\",\"text\":\"M17 carries the Registry translation table to State 2. A6 gives the table but says, “which transport condition counts as which kind, and the order the gateway tests them in, are the accepted gateway's … carried to States 6–7.”\",\"question\":\"When one transport exception satisfies more than one category, which RegistryFailureKind wins?\",\"options\":[\"Classify timeout subclasses as timeout before the general transport_error check\",\"Classify all connection-layer exceptions, including timeouts, as transport_error\",\"Use distinct connect-timeout and read-timeout treatment\"],\"default_guess\":\"Check timeout first, then classify remaining connection failures as transport_error.\",\"witness\":{\"initial\":\"A Registry call raises a timeout exception that is also a subclass of the HTTP client's general transport exception.\",\"events\":[\"A project-scoped read calls Registry validation.\",\"The overlapping exception is translated.\"],\"outcomes\":[\"The operation fails with RegistryFailureKind.timeout.\",\"The operation fails with RegistryFailureKind.transport_error.\"],\"observer\":\"The API error mapper, telemetry and tests inspecting the typed failure.\"},\"unit\":\"context\"},{\"subject\":\"Snapshot and expense fingerprinting\",\"kind\":\"missing canonicalization contract\",\"text\":\"A8 says canonicalization and digesting are the owning functions' accepted behavior “carried … to States 6–7,” but M19, M20, M27 and M28 rely on those fingerprints to distinguish replay from integrity conflict.\",\"question\":\"What exact fields, type encodings, Unicode treatment, decimal and timestamp normalization, collection ordering, serialization and digest algorithm define each fingerprint?\",\"options\":[\"Hash a specified canonical typed serialization with a named digest algorithm\",\"Hash canonical JSON with specified number, timestamp and Unicode rules\",\"Hash implementation-native tuples or representations\"],\"default_guess\":\"Use versioned canonical JSON over the explicitly listed fields, normalize decimals and UTC timestamps, sort only collections declared order-insensitive, preserve significant string code points, and digest with SHA-256.\",\"witness\":{\"initial\":\"A snapshot accepted by one deployed version has a stored fingerprint.\",\"events\":[\"The service is upgraded to an independently implemented version using another reasonable canonicalization or digest.\",\"The producer republishes content that is equal under the domain models.\"],\"outcomes\":[\"The new implementation reproduces the stored fingerprint and returns idempotent_replay.\",\"The new fingerprint differs and the service returns integrity_conflict.\"],\"observer\":\"The producer reading the import result.\"},\"unit\":\"context\"},{\"subject\":\"Boundary handling of monetary scale\",\"kind\":\"ambiguous validation versus rounding\",\"text\":\"R0-05 says money is “rounded half up to two places.” A9 says ROUND_HALF_UP applies “at derivation boundaries” and that stored amounts are already two-digit exact, while A7 rejects a snapshot section amount that is not “a valid EUR amount” without defining whether extra fractional digits are rounded or refused.\",\"question\":\"What happens when an input monetary amount has more than two fractional digits?\",\"options\":[\"Reject it as an invalid EUR amount\",\"Round it half-up to two digits before validation, storage and fingerprinting\",\"Accept its exact scale internally and round only derived outputs\"],\"default_guess\":\"Reject boundary amounts with more than two fractional digits; use half-up rounding only for calculations that produce additional precision.\",\"witness\":{\"initial\":\"An authorized producer submits an otherwise valid snapshot with material_planned = 1.005 EUR.\",\"events\":[\"The import passes authorization and reaches content validation.\"],\"outcomes\":[\"The attempt is accepted with 1.01 EUR stored and fingerprinted.\",\"The attempt is classified as rejected with invalid_sections.\"],\"observer\":\"The producer reading the import result and later clients reading the budget.\"},\"unit\":\"context\"},{\"subject\":\"Source-supplied timestamp representation\",\"kind\":\"contradictory timestamp policy\",\"text\":\"State 1 says timestamps are timezone-aware UTC. A28 says persisted timestamps are UTC and offset-naive, but also says source-supplied times are “kept as supplied” and leaves their accepted forms and checks to States 6–7. ApprovedEstimateSnapshot persists approved_at and published_at from the source.\",\"question\":\"Must source timestamps be supplied in UTC, may other offsets be accepted, and are accepted source timestamps persisted as aware values, normalized to naive UTC, or preserved with their original offset?\",\"options\":[\"Require a UTC offset and persist the instant as offset-naive UTC\",\"Accept any explicit offset, normalize it to offset-naive UTC, and preserve only the instant\",\"Preserve the supplied timezone-aware representation despite the offset-naive persistence rule\"],\"default_guess\":\"Require an explicit offset, normalize the instant to UTC, and persist it as offset-naive UTC.\",\"witness\":{\"initial\":\"An authorized producer submits approved_at as 2026-11-07T12:00:00+02:00.\",\"events\":[\"The snapshot is accepted and persisted.\"],\"outcomes\":[\"The stored value is naive 2026-11-07T10:00:00 under A28's persistence rule.\",\"The stored value remains aware 2026-11-07T12:00:00+02:00 because source time is kept as supplied.\"],\"observer\":\"Repository consumers, replay fingerprinting and API serialization.\"},\"unit\":\"context\"},{\"subject\":\"Client visibility of hidden progress photos\",\"kind\":\"missing read rule\",\"text\":\"State 0 lets staff manage a progress photo's visibility and describes the client's chronological gallery. M35 stores client_visible, but PhotoView omits it and neither the derived-view rules nor State 2 states whether hidden photos are removed from a viewer's gallery or only blocked at binary download.\",\"question\":\"Does client_visible=false exclude a photo from viewer photo listings, or does the viewer still receive its metadata while only the binary is refused?\",\"options\":[\"Exclude hidden photos entirely from viewer galleries\",\"Return hidden photo metadata in the gallery but refuse its binary\",\"Use different staff and viewer projections with an explicit visibility field for staff only\"],\"default_guess\":\"Exclude hidden photos from viewer galleries while retaining them in staff listings.\",\"witness\":{\"initial\":\"A project has one active viewer grant and one progress photo whose client_visible value was changed to false.\",\"events\":[\"The viewer requests the project overview or photo gallery.\"],\"outcomes\":[\"The hidden photo is absent from the returned list.\",\"A PhotoView containing its date, caption and section is returned, although its binary cannot be downloaded.\"],\"observer\":\"The client viewer.\"},\"unit\":\"context\"}]}",
+ "set_aside": []
+}

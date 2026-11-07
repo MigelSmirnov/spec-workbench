@@ -1,0 +1,85 @@
+{
+ "open_points": [
+  {
+   "unit": "context",
+   "subject": "authentication and authorization context ownership",
+   "kind": "overlapping ownership and unclear dependency",
+   "text": "`authorization_guard` owns “session validity, active principal” and “reads the persisted role and binds a session to its identity”, while `staff_identity` owns staff “resolution”, `viewer_access` owns viewer “session resolution”, and `service_identity` owns “bearer authentication”; `authorization_guard` may not know those later modules or `credential_security`.",
+   "question": "Which module produces the authoritative authenticated actor context, and which lifecycle facts must `authorization_guard` re-read instead of trusting that context?",
+   "options": [
+    "Identity modules verify the presented secret and all principal/session lifecycle facts; the guard trusts the resulting actor context.",
+    "Identity modules verify only the secret; the guard re-reads the session or credential and principal lifecycle before every authorization.",
+    "The guard owns complete authentication and therefore needs an additional dependency or port for secret verification."
+   ],
+   "default_guess": "Have each identity module verify the presented secret, then have `authorization_guard` re-read current session or credential and principal status using the actor context's identifiers.",
+   "witness": {
+    "initial": "An operator has a valid session and an active project assignment.",
+    "events": [
+     "The API resolves the session through `staff_identity` and obtains a `StaffActorContext`.",
+     "An administrator suspends the account or revokes the session before project authorization completes.",
+     "The project request reaches `authorization_guard`."
+    ],
+    "outcomes": [
+     "If the actor context is authoritative, the request can still read or mutate the project.",
+     "If the guard must re-read session and account lifecycle, the request is rejected immediately."
+    ],
+    "observer": "The operator and anyone observing the project mutation or response."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "document and photo binary authorization",
+   "kind": "missing dependency or contradictory owner",
+   "text": "A14 and “Facts several modules touch” require `expense_management` and `photo_management` to “re-check authenticated project access and client-visible eligibility”, but neither module knows `authorization_guard`; `api_irregular` knows the guard and also delegates the binary read to those modules.",
+   "question": "Is current project authorization re-evaluated inside the owning domain module, or is an earlier API/guard result accepted as sufficient evidence while the domain module checks only object project and visibility?",
+   "options": [
+    "Add an allowed dependency from both owning modules to `authorization_guard` and re-authorize there.",
+    "The API authorizes once and passes `AuthorizedProjectContext`; the owning module checks only that the object belongs to that project and is visible.",
+    "Pass a narrower authorization port or callback into the owning modules."
+   ],
+   "default_guess": "Pass a freshly produced `AuthorizedProjectContext` and let the owning module verify object project and visibility, while documenting that the API guard is the sole live grant/session check.",
+   "witness": {
+    "initial": "A viewer session and project grant are valid, and a client-visible document exists in that project.",
+    "events": [
+     "`api_irregular` authorizes the viewer and obtains an `AuthorizedProjectContext`.",
+     "An administrator revokes the project grant.",
+     "The API calls `expense_management.read_expense_document` with the previously produced context."
+    ],
+    "outcomes": [
+     "If the domain module rechecks current project access, the download is refused.",
+     "If it treats the context as sufficient evidence and checks only document project and visibility, the bytes are returned."
+    ],
+    "observer": "The viewer requesting the binary."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "empty manual budget creation during an archived-project progress read",
+   "kind": "decision without a clear owning module",
+   "text": "State 2 A5 requires `project_tracking.list_project_progress` to create an empty manual budget version when none exists, even for an archived project, but State 3 assigns A5 to `authorization_guard` and consumers that omit `project_tracking` and `budget_management`; `authorization_guard` must not own domain mutation, while `project_tracking` merely owns “the progress and payment lists”.",
+   "question": "Which module owns and initiates the exceptional budget write performed by this read, including its transaction and `budget.manual_version_create` audit?",
+   "options": [
+    "`project_tracking` detects absence and calls `budget_management.ensure_manual_budget` before returning the progress list.",
+    "`budget_management` exposes a dedicated read-initialization operation which the API invokes before `list_project_progress`.",
+    "`project_tracking` creates and audits the manual version directly in its own transaction."
+   ],
+   "default_guess": "Make `project_tracking.list_project_progress` call `budget_management.ensure_manual_budget`, with `budget_management` owning the creation and audit inside the operation's transaction.",
+   "witness": {
+    "initial": "An archived project has no `BudgetVersion` and has an existing staff assignment that still grants read access.",
+    "events": [
+     "The assigned operator requests the project's progress list.",
+     "The authorization guard admits the archived read.",
+     "The progress operation finds no manual budget version."
+    ],
+    "outcomes": [
+     "One implementation invokes budget initialization and persists an empty manual version with its audit before returning an empty progress list.",
+     "Another treats the progress list as a pure read and returns an empty list without creating the required version because no State 3 owner is assigned the exception."
+    ],
+    "observer": "The operator on subsequent budget/progress reads and an administrator inspecting audit or budget history."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"context\",\"subject\":\"authentication and authorization context ownership\",\"kind\":\"overlapping ownership and unclear dependency\",\"text\":\"`authorization_guard` owns “session validity, active principal” and “reads the persisted role and binds a session to its identity”, while `staff_identity` owns staff “resolution”, `viewer_access` owns viewer “session resolution”, and `service_identity` owns “bearer authentication”; `authorization_guard` may not know those later modules or `credential_security`.\",\"question\":\"Which module produces the authoritative authenticated actor context, and which lifecycle facts must `authorization_guard` re-read instead of trusting that context?\",\"options\":[\"Identity modules verify the presented secret and all principal/session lifecycle facts; the guard trusts the resulting actor context.\",\"Identity modules verify only the secret; the guard re-reads the session or credential and principal lifecycle before every authorization.\",\"The guard owns complete authentication and therefore needs an additional dependency or port for secret verification.\"],\"default_guess\":\"Have each identity module verify the presented secret, then have `authorization_guard` re-read current session or credential and principal status using the actor context's identifiers.\",\"witness\":{\"initial\":\"An operator has a valid session and an active project assignment.\",\"events\":[\"The API resolves the session through `staff_identity` and obtains a `StaffActorContext`.\",\"An administrator suspends the account or revokes the session before project authorization completes.\",\"The project request reaches `authorization_guard`.\"],\"outcomes\":[\"If the actor context is authoritative, the request can still read or mutate the project.\",\"If the guard must re-read session and account lifecycle, the request is rejected immediately.\"],\"observer\":\"The operator and anyone observing the project mutation or response.\"}},{\"unit\":\"context\",\"subject\":\"document and photo binary authorization\",\"kind\":\"missing dependency or contradictory owner\",\"text\":\"A14 and “Facts several modules touch” require `expense_management` and `photo_management` to “re-check authenticated project access and client-visible eligibility”, but neither module knows `authorization_guard`; `api_irregular` knows the guard and also delegates the binary read to those modules.\",\"question\":\"Is current project authorization re-evaluated inside the owning domain module, or is an earlier API/guard result accepted as sufficient evidence while the domain module checks only object project and visibility?\",\"options\":[\"Add an allowed dependency from both owning modules to `authorization_guard` and re-authorize there.\",\"The API authorizes once and passes `AuthorizedProjectContext`; the owning module checks only that the object belongs to that project and is visible.\",\"Pass a narrower authorization port or callback into the owning modules.\"],\"default_guess\":\"Pass a freshly produced `AuthorizedProjectContext` and let the owning module verify object project and visibility, while documenting that the API guard is the sole live grant/session check.\",\"witness\":{\"initial\":\"A viewer session and project grant are valid, and a client-visible document exists in that project.\",\"events\":[\"`api_irregular` authorizes the viewer and obtains an `AuthorizedProjectContext`.\",\"An administrator revokes the project grant.\",\"The API calls `expense_management.read_expense_document` with the previously produced context.\"],\"outcomes\":[\"If the domain module rechecks current project access, the download is refused.\",\"If it treats the context as sufficient evidence and checks only document project and visibility, the bytes are returned.\"],\"observer\":\"The viewer requesting the binary.\"}},{\"unit\":\"context\",\"subject\":\"empty manual budget creation during an archived-project progress read\",\"kind\":\"decision without a clear owning module\",\"text\":\"State 2 A5 requires `project_tracking.list_project_progress` to create an empty manual budget version when none exists, even for an archived project, but State 3 assigns A5 to `authorization_guard` and consumers that omit `project_tracking` and `budget_management`; `authorization_guard` must not own domain mutation, while `project_tracking` merely owns “the progress and payment lists”.\",\"question\":\"Which module owns and initiates the exceptional budget write performed by this read, including its transaction and `budget.manual_version_create` audit?\",\"options\":[\"`project_tracking` detects absence and calls `budget_management.ensure_manual_budget` before returning the progress list.\",\"`budget_management` exposes a dedicated read-initialization operation which the API invokes before `list_project_progress`.\",\"`project_tracking` creates and audits the manual version directly in its own transaction.\"],\"default_guess\":\"Make `project_tracking.list_project_progress` call `budget_management.ensure_manual_budget`, with `budget_management` owning the creation and audit inside the operation's transaction.\",\"witness\":{\"initial\":\"An archived project has no `BudgetVersion` and has an existing staff assignment that still grants read access.\",\"events\":[\"The assigned operator requests the project's progress list.\",\"The authorization guard admits the archived read.\",\"The progress operation finds no manual budget version.\"],\"outcomes\":[\"One implementation invokes budget initialization and persists an empty manual version with its audit before returning an empty progress list.\",\"Another treats the progress list as a pure read and returns an empty list without creating the required version because no State 3 owner is assigned the exception.\"],\"observer\":\"The operator on subsequent budget/progress reads and an administrator inspecting audit or budget history.\"}}]}",
+ "set_aside": []
+}
