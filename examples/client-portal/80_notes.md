@@ -119,7 +119,6 @@ verify_secret: [SECURITY_BOUNDARY] MUST verify secret against verification_hash 
 
 # financial_policy
 
-FinancialValidationError.__init__: [VALIDATION_ERROR] MUST represent an R9 rejection without implicit conversion or replacement values. The class defines this contracted __init__(self) -> None itself, calling the Exception constructor; its body is not a bare pass.
 validate_eur_amount: [VALIDATION_ERROR] MUST reject an amount whose currency is not EUR, the single portal currency, or whose sign is not allowed, and MUST return the accepted amount as a Decimal quantized to 2 fraction digits with ROUND_HALF_UP, without any currency conversion.
 calculate_completed_work: [BEHAVIOR] MUST compute each section's completed work as its planned work multiplied by its completion percent and divided by one hundred, quantize each per-section result to 2 fraction digits with ROUND_HALF_UP, and MUST NOT use float arithmetic.
 calculate_overall_progress: [BEHAVIOR] MUST use the weighted R9 formula over positive work_planned and return None when its denominator is zero; MUST NOT use arithmetic mean or fabricate zero. ProgressSectionView.completion_percent is optional, and a section whose completion_percent is None has no reported progress: it MUST contribute to neither the numerator nor the denominator, and MUST NOT be read as zero, because an unreported section is not a section reported as unstarted.
@@ -655,7 +654,6 @@ list_active_projects: [DEPENDENCY_BOUNDARY] MUST reach the Registry over a real 
 
 # email_delivery_gateway
 
-EmailDeliveryError.__init__: [SECURITY_BOUNDARY] MUST carry no token plaintext or address-ownership evidence.
 deliver_email_message: [ORCHESTRATION] MUST persist the delivery attempt/outcome around the provider call, translate provider failure to EmailDeliveryError, and MUST NOT mark any challenge valid, consumed, or verified.
 _send_delivery_request: [SECURITY_BOUNDARY] No email provider is integrated in the accepted service (open_questions Q19): MUST call no external service and return the provider message id formed as the text provider- followed by request.delivery_id, without logging token or inferring address ownership.
 _record_delivery_failure: [BEHAVIOR] MUST persist failed outcome for delivery_id in a new store transaction and return that EmailDeliveryRecord without changing its challenge.
@@ -681,9 +679,6 @@ _build_audit_record: [DETERMINISM_OR_ORDERING] MUST assign a new uuid4 audit_id 
 # authorization_guard
 
 AuthenticationRejected.__init__: [SECURITY_BOUNDARY] MUST carry no account, principal, project, selector, or failure-detail attributes.
-AuthorizationRejected.__init__: [SECURITY_BOUNDARY] MUST carry no inaccessible entity or project detail.
-ArchivedProjectRejected.__init__: [VALIDATION_ERROR] MUST represent the closed inactive-project rejection without exposing Registry response data.
-ScopedNotFoundError.__init__: [SECURITY_BOUNDARY] MUST conceal whether the inaccessible scoped object exists.
 conceal_authentication_failure: [SECURITY_BOUNDARY] MUST return a fresh parameterless AuthenticationRejected carrying no existence or project evidence.
 authorize_staff_project_read: [ORCHESTRATION] MUST construct the staff/read closed-choice request and delegate the complete decision to _authorize_project_operation without duplicating policy.
 authorize_viewer_project_read: [ORCHESTRATION] MUST construct the viewer/read closed-choice request and delegate the complete decision to _authorize_project_operation without accepting role or capability claims.
@@ -712,7 +707,6 @@ _authorize_project_operation: [FIELD_ASSIGNMENT] MUST address a service principa
 
 # staff_identity
 
-IdentityInputRejected.__init__: [VALIDATION_ERROR] MUST represent an R16 input rejection without retaining password plaintext.
 create_staff_account: [ORCHESTRATION] MUST authorize access management, enforce R16 normalized-email uniqueness, hash initial_password exactly as supplied, insert the pending-verification account, and append AuditAction.STAFF_CREATE in the same transaction. It MUST return the hash-free StaffAccountView with email_verified derived from email_verified_at and password_hash never leaving this module.
 authenticate_staff: [SECURITY_BOUNDARY] MUST normalize email, accept only an active verified account with a matching password, issue a hashed fixed-expiry session, audit success or concealed failure, and never reveal which check failed.
 resolve_staff_session: [SECURITY_BOUNDARY] MUST parse the R17 selector, verify its secret hash, fixed expiry, revocation, active account, and verified email before returning StaffActorContext; any failure raises AuthenticationRejected.
@@ -771,14 +765,11 @@ create_staff_account: [FIELD_ASSIGNMENT] MUST allocate staff_id with uuid4(); it
 bootstrap_first_administrator: [ORCHESTRATION] MUST normalize the supplied email and validate the supplied password through the existing staff identity input boundary, hash that password exactly as supplied through the credential boundary, build the account with StaffRole.ADMINISTRATOR, StaffStatus.ACTIVE, a set email_verified_at and created_by None, and its audit record with ActorKind.SYSTEM and no actor_id, key_version or project_id, AuditAction.STAFF_CREATE, AuditEntityKind.STAFF_ACCOUNT, AuditResult.SUCCESS and no reason_code, and hand both to the port in one call. It MUST NOT open a transaction, query persistence, or perform an authorization check, because no authorized administrator can exist yet.
 bootstrap_first_administrator: [FIELD_ASSIGNMENT] MUST allocate a fresh staff_id with uuid4() and a fresh audit_id, store the normalized email and only the hash of the supplied password, and capture created_at, updated_at and occurred_at from one offset-naive UTC timestamp compatible with the existing persisted datetime model. The audit entity_id MUST be the canonical string of the created staff_id. Every remaining account and audit field MUST take the fixed initial value stated for the first administrator rather than a caller argument.
 bootstrap_first_administrator: [SECURITY_BOUNDARY] MUST retain the supplied password only in hashed form and MUST NOT let that password or its hash reach standard output, standard error, a log, an audit record, a returned value or an exception message.
-bootstrap_first_administrator: [VALIDATION_ERROR] MUST raise BootstrapAlreadyCompleted, and never the input rejection, when the port reports an already initialized store, so a repeat attempt changes nothing and the caller can tell a second run apart from a mistyped address. IdentityInputRejected stays reserved for the supplied email and password. A genuine storage failure MUST propagate unchanged and MUST NOT be turned into either refusal.
+bootstrap_first_administrator: [VALIDATION_ERROR] MUST raise BootstrapAlreadyCompleted, and never the input rejection, when the port reports an already initialized store, so a repeat attempt changes nothing and the caller can tell a second run apart from a mistyped address. IdentityInputRejected stays reserved for the supplied email and password. A genuine storage failure MUST propagate unchanged and MUST NOT be turned into either refusal. BootstrapAlreadyCompleted is this module's own exception, defined here at top level as a plain Exception subclass whose body is pass and raised without arguments; it is not imported.
 bootstrap_first_administrator: [DEPENDENCY_BOUNDARY] MUST reach persistence only through StaffBootstrapPort and reuse the existing credential and staff identity input boundaries; it MUST NOT import PortalStore, PortalTransaction, any repository, or the adapter implementing the port, and MUST NOT be reachable from the http router.
-BootstrapAlreadyCompleted.__init__: [VALIDATION_ERROR] MUST represent only the fact that a staff account already exists, carrying no account, email, identifier, or credential detail, because it is raised on a path where the caller supplied a password. BootstrapAlreadyCompleted is defined at top level in this module (application/staff_bootstrap.py), not imported, and defines this contracted __init__(self) -> None itself, calling the Exception constructor; its body is not a bare pass.
 
 # staff_challenges
 
-ChallengeRejected.__init__: [SECURITY_BOUNDARY] MUST carry no account, selector, token-purpose, or lifecycle detail. The class defines this contracted __init__(self) -> None itself, calling the Exception constructor; its body is not a bare pass.
-ChallengeRateLimited.__init__: [VALIDATION_ERROR] MUST identify the closed challenge-rate-limit rejection without address-existence evidence. The class defines this contracted __init__(self) -> None itself, calling the Exception constructor; its body is not a bare pass.
 request_password_reset: [SECURITY_BOUNDARY] MUST return None for both known and unknown normalized email without exposing existence; issuing the R10 challenge is deferred with the challenge slice (R0-23), so no account is read and nothing is issued.
 _build_email_delivery_request: [FIELD_PROJECTION] MUST project recipient and message kind from record, include token only for token-bearing R10 kinds, and MUST NOT include any verification hash.
 _build_challenge_issue_view: [FIELD_PROJECTION] MUST set challenge_ref, expires_at, delivery_id, delivery_outcome, and message_kind from the committed challenge/delivery evidence and expose no token or hash.
@@ -926,8 +917,6 @@ import_snapshot: [ORCHESTRATION] MUST classify a content rejection from the reas
 
 # budget_management
 
-BudgetValidationError.__init__: [VALIDATION_ERROR] MUST carry no untyped payload or persistence detail.
-BudgetConflictError.__init__: [VALIDATION_ERROR] MUST carry no untyped payload or persistence detail.
 ensure_manual_budget: [ORCHESTRATION] MUST return the existing single manual version or atomically create one with empty plans plus AuditAction.BUDGET_MANUAL_VERSION_CREATE audit; it MUST NOT activate it implicitly.
 upsert_manual_section_plan: [ORCHESTRATION] MUST require an active project and the single manual version, create the stable PortalSection when needed (the name is SectionPlan.display_name, so a rename changes the plan, never the section), validate R9 amounts, upsert its plan, and append AuditAction.BUDGET_SECTION_PLAN_EDIT atomically without changing imported plans.
 get_budget_version: [SECURITY_BOUNDARY] MUST return the exact project-scoped version with deterministically ordered plans or raise ScopedNotFoundError without revealing another project.
@@ -974,9 +963,6 @@ _build_imported_plans: [VALIDATION_ERROR] MUST raise BudgetValidationError when 
 
 # expense_management
 
-ExpenseValidationError.__init__: [VALIDATION_ERROR] MUST carry no recognition raw response, provider field, or file_ref.
-ExpenseConflictError.__init__: [VALIDATION_ERROR] MUST carry no recognition raw response, provider field, or file_ref.
-BinaryAccessRejected.__init__: [SECURITY_BOUNDARY] MUST conceal file_ref and whether an inaccessible binary record or object exists.
 correct_expense: [ORCHESTRATION] MUST call validate_eur_amount with the currency EUR as currency, total_amount as amount, and strictly_positive=False; MUST validate explicit project-scoped allocations, then atomically replace editable expense fields and all allocations plus one AuditAction.EXPENSE_CORRECT audit; no intermediate invalid sum may commit; MUST return ExpenseOperationOutcome containing the corrected aggregate with replayed false.
 set_expense_inclusion: [ORCHESTRATION] MUST change only included and updated_at on the project-scoped Expense and append exactly AuditAction.EXPENSE_INCLUDE or AuditAction.EXPENSE_EXCLUDE atomically; MUST return ExpenseOperationOutcome containing the updated aggregate with replayed false.
 replace_expense_allocations: [ORCHESTRATION] MUST replace all allocations with explicit operator instructions whose sum equals the unchanged total_amount and append AuditAction.EXPENSE_ALLOCATE atomically; MUST return ExpenseOperationOutcome containing the updated aggregate with replayed false.
@@ -1044,8 +1030,6 @@ _build_expense_aggregate: [FIELD_ASSIGNMENT] MUST mint a fresh random UUID for e
 
 # project_tracking
 
-TrackingValidationError.__init__: [VALIDATION_ERROR] MUST carry no untyped payload or persistence detail. The class defines this contracted __init__(self) -> None itself, calling the Exception constructor; its body is not a bare pass.
-TrackingConflictError.__init__: [VALIDATION_ERROR] MUST carry no untyped payload or persistence detail. The class defines this contracted __init__(self) -> None itself, calling the Exception constructor; its body is not a bare pass.
 set_section_progress: [BEHAVIOR] MUST validate the project section and integer range 0..100, upsert the manual value, and append AuditAction.PROGRESS_UPDATE atomically; photographs MUST NOT alter it.
 register_work_payment: [BEHAVIOR] MUST enforce the portal currency EUR and R9, with payment_id as the replay identity; equal payment_id/content returns existing, conflict changes nothing, and a new payment plus AuditAction.PAYMENT_REGISTER audit commits atomically without creating an invoice/accounting posting.
 list_project_progress: [SECURITY_BOUNDARY] MUST return every persisted progress record for context.project_id only in active-budget plan order, with stable section_id ties.
@@ -1070,8 +1054,6 @@ register_work_payment: [FIELD_ASSIGNMENT] MUST carry the EUR-validated amount ra
 
 # photo_management
 
-PhotoValidationError.__init__: [VALIDATION_ERROR] MUST carry no file_ref, path, or storage-provider detail.
-PhotoConflictError.__init__: [VALIDATION_ERROR] MUST carry no file_ref, path, or storage-provider detail.
 publish_progress_photo: [ORCHESTRATION] MUST apply intake_id replay, and for a new intake_id validate optional section project scope, persist one file_ref-backed photo, and append AuditAction.PHOTO_PUBLISH atomically; it MUST NOT set progress or financial values.
 update_progress_photo: [ORCHESTRATION] MUST validate optional section project scope, change only caption/section/client_visible/updated_at/updated_by, and append AuditAction.PHOTO_UPDATE atomically without changing file_ref, progress, or finance.
 list_progress_photos: [SECURITY_BOUNDARY] MUST return project-scoped photos only, exclude non-client-visible items for viewer context, and order chronologically by photo_date then photo_id. It MUST project each eligible record onto ProgressPhotoView, so the storage file_ref and the recognition intake_id never leave this module: this function is the only photo list an HTTP route returns, and a storage location in a JSON body would defeat the binary delivery boundary, which hands stored bytes out only through the binary routes.
