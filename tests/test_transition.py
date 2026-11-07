@@ -467,6 +467,111 @@ def test_the_imports_closure_table_is_the_authoritative_decision(tmp_path):
     assert transition.run_check(case, "ambient_time")["outcome"] == "closed"
 
 
+API_DELEGATES = API2 + """
+## `public_op:api.enter_thing`
+
+### State impact
+
+Writes one Thing.
+"""
+
+
+def _delegating_case(tmp_path: Path, notes: str, extra: dict | None = None) -> Path:
+    """api.enter_thing returns a Thing; things (a clock consumer by Knows) stamps it."""
+    case = _clock_case(tmp_path)
+    _write(case / "50_public_apis.md", API_DELEGATES)
+    _contracts(case, {"record_thing": ("things", "(name: str) -> Thing"),
+                      "record_other": ("others", "(name: str) -> Thing"),
+                      "utc_now": ("clock", "() -> datetime"),
+                      "enter_thing": ("api", "(name: str) -> Thing"),
+                      **(extra or {})})
+    _write(case / "80_notes.md", "# State 7 — Notes\n\n" + notes)
+    return case
+
+
+def _time_findings(case: Path) -> list[tuple[str, str]]:
+    return sorted((f["code"], f["contract"]) for check in ("time_source", "ambient_time")
+                  for f in transition.run_check(case, check)["findings"])
+
+
+def test_an_endpoint_has_the_time_its_called_operation_computes(tmp_path):
+    # client-portal viewer_enter_endpoint: the session expiry is computed by
+    # enter_viewer_access, which the endpoint's note obliges it to call
+    case = _delegating_case(tmp_path, "enter_thing: [BEHAVIOR] MUST pass name to record_thing and return its Thing.\n"
+                                      "record_thing: [OBSERVABLE_OUTCOME] MUST stamp the thing with the current time.\n")
+    assert _time_findings(case) == [("fresh_timestamp_without_source", "record_other")]
+    import design_closure_gaps
+    through = design_closure_gaps.calls_supplying_time(
+        case, None, {"Thing": {"fields": {"created_at": "datetime"}}},
+        {"enter_thing": "(name: str) -> Thing", "record_thing": "(name: str) -> Thing"},
+        {"enter_thing": "api", "record_thing": "things"}, {"things"},
+        ["enter_thing: MUST call record_thing."])
+    assert through("enter_thing") == "record_thing"
+
+
+def test_an_endpoint_that_calls_nothing_with_a_source_has_none(tmp_path):
+    # no call at all; a call to an operation of a module without a source
+    for name, note in (("none", "enter_thing: [BEHAVIOR] MUST return a Thing.\n"),
+                       ("other", "enter_thing: [BEHAVIOR] MUST pass name to record_other.\n")):
+        case = _delegating_case(tmp_path / name, note)
+        assert ("fresh_timestamp_without_source", "enter_thing") in _time_findings(case)
+
+
+def test_a_callee_with_a_source_that_returns_no_timestamp_is_not_a_source(tmp_path):
+    case = _delegating_case(
+        tmp_path, "enter_thing: [BEHAVIOR] MUST validate name with check_name before building the Thing.\n",
+        {"check_name": ("things", "(name: str) -> bool")})
+    assert ("fresh_timestamp_without_source", "enter_thing") in _time_findings(case)
+
+
+def test_a_read_that_returns_a_stored_timestamp_is_not_a_source(tmp_path):
+    # client-portal: get_budget_version returns a stored activated_at; it makes no fresh time
+    case = _delegating_case(
+        tmp_path, "enter_thing: [BEHAVIOR] MUST load the existing Thing with read_thing and return it.\n",
+        {"read_thing": ("things", "(name: str) -> Thing")})
+    assert ("fresh_timestamp_without_source", "enter_thing") in _time_findings(case)
+
+
+def test_a_callee_that_produces_another_timestamp_is_not_the_source_of_this_one(tmp_path):
+    # client-portal register_work_payment -> append_audit: the audit's occurred_at
+    # is not the payment's recorded_at
+    case = _delegating_case(
+        tmp_path, "enter_thing: [BEHAVIOR] MUST record the entry with record_mark.\n",
+        {"record_mark": ("things", "(name: str) -> Mark")})
+    _closure(case, {"Thing": {"identity": "entity", "fields": {"created_at": "datetime"}},
+                    "Mark": {"identity": "entity", "fields": {"occurred_at": "datetime"}}})
+    _write(case / "50_public_apis.md", API_DELEGATES + "\n## `public_op:things.record_mark`\n\n"
+                                                     "### State impact\n\nWrites one Mark.\n")
+    assert ("fresh_timestamp_without_source", "enter_thing") in _time_findings(case)
+
+
+def test_a_note_that_needs_now_is_not_satisfied_by_a_callee_that_makes_a_timestamp(tmp_path):
+    case = _delegating_case(
+        tmp_path, "enter_thing: [OBSERVABLE_OUTCOME] MUST compare the current time with the deadline, "
+                  "then pass name to record_thing.\n")
+    assert ("ambient_time_note", "enter_thing") in _time_findings(case)
+
+
+def test_the_source_is_found_through_a_chain_of_calls(tmp_path):
+    case = _delegating_case(
+        tmp_path, "enter_thing: [BEHAVIOR] MUST hand name to route_thing.\n"
+                  "route_thing: [BEHAVIOR] MUST pass name to record_thing.\n",
+        {"route_thing": ("api", "(name: str) -> Thing")})
+    assert ("fresh_timestamp_without_source", "enter_thing") not in _time_findings(case)
+
+
+def test_a_note_that_needs_the_time_is_satisfied_by_calling_the_clock_function(tmp_path):
+    case = _delegating_case(
+        tmp_path, "enter_thing: [OBSERVABLE_OUTCOME] MUST stamp the thing with the current time from utc_now.\n")
+    assert _time_findings(case) == [("fresh_timestamp_without_source", "record_other")]
+
+
+def test_without_a_declared_clock_a_call_supplies_no_time(tmp_path):
+    case = _delegating_case(tmp_path, "enter_thing: [BEHAVIOR] MUST pass name to record_thing.\n")
+    (case / "70_system_clock_closure.json").unlink()
+    assert ("fresh_timestamp_without_source", "enter_thing") in _time_findings(case)
+
+
 def test_without_a_declared_module_level_clock_nothing_is_a_source(tmp_path):
     import design_closure_gaps
 

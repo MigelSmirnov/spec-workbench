@@ -27,11 +27,22 @@ Two fuses close it from opposite sides:
                                  datetime fields while its inputs carry none
                                  and its module declares no clock port
 
-A module-level clock (system_clock_backend v2-v4, SPEC_STANDARD 6.9) is a
+A module-level clock (system_clock_backend v2-v5, SPEC_STANDARD 6.9) is a
 source for the modules that really depend on it: those importing its function
 (the decided imports: 65_imports.json, else an assembled imports.module_internal,
 an empty one included), or, before imports are decided, those whose State 3
 Knows names the clock module (clock_consumers).
+
+An operation may also obtain its time from a function it calls: an endpoint
+returns the session whose expiry the access operation it delegates to
+computes. Such an operation has a source when, through the calls the design
+obliges — a note of the operation naming the callee (bare, ``Class.method``,
+or ``param.method`` through its own contract) or a call a deterministic backend
+emits, the same edges flow reachability reads (flow_closure) — it reaches a
+function whose module has a time source and that returns a value carrying a
+datetime, or the declared clock function itself. A callee the operation does
+not call, a callee without a source, or one that returns no datetime is not a
+source.
 
 Report-only by default; --strict exits 1 when anything is found.
 
@@ -390,7 +401,8 @@ def time_sources(case: Path, spec: dict[str, Any] | None = None) -> set[str]:
 
 def ambient_time_findings(models: dict[str, Any], contracts: dict[str, Any],
                           func_module: dict[str, str], notes: list[Any],
-                          sources: set[str] = frozenset()) -> list[dict[str, Any]]:
+                          sources: set[str] = frozenset(),
+                          through: Any = None) -> list[dict[str, Any]]:
     clocked = modules_with_clock(models, contracts, func_module) | sources
     findings = []
     for note in notes:
@@ -405,6 +417,8 @@ def ambient_time_findings(models: dict[str, Any], contracts: dict[str, Any],
             continue
         if _module_of(scope, func_module) in clocked:
             continue
+        if through is not None and through(scope, now=True):
+            continue
         findings.append({
             "code": "ambient_time_note", "contract": scope, "phrase": phrase.group(0),
             "message": (f"{scope or 'unscoped note'}: note requires '{phrase.group(0)}' but the contract has no "
@@ -417,7 +431,8 @@ def ambient_time_findings(models: dict[str, Any], contracts: dict[str, Any],
 def fresh_timestamp_findings(models: dict[str, Any], contracts: dict[str, Any],
                              func_module: dict[str, str],
                              impacts: dict[str, dict[str, Any]],
-                             sources: set[str] = frozenset()) -> list[dict[str, Any]]:
+                             sources: set[str] = frozenset(),
+                             through: Any = None) -> list[dict[str, Any]]:
     clocked = modules_with_clock(models, contracts, func_module) | sources
     findings = []
     for function in sorted(impacts):
@@ -434,13 +449,132 @@ def fresh_timestamp_findings(models: dict[str, Any], contracts: dict[str, Any],
         module = impacts[function].get("module") or _module_of(function, func_module)
         if module in clocked:
             continue
+        if through is not None and through(function):
+            continue
         findings.append({
             "code": "fresh_timestamp_without_source", "contract": function,
             "message": (f"{function}: public mutating operation returns datetime field(s) while its inputs carry "
-                        f"none and module {module} retains no clock port; name the time source — a datetime "
-                        "parameter or a clock dependency in __init__"),
+                        f"none, module {module} retains no clock port, and no function it calls supplies the "
+                        "time; name the time source — a datetime parameter, a clock dependency in __init__, a "
+                        "module-level clock it depends on, or the call to an operation that has one"),
         })
     return findings
+
+
+def call_edges(case: Path, spec: dict[str, Any] | None, func_module: dict[str, str],
+               contracts: dict[str, Any], notes: list[Any] | None = None) -> dict[str, set[str]]:
+    """caller -> callees the design obliges: note calls and deterministic backend calls (flow_closure).
+
+    The notes are the ones given, else the assembled ones, else ``80_notes.md``.
+    """
+    import flow_closure
+
+    if notes is None:
+        assembled = (spec or {}).get("notes")
+        notes = assembled if isinstance(assembled, list) and assembled else None
+    if notes is not None:
+        edges = flow_closure.note_call_edges([str(n) for n in notes], func_module, contracts)
+    else:
+        edges = flow_closure._note_calls(Path(case), func_module, contracts)
+    try:
+        backend = flow_closure._backend_calls(Path(case), func_module, contracts)
+    except Exception:  # an unreadable backend obliges no call
+        backend = {}
+    for caller, callees in backend.items():
+        edges.setdefault(caller, set()).update(callees)
+    return edges
+
+
+def datetime_fields(type_str: object, models: dict[str, Any], seen: set[str] | None = None) -> set[str]:
+    """Names of the datetime-valued fields a type carries (``""`` for a bare datetime)."""
+    seen = set() if seen is None else seen
+    names = re.findall(r"[A-Za-z_][A-Za-z0-9_]*", str(type_str))
+    found = {""} if "datetime" in names else set()
+    for name in names:
+        decl = models.get(name)
+        if isinstance(decl, dict) and name not in seen:
+            seen.add(name)
+            for field, field_type in (decl.get("fields") or {}).items():
+                if re.search(r"\bdatetime\b", str(field_type)):
+                    found.add(str(field))
+                found |= {f for f in datetime_fields(field_type, models, seen) if f}
+    return found
+
+
+def source_through_calls(function: str, edges: dict[str, set[str]], func_module: dict[str, str],
+                         clocked: set[str], contracts: dict[str, Any], models: dict[str, Any],
+                         clock: tuple[str, str] | None = None,
+                         producers: set[str] = frozenset(), now: bool = False) -> str | None:
+    """The first function ``function`` reaches through obliged calls that supplies a timestamp.
+
+    The path runs through contracted functions only, never through a class.
+    It supplies one when it is the declared clock function, or when it produces
+    time (``producers``: a mutating public operation, or one whose note needs
+    the current time), its module has a time source, and it returns a datetime
+    field of the same name as one ``function`` returns — the timestamp travels
+    back through the call (``expires_at`` of the grant becomes ``expires_at``
+    of the view). A read that returns stored timestamps is not a source of a
+    fresh one, and an unrelated timestamp (the audit's ``occurred_at``) is not
+    the operation's. A function that returns no timestamp (a note that needs
+    the current time, ``now``) is supplied only by the clock function itself.
+    """
+    wanted = set() if now else datetime_fields(str(contracts.get(function, "")).partition("->")[2], models)
+    seen = {function}
+    frontier = [function]
+    while frontier:
+        current = frontier.pop(0)
+        for callee in sorted(edges.get(current, ())):
+            if callee in seen:
+                continue
+            seen.add(callee)
+            # Only a call of a contracted function carries a value back. A class
+            # name collects the notes of all its methods (flow reachability may
+            # over-approximate through it; a time source may not).
+            if callee in models or callee not in contracts:
+                if not (clock is not None and callee == clock[1]):
+                    continue
+            if clock is not None and callee == clock[1]:
+                return callee
+            returns = str(contracts.get(callee, "")).partition("->")[2]
+            if (callee in producers and _module_of(callee, func_module) in clocked
+                    and wanted & datetime_fields(returns, models)):
+                return callee
+            frontier.append(callee)
+    return None
+
+
+def time_producers(case: Path, spec: dict[str, Any] | None, notes: list[Any] | None = None) -> set[str]:
+    """Operations that make a fresh timestamp: mutating public operations, and scopes whose notes need now."""
+    produced = {name for name, row in parse_state_impacts(Path(case)).items() if not row["read_only"]}
+    if notes is None:
+        assembled = (spec or {}).get("notes")
+        if isinstance(assembled, list) and assembled:
+            notes = assembled
+        else:
+            path = Path(case) / "80_notes.md"
+            notes = path.read_text(encoding="utf-8").splitlines() if path.is_file() else []
+    for note in notes:
+        text = str(note)
+        scope = NOTE_SCOPE_RE.match(text)
+        if scope and AMBIENT_TIME_RE.search(text):
+            produced.add(scope.group(1))
+    return produced
+
+
+def calls_supplying_time(case: Path, spec: dict[str, Any] | None, models: dict[str, Any],
+                         contracts: dict[str, Any], func_module: dict[str, str], sources: set[str],
+                         notes: list[Any] | None = None):
+    """function -> the callee that supplies its time (``source_through_calls``), or None."""
+    clocked = modules_with_clock(models, contracts, func_module) | set(sources)
+    edges = call_edges(case, spec, func_module, contracts, notes)
+    clock = declared_clock_function(case, spec)
+    producers = time_producers(case, spec, notes)
+
+    def through(function: str, now: bool = False) -> str | None:
+        return source_through_calls(function, edges, func_module, clocked, contracts, models, clock, producers,
+                                    now)
+
+    return through
 
 
 def check_time_sources(case: Path, spec: dict[str, Any]) -> list[dict[str, Any]]:
@@ -449,8 +583,10 @@ def check_time_sources(case: Path, spec: dict[str, Any]) -> list[dict[str, Any]]
     func_module = {f: module for module, funcs in (spec.get("module_functions") or {}).items()
                    for f in (funcs or [])}
     sources = time_sources(case, spec)
-    return (ambient_time_findings(models, contracts, func_module, spec.get("notes") or [], sources)
-            + fresh_timestamp_findings(models, contracts, func_module, parse_state_impacts(case), sources))
+    through = calls_supplying_time(case, spec, models, contracts, func_module, sources)
+    return (ambient_time_findings(models, contracts, func_module, spec.get("notes") or [], sources, through)
+            + fresh_timestamp_findings(models, contracts, func_module, parse_state_impacts(case), sources,
+                                       through))
 
 
 def run(case: Path) -> dict[str, Any]:
