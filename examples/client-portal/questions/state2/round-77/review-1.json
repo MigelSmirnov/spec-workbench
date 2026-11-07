@@ -1,0 +1,195 @@
+{
+ "open_points": [
+  {
+   "unit": "A5",
+   "subject": "PLAT-REG-006 live Registry truth",
+   "kind": "unverified invariant binding",
+   "text": "“PLAT-REG-006: a focused test at `get_project_context` showing the invariant holds” is bound to checks that substitute Registry validation/context instead of exercising `get_project_context`; they do not show that cached Registry state is never used as current truth.",
+   "question": "Which bound check must change Registry state between two operations and prove that the second operation fetches and obeys the new live state rather than a cached portal snapshot?",
+   "options": [
+    "Require a changed-between-requests Registry fixture and assert the second operation uses it",
+    "Treat the present substituted checks as sufficient without testing live-versus-cached behavior"
+   ],
+   "default_guess": "Require a changed-between-requests Registry fixture.",
+   "witness": {
+    "initial": "Registry reports project P active; the portal has already authorized a read of P.",
+    "events": [
+     "Registry archives P.",
+     "A staff operator attempts a mutation of P."
+    ],
+    "outcomes": [
+     "An implementation fetching live Registry truth observes archived and rejects the mutation.",
+     "An implementation caching the earlier active result allows the mutation; both implementations can pass the supplied fixed-result checks."
+    ],
+    "observer": "The operator and anyone reading the mutated project records"
+   }
+  },
+  {
+   "unit": "A18",
+   "subject": "INV-020 snapshot immutability and retention",
+   "kind": "insufficient required test",
+   "text": "“INV-020: a focused test at `import_snapshot` showing the invariant holds; a violating input is refused and changes nothing.” The bound check exercises duplicates, replay, conflict and rollback, but never imports a later version and verifies that the earlier accepted snapshot remains unchanged and present.",
+   "question": "What test demonstrates that accepting a later estimate version cannot overwrite or delete an earlier accepted snapshot?",
+   "options": [
+    "Import two versions and assert both exact snapshots remain readable",
+    "Rely on duplicate-key and rollback checks for append-only history"
+   ],
+   "default_guess": "Import two versions and assert both remain unchanged and readable.",
+   "witness": {
+    "initial": "Snapshot version 1 for project P and estimate E has been accepted.",
+    "events": [
+     "The producer publishes version 2 of E.",
+     "The import succeeds."
+    ],
+    "outcomes": [
+     "Both version 1 and version 2 remain stored as immutable snapshots.",
+     "Version 2 replaces or deletes version 1; the supplied check still passes because it never imports two versions."
+    ],
+    "observer": "A staff user reading budget history or any later operation referencing version 1"
+   }
+  },
+  {
+   "unit": "A18",
+   "subject": "INV-022 separation of import and activation authority",
+   "kind": "incomplete invariant evidence",
+   "text": "“INV-022: a focused test at `activate_budget_version` showing the invariant holds; a violating input is refused and changes nothing.” The bound budget check uses staff contexts and tests a missing activation capability, but never presents a service principal to activation.",
+   "question": "Which bound test proves that a producer cannot activate an imported version even if an internal context or forged input carries the activation capability?",
+   "options": [
+    "Call activation with a service actor and require refusal with no writes",
+    "Assume the static capability catalog alone proves the activation boundary"
+   ],
+   "default_guess": "Call activation with a service actor and require refusal with no writes.",
+   "witness": {
+    "initial": "A producer has imported snapshot S, and its inactive budget version V exists.",
+    "events": [
+     "The producer attempts to activate V through an internal call carrying an activation capability value."
+    ],
+    "outcomes": [
+     "Activation rejects because only a human staff actor may activate; V remains inactive.",
+     "Activation checks only the capability value and activates V; the supplied staff-only budget check does not distinguish this implementation."
+    ],
+    "observer": "The producer, staff reviewers, and clients who see the active budget"
+   }
+  },
+  {
+   "unit": "A18",
+   "subject": "INV-023 single-active budget activation",
+   "kind": "missing atomic failure evidence",
+   "text": "“INV-023: a focused test at `activate_budget_version` showing the invariant holds; a violating input is refused and changes nothing.” The bound check shows one successful sequential switch, but does not force a failure after the previous version is deactivated or test competing activations.",
+   "question": "What test demonstrates that deactivating the previous version and activating the selected version are atomic when activation fails or competes with another activation?",
+   "options": [
+    "Inject a failure between the two writes and test concurrent activation attempts, asserting the prior state is unchanged or exactly one version wins",
+    "Treat one successful sequential switch as proof of atomicity and the single-active invariant"
+   ],
+   "default_guess": "Inject an intermediate failure and test competing activation attempts.",
+   "witness": {
+    "initial": "Project P has active version A and inactive version B.",
+    "events": [
+     "Staff starts activation of B.",
+     "A persistence or audit failure occurs after A is marked inactive but before B is committed active."
+    ],
+    "outcomes": [
+     "The transaction rolls back, leaving A active and B inactive.",
+     "The partial change persists, leaving no active version; the supplied successful-path check does not expose it."
+    ],
+    "observer": "Staff and clients reading P's budget"
+   }
+  },
+  {
+   "unit": "A18",
+   "subject": "INV-024 imported-plan immutability",
+   "kind": "unexercised refusal condition",
+   "text": "“INV-024: a focused test at `upsert_manual_section_plan` showing the invariant holds; a violating input is refused and changes nothing.” The bound check edits manual plans and refuses an archived-project edit, but creates no imported plan and never attempts to edit one.",
+   "question": "Which test proves that a SectionPlan belonging to an `approved_estimate_snapshot` BudgetVersion cannot be edited?",
+   "options": [
+    "Create an imported version with a plan, attempt the upsert/edit, and assert refusal with unchanged rows",
+    "Infer imported-plan immutability from the manual-plan scenarios"
+   ],
+   "default_guess": "Attempt an imported-plan edit and assert no change.",
+   "witness": {
+    "initial": "Project P has an imported inactive or active budget version V with plan L copied from snapshot S.",
+    "events": [
+     "Staff submits a plan edit naming L's section."
+    ],
+    "outcomes": [
+     "The operation refuses the edit and L remains the exact snapshot copy.",
+     "The operation updates L as though it were manual; the supplied check still passes because it contains no imported plan."
+    ],
+    "observer": "Staff reviewing the imported budget and clients reading its planned values"
+   }
+  },
+  {
+   "unit": "A18",
+   "subject": "INV-025 source-key-only section linking",
+   "kind": "binding does not exercise owner",
+   "text": "“INV-025: a focused test at `_link_snapshot_sections` showing the invariant holds; a violating input is refused and changes nothing.” The bound budget-management check never calls `_link_snapshot_sections` and supplies no same-name/different-key or renamed/same-key case.",
+   "question": "What bound check proves that linking reuses a PortalSection only for equal `source_key` and never for equal display name?",
+   "options": [
+    "Exercise `_link_snapshot_sections` with both adversarial key/name combinations",
+    "Accept the budget activation check even though linking is not reached"
+   ],
+   "default_guess": "Exercise both adversarial key/name combinations directly.",
+   "witness": {
+    "initial": "Project P has section X with source_key `old-key` and display name `Kitchen`; a new snapshot contains `new-key` also named `Kitchen`.",
+    "events": [
+     "The snapshot sections are linked into a candidate budget version."
+    ],
+    "outcomes": [
+     "A new PortalSection is created because the source keys differ.",
+     "The existing section X is reused by display-name matching; the supplied bound check cannot detect this because it never invokes linking."
+    ],
+    "observer": "Staff reallocating expenses and clients viewing section history"
+   }
+  },
+  {
+   "unit": "A19",
+   "subject": "INV-033 exact explicit replacement evidence",
+   "kind": "binding content unavailable",
+   "text": "“Witness: `replace_expense_allocations` with the explicit amounts 150.00 to a section and 50.00 to other expenses persists exactly those two allocations, and a replacement of 1.00 against the 200.00 total is refused … (`verification/client_portal_expense_consumer_support.py`, run by the check).” The supplied binding contains only a delegation to `run_management_checks`; the referenced support-module content is not supplied, so the claimed exact-value and no-write assertions cannot be verified.",
+   "question": "Does the bound check actually assert the persisted 150.00/50.00 values and unchanged stored row counts after the mismatched 1.00 replacement?",
+   "options": [
+    "Provide the support check containing those exact assertions",
+    "Bind INV-033 to a self-contained check whose supplied content contains them"
+   ],
+   "default_guess": "Provide or bind a self-contained check with the exact assertions.",
+   "witness": {
+    "initial": "Expense E has total 200.00 and an existing allocation set.",
+    "events": [
+     "Staff replaces the allocations with explicit values 150.00 to section S and 50.00 to other expenses.",
+     "Staff then attempts a replacement containing only 1.00."
+    ],
+    "outcomes": [
+     "The check observes exactly 150.00 and 50.00 persisted, then observes `ExpenseValidationError` and identical row counts after the 1.00 attempt.",
+     "The delegated unseen check merely observes two allocations or a raised error without checking exact values or post-refusal rows, allowing spreading or partial writes to escape while the visible wrapper still passes."
+    ],
+    "observer": "The verification gate and later clients reading allocation totals"
+   }
+  },
+  {
+   "unit": "A21",
+   "subject": "INV-052 append-only audit and import records",
+   "kind": "insufficient append-only test",
+   "text": "“INV-052: a focused test at `PortalTransaction.commit` showing the invariant holds; a violating input is refused and changes nothing.” The bound snapshot check inserts and reads records and tests duplicate insertion and rollback, but never attempts to update or delete an existing SnapshotImportRecord or AuditRecord.",
+   "question": "What test demonstrates that every repository and transaction path refuses mutation or deletion of existing import and audit records without changing them?",
+   "options": [
+    "Attempt update and deletion through every exposed persistence path and assert refusal plus unchanged records",
+    "Treat insert-only scenarios and duplicate constraints as proof of append-only behavior"
+   ],
+   "default_guess": "Attempt prohibited mutation and deletion through every exposed path.",
+   "witness": {
+    "initial": "A classified snapshot import has produced import record I and audit record A.",
+    "events": [
+     "A maintenance or repository operation attempts to change I's outcome or delete I or A."
+    ],
+    "outcomes": [
+     "The persistence boundary refuses the operation and both records remain byte-for-byte unchanged.",
+     "The operation mutates or removes a record; the supplied check still passes because it never attempts either action."
+    ],
+    "observer": "The producer reading I and an auditor reviewing the import history"
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A5\",\"subject\":\"PLAT-REG-006 live Registry truth\",\"kind\":\"unverified invariant binding\",\"text\":\"“PLAT-REG-006: a focused test at `get_project_context` showing the invariant holds” is bound to checks that substitute Registry validation/context instead of exercising `get_project_context`; they do not show that cached Registry state is never used as current truth.\",\"question\":\"Which bound check must change Registry state between two operations and prove that the second operation fetches and obeys the new live state rather than a cached portal snapshot?\",\"options\":[\"Require a changed-between-requests Registry fixture and assert the second operation uses it\",\"Treat the present substituted checks as sufficient without testing live-versus-cached behavior\"],\"default_guess\":\"Require a changed-between-requests Registry fixture.\",\"witness\":{\"initial\":\"Registry reports project P active; the portal has already authorized a read of P.\",\"events\":[\"Registry archives P.\",\"A staff operator attempts a mutation of P.\"],\"outcomes\":[\"An implementation fetching live Registry truth observes archived and rejects the mutation.\",\"An implementation caching the earlier active result allows the mutation; both implementations can pass the supplied fixed-result checks.\"],\"observer\":\"The operator and anyone reading the mutated project records\"}},{\"unit\":\"A18\",\"subject\":\"INV-020 snapshot immutability and retention\",\"kind\":\"insufficient required test\",\"text\":\"“INV-020: a focused test at `import_snapshot` showing the invariant holds; a violating input is refused and changes nothing.” The bound check exercises duplicates, replay, conflict and rollback, but never imports a later version and verifies that the earlier accepted snapshot remains unchanged and present.\",\"question\":\"What test demonstrates that accepting a later estimate version cannot overwrite or delete an earlier accepted snapshot?\",\"options\":[\"Import two versions and assert both exact snapshots remain readable\",\"Rely on duplicate-key and rollback checks for append-only history\"],\"default_guess\":\"Import two versions and assert both remain unchanged and readable.\",\"witness\":{\"initial\":\"Snapshot version 1 for project P and estimate E has been accepted.\",\"events\":[\"The producer publishes version 2 of E.\",\"The import succeeds.\"],\"outcomes\":[\"Both version 1 and version 2 remain stored as immutable snapshots.\",\"Version 2 replaces or deletes version 1; the supplied check still passes because it never imports two versions.\"],\"observer\":\"A staff user reading budget history or any later operation referencing version 1\"}},{\"unit\":\"A18\",\"subject\":\"INV-022 separation of import and activation authority\",\"kind\":\"incomplete invariant evidence\",\"text\":\"“INV-022: a focused test at `activate_budget_version` showing the invariant holds; a violating input is refused and changes nothing.” The bound budget check uses staff contexts and tests a missing activation capability, but never presents a service principal to activation.\",\"question\":\"Which bound test proves that a producer cannot activate an imported version even if an internal context or forged input carries the activation capability?\",\"options\":[\"Call activation with a service actor and require refusal with no writes\",\"Assume the static capability catalog alone proves the activation boundary\"],\"default_guess\":\"Call activation with a service actor and require refusal with no writes.\",\"witness\":{\"initial\":\"A producer has imported snapshot S, and its inactive budget version V exists.\",\"events\":[\"The producer attempts to activate V through an internal call carrying an activation capability value.\"],\"outcomes\":[\"Activation rejects because only a human staff actor may activate; V remains inactive.\",\"Activation checks only the capability value and activates V; the supplied staff-only budget check does not distinguish this implementation.\"],\"observer\":\"The producer, staff reviewers, and clients who see the active budget\"}},{\"unit\":\"A18\",\"subject\":\"INV-023 single-active budget activation\",\"kind\":\"missing atomic failure evidence\",\"text\":\"“INV-023: a focused test at `activate_budget_version` showing the invariant holds; a violating input is refused and changes nothing.” The bound check shows one successful sequential switch, but does not force a failure after the previous version is deactivated or test competing activations.\",\"question\":\"What test demonstrates that deactivating the previous version and activating the selected version are atomic when activation fails or competes with another activation?\",\"options\":[\"Inject a failure between the two writes and test concurrent activation attempts, asserting the prior state is unchanged or exactly one version wins\",\"Treat one successful sequential switch as proof of atomicity and the single-active invariant\"],\"default_guess\":\"Inject an intermediate failure and test competing activation attempts.\",\"witness\":{\"initial\":\"Project P has active version A and inactive version B.\",\"events\":[\"Staff starts activation of B.\",\"A persistence or audit failure occurs after A is marked inactive but before B is committed active.\"],\"outcomes\":[\"The transaction rolls back, leaving A active and B inactive.\",\"The partial change persists, leaving no active version; the supplied successful-path check does not expose it.\"],\"observer\":\"Staff and clients reading P's budget\"}},{\"unit\":\"A18\",\"subject\":\"INV-024 imported-plan immutability\",\"kind\":\"unexercised refusal condition\",\"text\":\"“INV-024: a focused test at `upsert_manual_section_plan` showing the invariant holds; a violating input is refused and changes nothing.” The bound check edits manual plans and refuses an archived-project edit, but creates no imported plan and never attempts to edit one.\",\"question\":\"Which test proves that a SectionPlan belonging to an `approved_estimate_snapshot` BudgetVersion cannot be edited?\",\"options\":[\"Create an imported version with a plan, attempt the upsert/edit, and assert refusal with unchanged rows\",\"Infer imported-plan immutability from the manual-plan scenarios\"],\"default_guess\":\"Attempt an imported-plan edit and assert no change.\",\"witness\":{\"initial\":\"Project P has an imported inactive or active budget version V with plan L copied from snapshot S.\",\"events\":[\"Staff submits a plan edit naming L's section.\"],\"outcomes\":[\"The operation refuses the edit and L remains the exact snapshot copy.\",\"The operation updates L as though it were manual; the supplied check still passes because it contains no imported plan.\"],\"observer\":\"Staff reviewing the imported budget and clients reading its planned values\"}},{\"unit\":\"A18\",\"subject\":\"INV-025 source-key-only section linking\",\"kind\":\"binding does not exercise owner\",\"text\":\"“INV-025: a focused test at `_link_snapshot_sections` showing the invariant holds; a violating input is refused and changes nothing.” The bound budget-management check never calls `_link_snapshot_sections` and supplies no same-name/different-key or renamed/same-key case.\",\"question\":\"What bound check proves that linking reuses a PortalSection only for equal `source_key` and never for equal display name?\",\"options\":[\"Exercise `_link_snapshot_sections` with both adversarial key/name combinations\",\"Accept the budget activation check even though linking is not reached\"],\"default_guess\":\"Exercise both adversarial key/name combinations directly.\",\"witness\":{\"initial\":\"Project P has section X with source_key `old-key` and display name `Kitchen`; a new snapshot contains `new-key` also named `Kitchen`.\",\"events\":[\"The snapshot sections are linked into a candidate budget version.\"],\"outcomes\":[\"A new PortalSection is created because the source keys differ.\",\"The existing section X is reused by display-name matching; the supplied bound check cannot detect this because it never invokes linking.\"],\"observer\":\"Staff reallocating expenses and clients viewing section history\"}},{\"unit\":\"A19\",\"subject\":\"INV-033 exact explicit replacement evidence\",\"kind\":\"binding content unavailable\",\"text\":\"“Witness: `replace_expense_allocations` with the explicit amounts 150.00 to a section and 50.00 to other expenses persists exactly those two allocations, and a replacement of 1.00 against the 200.00 total is refused … (`verification/client_portal_expense_consumer_support.py`, run by the check).” The supplied binding contains only a delegation to `run_management_checks`; the referenced support-module content is not supplied, so the claimed exact-value and no-write assertions cannot be verified.\",\"question\":\"Does the bound check actually assert the persisted 150.00/50.00 values and unchanged stored row counts after the mismatched 1.00 replacement?\",\"options\":[\"Provide the support check containing those exact assertions\",\"Bind INV-033 to a self-contained check whose supplied content contains them\"],\"default_guess\":\"Provide or bind a self-contained check with the exact assertions.\",\"witness\":{\"initial\":\"Expense E has total 200.00 and an existing allocation set.\",\"events\":[\"Staff replaces the allocations with explicit values 150.00 to section S and 50.00 to other expenses.\",\"Staff then attempts a replacement containing only 1.00.\"],\"outcomes\":[\"The check observes exactly 150.00 and 50.00 persisted, then observes `ExpenseValidationError` and identical row counts after the 1.00 attempt.\",\"The delegated unseen check merely observes two allocations or a raised error without checking exact values or post-refusal rows, allowing spreading or partial writes to escape while the visible wrapper still passes.\"],\"observer\":\"The verification gate and later clients reading allocation totals\"}},{\"unit\":\"A21\",\"subject\":\"INV-052 append-only audit and import records\",\"kind\":\"insufficient append-only test\",\"text\":\"“INV-052: a focused test at `PortalTransaction.commit` showing the invariant holds; a violating input is refused and changes nothing.” The bound snapshot check inserts and reads records and tests duplicate insertion and rollback, but never attempts to update or delete an existing SnapshotImportRecord or AuditRecord.\",\"question\":\"What test demonstrates that every repository and transaction path refuses mutation or deletion of existing import and audit records without changing them?\",\"options\":[\"Attempt update and deletion through every exposed persistence path and assert refusal plus unchanged records\",\"Treat insert-only scenarios and duplicate constraints as proof of append-only behavior\"],\"default_guess\":\"Attempt prohibited mutation and deletion through every exposed path.\",\"witness\":{\"initial\":\"A classified snapshot import has produced import record I and audit record A.\",\"events\":[\"A maintenance or repository operation attempts to change I's outcome or delete I or A.\"],\"outcomes\":[\"The persistence boundary refuses the operation and both records remain byte-for-byte unchanged.\",\"The operation mutates or removes a record; the supplied check still passes because it never attempts either action.\"],\"observer\":\"The producer reading I and an auditor reviewing the import history\"}}]}",
+ "set_aside": []
+}

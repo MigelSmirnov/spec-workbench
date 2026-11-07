@@ -1,0 +1,276 @@
+{
+ "open_points": [
+  {
+   "unit": "A5",
+   "subject": "PLAT-REG-001, PLAT-REG-002 and PLAT-REG-007 witness bindings",
+   "kind": "unbound invariants",
+   "text": "\"Witnesses, the focused Factory verification checks that assert it: PLAT-REG-006 [witness: verification:authorization_guard_client_portal]; PLAT-REG-006 [witness: verification:derived_views_uow_client_portal].\" No existing check is bound to PLAT-REG-001, PLAT-REG-002 or PLAT-REG-007.",
+   "question": "Which existing checks assert PLAT-REG-001, PLAT-REG-002 and PLAT-REG-007 as their Required tests describe?",
+   "options": [
+    "Bind each invariant to an existing check that asserts it",
+    "Leave the three invariants without the required decision-witness binding"
+   ],
+   "default_guess": "Treat the three invariants as unverified until separate bindings are named.",
+   "witness": {
+    "initial": "The implementation generates a replacement project UUID during validation, links by display name, or copies Registry customer_ref into a viewer record.",
+    "events": [
+     "The State 2 decision-witness gate evaluates only the two checks named on A5's Witnesses line.",
+     "Neither named binding claims PLAT-REG-001, PLAT-REG-002 or PLAT-REG-007."
+    ],
+    "outcomes": [
+     "The gate passes although one of those invariant violations exists.",
+     "A gate with the missing invariant-specific binding fails on the same implementation."
+    ],
+    "observer": "The State 2 authoring gate and later implementers relying on its result"
+   }
+  },
+  {
+   "unit": "A5",
+   "subject": "PLAT-REG-006 verification",
+   "kind": "binding does not assert invariant",
+   "text": "\"PLAT-REG-006: a focused test at `get_project_context` showing the invariant holds; a violating input is refused and changes nothing.\" Both bound checks replace or stub Registry context access; neither exercises the real `get_project_context`, persistence of Registry context, or a cache-versus-live-context choice.",
+   "question": "What bound check proves that project context is fetched live, is not persisted as current truth, and that archived context remains readable without permitting mutation?",
+   "options": [
+    "Bind a check that exercises the real gateway/context path and distinguishes live data from stored or cached data",
+    "Treat the stubbed authorization and derived-view scenarios as sufficient"
+   ],
+   "default_guess": "Require a focused real `get_project_context` check because substituted context cannot prove the no-snapshot/live-read part.",
+   "witness": {
+    "initial": "Registry reports project P as active with name A; the portal has previously observed and cached that answer.",
+    "events": [
+     "Registry changes P to archived with name B.",
+     "A staff member reads P and then attempts a mutation.",
+     "The bound checks run with their substituted Registry answers."
+    ],
+    "outcomes": [
+     "An implementation using the stale stored answer returns name A and permits the mutation while the bound checks still pass.",
+     "A live-context implementation returns name B and refuses the mutation."
+    ],
+    "observer": "The staff caller and the Registry owner"
+   }
+  },
+  {
+   "unit": "A18",
+   "subject": "INV-020 snapshot immutability and append-only history",
+   "kind": "binding incomplete",
+   "text": "\"INV-020: a focused test at `import_snapshot` showing the invariant holds; a violating input is refused and changes nothing.\" The bound check covers duplicate identities, replay and conflict, but does not exercise deletion or replacement of an older snapshot after another version is accepted.",
+   "question": "What must the bound test do to demonstrate that accepted versions are never overwritten or deleted, including after later versions arrive?",
+   "options": [
+    "Persist multiple versions and attempt or detect overwrite and deletion of the older version",
+    "Treat replay/conflict and duplicate-key checks as proof of all append-only behavior"
+   ],
+   "default_guess": "Test retention of an older snapshot after importing a later version and refusal of any update or deletion path.",
+   "witness": {
+    "initial": "Snapshot version 1 for an estimate is accepted.",
+    "events": [
+     "The producer publishes version 2.",
+     "The import implementation deletes version 1 as part of retaining only the latest version.",
+     "The supplied snapshot-import check runs its existing scenarios."
+    ],
+    "outcomes": [
+     "The existing check passes because it never imports a later distinct version and then rereads version 1.",
+     "A complete INV-020 check fails because version 1 disappeared."
+    ],
+    "observer": "A producer reading historical imports and the verification gate"
+   }
+  },
+  {
+   "unit": "A18",
+   "subject": "INV-022 import/activation separation",
+   "kind": "binding incomplete",
+   "text": "\"INV-022: a focused test at `activate_budget_version` showing the invariant holds; a violating input is refused and changes nothing.\" The bound budget check shows that `portal.budget.manage` cannot activate and that a context carrying `portal.estimate_snapshot.activate` can, but it does not test a service actor or connect an imported snapshot to activation.",
+   "question": "How does the bound test prove that a producer never activates its own import and that import itself never activates a budget version?",
+   "options": [
+    "Exercise producer import followed by a producer activation attempt and assert no active-version change",
+    "Infer the invariant solely from the capability value used by the staff-context fixture"
+   ],
+   "default_guess": "Add an end-to-end producer-import/staff-activation separation scenario.",
+   "witness": {
+    "initial": "A producer has just imported snapshot S and no budget version is active.",
+    "events": [
+     "The producer calls an activation path using a context carrying the activation capability.",
+     "An implementation checks only the capability field and activates S.",
+     "The current bound checks run only staff-shaped contexts."
+    ],
+    "outcomes": [
+     "The producer activates its own import and the current check still passes.",
+     "An implementation that also enforces actor kind refuses it and leaves the project unchanged."
+    ],
+    "observer": "The producer, project staff and verification gate"
+   }
+  },
+  {
+   "unit": "A18",
+   "subject": "INV-023 atomic budget activation",
+   "kind": "atomicity unverified",
+   "text": "\"INV-023: a focused test at `activate_budget_version` showing the invariant holds; a violating input is refused and changes nothing.\" The bound check observes a successful switch, but injects no failure between deactivating the old version and activating the new one.",
+   "question": "What failure scenario must show that deactivation and activation are one atomic change rather than two independently committed writes?",
+   "options": [
+    "Inject a failure after old-version deactivation and prove both versions retain their prior states",
+    "Treat the successful final state as sufficient evidence of atomicity"
+   ],
+   "default_guess": "Inject an intermediate failure and require rollback of both status changes.",
+   "witness": {
+    "initial": "Budget version A is active and version B is inactive.",
+    "events": [
+     "Staff activates B.",
+     "The implementation commits A's deactivation, then audit insertion or B's activation fails."
+    ],
+    "outcomes": [
+     "A remains inactive and B remains inactive, leaving no active budget.",
+     "The whole operation rolls back, leaving A active and B inactive."
+    ],
+    "observer": "Staff reading the budget after the failed activation"
+   }
+  },
+  {
+   "unit": "A18",
+   "subject": "INV-024 imported-plan immutability",
+   "kind": "binding incomplete",
+   "text": "\"INV-024: a focused test at `upsert_manual_section_plan` showing the invariant holds; a violating input is refused and changes nothing.\" The bound check covers manual-version reuse and archived-project refusal, but never attempts to edit a plan belonging to an imported version.",
+   "question": "What bound scenario proves that imported plans are immutable copies of their snapshot?",
+   "options": [
+    "Attempt an upsert against an imported version or its section and assert refusal with no changes",
+    "Infer imported-plan immutability from testing only manual-plan operations"
+   ],
+   "default_guess": "Add a direct attempted edit of an imported plan and compare stored rows before and after.",
+   "witness": {
+    "initial": "An imported budget version contains a plan for section S.",
+    "events": [
+     "Staff submits a manual-plan upsert naming S.",
+     "An implementation locates the active version without checking its source and edits the imported plan."
+    ],
+    "outcomes": [
+     "The imported plan changes.",
+     "The operation is refused and the imported plan remains the snapshot copy."
+    ],
+    "observer": "Staff and clients reading the imported budget"
+   }
+  },
+  {
+   "unit": "A18",
+   "subject": "INV-025 source-key-only section linking",
+   "kind": "binding does not assert invariant",
+   "text": "\"INV-025: a focused test at `_link_snapshot_sections` showing the invariant holds; a violating input is refused and changes nothing.\" The bound budget-management check never calls `_link_snapshot_sections` and contains no equal-name/different-source-key or equal-source-key/renamed fixture.",
+   "question": "Which bound check demonstrates stable identity across renames, source_key-only automatic linking, and rejection of display-name matching?",
+   "options": [
+    "Bind a focused `_link_snapshot_sections` check with both decisive fixtures",
+    "Treat unrelated manual-budget activation coverage as sufficient"
+   ],
+   "default_guess": "Require the focused linking test named by the Required tests item.",
+   "witness": {
+    "initial": "Project P has section S with source_key old-key and display name Kitchen.",
+    "events": [
+     "A later snapshot contains a section also named Kitchen but with source_key new-key.",
+     "The linker chooses whether to reuse S."
+    ],
+    "outcomes": [
+     "A name-matching implementation reuses S despite the different source key.",
+     "A source-key-only implementation creates a new PortalSection."
+    ],
+    "observer": "Staff reallocating expenses and clients viewing section history"
+   }
+  },
+  {
+   "unit": "A18",
+   "subject": "INV-026, INV-027 and INV-028 decision-witness bindings",
+   "kind": "unbound invariants",
+   "text": "The Witnesses line names only INV-022, INV-023, INV-024, INV-025 and INV-020; it names no existing check for \"INV-026: a focused test at `import_snapshot`\", \"INV-027: a focused test at `build_budget_view`\", or \"INV-028: a focused test at `PortalTransaction.commit`\".",
+   "question": "Which existing checks assert INV-026, INV-027 and INV-028 and should be bound on their Required tests lines?",
+   "options": [
+    "Bind each of the three invariants to a check that asserts its stated behavior",
+    "Carry them forward without the State 2 decision-witness requirement"
+   ],
+   "default_guess": "Treat all three as unverified until explicit bindings are supplied.",
+   "witness": {
+    "initial": "An implementation stores an editable budget total, derives planned values from expenses, or permits deletion of a referenced PortalSection.",
+    "events": [
+     "The State 2 decision-witness gate evaluates the bindings written in A18.",
+     "None of the three affected invariants has a witness tag."
+    ],
+    "outcomes": [
+     "The gate has no invariant-specific check to reject the implementation.",
+     "With the required bindings, the corresponding violation is detected."
+    ],
+    "observer": "The verification gate and later code-generating agents"
+   }
+  },
+  {
+   "unit": "A19",
+   "subject": "INV-033 exact explicit-allocation witness",
+   "kind": "binding content unavailable",
+   "text": "\"Witness: `replace_expense_allocations` with the explicit amounts 150.00 to a section and 50.00 to other expenses persists exactly those two allocations, and a replacement of 1.00 against the 200.00 total is refused with `ExpenseValidationError` while the stored row counts stay unchanged; nothing spreads an amount (`verification/client_portal_expense_consumer_support.py`, run by the check)\" The supplied binding contains only a call to `run_management_checks`; the named support module containing those assertions is not supplied as binding evidence.",
+   "question": "Does the bound check actually assert exact 150.00/50.00 persistence and mismatched-sum no-write refusal, rather than merely calling a support routine whose assertions cannot be inspected here?",
+   "options": [
+    "Provide the bound support module as evidence or bind a self-contained check containing the assertions",
+    "Accept the wrapper's delegation as proof of assertions not present in the supplied content"
+   ],
+   "default_guess": "Do not accept the binding until the delegated check content is available.",
+   "witness": {
+    "initial": "Expense E has total 200.00 and no allocations.",
+    "events": [
+     "Staff requests allocations of 150.00 to section S and 50.00 to other expenses.",
+     "A faulty implementation replaces them with two proportional 100.00 allocations while preserving the row count and total.",
+     "The wrapper invokes a support routine whose supplied evidence does not reveal whether exact amounts are asserted."
+    ],
+    "outcomes": [
+     "A support routine checking only row count and total passes the faulty implementation.",
+     "A support routine asserting the stated 150.00 and 50.00 values fails it."
+    ],
+    "observer": "The verification gate and staff reading the saved allocations"
+   }
+  },
+  {
+   "unit": "A21",
+   "subject": "INV-050 determinism and recomputability",
+   "kind": "unbound and underspecified test",
+   "text": "\"INV-050: a focused test at `build_project_overview` showing the invariant holds; a violating input is refused and changes nothing.\" No witness tag binds INV-050 to an existing check, and the item does not say what repeated or reconstructed result would demonstrate determinism and recomputability.",
+   "question": "Which check must compare what inputs and outputs to prove that every derived value is deterministic and recomputable from owning records rather than stored editable totals or ambient state?",
+   "options": [
+    "Bind a check that rebuilds the overview from identical owning records and obtains identical values without stored derived state",
+    "Leave the generic focused-test sentence as the complete obligation"
+   ],
+   "default_guess": "Require a bound reconstruction test using identical owning records and independently recomputed expected values.",
+   "witness": {
+    "initial": "Owning expense, plan, progress and payment records are unchanged between two reads.",
+    "events": [
+     "A client reads the project overview.",
+     "An unrelated cached derived-total row or ambient value changes.",
+     "The client reads the same overview again."
+    ],
+    "outcomes": [
+     "The second overview changes because the builder uses stored or ambient derived state.",
+     "The second overview is identical because all values are recomputed from the unchanged owning records."
+    ],
+    "observer": "The client and the State 2 verification gate"
+   }
+  },
+  {
+   "unit": "A21",
+   "subject": "INV-052 append-only audit and import records",
+   "kind": "binding incomplete",
+   "text": "\"INV-052: a focused test at `PortalTransaction.commit` showing the invariant holds; a violating input is refused and changes nothing.\" The bound snapshot-import check exercises insertion, duplicate identifiers and rollback, but does not attempt to mutate or delete an existing import record and does not test mutation or deletion of an AuditRecord.",
+   "question": "What bound scenarios prove that both record kinds reject updates and deletions after commit?",
+   "options": [
+    "Attempt update and deletion of committed SnapshotImportRecord and AuditRecord rows and assert refusal with unchanged contents",
+    "Treat insert/duplicate/rollback coverage for snapshot imports as proof for both record kinds"
+   ],
+   "default_guess": "Add explicit post-commit update and deletion attempts for each record kind.",
+   "witness": {
+    "initial": "A classified snapshot import has committed import record I and audit record A.",
+    "events": [
+     "A maintenance or later import flow updates I's outcome and deletes A.",
+     "The supplied bound check runs its existing insert, duplicate and rollback cases."
+    ],
+    "outcomes": [
+     "The existing check passes because it never attempts or observes those mutations.",
+     "A complete append-only check fails and confirms I and A remain unchanged."
+    ],
+    "observer": "The producer reading I, auditors reading A, and the verification gate"
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A5\",\"subject\":\"PLAT-REG-001, PLAT-REG-002 and PLAT-REG-007 witness bindings\",\"kind\":\"unbound invariants\",\"text\":\"\\\"Witnesses, the focused Factory verification checks that assert it: PLAT-REG-006 [witness: verification:authorization_guard_client_portal]; PLAT-REG-006 [witness: verification:derived_views_uow_client_portal].\\\" No existing check is bound to PLAT-REG-001, PLAT-REG-002 or PLAT-REG-007.\",\"question\":\"Which existing checks assert PLAT-REG-001, PLAT-REG-002 and PLAT-REG-007 as their Required tests describe?\",\"options\":[\"Bind each invariant to an existing check that asserts it\",\"Leave the three invariants without the required decision-witness binding\"],\"default_guess\":\"Treat the three invariants as unverified until separate bindings are named.\",\"witness\":{\"initial\":\"The implementation generates a replacement project UUID during validation, links by display name, or copies Registry customer_ref into a viewer record.\",\"events\":[\"The State 2 decision-witness gate evaluates only the two checks named on A5's Witnesses line.\",\"Neither named binding claims PLAT-REG-001, PLAT-REG-002 or PLAT-REG-007.\"],\"outcomes\":[\"The gate passes although one of those invariant violations exists.\",\"A gate with the missing invariant-specific binding fails on the same implementation.\"],\"observer\":\"The State 2 authoring gate and later implementers relying on its result\"}},{\"unit\":\"A5\",\"subject\":\"PLAT-REG-006 verification\",\"kind\":\"binding does not assert invariant\",\"text\":\"\\\"PLAT-REG-006: a focused test at `get_project_context` showing the invariant holds; a violating input is refused and changes nothing.\\\" Both bound checks replace or stub Registry context access; neither exercises the real `get_project_context`, persistence of Registry context, or a cache-versus-live-context choice.\",\"question\":\"What bound check proves that project context is fetched live, is not persisted as current truth, and that archived context remains readable without permitting mutation?\",\"options\":[\"Bind a check that exercises the real gateway/context path and distinguishes live data from stored or cached data\",\"Treat the stubbed authorization and derived-view scenarios as sufficient\"],\"default_guess\":\"Require a focused real `get_project_context` check because substituted context cannot prove the no-snapshot/live-read part.\",\"witness\":{\"initial\":\"Registry reports project P as active with name A; the portal has previously observed and cached that answer.\",\"events\":[\"Registry changes P to archived with name B.\",\"A staff member reads P and then attempts a mutation.\",\"The bound checks run with their substituted Registry answers.\"],\"outcomes\":[\"An implementation using the stale stored answer returns name A and permits the mutation while the bound checks still pass.\",\"A live-context implementation returns name B and refuses the mutation.\"],\"observer\":\"The staff caller and the Registry owner\"}},{\"unit\":\"A18\",\"subject\":\"INV-020 snapshot immutability and append-only history\",\"kind\":\"binding incomplete\",\"text\":\"\\\"INV-020: a focused test at `import_snapshot` showing the invariant holds; a violating input is refused and changes nothing.\\\" The bound check covers duplicate identities, replay and conflict, but does not exercise deletion or replacement of an older snapshot after another version is accepted.\",\"question\":\"What must the bound test do to demonstrate that accepted versions are never overwritten or deleted, including after later versions arrive?\",\"options\":[\"Persist multiple versions and attempt or detect overwrite and deletion of the older version\",\"Treat replay/conflict and duplicate-key checks as proof of all append-only behavior\"],\"default_guess\":\"Test retention of an older snapshot after importing a later version and refusal of any update or deletion path.\",\"witness\":{\"initial\":\"Snapshot version 1 for an estimate is accepted.\",\"events\":[\"The producer publishes version 2.\",\"The import implementation deletes version 1 as part of retaining only the latest version.\",\"The supplied snapshot-import check runs its existing scenarios.\"],\"outcomes\":[\"The existing check passes because it never imports a later distinct version and then rereads version 1.\",\"A complete INV-020 check fails because version 1 disappeared.\"],\"observer\":\"A producer reading historical imports and the verification gate\"}},{\"unit\":\"A18\",\"subject\":\"INV-022 import/activation separation\",\"kind\":\"binding incomplete\",\"text\":\"\\\"INV-022: a focused test at `activate_budget_version` showing the invariant holds; a violating input is refused and changes nothing.\\\" The bound budget check shows that `portal.budget.manage` cannot activate and that a context carrying `portal.estimate_snapshot.activate` can, but it does not test a service actor or connect an imported snapshot to activation.\",\"question\":\"How does the bound test prove that a producer never activates its own import and that import itself never activates a budget version?\",\"options\":[\"Exercise producer import followed by a producer activation attempt and assert no active-version change\",\"Infer the invariant solely from the capability value used by the staff-context fixture\"],\"default_guess\":\"Add an end-to-end producer-import/staff-activation separation scenario.\",\"witness\":{\"initial\":\"A producer has just imported snapshot S and no budget version is active.\",\"events\":[\"The producer calls an activation path using a context carrying the activation capability.\",\"An implementation checks only the capability field and activates S.\",\"The current bound checks run only staff-shaped contexts.\"],\"outcomes\":[\"The producer activates its own import and the current check still passes.\",\"An implementation that also enforces actor kind refuses it and leaves the project unchanged.\"],\"observer\":\"The producer, project staff and verification gate\"}},{\"unit\":\"A18\",\"subject\":\"INV-023 atomic budget activation\",\"kind\":\"atomicity unverified\",\"text\":\"\\\"INV-023: a focused test at `activate_budget_version` showing the invariant holds; a violating input is refused and changes nothing.\\\" The bound check observes a successful switch, but injects no failure between deactivating the old version and activating the new one.\",\"question\":\"What failure scenario must show that deactivation and activation are one atomic change rather than two independently committed writes?\",\"options\":[\"Inject a failure after old-version deactivation and prove both versions retain their prior states\",\"Treat the successful final state as sufficient evidence of atomicity\"],\"default_guess\":\"Inject an intermediate failure and require rollback of both status changes.\",\"witness\":{\"initial\":\"Budget version A is active and version B is inactive.\",\"events\":[\"Staff activates B.\",\"The implementation commits A's deactivation, then audit insertion or B's activation fails.\"],\"outcomes\":[\"A remains inactive and B remains inactive, leaving no active budget.\",\"The whole operation rolls back, leaving A active and B inactive.\"],\"observer\":\"Staff reading the budget after the failed activation\"}},{\"unit\":\"A18\",\"subject\":\"INV-024 imported-plan immutability\",\"kind\":\"binding incomplete\",\"text\":\"\\\"INV-024: a focused test at `upsert_manual_section_plan` showing the invariant holds; a violating input is refused and changes nothing.\\\" The bound check covers manual-version reuse and archived-project refusal, but never attempts to edit a plan belonging to an imported version.\",\"question\":\"What bound scenario proves that imported plans are immutable copies of their snapshot?\",\"options\":[\"Attempt an upsert against an imported version or its section and assert refusal with no changes\",\"Infer imported-plan immutability from testing only manual-plan operations\"],\"default_guess\":\"Add a direct attempted edit of an imported plan and compare stored rows before and after.\",\"witness\":{\"initial\":\"An imported budget version contains a plan for section S.\",\"events\":[\"Staff submits a manual-plan upsert naming S.\",\"An implementation locates the active version without checking its source and edits the imported plan.\"],\"outcomes\":[\"The imported plan changes.\",\"The operation is refused and the imported plan remains the snapshot copy.\"],\"observer\":\"Staff and clients reading the imported budget\"}},{\"unit\":\"A18\",\"subject\":\"INV-025 source-key-only section linking\",\"kind\":\"binding does not assert invariant\",\"text\":\"\\\"INV-025: a focused test at `_link_snapshot_sections` showing the invariant holds; a violating input is refused and changes nothing.\\\" The bound budget-management check never calls `_link_snapshot_sections` and contains no equal-name/different-source-key or equal-source-key/renamed fixture.\",\"question\":\"Which bound check demonstrates stable identity across renames, source_key-only automatic linking, and rejection of display-name matching?\",\"options\":[\"Bind a focused `_link_snapshot_sections` check with both decisive fixtures\",\"Treat unrelated manual-budget activation coverage as sufficient\"],\"default_guess\":\"Require the focused linking test named by the Required tests item.\",\"witness\":{\"initial\":\"Project P has section S with source_key old-key and display name Kitchen.\",\"events\":[\"A later snapshot contains a section also named Kitchen but with source_key new-key.\",\"The linker chooses whether to reuse S.\"],\"outcomes\":[\"A name-matching implementation reuses S despite the different source key.\",\"A source-key-only implementation creates a new PortalSection.\"],\"observer\":\"Staff reallocating expenses and clients viewing section history\"}},{\"unit\":\"A18\",\"subject\":\"INV-026, INV-027 and INV-028 decision-witness bindings\",\"kind\":\"unbound invariants\",\"text\":\"The Witnesses line names only INV-022, INV-023, INV-024, INV-025 and INV-020; it names no existing check for \\\"INV-026: a focused test at `import_snapshot`\\\", \\\"INV-027: a focused test at `build_budget_view`\\\", or \\\"INV-028: a focused test at `PortalTransaction.commit`\\\".\",\"question\":\"Which existing checks assert INV-026, INV-027 and INV-028 and should be bound on their Required tests lines?\",\"options\":[\"Bind each of the three invariants to a check that asserts its stated behavior\",\"Carry them forward without the State 2 decision-witness requirement\"],\"default_guess\":\"Treat all three as unverified until explicit bindings are supplied.\",\"witness\":{\"initial\":\"An implementation stores an editable budget total, derives planned values from expenses, or permits deletion of a referenced PortalSection.\",\"events\":[\"The State 2 decision-witness gate evaluates the bindings written in A18.\",\"None of the three affected invariants has a witness tag.\"],\"outcomes\":[\"The gate has no invariant-specific check to reject the implementation.\",\"With the required bindings, the corresponding violation is detected.\"],\"observer\":\"The verification gate and later code-generating agents\"}},{\"unit\":\"A19\",\"subject\":\"INV-033 exact explicit-allocation witness\",\"kind\":\"binding content unavailable\",\"text\":\"\\\"Witness: `replace_expense_allocations` with the explicit amounts 150.00 to a section and 50.00 to other expenses persists exactly those two allocations, and a replacement of 1.00 against the 200.00 total is refused with `ExpenseValidationError` while the stored row counts stay unchanged; nothing spreads an amount (`verification/client_portal_expense_consumer_support.py`, run by the check)\\\" The supplied binding contains only a call to `run_management_checks`; the named support module containing those assertions is not supplied as binding evidence.\",\"question\":\"Does the bound check actually assert exact 150.00/50.00 persistence and mismatched-sum no-write refusal, rather than merely calling a support routine whose assertions cannot be inspected here?\",\"options\":[\"Provide the bound support module as evidence or bind a self-contained check containing the assertions\",\"Accept the wrapper's delegation as proof of assertions not present in the supplied content\"],\"default_guess\":\"Do not accept the binding until the delegated check content is available.\",\"witness\":{\"initial\":\"Expense E has total 200.00 and no allocations.\",\"events\":[\"Staff requests allocations of 150.00 to section S and 50.00 to other expenses.\",\"A faulty implementation replaces them with two proportional 100.00 allocations while preserving the row count and total.\",\"The wrapper invokes a support routine whose supplied evidence does not reveal whether exact amounts are asserted.\"],\"outcomes\":[\"A support routine checking only row count and total passes the faulty implementation.\",\"A support routine asserting the stated 150.00 and 50.00 values fails it.\"],\"observer\":\"The verification gate and staff reading the saved allocations\"}},{\"unit\":\"A21\",\"subject\":\"INV-050 determinism and recomputability\",\"kind\":\"unbound and underspecified test\",\"text\":\"\\\"INV-050: a focused test at `build_project_overview` showing the invariant holds; a violating input is refused and changes nothing.\\\" No witness tag binds INV-050 to an existing check, and the item does not say what repeated or reconstructed result would demonstrate determinism and recomputability.\",\"question\":\"Which check must compare what inputs and outputs to prove that every derived value is deterministic and recomputable from owning records rather than stored editable totals or ambient state?\",\"options\":[\"Bind a check that rebuilds the overview from identical owning records and obtains identical values without stored derived state\",\"Leave the generic focused-test sentence as the complete obligation\"],\"default_guess\":\"Require a bound reconstruction test using identical owning records and independently recomputed expected values.\",\"witness\":{\"initial\":\"Owning expense, plan, progress and payment records are unchanged between two reads.\",\"events\":[\"A client reads the project overview.\",\"An unrelated cached derived-total row or ambient value changes.\",\"The client reads the same overview again.\"],\"outcomes\":[\"The second overview changes because the builder uses stored or ambient derived state.\",\"The second overview is identical because all values are recomputed from the unchanged owning records.\"],\"observer\":\"The client and the State 2 verification gate\"}},{\"unit\":\"A21\",\"subject\":\"INV-052 append-only audit and import records\",\"kind\":\"binding incomplete\",\"text\":\"\\\"INV-052: a focused test at `PortalTransaction.commit` showing the invariant holds; a violating input is refused and changes nothing.\\\" The bound snapshot-import check exercises insertion, duplicate identifiers and rollback, but does not attempt to mutate or delete an existing import record and does not test mutation or deletion of an AuditRecord.\",\"question\":\"What bound scenarios prove that both record kinds reject updates and deletions after commit?\",\"options\":[\"Attempt update and deletion of committed SnapshotImportRecord and AuditRecord rows and assert refusal with unchanged contents\",\"Treat insert/duplicate/rollback coverage for snapshot imports as proof for both record kinds\"],\"default_guess\":\"Add explicit post-commit update and deletion attempts for each record kind.\",\"witness\":{\"initial\":\"A classified snapshot import has committed import record I and audit record A.\",\"events\":[\"A maintenance or later import flow updates I's outcome and deletes A.\",\"The supplied bound check runs its existing insert, duplicate and rollback cases.\"],\"outcomes\":[\"The existing check passes because it never attempts or observes those mutations.\",\"A complete append-only check fails and confirms I and A remain unchanged.\"],\"observer\":\"The producer reading I, auditors reading A, and the verification gate\"}}]}",
+ "set_aside": []
+}
