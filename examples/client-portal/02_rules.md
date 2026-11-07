@@ -95,6 +95,7 @@ portal.estimate_snapshot.activate
 ### Required tests
 
 - INV-002: a check against the rules table at `_require_capability` showing the invariant holds; a violating input is refused and changes nothing.
+- Witnesses, the focused Factory verification checks that assert it: INV-002 [witness: verification:authorization_guard_client_portal].
 
 ### Consequence
 
@@ -121,6 +122,7 @@ capability is never read from request data.
 ### Required tests
 
 - INV-007: a check against the rules table at `_require_capability` showing the invariant holds; a violating input is refused and changes nothing.
+- Witnesses, the focused Factory verification checks that assert it: INV-007 [witness: verification:authorization_guard_client_portal].
 
 ### Consequence
 
@@ -160,6 +162,7 @@ to every account stays the one the accepted spec gave.
 ### Required tests
 
 - INV-014: a focused test at `authenticate_staff` showing the invariant holds; a violating input is refused and changes nothing.
+- Witnesses, the focused Factory verification checks that assert it: INV-014 [witness: verification:staff_identity_uow_client_portal].
 
 ### Consequence
 
@@ -217,6 +220,7 @@ the challenges (owner 2026-11-07, A3 "Carried changes").
 - INV-017: a focused test at `_require_staff_scope` showing the invariant holds; a violating input is refused and changes nothing.
 - PLAT-REG-003: a focused test at `_authorize_project_operation` showing the invariant holds; a violating input is refused and changes nothing.
 - PLAT-REG-004: a focused test at `_authorize_project_operation` showing the invariant holds; a violating input is refused and changes nothing.
+- Witnesses, the focused Factory verification checks that assert it: INV-001, INV-017, PLAT-REG-003 [witness: verification:authorization_guard_client_portal]; INV-004 [witness: verification:staff_identity_uow_client_portal].
 
 ### Consequence
 
@@ -282,6 +286,7 @@ accepted; technical decisions delegated.
 - PLAT-REG-002: the ledger's property at `_validate_reference_identity` showing the invariant holds; a violating input is refused and changes nothing.
 - PLAT-REG-006: a focused test at `get_project_context` showing the invariant holds; a violating input is refused and changes nothing.
 - PLAT-REG-007: a focused test at `create_viewer` showing the invariant holds; a violating input is refused and changes nothing.
+- Witnesses, the focused Factory verification checks that assert it: PLAT-REG-006 [witness: verification:authorization_guard_client_portal]; PLAT-REG-006 [witness: verification:derived_views_uow_client_portal].
 
 ### Consequence
 
@@ -341,6 +346,7 @@ delegated.
 ### Required tests
 
 - PLAT-REG-005: a focused test at `_translate_registry_failure` showing the invariant holds; a violating input is refused and changes nothing.
+- Witnesses, the focused Factory verification checks that assert it: PLAT-REG-005 [witness: verification:derived_views_uow_client_portal]; PLAT-REG-005 [witness: verification:api_transport_financial_policy_registry_gateway_client_portal].
 
 ### Consequence
 
@@ -457,6 +463,7 @@ current service behaviour accepted; technical decisions delegated).
 - INV-030: a focused test at `create_expense_from_recognition` showing the invariant holds; a violating input is refused and changes nothing.
 - INV-042: a focused test at `register_work_payment` showing the invariant holds; a violating input is refused and changes nothing.
 - INV-043: a focused test at `publish_progress_photo` showing the invariant holds; a violating input is refused and changes nothing.
+- Witnesses, the focused Factory verification checks that assert it: INV-009 [witness: verification:service_identity_consumer_uow_client_portal]; INV-009 [witness: verification:viewer_access_sqlite_uow_client_portal]; INV-021 [witness: verification:snapshot_import_sqlite_uow_client_portal]; INV-030 [witness: verification:expense_intake_uow_client_portal]; INV-042 [witness: verification:project_tracking_audit_writer_sqlite_uow_client_portal]; INV-043 [witness: verification:photo_management_uow_client_portal].
 
 ### Consequence
 
@@ -503,6 +510,7 @@ behaviour accepted; technical decisions delegated.
 - INV-037: a check against the rules table at `validate_eur_amount` showing the invariant holds; a violating input is refused and changes nothing.
 - INV-041: a check against the rules table at `calculate_overall_progress` showing the invariant holds; a violating input is refused and changes nothing.
 - INV-044: the ledger's property at `calculate_material_balance` showing the invariant holds; a violating input is refused and changes nothing.
+- Witnesses, the focused Factory verification checks that assert it: INV-037 [witness: verification:project_tracking_audit_writer_sqlite_uow_client_portal]; INV-037 [witness: verification:snapshot_import_sqlite_uow_client_portal]; INV-041 [witness: verification:derived_views_uow_client_portal].
 
 ### Consequence
 
@@ -539,6 +547,7 @@ INV-010, INV-012, INV-013 and INV-016 (`open_questions.md` Q19, closed).
 ### Required tests
 
 - INV-015: a focused test at `perform_recovery_override` showing the invariant holds; a violating input is refused and changes nothing.
+- Witnesses, the focused Factory verification checks that assert it: INV-015 [witness: verification:staff_identity_uow_client_portal].
 
 ### Consequence
 
@@ -576,6 +585,7 @@ The accepted Factory spec revokes the sessions of a suspended or disabled staff 
 - INV-005: a check against the rules table at `_authorize_project_operation` showing the invariant holds; a violating input is refused and changes nothing.
 - INV-006: a check against the rules table at `_authorize_project_operation` showing the invariant holds; a violating input is refused and changes nothing.
 - INV-008: a focused test at `issue_viewer_access` showing the invariant holds; a violating input is refused and changes nothing.
+- Witnesses, the focused Factory verification checks that assert it: INV-005 [witness: verification:end_to_end_walkthrough_client_portal]; INV-005, INV-006 [witness: verification:authorization_guard_client_portal]; INV-006 [witness: verification:staff_identity_uow_client_portal]; INV-006 [witness: verification:service_identity_consumer_uow_client_portal].
 
 ### Consequence
 
@@ -614,6 +624,7 @@ is reached only if access changed in between (Q20). Owner 2026-11-06: current se
 ### Required tests
 
 - INV-029: a focused test at `authorize_snapshot_import` showing the invariant holds; a violating input is refused and changes nothing.
+- Witnesses, the focused Factory verification checks that assert it: INV-029 [witness: verification:authorization_guard_client_portal]; INV-029 [witness: verification:service_identity_consumer_uow_client_portal].
 
 ### Consequence
 
@@ -702,6 +713,7 @@ The accepted Factory spec adds two policies beside the catalog (Factory `5677993
 
 - INV-051: a focused test at `append_audit` showing the invariant holds; a violating input is refused and changes nothing.
 - INV-053: a focused test at `append_audit` showing the invariant holds; a violating input is refused and changes nothing.
+- Witnesses, the focused Factory verification checks that assert it: INV-051 [witness: verification:staff_identity_uow_client_portal]; INV-053 [witness: verification:snapshot_import_sqlite_uow_client_portal].
 
 ### Consequence
 
@@ -734,6 +746,7 @@ The accepted Factory spec extends `rules.binary_delivery_policy` (Factory `babd5
 ### Required tests
 
 - INV-034: a focused test at `_build_expense_aggregate` showing the invariant holds; a violating input is refused and changes nothing.
+- Witnesses, the focused Factory verification checks that assert it: INV-034 [witness: verification:expense_intake_uow_client_portal].
 
 ### Consequence
 
@@ -806,6 +819,7 @@ behaviour accepted; technical decisions delegated.
 
 - INV-018: a check against the rules table at `_normalize_staff_email` showing the invariant holds; a violating input is refused and changes nothing.
 - INV-019: a check against the rules table at `_validate_new_password` showing the invariant holds; a violating input is refused and changes nothing.
+- Witnesses, the focused Factory verification checks that assert it: INV-018 [witness: verification:staff_identity_uow_client_portal]; INV-019 [witness: verification:credential_security_policy_client_portal].
 
 ### Consequence
 
@@ -834,6 +848,7 @@ The table is rules data: `rules.staff_identity_input_policy` (SPEC_STANDARD 15.3
 ### Required tests
 
 - INV-003: a focused test at `issue_verification_secret` showing the invariant holds; a violating input is refused and changes nothing.
+- Witnesses, the focused Factory verification checks that assert it: INV-003 [witness: verification:credential_security_policy_client_portal]; INV-003 [witness: verification:staff_identity_uow_client_portal].
 
 ### Consequence
 
@@ -866,6 +881,7 @@ The former ledger rows INV-020…INV-029 that no table of R1–R17 carries. Thei
 - INV-026: a focused test at `import_snapshot` showing the invariant holds; a violating input is refused and changes nothing.
 - INV-027: a focused test at `build_budget_view` showing the invariant holds; a violating input is refused and changes nothing.
 - INV-028: a focused test at `PortalTransaction.commit` showing the invariant holds; a violating input is refused and changes nothing.
+- Witnesses, the focused Factory verification checks that assert it: INV-022, INV-023, INV-024, INV-025 [witness: verification:budget_management_sqlite_uow_client_portal]; INV-020 [witness: verification:snapshot_import_sqlite_uow_client_portal].
 
 ### Consequence
 
@@ -890,6 +906,7 @@ The former ledger rows INV-030…INV-037 that no table of R1–R17 carries; prod
 - INV-033: a focused test at `_build_replacement_allocations` showing the invariant holds; a violating input is refused and changes nothing.
 - INV-035: a focused test at `_project_expense_summary` showing the invariant holds; a violating input is refused and changes nothing.
 - INV-036: a focused test at `validate_project_section` showing the invariant holds; a violating input is refused and changes nothing.
+- Witnesses, the focused Factory verification checks that assert it: INV-032, INV-036 [witness: verification:expense_intake_uow_client_portal]; INV-032, INV-036 [witness: verification:expense_management_uow_client_portal]; INV-035 [witness: verification:derived_views_uow_client_portal].
 
 ### Consequence
 
@@ -928,6 +945,7 @@ The former ledger rows INV-050 and INV-052; product text of State 0 ("Derived va
 
 - INV-050: a focused test at `build_project_overview` showing the invariant holds; a violating input is refused and changes nothing.
 - INV-052: a focused test at `PortalTransaction.commit` showing the invariant holds; a violating input is refused and changes nothing.
+- Witnesses, the focused Factory verification checks that assert it: INV-052 [witness: verification:snapshot_import_sqlite_uow_client_portal].
 
 ### Consequence
 
@@ -957,6 +975,7 @@ carried verbatim at assembly (Factory `0baceacc`).
 - A focused test per use-case module that instruments the store, rejects a
   nested begin and requires exactly one close per call (Factory focused
   checks `*_uow_check`, `0f9ae3ae`, `7eb7ebcc`).
+- Witnesses, the focused Factory verification checks that assert it: closed-once, domain-error-unmasked [witness: verification:transaction_guard_client_portal]; closed-once [witness: verification:staff_identity_uow_client_portal].
 
 ### Consequence
 
@@ -984,6 +1003,7 @@ identifier is forbidden. Normative value: `rules.audit_entity_id_policy`
 - A writer test that rejects a UUID object and a non-canonical string for
   `entity_id`, and a consumer test per audited mutation that reads the record
   back.
+- Witnesses, the focused Factory verification checks that assert it: entity_id canonical [witness: verification:staff_identity_uow_client_portal]; entity_id canonical [witness: verification:staff_bootstrap_client_portal].
 
 ### Consequence
 
@@ -1006,6 +1026,7 @@ Normative value: `rules.model_immutability_policy` (Factory `bd561732`).
 
 - A test per revocation cascade that the read record is untouched and the
   replacement carries the change.
+- Witnesses, the focused Factory verification checks that assert it: read value unchanged [witness: verification:derived_views_uow_client_portal]; read value unchanged [witness: verification:service_identity_consumer_uow_client_portal].
 
 ### Consequence
 
@@ -1053,6 +1074,7 @@ headers only. Normative value: `rules.http_transport_policy` (Factory
 - Factory focused checks `client_portal_transport_guard`,
   `client_portal_api_transport_check` and `runtime_settings_client_portal`
   (`babd5e52`, `3080ef0d`, `dc351917`).
+- Witnesses, the focused Factory verification checks that assert it: host/body, sign-out origin & cookie, no secret in logs [witness: verification:runtime_behavior_client_portal]; host/body, no secret in logs [witness: verification:transport_guard_client_portal]; sign-out origin & cookie [witness: verification:api_transport_financial_policy_registry_gateway_client_portal].
 
 ### Consequence
 
@@ -1076,6 +1098,7 @@ Normative value: `rules.exception_payload_policy` (Factory `a12937fd`).
 ### Required tests
 
 - A snapshot import test per `ImportRejectReason` value.
+- Witnesses, the focused Factory verification checks that assert it: recorded reason equals exception reason [witness: verification:snapshot_import_sqlite_uow_client_portal].
 
 ### Consequence
 
@@ -1106,6 +1129,7 @@ delegated; answers OQ-18 and `open_questions.md` Q18).
 ### Required tests
 
 - A derived-view test with two records of equal date per list.
+- Witnesses, the focused Factory verification checks that assert it: same order every read [witness: verification:derived_views_uow_client_portal].
 
 ### Consequence
 
@@ -1148,6 +1172,7 @@ the instants are UTC, their stored form is offset-naive.
 - A test per multi-write operation (activation, revocation cascades,
   bootstrap) that its written timestamps, other than audit `occurred_at`,
   are one instant.
+- Witnesses, the focused Factory verification checks that assert it: one instant per operation [witness: verification:service_identity_consumer_uow_client_portal]; one instant per operation [witness: verification:staff_bootstrap_client_portal].
 
 ### Consequence
 
@@ -1187,6 +1212,7 @@ already completed. Normative value: `rules.staff_bootstrap_policy` (Factory
 
 - A bootstrap test on an empty and a non-empty store, with two concurrent
   attempts, and one per exit code.
+- Witnesses, the focused Factory verification checks that assert it: at most one account, only on empty table [witness: verification:staff_bootstrap_store_client_portal]; exit codes [witness: verification:staff_bootstrap_cli_client_portal].
 
 ### Consequence
 
@@ -1253,6 +1279,7 @@ to States 6–7.
 
 - `runtime_settings_client_portal`: an invalid or missing required variable
   stops start-up.
+- Witnesses, the focused Factory verification checks that assert it: required configuration [witness: verification:runtime_settings_client_portal]; bound existence [witness: verification:binary_storage_content_client_portal].
 
 ### Consequence
 
@@ -1272,6 +1299,7 @@ It decides nothing new: each applicable category is owned by a decision above.
 ### Required tests
 
 - `python tools/design_lint.py examples/client-portal --state 2`.
+- Witness: the State 2 security-review gate of the authoring sequence runs this lint [witness: workbench:state2_rules_decisions].
 
 ### Consequence
 
