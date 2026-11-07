@@ -179,7 +179,7 @@ No HTTP route reaches this flow.
 
 - Confirmation mismatch: exit code 1, by `module:staff_bootstrap_cli`.
 - Rejected email or password: exit code 2; nothing is written.
-- Any staff account already exists: `BootstrapAlreadyCompleted`, exit code 3;
+- Any staff account already exists: `BootstrapAlreadyCompletedError`, exit code 3;
   neither write persists.
 - The password is never printed, logged, audited, returned or read from
   arguments, environment or a file (`rules.staff_bootstrap_policy`).

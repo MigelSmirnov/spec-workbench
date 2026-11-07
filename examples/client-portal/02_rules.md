@@ -1165,7 +1165,7 @@ concerns the email and password the command is given: the audit record
 names the created account by its `staff_id` and carries neither. The emptiness check and both inserts run in one
 write transaction that no concurrent attempt can interleave, so concurrent attempts create exactly one
 account; when any staff account exists the command refuses with
-`BootstrapAlreadyCompleted` and nothing persists. The password is kept only
+`BootstrapAlreadyCompletedError` and nothing persists. The password is kept only
 as its hash; email and password are read neither from process arguments nor
 the environment nor a file and are never written to output, logs, audit,
 return values or exception messages, with one exception: the use case

@@ -1705,7 +1705,7 @@ hash reaches no sink the policy forbids.
 ### Errors
 
 `IdentityInputRejected` for the email or password;
-`BootstrapAlreadyCompleted` when any staff account exists, with nothing
+`BootstrapAlreadyCompletedError` when any staff account exists, with nothing
 written; a storage failure propagates unchanged.
 
 ### State impact

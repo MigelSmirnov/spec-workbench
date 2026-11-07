@@ -549,6 +549,12 @@ ever needed." It closes `open_questions.md` Q19 and replaces R0-23 of
 | running service and data | the deployed code still serves the six routes and creates the `email_deliveries` table on each transaction | spec only; the running service changes with the next Route B. An existing database keeps its (empty) `email_deliveries` table; the regenerated store no longer creates or reads it |
 | semantic diff against 459ac96c | the lists above | expected differences of the later semantic diff; design_provenance engaged for the removed names (owners A10, A11, A13, A16, A17, A22, A30; R0-03, R0-06, R0-15, R0-16, R0-19, R0-20, R0-23), each superseded by this owner decision |
 
+#### Deviation from 459ac96c: `BootstrapAlreadyCompleted` renamed `BootstrapAlreadyCompletedError` (coordinator, 2026-11-07)
+
+| topic | evidence | decision |
+|---|---|---|
+| the Factory's module-local exception export lists a class only by its `Error` suffix, so `BootstrapAlreadyCompleted` (staff_bootstrap) is the one taxonomy exception it misses | coordinator decision 2026-11-07; the name is internal: no HTTP route maps it (`70_router_context.json` `error_policy` has no entry; Factory code `api/router.py` registers no handler for it), and its one catcher, `cli/staff_bootstrap.py` 25–27, matches it by type and prints a fixed line with exit code 3 (`rules.staff_bootstrap_policy.command_outcomes`) | renamed in every state that names it (`02_rules.md` A29, `30_modules.md` `staff_bootstrap`, `40_flows.md`, `50_public_apis.md`), in `60_exception_taxonomy.json`, `rules.staff_bootstrap_policy.rejection_when_any_staff_exists`, the imports table, the `bootstrap_first_administrator` note and `global_spec.json`. Observable behaviour unchanged (exit code and printed line); expected difference of the later semantic diff. The running code keeps the old name until the next Route B |
+
 #### Values in notes restored (coordinator, 2026-11-06)
 
 | topic | evidence | decision |

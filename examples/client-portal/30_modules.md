@@ -914,7 +914,7 @@ A29: the first-administrator operation — normalize and validate the input
 through `staff_identity`'s input boundary, hash the password through
 `credential_security`, build the administrator account and its audit, and ask
 `StaffBootstrapPort` to create it only on an empty staff table; refuse with
-`BootstrapAlreadyCompleted` otherwise. Factory `6011ac93b143` (R0-07).
+`BootstrapAlreadyCompletedError` otherwise. Factory `6011ac93b143` (R0-07).
 
 ### Knows
 
@@ -939,7 +939,7 @@ the password.
 
 ```text
 bootstrap_first_administrator
-BootstrapAlreadyCompleted
+BootstrapAlreadyCompletedError
 ```
 
 ## `viewer_access`
