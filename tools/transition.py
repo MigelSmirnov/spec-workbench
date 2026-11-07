@@ -130,12 +130,14 @@ def _contract_rows(project: Path) -> tuple[dict[str, Any], dict[str, str]]:
 
 
 def _time_authorities(project: Path) -> set[str]:
+    """Modules with a declared source: policy authorities and module-level clock consumers."""
     import design_closure_gaps
 
     try:
-        return design_closure_gaps.time_source_authorities(design_closure_gaps.load_spec(project))
+        spec = design_closure_gaps.load_spec(project)
     except (OSError, ValueError):
-        return set()
+        spec = None
+    return design_closure_gaps.time_sources(project, spec)
 
 
 def check_model_closure(project: Path) -> dict[str, Any]:
