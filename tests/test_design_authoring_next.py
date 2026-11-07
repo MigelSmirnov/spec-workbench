@@ -15,6 +15,9 @@ def _ready_contracts():
 
 def _promoted_states_ready(monkeypatch) -> None:
     monkeypatch.setattr(design_authoring_next, "_promoted_states_step", lambda sequence, project, text: None)
+    # these tests route between post-State-6 phases; what closes at each
+    # transition is tested in test_transition.py
+    monkeypatch.setattr(design_authoring_next, "_transition_stop", lambda *args: None)
 
 
 def _post_state5_files(project) -> None:

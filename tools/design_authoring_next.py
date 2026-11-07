@@ -28,6 +28,7 @@ import design_stage5
 import design_stage6_contracts
 import design_stage6_data
 import design_trace
+import transition
 from notes_workbench import gate as notes_gate
 from questions_workbench import documents as question_documents
 from questions_workbench import service as question_rounds
@@ -138,6 +139,7 @@ def _result(
         "read": _read(sequence, phase),
         "ask": [str(item) for item in _phase(sequence, phase).get("questions") or []],
         "question_round": _question_round(sequence, phase, project_text),
+        "layer": transition.layer(sequence, phase),
         "summary": summary or {},
         "findings": findings or [],
     }
@@ -151,6 +153,32 @@ def _question_round(sequence: dict[str, Any], phase: str, project_text: str) -> 
     if not entry.get("question_scope"):
         return None
     return f"python tools/design_questions.py ask {project_text} --state {entry['semantic_state']}"
+
+
+def _transition_stop(sequence: dict[str, Any], project: Path, project_text: str, phase: str) -> dict[str, Any] | None:
+    """The phase's gate passed: now what closes at this transition (TRANSITION_PROTOCOL.md).
+
+    Its own checks and every obligation an earlier layer carried here. A result
+    that is not closed or carried stops the chain at this phase, so a gate
+    that could not see its inputs never reads as a pass.
+    """
+    report = transition.run_phase(project, phase, sequence)
+    if report["ready"]:
+        return None
+    stopped = [r for r in report["results"] if transition.blocking(r)]
+    names = ", ".join(f"{r['check']} ({r['outcome']}, from {r['from']})" for r in stopped)
+    payload = _result(
+        sequence=sequence, project=project, project_text=project_text,
+        phase=phase, blocked=True,
+        reason=(f"The {phase} gate passed, but what closes at this transition does not: {names}. "
+                "not_checked is not a pass; a workbench_gap is routed to the Workbench, never repaired by "
+                "changing the design's behaviour."),
+        summary=report["summary"], findings=report["findings"],
+    )
+    payload["action"] = {"tool": "tools/transition.py", "args": [project_text, "--phase", phase, "--json"],
+                         "command": _command("tools/transition.py", project_text, ["--phase", phase, "--json"])}
+    payload["transition_results"] = report["results"]
+    return payload
 
 
 def _lint_findings(report: object) -> list[dict[str, Any]]:
@@ -302,6 +330,10 @@ def _promoted_states_step(sequence: dict[str, Any], project: Path, project_text:
             findings=_lint_findings(state2),
         )
 
+    stop = _transition_stop(sequence, project, project_text, "state2_rules_decisions")
+    if stop is not None:
+        return stop
+
     state3 = design_stage3.lint(project)
     s3 = state3["summary"]
     if not s3["modules"] or s3["errors"]:
@@ -353,6 +385,10 @@ def _promoted_states_step(sequence: dict[str, Any], project: Path, project_text:
                 phase="state4_reviewed_flows", blocked=bool(c4["invalid_plan_refs"]),
                 reason="Complete the explicit State 4 flow plan.", summary=c4, use_next=True,
             )
+
+    stop = _transition_stop(sequence, project, project_text, "state4_reviewed_flows")
+    if stop is not None:
+        return stop
 
     state5 = design_stage5.lint(project)
     s5 = state5["summary"]
@@ -572,9 +608,13 @@ def _post_state5_step(sequence: dict[str, Any], project: Path, project_text: str
             phase="state6_exact_contracts", blocked=False,
             reason="State 6 owns canonical Python signatures and must close before deterministic backend closure.",
             summary=contracts["summary"],
+            findings=transition.classify(project, list(contracts.get("findings") or [])),
             unresolved_functions=contracts["unresolved_functions"],
             router_allowed=False, persistence_allowed=False,
         )
+    stop = _transition_stop(sequence, project, project_text, "state6_exact_contracts")
+    if stop is not None:
+        return stop
 
     persistence = persistence_authoring.coverage(project)
     if not persistence["summary"]["handoff_ready"]:
@@ -611,6 +651,10 @@ def _post_state5_step(sequence: dict[str, Any], project: Path, project_text: str
             summary=notes["summary"], findings=notes["findings"],
             router_allowed=True, persistence_allowed=True,
         )
+
+    stop = _transition_stop(sequence, project, project_text, "state7_notes")
+    if stop is not None:
+        return stop
 
     witnesses = design_decision_witness.coverage(project)
     if not witnesses["summary"]["handoff_ready"]:

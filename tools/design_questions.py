@@ -12,7 +12,10 @@ raised by two reviews are judged) and keeps it under
 examples/<case>/questions/state<N>/. `--since` reopens a state closed at that
 git ref: the judge sees the change and may set aside topics about passages the
 change did not touch. `status` exits 0 when the state is closed — every unit
-closed by its two latest reviews, clear on its current text — and 1 otherwise.
+closed by its two latest reviews, clear on its current text — and its
+transition holds (skills/spec-authoring/TRANSITION_PROTOCOL.md: what the state
+owns, checks and receives), and 1 otherwise; a closed round never hides a
+blocking deterministic result.
 
 State 7 is asked module by module on the prompts the Factory builds for the
 generated modules (`--factory-root`, default SPEC_WORKBENCH_FACTORY_ROOT or the
@@ -37,7 +40,8 @@ def _human_round(summary: dict) -> str:
         f"repeated={summary['repeated_topics']} blocking={summary.get('blocking_topics', '-')} "
         f"deferred={summary.get('deferred_topics', 0)} "
         f"clear={str(summary.get('clear', not summary['repeated_topics'])).lower()} "
-        f"closed={str(summary['closed']).lower()}"
+        f"closed={str(summary['closed']).lower()} "
+        f"transition_ready={str(summary.get('transition_ready', True)).lower()}"
     ]
     if "scope" in summary:
         lines.append(f"  units: reviewed={len(summary['scope'])} blocked={summary['blocked_units'] or '-'} "
@@ -82,18 +86,22 @@ def main(argv: list[str] | None = None) -> int:
             summary = service.ask_round(args.case, args.state, _provider(args), args.runs, args.since,
                                         args.factory_root)
             print(json.dumps(summary, ensure_ascii=False, indent=2) if args.json else _human_round(summary))
-            return 0 if summary["closed"] else 1
-        result = service.status(args.case, args.state, args.factory_root)
+            return 0 if summary["closed"] and summary["transition_ready"] else 1
+        result = service.status(args.case, args.state, args.factory_root, with_transition=True)
         if args.json:
             print(json.dumps(result, ensure_ascii=False, indent=2))
         else:
             print(f"State {result['state']} questions: closed={str(result['closed']).lower()} "
+                  f"ready={str(result['ready']).lower()} "
                   f"round={result['round']} provider={result.get('provider')} — {result['reason']}")
+            for finding in result["transition"]["findings"][:20]:
+                print(f"  transition [{finding.get('outcome', 'gate')}] {finding.get('code')}: "
+                      f"{str(finding.get('message', ''))[:160]}")
             if result.get("closed_at") and not result["closed"]:
                 print(f"  reopened since {result['closed_at']}: ask --since {result['closed_at']}")
             for topic in result.get("repeated", []):
                 print(f"  [{len(topic['runs'])}] {topic['topic']}")
-        return 0 if result["closed"] else 1
+        return 0 if result["ready"] else 1
     except (service.QuestionRoundError, ValueError, RuntimeError) as exc:
         print(f"design_questions: error: {exc}", file=sys.stderr)
         return 2

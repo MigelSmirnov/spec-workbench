@@ -20,9 +20,17 @@ config (the named focused command-check must exist); `note:<scope>` resolves
 against the assembled specification (the scope must carry a [TEST_EVIDENCE]
 note). A tag that resolves is a mechanical witness; a tag that does not is an
 error — a claimed witness that is absent is worse than no claim. A decision
-with formal invariants and no witness at all is reported as a warning, not a
-block: the corpus adopts tags decision by decision, and adequacy of a witness
-to its invariant stays a human judgement.
+with formal invariants and no witness at all stops the case (the fence raises
+its warning). A tag binds the invariant identifiers its own line names, so
+one check cannot stand for a decision's other invariants; whether the check
+really asserts the invariant stays a judgement of the State 2 question round.
+
+Two things are kept apart (TRANSITION_PROTOCOL.md, "Invariant evidence"): the
+Required tests item that describes what must be shown — a State 2 decision,
+checked at the State 2 handoff by ``required_tests`` — and the binding of that
+description to an existing check, confirmed here. Neither is the reviewer's
+defect witness of a question round, which shows a history in which the texts
+give two outcomes.
 
     python tools/design_decision_witness.py examples/<case> --coverage [--json]
 """
@@ -127,7 +135,113 @@ def _section_lines(case: Path, item: dict[str, Any], title: str) -> tuple[str, s
     return None
 
 
+INVARIANT_ID_RE = re.compile(r"\b[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*-\d{1,4}\b")
+
+
+def invariant_ids(text: str) -> list[str]:
+    """The identifiers formal invariants are written under (INV-031, PLAT-REG-003), in order."""
+    return list(dict.fromkeys(INVARIANT_ID_RE.findall(text)))
+
+
+def _workbench_checks() -> set[str]:
+    try:
+        from assembly_workbench.model import CHECK_ORDER
+        checks = set(CHECK_ORDER)
+    except ImportError:  # pragma: no cover
+        checks = set()
+    return checks | set(LINT_GATES)
+
+
+def _resolve(kind: str, name: str, key: Any, location: str, check_names: set[str] | None, unavailable: str,
+             evidence_scopes: set[str] | None) -> tuple[bool, dict[str, Any] | None]:
+    """Whether one tag binds to an existing check, and the finding when it does not or cannot be told."""
+    if kind == "workbench":
+        # a decision the workbench itself enforces: on every assembly (identity, flows …)
+        # or as a design_lint gate of the authoring sequence (State 1/2, security review)
+        if name in _workbench_checks():
+            return True, None
+        return False, {"severity": "error", "code": "witness_unresolved", "decision": key,
+                       "witness": f"{kind}:{name}", "location": location,
+                       "message": (f"{key}: claims workbench check {name!r} that the assembly nor the authoring "
+                                   "sequence runs — a claimed witness that is absent is worse than no claim")}
+    if kind == "verification":
+        if check_names is None:
+            return True, {"severity": "warning", "code": "witness_unverifiable", "outcome": "not_checked",
+                          "decision": key, "witness": f"{kind}:{name}", "location": location,
+                          "message": f"{key}: factory verification config unavailable ({unavailable}); "
+                                     f"witness {name} is not checked — not checked is not a pass"}
+        if name in check_names:
+            return True, None
+        return False, {"severity": "error", "code": "witness_unresolved", "decision": key,
+                       "witness": f"{kind}:{name}", "location": location,
+                       "message": (f"{key}: claims verification check {name!r} that the factory config does not "
+                                   "define — a claimed witness that is absent is worse than no claim")}
+    if evidence_scopes is None:
+        return True, {"severity": "warning", "code": "witness_unverifiable", "outcome": "not_checked",
+                      "decision": key, "witness": f"{kind}:{name}", "location": location,
+                      "message": f"{key}: no assembled specification yet; note witness {name} is not checked "
+                                 "before assembly"}
+    if name in evidence_scopes:
+        return True, None
+    return False, {"severity": "error", "code": "witness_unresolved", "decision": key,
+                   "witness": f"{kind}:{name}", "location": location,
+                   "message": (f"{key}: claims a [TEST_EVIDENCE] note at scope {name!r} that the assembled "
+                               "specification does not carry")}
+
+
+def _decisions(case: Path):
+    """(key, invariants (location, text), tests (location, text) | None) per decision with formal invariants."""
+    for item in design_index.list_items(case, kind="decision"):
+        invariants = _section_lines(case, item, "Formal invariant(s)") or _section_lines(case, item, "Formal invariants")
+        if invariants is None or not invariants[1].strip():
+            continue
+        yield item.get("key"), invariants, _section_lines(case, item, "Required tests")
+
+
+def required_tests(case: Path) -> dict[str, Any]:
+    """The State 2 half: every formal invariant has a described required test.
+
+    What the test must show is a State 2 decision; which existing check proves
+    it is a binding, confirmed by ``coverage`` at decision_witness_resolution
+    (TRANSITION_PROTOCOL.md, "Invariant evidence"). A described test without a
+    binding is carried there, not a pass and not a stop here.
+    """
+    case = case.resolve()
+    findings: list[dict[str, Any]] = []
+    decisions = carried = 0
+    for key, invariants, tests in _decisions(case):
+        decisions += 1
+        body = tests[1] if tests else ""
+        described = [line for line in body.splitlines()[1:] if line.strip()]
+        if not described:
+            findings.append({"severity": "error", "code": "invariant_without_required_test", "decision": key,
+                             "location": invariants[0],
+                             "message": f"{key}: formal invariants declared and no Required tests describe what "
+                                        "must be shown — the decision has not said how it would be known to hold"})
+            continue
+        untested = [i for i in invariant_ids(invariants[1]) if i not in set(invariant_ids(body))]
+        for ident in untested:
+            findings.append({"severity": "error", "code": "invariant_without_required_test", "decision": key,
+                             "invariant": ident, "location": tests[0],
+                             "message": f"{key}: invariant {ident} is named by no Required tests item"})
+        if not WITNESS_RE.search(body):
+            carried += 1
+    findings = fence.enforce(findings)
+    return {"schema_version": SCHEMA_VERSION, "project_root": case.name,
+            "summary": {"decisions_with_invariants": decisions, "binding_carried": carried,
+                        "errors": fence.stops(findings)},
+            "findings": findings}
+
+
 def coverage(case: Path, factory: Path | None = None) -> dict[str, Any]:
+    """Every invariant-bearing decision binds to an existing check that asserts it.
+
+    A tag binds the invariant identifiers named on its own Required tests line;
+    when the invariants carry identifiers, each one needs a binding line, so one
+    tag cannot stand for invariants it does not name. A tag on a line naming no
+    identifier binds the whole decision. Whether the bound check really asserts
+    the invariant stays a judgement of the State 2 question round.
+    """
     case = case.resolve()
     if factory is None:
         factory = factory_root(Path(__file__).resolve().parents[1])
@@ -137,84 +251,43 @@ def coverage(case: Path, factory: Path | None = None) -> dict[str, Any]:
     findings: list[dict[str, Any]] = []
     decisions = 0
     witnessed = 0
-    for item in design_index.list_items(case, kind="decision"):
-        invariants = _section_lines(case, item, "Formal invariant(s)") or _section_lines(case, item, "Formal invariants")
-        tests = _section_lines(case, item, "Required tests")
-        if invariants is None or not invariants[1].strip():
-            continue
+    for key, invariants, tests in _decisions(case):
         decisions += 1
-        tags = WITNESS_RE.findall(tests[1]) if tests else []
+        lines = tests[1].splitlines() if tests else []
         location = (tests or invariants)[0]
-        if not tags:
+        if not any(WITNESS_RE.search(line) for line in lines):
             findings.append({
                 "severity": "warning", "code": "decision_without_witness",
-                "decision": item.get("key"), "location": location,
-                "message": (f"{item.get('key')}: formal invariants declared, no witness tag in "
+                "decision": key, "location": location,
+                "message": (f"{key}: formal invariants declared, no witness tag in "
                             "Required tests — nothing mechanical enforces this decision"),
             })
             continue
-        resolved_any = False
-        for kind, name in tags:
-            if kind == "workbench":
-                # a decision the workbench itself enforces: on every assembly (identity, flows …)
-                # or as a design_lint gate of the authoring sequence (State 1/2, security review)
-                try:
-                    from assembly_workbench.model import CHECK_ORDER
-                    workbench_checks = set(CHECK_ORDER)
-                except ImportError:  # pragma: no cover
-                    workbench_checks = set()
-                workbench_checks.update(LINT_GATES)
-                if name in workbench_checks:
-                    resolved_any = True
-                else:
-                    findings.append({
-                        "severity": "error", "code": "witness_unresolved",
-                        "decision": item.get("key"), "witness": f"{kind}:{name}", "location": location,
-                        "message": (f"{item.get('key')}: claims workbench check {name!r} that the assembly "
-                                    "nor the authoring sequence runs — a claimed witness that is absent is worse than no claim"),
-                    })
-                continue
-            if kind == "verification":
-                if check_names is None:
-                    findings.append({
-                        "severity": "warning", "code": "witness_unverifiable",
-                        "decision": item.get("key"), "witness": f"{kind}:{name}", "location": location,
-                        "message": f"{item.get('key')}: factory verification config unavailable ({unavailable}); "
-                                   f"witness {name} will be judged at factory admission",
-                    })
-                    resolved_any = True
-                elif name in check_names:
-                    resolved_any = True
-                else:
-                    findings.append({
-                        "severity": "error", "code": "witness_unresolved",
-                        "decision": item.get("key"), "witness": f"{kind}:{name}", "location": location,
-                        "message": (f"{item.get('key')}: claims verification check {name!r} that the "
-                                    "factory config does not define — a claimed witness that is "
-                                    "absent is worse than no claim"),
-                    })
-            else:
-                if evidence_scopes is None:
-                    findings.append({
-                        "severity": "warning", "code": "witness_unverifiable",
-                        "decision": item.get("key"), "witness": f"{kind}:{name}", "location": location,
-                        "message": f"{item.get('key')}: no assembled specification yet; "
-                                   f"note witness {name} unverifiable before assembly",
-                    })
-                    resolved_any = True
-                elif name in evidence_scopes:
-                    resolved_any = True
-                else:
-                    findings.append({
-                        "severity": "error", "code": "witness_unresolved",
-                        "decision": item.get("key"), "witness": f"{kind}:{name}", "location": location,
-                        "message": (f"{item.get('key')}: claims a [TEST_EVIDENCE] note at scope "
-                                    f"{name!r} that the assembled specification does not carry"),
-                    })
-        if resolved_any:
+        ids = invariant_ids(invariants[1])
+        bound: set[str] = set()
+        whole = False
+        for line in lines:
+            resolved_line = False
+            for kind, name in WITNESS_RE.findall(line):
+                resolved, finding = _resolve(kind, name, key, location, check_names, unavailable, evidence_scopes)
+                resolved_line = resolved_line or resolved
+                if finding:
+                    findings.append(finding)
+            if resolved_line:
+                named = [i for i in invariant_ids(line) if i in ids]
+                bound.update(named)
+                whole = whole or not named
+        unbound = [] if whole else [i for i in ids if i not in bound]
+        for ident in unbound:
+            findings.append({
+                "severity": "warning", "code": "invariant_without_witness", "decision": key,
+                "invariant": ident, "location": location,
+                "message": f"{key}: invariant {ident} is bound to no existing check; a tag binds only the "
+                           "invariants its own line names",
+            })
+        if (whole or bound) and not unbound:
             witnessed += 1
 
-    errors = sum(1 for f in findings if f["severity"] == "error")
     findings = fence.enforce(findings)
     errors = fence.stops(findings)
     return {

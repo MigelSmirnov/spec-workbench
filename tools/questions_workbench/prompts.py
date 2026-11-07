@@ -271,7 +271,8 @@ def judge_instruction(state: int, reopened: bool, later_files: list[str] | None 
                         witness_schema=WITNESS_SCHEMA if witness else "")
 
 
-def judge_input(texts: str, topics: list[dict], change: str | None, precedents: list[dict] | None = None) -> str:
+def judge_input(texts: str, topics: list[dict], change: str | None, precedents: list[dict] | None = None,
+                layer: str | None = None) -> str:
     listing = "\n\n".join(
         f"{t['id']}: {t['topic']}\n" + "\n".join(f"  - {p}" for p in t["points"]) for t in topics
     )
@@ -286,5 +287,75 @@ def judge_input(texts: str, topics: list[dict], change: str | None, precedents: 
             for p in precedents
         )
         parts.append(f"=== PRIOR JUDGEMENTS (non-blocking, verified) ===\n\n{prior}")
+    if layer:
+        parts.append(layer)
     parts.append(f"=== TOPICS TO JUDGE ===\n\n{listing}")
     return "\n\n".join(parts)
+
+
+LAYER = """
+
+The transition of State {state} (skills/spec-authoring/TRANSITION_PROTOCOL.md).
+Within the scope above, ask the protocol's five questions of the units under
+review: are the inputs this state needs available; are the decisions it owns
+made; can each be written in the standard; did the obligations earlier states
+carried here close; and is every obligation it carries further a decided
+execution with a receiving state and a check, never an open choice written as
+"later". A choice deferred without being decided is a gap of this state.
+
+This state owns:
+{owns}
+It received from earlier states (result now):
+{received}
+It carries further:
+{carries}
+Deterministic results now. They are not design text: never quote them. A point
+they already state need not be raised, and no point may take a result that is
+not closed or carried for a pass; "not_checked" means an input is missing:
+{findings}
+
+Ask about an earlier state only whether this state fulfils what it carried
+here; its closed units are not audited again. A decision's "[witness: ...]" tag
+binds an invariant to an existing check: it is not the history you give as a
+point's witness. Whether the bound check asserts the very invariant its line
+names, and whether a Required tests item says what would show the invariant
+holds, are points of the state that owns the invariant."""
+
+
+LAYER_JUDGE = """=== DETERMINISTIC RESULTS AT THIS TRANSITION (not design text; never quote) ===
+
+A topic these results show open is not judged answered or indifferent, by
+this state's texts or a later one's: the texts may say it, the check says it
+does not hold.
+{findings}"""
+
+MAX_LAYER_LINES = 40
+
+
+def _layer_lines(context: dict) -> tuple[str, str, str, str]:
+    owns = "\n".join(f"- {item}" for item in context.get("owns") or []) or "- (nothing declared)"
+    received = "\n".join(f"- [{r['outcome']}] {r['obligation']} (from {r['from']}, check {r['check']})"
+                         for r in context.get("results") or []) or "- (nothing)"
+    carries = "\n".join(f"- {c.get('obligation', '')} -> {c.get('to')} (confirmed by {c.get('check')})"
+                        for c in context.get("carries") or []) or "- (nothing)"
+    lines = [f"- [{r['outcome']}] {f.get('code')}: {f.get('message', '')}"
+             for r in context.get("results") or [] if r["outcome"] not in ("closed", "carried")
+             for f in r.get("findings") or []]
+    lines += [f"- [gate] {f.get('code')}: {f.get('message', '')}" for f in context.get("gate_findings") or []]
+    if len(lines) > MAX_LAYER_LINES:
+        lines = lines[:MAX_LAYER_LINES] + [f"- … {len(lines) - MAX_LAYER_LINES} more"]
+    return owns, received, carries, "\n".join(lines) or "- (none)"
+
+
+def layer_scope(context: dict | None) -> str:
+    """The transition block of a document round's instruction; "" without a context."""
+    if not context:
+        return ""
+    owns, received, carries, findings = _layer_lines(context)
+    return LAYER.format(state=context["state"], owns=owns, received=received, carries=carries, findings=findings)
+
+
+def layer_judge(context: dict | None) -> str | None:
+    if not context:
+        return None
+    return LAYER_JUDGE.format(findings=_layer_lines(context)[3])
