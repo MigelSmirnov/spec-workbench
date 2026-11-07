@@ -1365,7 +1365,11 @@ This describes the existing deployment and answers OQ-17 and
 ### Required tests
 
 - The deployment requirements contain only `==` pins, one per direct import.
-- The pre-deploy vulnerability check of those pins passes.
+- The pre-deploy vulnerability check of those pins passes: every distribution
+  pip resolves for the deployment requirements on the image target is matched
+  against a fresh public advisory snapshot; a listed version blocks, and stale,
+  missing or unmatchable data does not pass
+  [witness: verification:dependency_vulnerability_client_portal].
 
 ### Consequence
 
