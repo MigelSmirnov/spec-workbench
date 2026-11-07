@@ -229,6 +229,70 @@ def test_a_tag_in_an_item_naming_no_invariant_binds_none_of_several(tmp_path):
                      ("witness_binding_ambiguous", None)]
 
 
+UNIDENTIFIED = RULES.replace("- INV-001: a thing is counted once\n- INV-002: a count never decreases",
+                             "- A thing is counted once.\n- A count never decreases.")
+
+
+def _unidentified(tmp_path: Path, tests: str) -> Path:
+    case = _case(tmp_path)
+    _write(case / "02_rules.md", UNIDENTIFIED.format(tests=tests))
+    return case
+
+
+def test_one_tag_does_not_stand_for_several_unidentified_invariants(tmp_path):
+    # review 5814738409 (#152): A32 had two invariants without identifiers, and
+    # one tag for the second made the whole decision witnessed
+    case = _unidentified(tmp_path, "- Counted twice is refused.\n"
+                                   "- A lower count is refused. [witness: workbench:state2_rules_decisions]")
+    report = design_decision_witness.coverage(case, tmp_path)
+    codes = sorted(f["code"] for f in report["findings"])
+    assert codes == ["invariant_without_identifier", "invariant_without_identifier", "witness_binding_ambiguous"]
+    assert report["summary"]["witnessed"] == 0
+    assert all(f["severity"] == "error" for f in report["findings"])
+
+
+def test_word_labels_in_the_item_are_not_an_address(tmp_path):
+    # client-portal A22/A25/A29: "closed-once, domain-error-unmasked [witness: ...]"
+    case = _unidentified(tmp_path, "- Witnesses: counted-once, never-decreases "
+                                   "[witness: workbench:state2_rules_decisions]")
+    report = design_decision_witness.coverage(case, tmp_path)
+    assert "witness_binding_ambiguous" in {f["code"] for f in report["findings"]}
+    assert report["summary"]["witnessed"] == 0
+
+
+def test_a_mixed_decision_reports_the_invariant_without_an_identifier(tmp_path):
+    case = _case(tmp_path)
+    _write(case / "02_rules.md", RULES.replace("- INV-002: a count never decreases", "- A count never decreases.")
+           .format(tests="- INV-001: refused. [witness: workbench:state2_rules_decisions]"))
+    report = design_decision_witness.coverage(case, tmp_path)
+    assert [f["code"] for f in report["findings"]] == ["invariant_without_identifier"]
+    assert "A count never decreases." in report["findings"][0]["message"]
+    assert report["summary"]["witnessed"] == 0
+
+
+def test_each_identified_invariant_stays_open_without_its_own_check(tmp_path):
+    # two invariants, two checks: whichever check is missing, its invariant alone stays open
+    tests = ("- INV-001: refused. [witness: workbench:state2_rules_decisions]\n"
+             "- INV-002: refused. [witness: workbench:state1_models]")
+    both = design_decision_witness.coverage(_case(tmp_path / "both", tests), tmp_path)
+    assert both["summary"]["witnessed"] == 1 and both["findings"] == []
+    for missing, left in (("state2_rules_decisions", "INV-001"), ("state1_models", "INV-002")):
+        case = _case(tmp_path / missing, tests.replace(f"workbench:{missing}", "workbench:no_such_check"))
+        report = design_decision_witness.coverage(case, tmp_path)
+        assert [(f["code"], f.get("invariant")) for f in report["findings"]] == [
+            ("witness_unresolved", None), ("invariant_without_witness", left)]
+        assert report["summary"]["witnessed"] == 0
+
+
+def test_one_unidentified_invariant_is_still_bound_by_one_tag(tmp_path):
+    case = _case(tmp_path)
+    _write(case / "02_rules.md", RULES.replace("- INV-001: a thing is counted once\n- INV-002: a count never decreases",
+                                               "- A thing is counted once.")
+           .format(tests="- Counted twice is refused. [witness: workbench:state2_rules_decisions]"))
+    report = design_decision_witness.coverage(case, tmp_path)
+    assert report["findings"] == [] and report["summary"]["witnessed"] == 1
+
+
 def test_a_cited_known_gap_marks_its_findings_and_they_still_stop(tmp_path, monkeypatch):
     # an open gap with its finding codes (KG-002 itself is closed by system_clock_backend/v4)
     gaps = tmp_path / "KNOWN_GAPS.md"
