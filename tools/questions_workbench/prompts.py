@@ -386,17 +386,101 @@ say so, and never treat it as sufficient.
 {listing}"""
 
 
+ROUND_MATERIAL_BUDGET = 240_000  # characters of distinct check content one pass of a round is given
+
+
+def _selected(context: dict, entry: dict) -> bool:
+    scope = context.get("material_scope")
+    return (scope is None or entry["decision"] not in scope or scope[entry["decision"]] is None
+            or entry["item"] in scope[entry["decision"]])
+
+
+def material_parts(context: dict | None, units: list[str] | None,
+                   budget: int | None = None) -> list[dict[str, list[str]]]:
+    """The passes a round's bindings are split into: per pass, unit -> the items it is given.
+
+    Each binding goes to the pass where its files add the fewest characters
+    not already there (shared checks stay together), within the budget; a new
+    pass opens only when none can take it. Nothing is cut: every selected,
+    available binding is in exactly one pass. One pass (or none) means the
+    round is not split.
+    """
+    budget = ROUND_MATERIAL_BUDGET if budget is None else budget
+    passes: list[tuple[dict[str, list[str]], dict[str, int]]] = []
+    for entry in (context or {}).get("materials") or []:
+        if units is not None and entry["decision"] not in units:
+            continue
+        if entry["status"] != "available" or not _selected(context, entry):
+            continue
+        files = {f["sha256"]: len(f["text"]) for f in entry.get("files") or []}
+        best, cost = None, None
+        for index, (_, shown) in enumerate(passes):
+            added = sum(size for sha, size in files.items() if sha not in shown)
+            if sum(shown.values()) + added <= budget and (cost is None or added < cost):
+                best, cost = index, added
+        if best is None:
+            passes.append(({}, {}))
+            best = len(passes) - 1
+        part, shown = passes[best]
+        part.setdefault(entry["decision"], []).append(entry["item"])
+        shown.update(files)
+    return [part for part, _ in passes]
+
+
+def material_pass(context: dict, parts: list[dict[str, list[str]]], index: int) -> dict:
+    """The context of pass ``index``: its own bindings given, the others named with their pass."""
+    elsewhere = {(unit, item): number for number, part in enumerate(parts, 1) if number != index + 1
+                 for unit, items in part.items() for item in items}
+    return {**context, "material_scope": {unit: list(parts[index].get(unit, []))
+                                          for unit in {u for part in parts for u in part}
+                                          | set(context.get("material_scope") or {})},
+            "material_elsewhere": elsewhere, "material_pass": (index + 1, len(parts))}
+
+
 def _materials(context: dict, units: list[str] | None) -> str:
+    """The checks the bindings of the units under review rest on, each file once.
+
+    A file shared by several bindings is given at its first binding and named
+    by path and sha256 at the others. A binding the edit did not touch
+    (``material_scope``) is listed without its check; one given to another
+    pass of the round (``material_parts``) is named with its pass. A single
+    binding over the budget is NOT CHECKED, with the reason: never cut.
+    """
+    shown: set[str] = set()
+    used = 0
     rows = []
     for entry in context.get("materials") or []:
         if units is not None and entry["decision"] not in units:
             continue
         head = (f"- {entry['decision']} binds {', '.join(entry['invariants']) or 'its invariant'} "
                 f"to {entry['witness']}; item: {entry['item']}")
+        files = entry.get("files") or []
         if entry["status"] != "available":
             rows.append(f"{head}\n  NOT CHECKED: {entry.get('reason')}")
             continue
-        body = [head] + [f"--- {f['path']} sha256 {f['sha256']} ---\n{f['text']}" for f in entry.get("files") or []]
+        selected = _selected(context, entry)
+        listed = ", ".join(f"{f['path']} sha256 {f['sha256']}" for f in files)
+        elsewhere = (context.get("material_elsewhere") or {}).get((entry["decision"], entry["item"]))
+        if elsewhere:
+            rows.append(f"{head}\n  judged in pass {elsewhere} of this round, with its check: {listed}")
+            continue
+        if not selected:
+            rows.append(f"{head}\n  unchanged by the edit under review; its check is not given again: {listed}")
+            continue
+        new = {f["sha256"]: len(f["text"]) for f in files if f["sha256"] not in shown}
+        if used + sum(new.values()) > ROUND_MATERIAL_BUDGET:
+            rows.append(f"{head}\n  NOT CHECKED: the checks of this round exceed what one round is given "
+                        f"({ROUND_MATERIAL_BUDGET} characters); judge this binding in a round of its own: {listed}")
+            continue
+        body = [head]
+        for f in files:
+            label = f"{f['path']} sha256 {f['sha256']}" + (" (imported by the check)" if f.get("imported") else "")
+            if f["sha256"] in shown:
+                body.append(f"--- {label}: given above ---")
+            else:
+                body.append(f"--- {label} ---\n{f['text']}")
+                shown.add(f["sha256"])
+        used += sum(new.values())
         if entry.get("basis"):
             body.append(f"  basis: {entry['basis']}")
         rows.append("\n".join(body))
@@ -423,6 +507,19 @@ bindings name changed since they were closed (a file, a command or a digest),
 while their text did not. Review them only for whether each binding still
 asserts the invariants its item names on the evidence above; their text is
 closed otherwise."""
+
+
+MATERIAL_PASS = """
+
+This is pass {number} of {total} of this round, split because the checks of
+its bindings do not fit one input. Ask only whether each binding given with
+its check above asserts the invariants its item names, and about nothing else:
+the texts are asked about in pass 1."""
+
+
+def material_pass_note(context: dict) -> str:
+    number, total = context.get("material_pass") or (1, 1)
+    return MATERIAL_PASS.format(number=number, total=total) if number > 1 else ""
 
 
 def layer_judge(context: dict | None, units: list[str] | None = None) -> str | None:
