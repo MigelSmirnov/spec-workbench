@@ -176,12 +176,15 @@ python tools/design_diagnose.py --spec <accepted global_spec.json> [--ref <git r
     [--factory-root <code_factory>] [--code-root <implementation root>] [--json]
 ```
 
-It reads the revision from a temporary worktree, runs the rule checks and
-groups their findings by the state that owns each rule (`State 1: 160 identity
+It reads the revision from a temporary worktree, runs every check of the two
+Workbench registries (the assembly checks and the transition checks) and
+groups their findings by the state or phase that owns each rule (`State 1: 160 identity
 · State 2: 44 time source, 32 witness · …`). A rule whose inputs the revision
 does not hold — identity without State 1, flows without State 4, fresh
 timestamps without State 5 — is `not_checkable`, never omitted and never a
-pass.
+pass; a check that fails to run is an `error` row and hides no other result.
+The report names the Workbench that produced it: commit, uncommitted changes,
+and the digests of the tools it loaded, of the sequence and of the standard.
 
 Time is reported as two obligations, because a wall-clock source says nothing
 about a monotonic one: the wall-clock requirements and the elapsed-time

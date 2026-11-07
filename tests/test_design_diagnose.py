@@ -65,8 +65,9 @@ def test_a_case_is_read_as_it_was_at_the_given_ref(tmp_path):
     now = design_diagnose.diagnose(case, "case", factory=tmp_path / "none")
     then = design_diagnose.diagnose(case, "case", ref=first, factory=tmp_path / "none")
     assert then["input"]["commit"] == first
-    notes = lambda report: next(r for r in report["by_state"]["State 2"] if r["rule"].startswith("a note"))
-    assert notes(then)["counts"] == {"ambient_time_note": 1} and notes(now)["outcome"] == "closed"
+    gaps = lambda report: [r for rows in report["by_state"].values() for r in rows if r["check"] == "closure_gaps"]
+    time = lambda report: [r["counts"] for r in gaps(report) if r["owner"] == "State 2"]
+    assert time(then) == [{"ambient_time_note": 1}] and time(now) == []
     assert _git(repo, "worktree", "list").count("\n") == 0          # the temporary worktree is gone
 
 
@@ -74,13 +75,12 @@ def test_a_raw_accepted_spec_reports_every_rule_it_cannot_check_as_not_checkable
     spec = tmp_path / "accepted.json"
     _write(spec, _spec([TIME_NOTE]))
     report = design_diagnose.diagnose(spec, "spec", factory=tmp_path / "none")
-    outcomes = {r["rule"]: r["outcome"] for rows in report["by_state"].values() for r in rows}
-    assert outcomes["every model has one identity and one closure"] == "not_checkable"
-    assert outcomes["every fresh timestamp has a source"] == "not_checkable"
-    assert outcomes["every formal invariant is witnessed"] == "not_checkable"
-    assert outcomes["every flow step is executed"] == "not_checkable"
-    assert outcomes["a note that needs the time names its source"] == "open"      # what the spec can show, it shows
-    assert report["summary"]["State 1"]["not_checkable"] == ["every model has one identity and one closure"]
+    rows = {(r["registry"], r["check"], r["owner"]): r for rows in report["by_state"].values() for r in rows}
+    for name in ("identity", "witness", "flows", "contracts", "notes", "imports", "fields", "modules"):
+        row = next(r for (registry, check, _), r in rows.items() if registry == "assembly" and check == name)
+        assert row["outcome"] == "not_checkable" and row["reason"].startswith("the revision has no"), name
+    assert rows[("assembly", "closure_gaps", "State 2")]["outcome"] == "open"   # what the spec can show, it shows
+    assert "identity" in report["summary"]["State 1"]["not_checkable"]
     assert report["input"]["spec_sha256"] and report["input"]["kind"] == "spec"
 
 
@@ -90,12 +90,11 @@ def test_findings_are_layered_by_the_state_that_owns_the_rule(tmp_path):
     _write(case / "50_public_apis.md", API)
     _write(case / "global_spec.json", _spec([TIME_NOTE]))
     report = design_diagnose.diagnose(case, "case", factory=tmp_path / "none")
-    state1 = {r["rule"]: r for r in report["by_state"]["State 1"]}
-    state2 = {r["rule"]: r for r in report["by_state"]["State 2"]}
-    assert state1["every model has one identity and one closure"]["counts"] == {"missing_model_closure": 1}
-    assert state2["every fresh timestamp has a source"]["counts"] == {"fresh_timestamp_without_source": 1}
-    assert state2["a note that needs the time names its source"]["counts"] == {"ambient_time_note": 1}
-    assert report["summary"]["State 2"]["open"] == 2
+    state1 = {r["check"]: r for r in report["by_state"]["State 1"]}
+    state2 = {r["check"]: r for r in report["by_state"]["State 2"]}
+    assert state1["identity"]["counts"] == {"missing_model_closure": 1}
+    assert state2["closure_gaps"]["counts"] == {"ambient_time_note": 1, "fresh_timestamp_without_source": 1}
+    assert report["summary"]["State 2"]["open"]["assembly"] == 2
 
 
 # ---------------------------------------------- wall clock and elapsed time apart
@@ -238,7 +237,7 @@ GUARD_READS_HOST = "import time\n\ndef admit_entry(client):\n    return time.mon
 @real
 def test_variant_1_v4_without_elapsed_time_is_caught_by_the_code_gate_and_the_coverage(tmp_path):
     report = _real_variant(tmp_path, None, GUARD_READS_HOST)
-    assert report["factory"]["spec"]["outcome"] == "closed"                    # the validator sees nothing
+    assert report["factory"]["spec"]["time_outcome"] == "closed"               # the validator sees nothing of time
     assert [(f["module"], f["code"]) for f in report["factory"]["code"]["findings"]] == [
         ("guard", "undeclared_elapsed_clock_access")]                          # the gate on live code does
     assert [f["code"] for f in report["time"]["elapsed"]["findings"]] == ["elapsed_requirement_without_source"]
@@ -262,3 +261,82 @@ def test_without_code_the_validator_result_stands_and_the_code_is_not_checked(tm
     again = design_diagnose.diagnose(spec, "spec", factory=REAL, code_root=None)
     assert again["factory"]["code"]["outcome"] == "not_checked"
     assert again["factory"]["spec"]["time_findings"] == report["factory"]["spec"]["time_findings"]
+
+
+# ---------------------------------------------- review 5813845419 of #151
+
+def test_every_registered_check_is_in_the_coverage(tmp_path):
+    from assembly_workbench.checks import CHECKS
+    import transition
+
+    spec = tmp_path / "accepted.json"
+    _write(spec, _spec([TIME_NOTE]))
+    report = design_diagnose.diagnose(spec, "spec", factory=tmp_path / "none")
+    assert report["coverage"]["assembly"] == sorted(CHECKS)
+    assert report["coverage"]["transition"] == sorted(transition.CHECKS)
+    owners = {r["owner"] for rows in report["by_state"].values() for r in rows}
+    assert "unresolved" not in owners
+
+
+def test_a_contract_violation_outside_the_four_groups_is_shown_under_its_owner(tmp_path):
+    case = tmp_path / "demo"
+    _write(case / "01_models.md", MODELS)
+    _write(case / "global_spec.json", _spec([]))
+    _write(case / "60_contract_plan.json", {"schema_version": "spec_workbench_state6_contract_plan.v1", "status": "closed",
+                                            "functions": [{"function": "record_thing", "module": "module:things",
+                                                           "visibility": "internal"}]})
+    _write(case / "60_contracts.json", {"schema_version": "spec_workbench_state6_contracts.v1",
+                                        "contracts": {"record_thing": "not a signature"}})
+    _write(case / "50_api_plan.json", {"schema_version": "spec_workbench_state5_plan.v1", "operations": []})
+    report = design_diagnose.diagnose(case, "case", factory=tmp_path / "none")
+    contracts = next(r for r in report["by_state"]["State 6"] if r["check"] == "contracts")
+    assert contracts["outcome"] == "open" and "invalid_signature_shape" in contracts["counts"]
+
+
+def test_a_check_that_fails_to_run_is_its_own_error_and_hides_nothing(tmp_path):
+    spec = _spec([GUARD_NOTE, TIME_NOTE], rules={"system_clock_backend": V4, "time_source_policy": _policy(None)},
+                 imports={"things": {"clock": ["utc_now"]}})
+    case = tmp_path / "demo"
+    _write(case / "01_models.md", MODELS)
+    _write(case / "global_spec.json", spec)
+    _write(case / "60_model_closure_core.json", "{ not json")
+    report = design_diagnose.diagnose(case, "case", factory=tmp_path / "none")
+    identity = next(r for r in report["by_state"]["State 1"] if r["check"] == "identity")
+    assert identity["outcome"] == "error" and "could not run" in identity["reason"]
+    assert "identity" in report["summary"]["State 1"]["error"]
+    assert [f["code"] for f in report["time"]["elapsed"]["findings"]] == ["elapsed_requirement_without_source"]
+    assert any(r["check"] == "closure_gaps" for rows in report["by_state"].values() for r in rows)
+
+
+def test_a_validator_error_outside_time_makes_the_factory_spec_check_open(tmp_path):
+    factory = _fake_factory(tmp_path / "factory", [
+        {"severity": "error", "subcategory": "contract_unknown_type", "category": "contracts",
+         "message": "contracts.record_thing names Unknown"}], {"verdict": "PASS", "findings": []})
+    spec = tmp_path / "accepted.json"
+    _write(spec, _spec([]))
+    report = design_diagnose.diagnose(spec, "spec", factory=factory)
+    checked = report["factory"]["spec"]
+    assert checked["outcome"] == "open" and checked["time_outcome"] == "closed"
+    assert [f["subcategory"] for f in checked["findings"]] == ["contract_unknown_type"]
+    assert "contract_unknown_type: contracts.record_thing names Unknown" in design_diagnose.human(report)
+
+
+def test_an_inconsistent_validator_result_is_not_a_pass(tmp_path):
+    factory = tmp_path / "factory"
+    _write(factory / "tools" / "validate_spec.py",
+           "import json, sys\nout = sys.argv[sys.argv.index('--out') + 1]\n"
+           "json.dump({'status': 'FAIL', 'findings': []}, open(out, 'w'))\nsys.exit(1)\n")
+    spec = tmp_path / "accepted.json"
+    _write(spec, _spec([]))
+    checked = design_diagnose.diagnose(spec, "spec", factory=factory)["factory"]["spec"]
+    assert checked["outcome"] == "error" and "no error finding" in checked["reason"]
+
+
+def test_the_report_names_the_workbench_that_produced_it(tmp_path):
+    spec = tmp_path / "accepted.json"
+    _write(spec, _spec([]))
+    workbench = design_diagnose.diagnose(spec, "spec", factory=tmp_path / "none")["workbench"]
+    assert workbench["commit"] and isinstance(workbench["dirty"], bool)
+    assert "tools/design_diagnose.py" in workbench["tool_sha256"]
+    assert "tools/design_closure_gaps.py" in workbench["tool_sha256"]
+    assert len(workbench["sequence_sha256"]) == 64 and len(workbench["standard_sha256"]) == 64

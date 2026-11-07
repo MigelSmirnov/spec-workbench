@@ -14,6 +14,13 @@ A rule whose inputs do not exist in the revision reports ``not_checkable``,
 never silence or a pass. Wall-clock and elapsed-time obligations are shown
 apart: a wall-clock backend says nothing about a monotonic source.
 
+Every check of the two Workbench registries — the assembly checks and the
+transition checks — is in the report once, under the state or phase that owns
+its rule, with the inputs it reads; a check that cannot run is an `error` row
+and hides no other result. The report names the Workbench that produced it
+(commit, uncommitted changes, digests of the tools it loaded, of the sequence
+and of the standard), so a past result can be reproduced.
+
 Three kinds of result are kept apart, each with what it read:
 
 - the Workbench's checks of the design and the specification (always);
@@ -123,107 +130,154 @@ def _load_spec(case: Path) -> dict[str, Any] | None:
     return spec if isinstance(spec, dict) else None
 
 
-def _has_state(case: Path, state: int) -> bool:
-    from questions_workbench import documents
-    return any(found == state for found, _ in documents.design_documents(case, state))
-
-
 # ---------------------------------------------------------------- rule checks
 
-def _result(rule: str, state: int, outcome: str, findings: list[dict[str, Any]] | None = None,
-            reads: list[str] | None = None, reason: str | None = None) -> dict[str, Any]:
+# Every check the Workbench registers, once: the assembly registry
+# (assembly_workbench.checks.CHECKS) and the transition registry
+# (transition.CHECKS). Each row says which state owns the rule and which inputs
+# it reads; nothing here re-implements a check. A check whose inputs the
+# revision lacks is not_checkable; one that fails to run is an error; neither
+# is a pass, and neither hides another check's result.
+#   owner: "State N", or the phase of the authoring sequence that owns the rule
+#   needs: globs that must each match at least one file of the revision
+ASSEMBLY_ROWS: dict[str, dict[str, Any]] = {
+    "language": {"owner": "Stage 8 assembly", "needs": [SPEC_FILE],
+                 "rule": "the specification uses only the standard's language"},
+    "modules": {"owner": "State 3", "needs": ["30_*.md"], "rule": "every module owns a mechanism"},
+    "identity": {"owner": "State 1", "needs": ["01_models*.md", SPEC_FILE],
+                 "rule": "every model has one identity and one closure"},
+    "fields": {"owner": "State 6", "needs": ["01_models*.md", "60_model_closure_*.json"],
+               "rule": "the model closure carries every fact State 1 names"},
+    "data": {"owner": "Data closure (before State 6)", "needs": ["60_data_closure.json"],
+             "rule": "every accepted value has one home"},
+    "contracts": {"owner": "State 6", "needs": ["50_api_plan.json", "60_contract_plan.json", "60_contracts.json"],
+                  "rule": "every planned function has an exact signature"},
+    "external_contracts": {"owner": "State 6", "needs": ["60_contracts.json"],
+                           "rule": "external facts rest on content-addressed evidence"},
+    "notes": {"owner": "State 7", "needs": ["80_notes.md", SPEC_FILE], "rule": "notes pass the note gate"},
+    "closure_gaps": {"owner": "by finding", "needs": [SPEC_FILE],
+                     "rule": "the specification's closure is complete"},
+    "router": {"owner": "Deterministic closures (after State 6)", "needs": ["60_contracts.json"],
+               "rule": "every exposed operation has a closed route"},
+    "persistence": {"owner": "Deterministic closures (after State 6)", "needs": ["60_contracts.json"],
+                    "rule": "the persistence backend is closed against the contracts"},
+    "witness": {"owner": "State 2", "needs": ["02_*.md"], "rule": "every formal invariant is witnessed"},
+    "imports": {"owner": "Imports closure (after State 7)", "needs": ["65_imports.json", SPEC_FILE],
+                "rule": "every symbol a module names is decided"},
+    "flows": {"owner": "State 4", "needs": ["40_*.md", "60_contract_plan.json", "60_contracts.json"],
+              "rule": "every flow step is executed"},
+    # the Factory's validator is reported once, under factory.spec, with what it read
+    "factory": {"owner": "Stage 9 Factory admission", "needs": [SPEC_FILE], "reported_as": "factory.spec",
+                "rule": "the Factory's canonical validator accepts the specification"},
+}
+TRANSITION_NEEDS: dict[str, list[str]] = {
+    "model_closure": ["01_models*.md", "60_contracts.json"],
+    "time_source": ["50_*.md", "60_contract_plan.json", "60_contracts.json"],
+    "ambient_time": ["80_notes.md", "60_contract_plan.json", "60_contracts.json"],
+    "flow_steps": ["40_*.md", "60_contract_plan.json", "60_contracts.json"],
+    "flow_reachability": ["40_*.md", "60_contract_plan.json", "60_contracts.json", "80_notes.md"],
+    "invariant_tests": ["02_*.md"],
+    "witness_material": ["02_*.md"],
+    "decision_witness": ["02_*.md"],
+}
+
+
+def _row(registry: str, name: str, owner: str, rule: str, outcome: str, findings: list[dict[str, Any]] | None = None,
+         reads: list[str] | None = None, reason: str | None = None) -> dict[str, Any]:
     findings = findings or []
     counts: dict[str, int] = {}
     for finding in findings:
-        counts[str(finding.get("code"))] = counts.get(str(finding.get("code")), 0) + 1
-    result = {"rule": rule, "state": state, "outcome": outcome, "findings": findings,
-              "counts": dict(sorted(counts.items())), "reads": reads or []}
+        counts[str(finding.get("code") or finding.get("subcategory"))] = counts.get(
+            str(finding.get("code") or finding.get("subcategory")), 0) + 1
+    row = {"registry": registry, "check": name, "owner": owner, "rule": rule, "outcome": outcome,
+           "findings": findings, "counts": dict(sorted(counts.items())), "reads": reads or []}
     if reason:
-        result["reason"] = reason
-    return result
+        row["reason"] = reason
+    return row
 
 
-def check_identity(case: Path, spec: dict[str, Any] | None) -> dict[str, Any]:
-    rule = "every model has one identity and one closure"
-    if not list(case.glob("01_models*.md")):
-        return _result(rule, 1, NOT_CHECKABLE, reason="no State 1 model documents (01_models*.md) in the revision")
-    if spec is not None and isinstance(spec.get("models"), dict):
-        from identity_workbench import verify
-        report = verify(case)
-        return _result(rule, 1, "open" if report["findings"] else "closed", report["findings"],
-                       ["01_models*.md", "60_model_closure_*.json", SPEC_FILE])
-    from identity_workbench.service import state6_closure
-    report = state6_closure(case)
-    outcome = report["outcome"] if report["outcome"] != "not_checked" else NOT_CHECKABLE
-    return _result(rule, 1, outcome, report["findings"], ["01_models*.md", "60_model_closure_*.json", "60_contracts.json"])
+def _missing(case: Path, needs: list[str]) -> list[str]:
+    return [pattern for pattern in needs if not list(case.glob(pattern))]
 
 
-def check_time_sources(case: Path, spec: dict[str, Any] | None) -> list[dict[str, Any]]:
-    """Fresh timestamps (contracts and State 5) and notes that need the current time."""
-    fresh_rule, notes_rule = "every fresh timestamp has a source", "a note that needs the time names its source"
-    if spec is None:
-        return [_result(fresh_rule, 2, NOT_CHECKABLE, reason=f"no assembled {SPEC_FILE} in the revision"),
-                _result(notes_rule, 2, NOT_CHECKABLE, reason=f"no assembled {SPEC_FILE} in the revision")]
-    models = spec.get("models") or {}
-    contracts = spec.get("contracts") or {}
-    owners = {f: m for m, fs in (spec.get("module_functions") or {}).items() for f in fs or []}
-    sources = design_closure_gaps.time_sources(case, spec)
-    notes = design_closure_gaps.ambient_time_findings(models, contracts, owners, spec.get("notes") or [], sources)
-    results = [_result(notes_rule, 2, "open" if notes else "closed", notes, [f"{SPEC_FILE} notes, contracts, models"])]
-    impacts = design_closure_gaps.parse_state_impacts(case)
-    if not impacts:
-        results.insert(0, _result(fresh_rule, 2, NOT_CHECKABLE,
-                                  reason="no State 5 documents: which operations write is not stated in the revision"))
-    else:
-        fresh = design_closure_gaps.fresh_timestamp_findings(models, contracts, owners, impacts, sources)
-        results.insert(0, _result(fresh_rule, 2, "open" if fresh else "closed", fresh,
-                                  [f"{SPEC_FILE} contracts and models", "State 5 State impact"]))
-    return results
-
-
-def check_witness(case: Path, factory: Path | None) -> dict[str, Any]:
-    rule = "every formal invariant is witnessed"
-    import design_decision_witness
-    if not _has_state(case, 2):
-        return _result(rule, 2, NOT_CHECKABLE, reason="no State 2 documents in the revision")
-    report = design_decision_witness.coverage(case, factory)
-    findings = report["findings"]
-    if findings and all(f.get("outcome") == "not_checked" for f in findings):
-        return _result(rule, 2, NOT_CHECKABLE, findings, ["State 2 Required tests"],
-                       reason="the bound checks cannot be read (no Factory verification config)")
-    return _result(rule, 2, "open" if findings else "closed", findings,
-                   ["State 2 Required tests", "Factory verification config", SPEC_FILE])
-
-
-def check_flows(case: Path) -> dict[str, Any]:
-    rule = "every flow step is executed"
-    import flow_closure
-    if not _has_state(case, 4):
-        return _result(rule, 4, NOT_CHECKABLE, reason="no State 4 flow documents in the revision")
+def _safely(run, registry: str, name: str, owner: str, rule: str, reads: list[str]) -> list[dict[str, Any]]:
+    """One check, isolated: whatever it raises becomes its own `error` row."""
     try:
-        report = flow_closure.coverage(case)
-    except Exception as exc:  # the State 6 plan or catalog is missing or unreadable
-        return _result(rule, 4, NOT_CHECKABLE, reason=f"the flows' operations cannot be read ({exc})")
-    outcome = NOT_CHECKABLE if report["summary"]["reachability"] == "not_checked" else (
-        "open" if report["findings"] else "closed")
-    return _result(rule, 4, outcome, report["findings"], ["State 4 flows", "60_contract_plan.json", "80_notes.md",
-                                                          "router and backend closures"])
+        return run()
+    except Exception as exc:  # noqa: BLE001 — a failing check never aborts the others
+        return [_row(registry, name, owner, rule, "error", reads=reads,
+                     reason=f"the check could not run: {type(exc).__name__}: {exc}")]
 
 
-def check_closure(spec: dict[str, Any] | None, case: Path) -> list[dict[str, Any]]:
-    """The other closure-completeness rules of the specification, each with its owner."""
-    if spec is None:
-        return [_result("the specification's closure is complete", 6, NOT_CHECKABLE,
-                        reason=f"no assembled {SPEC_FILE} in the revision")]
-    findings = (design_closure_gaps.check_models(spec) + design_closure_gaps.check_orphan_reads(spec)
-                + design_closure_gaps.check_external_returns(spec) + design_closure_gaps.check_tables(spec)
-                + design_closure_gaps.check_prose(case, spec))
-    by_state: dict[int, list[dict[str, Any]]] = {}
-    for finding in findings:
-        by_state.setdefault(CLOSURE_OWNERS.get(finding["code"], 6), []).append(finding)
-    rules = {1: "every model states its content", 5: "everything read is produced", 6: "every return and table has a producer"}
-    return [_result(rules[state], state, "open" if by_state.get(state) else "closed", by_state.get(state, []),
-                    [SPEC_FILE]) for state in sorted(rules)]
+def assembly_rows(case: Path, factory: Path | None) -> list[dict[str, Any]]:
+    from assembly_workbench import checks
+
+    rows: list[dict[str, Any]] = []
+    for name in checks.CHECKS:
+        meta = ASSEMBLY_ROWS.get(name, {"owner": "unresolved", "needs": [], "rule": name})
+        owner, rule, needs = meta["owner"], meta["rule"], meta["needs"]
+        if meta.get("reported_as"):
+            rows.append(_row("assembly", name, owner, rule, "reported_elsewhere", reads=needs,
+                             reason=f"reported under {meta['reported_as']} with the Factory's identity"))
+            continue
+        missing = _missing(case, needs)
+        if missing:
+            rows.append(_row("assembly", name, owner, rule, NOT_CHECKABLE, reads=needs,
+                             reason=f"the revision has no {', '.join(missing)}"))
+            continue
+
+        def run(name=name, owner=owner, rule=rule, needs=needs):
+            result = checks.run(case, name, factory_root=factory)
+            findings = [f for f in result.findings if isinstance(f, dict)]
+            if name != "closure_gaps":
+                return [_row("assembly", name, owner, rule, "closed" if result.ready else "open", findings, needs)]
+            by_owner: dict[str, list[dict[str, Any]]] = {}
+            for finding in findings:
+                state = CLOSURE_OWNERS.get(str(finding.get("code")))
+                by_owner.setdefault(f"State {state}" if state else "unresolved", []).append(finding)
+            if not by_owner:
+                return [_row("assembly", name, "State 6", rule, "closed", [], needs)]
+            return [_row("assembly", name, holder, rule, "open", found, needs) for holder, found in sorted(by_owner.items())]
+
+        rows += _safely(run, "assembly", name, owner, rule, needs)
+    return rows
+
+
+def transition_rows(case: Path) -> list[dict[str, Any]]:
+    import transition
+
+    sequence = transition.load_sequence()
+    owners: dict[str, tuple[str, str]] = {}
+    for phase in sequence["phases"]:
+        state = phase.get("semantic_state")
+        label = f"State {state}" if state is not None else phase["id"]
+        for name in transition.own_checks(sequence, phase["id"]):
+            owners[name] = (label, "owned by this layer")
+    for item in transition.obligations(sequence):
+        phase = next(p for p in sequence["phases"] if p["id"] == item["from"])
+        state = phase.get("semantic_state")
+        owners.setdefault(item["check"], (f"State {state}" if state is not None else phase["id"],
+                                          item.get("obligation", "")))
+    rows: list[dict[str, Any]] = []
+    for name in transition.CHECKS:
+        owner, rule = owners.get(name, ("unresolved", name))
+        needs = TRANSITION_NEEDS.get(name, [])
+        missing = _missing(case, needs)
+        if missing:
+            rows.append(_row("transition", name, owner, rule, NOT_CHECKABLE, reads=needs,
+                             reason=f"the revision has no {', '.join(missing)}"))
+            continue
+
+        def run(name=name, owner=owner, rule=rule, needs=needs):
+            result = transition.run_check(case, name)
+            outcome = {"not_checked": NOT_CHECKABLE}.get(result["outcome"], result["outcome"])
+            row = _row("transition", name, owner, rule, outcome, result["findings"], needs)
+            if outcome == NOT_CHECKABLE:
+                row["reason"] = "; ".join(f.get("message", "") for f in result["findings"])[:300]
+            return [row]
+
+        rows += _safely(run, "transition", name, owner, rule, needs)
+    return rows
 
 
 # ---------------------------------------------------------------- time coverage
@@ -379,13 +433,25 @@ def factory_spec_check(case: Path, factory: Path | None) -> dict[str, Any]:
         done = subprocess.run([sys.executable, str(validator), str(spec_path), "--out", str(out), "--quiet"],
                               capture_output=True, text=True, cwd=str(factory))
         if not out.is_file():
-            return {"outcome": "not_checked", "factory": _factory_identity(factory),
+            return {"outcome": "error", "factory": _factory_identity(factory),
                     "reason": f"the validator wrote no report (exit {done.returncode})"}
-        report = json.loads(out.read_text(encoding="utf-8"))
-    errors = [f for f in report.get("findings") or [] if str(f.get("severity")).lower() in {"error", "block"}]
+        try:
+            report = json.loads(out.read_text(encoding="utf-8"))
+        except ValueError as exc:
+            return {"outcome": "error", "factory": _factory_identity(factory),
+                    "reason": f"the validator's report is not JSON (exit {done.returncode}): {exc}"}
+    findings = [f for f in report.get("findings") or [] if isinstance(f, dict)]
+    errors = [f for f in findings if str(f.get("severity")).lower() in {"error", "block"}]
     time_errors = [f for f in errors if _time_related(f)]
-    return {"outcome": "open" if time_errors else "closed", "factory": _factory_identity(factory),
-            "status": report.get("status"), "errors": len(errors), "time_findings": time_errors}
+    status = str(report.get("status") or "")
+    # the whole result decides; the time part is shown apart, never instead
+    consistent = (done.returncode == 0) == (not errors) and (status.upper() in {"PASS", "OK", ""}) == (not errors)
+    outcome = "open" if errors else ("closed" if consistent else "error")
+    return {"outcome": outcome, "time_outcome": "open" if time_errors else "closed",
+            "factory": _factory_identity(factory), "status": report.get("status"), "exit_code": done.returncode,
+            "errors": len(errors), "findings": findings, "time_findings": time_errors,
+            **({} if consistent or errors else {"reason": f"the validator exited {done.returncode} with status "
+                                                          f"{report.get('status')!r} and no error finding"})}
 
 
 def factory_code_check(case: Path, factory: Path | None, code_root: Path | None) -> dict[str, Any]:
@@ -424,57 +490,106 @@ def factory_code_check(case: Path, factory: Path | None, code_root: Path | None)
 
 # ---------------------------------------------------------------- the report
 
+def workbench_identity() -> dict[str, Any]:
+    """The Workbench that produced the report: commit, uncommitted changes, and
+    the digest of every tool module the report imported."""
+    identity: dict[str, Any] = {"root": str(ROOT)}
+    try:
+        identity["commit"] = _git(ROOT, "rev-parse", "HEAD")
+        identity["dirty"] = bool(_git(ROOT, "status", "--porcelain", "--", "tools", "skills"))
+    except RuntimeError:
+        identity["commit"] = None
+    tools = ROOT / "tools"
+    loaded = sorted({Path(module.__file__).resolve() for module in list(sys.modules.values())
+                     if getattr(module, "__file__", None) and str(module.__file__).startswith(str(tools))})
+    identity["tool_sha256"] = {str(path.relative_to(ROOT)): _sha(path.read_bytes()) for path in loaded}
+    sequence = ROOT / "skills" / "spec-authoring" / "authoring_sequence.json"
+    standard = ROOT / "skills" / "spec-authoring" / "SPEC_STANDARD.md"
+    identity["sequence_sha256"] = _sha(sequence.read_bytes()) if sequence.is_file() else None
+    identity["standard_sha256"] = _sha(standard.read_bytes()) if standard.is_file() else None
+    return identity
+
+
+def _section(run, fallback: dict[str, Any]) -> dict[str, Any]:
+    try:
+        return run()
+    except Exception as exc:  # noqa: BLE001 — one failing part never hides the others
+        return {**fallback, "outcome": "error", "reason": f"{type(exc).__name__}: {exc}"}
+
+
 def diagnose(path: Path, kind: str, ref: str | None = None, factory: Path | None = None,
              code_root: Path | None = None) -> dict[str, Any]:
     factory = factory_root(factory)
     with materialize(path, ref, kind) as (case, described):
         spec = _load_spec(case)
-        results = [check_identity(case, spec), *check_time_sources(case, spec), check_witness(case, factory),
-                   check_flows(case), *check_closure(spec, case)]
-        time = time_coverage(case, spec)
-        factory_results = {"spec": factory_spec_check(case, factory),
-                           "code": factory_code_check(case, factory, code_root.resolve() if code_root else None)}
+        rows = assembly_rows(case, factory) + transition_rows(case)
+        time = _section(lambda: time_coverage(case, spec), {
+            "wall": {"outcome": "error"}, "elapsed": {"outcome": "error"}, "analysis_bounds": []})
+        factory_results = {
+            "spec": _section(lambda: factory_spec_check(case, factory), {}),
+            "code": _section(lambda: factory_code_check(case, factory, code_root.resolve() if code_root else None), {}),
+        }
+    order = lambda owner: (0, int(owner.split()[1])) if owner.startswith("State ") else (1, owner)
     by_state: dict[str, list[dict[str, Any]]] = {}
-    for result in sorted(results, key=lambda r: r["state"]):
-        by_state.setdefault(f"State {result['state']}", []).append(result)
-    summary = {state: {"open": sum(len(r["findings"]) for r in rows if r["outcome"] == "open"),
-                       "not_checkable": [r["rule"] for r in rows if r["outcome"] == NOT_CHECKABLE]}
-               for state, rows in by_state.items()}
-    return {"schema_version": SCHEMA, "input": described, "by_state": by_state, "summary": summary,
-            "time": time, "factory": factory_results}
+    for row in sorted(rows, key=lambda r: order(r["owner"])):
+        by_state.setdefault(row["owner"], []).append(row)
+    # the two registries check the same rules at different moments: their counts
+    # are kept apart rather than added
+    summary = {owner: {"open": {registry: sum(len(r["findings"]) or 1 for r in owned
+                                              if r["outcome"] == "open" and r["registry"] == registry)
+                                for registry in ("assembly", "transition")},
+                       "not_checkable": [r["check"] for r in owned if r["outcome"] == NOT_CHECKABLE],
+                       "error": [r["check"] for r in owned if r["outcome"] == "error"]}
+               for owner, owned in by_state.items()}
+    coverage = {"assembly": sorted({r["check"] for r in rows if r["registry"] == "assembly"}),
+                "transition": sorted({r["check"] for r in rows if r["registry"] == "transition"})}
+    return {"schema_version": SCHEMA, "input": described, "workbench": workbench_identity(),
+            "by_state": by_state, "summary": summary, "coverage": coverage, "time": time,
+            "factory": factory_results}
 
 
-def _line(result: dict[str, Any]) -> str:
-    if result["outcome"] == NOT_CHECKABLE:
-        return f"    {result['rule']}: not checkable — {result.get('reason', '')}"
-    counts = ", ".join(f"{count} {code}" for code, count in result["counts"].items())
-    return f"    {result['rule']}: {result['outcome']}" + (f" ({counts})" if counts else "")
+def _line(row: dict[str, Any]) -> str:
+    name = f"{row['check']} ({row['registry']})"
+    if row["outcome"] in {NOT_CHECKABLE, "error", "reported_elsewhere"}:
+        return f"    {name}: {row['outcome'].replace('_', ' ')} — {row.get('reason', '')}"
+    counts = ", ".join(f"{count} {code}" for code, count in row["counts"].items())
+    return f"    {name}: {row['outcome']}" + (f" ({counts})" if counts else "")
 
 
 def human(report: dict[str, Any]) -> str:
     source = report["input"]
-    lines = [f"diagnosis of {source['kind']} {source['path']}" + (f" at {source.get('commit')}" if source.get("ref") else "")]
+    lines = [f"diagnosis of {source['kind']} {source['path']}" + (f" at {source.get('commit')}" if source.get("ref") else "")
+             + f" · workbench {str(report['workbench'].get('commit'))[:10]}"
+             + (" (dirty)" if report["workbench"].get("dirty") else "")]
     lines.append("  " + " · ".join(
-        f"{state}: {row['open']} open" + (f", {len(row['not_checkable'])} not checkable" if row["not_checkable"] else "")
-        for state, row in report["summary"].items()))
-    for state, rows in report["by_state"].items():
-        lines.append(f"  {state}")
+        f"{owner}: {row['open']['assembly']} open" + (f" ({row['open']['transition']} at its transition)"
+                                                       if row['open']['transition'] else "")
+        + (f", {len(row['not_checkable'])} not checkable" if row["not_checkable"] else "")
+        + (f", {len(row['error'])} error" if row["error"] else "")
+        for owner, row in report["summary"].items()))
+    for owner, rows in report["by_state"].items():
+        lines.append(f"  {owner}")
         lines += [_line(row) for row in rows]
     time = report["time"]
     for kind in ("wall", "elapsed"):
-        part = time[kind]
+        part = time.get(kind) or {"outcome": "error"}
         lines.append(f"  time · {kind}: {part['outcome']}"
                      + (f", {len(part.get('requirements', []))} requirement(s), {len(part.get('findings', []))} without a source"
-                        if part["outcome"] != NOT_CHECKABLE else ""))
+                        if part["outcome"] not in {NOT_CHECKABLE, "error"} else ""))
         lines += [f"    {f['code']}: {f['message'][:160]}" for f in part.get("findings", [])[:10]]
-    for kind in ("spec", "code"):
-        part = report["factory"][kind]
-        detail = part.get("reason") or (f"{len(part.get('time_findings', part.get('findings', [])))} time finding(s)")
-        lines.append(f"  Factory {kind} check: {part['outcome']} — {detail}")
-        for finding in part.get("time_findings", part.get("findings", []))[:10]:
-            lines.append(f"    {finding.get('subcategory') or finding.get('code')}: "
-                         f"{str(finding.get('message') or finding.get('reason'))[:160]}")
-    lines.append("  bounds: " + " | ".join(time["analysis_bounds"]))
+    spec_check = report["factory"]["spec"]
+    lines.append(f"  Factory spec check: {spec_check.get('outcome')}"
+                 + (f" — {spec_check['errors']} error(s), time part {spec_check.get('time_outcome')}"
+                    if "errors" in spec_check else f" — {spec_check.get('reason', '')}"))
+    for finding in spec_check.get("findings", [])[:15]:
+        if str(finding.get("severity")).lower() in {"error", "block"}:
+            lines.append(f"    {finding.get('subcategory') or finding.get('category')}: {str(finding.get('message'))[:160]}")
+    code_check = report["factory"]["code"]
+    lines.append(f"  Factory code check: {code_check.get('outcome')} — "
+                 + (code_check.get("reason") or f"{len(code_check.get('findings', []))} finding(s)"))
+    for finding in code_check.get("findings", [])[:10]:
+        lines.append(f"    {finding.get('code')}: {finding.get('module')} {str(finding.get('reason'))[:120]}")
+    lines.append("  bounds: " + " | ".join(time.get("analysis_bounds") or []))
     return "\n".join(lines)
 
 
