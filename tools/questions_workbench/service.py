@@ -544,25 +544,48 @@ def _document_round(provider: Provider, state: int, runs: int, read: StateTexts,
     """States 0-6: every review reads the texts of States 0..N, asked about the open units,
     with the transition of the state (TRANSITION_PROTOCOL.md): what it owns, receives and
     carries, and the deterministic results of its gate and checks."""
-    instruction = prompts.ask_instruction(state, documents.question_scope(state))
-    instruction += prompts.unit_scope(state, [(key, read.units[key]["title"]) for key in scope],
-                                      {key: diff for key, (diff, _) in changed.items()}, referencing)
-    instruction += prompts.hypotheses_note(_previous_hypotheses(case, state))
-    instruction += prompts.layer_scope(layer, scope)
+    base = prompts.ask_instruction(state, documents.question_scope(state))
+    base += prompts.unit_scope(state, [(key, read.units[key]["title"]) for key in scope],
+                               {key: diff for key, (diff, _) in changed.items()}, referencing)
+    base += prompts.hypotheses_note(_previous_hypotheses(case, state))
     text = prompts.ask_input(read.texts)
-    with ThreadPoolExecutor(max_workers=runs) as pool:
-        reviews = list(pool.map(lambda _: _review(provider, instruction, text), range(runs)))
-    for review in reviews:
-        _set_aside(review, scope, changed, read.units)
-    topics = _group(provider, reviews, keep_points=True)
-    repeated = _judged(topics, witness=True)
     later = {p.name: p.read_text(encoding="utf-8") for _, p in documents.later_documents(case, state)}
     evidence = (layer or {}).get("unit_evidence") or {}
     precedents = [p for p in _precedents(case, state) if _evidence_holds(p, evidence, scope)]
-    judged = (_judge(provider, state, text, read.texts, repeated, old, later, precedents,
-                     witness=True, case=case, layer=prompts.layer_judge(layer, scope)) if repeated
-              else {"provider": provider.name})
-    return reviews, topics, repeated, judged
+    # the bindings' checks are split into passes when they do not fit one input
+    # (ROUND_MATERIAL_BUDGET); pass 1 also asks about the texts
+    parts = prompts.material_parts(layer, scope)
+    contexts = ([prompts.material_pass(layer, parts, i) for i in range(len(parts))]
+                if layer is not None and len(parts) > 1 else [layer])
+    reviews_all: list[dict[str, Any]] = []
+    topics_all: list[dict[str, Any]] = []
+    repeated_all: list[dict[str, Any]] = []
+    judged: dict[str, Any] = {"provider": provider.name}
+    for number, context in enumerate(contexts, 1):
+        instruction = base + prompts.layer_scope(context, scope) + prompts.material_pass_note(context or {})
+        with ThreadPoolExecutor(max_workers=runs) as pool:
+            reviews = list(pool.map(lambda _: _review(provider, instruction, text), range(runs)))
+        for review in reviews:
+            _set_aside(review, scope, changed, read.units)
+            if number > 1:
+                review["pass"] = number
+        topics = _group(provider, reviews, keep_points=True)
+        repeated = _judged(topics, witness=True)
+        result = (_judge(provider, state, text, read.texts, repeated, old, later, precedents,
+                         witness=True, case=case, layer=prompts.layer_judge(context, scope)) if repeated
+                  else {"provider": provider.name})
+        if number == 1:
+            judged = result
+        else:
+            for topic in repeated:
+                topic["id"] = f"P{number}:{topic['id']}"
+            judged.setdefault("passes", []).append({"pass": number, **result})
+        reviews_all += reviews
+        topics_all += topics
+        repeated_all += repeated
+    if len(contexts) > 1:
+        judged["material_passes"] = len(contexts)
+    return reviews_all, topics_all, repeated_all, judged
 
 
 def _previous_hypotheses(case: Path, state: int) -> list[tuple[str, str]]:
@@ -661,6 +684,8 @@ def ask_round(case: Path, state: int, provider: Provider, runs: int = DEFAULT_RU
     layer = layer_context(case, state)
     layer["evidence_reopened"] = evidence_reopened
     layer["unit_evidence"] = evidence
+    layer["material_scope"] = material_scope(scope, changed, evidence_reopened, layer.get("materials") or [],
+                                             referencing)
     reviews, topics, repeated, judged = asked(provider, state, runs, read, scope, changed, old, case, referencing,
                                               layer)
     for topic in topics:
@@ -715,6 +740,31 @@ def ask_round(case: Path, state: int, provider: Provider, runs: int = DEFAULT_RU
     summary["open_units"] = [key for key, done in open_after.items() if not done]
     (directory / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     return summary
+
+
+def material_scope(scope: list[str], changed: dict[str, tuple[str, list[str]]], evidence_reopened: list[str],
+                   materials: list[dict[str, Any]], referencing: dict[str, list[str]] | None = None
+                   ) -> dict[str, list[str] | None]:
+    """unit -> the bindings whose check the round is given (None: all of them).
+
+    A unit never closed, or reopened because its bound checks changed, gets
+    the check of every binding. A unit reopened by an edit gets the checks of
+    the bindings whose Required tests item the edit touched; an edit elsewhere
+    (A11 edited only for its clock source) brings none. A closed unit asked
+    only because it names a changed decision gets none.
+    """
+    selected: dict[str, list[str] | None] = {}
+    for key in scope:
+        if referencing and key in referencing and key not in changed:
+            selected[key] = []
+        elif key in evidence_reopened or key not in changed:
+            selected[key] = None
+        else:
+            added = {line[1:].strip() for line in changed[key][0].splitlines()
+                     if line.startswith("+") and not line.startswith("+++") and line[1:].strip()}
+            selected[key] = [m["item"] for m in materials if m["decision"] == key
+                             and any(line.strip() in added for line in str(m["item"]).splitlines() if line.strip())]
+    return selected
 
 
 def unit_evidence(case: Path, state: int) -> dict[str, str]:
