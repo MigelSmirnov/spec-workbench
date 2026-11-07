@@ -283,6 +283,7 @@ accepted; technical decisions delegated.
 ### Required tests
 
 - PLAT-REG-001: a focused test at `validate_project_reference` showing the invariant holds; a violating input is refused and changes nothing.
+  Witness: a project id the Registry does not know is refused with `ScopedNotFoundError` for every principal, so no id the portal made up can pass the guard [witness: verification:authorization_guard_client_portal].
 - PLAT-REG-002: the ledger's property at `_validate_reference_identity` showing the invariant holds; a violating input is refused and changes nothing.
 - PLAT-REG-006: a focused test at `get_project_context` showing the invariant holds; a violating input is refused and changes nothing.
 - PLAT-REG-007: a focused test at `create_viewer` showing the invariant holds; a violating input is refused and changes nothing.
@@ -879,7 +880,9 @@ The former ledger rows INV-020…INV-029 that no table of R1–R17 carries. Thei
 - INV-024: a focused test at `upsert_manual_section_plan` showing the invariant holds; a violating input is refused and changes nothing.
 - INV-025: a focused test at `_link_snapshot_sections` showing the invariant holds; a violating input is refused and changes nothing.
 - INV-026: a focused test at `import_snapshot` showing the invariant holds; a violating input is refused and changes nothing.
+  Witness: the budget view keeps each section's planned values from the plan (500.00 for the kitchen, 700.00 in total) beside an included 100.00 and an excluded 900.00 expense of the same section [witness: verification:derived_views_uow_client_portal].
 - INV-027: a focused test at `build_budget_view` showing the invariant holds; a violating input is refused and changes nothing.
+  Witness: the budget view's planned, actual, other-expense and remaining totals are computed at read from the seeded plans and allocations, none of which stores a total, and an excluded expense does not reach them [witness: verification:derived_views_uow_client_portal].
 - INV-028: a focused test at `PortalTransaction.commit` showing the invariant holds; a violating input is refused and changes nothing.
 - Witnesses, the focused Factory verification checks that assert it: INV-022, INV-023, INV-024, INV-025 [witness: verification:budget_management_sqlite_uow_client_portal]; INV-020 [witness: verification:snapshot_import_sqlite_uow_client_portal].
 
@@ -904,6 +907,7 @@ The former ledger rows INV-030…INV-037 that no table of R1–R17 carries; prod
 
 - INV-032: a focused test at `PortalTransaction.commit` showing the invariant holds; a violating input is refused and changes nothing.
 - INV-033: a focused test at `_build_replacement_allocations` showing the invariant holds; a violating input is refused and changes nothing.
+  Witness: a replacement persists exactly the operator's amounts (150.00 to a section, 50.00 to other expenses), and one whose sum differs from the total is refused without any write instead of being spread [witness: verification:expense_management_uow_client_portal].
 - INV-035: a focused test at `_project_expense_summary` showing the invariant holds; a violating input is refused and changes nothing.
 - INV-036: a focused test at `validate_project_section` showing the invariant holds; a violating input is refused and changes nothing.
 - Witnesses, the focused Factory verification checks that assert it: INV-032, INV-036 [witness: verification:expense_intake_uow_client_portal]; INV-032, INV-036 [witness: verification:expense_management_uow_client_portal]; INV-035 [witness: verification:derived_views_uow_client_portal].
@@ -944,6 +948,7 @@ The former ledger rows INV-050 and INV-052; product text of State 0 ("Derived va
 ### Required tests
 
 - INV-050: a focused test at `build_project_overview` showing the invariant holds; a violating input is refused and changes nothing.
+  Witness: the views built from the same seeded records answer the exact expected totals and the declared orderings, identity ties included, for staff and viewer alike [witness: verification:derived_views_uow_client_portal].
 - INV-052: a focused test at `PortalTransaction.commit` showing the invariant holds; a violating input is refused and changes nothing.
 - Witnesses, the focused Factory verification checks that assert it: INV-052 [witness: verification:snapshot_import_sqlite_uow_client_portal].
 
