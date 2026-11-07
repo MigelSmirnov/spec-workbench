@@ -92,15 +92,23 @@ Three things share the word "witness" and are kept apart:
   State 2 handoff that every formal invariant, by its identifier when it has
   one, is named by a Required tests item.
 - the **binding** — `[witness: verification:<check>]`, `note:<scope>` or
-  `workbench:<check>` on a Required tests line, naming an existing check that
-  asserts the invariants *that line names*. It is carried to
+  `workbench:<check>` in a Required tests item, naming an existing check that
+  asserts the invariants *that item names* (a Required tests list item with
+  its continuation lines). It is carried to
   `decision_witness_resolution`, where `decision_witness` confirms that the
-  check exists. One tag does not stand for the decision's other invariants.
+  check exists. One tag does not stand for the decision's other invariants; a
+  tag in an item that names none of several identified invariants binds
+  nothing (`witness_binding_ambiguous`).
 - the **defect witness** of a question round — a history in which the texts give
   two outcomes. It proves a defect; it never proves an invariant.
 
 Whether a bound check really asserts its invariant is a judgement, asked in the
-State 2 round. On client-portal 28 of 32 decisions were bound to existing
+State 2 round on the check's content: the round is given, read-only, the files
+the check's command names in the Factory checkout (or the assembled
+[TEST_EVIDENCE] notes of a `note:` scope), each with its sha256, and keeps those
+digests as the basis of its result (`layer.materials`). A binding whose content
+cannot be read whole is `not_checked` (`witness_material`, a State 2 check): its
+sufficiency is not judged, and it is never taken as sufficient. On client-portal 28 of 32 decisions were bound to existing
 checks; A7, A15, A20 and A32 have none. A binding found by reading check code
 is evidence; a binding to a check that does not assert the invariant is a
 false claim.
@@ -122,6 +130,15 @@ note; do not write one to satisfy the analyser.
 A round is asked with its layer (`questions_workbench`): the reviewers and the
 judge are given what the layer owns, the obligations it received and their
 results, the obligations it carries, and the deterministic findings of its gate.
+A State 7 round reads one module's Factory prompt, unchanged, and its
+instruction adds the received obligations that module takes part in: a flow
+step nothing calls in a flow the module executes, a note of the module that
+needs the current time without its source, and every result not checked. A
+reviewer reports an obligation the prompt does not carry out as
+`unmet_obligation`; the judge sees the same list. Such a topic does not block
+the round (State 7 rounds block on contradictions); the obligation keeps
+blocking through its deterministic check.
+
 A judgement cannot answer a topic against a listed finding, and a round that
 closes does not make a blocking result disappear: `design_questions.py status`
 reports `closed` for the rounds and `ready` for the transition, and exits 1

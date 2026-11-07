@@ -21,8 +21,9 @@ against the assembled specification (the scope must carry a [TEST_EVIDENCE]
 note). A tag that resolves is a mechanical witness; a tag that does not is an
 error — a claimed witness that is absent is worse than no claim. A decision
 with formal invariants and no witness at all stops the case (the fence raises
-its warning). A tag binds the invariant identifiers its own line names, so
-one check cannot stand for a decision's other invariants; whether the check
+its warning). A tag binds the invariant identifiers its own Required tests item names, so
+one check cannot stand for a decision's other invariants (by item: a list
+item and its continuation lines); whether the check
 really asserts the invariant stays a judgement of the State 2 question round.
 
 Two things are kept apart (TRANSITION_PROTOCOL.md, "Invariant evidence"): the
@@ -84,23 +85,103 @@ def _load_json(path: Path) -> dict[str, Any]:
     return payload if isinstance(payload, dict) else {}
 
 
-def _verification_check_names(case: Path, factory: Path) -> tuple[set[str] | None, str]:
-    """Focused command-check names of the target factory project, or None and why they are unverifiable."""
+def _verification_commands(case: Path, factory: Path) -> tuple[list[dict[str, Any]] | None, Path | None, str]:
+    """The command checks of the target factory project and their config file, or None and why not."""
     if yaml is None:
-        return None, f"PyYAML is not installed for {sys.executable}"
+        return None, None, f"PyYAML is not installed for {sys.executable}"
     target = _load_json(case / FACTORY_TARGET_FILE)
     project = target.get("factory_project")
     if not isinstance(project, str) or not project:
-        return None, f"{FACTORY_TARGET_FILE} names no factory_project"
+        return None, None, f"{FACTORY_TARGET_FILE} names no factory_project"
     config_path = factory / "verification" / "configs" / f"{project}.yaml"
     try:
         config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
     except OSError:
-        return None, f"{config_path} is not readable (set {FACTORY_ROOT_ENV} to the factory checkout)"
+        return None, None, f"{config_path} is not readable (set {FACTORY_ROOT_ENV} to the factory checkout)"
     except yaml.YAMLError:
-        return None, f"{config_path} is not valid YAML"
+        return None, None, f"{config_path} is not valid YAML"
     commands = ((config or {}).get("checks") or {}).get("commands") or []
-    return {str(item.get("name")) for item in commands if isinstance(item, dict) and item.get("name")}, ""
+    return [c for c in commands if isinstance(c, dict) and c.get("name")], config_path, ""
+
+
+MATERIAL_LIMIT = 60_000  # characters of check content one binding may give a round, whole or not at all
+
+
+def binding_material(case: Path, factory: Path | None = None) -> list[dict[str, Any]]:
+    """What each binding of an invariant to a check rests on, read-only.
+
+    The round judges whether a bound check asserts the invariants its item
+    names; a check's name proves only that it exists. For a ``verification:``
+    tag the material is the files its command names, read from the Factory
+    checkout (resolved against the command's ``cwd``) and kept with their
+    sha256; for ``note:`` the assembled [TEST_EVIDENCE] notes of the scope; for
+    ``workbench:`` the Workbench gate itself. Material that cannot be read
+    whole is ``not_checked``: sufficiency is then not judged, never assumed.
+    """
+    case = case.resolve()
+    if factory is None:
+        factory = factory_root(Path(__file__).resolve().parents[1])
+    commands, config_path, unavailable = _verification_commands(case, factory)
+    by_name = {str(c["name"]): c for c in commands or []}
+    spec = _load_json(case / ASSEMBLED_SPEC_FILE)
+    found: list[dict[str, Any]] = []
+    for key, invariants, tests in _decisions(case):
+        ids = invariant_ids(invariants[1])
+        for item in required_test_items(tests[1]) if tests else []:
+            for kind, name in WITNESS_RE.findall(item):
+                entry: dict[str, Any] = {"decision": key, "witness": f"{kind}:{name}",
+                                         "invariants": [i for i in invariant_ids(item) if i in ids] or ids,
+                                         "item": item.strip(), "files": []}
+                if kind == "workbench":
+                    entry.update(status="available", basis=f"the Workbench gate {name} (tools/, authoring_sequence.json)")
+                elif kind == "note":
+                    notes = [str(n) for n in (spec.get("notes") or []) if "[TEST_EVIDENCE]" in str(n)
+                             and str(n).split(":", 1)[0].split(".", 1)[0] == name.split(".", 1)[0]]
+                    if notes:
+                        text = "\n".join(notes)
+                        entry.update(status="available", files=[{"path": f"global_spec.json notes {name}",
+                                                                 "sha256": _sha(text), "text": text}])
+                    else:
+                        entry.update(status="not_checked", reason="no assembled [TEST_EVIDENCE] note of the scope")
+                else:
+                    command = by_name.get(name)
+                    if commands is None or config_path is None:
+                        entry.update(status="not_checked", reason=unavailable)
+                    elif command is None:
+                        entry.update(status="not_checked", reason=f"{name} is not a check of {config_path.name}")
+                    else:
+                        base = (config_path.parent / str(command.get("cwd") or ".")).resolve()
+                        root = factory.resolve()
+                        files = []
+                        for arg in command.get("command") or []:
+                            candidate = (base / str(arg)).resolve()
+                            if candidate.is_file() and root in candidate.parents:
+                                text = candidate.read_text(encoding="utf-8", errors="replace")
+                                files.append({"path": candidate.relative_to(root).as_posix(),
+                                              "sha256": _sha(text), "text": text})
+                        size = sum(len(f["text"]) for f in files)
+                        if not files:
+                            entry.update(status="not_checked", reason=f"the command of {name} names no readable file")
+                        elif size > MATERIAL_LIMIT:
+                            entry.update(status="not_checked", files=[{k: f[k] for k in ("path", "sha256")} for f in files],
+                                         reason=f"{size} characters exceed what a round is given whole ({MATERIAL_LIMIT})")
+                        else:
+                            entry.update(status="available", files=files)
+                found.append(entry)
+    return found
+
+
+def _sha(text: str) -> str:
+    import hashlib
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _verification_check_names(case: Path, factory: Path) -> tuple[set[str] | None, str]:
+    """Focused command-check names of the target factory project, or None and why they are unverifiable."""
+    commands, _, unavailable = _verification_commands(case, factory)
+    if commands is None:
+        return None, unavailable
+    return {str(item.get("name")) for item in commands}, ""
 
 
 def _test_evidence_scopes(case: Path) -> set[str] | None:
@@ -198,6 +279,35 @@ def _decisions(case: Path):
         yield item.get("key"), invariants, _section_lines(case, item, "Required tests")
 
 
+ITEM_RE = re.compile(r"^\s{0,3}(?:[-*+]|\d+[.)])\s+")
+
+
+def required_test_items(section: str) -> list[str]:
+    """The logical items of a Required tests section: a list item with its
+    indented continuation lines, or an unindented paragraph. The heading line
+    is not an item."""
+    items: list[str] = []
+    current: list[str] = []
+    blank = False
+    for line in section.splitlines():
+        if line.startswith("#"):
+            continue
+        if not line.strip():
+            blank = True
+            continue
+        starts = bool(ITEM_RE.match(line)) or (blank and not line.startswith((" ", "\t")))
+        if starts or not current:
+            if current:
+                items.append("\n".join(current))
+            current = [line]
+        else:
+            current.append(line)
+        blank = False
+    if current:
+        items.append("\n".join(current))
+    return items
+
+
 def required_tests(case: Path) -> dict[str, Any]:
     """The State 2 half: every formal invariant has a described required test.
 
@@ -236,10 +346,11 @@ def required_tests(case: Path) -> dict[str, Any]:
 def coverage(case: Path, factory: Path | None = None) -> dict[str, Any]:
     """Every invariant-bearing decision binds to an existing check that asserts it.
 
-    A tag binds the invariant identifiers named on its own Required tests line;
-    when the invariants carry identifiers, each one needs a binding line, so one
-    tag cannot stand for invariants it does not name. A tag on a line naming no
-    identifier binds the whole decision. Whether the bound check really asserts
+    A tag binds the invariant identifiers named in its own Required tests item
+    (the list item with its continuation lines); when the invariants carry
+    identifiers, each needs an item that names it and binds it. A tag in an item
+    naming no identifier binds the decision only when the decision has at most
+    one identified invariant; otherwise it is ambiguous and binds nothing. Whether the bound check really asserts
     the invariant stays a judgement of the State 2 question round.
     """
     case = case.resolve()
@@ -253,9 +364,9 @@ def coverage(case: Path, factory: Path | None = None) -> dict[str, Any]:
     witnessed = 0
     for key, invariants, tests in _decisions(case):
         decisions += 1
-        lines = tests[1].splitlines() if tests else []
+        items = required_test_items(tests[1]) if tests else []
         location = (tests or invariants)[0]
-        if not any(WITNESS_RE.search(line) for line in lines):
+        if not any(WITNESS_RE.search(item) for item in items):
             findings.append({
                 "severity": "warning", "code": "decision_without_witness",
                 "decision": key, "location": location,
@@ -266,24 +377,34 @@ def coverage(case: Path, factory: Path | None = None) -> dict[str, Any]:
         ids = invariant_ids(invariants[1])
         bound: set[str] = set()
         whole = False
-        for line in lines:
-            resolved_line = False
-            for kind, name in WITNESS_RE.findall(line):
+        for item in items:
+            resolved_item = False
+            for kind, name in WITNESS_RE.findall(item):
                 resolved, finding = _resolve(kind, name, key, location, check_names, unavailable, evidence_scopes)
-                resolved_line = resolved_line or resolved
+                resolved_item = resolved_item or resolved
                 if finding:
                     findings.append(finding)
-            if resolved_line:
-                named = [i for i in invariant_ids(line) if i in ids]
+            if not resolved_item:
+                continue
+            named = [i for i in invariant_ids(item) if i in ids]
+            if named:
                 bound.update(named)
-                whole = whole or not named
+            elif len(ids) <= 1:
+                whole = True  # one invariant, or none named by identifier: the binding is unambiguous
+            else:
+                findings.append({
+                    "severity": "warning", "code": "witness_binding_ambiguous", "decision": key,
+                    "location": location,
+                    "message": (f"{key}: a Required tests item binds a check but names none of the decision's "
+                                f"invariants ({', '.join(ids)}); name the invariants the check asserts in that item"),
+                })
         unbound = [] if whole else [i for i in ids if i not in bound]
         for ident in unbound:
             findings.append({
                 "severity": "warning", "code": "invariant_without_witness", "decision": key,
                 "invariant": ident, "location": location,
                 "message": f"{key}: invariant {ident} is bound to no existing check; a tag binds only the "
-                           "invariants its own line names",
+                           "invariants its own Required tests item names",
             })
         if (whole or bound) and not unbound:
             witnessed += 1

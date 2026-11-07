@@ -52,7 +52,7 @@ closed round never hides a `not_checked` or blocking result.
 A point's witness below is a **defect witness**: a history in which the texts
 give two outcomes. It is not a decision's `[witness: …]` tag, which binds an
 invariant to an existing check (`TRANSITION_PROTOCOL.md`, "Invariant
-evidence"); whether that check asserts the invariant its line names is a point
+evidence"); whether that check asserts the invariants its item names is a point
 of State 2.
 
 ### The Codex CLI is the standard provider

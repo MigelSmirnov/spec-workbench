@@ -217,7 +217,22 @@ def check_decision_witness(project: Path) -> dict[str, Any]:
     return _report(outcome, report["findings"], **report["summary"])
 
 
+def check_witness_material(project: Path) -> dict[str, Any]:
+    """A binding made at State 2 is judged there: its check's content must be readable whole."""
+    import design_decision_witness
+
+    materials = design_decision_witness.binding_material(project)
+    missing = [m for m in materials if m["status"] != "available"]
+    findings = [{"severity": "error", "code": "witness_material_not_checked", "outcome": "not_checked",
+                 "decision": m["decision"], "witness": m["witness"],
+                 "message": (f"{m['decision']}: whether {m['witness']} asserts {', '.join(m['invariants']) or 'its invariant'} "
+                             f"cannot be judged: {m.get('reason')} — not checked is not a pass")} for m in missing]
+    return _report("not_checked" if findings else "closed", findings, bindings=len(materials),
+                   available=len(materials) - len(missing))
+
+
 CHECKS: dict[str, Callable[[Path], dict[str, Any]]] = {
+    "witness_material": check_witness_material,
     "model_closure": check_model_closure,
     "time_source": check_time_source,
     "ambient_time": check_ambient_time,
@@ -370,9 +385,52 @@ def round_context(project: Path, state: int, sequence: dict[str, Any] | None = N
     except Exception as exc:  # the gate cannot read the case: say so, never report it clean
         gate = [{"code": "state_gate_not_checked", "severity": "error",
                  "message": f"the State {state} gate could not read the case ({exc}) — not checked is not a pass"}]
+    materials: list[dict[str, Any]] = []
+    if "witness_material" in [c for phase in phases for c in own_checks(sequence, phase)]:
+        import design_decision_witness
+        materials = design_decision_witness.binding_material(project)
     return {"state": state, "owns": owns, "carries": carries, "results": report["results"],
             "ready": report["ready"] and not any(f.get("severity") in {"error", "block"} for f in gate),
-            "gate_findings": gate}
+            "gate_findings": gate, "materials": materials}
+
+
+def module_obligations(project: Path, context: dict[str, Any], module: str) -> list[str]:
+    """The received obligations one generated module's code takes part in (State 7).
+
+    A State 7 round reads one module's Factory prompt; this is what it is asked
+    against besides: a flow step nothing calls in a flow the module takes part
+    in (the module may be the caller whose note must name it), a note of the
+    module that needs the current time without its source, and every result
+    that could not be checked at all. The Factory prompt itself is unchanged.
+    """
+    import design_stage4
+
+    try:
+        spec = json.loads((project / "global_spec.json").read_text(encoding="utf-8"))
+        owners = {f: m for m, fs in (spec.get("module_functions") or {}).items() for f in fs or []}
+    except (OSError, ValueError, AttributeError):
+        owners = {}
+    try:
+        flows = {flow.key: {ref.removeprefix("capability:").split(".", 1)[0] for ref in flow.capability_refs}
+                 for flow in design_stage4.parse_flows(project)}
+    except Exception:  # the State 4 gate reports an unreadable flow document
+        flows = {}
+    lines: list[str] = []
+    for result in context.get("results") or []:
+        if result["outcome"] in ("closed", "carried"):
+            continue
+        if result["outcome"] == "not_checked":
+            lines += [f"- [not_checked] {f.get('code')}: {f.get('message', '')}" for f in result.get("findings") or []]
+            continue
+        for finding in result.get("findings") or []:
+            code = finding.get("code")
+            if code == "flow_capability_unreached" and module in flows.get(str(finding.get("flow")), set()):
+                lines.append(f"- [{result['outcome']}] {finding['flow']} needs {finding['capability']}, and nothing a "
+                             "route reaches calls it: if this module's code calls it in that flow, a note of the "
+                             "calling function must name it")
+            elif code == "ambient_time_note" and owners.get(str(finding.get("contract"))) == module:
+                lines.append(f"- [{result['outcome']}] {finding.get('message', '')}")
+    return lines
 
 
 def _human(report: dict[str, Any]) -> str:

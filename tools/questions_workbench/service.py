@@ -532,7 +532,7 @@ def _document_round(provider: Provider, state: int, runs: int, read: StateTexts,
     instruction += prompts.unit_scope(state, [(key, read.units[key]["title"]) for key in scope],
                                       {key: diff for key, (diff, _) in changed.items()}, referencing)
     instruction += prompts.hypotheses_note(_previous_hypotheses(case, state))
-    instruction += prompts.layer_scope(layer)
+    instruction += prompts.layer_scope(layer, scope)
     text = prompts.ask_input(read.texts)
     with ThreadPoolExecutor(max_workers=runs) as pool:
         reviews = list(pool.map(lambda _: _review(provider, instruction, text), range(runs)))
@@ -542,7 +542,7 @@ def _document_round(provider: Provider, state: int, runs: int, read: StateTexts,
     repeated = _judged(topics, witness=True)
     later = {p.name: p.read_text(encoding="utf-8") for _, p in documents.later_documents(case, state)}
     judged = (_judge(provider, state, text, read.texts, repeated, old, later, _precedents(case, state),
-                     witness=True, case=case, layer=prompts.layer_judge(layer)) if repeated
+                     witness=True, case=case, layer=prompts.layer_judge(layer, scope)) if repeated
               else {"provider": provider.name})
     return reviews, topics, repeated, judged
 
@@ -561,13 +561,20 @@ def _module_round(provider: Provider, state: int, runs: int, read: StateTexts, s
                   changed: dict[str, tuple[str, list[str]]], old: dict[str, str] | None,
                   case: Path, referencing: dict[str, list[str]] | None = None,
                   layer: dict[str, Any] | None = None) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
-    """State 7: each review reads one module's prompt, as its generator would."""
+    """State 7: each review reads one module's prompt, as its generator would, and is
+    asked against the obligations received at State 7 that the module takes part in."""
     scope_text = documents.question_scope(state)
+
+    import transition
+
+    # received obligations, limited to each module (transition.module_obligations);
+    # the Factory prompt itself stays as the Factory builds it
+    obligations = {module: transition.module_obligations(case, layer or {}, module) for module in scope}
 
     def one(job: tuple[str, int]) -> dict[str, Any]:
         module = job[0]
         diff = changed[module][0] if module in changed else None
-        review = _review(provider, prompts.module_ask_instruction(state, scope_text, diff),
+        review = _review(provider, prompts.module_ask_instruction(state, scope_text, diff, obligations[module]),
                          prompts.module_input(module, read.units[module]["text"]))
         review["unit"] = module
         for point in review["open_points"]:
@@ -594,7 +601,8 @@ def _module_round(provider: Provider, state: int, runs: int, read: StateTexts, s
             text = prompts.module_input(module, read.units[module]["text"])
             module_old = None if old is None else {module: old.get(module, "")}
             judged["modules"][module] = _judge(provider, state, text, [(state, module, read.units[module]["text"])],
-                                               again, module_old, None, precedents)
+                                               again, module_old, None, precedents,
+                                               layer=prompts.module_layer_judge(obligations[module]))
             for topic in again:
                 topic["id"] = f"{module}:{topic['id']}"
         topics += mine
@@ -705,6 +713,10 @@ def layer_record(layer: dict[str, Any]) -> dict[str, Any]:
             "results": [{"check": r["check"], "from": r["from"], "outcome": r["outcome"],
                          "findings": len(r.get("findings") or [])} for r in layer.get("results") or []],
             "gate_findings": len(layer.get("gate_findings") or []),
+            # the basis a sufficiency judgement rests on: which content, by digest
+            "materials": [{"decision": m["decision"], "witness": m["witness"], "status": m["status"],
+                           "files": [{"path": f["path"], "sha256": f["sha256"]} for f in m.get("files") or []]}
+                          for m in layer.get("materials") or []],
             "digest": _sha(json.dumps(layer, sort_keys=True, ensure_ascii=False, default=str))}
 
 

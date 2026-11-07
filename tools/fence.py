@@ -56,6 +56,8 @@ HINTS: dict[str, str] = {
     "model_closure_absent": "write 60_model_closure_*.json: one record per State 1 model with its identity, and a contract_only file for the runtime models the contracts introduce",
     "invariant_without_required_test": "say in Required tests what must be shown for this invariant, naming it by its identifier",
     "invariant_without_witness": "bind the invariant to an existing check that asserts it ([witness: ...] on the Required tests line naming it), or keep it carried and say which check will be written",
+    "witness_binding_ambiguous": "name, in the Required tests item that carries the tag, the invariants its check asserts",
+    "witness_material_not_checked": "make the bound check's content readable (SPEC_WORKBENCH_FACTORY_ROOT, a command that names its files, at most the size a round is given whole) so the round can judge it, or remove the binding and carry it",
     "flow_reachability_not_checked": "assemble the router (design_spec_projection.py --apply) or close the router closure so the routes the flows start from can be read",
     "table_access_unnamed": "a note naming a record table names its access: spell the match in the row model's field vocabulary, or name the contract that owns it (NOTE_GATE.md 'Table access must be named')",
 }

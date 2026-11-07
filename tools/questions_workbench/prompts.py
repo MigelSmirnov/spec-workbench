@@ -104,9 +104,35 @@ a point about one of them, away from the change, is set aside.
 {diff}```"""
 
 
-def module_ask_instruction(state: int, scope: str, diff: str | None = None) -> str:
+MODULE_OBLIGATIONS = """
+
+Obligations this module's code takes part in, received from earlier states
+(skills/spec-authoring/TRANSITION_PROTOCOL.md). They are deterministic results,
+not part of the prompt: never quote them. For each one that concerns code this
+module writes, check whether the prompt carries it out. When it does not,
+report a point of kind "unmet_obligation": in "text" copy, verbatim from the
+prompt, the contract or note of the function that should carry it, and in
+"question" say what the note must state.
+{listing}"""
+
+
+def module_ask_instruction(state: int, scope: str, diff: str | None = None,
+                           obligations: list[str] | None = None) -> str:
     instruction = MODULE_ASK.format(state=state, scope=scope)
+    if obligations:
+        instruction += MODULE_OBLIGATIONS.format(listing="\n".join(obligations))
     return instruction + (MODULE_CHANGE.format(diff=diff) if diff is not None else "")
+
+
+MODULE_LAYER_JUDGE = """=== OBLIGATIONS THIS MODULE TAKES PART IN (deterministic results, not prompt text; never quote) ===
+
+A topic about one of these is not judged answered unless the prompt carries it
+out; these results say the design does not yet.
+{listing}"""
+
+
+def module_layer_judge(obligations: list[str]) -> str | None:
+    return MODULE_LAYER_JUDGE.format(listing="\n".join(obligations)) if obligations else None
 
 
 def module_input(module: str, prompt: str) -> str:
@@ -317,7 +343,7 @@ not closed or carried for a pass; "not_checked" means an input is missing:
 Ask about an earlier state only whether this state fulfils what it carried
 here; its closed units are not audited again. A decision's "[witness: ...]" tag
 binds an invariant to an existing check: it is not the history you give as a
-point's witness. Whether the bound check asserts the very invariant its line
+point's witness. Whether the bound check asserts the very invariant its item
 names, and whether a Required tests item says what would show the invariant
 holds, are points of the state that owns the invariant."""
 
@@ -347,15 +373,50 @@ def _layer_lines(context: dict) -> tuple[str, str, str, str]:
     return owns, received, carries, "\n".join(lines) or "- (none)"
 
 
-def layer_scope(context: dict | None) -> str:
-    """The transition block of a document round's instruction; "" without a context."""
+MATERIALS = """
+
+Evidence of the bindings under review. These are the Factory checks the
+decisions' "[witness: ...]" tags name, read-only, each file with its sha256.
+They are not design text: never quote them. For each binding decide whether
+the content asserts every invariant its item names, as stated — not merely
+that it calls the same function. When it does not, raise a point on the
+decision's unit, quoting the Required tests item: the binding claims what the
+check does not show. A binding listed as not checked has no content to judge:
+say so, and never treat it as sufficient.
+{listing}"""
+
+
+def _materials(context: dict, units: list[str] | None) -> str:
+    rows = []
+    for entry in context.get("materials") or []:
+        if units is not None and entry["decision"] not in units:
+            continue
+        head = (f"- {entry['decision']} binds {', '.join(entry['invariants']) or 'its invariant'} "
+                f"to {entry['witness']}; item: {entry['item']}")
+        if entry["status"] != "available":
+            rows.append(f"{head}\n  NOT CHECKED: {entry.get('reason')}")
+            continue
+        body = [head] + [f"--- {f['path']} sha256 {f['sha256']} ---\n{f['text']}" for f in entry.get("files") or []]
+        if entry.get("basis"):
+            body.append(f"  basis: {entry['basis']}")
+        rows.append("\n".join(body))
+    return "\n\n".join(rows)
+
+
+def layer_scope(context: dict | None, units: list[str] | None = None) -> str:
+    """The transition block of a document round's instruction; "" without a context.
+    `units`: the units under review, which the bindings' evidence is limited to."""
     if not context:
         return ""
     owns, received, carries, findings = _layer_lines(context)
-    return LAYER.format(state=context["state"], owns=owns, received=received, carries=carries, findings=findings)
+    text = LAYER.format(state=context["state"], owns=owns, received=received, carries=carries, findings=findings)
+    listing = _materials(context, units)
+    return text + (MATERIALS.format(listing=listing) if listing else "")
 
 
-def layer_judge(context: dict | None) -> str | None:
+def layer_judge(context: dict | None, units: list[str] | None = None) -> str | None:
     if not context:
         return None
-    return LAYER_JUDGE.format(findings=_layer_lines(context)[3])
+    text = LAYER_JUDGE.format(findings=_layer_lines(context)[3])
+    listing = _materials(context, units)
+    return text + (MATERIALS.format(listing=listing) if listing else "")

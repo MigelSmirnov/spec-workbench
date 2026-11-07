@@ -211,6 +211,24 @@ def test_a_binding_covers_only_the_invariants_its_line_names(tmp_path):
     assert design_decision_witness.coverage(both, tmp_path)["summary"]["witnessed"] == 1
 
 
+def test_a_tag_on_its_own_continuation_line_binds_only_the_invariant_its_item_names(tmp_path):
+    # review r4501731318: the docstring's format puts the tag on the next line
+    case = _case(tmp_path, "- INV-001: a thing counted twice is refused.\n"
+                           "  [witness: workbench:state2_rules_decisions]\n"
+                           "- INV-002: a lower count is refused.")
+    report = design_decision_witness.coverage(case, tmp_path)
+    assert [(f["code"], f.get("invariant")) for f in report["findings"]] == [("invariant_without_witness", "INV-002")]
+    assert report["summary"]["witnessed"] == 0
+
+
+def test_a_tag_in_an_item_naming_no_invariant_binds_none_of_several(tmp_path):
+    case = _case(tmp_path, "- INV-001: refused.\n- INV-002: refused.\n"
+                           "- Witness: [witness: workbench:state2_rules_decisions]")
+    codes = sorted((f["code"], f.get("invariant")) for f in design_decision_witness.coverage(case, tmp_path)["findings"])
+    assert codes == [("invariant_without_witness", "INV-001"), ("invariant_without_witness", "INV-002"),
+                     ("witness_binding_ambiguous", None)]
+
+
 def test_a_cited_known_gap_marks_its_findings_and_they_still_stop(tmp_path):
     case = _case(tmp_path)
     _write(case / "02_rules.md", (case / "02_rules.md").read_text() + "\nClock: utcnow. [known_gap: KG-002]\n")
@@ -270,6 +288,80 @@ def test_the_state2_round_is_asked_with_what_it_owns_receives_carries_and_its_fi
     assert summary["layer"]["ready"] is False and summary["transition_ready"] is False
     assert {"check": "invariant_tests", "from": "state2_rules_decisions", "outcome": "open", "findings": 1} \
         in summary["layer"]["results"]
+
+
+CHECK_SCRIPT = """def test_counted_once():
+    store = Store()
+    store.record("a")
+    assert store.record("a") is REFUSED  # INV-001 only: nothing here lowers a count
+"""
+
+
+def _factory_with_check(tmp_path: Path, case: Path) -> Path:
+    import yaml
+
+    factory = tmp_path / "factory"
+    (factory / "verification" / "configs").mkdir(parents=True)
+    _write(factory / "verification" / "counts_once_check.py", CHECK_SCRIPT)
+    _write(factory / "verification" / "configs" / "Demo.yaml", yaml.safe_dump({"checks": {"commands": [
+        {"name": "counts_once", "cwd": "../..", "command": ["python", "verification/counts_once_check.py"]}]}}))
+    _write(case / "90_factory_target.json", {"factory_project": "Demo"})
+    return factory
+
+
+class SufficiencyProvider(LayerProvider):
+    """The judge finds the binding insufficient: the check asserts INV-001 only."""
+
+    ITEM = "- INV-001, INV-002: refused. [witness: verification:counts_once]"
+
+    def complete(self, instruction: str, text: str):
+        if instruction.startswith("You judge the topics"):
+            self.judged.append(text)
+            ids = [line.split(":", 1)[0] for line in text.split("=== TOPICS TO JUDGE ===")[1].splitlines()
+                   if line[:1] == "T"]
+            verdict = {"kind": "consequential_gap", "quotes": [self.ITEM],
+                       "divergence": "a lower count is accepted or refused; the owner notices",
+                       "witness": {"initial": "a thing counted twice", "events": ["the owner lowers the count"],
+                                   "outcomes": ["refused", "accepted"], "observer": "the owner",
+                                   "basis": ["## Accepted decision A01 — things are counted"]}}
+            return json.dumps({"judgements": [{"id": i, **verdict} for i in ids]}), {}
+        return super().complete(instruction, text)
+
+
+def test_the_round_judges_a_binding_on_the_check_content_it_is_given(tmp_path, monkeypatch):
+    # review r4501731322: a check's name proves it exists, not what it asserts
+    _clean_gate(monkeypatch)
+    case = _case(tmp_path, SufficiencyProvider.ITEM)
+    factory = _factory_with_check(tmp_path, case)
+    monkeypatch.setenv("SPEC_WORKBENCH_FACTORY_ROOT", str(factory))
+    assert transition.run_check(case, "witness_material")["outcome"] == "closed"
+    point = {**POINT, "text": SufficiencyProvider.ITEM, "question": "does counts_once assert INV-002?"}
+    provider = SufficiencyProvider([[point], [point], []])
+    summary = service.ask_round(case, 2, provider)
+    asked = provider.instructions[0]
+    assert "Evidence of the bindings under review" in asked
+    assert "A01 binds INV-001, INV-002 to verification:counts_once" in asked
+    assert "INV-001 only: nothing here lowers a count" in asked          # the check's own content
+    assert "INV-001 only: nothing here lowers a count" in provider.judged[0]
+    digest = __import__("hashlib").sha256(CHECK_SCRIPT.encode()).hexdigest()
+    assert summary["layer"]["materials"] == [{"decision": "A01", "witness": "verification:counts_once",
+                                              "status": "available",
+                                              "files": [{"path": "verification/counts_once_check.py",
+                                                         "sha256": digest}]}]
+    assert summary["blocked_units"] == ["A01"] and summary["clear"] is False
+
+
+def test_a_binding_whose_check_cannot_be_read_is_not_judged_sufficient(tmp_path, monkeypatch):
+    _clean_gate(monkeypatch)
+    case = _case(tmp_path, SufficiencyProvider.ITEM)
+    _write(case / "90_factory_target.json", {"factory_project": "Demo"})
+    monkeypatch.setenv("SPEC_WORKBENCH_FACTORY_ROOT", str(tmp_path / "no-factory"))
+    result = transition.run_check(case, "witness_material")
+    assert result["outcome"] == "not_checked" and transition.blocking(result)
+    assert [f["code"] for f in result["findings"]] == ["witness_material_not_checked"]
+    summary, provider = _ask(case)
+    assert "NOT CHECKED:" in provider.instructions[0]
+    assert summary["transition_ready"] is False
 
 
 # ------------------------------- 4. a closed round hides no blocking result
@@ -386,3 +478,36 @@ def test_binding_one_invariant_reopens_only_its_decision(tmp_path):
     summary, provider = _ask(case)
     assert summary["scope"] == ["A01"]
     assert "- A02" not in provider.instructions[0]
+
+
+# ------------------- State 7: the module review is asked against its obligations
+
+def test_a_state7_module_review_is_asked_against_the_obligations_it_takes_part_in(tmp_path, monkeypatch):
+    # review r4501731320: the State 7 reviewer must see the flow and time
+    # obligations its module executes, beside the Factory's own prompt
+    import test_design_questions_gates as gates
+
+    case, factory = gates._notes_case(tmp_path, monkeypatch)
+    _write(case / "40_flows.md", "# State 4 — Flows\n\n## `flow:serve_thing`\n\n"
+                                 "1. `capability:store.save` stores the thing.\n")
+    context = {"state": 7, "owns": [], "carries": [], "gate_findings": [], "materials": [], "ready": False,
+               "results": [{"check": "flow_reachability", "from": "state4_reviewed_flows", "outcome": "open",
+                            "obligation": "every step is called", "findings": [
+                                {"code": "flow_capability_unreached", "flow": "flow:serve_thing",
+                                 "capability": "capability:store.save", "message": "x"}]}]}
+    monkeypatch.setattr(service, "layer_context", lambda case, state: context)
+    point = {"subject": "save", "kind": "unmet_obligation", "text": "- save: [PRECONDITION] The record fits the size limit.",
+             "question": "which note calls save in flow:serve_thing?"}
+    provider = gates.Provider(points=[point])
+    summary = service.ask_round(case, 7, provider, factory_root=factory)
+    store = [i for i, t in zip(provider.instructions, provider.inputs) if "Module: store" in t]
+    surface = [i for i, t in zip(provider.instructions, provider.inputs) if "Module: surface" in t]
+    assert store and all("flow:serve_thing needs capability:store.save" in i for i in store)
+    assert surface and not any("flow:serve_thing" in i for i in surface)   # limited to the module
+    # the Factory prompt is given and kept as the Factory built it
+    prompt = service.state_texts(case, 7, factory).units["store"]["text"]
+    assert any(t.endswith(prompt) and "flow:serve_thing" not in t for t in provider.inputs if "Module: store" in t)
+    kept = service.rounds_dir(case, 7) / summary["round"] / "prompts" / "store.txt"
+    assert kept.read_text(encoding="utf-8") == prompt
+    assert any("OBLIGATIONS THIS MODULE TAKES PART IN" in j and "capability:store.save" in j for j in provider.judged)
+    assert summary["transition_ready"] is False
