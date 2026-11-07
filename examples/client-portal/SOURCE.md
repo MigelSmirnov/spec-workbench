@@ -528,6 +528,12 @@ finding goes back to the coordinator.
 | kept constructor contracts | `conceal_authentication_failure() -> AuthenticationRejected`: the Factory validator accepts a signature type only as a module-owned class with a contract; `PersistenceError.__init__` is fixed by the sqlite unit-of-work emitter (`ERROR_CONTRACTS`); `BinaryStorageError` (binary_storage) is not model-generated; `RegistryBoundaryError(kind)` and `SnapshotContentRejected(reason)` carry the A26 fields | unchanged. `AuthenticationRejected` (authorization_guard) and `RegistryBoundaryError` (registry_gateway) keep a prompt where OWNED CLASSES requires `__init__` while MODULE-LOCAL EXCEPTION EXPORTS shows `pass`; no round has raised it |
 | semantic diff against 459ac96c | the change removes 18 contracts and 18 notes and adds one sentence to the `bootstrap_first_administrator` [VALIDATION_ERROR] note (the class is this module's own, a plain `pass` subclass raised without arguments) | expected differences of the later semantic diff; behaviour of the running service unchanged |
 
+#### `connection: object` in the model-written repository (coordinator, 2026-11-07)
+
+| topic | evidence | decision |
+|---|---|---|
+| `connection: object` of `create_budget_schema` and `SqliteBudgetRepository.__init__` (round-02 budget_repository:T1) | budget_repository is the one repository with `emission: irregular` (`70_persistence_closure.json`), so the Factory leaves it to the model; the unit-of-work emitter fixes `<Repository>.__init__` as `(self, connection: object, context: …)` (`REPOSITORY_INIT`) and calls the schema function with its connection; the prompt line "annotate each parameter with the type its CONTRACTS signature declares, never object or nothing" is deliberate (owner 2026-11-07); running code `adapters/budget_repository.py:9,62` keeps `object` and uses only `cursor()` | signatures unchanged; one [DEPENDENCY_BOUNDARY] note per callable states that `object` is the declared type, fixed by the backend, and how the connection is used. Not a deviation from 459ac96c beyond the two added notes |
+
 #### Values in notes restored (coordinator, 2026-11-06)
 
 | topic | evidence | decision |
