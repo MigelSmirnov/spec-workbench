@@ -78,10 +78,12 @@ State 2 decides the source and the meaning of time: who reads the clock, in
 which representation the product keeps an instant, and how many readings one
 operation takes. State 6 shows how each consumer obtains it: a `datetime`
 parameter, a clock port retained by `__init__`, or a declared
-`rules.time_source_policy` authority. The standard has no form for every valid
-design: an operation that reads naive `datetime.utcnow()` in a module-level
-function has none (KG-002). Record the gap; do not replace the accepted
-behaviour with a clock port to satisfy the check.
+`rules.time_source_policy` authority. For a design that keeps offset-naive UTC
+instants and reads them from module-level functions, SPEC_STANDARD §6.9
+version 4 is the form: one imported operation, one reading per call. Its
+consumers are the modules that depend on it (imports, or State 3 `Knows`
+before imports are decided). Do not replace the accepted behaviour with a
+clock port to satisfy the check (KG-002, closed by that form).
 
 ### Invariant evidence
 

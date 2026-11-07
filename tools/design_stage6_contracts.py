@@ -299,7 +299,12 @@ def _time_source_findings(project: Path, rows: list[dict[str, Any]]) -> list[dic
     contracts = {row["function"]: row["signature"] for row in rows if row["resolved"]}
     func_module = {row["function"]: str(row["module"] or "").removeprefix("module:") for row in rows}
     impacts = design_closure_gaps.parse_state_impacts(project)
-    return design_closure_gaps.fresh_timestamp_findings(models, contracts, func_module, impacts)
+    try:
+        spec = design_closure_gaps.load_spec(project)
+    except (OSError, ValueError):
+        spec = None
+    sources = design_closure_gaps.clock_consumers(project, spec)
+    return design_closure_gaps.fresh_timestamp_findings(models, contracts, func_module, impacts, sources)
 
 
 NOTES_FILE = "80_notes.md"
