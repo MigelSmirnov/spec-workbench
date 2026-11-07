@@ -1,0 +1,109 @@
+Module: financial_policy
+Target path: domain/financial_policy.py
+Target file: financial_policy.py
+
+IMPORTS (every listed symbol is available; import the ones the module uses):
+from __future__ import annotations
+from decimal import Decimal
+from uuid import UUID
+
+from core.models import ProgressSectionView, WorkBalanceLabel, WorkBalanceResult
+
+CONTRACTS (function signatures — follow exactly):
+def _quantize_money(amount: Decimal) -> Decimal
+def calculate_completed_work(work_planned: Decimal, completion_percent: int) -> Decimal
+def calculate_material_balance(material_planned: Decimal, material_actual: Decimal) -> Decimal
+def calculate_overall_progress(sections: list[ProgressSectionView]) -> Decimal | None
+def calculate_work_balance(completed_work_total: Decimal, payments_total: Decimal) -> WorkBalanceResult
+def validate_eur_amount(currency: str, amount: Decimal, strictly_positive: bool = False) -> Decimal
+
+OWNED FUNCTIONS REQUIRED (must be defined as top-level functions):
+- _quantize_money: (amount: Decimal) -> Decimal
+- calculate_completed_work: (work_planned: Decimal, completion_percent: int) -> Decimal
+- calculate_material_balance: (material_planned: Decimal, material_actual: Decimal) -> Decimal
+- calculate_overall_progress: (sections: list[ProgressSectionView]) -> Decimal | None
+- calculate_work_balance: (completed_work_total: Decimal, payments_total: Decimal) -> WorkBalanceResult
+- validate_eur_amount: (currency: str, amount: Decimal, strictly_positive: bool = False) -> Decimal
+
+STATIC GATE CONTRACT (deterministic checks; a violating candidate is rejected without repair):
+- Reflective attribute access is rejected: never call getattr, hasattr,
+  setattr, delattr, or vars; every declared field and operation is
+  addressed directly by name, including in try/finally cleanup.
+- A definition whose parameter list differs from its declared contract
+  signature is rejected; keep names and order exactly.
+- A constructed record accepted by a declared insert_*/upsert_*/append_*
+  operation must reach a call or return; a built-and-dropped record is
+  rejected.
+- Instantiating a spec-declared interface is rejected; construct the
+  module-owned concrete class instead.
+- A stub, placeholder, or fail-closed body for a contracted callable is
+  rejected; implement the complete specified behavior.
+- A top-level import of a package outside the Python standard library and
+  this project's own modules is rejected unless IMPORTS lists it; a note
+  never adds a package to IMPORTS.
+- A model is constructed with values of its declared field types; a field
+  typed tuple[...] receives a tuple, built with tuple(...) where the items
+  were collected in a list, never the list itself.
+- A value passed to a model field is narrowed at the call itself: a name
+  seeded with None, set on some branches and passed later under a test of
+  another name is rejected; build the value where it is obtained and pass
+  it there, or test that same name for None at the call.
+
+OWNED CLASSES REQUIRED (must be defined locally, not merely referenced):
+No owned local classes required.
+
+CONCRETE IMPLEMENTATION OBLIGATIONS:
+No local concrete-to-interface obligations.
+
+REQUIREMENTS (notes — implement these):
+- _quantize_money: [BEHAVIOR] MUST quantize the Decimal to 2 fraction digits with the rounding mode ROUND_HALF_UP and MUST NOT convert through float.
+- calculate_completed_work: [BEHAVIOR] MUST compute each section's completed work as its planned work multiplied by its completion percent and divided by one hundred, quantize each per-section result to 2 fraction digits with ROUND_HALF_UP, and MUST NOT use float arithmetic.
+- calculate_material_balance: [BEHAVIOR] MUST return quantized material_planned minus material_actual, preserving a negative overspend result without clamping.
+- calculate_overall_progress: [BEHAVIOR] MUST use the weighted R9 formula over positive work_planned and return None when its denominator is zero; MUST NOT use arithmetic mean or fabricate zero. ProgressSectionView.completion_percent is optional, and a section whose completion_percent is None has no reported progress: it MUST contribute to neither the numerator nor the denominator, and MUST NOT be read as zero, because an unreported section is not a section reported as unstarted.
+- calculate_work_balance: [BEHAVIOR] MUST return quantized completed_work_total minus payments_total and the label the sign of that difference selects: WorkBalanceLabel.COMPLETED_AHEAD_OF_PAYMENTS when it is positive, WorkBalanceLabel.UNUSED_ADVANCE_PAYMENT when it is negative, WorkBalanceLabel.BALANCED when it is zero.
+- validate_eur_amount: [VALIDATION_ERROR] MUST reject an amount whose currency is not EUR, the single portal currency, or whose sign is not allowed, and MUST return the accepted amount as a Decimal quantized to 2 fraction digits with ROUND_HALF_UP, without any currency conversion.
+
+MODEL DATA DEFINITIONS (READ-ONLY SPEC DATA, NOT CODE):
+No = models.* spec data addresses referenced by notes.
+
+MODEL DATA ADDRESSES (SPEC DATA, NOT IMPORT PATHS):
+No = models.* spec data addresses referenced by notes.
+
+IMPORTED MODEL OWNERSHIP (DO NOT REDEFINE):
+Imported runtime model symbols are owned by their source modules listed in IMPORTS; use them as imported and do not redefine them here.
+
+RUNTIME MODEL SURFACE (CORE.MODELS IMPORTS):
+These are imported runtime symbols from core.models. Use the listed enum member names and model fields exactly.
+- ProgressSectionView fields (exact, no others exist): completed_work_value: Decimal, completion_percent: int | None, display_name: str, section_id: UUID, work_planned: Decimal
+- WorkBalanceLabel enum members: BALANCED='balanced', COMPLETED_AHEAD_OF_PAYMENTS='completed_ahead_of_payments', UNUSED_ADVANCE_PAYMENT='unused_advance_payment'
+- WorkBalanceResult fields (exact, no others exist): balance: Decimal, label: WorkBalanceLabel
+
+MODULE-LOCAL EXCEPTION EXPORTS:
+If any exception class is listed here, define it in this file at top level.
+Do not import these classes from core.errors or any other module.
+- class FinancialValidationError(Exception): pass
+
+FUNCTION ORDER (define in this order):
+_quantize_money, calculate_completed_work, calculate_material_balance, calculate_overall_progress, calculate_work_balance, validate_eur_amount
+
+MODELS CONTEXT:
+Runtime models live in core.models. Use IMPORTS and IMPORTED MODEL
+OWNERSHIP for runtime model symbols; do not reproduce model schemas
+or import from a top-level models module.
+
+Generate the complete financial_policy.py file.
+Every owned function listed above must be implemented exactly once at module top level.
+Define every class and method listed in OWNED CLASSES REQUIRED in this file.
+For every local binding in CONCRETE IMPLEMENTATION OBLIGATIONS, inherit the declared interface and implement its complete method surface with non-placeholder bodies.
+If this is the models module, emit every enum/model in MODEL DEFINITIONS exactly once.
+If this is not the models module, do not emit Pydantic model classes, enums, create_model calls, or local model schema shadows.
+Do not invent model fields or enum values not present in the imported runtime models.
+Use only the IMPORTS listed above plus required standard library imports.
+Import from IMPORTS every symbol the module uses, including symbols used only in annotations, and annotate each parameter with the type its CONTRACTS signature declares, never object or nothing.
+Never import from a top-level models module or models.*; runtime models live in core.models only when listed in IMPORTS.
+`models.<name>` in notes is a canonical spec data address, not an importable Python module.
+When one owner module provides a function and core.models provides a DTO with a similar name, split the imports by source exactly as listed in IMPORTS.
+Construct imported runtime models only with the fields listed in IMPORTED MODEL SURFACE; models are frozen and forbid extra fields, so an invented keyword argument fails at runtime.
+Read from a model value only the fields listed for its type; never use getattr(value, name, default) to probe for a field that is not declared.
+Never assign to an attribute of a model value (models are frozen): derive a changed value with value.model_copy(update={...}) or construct a new instance.
+Define every class listed in MODULE-LOCAL EXCEPTION EXPORTS in this file.

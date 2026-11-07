@@ -1,0 +1,175 @@
+Module: budget_repository
+Target path: adapters/budget_repository.py
+Target file: budget_repository.py
+
+IMPORTS (every listed symbol is available; import the ones the module uses):
+from __future__ import annotations
+from datetime import datetime
+from decimal import Decimal
+from uuid import UUID
+import sqlite3
+
+from core.models import ActorKind, AuditRepository, AuditRepositoryContext, BudgetRepository, BudgetSource, BudgetVersion, BudgetVersionStatus, SectionPlan, AuditRecord
+
+CONTRACTS (function signatures — follow exactly):
+def create_budget_schema(connection: object) -> None
+# SqliteBudgetRepository
+def __init__(self, connection: object, context: AuditRepositoryContext) -> None
+# SqliteBudgetRepository
+def get_active_budget_version(self, project_id: UUID) -> BudgetVersion | None
+# SqliteBudgetRepository
+def get_budget_version(self, version_id: UUID) -> BudgetVersion | None
+# SqliteBudgetRepository
+def get_manual_budget_version(self, project_id: UUID) -> BudgetVersion | None
+# SqliteBudgetRepository
+def insert_budget_version(self, version: BudgetVersion) -> None
+# SqliteBudgetRepository
+def insert_section_plans(self, plans: list[SectionPlan]) -> None
+# SqliteBudgetRepository
+def list_budget_plans(self, version_id: UUID) -> list[SectionPlan]
+# SqliteBudgetRepository
+def update_budget_versions(self, versions: list[BudgetVersion]) -> None
+# SqliteBudgetRepository
+def upsert_section_plan(self, plan: SectionPlan) -> None
+# AuditRepositoryContext
+def assert_open(self) -> None
+# AuditRepositoryContext
+def translate_error(self, error: BaseException) -> BaseException
+# BudgetRepository
+def get_active_budget_version(self, project_id: UUID) -> BudgetVersion | None
+# BudgetRepository
+def get_budget_version(self, version_id: UUID) -> BudgetVersion | None
+# BudgetRepository
+def get_manual_budget_version(self, project_id: UUID) -> BudgetVersion | None
+# BudgetRepository
+def insert_budget_version(self, version: BudgetVersion) -> None
+# BudgetRepository
+def insert_section_plans(self, plans: list[SectionPlan]) -> None
+# BudgetRepository
+def list_budget_plans(self, version_id: UUID) -> list[SectionPlan]
+# BudgetRepository
+def update_budget_versions(self, versions: list[BudgetVersion]) -> None
+# BudgetRepository
+def upsert_section_plan(self, plan: SectionPlan) -> None
+# AuditRepository
+def insert_audit(self, record: AuditRecord) -> None
+
+OWNED FUNCTIONS REQUIRED (must be defined as top-level functions):
+- create_budget_schema: (connection: object) -> None
+
+STATIC GATE CONTRACT (deterministic checks; a violating candidate is rejected without repair):
+- Reflective attribute access is rejected: never call getattr, hasattr,
+  setattr, delattr, or vars; every declared field and operation is
+  addressed directly by name, including in try/finally cleanup.
+- A definition whose parameter list differs from its declared contract
+  signature is rejected; keep names and order exactly.
+- A constructed record accepted by a declared insert_*/upsert_*/append_*
+  operation must reach a call or return; a built-and-dropped record is
+  rejected.
+- Instantiating a spec-declared interface is rejected; construct the
+  module-owned concrete class instead.
+- A stub, placeholder, or fail-closed body for a contracted callable is
+  rejected; implement the complete specified behavior.
+- A top-level import of a package outside the Python standard library and
+  this project's own modules is rejected unless IMPORTS lists it; a note
+  never adds a package to IMPORTS.
+- A model is constructed with values of its declared field types; a field
+  typed tuple[...] receives a tuple, built with tuple(...) where the items
+  were collected in a list, never the list itself.
+- A value passed to a model field is narrowed at the call itself: a name
+  seeded with None, set on some branches and passed later under a test of
+  another name is rejected; build the value where it is obtained and pass
+  it there, or test that same name for None at the call.
+
+OWNED CLASSES REQUIRED (must be defined locally, not merely referenced):
+- SqliteBudgetRepository: define locally with methods __init__, get_active_budget_version, get_budget_version, get_manual_budget_version, insert_budget_version, insert_section_plans, list_budget_plans, update_budget_versions, upsert_section_plan
+
+CONCRETE IMPLEMENTATION OBLIGATIONS:
+No local concrete-to-interface obligations.
+
+REQUIREMENTS (notes — implement these):
+- create_budget_schema: [CONFIG_REFERENCE] MUST idempotently create only the tables budget_versions (= config.persistence.budget_version_table_name) and section_plans (= config.persistence.section_plan_table_name), written as fixed names in the SQL text, with columns corresponding one-to-one to BudgetVersion and SectionPlan fields; version_id and plan_id are primary keys, (version_id, section_id) is unique, and nullable model fields remain nullable.
+- create_budget_schema: [SCHEMA_CONSTRAINT] MUST enforce at most one BudgetVersion with source MANUAL per project_id and at most one BudgetVersion with status ACTIVE per project_id using unique partial indexes.
+- create_budget_schema: [FORBIDDEN_ACTION] MUST NOT commit, rollback, close the supplied connection, create another repository table, or interpolate runtime values into SQL.
+- create_budget_schema: [DEPENDENCY_BOUNDARY] MUST keep the parameter annotation connection: object exactly as its contract declares; object is the declared type here, not a missing one: the transaction of the sqlite unit-of-work backend calls it with its open sqlite3 connection, which the function uses only through its cursor() method.
+- SqliteBudgetRepository.__init__: [DEPENDENCY_BOUNDARY] MUST retain exactly the supplied SQLite connection object and AuditRepositoryContext and MUST NOT create a connection, transaction, store, or independent error policy.
+- SqliteBudgetRepository.__init__: [DEPENDENCY_BOUNDARY] MUST implement only BudgetRepository on the caller-owned SQLite connection; it MUST NOT import application/domain services, create a connection, or commit, rollback, or close the connection.
+- SqliteBudgetRepository.__init__: [DEPENDENCY_BOUNDARY] MUST keep the parameter annotation connection: object exactly as its contract declares; object is the declared type here, not a missing one: the sqlite unit-of-work backend fixes this constructor signature for every repository, and its transaction passes the open sqlite3 connection, which the methods use only through its cursor() method.
+- SqliteBudgetRepository.get_active_budget_version: [RETURN_SHAPE] MUST assert open state and return the sole BudgetVersion with matching project_id and ACTIVE status or None; more than one matching row MUST translate as a persistence failure.
+- SqliteBudgetRepository.get_active_budget_version: [VALIDATION_ERROR] MUST translate all SQLite driver, row decoding, missing-update, constraint, and closed-state failures only through AuditRepositoryContext.translate_error without exposing SQL, database URL, or raw row data; no method may commit, rollback, or close.
+- SqliteBudgetRepository.get_budget_version: [RETURN_SHAPE] MUST assert open state, select the row whose version_id matches, reconstruct every BudgetVersion field using canonical UUID, datetime, and enum parsing, and return None when absent.
+- SqliteBudgetRepository.get_budget_version: [VALIDATION_ERROR] MUST translate all SQLite driver, row decoding, missing-update, constraint, and closed-state failures only through AuditRepositoryContext.translate_error without exposing SQL, database URL, or raw row data; no method may commit, rollback, or close.
+- SqliteBudgetRepository.get_manual_budget_version: [RETURN_SHAPE] MUST assert open state and return the sole BudgetVersion with matching project_id and MANUAL source or None; more than one matching row MUST translate as a persistence failure.
+- SqliteBudgetRepository.get_manual_budget_version: [VALIDATION_ERROR] MUST translate all SQLite driver, row decoding, missing-update, constraint, and closed-state failures only through AuditRepositoryContext.translate_error without exposing SQL, database URL, or raw row data; no method may commit, rollback, or close.
+- SqliteBudgetRepository.insert_budget_version: [FIELD_PROJECTION] MUST assert open state and insert every BudgetVersion field exactly once using parameterized SQL and canonical UUID, datetime, and enum strings; duplicate version_id, second project MANUAL source, or second project ACTIVE status MUST translate through AuditRepositoryContext.translate_error.
+- SqliteBudgetRepository.insert_budget_version: [VALIDATION_ERROR] MUST translate all SQLite driver, row decoding, missing-update, constraint, and closed-state failures only through AuditRepositoryContext.translate_error without exposing SQL, database URL, or raw row data; no method may commit, rollback, or close.
+- SqliteBudgetRepository.insert_section_plans: [FIELD_PROJECTION] MUST assert open state, treat an empty list as a no-op, and insert every field of every supplied SectionPlan using parameterized SQL and canonical UUID, Decimal, and datetime strings; duplicate plan_id or duplicate (version_id, section_id) MUST translate through AuditRepositoryContext.translate_error.
+- SqliteBudgetRepository.insert_section_plans: [VALIDATION_ERROR] MUST translate all SQLite driver, row decoding, missing-update, constraint, and closed-state failures only through AuditRepositoryContext.translate_error without exposing SQL, database URL, or raw row data; no method may commit, rollback, or close.
+- SqliteBudgetRepository.list_budget_plans: [DETERMINISM_OR_ORDERING] MUST assert open state and return all and only version_id rows as SectionPlan values ordered by sort_order ascending then section_id ascending.
+- SqliteBudgetRepository.list_budget_plans: [VALIDATION_ERROR] MUST translate all SQLite driver, row decoding, missing-update, constraint, and closed-state failures only through AuditRepositoryContext.translate_error without exposing SQL, database URL, or raw row data; no method may commit, rollback, or close.
+- SqliteBudgetRepository.update_budget_versions: [FIELD_PROJECTION] MUST assert open state, treat an empty list as a no-op, require every version_id to exist, and update only status, activated_at, activated_by, and deactivated_at from each supplied BudgetVersion using parameterized SQL; version_id, project_id, source, snapshot_id, created_at, created_by_kind, and created_by_id are immutable and MUST NOT be updated, while non-ACTIVE rows MUST be applied before ACTIVE rows so valid activation swaps do not transiently violate uniqueness.
+- SqliteBudgetRepository.update_budget_versions: [VALIDATION_ERROR] MUST translate all SQLite driver, row decoding, missing-update, constraint, and closed-state failures only through AuditRepositoryContext.translate_error without exposing SQL, database URL, or raw row data; no method may commit, rollback, or close.
+- SqliteBudgetRepository.upsert_section_plan: [SCHEMA_CONSTRAINT] MUST assert open state, require plan.version_id to reference a MANUAL BudgetVersion, and insert or replace every SectionPlan field for the matching (version_id, section_id); it MUST reject attempts to update an imported version.
+- SqliteBudgetRepository.upsert_section_plan: [VALIDATION_ERROR] MUST translate all SQLite driver, row decoding, missing-update, constraint, and closed-state failures only through AuditRepositoryContext.translate_error without exposing SQL, database URL, or raw row data; no method may commit, rollback, or close.
+
+MODEL DATA DEFINITIONS (READ-ONLY SPEC DATA, NOT CODE):
+No = models.* spec data addresses referenced by notes.
+
+MODEL DATA ADDRESSES (SPEC DATA, NOT IMPORT PATHS):
+No = models.* spec data addresses referenced by notes.
+
+IMPORTED MODEL OWNERSHIP (DO NOT REDEFINE):
+Imported runtime model symbols are owned by their source modules listed in IMPORTS; use them as imported and do not redefine them here.
+
+RUNTIME MODEL SURFACE (CORE.MODELS IMPORTS):
+These are imported runtime symbols from core.models. Use the listed enum member names and model fields exactly.
+- ActorKind enum members: SERVICE='service', STAFF='staff', SYSTEM='system', VIEWER='viewer'
+- AuditRecord fields (exact, no others exist): action: AuditAction, actor_id: UUID | None, actor_kind: ActorKind, audit_id: UUID, entity_id: str | None, entity_kind: AuditEntityKind | None, key_version: int | None, occurred_at: datetime, project_id: UUID | None, reason_code: str | None, result: AuditResult
+- AuditRepository operations (exact, no others exist):
+    insert_audit(self, record: AuditRecord) -> None
+- AuditRepositoryContext operations (exact, no others exist):
+    assert_open(self) -> None
+    translate_error(self, error: BaseException) -> BaseException
+- BudgetRepository operations (exact, no others exist):
+    get_active_budget_version(self, project_id: UUID) -> BudgetVersion | None
+    get_budget_version(self, version_id: UUID) -> BudgetVersion | None
+    get_manual_budget_version(self, project_id: UUID) -> BudgetVersion | None
+    insert_budget_version(self, version: BudgetVersion) -> None
+    insert_section_plans(self, plans: list[SectionPlan]) -> None
+    list_budget_plans(self, version_id: UUID) -> list[SectionPlan]
+    update_budget_versions(self, versions: list[BudgetVersion]) -> None
+    upsert_section_plan(self, plan: SectionPlan) -> None
+- BudgetSource enum members: APPROVED_ESTIMATE_SNAPSHOT='approved_estimate_snapshot', MANUAL='manual'
+- BudgetVersion fields (exact, no others exist): activated_at: datetime | None, activated_by: UUID | None, created_at: datetime, created_by_id: UUID, created_by_kind: ActorKind, deactivated_at: datetime | None, project_id: UUID, snapshot_id: UUID | None, source: BudgetSource, status: BudgetVersionStatus, version_id: UUID
+- BudgetVersionStatus enum members: ACTIVE='active', INACTIVE='inactive'
+- SectionPlan fields (exact, no others exist): display_name: str, material_planned: Decimal, plan_id: UUID, section_id: UUID, sort_order: int, source_section_code: str | None, updated_at: datetime, updated_by: UUID | None, version_id: UUID, work_planned: Decimal
+
+MODULE-LOCAL EXCEPTION EXPORTS:
+If any exception class is listed here, define it in this file at top level.
+Do not import these classes from core.errors or any other module.
+No module-local exception exports required.
+
+FUNCTION ORDER (define in this order):
+create_budget_schema
+
+MODELS CONTEXT:
+Runtime models live in core.models. Use IMPORTS and IMPORTED MODEL
+OWNERSHIP for runtime model symbols; do not reproduce model schemas
+or import from a top-level models module.
+
+Generate the complete budget_repository.py file.
+Every owned function listed above must be implemented exactly once at module top level.
+Define every class and method listed in OWNED CLASSES REQUIRED in this file.
+For every local binding in CONCRETE IMPLEMENTATION OBLIGATIONS, inherit the declared interface and implement its complete method surface with non-placeholder bodies.
+If this is the models module, emit every enum/model in MODEL DEFINITIONS exactly once.
+If this is not the models module, do not emit Pydantic model classes, enums, create_model calls, or local model schema shadows.
+Do not invent model fields or enum values not present in the imported runtime models.
+Use only the IMPORTS listed above plus required standard library imports.
+Import from IMPORTS every symbol the module uses, including symbols used only in annotations, and annotate each parameter with the type its CONTRACTS signature declares, never object or nothing.
+Never import from a top-level models module or models.*; runtime models live in core.models only when listed in IMPORTS.
+`models.<name>` in notes is a canonical spec data address, not an importable Python module.
+When one owner module provides a function and core.models provides a DTO with a similar name, split the imports by source exactly as listed in IMPORTS.
+Construct imported runtime models only with the fields listed in IMPORTED MODEL SURFACE; models are frozen and forbid extra fields, so an invented keyword argument fails at runtime.
+Read from a model value only the fields listed for its type; never use getattr(value, name, default) to probe for a field that is not declared.
+Never assign to an attribute of a model value (models are frozen): derive a changed value with value.model_copy(update={...}) or construct a new instance.
+Define every class listed in MODULE-LOCAL EXCEPTION EXPORTS in this file.

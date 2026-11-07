@@ -1,0 +1,115 @@
+Module: runtime
+Target path: runtime/app.py
+Target file: app.py
+
+IMPORTS (every listed symbol is available; import the ones the module uses):
+from __future__ import annotations
+
+from fastapi import FastAPI
+
+from adapters.portal_store import PortalStore, PortalTransaction
+from api.router import create_app
+from core.models import HealthStatus, RuntimeEnvironment, RuntimeSettings
+from runtime.transport_guard import install_transport_guards
+
+CONTRACTS (function signatures — follow exactly):
+def create_runtime_app(settings: RuntimeSettings) -> FastAPI
+def liveness_endpoint() -> HealthStatus
+def readiness_endpoint(store: PortalStore) -> HealthStatus
+# PortalStore
+def __init__(self, database_url: str) -> None
+# PortalStore
+def begin(self) -> PortalTransaction
+# PortalTransaction
+def __init__(self, connection: object) -> None
+# PortalTransaction
+def rollback(self) -> None
+
+IMPORTED FUNCTION SIGNATURES (these come from the imports above):
+def create_app(store: PortalStore) -> FastAPI
+def install_transport_guards(app: FastAPI, settings: RuntimeSettings) -> None
+
+OWNED FUNCTIONS REQUIRED (must be defined as top-level functions):
+- create_runtime_app: (settings: RuntimeSettings) -> FastAPI
+- liveness_endpoint: () -> HealthStatus
+- readiness_endpoint: (store: PortalStore) -> HealthStatus
+
+STATIC GATE CONTRACT (deterministic checks; a violating candidate is rejected without repair):
+- Reflective attribute access is rejected: never call getattr, hasattr,
+  setattr, delattr, or vars; every declared field and operation is
+  addressed directly by name, including in try/finally cleanup.
+- A definition whose parameter list differs from its declared contract
+  signature is rejected; keep names and order exactly.
+- A constructed record accepted by a declared insert_*/upsert_*/append_*
+  operation must reach a call or return; a built-and-dropped record is
+  rejected.
+- Instantiating a spec-declared interface is rejected; construct the
+  module-owned concrete class instead.
+- A stub, placeholder, or fail-closed body for a contracted callable is
+  rejected; implement the complete specified behavior.
+- A top-level import of a package outside the Python standard library and
+  this project's own modules is rejected unless IMPORTS lists it; a note
+  never adds a package to IMPORTS.
+- A model is constructed with values of its declared field types; a field
+  typed tuple[...] receives a tuple, built with tuple(...) where the items
+  were collected in a list, never the list itself.
+- A value passed to a model field is narrowed at the call itself: a name
+  seeded with None, set on some branches and passed later under a test of
+  another name is rejected; build the value where it is obtained and pass
+  it there, or test that same name for None at the call.
+
+OWNED CLASSES REQUIRED (must be defined locally, not merely referenced):
+No owned local classes required.
+
+CONCRETE IMPLEMENTATION OBLIGATIONS:
+No local concrete-to-interface obligations.
+
+REQUIREMENTS (notes — implement these):
+- create_runtime_app: [ORCHESTRATION] MUST construct exactly one PortalStore from settings.database_url, compose the existing create_app boundary of the api module (imported from api.router) as the single inner application, register liveness only at /health/live and readiness only at /health/ready, each declaring HealthStatus as its response model so the response body carries exactly the fields HealthStatus declares and a later field added to that model cannot reach a public health response unnoticed, delegate the entire request policy to install_transport_guards before mounting, and then mount that one inner application first at /api and then as the catch-all at / so both health routes stay reachable and FastAPI mount routing strips the deployment prefix. The runtime module MUST remain side-effect-free when imported: application construction is permitted only when create_runtime_app is called explicitly with RuntimeSettings supplied by the caller, and module import MUST NOT call load_runtime_settings, create_runtime_app, PortalStore, or expose an eagerly constructed application singleton. It MUST NOT implement host, origin, CORS, rate-limit, body-limit, cache-control, security-header or logging behaviour itself, reconstruct a Request to influence route lookup, register a wildcard proxy route, invoke the inner ASGI callable directly, construct a second inner application, import domain or application internals, or import starlette directly.
+- liveness_endpoint: [SECURITY_BOUNDARY] MUST return only HealthStatus(status='ok') to prove the process can answer and MUST NOT expose paths, credentials, schema details, dependency versions, configuration, or exception text.
+- readiness_endpoint: [BEHAVIOR] MUST perform the bounded storage initialization check by opening one transaction with store.begin(), which returns a PortalTransaction and creates any missing schemas (storage initialization, not product state: no product row is written), and closing it with exactly one tx.rollback(), rolling back on failure only while it is still open, return only the generic health response, exposing no path, credential, schema, dependency version, configuration or exception detail, and MUST NOT mutate product state.
+
+MODEL DATA DEFINITIONS (READ-ONLY SPEC DATA, NOT CODE):
+No = models.* spec data addresses referenced by notes.
+
+MODEL DATA ADDRESSES (SPEC DATA, NOT IMPORT PATHS):
+No = models.* spec data addresses referenced by notes.
+
+IMPORTED MODEL OWNERSHIP (DO NOT REDEFINE):
+Imported runtime model symbols are owned by their source modules listed in IMPORTS; use them as imported and do not redefine them here.
+
+RUNTIME MODEL SURFACE (CORE.MODELS IMPORTS):
+These are imported runtime symbols from core.models. Use the listed enum member names and model fields exactly.
+- HealthStatus fields (exact, no others exist): status: str
+- RuntimeEnvironment enum members: DEVELOPMENT='development', PRODUCTION='production', TEST='test'
+- RuntimeSettings fields (exact, no others exist): allowed_origins: list[str], database_url: str, environment: RuntimeEnvironment, max_binary_response_bytes: int, max_request_body_bytes: int, production_logging: bool, public_origin: str, trusted_hosts: list[str], viewer_entry_rate_limit_attempts: int, viewer_entry_rate_limit_window_seconds: int
+
+MODULE-LOCAL EXCEPTION EXPORTS:
+If any exception class is listed here, define it in this file at top level.
+Do not import these classes from core.errors or any other module.
+No module-local exception exports required.
+
+FUNCTION ORDER (define in this order):
+create_runtime_app, liveness_endpoint, readiness_endpoint
+
+MODELS CONTEXT:
+Runtime models live in core.models. Use IMPORTS and IMPORTED MODEL
+OWNERSHIP for runtime model symbols; do not reproduce model schemas
+or import from a top-level models module.
+
+Generate the complete app.py file.
+Every owned function listed above must be implemented exactly once at module top level.
+Define every class and method listed in OWNED CLASSES REQUIRED in this file.
+For every local binding in CONCRETE IMPLEMENTATION OBLIGATIONS, inherit the declared interface and implement its complete method surface with non-placeholder bodies.
+If this is the models module, emit every enum/model in MODEL DEFINITIONS exactly once.
+If this is not the models module, do not emit Pydantic model classes, enums, create_model calls, or local model schema shadows.
+Do not invent model fields or enum values not present in the imported runtime models.
+Use only the IMPORTS listed above plus required standard library imports.
+Import from IMPORTS every symbol the module uses, including symbols used only in annotations, and annotate each parameter with the type its CONTRACTS signature declares, never object or nothing.
+Never import from a top-level models module or models.*; runtime models live in core.models only when listed in IMPORTS.
+`models.<name>` in notes is a canonical spec data address, not an importable Python module.
+When one owner module provides a function and core.models provides a DTO with a similar name, split the imports by source exactly as listed in IMPORTS.
+Construct imported runtime models only with the fields listed in IMPORTED MODEL SURFACE; models are frozen and forbid extra fields, so an invented keyword argument fails at runtime.
+Read from a model value only the fields listed for its type; never use getattr(value, name, default) to probe for a field that is not declared.
+Never assign to an attribute of a model value (models are frozen): derive a changed value with value.model_copy(update={...}) or construct a new instance.
+Define every class listed in MODULE-LOCAL EXCEPTION EXPORTS in this file.
