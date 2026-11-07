@@ -116,7 +116,8 @@ def imported_files(path: Path, root: Path, seen: set[Path] | None = None) -> lis
 
     An import resolves against the importing file's directory (where a check
     puts its own support module on ``sys.path``) and then against the Factory
-    root. The product under test (``projects/``), the standard library and
+    root; the ``__init__.py`` of every package on the way is taken too, since
+    Python runs it on that import. The product under test (``projects/``), the standard library and
     installed packages resolve to nothing here: they are what the check
     exercises, not where it asserts.
     """
@@ -128,32 +129,47 @@ def imported_files(path: Path, root: Path, seen: set[Path] | None = None) -> lis
         tree = ast.parse(path.read_text(encoding="utf-8", errors="replace"))
     except (OSError, SyntaxError, ValueError):
         return found
-    bases: list[Path] = []  # module paths without suffix, each tried as file then package
+    bases: list[tuple[Path, Path]] = []  # (the sys.path entry, the module path without suffix)
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
-            dotted = [alias.name for alias in node.names]
-            bases += [d / Path(*n.split(".")) for n in dotted for d in (path.parent, root)]
+            for name in (alias.name for alias in node.names):
+                bases += [(d, d / Path(*name.split("."))) for d in (path.parent, root)]
         elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
             module = Path(*node.module.split("."))
             for directory in (path.parent, root):
-                bases.append(directory / module)
-                bases += [directory / module / alias.name for alias in node.names]
+                bases.append((directory, directory / module))
+                bases += [(directory, directory / module / alias.name) for alias in node.names]
         elif isinstance(node, ast.ImportFrom) and node.level:
             package = path.parent
             for _ in range(node.level - 1):
                 package = package.parent
             module = package / Path(*node.module.split(".")) if node.module else package
-            bases.append(module)
-            bases += [module / alias.name for alias in node.names]
-    for base in bases:
+            bases.append((root, module))
+            bases += [(root, module / alias.name) for alias in node.names]
+
+    def take(candidate: Path) -> None:
+        candidate = candidate.resolve()
+        if (not candidate.is_file() or root not in candidate.parents or candidate in seen
+                or candidate.relative_to(root).parts[0] == UNDER_TEST):
+            return
+        seen.add(candidate)
+        found.append(candidate)
+        found.extend(imported_files(candidate, root, seen))
+
+    for entry, base in bases:
         for candidate in (base.with_suffix(".py"), base / "__init__.py"):
-            candidate = candidate.resolve()
-            if (not candidate.is_file() or root not in candidate.parents or candidate in seen
-                    or candidate.relative_to(root).parts[0] == UNDER_TEST):
+            if not candidate.resolve().is_file():
                 continue
-            seen.add(candidate)
-            found.append(candidate)
-            found += imported_files(candidate, root, seen)
+            # importing a.b.c runs a/__init__.py and a/b/__init__.py first
+            package = candidate.resolve().parent
+            entry = entry.resolve()
+            parents = []
+            while package != entry and entry in package.parents:
+                parents.append(package / "__init__.py")
+                package = package.parent
+            for init in reversed(parents):
+                take(init)
+            take(candidate)
     return found
     names: list[str] = []
     for node in ast.walk(tree):

@@ -685,7 +685,7 @@ def ask_round(case: Path, state: int, provider: Provider, runs: int = DEFAULT_RU
     layer["evidence_reopened"] = evidence_reopened
     layer["unit_evidence"] = evidence
     layer["material_scope"] = material_scope(scope, changed, evidence_reopened, layer.get("materials") or [],
-                                             referencing)
+                                             referencing, evidence_moved(previous_summaries, scope, evidence))
     reviews, topics, repeated, judged = asked(provider, state, runs, read, scope, changed, old, case, referencing,
                                               layer)
     for topic in topics:
@@ -742,28 +742,75 @@ def ask_round(case: Path, state: int, provider: Provider, runs: int = DEFAULT_RU
     return summary
 
 
+def evidence_moved(summaries: list[dict[str, Any]], scope: list[str], evidence: dict[str, str]) -> set[str]:
+    """Units whose bound checks are not the ones their last review judged.
+
+    The last round that reviewed the unit recorded another evidence digest,
+    or none at all: either way the checks have not been shown on this basis.
+    """
+    moved: set[str] = set()
+    for key in scope:
+        if key not in evidence:
+            continue
+        reviewed = [s for s in summaries if key in (s.get("scope") or [])]
+        if not reviewed or (reviewed[-1].get("unit_evidence") or {}).get(key) != evidence[key]:
+            moved.add(key)
+    return moved
+
+
 def material_scope(scope: list[str], changed: dict[str, tuple[str, list[str]]], evidence_reopened: list[str],
-                   materials: list[dict[str, Any]], referencing: dict[str, list[str]] | None = None
-                   ) -> dict[str, list[str] | None]:
+                   materials: list[dict[str, Any]], referencing: dict[str, list[str]] | None = None,
+                   moved: set[str] | None = None) -> dict[str, list[str] | None]:
     """unit -> the bindings whose check the round is given (None: all of them).
 
-    A unit never closed, or reopened because its bound checks changed, gets
-    the check of every binding. A unit reopened by an edit gets the checks of
-    the bindings whose Required tests item the edit touched; an edit elsewhere
-    (A11 edited only for its clock source) brings none. A closed unit asked
-    only because it names a changed decision gets none.
+    Evidence comes first: a unit whose bound checks changed since its last
+    review (``moved``), or reopened for them, gets every binding, whatever its
+    text did. A unit never closed gets every binding. A unit reopened by an
+    edit gets only what the edit provably concerns:
+
+    - a changed line of a Required tests item (an earlier version is matched
+      by its witness tag): that item's binding;
+    - a changed line naming formal invariants by identifier (a strengthened
+      INV-001): the bindings whose item names them;
+    - any other change (normative text, an unidentified invariant, a removed
+      line nothing can be tied to): every binding, since the edit may change
+      what the checks must show.
+
+    A closed unit asked only because it names a changed decision gets none.
     """
+    import design_decision_witness
+
+    moved = moved or set()
     selected: dict[str, list[str] | None] = {}
     for key in scope:
-        if referencing and key in referencing and key not in changed:
+        if key in moved or key in evidence_reopened:
+            selected[key] = None
+        elif referencing and key in referencing and key not in changed:
             selected[key] = []
-        elif key in evidence_reopened or key not in changed:
+        elif key not in changed:
             selected[key] = None
         else:
-            added = {line[1:].strip() for line in changed[key][0].splitlines()
-                     if line.startswith("+") and not line.startswith("+++") and line[1:].strip()}
-            selected[key] = [m["item"] for m in materials if m["decision"] == key
-                             and any(line.strip() in added for line in str(m["item"]).splitlines() if line.strip())]
+            own = [m for m in materials if m["decision"] == key]
+            item_lines = {m["item"]: {line.strip() for line in str(m["item"]).splitlines() if line.strip()}
+                          for m in own}
+            chosen: list[str] = []
+            provable = True
+            for line in changed[key][0].splitlines():
+                if not line[:1] in "+-" or line.startswith(("+++", "---")) or not line[1:].strip():
+                    continue
+                text = line[1:].strip()
+                items = [item for item, lines in item_lines.items() if text in lines]
+                tags = set(design_decision_witness.WITNESS_RE.findall(text))
+                if not items and tags:  # an earlier version of an item: its witness tag anchors it
+                    items = [m["item"] for m in own if tags & set(design_decision_witness.WITNESS_RE.findall(m["item"]))]
+                if not items:
+                    ids = set(design_decision_witness.invariant_ids(text))
+                    items = [m["item"] for m in own if ids & set(design_decision_witness.invariant_ids(m["item"]))]
+                if not items:
+                    provable = False
+                    break
+                chosen += [item for item in items if item not in chosen]
+            selected[key] = chosen if provable else None
     return selected
 
 
