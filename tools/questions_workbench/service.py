@@ -38,7 +38,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
-from . import documents, judge, prompts, units
+from . import documents, judge, layer_prompt, prompts, units
 from .provenance import QuoteProvenance
 from .provider import LATER_DIR, Provider
 
@@ -548,7 +548,13 @@ def _document_round(provider: Provider, state: int, runs: int, read: StateTexts,
     base += prompts.unit_scope(state, [(key, read.units[key]["title"]) for key in scope],
                                {key: diff for key, (diff, _) in changed.items()}, referencing)
     base += prompts.hypotheses_note(_previous_hypotheses(case, state))
-    text = prompts.ask_input(read.texts)
+    if state <= layer_prompt.LAST_STATE:
+        # the prompt of the layer, not the texts of States 0..N (owner decision 2026-11-08)
+        selection = layer_prompt.select(read.texts, state, read.units, scope, changed, referencing)
+        text = layer_prompt.render(selection, read.texts, state)
+        base += layer_prompt.note(selection, state)
+    else:
+        text = prompts.ask_input(read.texts)
     later = {p.name: p.read_text(encoding="utf-8") for _, p in documents.later_documents(case, state)}
     evidence = (layer or {}).get("unit_evidence") or {}
     precedents = [p for p in _precedents(case, state) if _evidence_holds(p, evidence, scope)]
