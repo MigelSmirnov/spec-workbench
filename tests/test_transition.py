@@ -810,3 +810,18 @@ def test_a_judgement_on_old_evidence_is_no_precedent_after_the_check_changes(tmp
     judgement = summary["topics"][0]["judgement"]
     assert judgement["verified"] is False and judgement["blocking"] is True
     assert summary["blocked_units"] == ["A01"]
+
+
+def test_a_v5_clock_is_read_by_its_wall_operation_and_handed_to_its_dependants(tmp_path):
+    # system_clock_backend/v5 (KG-003): the wall operation is wall_clock_function
+    import design_closure_gaps
+
+    case = _clock_case(tmp_path)
+    v5 = {**V4_CLOCK, "backend_ir": {**V4_CLOCK["backend_ir"], "schema_version": 5,
+                                     "backend": {"emitter": "python_host_naive_utc_and_elapsed_clock_v1"},
+                                     "wiring": {"module": "clock", "wall_clock_function": "utc_now",
+                                                "elapsed_clock_function": "monotonic_seconds"}}}
+    _write(case / "70_system_clock_closure.json", v5)
+    assert design_closure_gaps.declared_clock_function(case) == ("clock", "utc_now")
+    assert design_closure_gaps.clock_consumers(case) == {"things"}
+    assert [f["contract"] for f in transition.run_check(case, "time_source")["findings"]] == ["record_other"]
