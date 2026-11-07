@@ -417,8 +417,10 @@ def ambient_time_findings(models: dict[str, Any], contracts: dict[str, Any],
             continue
         if _module_of(scope, func_module) in clocked:
             continue
-        if through is not None and through(scope, now=True):
-            continue
+        if through is not None:
+            wanted, covered = through(scope, now=True)
+            if wanted <= set(covered):
+                continue
         findings.append({
             "code": "ambient_time_note", "contract": scope, "phrase": phrase.group(0),
             "message": (f"{scope or 'unscoped note'}: note requires '{phrase.group(0)}' but the contract has no "
@@ -449,14 +451,25 @@ def fresh_timestamp_findings(models: dict[str, Any], contracts: dict[str, Any],
         module = impacts[function].get("module") or _module_of(function, func_module)
         if module in clocked:
             continue
-        if through is not None and through(function):
-            continue
+        supplied: dict[str, str] = {}
+        if through is not None:
+            wanted, supplied = through(function)
+            if wanted and wanted <= set(supplied):
+                continue
+        open_fields = sorted(f or "datetime" for f in (wanted - set(supplied))) if through is not None else []
         findings.append({
             "code": "fresh_timestamp_without_source", "contract": function,
-            "message": (f"{function}: public mutating operation returns datetime field(s) while its inputs carry "
-                        f"none, module {module} retains no clock port, and no function it calls supplies the "
-                        "time; name the time source — a datetime parameter, a clock dependency in __init__, a "
-                        "module-level clock it depends on, or the call to an operation that has one"),
+            **({"unsupplied": open_fields, "supplied": {f or "datetime": s for f, s in sorted(supplied.items())}}
+               if supplied else {}),
+            "message": (f"{function}: public mutating operation returns datetime field(s) "
+                        + (f"{', '.join(open_fields)} " if supplied else "")
+                        + f"while its inputs carry none, module {module} retains no clock port, and "
+                        + ("no function it calls supplies the time"
+                           if not supplied else
+                           "its calls supply only " + ", ".join(f"{f or 'datetime'} ({s})"
+                                                              for f, s in sorted(supplied.items())))
+                        + "; name the time source — a datetime parameter, a clock dependency in __init__, a "
+                        "module-level clock it depends on, or the call to an operation that returns it"),
         })
     return findings
 
@@ -501,46 +514,53 @@ def datetime_fields(type_str: object, models: dict[str, Any], seen: set[str] | N
     return found
 
 
-def source_through_calls(function: str, edges: dict[str, set[str]], func_module: dict[str, str],
-                         clocked: set[str], contracts: dict[str, Any], models: dict[str, Any],
-                         clock: tuple[str, str] | None = None,
-                         producers: set[str] = frozenset(), now: bool = False) -> str | None:
-    """The first function ``function`` reaches through obliged calls that supplies a timestamp.
+def covered_timestamps(function: str, wanted: set[str], edges: dict[str, set[str]],
+                       func_module: dict[str, str], clocked: set[str], contracts: dict[str, Any],
+                       models: dict[str, Any], clock: tuple[str, str] | None = None,
+                       producers: set[str] = frozenset(),
+                       _stack: frozenset[str] = frozenset()) -> dict[str, str]:
+    """Which of the ``wanted`` datetime fields of ``function`` a call supplies: field -> source.
 
-    The path runs through contracted functions only, never through a class.
-    It supplies one when it is the declared clock function, or when it produces
-    time (``producers``: a mutating public operation, or one whose note needs
-    the current time), its module has a time source, and it returns a datetime
-    field of the same name as one ``function`` returns — the timestamp travels
-    back through the call (``expires_at`` of the grant becomes ``expires_at``
-    of the view). A read that returns stored timestamps is not a source of a
-    fresh one, and an unrelated timestamp (the audit's ``occurred_at``) is not
-    the operation's. A function that returns no timestamp (a note that needs
-    the current time, ``now``) is supplied only by the clock function itself.
+    A value travels back only through what a call returns. ``function``'s
+    obliged calls (notes, deterministic backends; contracted functions only,
+    never a class) supply a field when:
+
+    - the call is the clock function itself: ``function`` reads the current
+      time and makes every field it wants from it;
+    - the callee returns a datetime field of that name and either makes time
+      (``producers``: a mutating public operation or one whose note needs the
+      current time) in a module with a source, or is itself supplied with that
+      field by its own calls.
+
+    A call that returns none of the wanted fields carries nothing back,
+    whatever it does inside (a validation returning ``bool`` that reads the
+    clock gives its caller no timestamp). A read returning stored timestamps
+    makes no fresh one. Each field is judged on its own: a callee supplying
+    ``expires_at`` leaves ``recorded_at`` to its own source. ``""`` stands for
+    a bare datetime (a note that needs the current time wants that).
     """
-    wanted = set() if now else datetime_fields(str(contracts.get(function, "")).partition("->")[2], models)
-    seen = {function}
-    frontier = [function]
-    while frontier:
-        current = frontier.pop(0)
-        for callee in sorted(edges.get(current, ())):
-            if callee in seen:
-                continue
-            seen.add(callee)
-            # Only a call of a contracted function carries a value back. A class
-            # name collects the notes of all its methods (flow reachability may
-            # over-approximate through it; a time source may not).
-            if callee in models or callee not in contracts:
-                if not (clock is not None and callee == clock[1]):
-                    continue
-            if clock is not None and callee == clock[1]:
-                return callee
-            returns = str(contracts.get(callee, "")).partition("->")[2]
-            if (callee in producers and _module_of(callee, func_module) in clocked
-                    and wanted & datetime_fields(returns, models)):
-                return callee
-            frontier.append(callee)
-    return None
+    covered: dict[str, str] = {}
+    if not wanted:
+        return covered
+    for callee in sorted(edges.get(function, ())):
+        if clock is not None and callee == clock[1]:
+            for field in wanted:
+                covered.setdefault(field, callee)
+            continue
+        if callee == function or callee in _stack or callee in models or callee not in contracts:
+            continue
+        carried = wanted & datetime_fields(str(contracts.get(callee, "")).partition("->")[2], models)
+        if not carried:
+            continue
+        if callee in producers and _module_of(callee, func_module) in clocked:
+            for field in carried:
+                covered.setdefault(field, callee)
+            continue
+        deeper = covered_timestamps(callee, carried, edges, func_module, clocked, contracts, models, clock,
+                                    producers, _stack | {function})
+        for field, source in deeper.items():
+            covered.setdefault(field, source)
+    return covered
 
 
 def time_producers(case: Path, spec: dict[str, Any] | None, notes: list[Any] | None = None) -> set[str]:
@@ -564,15 +584,19 @@ def time_producers(case: Path, spec: dict[str, Any] | None, notes: list[Any] | N
 def calls_supplying_time(case: Path, spec: dict[str, Any] | None, models: dict[str, Any],
                          contracts: dict[str, Any], func_module: dict[str, str], sources: set[str],
                          notes: list[Any] | None = None):
-    """function -> the callee that supplies its time (``source_through_calls``), or None."""
+    """function -> (the datetime fields it must supply, those its calls supply: field -> source).
+
+    ``now=True`` asks for the current time itself (a note that needs it).
+    """
     clocked = modules_with_clock(models, contracts, func_module) | set(sources)
     edges = call_edges(case, spec, func_module, contracts, notes)
     clock = declared_clock_function(case, spec)
     producers = time_producers(case, spec, notes)
 
-    def through(function: str, now: bool = False) -> str | None:
-        return source_through_calls(function, edges, func_module, clocked, contracts, models, clock, producers,
-                                    now)
+    def through(function: str, now: bool = False) -> tuple[set[str], dict[str, str]]:
+        wanted = {""} if now else datetime_fields(str(contracts.get(function, "")).partition("->")[2], models)
+        return wanted, covered_timestamps(function, wanted, edges, func_module, clocked, contracts, models,
+                                          clock, producers)
 
     return through
 

@@ -506,7 +506,7 @@ def test_an_endpoint_has_the_time_its_called_operation_computes(tmp_path):
         {"enter_thing": "(name: str) -> Thing", "record_thing": "(name: str) -> Thing"},
         {"enter_thing": "api", "record_thing": "things"}, {"things"},
         ["enter_thing: MUST call record_thing."])
-    assert through("enter_thing") == "record_thing"
+    assert through("enter_thing") == ({"created_at"}, {"created_at": "record_thing"})
 
 
 def test_an_endpoint_that_calls_nothing_with_a_source_has_none(tmp_path):
@@ -550,6 +550,57 @@ def test_a_note_that_needs_now_is_not_satisfied_by_a_callee_that_makes_a_timesta
         tmp_path, "enter_thing: [OBSERVABLE_OUTCOME] MUST compare the current time with the deadline, "
                   "then pass name to record_thing.\n")
     assert ("ambient_time_note", "enter_thing") in _time_findings(case)
+
+
+def test_a_call_that_returns_no_timestamp_carries_none_back_even_if_it_reads_the_clock(tmp_path):
+    # review r4503882890: validate_access() -> bool reads utc_now to check a
+    # session's expiry; enter_thing gets no date for its new Thing from it
+    case = _delegating_case(
+        tmp_path, "enter_thing: [BEHAVIOR] MUST check the caller with validate_access before building the Thing.\n"
+                  "validate_access: [BEHAVIOR] MUST compare the session expiry with utc_now.\n",
+        {"validate_access": ("api", "(name: str) -> bool")})
+    assert ("fresh_timestamp_without_source", "enter_thing") in _time_findings(case)
+    for returns in ("None", "bool | None"):
+        case = _delegating_case(
+            tmp_path / returns.replace(" ", ""),
+            "enter_thing: [BEHAVIOR] MUST call validate_access first.\n"
+            "validate_access: [BEHAVIOR] MUST read utc_now to check the deadline.\n",
+            {"validate_access": ("api", f"(name: str) -> {returns}")})
+        assert ("fresh_timestamp_without_source", "enter_thing") in _time_findings(case)
+
+
+def test_a_note_that_needs_now_gets_none_from_a_validation_that_reads_the_clock(tmp_path):
+    case = _delegating_case(
+        tmp_path, "enter_thing: [OBSERVABLE_OUTCOME] MUST compare the current time with the deadline "
+                  "after validate_access.\n"
+                  "validate_access: [BEHAVIOR] MUST read utc_now to check the session.\n",
+        {"validate_access": ("api", "(name: str) -> bool")})
+    assert ("ambient_time_note", "enter_thing") in _time_findings(case)
+
+
+def _two_dates_case(tmp_path: Path, notes: str) -> Path:
+    case = _delegating_case(tmp_path, notes, {
+        "enter_thing": ("api", "(name: str) -> Entry"),
+        "enter_access": ("things", "(name: str) -> Grant"),
+        "record_entry": ("things", "(name: str) -> Mark")})
+    _closure(case, {"Thing": {"identity": "entity", "fields": {"created_at": "datetime"}},
+                    "Entry": {"identity": "value", "fields": {"expires_at": "datetime", "recorded_at": "datetime"}},
+                    "Grant": {"identity": "value", "fields": {"expires_at": "datetime"}},
+                    "Mark": {"identity": "entity", "fields": {"recorded_at": "datetime"}}})
+    _write(case / "50_public_apis.md", API_DELEGATES
+           + "\n## `public_op:things.enter_access`\n\n### State impact\n\nWrites one Grant.\n"
+           + "\n## `public_op:things.record_entry`\n\n### State impact\n\nWrites one Mark.\n")
+    return case
+
+
+def test_each_wanted_date_needs_its_own_source(tmp_path):
+    # review r4503882893: Entry carries expires_at and recorded_at; enter_access supplies only expires_at
+    one = _two_dates_case(tmp_path / "one", "enter_thing: [BEHAVIOR] MUST obtain the grant from enter_access.\n")
+    finding = next(f for f in transition.run_check(one, "time_source")["findings"] if f["contract"] == "enter_thing")
+    assert finding["unsupplied"] == ["recorded_at"] and finding["supplied"] == {"expires_at": "enter_access"}
+    both = _two_dates_case(tmp_path / "both", "enter_thing: [BEHAVIOR] MUST obtain the grant from enter_access "
+                                              "and the mark from record_entry.\n")
+    assert ("fresh_timestamp_without_source", "enter_thing") not in _time_findings(both)
 
 
 def test_the_source_is_found_through_a_chain_of_calls(tmp_path):
