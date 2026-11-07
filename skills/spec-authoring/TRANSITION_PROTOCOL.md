@@ -85,6 +85,25 @@ consumers are the modules that depend on it (imports, or State 3 `Knows`
 before imports are decided). Do not replace the accepted behaviour with a
 clock port to satisfy the check (KG-002, closed by that form).
 
+An operation that does not read the clock may return a timestamp its callee
+made: the viewer entry endpoint returns the session whose `expires_at` the
+access operation computed. Each datetime field it returns is judged
+on its own, through the calls the design obliges (a note naming the callee,
+or a call a deterministic backend emits — the edges of flow reachability,
+contracted functions only, never a class). A field is supplied when the
+operation calls the clock function itself, or when a callee returns a field
+of that name and either makes time (a mutating public operation, or one whose
+note needs the current time) in a module with a source, or is itself supplied
+with it. A value travels back only through what a call returns: a validation
+returning `bool` that reads the clock supplies nothing, a read returning a
+stored timestamp makes no fresh one, and a callee making another timestamp
+(the audit's `occurred_at`) is not this one's source. A field no call supplies
+stays open; a note that needs the current time itself is satisfied only by a
+call that returns it (the clock, or a function returning bare `datetime`).
+Delegation the names cannot show is a question for the round, not a wider
+match. Do not import
+the clock into a module that does not read it to satisfy the check.
+
 ### Invariant evidence
 
 Three things share the word "witness" and are kept apart:

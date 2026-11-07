@@ -336,8 +336,11 @@ def time_coverage(case: Path, spec: dict[str, Any] | None) -> dict[str, Any]:
     impacts = design_closure_gaps.parse_state_impacts(case)
     required = (design_closure_gaps.ambient_time_findings(models, contracts, owners, spec.get("notes") or [])
                 + design_closure_gaps.fresh_timestamp_findings(models, contracts, owners, impacts))
-    uncovered = (design_closure_gaps.ambient_time_findings(models, contracts, owners, spec.get("notes") or [], wall_sources)
-                 + design_closure_gaps.fresh_timestamp_findings(models, contracts, owners, impacts, wall_sources))
+    through = design_closure_gaps.calls_supplying_time(case, spec, models, contracts, owners, wall_sources)
+    uncovered = (design_closure_gaps.ambient_time_findings(models, contracts, owners, spec.get("notes") or [],
+                                                           wall_sources, through)
+                 + design_closure_gaps.fresh_timestamp_findings(models, contracts, owners, impacts, wall_sources,
+                                                                through))
     wall = {
         "outcome": "open" if uncovered else "closed",
         "requirements": [{"scope": f["contract"], "module": module_of(f["contract"]), "evidence": f["code"]}
