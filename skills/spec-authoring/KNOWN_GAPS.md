@@ -44,3 +44,26 @@ declaring the v4 backend and the dependency of its consumers; the accepted
 semantics of A28 (one reading per operation, its instant reused for every write,
 the audit writer's own reading) are the design's and the backend does not change
 them. The client-portal case itself is not changed by this record.
+
+## KG-003 — No form for naive UTC instants together with an elapsed-time reading (closed by `system_clock_backend/v5`)
+
+Recorded 2026-11-07 (issue #147, comment of 15:23; client-portal at `8fe9b865`,
+Factory at `29550bfd`). `system_clock_backend/v4` closed KG-002 for the wall
+clock, but client-portal also measures elapsed time (`transport_guard`,
+`time.monotonic`, the viewer-entry rate-limit window). With v4 both policies
+failed, each in a different check:
+
+| policy | Factory `validate_spec` | Factory time-source gate on the live module |
+|---|---|---|
+| no `elapsed_time` | pass | BLOCK `undeclared_elapsed_clock_access` (only at Route B) |
+| `elapsed_time` held by `transport_guard` | BLOCK `local_implementation_requires_deterministic_backend` (`elapsed_clock_authority`) | pass |
+
+Closed by SPEC_STANDARD §6.9 version 5 (`python_host_naive_utc_and_elapsed_clock_v1`):
+v4's naive UTC wall-clock operation and one elapsed operation returning the raw
+sample of `time.monotonic` (float seconds) or `time.monotonic_ns` (int ns) in the
+same module, the only reader of both host clocks. v4 is unchanged. Both policies
+above are Factory regressions (code-factory `test_generate_system_clock_draft.py`).
+The case itself is not changed by this record; it reaches the form by declaring
+the v5 backend and the dependencies of its consumers. The first policy is also
+why the Workbench's own time check cannot stand in for the Factory gate on
+code: the revision diagnosis of #147 (second direction) shows the two results apart.
