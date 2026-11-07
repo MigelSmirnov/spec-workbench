@@ -1,0 +1,106 @@
+{
+ "open_points": [
+  {
+   "unit": "40_flows.md:`flow:start_service_and_answer_health`",
+   "subject": "service process startup and network binding",
+   "kind": "missing capability",
+   "text": "“The deployment process starts the service” and “A running service bound to its trusted hosts and origins. Produced by `module:runtime`.”",
+   "question": "What operation starts the HTTP server and binds the runtime application, and which module or external deployment component owns it?",
+   "options": [
+    "An external deployment/server process binds and serves the application returned by `runtime.create_runtime_app`.",
+    "`module:runtime` owns an additional serve/bind capability."
+   ],
+   "default_guess": "Treat binding and serving as an external deployment responsibility that invokes `runtime.create_runtime_app`.",
+   "witness": {
+    "initial": "Valid runtime configuration exists and no service process is running.",
+    "events": [
+     "The deployment process invokes the only named runtime capability, `runtime.create_runtime_app`.",
+     "The capability returns the composed application."
+    ],
+    "outcomes": [
+     "The deployment process separately gives the application to an ASGI server, which binds a socket and serves requests.",
+     "`runtime.create_runtime_app` itself starts or otherwise owns the listening server."
+    ],
+    "observer": "The deployment operator and process supervisor see whether invoking the named capability returns or starts a listening service."
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:start_service_and_answer_health`",
+   "subject": "liveness and readiness operations",
+   "kind": "unnamed capability",
+   "text": "“Liveness answers `ok` without reading anything. Readiness opens one `module:portal_store` transaction and rolls it back” while `module:runtime` exposes only the candidate capability `create_runtime_app`.",
+   "question": "Which named runtime capabilities or handlers own the liveness and readiness operations and their `HealthStatus` production?",
+   "options": [
+    "`module:runtime` has separate liveness and readiness capabilities called by its health handlers.",
+    "The health handlers are private behavior created inside `runtime.create_runtime_app`, with no separately named capability."
+   ],
+   "default_guess": "Implement private liveness and readiness handlers inside `runtime.create_runtime_app`.",
+   "witness": {
+    "initial": "The runtime application has been composed successfully.",
+    "events": [
+     "A monitor sends a liveness request.",
+     "A monitor sends a readiness request."
+    ],
+    "outcomes": [
+     "The router calls separately named runtime health capabilities.",
+     "Handlers closed inside `create_runtime_app` produce the answers directly."
+    ],
+    "observer": "A State 5 author deciding the runtime public surface and a code author wiring the health routes see different required operations."
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:start_service_and_answer_health`",
+   "subject": "readiness storage-failure response",
+   "kind": "unstated failure outcome",
+   "text": "“readiness fails with the storage failure of `module:portal_store`; the answer discloses no path, credential, schema, dependency version, configuration or exception”",
+   "question": "What observable health response is returned when readiness encounters the storage failure?",
+   "options": [
+    "Return the general persistence-failure response: HTTP 500 with an empty body.",
+    "Return a non-ready `HealthStatus` with a non-success status such as HTTP 503.",
+    "Propagate a sanitized runtime error whose exact status and body are chosen later."
+   ],
+   "default_guess": "Return HTTP 500 with an empty body, following the flow-wide persistence-error policy.",
+   "witness": {
+    "initial": "The service is running, but its database cannot be opened.",
+    "events": [
+     "A monitor requests readiness.",
+     "`module:runtime` asks `module:portal_store` to begin a transaction.",
+     "`module:portal_store` raises its storage failure."
+    ],
+    "outcomes": [
+     "The monitor receives HTTP 500 with an empty body under the general persistence-error mapping.",
+     "The monitor receives an explicit non-ready health response, for example HTTP 503 with a safe `HealthStatus` body."
+    ],
+    "observer": "The monitor, proxy, and deployment health controller see different status codes and response bodies."
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:start_service_and_answer_health`",
+   "subject": "readiness success condition",
+   "kind": "contradictory outcome",
+   "text": "The outcome promises “`HealthStatus` `ok` … for readiness when the database opens,” but step 4 says every readiness transaction invokes all repository schema-creation functions and “a failure … is the storage failure.”",
+   "question": "Does readiness report `ok` merely when the database connection opens, or only after every create-on-begin schema operation also succeeds?",
+   "options": [
+    "Opening the database is sufficient; schema-creation failures do not affect readiness.",
+    "Readiness is `ok` only if the database opens and all create-on-begin schema calls succeed."
+   ],
+   "default_guess": "Require the database open and every create-on-begin schema call to succeed.",
+   "witness": {
+    "initial": "The configured SQLite database can be opened, but it is read-only and one or more required tables are absent.",
+    "events": [
+     "A monitor requests readiness.",
+     "`module:portal_store` opens the database successfully.",
+     "`PortalStore.begin` attempts to create the missing repository schemas and SQLite refuses the write."
+    ],
+    "outcomes": [
+     "The readiness outcome is `ok` because the database opened, as the Outcomes passage states.",
+     "Readiness fails with a storage failure because schema creation failed, as step 4 states."
+    ],
+    "observer": "The readiness monitor sees either a healthy or unhealthy service for the same database state."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"40_flows.md:`flow:start_service_and_answer_health`\",\"subject\":\"service process startup and network binding\",\"kind\":\"missing capability\",\"text\":\"“The deployment process starts the service” and “A running service bound to its trusted hosts and origins. Produced by `module:runtime`.”\",\"question\":\"What operation starts the HTTP server and binds the runtime application, and which module or external deployment component owns it?\",\"options\":[\"An external deployment/server process binds and serves the application returned by `runtime.create_runtime_app`.\",\"`module:runtime` owns an additional serve/bind capability.\"],\"default_guess\":\"Treat binding and serving as an external deployment responsibility that invokes `runtime.create_runtime_app`.\",\"witness\":{\"initial\":\"Valid runtime configuration exists and no service process is running.\",\"events\":[\"The deployment process invokes the only named runtime capability, `runtime.create_runtime_app`.\",\"The capability returns the composed application.\"],\"outcomes\":[\"The deployment process separately gives the application to an ASGI server, which binds a socket and serves requests.\",\"`runtime.create_runtime_app` itself starts or otherwise owns the listening server.\"],\"observer\":\"The deployment operator and process supervisor see whether invoking the named capability returns or starts a listening service.\"}},{\"unit\":\"40_flows.md:`flow:start_service_and_answer_health`\",\"subject\":\"liveness and readiness operations\",\"kind\":\"unnamed capability\",\"text\":\"“Liveness answers `ok` without reading anything. Readiness opens one `module:portal_store` transaction and rolls it back” while `module:runtime` exposes only the candidate capability `create_runtime_app`.\",\"question\":\"Which named runtime capabilities or handlers own the liveness and readiness operations and their `HealthStatus` production?\",\"options\":[\"`module:runtime` has separate liveness and readiness capabilities called by its health handlers.\",\"The health handlers are private behavior created inside `runtime.create_runtime_app`, with no separately named capability.\"],\"default_guess\":\"Implement private liveness and readiness handlers inside `runtime.create_runtime_app`.\",\"witness\":{\"initial\":\"The runtime application has been composed successfully.\",\"events\":[\"A monitor sends a liveness request.\",\"A monitor sends a readiness request.\"],\"outcomes\":[\"The router calls separately named runtime health capabilities.\",\"Handlers closed inside `create_runtime_app` produce the answers directly.\"],\"observer\":\"A State 5 author deciding the runtime public surface and a code author wiring the health routes see different required operations.\"}},{\"unit\":\"40_flows.md:`flow:start_service_and_answer_health`\",\"subject\":\"readiness storage-failure response\",\"kind\":\"unstated failure outcome\",\"text\":\"“readiness fails with the storage failure of `module:portal_store`; the answer discloses no path, credential, schema, dependency version, configuration or exception”\",\"question\":\"What observable health response is returned when readiness encounters the storage failure?\",\"options\":[\"Return the general persistence-failure response: HTTP 500 with an empty body.\",\"Return a non-ready `HealthStatus` with a non-success status such as HTTP 503.\",\"Propagate a sanitized runtime error whose exact status and body are chosen later.\"],\"default_guess\":\"Return HTTP 500 with an empty body, following the flow-wide persistence-error policy.\",\"witness\":{\"initial\":\"The service is running, but its database cannot be opened.\",\"events\":[\"A monitor requests readiness.\",\"`module:runtime` asks `module:portal_store` to begin a transaction.\",\"`module:portal_store` raises its storage failure.\"],\"outcomes\":[\"The monitor receives HTTP 500 with an empty body under the general persistence-error mapping.\",\"The monitor receives an explicit non-ready health response, for example HTTP 503 with a safe `HealthStatus` body.\"],\"observer\":\"The monitor, proxy, and deployment health controller see different status codes and response bodies.\"}},{\"unit\":\"40_flows.md:`flow:start_service_and_answer_health`\",\"subject\":\"readiness success condition\",\"kind\":\"contradictory outcome\",\"text\":\"The outcome promises “`HealthStatus` `ok` … for readiness when the database opens,” but step 4 says every readiness transaction invokes all repository schema-creation functions and “a failure … is the storage failure.”\",\"question\":\"Does readiness report `ok` merely when the database connection opens, or only after every create-on-begin schema operation also succeeds?\",\"options\":[\"Opening the database is sufficient; schema-creation failures do not affect readiness.\",\"Readiness is `ok` only if the database opens and all create-on-begin schema calls succeed.\"],\"default_guess\":\"Require the database open and every create-on-begin schema call to succeed.\",\"witness\":{\"initial\":\"The configured SQLite database can be opened, but it is read-only and one or more required tables are absent.\",\"events\":[\"A monitor requests readiness.\",\"`module:portal_store` opens the database successfully.\",\"`PortalStore.begin` attempts to create the missing repository schemas and SQLite refuses the write.\"],\"outcomes\":[\"The readiness outcome is `ok` because the database opened, as the Outcomes passage states.\",\"Readiness fails with a storage failure because schema creation failed, as step 4 states.\"],\"observer\":\"The readiness monitor sees either a healthy or unhealthy service for the same database state.\"}}]}",
+ "set_aside": []
+}

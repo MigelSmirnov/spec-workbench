@@ -182,7 +182,7 @@ No HTTP route reaches this flow.
 - Any staff account already exists: `BootstrapAlreadyCompletedError`, exit code 3;
   neither write persists.
 - The password is never printed, logged, audited, returned or read from
-  arguments, environment or a file (`rules.staff_bootstrap_policy`).
+  arguments, environment or a file (A29).
 
 ## `flow:staff_session_lifecycle`
 
@@ -319,7 +319,7 @@ grants or revokes one project, or revokes the viewer (R0-14).
 ### Boundary
 
 `module:viewer_access` owns viewers, credentials, grants and the revocation
-cascades of `rules.revocation_cascades`. `module:authorization_guard` decides
+cascades of the A11 table. `module:authorization_guard` decides
 access management. `module:registry_gateway` validates the project of a new
 grant. `module:credential_security` issues the link secret.
 `module:audit_writer` appends each audit.

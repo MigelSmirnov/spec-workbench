@@ -525,7 +525,7 @@ from the environment nor from a file, and never printed, logged or audited,
 except that the success message shows the normalized email to the operator
 who supplied it (Factory code `cli/staff_bootstrap.py` 33). Its
 outcome is a closed set of exit codes that deployment scripts may branch on
-(Factory `6011ac93`, `rules.staff_bootstrap_policy`).
+(Factory `6011ac93`, State 2 A29).
 
 ### R0-08 — Administrators discover the projects they grant (accepted Factory spec, 2026-08-08)
 

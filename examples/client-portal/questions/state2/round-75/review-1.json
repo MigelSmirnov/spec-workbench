@@ -1,0 +1,131 @@
+{
+ "open_points": [
+  {
+   "unit": "A29",
+   "subject": "bootstrap confirmation",
+   "kind": "undefined input and refusal condition",
+   "text": "The exit-code table names “confirmation did not match”, but no text defines what must be confirmed, how it is entered, or what equality test constitutes a match.",
+   "question": "What confirmation does the command require, and how is a match determined?",
+   "options": [
+    "The operator repeats the password and the two raw Unicode strings must be exactly equal.",
+    "The operator confirms the normalized email.",
+    "The operator enters a fixed acknowledgement phrase.",
+    "The command asks a yes/no confirmation of the proposed account."
+   ],
+   "default_guess": "Require an exact second entry of the password before validating or hashing it.",
+   "witness": {
+    "initial": "The staff table is empty.",
+    "events": [
+     "The host operator enters a valid email and password, then supplies a confirmation value that confirms the email but does not repeat the password."
+    ],
+    "outcomes": [
+     "An implementation treating confirmation as email acknowledgement creates the administrator and exits 0.",
+     "An implementation treating confirmation as password repetition refuses and exits 1."
+    ],
+    "observer": "The host operator and any deployment script branching on the exit code."
+   }
+  },
+  {
+   "unit": "A29",
+   "subject": "bootstrap input boundary",
+   "kind": "unspecified acquisition channel",
+   "text": "“The email and password are its inputs, read neither from process arguments nor from the environment nor from a file” excludes several channels but does not identify the required channel or say whether redirected standard input is accepted.",
+   "question": "Must email, password, and confirmation be read interactively from a controlling terminal, or may they be supplied through standard input; and must secret entry have terminal echo disabled?",
+   "options": [
+    "Require a controlling terminal and concealed password/confirmation prompts; reject non-interactive invocation.",
+    "Read standard input, including redirected or piped input, while never echoing values from the program.",
+    "Use a terminal when present but fall back to standard input when it is absent."
+   ],
+   "default_guess": "Require an interactive controlling terminal and use non-echoing entry for password and confirmation.",
+   "witness": {
+    "initial": "The staff table is empty and the command is launched by a deployment process with no controlling terminal.",
+    "events": [
+     "The process sends email, password, and confirmation through a pipe connected to standard input."
+    ],
+    "outcomes": [
+     "A stdin-capable implementation creates the account and exits 0.",
+     "A terminal-only implementation refuses or cannot read the inputs and exits nonzero."
+    ],
+    "observer": "The deployment process and host operator."
+   }
+  },
+  {
+   "unit": "A29",
+   "subject": "bootstrap check precedence",
+   "kind": "unspecified order of checks",
+   "text": "The policy assigns different exit codes to “confirmation did not match”, “identity input rejected”, and “bootstrap already completed”, but does not state their evaluation order when more than one condition is true or whether table emptiness is checked before credentials are solicited.",
+   "question": "Which failure wins when confirmation mismatch, invalid identity input, and an already non-empty staff table overlap, and at what point are credentials requested?",
+   "options": [
+    "Check table emptiness first; if non-empty, request no credentials and exit 3.",
+    "Collect inputs, check confirmation first, then identity policy, then table emptiness: exit 1, 2, or 3 respectively.",
+    "Collect inputs, validate identity first, then confirmation, then perform the transactional emptiness check.",
+    "Perform preliminary checks in any order, with only the transactional emptiness check authoritative against races."
+   ],
+   "default_guess": "Check for an existing account before prompting, then collect inputs, check confirmation, validate email and password, and finally repeat the authoritative emptiness check inside the write transaction.",
+   "witness": {
+    "initial": "A staff account already exists.",
+    "events": [
+     "The host operator invokes the bootstrap command and would supply an invalid email, an invalid password, and a nonmatching confirmation if prompted."
+    ],
+    "outcomes": [
+     "An existence-first implementation prompts for nothing and exits 3.",
+     "An input-first implementation solicits secrets and exits 1 or 2 before reporting that bootstrap was already completed."
+    ],
+    "observer": "The host operator and deployment script."
+   }
+  },
+  {
+   "unit": "A29",
+   "subject": "bootstrap exit-code contract",
+   "kind": "incomplete failure mapping",
+   "text": "“Exit codes are a closed external contract” lists only account created, confirmation mismatch, identity input rejected, and bootstrap already completed; it gives no outcome or exit code for input EOF/cancellation, hashing failure, database failure, audit insertion failure, configuration failure, or another unexpected exception.",
+   "question": "How must every failure outside the four listed business outcomes terminate without violating the claim that the exit-code contract is closed?",
+   "options": [
+    "Add a distinct closed exit code for operational/internal failure.",
+    "Let unexpected exceptions escape and use the platform's generic nonzero exit status, making that status part of the contract.",
+    "Map all operational failures to one of codes 1–3 and define which one.",
+    "Define the table as closed only for classified business outcomes, explicitly leaving process-level failures outside it."
+   ],
+   "default_guess": "Add a distinct operational-failure exit code, print only a secret-free generic error, and preserve transactional rollback.",
+   "witness": {
+    "initial": "The staff table is empty, and the operator supplies valid matching inputs.",
+    "events": [
+     "The account insert succeeds within the transaction.",
+     "The audit insert fails because the database reports an I/O error."
+    ],
+    "outcomes": [
+     "An implementation treats the exception as an unclassified process failure and terminates with the runtime's generic status, commonly 1.",
+     "An implementation maps the failure to an existing listed code such as 2, while the transaction rolls back."
+    ],
+    "observer": "A deployment script branching on the supposedly closed exit-code contract."
+   }
+  },
+  {
+   "unit": "A29",
+   "subject": "authorization to run the local bootstrap command",
+   "kind": "unspecified caller eligibility",
+   "text": "“The host operator runs a local administrative command” and “There is no HTTP route” do not define whether the command itself verifies any operating-system identity or terminal context, or instead relies entirely on possession of local execution and database access.",
+   "question": "Who is permitted to invoke bootstrap, and what local authorization or privilege check, if any, must precede reading credentials and opening the database?",
+   "options": [
+    "Anyone able to execute the command with access to the configured database may bootstrap; host permissions are the sole control.",
+    "Require a specified operating-system user or effective-user privilege and refuse all others.",
+    "Require invocation from a controlling terminal owned by an authorized host user."
+   ],
+   "default_guess": "Treat operating-system and database permissions as the boundary and perform no additional application-level caller check.",
+   "witness": {
+    "initial": "The deployment is empty, and an unprivileged local user can execute the CLI and reach the configured SQLite file.",
+    "events": [
+     "That user supplies a valid administrator email and password."
+    ],
+    "outcomes": [
+     "An implementation relying only on file and execution access creates the first administrator.",
+     "An implementation enforcing an OS-user or privilege check refuses before reading or persisting the identity."
+    ],
+    "observer": "The local user and the legitimate host operator who later attempts bootstrap."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A29\",\"subject\":\"bootstrap confirmation\",\"kind\":\"undefined input and refusal condition\",\"text\":\"The exit-code table names “confirmation did not match”, but no text defines what must be confirmed, how it is entered, or what equality test constitutes a match.\",\"question\":\"What confirmation does the command require, and how is a match determined?\",\"options\":[\"The operator repeats the password and the two raw Unicode strings must be exactly equal.\",\"The operator confirms the normalized email.\",\"The operator enters a fixed acknowledgement phrase.\",\"The command asks a yes/no confirmation of the proposed account.\"],\"default_guess\":\"Require an exact second entry of the password before validating or hashing it.\",\"witness\":{\"initial\":\"The staff table is empty.\",\"events\":[\"The host operator enters a valid email and password, then supplies a confirmation value that confirms the email but does not repeat the password.\"],\"outcomes\":[\"An implementation treating confirmation as email acknowledgement creates the administrator and exits 0.\",\"An implementation treating confirmation as password repetition refuses and exits 1.\"],\"observer\":\"The host operator and any deployment script branching on the exit code.\"}},{\"unit\":\"A29\",\"subject\":\"bootstrap input boundary\",\"kind\":\"unspecified acquisition channel\",\"text\":\"“The email and password are its inputs, read neither from process arguments nor from the environment nor from a file” excludes several channels but does not identify the required channel or say whether redirected standard input is accepted.\",\"question\":\"Must email, password, and confirmation be read interactively from a controlling terminal, or may they be supplied through standard input; and must secret entry have terminal echo disabled?\",\"options\":[\"Require a controlling terminal and concealed password/confirmation prompts; reject non-interactive invocation.\",\"Read standard input, including redirected or piped input, while never echoing values from the program.\",\"Use a terminal when present but fall back to standard input when it is absent.\"],\"default_guess\":\"Require an interactive controlling terminal and use non-echoing entry for password and confirmation.\",\"witness\":{\"initial\":\"The staff table is empty and the command is launched by a deployment process with no controlling terminal.\",\"events\":[\"The process sends email, password, and confirmation through a pipe connected to standard input.\"],\"outcomes\":[\"A stdin-capable implementation creates the account and exits 0.\",\"A terminal-only implementation refuses or cannot read the inputs and exits nonzero.\"],\"observer\":\"The deployment process and host operator.\"}},{\"unit\":\"A29\",\"subject\":\"bootstrap check precedence\",\"kind\":\"unspecified order of checks\",\"text\":\"The policy assigns different exit codes to “confirmation did not match”, “identity input rejected”, and “bootstrap already completed”, but does not state their evaluation order when more than one condition is true or whether table emptiness is checked before credentials are solicited.\",\"question\":\"Which failure wins when confirmation mismatch, invalid identity input, and an already non-empty staff table overlap, and at what point are credentials requested?\",\"options\":[\"Check table emptiness first; if non-empty, request no credentials and exit 3.\",\"Collect inputs, check confirmation first, then identity policy, then table emptiness: exit 1, 2, or 3 respectively.\",\"Collect inputs, validate identity first, then confirmation, then perform the transactional emptiness check.\",\"Perform preliminary checks in any order, with only the transactional emptiness check authoritative against races.\"],\"default_guess\":\"Check for an existing account before prompting, then collect inputs, check confirmation, validate email and password, and finally repeat the authoritative emptiness check inside the write transaction.\",\"witness\":{\"initial\":\"A staff account already exists.\",\"events\":[\"The host operator invokes the bootstrap command and would supply an invalid email, an invalid password, and a nonmatching confirmation if prompted.\"],\"outcomes\":[\"An existence-first implementation prompts for nothing and exits 3.\",\"An input-first implementation solicits secrets and exits 1 or 2 before reporting that bootstrap was already completed.\"],\"observer\":\"The host operator and deployment script.\"}},{\"unit\":\"A29\",\"subject\":\"bootstrap exit-code contract\",\"kind\":\"incomplete failure mapping\",\"text\":\"“Exit codes are a closed external contract” lists only account created, confirmation mismatch, identity input rejected, and bootstrap already completed; it gives no outcome or exit code for input EOF/cancellation, hashing failure, database failure, audit insertion failure, configuration failure, or another unexpected exception.\",\"question\":\"How must every failure outside the four listed business outcomes terminate without violating the claim that the exit-code contract is closed?\",\"options\":[\"Add a distinct closed exit code for operational/internal failure.\",\"Let unexpected exceptions escape and use the platform's generic nonzero exit status, making that status part of the contract.\",\"Map all operational failures to one of codes 1–3 and define which one.\",\"Define the table as closed only for classified business outcomes, explicitly leaving process-level failures outside it.\"],\"default_guess\":\"Add a distinct operational-failure exit code, print only a secret-free generic error, and preserve transactional rollback.\",\"witness\":{\"initial\":\"The staff table is empty, and the operator supplies valid matching inputs.\",\"events\":[\"The account insert succeeds within the transaction.\",\"The audit insert fails because the database reports an I/O error.\"],\"outcomes\":[\"An implementation treats the exception as an unclassified process failure and terminates with the runtime's generic status, commonly 1.\",\"An implementation maps the failure to an existing listed code such as 2, while the transaction rolls back.\"],\"observer\":\"A deployment script branching on the supposedly closed exit-code contract.\"}},{\"unit\":\"A29\",\"subject\":\"authorization to run the local bootstrap command\",\"kind\":\"unspecified caller eligibility\",\"text\":\"“The host operator runs a local administrative command” and “There is no HTTP route” do not define whether the command itself verifies any operating-system identity or terminal context, or instead relies entirely on possession of local execution and database access.\",\"question\":\"Who is permitted to invoke bootstrap, and what local authorization or privilege check, if any, must precede reading credentials and opening the database?\",\"options\":[\"Anyone able to execute the command with access to the configured database may bootstrap; host permissions are the sole control.\",\"Require a specified operating-system user or effective-user privilege and refuse all others.\",\"Require invocation from a controlling terminal owned by an authorized host user.\"],\"default_guess\":\"Treat operating-system and database permissions as the boundary and perform no additional application-level caller check.\",\"witness\":{\"initial\":\"The deployment is empty, and an unprivileged local user can execute the CLI and reach the configured SQLite file.\",\"events\":[\"That user supplies a valid administrator email and password.\"],\"outcomes\":[\"An implementation relying only on file and execution access creates the first administrator.\",\"An implementation enforcing an OS-user or privilege check refuses before reading or persisting the identity.\"],\"observer\":\"The local user and the legitimate host operator who later attempts bootstrap.\"}}]}",
+ "set_aside": []
+}

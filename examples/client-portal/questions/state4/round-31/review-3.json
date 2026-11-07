@@ -1,0 +1,97 @@
+{
+ "open_points": [
+  {
+   "unit": "40_flows.md:`flow:start_service_and_answer_health`",
+   "subject": "liveness and readiness handlers",
+   "kind": "missing capability",
+   "text": "`module:runtime` owns ... the two health answers`, but its only named capability is `capability:runtime.create_runtime_app`; no capability or concrete route is named for answering either check.",
+   "question": "Which callable operation and route answer liveness, and which callable operation and route answer readiness?",
+   "options": [
+    "`create_runtime_app` installs inline health handlers",
+    "Separate runtime liveness and readiness capabilities are exposed"
+   ],
+   "default_guess": "Have `create_runtime_app` install two inline unauthenticated health handlers."
+  },
+  {
+   "unit": "40_flows.md:`flow:start_service_and_answer_health`",
+   "subject": "readiness failure response",
+   "kind": "unstated failure outcome",
+   "text": "`readiness fails with the storage failure of module:portal_store; the answer discloses no path, credential, schema, dependency version, configuration or exception` does not state whether the HTTP answer is a non-ok `HealthStatus` or the general empty-body persistence error.",
+   "question": "What exact readiness response is returned when its database transaction cannot be opened?",
+   "options": [
+    "A non-ok `HealthStatus` response",
+    "The general persistence failure response: HTTP 500 with an empty body",
+    "A distinct unavailable readiness response"
+   ],
+   "default_guess": "Return a sanitized non-ok readiness response with a service-unavailable status.",
+   "witness": {
+    "initial": "The service is running, but its configured SQLite database cannot be opened.",
+    "events": [
+     "A monitor sends the readiness request.",
+     "`module:runtime` asks `module:portal_store` to open the readiness transaction.",
+     "`module:portal_store` reports a storage failure."
+    ],
+    "outcomes": [
+     "The monitor receives a serialized non-ok `HealthStatus`.",
+     "The monitor receives the general empty HTTP 500 persistence response."
+    ],
+    "observer": "The readiness monitor or deployment orchestrator"
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:start_service_and_answer_health`",
+   "subject": "readiness success criterion",
+   "kind": "contradictory outcome",
+   "text": "The outcome promises `HealthStatus ok ... for readiness when the database opens`, while every transaction begin must first create all missing schemas and `a failure ... is the storage failure`.",
+   "question": "If the database opens successfully but schema creation fails, is readiness `ok` because the database opened, or failed because `PortalStore.begin` did not complete?",
+   "options": [
+    "Readiness is ok once the database connection opens",
+    "Readiness is ok only after every schema creation succeeds and the transaction can be rolled back"
+   ],
+   "default_guess": "Report readiness as failed unless the complete begin-and-rollback probe succeeds.",
+   "witness": {
+    "initial": "The SQLite file can be opened, but the connection cannot create one missing table, for example because the database is read-only.",
+    "events": [
+     "A monitor asks for readiness.",
+     "`module:runtime` opens a `PortalStore` transaction.",
+     "The connection opens.",
+     "One repository schema creation fails."
+    ],
+    "outcomes": [
+     "Readiness returns `ok` because the database opened.",
+     "Readiness fails with the storage failure because transaction begin did not complete."
+    ],
+    "observer": "The readiness monitor or deployment orchestrator"
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:start_service_and_answer_health`",
+   "subject": "binary-storage environment configuration",
+   "kind": "cross-text contradiction",
+   "text": "The flow says `module:runtime_settings owns reading the environment, once` and that malformed or inconsistent binary bounds stop startup, while State 3 says `binary_storage reads BINARY_STORAGE_ROOT and BINARY_MAX_READ_BYTES at each binary read, each refusing that call when its value is missing or unusable`.",
+   "question": "Are binary-storage environment values snapshotted and validated only at startup, or reread and revalidated for every binary request?",
+   "options": [
+    "Read once at startup through `RuntimeSettings`; later environment changes have no effect",
+    "Read again for every binary operation; later removal or change affects the running service",
+    "Validate at startup and also reread on every binary operation"
+   ],
+   "default_guess": "Validate and snapshot the values at startup, then pass the immutable settings to binary storage.",
+   "witness": {
+    "initial": "The service starts with valid `BINARY_STORAGE_ROOT` and `BINARY_MAX_READ_BYTES` values.",
+    "events": [
+     "`runtime_settings` loads and validates the environment.",
+     "The deployment process changes or removes one binary environment variable without restarting the service.",
+     "An authorized caller requests a stored binary."
+    ],
+    "outcomes": [
+     "The request uses the startup snapshot and proceeds under the original values.",
+     "`binary_storage` rereads the environment and refuses the request or uses the changed value."
+    ],
+    "observer": "The caller requesting the binary and the service operator"
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"40_flows.md:`flow:start_service_and_answer_health`\",\"subject\":\"liveness and readiness handlers\",\"kind\":\"missing capability\",\"text\":\"`module:runtime` owns ... the two health answers`, but its only named capability is `capability:runtime.create_runtime_app`; no capability or concrete route is named for answering either check.\",\"question\":\"Which callable operation and route answer liveness, and which callable operation and route answer readiness?\",\"options\":[\"`create_runtime_app` installs inline health handlers\",\"Separate runtime liveness and readiness capabilities are exposed\"],\"default_guess\":\"Have `create_runtime_app` install two inline unauthenticated health handlers.\"},{\"unit\":\"40_flows.md:`flow:start_service_and_answer_health`\",\"subject\":\"readiness failure response\",\"kind\":\"unstated failure outcome\",\"text\":\"`readiness fails with the storage failure of module:portal_store; the answer discloses no path, credential, schema, dependency version, configuration or exception` does not state whether the HTTP answer is a non-ok `HealthStatus` or the general empty-body persistence error.\",\"question\":\"What exact readiness response is returned when its database transaction cannot be opened?\",\"options\":[\"A non-ok `HealthStatus` response\",\"The general persistence failure response: HTTP 500 with an empty body\",\"A distinct unavailable readiness response\"],\"default_guess\":\"Return a sanitized non-ok readiness response with a service-unavailable status.\",\"witness\":{\"initial\":\"The service is running, but its configured SQLite database cannot be opened.\",\"events\":[\"A monitor sends the readiness request.\",\"`module:runtime` asks `module:portal_store` to open the readiness transaction.\",\"`module:portal_store` reports a storage failure.\"],\"outcomes\":[\"The monitor receives a serialized non-ok `HealthStatus`.\",\"The monitor receives the general empty HTTP 500 persistence response.\"],\"observer\":\"The readiness monitor or deployment orchestrator\"}},{\"unit\":\"40_flows.md:`flow:start_service_and_answer_health`\",\"subject\":\"readiness success criterion\",\"kind\":\"contradictory outcome\",\"text\":\"The outcome promises `HealthStatus ok ... for readiness when the database opens`, while every transaction begin must first create all missing schemas and `a failure ... is the storage failure`.\",\"question\":\"If the database opens successfully but schema creation fails, is readiness `ok` because the database opened, or failed because `PortalStore.begin` did not complete?\",\"options\":[\"Readiness is ok once the database connection opens\",\"Readiness is ok only after every schema creation succeeds and the transaction can be rolled back\"],\"default_guess\":\"Report readiness as failed unless the complete begin-and-rollback probe succeeds.\",\"witness\":{\"initial\":\"The SQLite file can be opened, but the connection cannot create one missing table, for example because the database is read-only.\",\"events\":[\"A monitor asks for readiness.\",\"`module:runtime` opens a `PortalStore` transaction.\",\"The connection opens.\",\"One repository schema creation fails.\"],\"outcomes\":[\"Readiness returns `ok` because the database opened.\",\"Readiness fails with the storage failure because transaction begin did not complete.\"],\"observer\":\"The readiness monitor or deployment orchestrator\"}},{\"unit\":\"40_flows.md:`flow:start_service_and_answer_health`\",\"subject\":\"binary-storage environment configuration\",\"kind\":\"cross-text contradiction\",\"text\":\"The flow says `module:runtime_settings owns reading the environment, once` and that malformed or inconsistent binary bounds stop startup, while State 3 says `binary_storage reads BINARY_STORAGE_ROOT and BINARY_MAX_READ_BYTES at each binary read, each refusing that call when its value is missing or unusable`.\",\"question\":\"Are binary-storage environment values snapshotted and validated only at startup, or reread and revalidated for every binary request?\",\"options\":[\"Read once at startup through `RuntimeSettings`; later environment changes have no effect\",\"Read again for every binary operation; later removal or change affects the running service\",\"Validate at startup and also reread on every binary operation\"],\"default_guess\":\"Validate and snapshot the values at startup, then pass the immutable settings to binary storage.\",\"witness\":{\"initial\":\"The service starts with valid `BINARY_STORAGE_ROOT` and `BINARY_MAX_READ_BYTES` values.\",\"events\":[\"`runtime_settings` loads and validates the environment.\",\"The deployment process changes or removes one binary environment variable without restarting the service.\",\"An authorized caller requests a stored binary.\"],\"outcomes\":[\"The request uses the startup snapshot and proceeds under the original values.\",\"`binary_storage` rereads the environment and refuses the request or uses the changed value.\"],\"observer\":\"The caller requesting the binary and the service operator\"}}]}",
+ "set_aside": []
+}

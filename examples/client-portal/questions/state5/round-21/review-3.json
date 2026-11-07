@@ -1,0 +1,91 @@
+{
+ "open_points": [
+  {
+   "subject": "runtime configuration of session lifetimes, entropy, timeouts and limits",
+   "kind": "contradictory configurability",
+   "text": "A30 says “Runtime knobs with confirmed defaults (deployment values may differ)”, while `runtime.create_runtime_app` says “every A30 value without an `_env_name` ... is fixed in the use cases' source, so a deployment cannot change it”.",
+   "question": "Are A30 values such as staff/viewer session TTL and credential entropy deployment-configurable, or source-fixed constants?",
+   "options": [
+    "Treat every A30 value as a deployment knob and define how it reaches its consumer.",
+    "Treat values without an `_env_name` as source-fixed and narrow A30 accordingly."
+   ],
+   "default_guess": "Follow the accepted running behavior stated in State 5: values without an `_env_name` are source-fixed.",
+   "witness": {
+    "initial": "A deployment requires staff sessions to expire after 2 hours instead of the stated 12-hour default.",
+    "events": [
+     "The deployment operator supplies a changed session-TTL configuration and starts the service.",
+     "A staff member logs in."
+    ],
+    "outcomes": [
+     "The configured value is honored and the session expires after 2 hours because A30 calls it a deployment knob.",
+     "The value cannot be configured and the session expires after 12 hours because State 5 fixes it in source."
+    ],
+    "observer": "The deployment operator and signed-in staff member"
+   },
+   "unit": "context"
+  },
+  {
+   "subject": "HTTP API mount and canonical public path",
+   "kind": "contradictory routing boundary",
+   "text": "A25 says “The public API lives under `/api`, stripped by the deployment proxy”, while `runtime.create_runtime_app` mounts the inner application “at `/api` and then at `/`” and states that `/api/api/…` behind the stripping proxy reaches the same route.",
+   "question": "Must each API operation have only the canonical external `/api/...` path, or must the service deliberately accept both root-mounted and `/api`-mounted forms, including externally repeated `/api/api/...` paths through the proxy?",
+   "options": [
+    "Expose only the canonical `/api/...` external namespace and reject repeated-prefix paths.",
+    "Keep both mounts and accept both path forms as State 5 describes."
+   ],
+   "default_guess": "Follow State 5 and retain both mounts because it explicitly describes the running service behavior.",
+   "witness": {
+    "initial": "The service is behind the proxy that strips one leading `/api` prefix.",
+    "events": [
+     "A client requests `/api/api/auth/viewer/session` with a valid viewer cookie."
+    ],
+    "outcomes": [
+     "After one prefix is stripped, `/api/auth/viewer/session` reaches the duplicate `/api` mount and succeeds.",
+     "The repeated-prefix request is outside the canonical API namespace and is rejected, normally as not found."
+    ],
+    "observer": "The client and the proxy/security logs"
+   },
+   "unit": "context"
+  },
+  {
+   "subject": "first-administrator CLI failure contract",
+   "kind": "contradictory exit-code closure",
+   "text": "R0-07 says the command's “outcome is a closed set of exit codes that deployment scripts may branch on”, and A29 calls the four-code table a “closed external contract”; `run_bootstrap_cli` instead says a configuration or storage failure “raises it and returns no exit code” and that the resulting host-process status is outside that closed contract.",
+   "question": "Does every termination of the bootstrap command map to a specified closed exit code, or are configuration and storage failures intentionally outside the exit-code contract?",
+   "options": [
+    "Define exit codes for configuration and storage failures so every command termination is in the closed contract.",
+    "Keep only the four business outcomes closed and let infrastructure failures escape without a specified code."
+   ],
+   "default_guess": "Follow the explicit State 5 operation and let infrastructure failures escape outside the four business outcome codes.",
+   "witness": {
+    "initial": "No staff account exists, but the configured SQLite database cannot be opened.",
+    "events": [
+     "The host operator enters matching valid credentials and runs the bootstrap command.",
+     "The command attempts to construct or use the bootstrap store."
+    ],
+    "outcomes": [
+     "The command returns a defined member of its closed exit-code contract, allowing the deployment script to classify the failure.",
+     "The operation raises; no defined result is returned, and the host runtime chooses an unspecified process status."
+    ],
+    "observer": "The host operator and deployment script"
+   },
+   "unit": "context"
+  },
+  {
+   "subject": "staff identity input policy used by first-administrator bootstrap",
+   "kind": "missing intermodule operation",
+   "text": "State 5 says an operation is what another module may call and “everything else a module does is hidden”, but `bootstrap_first_administrator` must apply “the A16 input rules through the staff identity input boundary”; no public `staff_identity` operation exposes email normalization or new-password validation, while `credential_security.hash_password` requires plaintext “already accepted by the A16 input policy of its caller”.",
+   "question": "What public operation may `staff_bootstrap` call to apply the staff-owned A16 normalization and password validation, or is bootstrap required to implement those rules itself despite `staff_identity` owning them?",
+   "options": [
+    "Expose a staff-identity input-validation operation callable by bootstrap.",
+    "Make bootstrap independently implement the exact A16 rules.",
+    "Permit bootstrap to call an otherwise hidden staff-identity helper, contrary to the public-operation convention."
+   ],
+   "default_guess": "Expose a narrow staff-identity validation operation so A16 retains one owner and bootstrap does not call hidden implementation details.",
+   "unit": "context"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"runtime configuration of session lifetimes, entropy, timeouts and limits\",\"kind\":\"contradictory configurability\",\"text\":\"A30 says “Runtime knobs with confirmed defaults (deployment values may differ)”, while `runtime.create_runtime_app` says “every A30 value without an `_env_name` ... is fixed in the use cases' source, so a deployment cannot change it”.\",\"question\":\"Are A30 values such as staff/viewer session TTL and credential entropy deployment-configurable, or source-fixed constants?\",\"options\":[\"Treat every A30 value as a deployment knob and define how it reaches its consumer.\",\"Treat values without an `_env_name` as source-fixed and narrow A30 accordingly.\"],\"default_guess\":\"Follow the accepted running behavior stated in State 5: values without an `_env_name` are source-fixed.\",\"witness\":{\"initial\":\"A deployment requires staff sessions to expire after 2 hours instead of the stated 12-hour default.\",\"events\":[\"The deployment operator supplies a changed session-TTL configuration and starts the service.\",\"A staff member logs in.\"],\"outcomes\":[\"The configured value is honored and the session expires after 2 hours because A30 calls it a deployment knob.\",\"The value cannot be configured and the session expires after 12 hours because State 5 fixes it in source.\"],\"observer\":\"The deployment operator and signed-in staff member\"},\"unit\":\"context\"},{\"subject\":\"HTTP API mount and canonical public path\",\"kind\":\"contradictory routing boundary\",\"text\":\"A25 says “The public API lives under `/api`, stripped by the deployment proxy”, while `runtime.create_runtime_app` mounts the inner application “at `/api` and then at `/`” and states that `/api/api/…` behind the stripping proxy reaches the same route.\",\"question\":\"Must each API operation have only the canonical external `/api/...` path, or must the service deliberately accept both root-mounted and `/api`-mounted forms, including externally repeated `/api/api/...` paths through the proxy?\",\"options\":[\"Expose only the canonical `/api/...` external namespace and reject repeated-prefix paths.\",\"Keep both mounts and accept both path forms as State 5 describes.\"],\"default_guess\":\"Follow State 5 and retain both mounts because it explicitly describes the running service behavior.\",\"witness\":{\"initial\":\"The service is behind the proxy that strips one leading `/api` prefix.\",\"events\":[\"A client requests `/api/api/auth/viewer/session` with a valid viewer cookie.\"],\"outcomes\":[\"After one prefix is stripped, `/api/auth/viewer/session` reaches the duplicate `/api` mount and succeeds.\",\"The repeated-prefix request is outside the canonical API namespace and is rejected, normally as not found.\"],\"observer\":\"The client and the proxy/security logs\"},\"unit\":\"context\"},{\"subject\":\"first-administrator CLI failure contract\",\"kind\":\"contradictory exit-code closure\",\"text\":\"R0-07 says the command's “outcome is a closed set of exit codes that deployment scripts may branch on”, and A29 calls the four-code table a “closed external contract”; `run_bootstrap_cli` instead says a configuration or storage failure “raises it and returns no exit code” and that the resulting host-process status is outside that closed contract.\",\"question\":\"Does every termination of the bootstrap command map to a specified closed exit code, or are configuration and storage failures intentionally outside the exit-code contract?\",\"options\":[\"Define exit codes for configuration and storage failures so every command termination is in the closed contract.\",\"Keep only the four business outcomes closed and let infrastructure failures escape without a specified code.\"],\"default_guess\":\"Follow the explicit State 5 operation and let infrastructure failures escape outside the four business outcome codes.\",\"witness\":{\"initial\":\"No staff account exists, but the configured SQLite database cannot be opened.\",\"events\":[\"The host operator enters matching valid credentials and runs the bootstrap command.\",\"The command attempts to construct or use the bootstrap store.\"],\"outcomes\":[\"The command returns a defined member of its closed exit-code contract, allowing the deployment script to classify the failure.\",\"The operation raises; no defined result is returned, and the host runtime chooses an unspecified process status.\"],\"observer\":\"The host operator and deployment script\"},\"unit\":\"context\"},{\"subject\":\"staff identity input policy used by first-administrator bootstrap\",\"kind\":\"missing intermodule operation\",\"text\":\"State 5 says an operation is what another module may call and “everything else a module does is hidden”, but `bootstrap_first_administrator` must apply “the A16 input rules through the staff identity input boundary”; no public `staff_identity` operation exposes email normalization or new-password validation, while `credential_security.hash_password` requires plaintext “already accepted by the A16 input policy of its caller”.\",\"question\":\"What public operation may `staff_bootstrap` call to apply the staff-owned A16 normalization and password validation, or is bootstrap required to implement those rules itself despite `staff_identity` owning them?\",\"options\":[\"Expose a staff-identity input-validation operation callable by bootstrap.\",\"Make bootstrap independently implement the exact A16 rules.\",\"Permit bootstrap to call an otherwise hidden staff-identity helper, contrary to the public-operation convention.\"],\"default_guess\":\"Expose a narrow staff-identity validation operation so A16 retains one owner and bootstrap does not call hidden implementation details.\",\"unit\":\"context\"}]}",
+ "set_aside": []
+}

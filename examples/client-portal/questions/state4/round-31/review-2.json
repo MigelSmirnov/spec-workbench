@@ -1,0 +1,83 @@
+{
+ "open_points": [
+  {
+   "unit": "40_flows.md:`flow:start_service_and_answer_health`",
+   "subject": "Registry endpoint validation at startup",
+   "kind": "contradiction",
+   "text": "R0-10 says the service is configured by environment variables “which it validates when it starts”; A6/A30 and this flow instead say “The Registry endpoint is not one of them: the service starts without it.”",
+   "question": "Must a missing or unusable REGISTRY_BASE_URL prevent startup, or may startup succeed and only later Registry calls fail?",
+   "options": [
+    "Validate REGISTRY_BASE_URL at startup and refuse to start",
+    "Start without REGISTRY_BASE_URL; fail each Registry call as transport_error"
+   ],
+   "default_guess": "Follow the more specific A6/A30 and State 4 flow: start successfully and fail only Registry calls.",
+   "witness": {
+    "initial": "REGISTRY_BASE_URL is absent when the deployment process starts the service.",
+    "events": [
+     "The deployment process invokes runtime_settings.load_runtime_settings.",
+     "module:runtime creates the application."
+    ],
+    "outcomes": [
+     "Startup is refused because every configuration environment variable must be validated at startup under R0-10.",
+     "Startup succeeds because the Registry endpoint is explicitly excluded from startup settings; a later Registry operation fails with transport_error."
+    ],
+    "observer": "The deployment process and health monitor see whether the service starts and answers health checks."
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:start_service_and_answer_health`",
+   "subject": "Lifetime of binary-storage environment configuration",
+   "kind": "contradictory configuration ownership",
+   "text": "The flow says runtime_settings owns “reading the environment, once: the closed table config.runtime_environment_variables”; State 3 says binary_storage reads BINARY_STORAGE_ROOT and BINARY_MAX_READ_BYTES “at each binary read.” BINARY_MAX_READ_BYTES is also a required member of the startup configuration in A30.",
+   "question": "Are BINARY_STORAGE_ROOT and BINARY_MAX_READ_BYTES fixed in RuntimeSettings at startup, or re-read from the environment for every binary request?",
+   "options": [
+    "Use the startup RuntimeSettings snapshot for every read",
+    "Re-read both variables for every binary read",
+    "Validate them at startup but also re-read them later"
+   ],
+   "default_guess": "Preserve the running-service exception stated in State 3: validate the startup value where required, then re-read the binary variables for each binary operation.",
+   "witness": {
+    "initial": "The service starts with BINARY_MAX_READ_BYTES set to 1000 and passes all startup consistency checks.",
+    "events": [
+     "module:runtime_settings reads RuntimeSettings.",
+     "An operator changes BINARY_MAX_READ_BYTES to 2000 without restarting the service.",
+     "An authorized caller requests a 1500-byte binary."
+    ],
+    "outcomes": [
+     "The request is refused because environment configuration was read once and the active bound remains 1000.",
+     "binary_storage accepts the read because it re-reads the environment and observes 2000."
+    ],
+    "observer": "The authorized binary caller sees either a refusal or the binary response."
+   }
+  },
+  {
+   "unit": "40_flows.md:`flow:start_service_and_answer_health`",
+   "subject": "Readiness storage failure response",
+   "kind": "unstated failure outcome",
+   "text": "The flow says “readiness fails with the storage failure of module:portal_store” and constrains disclosure, but does not state the readiness HTTP status or whether the response is an empty error or a non-ok HealthStatus.",
+   "question": "What exact HTTP outcome does readiness return when opening the database, creating a schema, or rolling back the readiness transaction fails?",
+   "options": [
+    "HTTP 500 with an empty body under the general persistence error policy",
+    "HTTP 503 with a non-ok HealthStatus",
+    "HTTP 503 with an empty body"
+   ],
+   "default_guess": "Return HTTP 500 with an empty body, applying the general persistence/storage failure translation.",
+   "witness": {
+    "initial": "The service is running, but its configured SQLite database cannot be opened.",
+    "events": [
+     "A monitor requests readiness.",
+     "module:runtime asks module:portal_store to begin the readiness transaction.",
+     "module:portal_store raises its storage failure."
+    ],
+    "outcomes": [
+     "The general failure policy is applied: HTTP 500 with an empty body.",
+     "Readiness-specific semantics are inferred: HTTP 503, possibly carrying a safe non-ok HealthStatus."
+    ],
+    "observer": "The monitor or deployment proxy sees a different status and possibly a different response body."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"40_flows.md:`flow:start_service_and_answer_health`\",\"subject\":\"Registry endpoint validation at startup\",\"kind\":\"contradiction\",\"text\":\"R0-10 says the service is configured by environment variables “which it validates when it starts”; A6/A30 and this flow instead say “The Registry endpoint is not one of them: the service starts without it.”\",\"question\":\"Must a missing or unusable REGISTRY_BASE_URL prevent startup, or may startup succeed and only later Registry calls fail?\",\"options\":[\"Validate REGISTRY_BASE_URL at startup and refuse to start\",\"Start without REGISTRY_BASE_URL; fail each Registry call as transport_error\"],\"default_guess\":\"Follow the more specific A6/A30 and State 4 flow: start successfully and fail only Registry calls.\",\"witness\":{\"initial\":\"REGISTRY_BASE_URL is absent when the deployment process starts the service.\",\"events\":[\"The deployment process invokes runtime_settings.load_runtime_settings.\",\"module:runtime creates the application.\"],\"outcomes\":[\"Startup is refused because every configuration environment variable must be validated at startup under R0-10.\",\"Startup succeeds because the Registry endpoint is explicitly excluded from startup settings; a later Registry operation fails with transport_error.\"],\"observer\":\"The deployment process and health monitor see whether the service starts and answers health checks.\"}},{\"unit\":\"40_flows.md:`flow:start_service_and_answer_health`\",\"subject\":\"Lifetime of binary-storage environment configuration\",\"kind\":\"contradictory configuration ownership\",\"text\":\"The flow says runtime_settings owns “reading the environment, once: the closed table config.runtime_environment_variables”; State 3 says binary_storage reads BINARY_STORAGE_ROOT and BINARY_MAX_READ_BYTES “at each binary read.” BINARY_MAX_READ_BYTES is also a required member of the startup configuration in A30.\",\"question\":\"Are BINARY_STORAGE_ROOT and BINARY_MAX_READ_BYTES fixed in RuntimeSettings at startup, or re-read from the environment for every binary request?\",\"options\":[\"Use the startup RuntimeSettings snapshot for every read\",\"Re-read both variables for every binary read\",\"Validate them at startup but also re-read them later\"],\"default_guess\":\"Preserve the running-service exception stated in State 3: validate the startup value where required, then re-read the binary variables for each binary operation.\",\"witness\":{\"initial\":\"The service starts with BINARY_MAX_READ_BYTES set to 1000 and passes all startup consistency checks.\",\"events\":[\"module:runtime_settings reads RuntimeSettings.\",\"An operator changes BINARY_MAX_READ_BYTES to 2000 without restarting the service.\",\"An authorized caller requests a 1500-byte binary.\"],\"outcomes\":[\"The request is refused because environment configuration was read once and the active bound remains 1000.\",\"binary_storage accepts the read because it re-reads the environment and observes 2000.\"],\"observer\":\"The authorized binary caller sees either a refusal or the binary response.\"}},{\"unit\":\"40_flows.md:`flow:start_service_and_answer_health`\",\"subject\":\"Readiness storage failure response\",\"kind\":\"unstated failure outcome\",\"text\":\"The flow says “readiness fails with the storage failure of module:portal_store” and constrains disclosure, but does not state the readiness HTTP status or whether the response is an empty error or a non-ok HealthStatus.\",\"question\":\"What exact HTTP outcome does readiness return when opening the database, creating a schema, or rolling back the readiness transaction fails?\",\"options\":[\"HTTP 500 with an empty body under the general persistence error policy\",\"HTTP 503 with a non-ok HealthStatus\",\"HTTP 503 with an empty body\"],\"default_guess\":\"Return HTTP 500 with an empty body, applying the general persistence/storage failure translation.\",\"witness\":{\"initial\":\"The service is running, but its configured SQLite database cannot be opened.\",\"events\":[\"A monitor requests readiness.\",\"module:runtime asks module:portal_store to begin the readiness transaction.\",\"module:portal_store raises its storage failure.\"],\"outcomes\":[\"The general failure policy is applied: HTTP 500 with an empty body.\",\"Readiness-specific semantics are inferred: HTTP 503, possibly carrying a safe non-ok HealthStatus.\"],\"observer\":\"The monitor or deployment proxy sees a different status and possibly a different response body.\"}}]}",
+ "set_aside": []
+}

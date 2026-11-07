@@ -1,0 +1,144 @@
+{
+ "open_points": [
+  {
+   "subject": "runtime.create_runtime_app configuration propagation",
+   "kind": "contradiction",
+   "text": "A30 calls the session lifetimes, credential entropy and other listed values “Runtime knobs with confirmed defaults (deployment values may differ)”; State 5 instead says “every A30 value without an `_env_name` ... is fixed in the use cases' source, so a deployment cannot change it” and that use cases receive no `RuntimeSettings`.",
+   "question": "Are staff/viewer session lifetimes and credential entropy deployment-configurable runtime values, or fixed source constants?",
+   "options": [
+    "Propagate the configured RuntimeSettings values into the relevant use cases.",
+    "Ignore deployment values and use the source-fixed 12-hour, 30-day and 32-byte constants."
+   ],
+   "default_guess": "Use the source-fixed values because State 5 explicitly describes the running service that way.",
+   "witness": {
+    "initial": "A deployment constructs RuntimeSettings with a one-hour staff session lifetime.",
+    "events": [
+     "The deployment calls runtime.create_runtime_app with those settings.",
+     "A staff member logs in and waits two hours.",
+     "The staff member makes an authenticated request."
+    ],
+    "outcomes": [
+     "The configured lifetime is honored, so the session is expired.",
+     "The source-fixed twelve-hour lifetime is used, so the session remains valid."
+    ],
+    "observer": "The staff member and deployment operator."
+   },
+   "unit": "context"
+  },
+  {
+   "subject": "runtime.create_runtime_app route mounting",
+   "kind": "contradiction",
+   "text": "A25 says “The public API lives under `/api`, stripped by the deployment proxy”; State 5 says the inner application is mounted “at `/api` and then at `/`” and “a route is reached whether or not the proxy has stripped `/api`,” including `/api/api/…` behind the stripping proxy.",
+   "question": "Which externally reachable path set is normative: only the public `/api` namespace, or both prefixed and unprefixed copies, including the repeated-prefix path through a stripping proxy?",
+   "options": [
+    "Expose only the path arrangement implied by the proxy contract: external `/api/...` mapped to one internal route.",
+    "Mount the application at both `/api` and `/`, accepting both copies and the described repeated-prefix path."
+   ],
+   "default_guess": "Follow State 5 and mount both copies.",
+   "witness": {
+    "initial": "The service is reachable on a trusted host behind the prefix-stripping proxy.",
+    "events": [
+     "A client requests `/api/api/auth/staff/login`.",
+     "The proxy strips the first `/api` and forwards `/api/auth/staff/login`."
+    ],
+    "outcomes": [
+     "The request reaches the login route because the inner application is also mounted at `/api`.",
+     "The request is not routed because the public contract has only one `/api` prefix."
+    ],
+    "observer": "The HTTP client and proxy operator."
+   },
+   "unit": "context"
+  },
+  {
+   "subject": "staff_bootstrap_cli.run_bootstrap_cli failure contract",
+   "kind": "contradiction",
+   "text": "R0-07 and A29 say the command's outcome is a closed set of exit codes, listing only 0, 1, 2 and 3; State 5 says “A configuration or storage failure is none of the four outcomes: the operation raises it and returns no exit code, and the failure status the host process then ends with is outside the closed contract of A29.”",
+   "question": "What is the externally observable CLI contract when configuration loading or storage fails?",
+   "options": [
+    "Every termination must map to one of the four closed exit codes.",
+    "Configuration and storage failures escape the operation and produce an implementation/runtime-defined process status outside that table.",
+    "Extend the closed table with explicit infrastructure-failure exit codes."
+   ],
+   "default_guess": "Let infrastructure failures escape, as State 5 explicitly states, while treating the earlier table as closed only over business outcomes.",
+   "witness": {
+    "initial": "The bootstrap command is run with an unusable database configuration.",
+    "events": [
+     "The CLI reads matching credentials.",
+     "Runtime settings or bootstrap storage initialization fails.",
+     "A deployment script observes process termination."
+    ],
+    "outcomes": [
+     "The command returns one of the four contractually closed exit codes.",
+     "The operation raises and the host produces an unspecified status outside the four-code contract."
+    ],
+    "observer": "The deployment script and host operator."
+   },
+   "unit": "context"
+  },
+  {
+   "subject": "snapshot_import.import_snapshot relationship to budget candidacy",
+   "kind": "contradiction",
+   "text": "State 5 says “A18: a snapshot becomes a candidate only by activation”; States 0–4 repeatedly say Q11—what turns an accepted snapshot into a candidate BudgetVersion—is deferred, that import creates no BudgetVersion, section or plan, and that activation accepts an existing `version_id`.",
+   "question": "Does activation itself turn an accepted snapshot into a candidate BudgetVersion, or is no snapshot-to-candidate operation defined until Q11 is decided?",
+   "options": [
+    "Activation materializes or selects the candidate BudgetVersion from the snapshot.",
+    "Import leaves only the snapshot and import result; activation cannot use it until a separate Q11 operation creates a BudgetVersion.",
+    "The phrase means only that an already-created imported BudgetVersion becomes active, without deciding how it was created."
+   ],
+   "default_guess": "Treat the State 5 phrase as imprecise and keep snapshot-to-BudgetVersion creation deferred to Q11.",
+   "witness": {
+    "initial": "A producer has successfully imported a snapshot; the project has no imported BudgetVersion for it.",
+    "events": [
+     "An operator reviews the successful import.",
+     "The operator attempts to make that snapshot the active budget."
+    ],
+    "outcomes": [
+     "Activation creates or derives the candidate version and activates it.",
+     "There is no `version_id` to pass to activate_budget_version, so the snapshot cannot be activated until Q11 supplies another operation."
+    ],
+    "observer": "The operator and API client."
+   },
+   "unit": "context"
+  },
+  {
+   "subject": "credential_security password-operation callers",
+   "kind": "caller contradiction",
+   "text": "State 5 lists `module:viewer_access` as a caller of both `credential_security.hash_password` and `credential_security.verify_password`; the viewer flows and operations instead issue capability/session secrets with `issue_verification_secret` and authenticate them with `parse_verification_secret` plus `verify_secret`, and ClientViewer has no password.",
+   "question": "Is viewer_access genuinely permitted or required to call the password-specific hash and verification operations?",
+   "options": [
+    "Viewer access uses only the verification-secret operations; remove it from both password-operation caller lists.",
+    "Viewer access also calls the password operations, requiring the exact purpose and call sites to be specified."
+   ],
+   "default_guess": "Remove viewer_access from the password-operation caller lists.",
+   "unit": "context"
+  },
+  {
+   "subject": "service_identity.issue_service_credential expires_at representation",
+   "kind": "contradiction",
+   "text": "A28 says persisted timestamps are UTC and stored offset-naive, while State 5 says a supplied service-credential expiry is “accepted and stored as supplied ... never converted.”",
+   "question": "What happens when `expires_at` is offset-aware, non-UTC, or otherwise not already in the persisted UTC offset-naive form?",
+   "options": [
+    "Require callers to supply an offset-naive UTC datetime and reject every other representation.",
+    "Normalize an aware timestamp to UTC and remove its offset before persistence.",
+    "Persist the datetime exactly as supplied, including its offset."
+   ],
+   "default_guess": "Require or normalize to UTC offset-naive before persistence, preserving the represented instant.",
+   "witness": {
+    "initial": "An administrator issues a credential with `expires_at` equal to `2030-01-01T12:00:00+02:00`.",
+    "events": [
+     "The credential is persisted.",
+     "The producer authenticates at `2030-01-01T10:30:00Z`."
+    ],
+    "outcomes": [
+     "The supplied instant is normalized to `10:00` UTC, so the credential is expired.",
+     "The offset is merely discarded or the supplied representation is retained inconsistently, allowing comparison as `12:00` and leaving the credential usable."
+    ],
+    "observer": "The producer authenticating with the credential."
+   },
+   "unit": "context"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"runtime.create_runtime_app configuration propagation\",\"kind\":\"contradiction\",\"text\":\"A30 calls the session lifetimes, credential entropy and other listed values “Runtime knobs with confirmed defaults (deployment values may differ)”; State 5 instead says “every A30 value without an `_env_name` ... is fixed in the use cases' source, so a deployment cannot change it” and that use cases receive no `RuntimeSettings`.\",\"question\":\"Are staff/viewer session lifetimes and credential entropy deployment-configurable runtime values, or fixed source constants?\",\"options\":[\"Propagate the configured RuntimeSettings values into the relevant use cases.\",\"Ignore deployment values and use the source-fixed 12-hour, 30-day and 32-byte constants.\"],\"default_guess\":\"Use the source-fixed values because State 5 explicitly describes the running service that way.\",\"witness\":{\"initial\":\"A deployment constructs RuntimeSettings with a one-hour staff session lifetime.\",\"events\":[\"The deployment calls runtime.create_runtime_app with those settings.\",\"A staff member logs in and waits two hours.\",\"The staff member makes an authenticated request.\"],\"outcomes\":[\"The configured lifetime is honored, so the session is expired.\",\"The source-fixed twelve-hour lifetime is used, so the session remains valid.\"],\"observer\":\"The staff member and deployment operator.\"},\"unit\":\"context\"},{\"subject\":\"runtime.create_runtime_app route mounting\",\"kind\":\"contradiction\",\"text\":\"A25 says “The public API lives under `/api`, stripped by the deployment proxy”; State 5 says the inner application is mounted “at `/api` and then at `/`” and “a route is reached whether or not the proxy has stripped `/api`,” including `/api/api/…` behind the stripping proxy.\",\"question\":\"Which externally reachable path set is normative: only the public `/api` namespace, or both prefixed and unprefixed copies, including the repeated-prefix path through a stripping proxy?\",\"options\":[\"Expose only the path arrangement implied by the proxy contract: external `/api/...` mapped to one internal route.\",\"Mount the application at both `/api` and `/`, accepting both copies and the described repeated-prefix path.\"],\"default_guess\":\"Follow State 5 and mount both copies.\",\"witness\":{\"initial\":\"The service is reachable on a trusted host behind the prefix-stripping proxy.\",\"events\":[\"A client requests `/api/api/auth/staff/login`.\",\"The proxy strips the first `/api` and forwards `/api/auth/staff/login`.\"],\"outcomes\":[\"The request reaches the login route because the inner application is also mounted at `/api`.\",\"The request is not routed because the public contract has only one `/api` prefix.\"],\"observer\":\"The HTTP client and proxy operator.\"},\"unit\":\"context\"},{\"subject\":\"staff_bootstrap_cli.run_bootstrap_cli failure contract\",\"kind\":\"contradiction\",\"text\":\"R0-07 and A29 say the command's outcome is a closed set of exit codes, listing only 0, 1, 2 and 3; State 5 says “A configuration or storage failure is none of the four outcomes: the operation raises it and returns no exit code, and the failure status the host process then ends with is outside the closed contract of A29.”\",\"question\":\"What is the externally observable CLI contract when configuration loading or storage fails?\",\"options\":[\"Every termination must map to one of the four closed exit codes.\",\"Configuration and storage failures escape the operation and produce an implementation/runtime-defined process status outside that table.\",\"Extend the closed table with explicit infrastructure-failure exit codes.\"],\"default_guess\":\"Let infrastructure failures escape, as State 5 explicitly states, while treating the earlier table as closed only over business outcomes.\",\"witness\":{\"initial\":\"The bootstrap command is run with an unusable database configuration.\",\"events\":[\"The CLI reads matching credentials.\",\"Runtime settings or bootstrap storage initialization fails.\",\"A deployment script observes process termination.\"],\"outcomes\":[\"The command returns one of the four contractually closed exit codes.\",\"The operation raises and the host produces an unspecified status outside the four-code contract.\"],\"observer\":\"The deployment script and host operator.\"},\"unit\":\"context\"},{\"subject\":\"snapshot_import.import_snapshot relationship to budget candidacy\",\"kind\":\"contradiction\",\"text\":\"State 5 says “A18: a snapshot becomes a candidate only by activation”; States 0–4 repeatedly say Q11—what turns an accepted snapshot into a candidate BudgetVersion—is deferred, that import creates no BudgetVersion, section or plan, and that activation accepts an existing `version_id`.\",\"question\":\"Does activation itself turn an accepted snapshot into a candidate BudgetVersion, or is no snapshot-to-candidate operation defined until Q11 is decided?\",\"options\":[\"Activation materializes or selects the candidate BudgetVersion from the snapshot.\",\"Import leaves only the snapshot and import result; activation cannot use it until a separate Q11 operation creates a BudgetVersion.\",\"The phrase means only that an already-created imported BudgetVersion becomes active, without deciding how it was created.\"],\"default_guess\":\"Treat the State 5 phrase as imprecise and keep snapshot-to-BudgetVersion creation deferred to Q11.\",\"witness\":{\"initial\":\"A producer has successfully imported a snapshot; the project has no imported BudgetVersion for it.\",\"events\":[\"An operator reviews the successful import.\",\"The operator attempts to make that snapshot the active budget.\"],\"outcomes\":[\"Activation creates or derives the candidate version and activates it.\",\"There is no `version_id` to pass to activate_budget_version, so the snapshot cannot be activated until Q11 supplies another operation.\"],\"observer\":\"The operator and API client.\"},\"unit\":\"context\"},{\"subject\":\"credential_security password-operation callers\",\"kind\":\"caller contradiction\",\"text\":\"State 5 lists `module:viewer_access` as a caller of both `credential_security.hash_password` and `credential_security.verify_password`; the viewer flows and operations instead issue capability/session secrets with `issue_verification_secret` and authenticate them with `parse_verification_secret` plus `verify_secret`, and ClientViewer has no password.\",\"question\":\"Is viewer_access genuinely permitted or required to call the password-specific hash and verification operations?\",\"options\":[\"Viewer access uses only the verification-secret operations; remove it from both password-operation caller lists.\",\"Viewer access also calls the password operations, requiring the exact purpose and call sites to be specified.\"],\"default_guess\":\"Remove viewer_access from the password-operation caller lists.\",\"unit\":\"context\"},{\"subject\":\"service_identity.issue_service_credential expires_at representation\",\"kind\":\"contradiction\",\"text\":\"A28 says persisted timestamps are UTC and stored offset-naive, while State 5 says a supplied service-credential expiry is “accepted and stored as supplied ... never converted.”\",\"question\":\"What happens when `expires_at` is offset-aware, non-UTC, or otherwise not already in the persisted UTC offset-naive form?\",\"options\":[\"Require callers to supply an offset-naive UTC datetime and reject every other representation.\",\"Normalize an aware timestamp to UTC and remove its offset before persistence.\",\"Persist the datetime exactly as supplied, including its offset.\"],\"default_guess\":\"Require or normalize to UTC offset-naive before persistence, preserving the represented instant.\",\"witness\":{\"initial\":\"An administrator issues a credential with `expires_at` equal to `2030-01-01T12:00:00+02:00`.\",\"events\":[\"The credential is persisted.\",\"The producer authenticates at `2030-01-01T10:30:00Z`.\"],\"outcomes\":[\"The supplied instant is normalized to `10:00` UTC, so the credential is expired.\",\"The offset is merely discarded or the supplied representation is retained inconsistently, allowing comparison as `12:00` and leaving the credential usable.\"],\"observer\":\"The producer authenticating with the credential.\"},\"unit\":\"context\"}]}",
+ "set_aside": []
+}

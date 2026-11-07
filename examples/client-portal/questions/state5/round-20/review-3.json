@@ -1,0 +1,187 @@
+{
+ "open_points": [
+  {
+   "subject": "runtime.create_runtime_app and RuntimeSettings",
+   "kind": "configuration contradiction",
+   "unit": "context",
+   "text": "A30 says staff_session_ttl_hours, viewer_session_ttl_days and credential_entropy_bytes are runtime knobs whose deployment values may differ; State 5 says every A30 value without an _env_name is fixed in source and a deployment cannot change it.",
+   "question": "Are session lifetimes and credential entropy deployment-configurable RuntimeSettings, or source-fixed constants unavailable to deployment configuration?",
+   "options": [
+    "Include them in RuntimeSettings and honor deployment values.",
+    "Keep them fixed in source and reject or ignore deployment overrides."
+   ],
+   "default_guess": "Honor A30 and make them deployment-configurable.",
+   "witness": {
+    "initial": "A deployment needs a 24-hour staff session instead of the 12-hour default.",
+    "events": [
+     "The deployer supplies a supported runtime override and starts the service.",
+     "A staff member logs in and uses the session after 12 hours but before 24 hours."
+    ],
+    "outcomes": [
+     "The session remains valid because A30 permits a deployment-specific TTL.",
+     "The session is expired because State 5 fixes the TTL at 12 hours in source."
+    ],
+    "observer": "The staff member and deployment operator."
+   }
+  },
+  {
+   "subject": "staff_bootstrap.bootstrap_first_administrator",
+   "kind": "missing public dependency",
+   "unit": "context",
+   "text": "State 5 says everything a module does except its public operations is hidden, but bootstrap_first_administrator must apply A16 through “the staff identity input boundary”; staff_identity exposes no public normalization or password-validation operation for staff_bootstrap to call.",
+   "question": "Which public operation supplies staff email normalization and new-password validation to staff_bootstrap?",
+   "options": [
+    "Expose a staff_identity input-validation operation.",
+    "Move the shared input policy to another public module operation.",
+    "Duplicate the A16 implementation inside staff_bootstrap.",
+    "Permit staff_bootstrap to call a private staff_identity helper despite the public-operation boundary."
+   ],
+   "default_guess": "Expose a shared public input-validation operation owned by staff_identity.",
+   "witness": {
+    "initial": "An empty deployment is bootstrapped with an email containing a normalization edge case or a password containing a disputed control character.",
+    "events": [
+     "The host operator submits the values to staff_bootstrap_cli.",
+     "staff_bootstrap must validate them before creating the first account."
+    ],
+    "outcomes": [
+     "Bootstrap uses exactly the same normalization and validation implementation as later staff-account creation.",
+     "Bootstrap independently implements or privately reaches the policy and may accept, reject, or normalize the value differently."
+    ],
+    "observer": "The host operator and later login caller."
+   }
+  },
+  {
+   "subject": "credential_security.hash_password and credential_security.verify_password",
+   "kind": "caller contradiction",
+   "unit": "context",
+   "text": "State 5 lists module:viewer_access as a caller of both password operations, while States 0–4 define viewers as having no password and show viewer_access using issue_verification_secret, parse_verification_secret and verify_secret instead.",
+   "question": "May viewer_access call password hashing or verification for any operation, or are those callers erroneous?",
+   "options": [
+    "Remove viewer_access from both password-operation caller lists.",
+    "Define the viewer operation and value that use password hashing and verification."
+   ],
+   "default_guess": "Remove viewer_access from both caller lists."
+  },
+  {
+   "subject": "service_identity.change_service_principal_status",
+   "kind": "transition contradiction",
+   "unit": "context",
+   "text": "A3 says only active ↔ disabled transitions are admitted and “Transitions outside these tables are rejected”; State 5 says requesting the status already held returns unchanged, writes nothing and is not refused.",
+   "question": "What happens when the requested PrincipalStatus equals the persisted status?",
+   "options": [
+    "Reject it as an unlisted transition.",
+    "Return unchanged success with no audit or write."
+   ],
+   "default_guess": "Reject it under A3.",
+   "witness": {
+    "initial": "An active service principal exists and has a usable credential.",
+    "events": [
+     "An administrator requests that its status be changed to active."
+    ],
+    "outcomes": [
+     "AuthorizationRejected is returned because active → active is not in A3.",
+     "The unchanged principal is returned successfully with no write or audit."
+    ],
+    "observer": "The administrator making the request."
+   }
+  },
+  {
+   "subject": "budget_management.activate_budget_version",
+   "kind": "transition contradiction",
+   "unit": "context",
+   "text": "A3 defines BudgetVersionStatus as inactive → active → inactive, with re-activation after becoming inactive, and rejects transitions outside the table; State 5 says activating the version already active succeeds, replaces its activation time and actor, and appends another snapshot.activate audit.",
+   "question": "Is active → active a valid activation operation?",
+   "options": [
+    "Reject active → active as an unlisted status transition.",
+    "Accept it as a new activation occurrence that rewrites activation provenance and audits again.",
+    "Treat it as an idempotent no-op without rewriting or auditing."
+   ],
+   "default_guess": "Reject active → active under A3.",
+   "witness": {
+    "initial": "Budget version V is active with activated_at T1 and activated_by A1.",
+    "events": [
+     "Administrator A2 invokes activate_budget_version for V."
+    ],
+    "outcomes": [
+     "The operation is refused and V retains T1/A1 with no new audit.",
+     "The operation succeeds, replaces provenance with T2/A2 and appends snapshot.activate."
+    ],
+    "observer": "A2 and anyone reading the budget-version history or audit."
+   }
+  },
+  {
+   "subject": "snapshot_import.import_snapshot",
+   "kind": "deferred-feature contradiction",
+   "unit": "context",
+   "text": "State 5 says “a snapshot becomes a candidate only by activation” while States 0–4 and the same operation say import creates no BudgetVersion, section or plan, activation accepts a version_id, and Q11—the operation that turns a snapshot into a candidate—is explicitly deferred.",
+   "question": "Can activation itself turn an ApprovedEstimateSnapshot into a candidate BudgetVersion, or is no such operation present until Q11 is designed?",
+   "options": [
+    "No candidate is created in State 5; activation can address only an existing BudgetVersion.",
+    "Activation accepts a snapshot and creates its candidate BudgetVersion and plans before activating it."
+   ],
+   "default_guess": "No candidate is created until Q11 is designed.",
+   "witness": {
+    "initial": "A producer has imported an accepted snapshot, and no imported BudgetVersion exists for it.",
+    "events": [
+     "An operator attempts to activate the imported snapshot."
+    ],
+    "outcomes": [
+     "The request cannot name an existing version and is refused or unavailable until Q11 exists.",
+     "Activation creates the candidate version and activates it, as the quoted State 5 sentence suggests."
+    ],
+    "observer": "The operator and client reading the active budget."
+   }
+  },
+  {
+   "subject": "expense_intake.create_expense_from_recognition",
+   "kind": "authorization-owner gap",
+   "unit": "context",
+   "text": "A7 says the expense operation checks the authorized context’s portal.expense.manage capability after recognition and version checks; State 5 names supported-version enforcement but does not state that create_expense_from_recognition validates the capability carried by AuthorizedProjectContext.",
+   "question": "Must create_expense_from_recognition itself reject an AuthorizedProjectContext carrying a capability other than portal.expense.manage, or may it rely entirely on the route’s prior guard?",
+   "options": [
+    "The operation validates that the context carries portal.expense.manage.",
+    "The operation trusts any AuthorizedProjectContext for the same project and relies on its caller to have selected the right capability."
+   ],
+   "default_guess": "Validate portal.expense.manage inside the operation, as A7 requires.",
+   "witness": {
+    "initial": "A valid staff AuthorizedProjectContext exists for portal.expense.read on an active assigned project.",
+    "events": [
+     "An internal caller passes that context with a valid confirmed recognition and allocations to create_expense_from_recognition."
+    ],
+    "outcomes": [
+     "The operation rejects the mismatched capability and stores nothing.",
+     "The operation creates the expense because the context is otherwise trusted and State 5 specifies no local capability check."
+    ],
+    "observer": "The staff caller and the project’s viewers."
+   }
+  },
+  {
+   "subject": "budget_management.ensure_manual_budget and project_tracking.list_project_progress",
+   "kind": "actor-scope gap",
+   "unit": "context",
+   "text": "R0-24 limits the archived-project exception to “a staff read” of progress, but State 5 accepts an unrestricted AuthorizedProjectContext and does not require actor_kind = staff or a staff progress-read capability before creating the empty manual budget.",
+   "question": "Which trusted contexts may trigger the normally read-only creation of an empty manual budget, especially on an archived project?",
+   "options": [
+    "Only a staff context authorized for the progress read may trigger it.",
+    "Any AuthorizedProjectContext, including a viewer context, may trigger it.",
+    "ensure_manual_budget may create it directly for staff callers, while list_project_progress separately enforces the narrower exception."
+   ],
+   "default_guess": "Restrict the creation to the staff progress-read path named by R0-24.",
+   "witness": {
+    "initial": "An archived project has an active viewer grant but no manual BudgetVersion.",
+    "events": [
+     "The viewer is authorized to read the project.",
+     "An internal overview or tracking path invokes the exported operation with that viewer’s AuthorizedProjectContext."
+    ],
+    "outcomes": [
+     "The operation refuses or remains read-only because R0-24 grants the write exception only to a staff progress read.",
+     "The operation creates the empty manual budget and audit because State 5 accepts any AuthorizedProjectContext."
+    ],
+    "observer": "Auditors and later staff reading the project’s budget history."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"runtime.create_runtime_app and RuntimeSettings\",\"kind\":\"configuration contradiction\",\"unit\":\"context\",\"text\":\"A30 says staff_session_ttl_hours, viewer_session_ttl_days and credential_entropy_bytes are runtime knobs whose deployment values may differ; State 5 says every A30 value without an _env_name is fixed in source and a deployment cannot change it.\",\"question\":\"Are session lifetimes and credential entropy deployment-configurable RuntimeSettings, or source-fixed constants unavailable to deployment configuration?\",\"options\":[\"Include them in RuntimeSettings and honor deployment values.\",\"Keep them fixed in source and reject or ignore deployment overrides.\"],\"default_guess\":\"Honor A30 and make them deployment-configurable.\",\"witness\":{\"initial\":\"A deployment needs a 24-hour staff session instead of the 12-hour default.\",\"events\":[\"The deployer supplies a supported runtime override and starts the service.\",\"A staff member logs in and uses the session after 12 hours but before 24 hours.\"],\"outcomes\":[\"The session remains valid because A30 permits a deployment-specific TTL.\",\"The session is expired because State 5 fixes the TTL at 12 hours in source.\"],\"observer\":\"The staff member and deployment operator.\"}},{\"subject\":\"staff_bootstrap.bootstrap_first_administrator\",\"kind\":\"missing public dependency\",\"unit\":\"context\",\"text\":\"State 5 says everything a module does except its public operations is hidden, but bootstrap_first_administrator must apply A16 through “the staff identity input boundary”; staff_identity exposes no public normalization or password-validation operation for staff_bootstrap to call.\",\"question\":\"Which public operation supplies staff email normalization and new-password validation to staff_bootstrap?\",\"options\":[\"Expose a staff_identity input-validation operation.\",\"Move the shared input policy to another public module operation.\",\"Duplicate the A16 implementation inside staff_bootstrap.\",\"Permit staff_bootstrap to call a private staff_identity helper despite the public-operation boundary.\"],\"default_guess\":\"Expose a shared public input-validation operation owned by staff_identity.\",\"witness\":{\"initial\":\"An empty deployment is bootstrapped with an email containing a normalization edge case or a password containing a disputed control character.\",\"events\":[\"The host operator submits the values to staff_bootstrap_cli.\",\"staff_bootstrap must validate them before creating the first account.\"],\"outcomes\":[\"Bootstrap uses exactly the same normalization and validation implementation as later staff-account creation.\",\"Bootstrap independently implements or privately reaches the policy and may accept, reject, or normalize the value differently.\"],\"observer\":\"The host operator and later login caller.\"}},{\"subject\":\"credential_security.hash_password and credential_security.verify_password\",\"kind\":\"caller contradiction\",\"unit\":\"context\",\"text\":\"State 5 lists module:viewer_access as a caller of both password operations, while States 0–4 define viewers as having no password and show viewer_access using issue_verification_secret, parse_verification_secret and verify_secret instead.\",\"question\":\"May viewer_access call password hashing or verification for any operation, or are those callers erroneous?\",\"options\":[\"Remove viewer_access from both password-operation caller lists.\",\"Define the viewer operation and value that use password hashing and verification.\"],\"default_guess\":\"Remove viewer_access from both caller lists.\"},{\"subject\":\"service_identity.change_service_principal_status\",\"kind\":\"transition contradiction\",\"unit\":\"context\",\"text\":\"A3 says only active ↔ disabled transitions are admitted and “Transitions outside these tables are rejected”; State 5 says requesting the status already held returns unchanged, writes nothing and is not refused.\",\"question\":\"What happens when the requested PrincipalStatus equals the persisted status?\",\"options\":[\"Reject it as an unlisted transition.\",\"Return unchanged success with no audit or write.\"],\"default_guess\":\"Reject it under A3.\",\"witness\":{\"initial\":\"An active service principal exists and has a usable credential.\",\"events\":[\"An administrator requests that its status be changed to active.\"],\"outcomes\":[\"AuthorizationRejected is returned because active → active is not in A3.\",\"The unchanged principal is returned successfully with no write or audit.\"],\"observer\":\"The administrator making the request.\"}},{\"subject\":\"budget_management.activate_budget_version\",\"kind\":\"transition contradiction\",\"unit\":\"context\",\"text\":\"A3 defines BudgetVersionStatus as inactive → active → inactive, with re-activation after becoming inactive, and rejects transitions outside the table; State 5 says activating the version already active succeeds, replaces its activation time and actor, and appends another snapshot.activate audit.\",\"question\":\"Is active → active a valid activation operation?\",\"options\":[\"Reject active → active as an unlisted status transition.\",\"Accept it as a new activation occurrence that rewrites activation provenance and audits again.\",\"Treat it as an idempotent no-op without rewriting or auditing.\"],\"default_guess\":\"Reject active → active under A3.\",\"witness\":{\"initial\":\"Budget version V is active with activated_at T1 and activated_by A1.\",\"events\":[\"Administrator A2 invokes activate_budget_version for V.\"],\"outcomes\":[\"The operation is refused and V retains T1/A1 with no new audit.\",\"The operation succeeds, replaces provenance with T2/A2 and appends snapshot.activate.\"],\"observer\":\"A2 and anyone reading the budget-version history or audit.\"}},{\"subject\":\"snapshot_import.import_snapshot\",\"kind\":\"deferred-feature contradiction\",\"unit\":\"context\",\"text\":\"State 5 says “a snapshot becomes a candidate only by activation” while States 0–4 and the same operation say import creates no BudgetVersion, section or plan, activation accepts a version_id, and Q11—the operation that turns a snapshot into a candidate—is explicitly deferred.\",\"question\":\"Can activation itself turn an ApprovedEstimateSnapshot into a candidate BudgetVersion, or is no such operation present until Q11 is designed?\",\"options\":[\"No candidate is created in State 5; activation can address only an existing BudgetVersion.\",\"Activation accepts a snapshot and creates its candidate BudgetVersion and plans before activating it.\"],\"default_guess\":\"No candidate is created until Q11 is designed.\",\"witness\":{\"initial\":\"A producer has imported an accepted snapshot, and no imported BudgetVersion exists for it.\",\"events\":[\"An operator attempts to activate the imported snapshot.\"],\"outcomes\":[\"The request cannot name an existing version and is refused or unavailable until Q11 exists.\",\"Activation creates the candidate version and activates it, as the quoted State 5 sentence suggests.\"],\"observer\":\"The operator and client reading the active budget.\"}},{\"subject\":\"expense_intake.create_expense_from_recognition\",\"kind\":\"authorization-owner gap\",\"unit\":\"context\",\"text\":\"A7 says the expense operation checks the authorized context’s portal.expense.manage capability after recognition and version checks; State 5 names supported-version enforcement but does not state that create_expense_from_recognition validates the capability carried by AuthorizedProjectContext.\",\"question\":\"Must create_expense_from_recognition itself reject an AuthorizedProjectContext carrying a capability other than portal.expense.manage, or may it rely entirely on the route’s prior guard?\",\"options\":[\"The operation validates that the context carries portal.expense.manage.\",\"The operation trusts any AuthorizedProjectContext for the same project and relies on its caller to have selected the right capability.\"],\"default_guess\":\"Validate portal.expense.manage inside the operation, as A7 requires.\",\"witness\":{\"initial\":\"A valid staff AuthorizedProjectContext exists for portal.expense.read on an active assigned project.\",\"events\":[\"An internal caller passes that context with a valid confirmed recognition and allocations to create_expense_from_recognition.\"],\"outcomes\":[\"The operation rejects the mismatched capability and stores nothing.\",\"The operation creates the expense because the context is otherwise trusted and State 5 specifies no local capability check.\"],\"observer\":\"The staff caller and the project’s viewers.\"}},{\"subject\":\"budget_management.ensure_manual_budget and project_tracking.list_project_progress\",\"kind\":\"actor-scope gap\",\"unit\":\"context\",\"text\":\"R0-24 limits the archived-project exception to “a staff read” of progress, but State 5 accepts an unrestricted AuthorizedProjectContext and does not require actor_kind = staff or a staff progress-read capability before creating the empty manual budget.\",\"question\":\"Which trusted contexts may trigger the normally read-only creation of an empty manual budget, especially on an archived project?\",\"options\":[\"Only a staff context authorized for the progress read may trigger it.\",\"Any AuthorizedProjectContext, including a viewer context, may trigger it.\",\"ensure_manual_budget may create it directly for staff callers, while list_project_progress separately enforces the narrower exception.\"],\"default_guess\":\"Restrict the creation to the staff progress-read path named by R0-24.\",\"witness\":{\"initial\":\"An archived project has an active viewer grant but no manual BudgetVersion.\",\"events\":[\"The viewer is authorized to read the project.\",\"An internal overview or tracking path invokes the exported operation with that viewer’s AuthorizedProjectContext.\"],\"outcomes\":[\"The operation refuses or remains read-only because R0-24 grants the write exception only to a staff progress read.\",\"The operation creates the empty manual budget and audit because State 5 accepts any AuthorizedProjectContext.\"],\"observer\":\"Auditors and later staff reading the project’s budget history.\"}}]}",
+ "set_aside": []
+}

@@ -589,7 +589,7 @@ The accepted Factory spec revokes the sessions of a suspended or disabled staff 
 
 ### Consequence
 
-The table is rules data: `rules.revocation_cascades` (SPEC_STANDARD 15.3.1, a rules table). The owning functions named in the tests carry it by address.
+The normative policy is the table above: it is the rules table of this decision (the policy data behind INV-005 and INV-006 lives in this document's rules tables, see Status), and the two checks hold the operations to it. The specification has no `rules` namespace for it: no generated code reads the table as data, and SPEC_STANDARD 15.3.1 (edition 2) refuses a `= rules.*` note address outside a backend IR. The State 7 notes of the owning operations (`revoke_viewer`, `revoke_viewer_access`, `revoke_viewer_project`, `revoke_staff_project_assignment`, `change_staff_status`, `change_service_principal_status`, `revoke_service_credential`) state each cascade as behaviour. The accepted spec's `rules.revocation_cascades` is removed (2026-11-07, SOURCE.md).
 
 ## Accepted decision A12 — R12. Producer scope rule
 
@@ -662,7 +662,7 @@ is the only evidence of the change (Factory code
 A rejected record of a
 significant mutation carries `result = rejected` and a `reason_code`.
 
-The significant mutations (`rules.audit_significant_mutation_actions`) are
+The significant mutations are
 exactly: `viewer.create viewer.revoke viewer.credential_issue
 viewer.credential_revoke grant.create grant.revoke staff_assignment.create
 staff_assignment.revoke staff.create staff.suspend staff.reinstate
@@ -702,7 +702,7 @@ The six challenge actions `staff.email_verification_issue`,
 operation of the accepted service wrote, leave the catalog and the significant
 set with the challenges (owner 2026-11-07, A10, `00_product.md` R0-23).
 
-The accepted Factory spec adds two policies beside the catalog (Factory `5677993e`, 2026-07-22): `rules.audit_significant_mutation_actions`, the closed subset of the catalog called significant mutations (listed above), and `rules.audit_result_reason_policy`: a success carries no `reason_code`, a rejected significant mutation carries a non-blank one, a rejected non-significant action may carry one.
+The accepted Factory spec adds two policies beside the catalog (Factory `5677993e`, 2026-07-22): `rules.audit_significant_mutation_actions`, the closed subset of the catalog called significant mutations (listed above; removed from the case 2026-11-07, see Consequence), and `rules.audit_result_reason_policy`: a success carries no `reason_code`, a rejected significant mutation carries a non-blank one, a rejected non-significant action may carry one.
 
 ### Formal invariants
 
@@ -717,7 +717,7 @@ The accepted Factory spec adds two policies beside the catalog (Factory `5677993
 
 ### Consequence
 
-The table is rules data: `rules.audit_action_catalog` (SPEC_STANDARD 15.3.1, a rules table). The owning functions named in the tests carry it by address.
+The normative catalog and significant subset are the two lists above, the rules tables of this decision; INV-051 and INV-053 are checked against them. In the specification the catalog is the `AuditAction` enumeration (`= models.AuditAction`) and the significant subset is named member by member in the State 7 note of `_validate_audit_intent`. Neither has a `rules` namespace: no generated code reads them as data, and SPEC_STANDARD 15.3.1 (edition 2) refuses a `= rules.*` address outside a backend IR. The accepted spec's `rules.audit_action_catalog` and `rules.audit_significant_mutation_actions` are removed (2026-11-07, SOURCE.md).
 
 ## Accepted decision A14 — R14. Binary delivery policy
 
@@ -1197,10 +1197,18 @@ return values or exception messages, with one exception: the use case
 returns the created account view with the normalized email and the command
 prints that email to the operator who supplied it (Factory code
 `application/staff_bootstrap.py` 55, `cli/staff_bootstrap.py` 33). There is no HTTP route and no API
-description entry. Exit codes are a closed external contract: 0 account
-created, 1 confirmation did not match, 2 identity input rejected, 3 bootstrap
-already completed. Normative value: `rules.staff_bootstrap_policy` (Factory
-`6011ac93`).
+description entry. Exit codes are a closed external contract (Factory code
+`cli/staff_bootstrap.py` 19, 28, 31, 34):
+
+| Outcome | Exit code |
+| --- | --- |
+| account created | 0 |
+| confirmation did not match | 1 |
+| identity input rejected | 2 |
+| bootstrap already completed | 3 |
+
+The accepted spec held these values as `rules.staff_bootstrap_policy`
+(Factory `6011ac93`); see Consequence.
 
 ### Formal invariants
 
@@ -1216,7 +1224,7 @@ already completed. Normative value: `rules.staff_bootstrap_policy` (Factory
 
 ### Consequence
 
-`rules.staff_bootstrap_policy`; the bootstrap modules of State 3 own it.
+The policy data behind the invariants is the exit-code table above, the rules table of this decision; the rest of the policy is the decision's rules text. The bootstrap modules of State 3 own it. In the specification the serialized write is lowered by `rules.sqlite_unit_of_work_backend.bootstrap_store`; the account values, the audit, the input boundary, the disclosure limits and the exit codes are stated by the State 7 notes of `bootstrap_first_administrator` and `run_bootstrap_cli`. There is no `rules` namespace for it: no generated code reads the policy as data, so the accepted spec's `rules.staff_bootstrap_policy` is removed (2026-11-07, SOURCE.md).
 
 ## Accepted decision A30 — Configuration
 

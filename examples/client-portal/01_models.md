@@ -216,7 +216,7 @@ None.
 
 Repaired to the accepted spec (notes `resolve_viewer_session`,
 `sign_out_viewer`, `issue_viewer_access`, `revoke_viewer_access`;
-`rules.revocation_cascades`; Factory code `application/viewer_access.py`,
+the A11 revocation cascade table; Factory code `application/viewer_access.py`,
 which checks that the viewer holds any non-revoked credential): "its
 credential" and "explicit staff action" are made exact (owner 2026-11-06:
 current service behaviour accepted; technical decisions delegated).
@@ -333,7 +333,7 @@ None.
 
 Repaired to the running service (accepted `create_staff_account`,
 `change_staff_status`, `change_staff_password`, `perform_recovery_override`,
-`rules.staff_bootstrap_policy`; R0-07, R0-19, R0-23; owner 2026-11-06:
+A29; R0-07, R0-19, R0-23; owner 2026-11-06:
 current service behaviour accepted; technical decisions delegated). The
 notification of suspension and disabling and the email change through
 `PendingEmailChange` are removed with the challenges (owner 2026-11-07,
@@ -522,7 +522,7 @@ None.
 
 Repaired to the accepted spec: `create_service_principal` persists
 `scope_mode`, `change_service_principal_status` changes only the status
-(`rules.revocation_cascades.service_principal_disabled`), and no operation
+(the A11 cascade of a disabled service principal), and no operation
 changes the scope mode; `authorize_producer_scope` decides an
 `all_projects` principal by the Registry's active answer alone
 (`rules.producer_scope_policy`). Owner 2026-11-06: current service behaviour
@@ -1698,8 +1698,8 @@ None.
 
 ### Carried changes
 
-Bootstrap and password-change audit made exact (`rules.staff_bootstrap_policy`
-`audit`, `creator_semantics` and `disclosure.forbidden_sinks`; note
+Bootstrap and password-change audit made exact (A29: the
+audit, the creator semantics and the forbidden disclosure sinks; note
 `change_staff_password`: "appends no audit, by declaration"). Owner
 2026-11-06: current service behaviour accepted; technical decisions
 delegated.

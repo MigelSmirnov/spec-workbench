@@ -1011,7 +1011,7 @@ None outside the caller's transaction.
 
 ### Enforces
 
-A13 (closed catalogue `rules.audit_action_catalog`, reason policy
+A13 (closed catalogue `AuditAction`, reason policy
 `rules.audit_result_reason_policy`), A23 (`entity_id`), A21 (append-only),
 A28 (`occurred_at` from its own clock read at append, not the caller's
 instant): exactly one insert; a service actor keeps its `key_version`; no secret or
@@ -1461,7 +1461,7 @@ None beyond the change and the audit.
 ### Enforces
 
 A3 (`rules.status_transitions`) from the persisted status; A11
-(`rules.revocation_cascades`): suspension and disabling revoke every live
+(revocation cascades): suspension and disabling revoke every live
 session at the same timestamp. R0-19: activation from `pending_verification` records
 `email_verified_at`; reinstatement from `suspended` keeps it. A13: one
 `staff.suspend` for suspension, `staff.disable` for disabling, and
@@ -1503,7 +1503,7 @@ None.
 ### Enforces
 
 A16 for the new password, A17 for the hash; every other live session of the
-account is revoked, the actor's own is kept. `rules.audit_action_catalog`
+account is revoked, the actor's own is kept. The A13 catalogue (`AuditAction`)
 has no action for a password change, so none is appended. Neither plaintext
 is persisted or audited.
 
@@ -1696,7 +1696,7 @@ None.
 
 ### Enforces
 
-R0-07 and A29 (`rules.staff_bootstrap_policy`): the A16 input rules through
+R0-07 and A29: the A16 input rules through
 the staff identity input boundary, the A17 hash, an account with no creator
 and its `staff.create` audit with the system actor, handed to the port in one
 call; no transaction, query or authorization of its own. The password or its
@@ -1776,7 +1776,7 @@ None.
 
 ### Enforces
 
-R0-14, A3 (terminal), A11 (`rules.revocation_cascades`: credentials and
+R0-14, A3 (terminal), A11 (revocation cascades: credentials and
 sessions revoked in the same transaction), R0-24 (no Registry call), A24,
 A13 (`viewer.revoke`).
 
@@ -2004,7 +2004,7 @@ None beyond the revocation.
 ### Enforces
 
 R0-09: only the session the context names, owned by its viewer, is revoked;
-the viewer's other sessions stay. A24. `rules.audit_action_catalog` has no
+the viewer's other sessions stay. A24. The A13 catalogue (`AuditAction`) has no
 viewer logout action, so none is appended.
 
 ### Errors
@@ -2186,7 +2186,7 @@ None.
 
 ### Enforces
 
-A3 (`rules.status_transitions`), A11 (`rules.revocation_cascades`), A24, A13
+A3 (`rules.status_transitions`), A11 (revocation cascades), A24, A13
 (`principal.disable` or `principal.enable`). A request for the status the
 principal already holds is no transition, so A3's refusal of unlisted
 transitions does not apply to it: the operation returns the principal
@@ -3960,7 +3960,7 @@ None: the email and the password, twice without echo, from the terminal.
 
 ### Outputs
 
-The exit code `rules.staff_bootstrap_policy.command_outcomes` assigns: 0
+The exit code A29 assigns: 0
 created, 1 confirmation mismatch, 2 rejected input, 3 already initialized.
 
 ### Observable effect

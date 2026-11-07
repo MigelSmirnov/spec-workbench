@@ -1,0 +1,124 @@
+{
+ "open_points": [
+  {
+   "subject": "runtime configuration of session TTLs and credential entropy",
+   "kind": "contradiction",
+   "text": "A30 calls staff_session_ttl_hours, viewer_session_ttl_days and credential_entropy_bytes runtime knobs whose deployment values may differ; runtime.create_runtime_app says these values are fixed in source and a deployment cannot change them.",
+   "question": "Are session lifetimes and credential entropy deployment-configurable, and if so how are their configured values propagated to the use cases?",
+   "options": [
+    "Treat the A30 values as deploy-time settings and pass them to the identity and credential operations.",
+    "Keep the values fixed in source as State 5 says, despite A30 classifying them as runtime knobs."
+   ],
+   "default_guess": "Keep the running service's source-fixed values until explicit configuration fields and propagation are defined.",
+   "witness": {
+    "initial": "A deployment is configured for a one-hour staff session instead of the twelve-hour default.",
+    "events": [
+     "A staff member logs in successfully.",
+     "The member presents the session token two hours later."
+    ],
+    "outcomes": [
+     "The session is expired because the deployment override is honored.",
+     "The session remains valid because staff_identity uses the source-fixed twelve-hour lifetime."
+    ],
+    "observer": "The staff member and the deployment operator"
+   },
+   "unit": "context"
+  },
+  {
+   "subject": "HTTP API mount and public path contract",
+   "kind": "contradiction",
+   "text": "A25 says \"The public API lives under /api, stripped by the deployment proxy\"; runtime.create_runtime_app mounts the inner application both at /api and at / and explicitly makes a repeated /api/api prefix reach the same route.",
+   "question": "Which externally reachable path aliases are part of the API contract: only the single /api prefix, root paths after proxy stripping, or both mounts including repeated-prefix paths?",
+   "options": [
+    "Expose only the externally documented single-/api paths.",
+    "Accept both root and /api-mounted routes, including /api/api through a stripping proxy."
+   ],
+   "default_guess": "Expose only one external /api prefix and keep any root routing private to the stripping proxy.",
+   "witness": {
+    "initial": "The service is running behind the specified proxy, which strips one leading /api.",
+    "events": [
+     "A caller sends POST /api/api/auth/staff/login with valid credentials."
+    ],
+    "outcomes": [
+     "After one prefix is stripped, the /api mount accepts the login.",
+     "The request is not a declared public route and returns not found."
+    ],
+    "observer": "The HTTP caller"
+   },
+   "unit": "context"
+  },
+  {
+   "subject": "transport guard coverage of health endpoints",
+   "kind": "ambiguous composition",
+   "text": "A25 requires trusted-host checks and security headers on every answer, while runtime.create_runtime_app creates health routes and says \"the transport guard installed before mounting\" without fixing whether the guard wraps the outer application containing health or only the mounted inner API.",
+   "question": "Do /health/live and /health/ready pass through the transport guard, including trusted-host rejection, security headers and redacted request logging?",
+   "options": [
+    "Install the guard on the outer application so it covers health and API routes.",
+    "Install it only on the inner API, leaving health routes outside it."
+   ],
+   "default_guess": "Apply the transport guard to the outer application, including health routes.",
+   "witness": {
+    "initial": "The service is running with a closed trusted-host allowlist.",
+    "events": [
+     "A monitor sends GET /health/live with an untrusted Host header."
+    ],
+    "outcomes": [
+     "The transport guard rejects the request with 400 and its standard headers.",
+     "The health handler bypasses the guard and returns HealthStatus ok."
+    ],
+    "observer": "The monitor and service operator"
+   },
+   "unit": "context"
+  },
+  {
+   "subject": "staff_bootstrap_cli infrastructure failure contract",
+   "kind": "contradiction",
+   "text": "R0-07 and A29 say the command's outcome is a closed set of exit codes 0–3; run_bootstrap_cli says a configuration or storage failure raises, returns no exit code, and ends with a host-process status outside that closed contract.",
+   "question": "What exact exit status and terminal response does the bootstrap command produce for configuration and storage failures?",
+   "options": [
+    "Map every such failure to one of the closed 0–3 exit codes.",
+    "Extend the closed contract with explicit infrastructure-failure exit codes.",
+    "Leave the exception uncaught and accept a platform-dependent process status."
+   ],
+   "default_guess": "Add a distinct documented nonzero infrastructure-failure exit code without exposing internal details.",
+   "witness": {
+    "initial": "No staff account exists, but the configured SQLite database cannot be opened.",
+    "events": [
+     "The host operator runs the bootstrap command and supplies matching valid credentials."
+    ],
+    "outcomes": [
+     "The command terminates using only the closed 0–3 exit-code contract.",
+     "The operation raises and the runtime chooses an unspecified status outside that contract."
+    ],
+    "observer": "The host operator and deployment script"
+   },
+   "unit": "context"
+  },
+  {
+   "subject": "financial_policy.validate_eur_amount scale handling",
+   "kind": "contradiction",
+   "text": "A9 specifies Decimal money with two fraction digits and ROUND_HALF_UP at derivation boundaries, and State 3 calls this operation two-fraction-digit validation; State 5 says an input with more fraction digits is rounded, never refused.",
+   "question": "When a boundary supplies a finite EUR amount with more than two fraction digits, must the operation reject it or round and store the rounded value?",
+   "options": [
+    "Reject amounts whose supplied scale exceeds two fraction digits.",
+    "Round boundary amounts half-up to two digits and accept them."
+   ],
+   "default_guess": "Reject excess-scale boundary amounts and reserve rounding for derived calculations.",
+   "witness": {
+    "initial": "An active project is authorized and has no payment with the proposed payment_id.",
+    "events": [
+     "An operator registers a EUR work payment whose amount is 1.005."
+    ],
+    "outcomes": [
+     "The request is rejected as invalid money because stored input amounts must already have two fraction digits.",
+     "The request succeeds and stores 1.01 after ROUND_HALF_UP quantization."
+    ],
+    "observer": "The operator and readers of the payment total"
+   },
+   "unit": "context"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"runtime configuration of session TTLs and credential entropy\",\"kind\":\"contradiction\",\"text\":\"A30 calls staff_session_ttl_hours, viewer_session_ttl_days and credential_entropy_bytes runtime knobs whose deployment values may differ; runtime.create_runtime_app says these values are fixed in source and a deployment cannot change them.\",\"question\":\"Are session lifetimes and credential entropy deployment-configurable, and if so how are their configured values propagated to the use cases?\",\"options\":[\"Treat the A30 values as deploy-time settings and pass them to the identity and credential operations.\",\"Keep the values fixed in source as State 5 says, despite A30 classifying them as runtime knobs.\"],\"default_guess\":\"Keep the running service's source-fixed values until explicit configuration fields and propagation are defined.\",\"witness\":{\"initial\":\"A deployment is configured for a one-hour staff session instead of the twelve-hour default.\",\"events\":[\"A staff member logs in successfully.\",\"The member presents the session token two hours later.\"],\"outcomes\":[\"The session is expired because the deployment override is honored.\",\"The session remains valid because staff_identity uses the source-fixed twelve-hour lifetime.\"],\"observer\":\"The staff member and the deployment operator\"},\"unit\":\"context\"},{\"subject\":\"HTTP API mount and public path contract\",\"kind\":\"contradiction\",\"text\":\"A25 says \\\"The public API lives under /api, stripped by the deployment proxy\\\"; runtime.create_runtime_app mounts the inner application both at /api and at / and explicitly makes a repeated /api/api prefix reach the same route.\",\"question\":\"Which externally reachable path aliases are part of the API contract: only the single /api prefix, root paths after proxy stripping, or both mounts including repeated-prefix paths?\",\"options\":[\"Expose only the externally documented single-/api paths.\",\"Accept both root and /api-mounted routes, including /api/api through a stripping proxy.\"],\"default_guess\":\"Expose only one external /api prefix and keep any root routing private to the stripping proxy.\",\"witness\":{\"initial\":\"The service is running behind the specified proxy, which strips one leading /api.\",\"events\":[\"A caller sends POST /api/api/auth/staff/login with valid credentials.\"],\"outcomes\":[\"After one prefix is stripped, the /api mount accepts the login.\",\"The request is not a declared public route and returns not found.\"],\"observer\":\"The HTTP caller\"},\"unit\":\"context\"},{\"subject\":\"transport guard coverage of health endpoints\",\"kind\":\"ambiguous composition\",\"text\":\"A25 requires trusted-host checks and security headers on every answer, while runtime.create_runtime_app creates health routes and says \\\"the transport guard installed before mounting\\\" without fixing whether the guard wraps the outer application containing health or only the mounted inner API.\",\"question\":\"Do /health/live and /health/ready pass through the transport guard, including trusted-host rejection, security headers and redacted request logging?\",\"options\":[\"Install the guard on the outer application so it covers health and API routes.\",\"Install it only on the inner API, leaving health routes outside it.\"],\"default_guess\":\"Apply the transport guard to the outer application, including health routes.\",\"witness\":{\"initial\":\"The service is running with a closed trusted-host allowlist.\",\"events\":[\"A monitor sends GET /health/live with an untrusted Host header.\"],\"outcomes\":[\"The transport guard rejects the request with 400 and its standard headers.\",\"The health handler bypasses the guard and returns HealthStatus ok.\"],\"observer\":\"The monitor and service operator\"},\"unit\":\"context\"},{\"subject\":\"staff_bootstrap_cli infrastructure failure contract\",\"kind\":\"contradiction\",\"text\":\"R0-07 and A29 say the command's outcome is a closed set of exit codes 0–3; run_bootstrap_cli says a configuration or storage failure raises, returns no exit code, and ends with a host-process status outside that closed contract.\",\"question\":\"What exact exit status and terminal response does the bootstrap command produce for configuration and storage failures?\",\"options\":[\"Map every such failure to one of the closed 0–3 exit codes.\",\"Extend the closed contract with explicit infrastructure-failure exit codes.\",\"Leave the exception uncaught and accept a platform-dependent process status.\"],\"default_guess\":\"Add a distinct documented nonzero infrastructure-failure exit code without exposing internal details.\",\"witness\":{\"initial\":\"No staff account exists, but the configured SQLite database cannot be opened.\",\"events\":[\"The host operator runs the bootstrap command and supplies matching valid credentials.\"],\"outcomes\":[\"The command terminates using only the closed 0–3 exit-code contract.\",\"The operation raises and the runtime chooses an unspecified status outside that contract.\"],\"observer\":\"The host operator and deployment script\"},\"unit\":\"context\"},{\"subject\":\"financial_policy.validate_eur_amount scale handling\",\"kind\":\"contradiction\",\"text\":\"A9 specifies Decimal money with two fraction digits and ROUND_HALF_UP at derivation boundaries, and State 3 calls this operation two-fraction-digit validation; State 5 says an input with more fraction digits is rounded, never refused.\",\"question\":\"When a boundary supplies a finite EUR amount with more than two fraction digits, must the operation reject it or round and store the rounded value?\",\"options\":[\"Reject amounts whose supplied scale exceeds two fraction digits.\",\"Round boundary amounts half-up to two digits and accept them.\"],\"default_guess\":\"Reject excess-scale boundary amounts and reserve rounding for derived calculations.\",\"witness\":{\"initial\":\"An active project is authorized and has no payment with the proposed payment_id.\",\"events\":[\"An operator registers a EUR work payment whose amount is 1.005.\"],\"outcomes\":[\"The request is rejected as invalid money because stored input amounts must already have two fraction digits.\",\"The request succeeds and stores 1.01 after ROUND_HALF_UP quantization.\"],\"observer\":\"The operator and readers of the payment total\"},\"unit\":\"context\"}]}",
+ "set_aside": []
+}

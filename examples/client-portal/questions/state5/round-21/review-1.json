@@ -1,0 +1,117 @@
+{
+ "open_points": [
+  {
+   "subject": "runtime.create_runtime_app configuration propagation",
+   "kind": "contradictory configuration authority",
+   "text": "A30 says runtime knobs have confirmed defaults and \"deployment values may differ\", but State 5 says \"every A30 value without an `_env_name` ... is fixed in the use cases' source, so a deployment cannot change it\" and that RuntimeSettings reaches only the store and transport guard.",
+   "question": "Do use cases receive and honor deployment-configured session TTLs, limits and credential entropy, or must they always use source-fixed values?",
+   "options": [
+    "Propagate the RuntimeSettings values to the use cases.",
+    "Ignore those RuntimeSettings fields and use the source-fixed defaults."
+   ],
+   "default_guess": "Honor A30 by propagating the deployment-configured values.",
+   "witness": {
+    "initial": "A deployment supplies a staff-session TTL of one hour instead of the confirmed twelve-hour default.",
+    "events": [
+     "The deployment creates RuntimeSettings with the one-hour value.",
+     "A staff member logs in through staff_identity.authenticate_staff."
+    ],
+    "outcomes": [
+     "The session expires one hour after creation because A30 treats the TTL as a deployment knob.",
+     "The session expires twelve hours after creation because create_runtime_app does not propagate the setting and the use case uses its source-fixed value."
+    ],
+    "observer": "The signed-in staff member and the deployment operator."
+   },
+   "unit": "context"
+  },
+  {
+   "subject": "binary_storage.read_binary configuration lifetime",
+   "kind": "contradictory environment timing",
+   "text": "R0-10 says the service is configured by environment variables \"which it validates when it starts\"; State 3 says RuntimeSettings is read once, but also says binary_storage reads `BINARY_STORAGE_ROOT` and `BINARY_MAX_READ_BYTES` \"at each binary read\". State 5 gives read_binary no RuntimeSettings input.",
+   "question": "Are the binary root and read limit fixed from startup-validated RuntimeSettings, or re-read from the process environment for every binary read?",
+   "options": [
+    "Use the values captured and validated at startup.",
+    "Read and validate the current environment values on each binary request."
+   ],
+   "default_guess": "Use the startup-validated RuntimeSettings values.",
+   "witness": {
+    "initial": "The service starts with a valid binary root A and read limit, then the process environment is changed to root B or a different limit without restarting.",
+    "events": [
+     "A staff member requests an authorized document after the environment change.",
+     "binary_storage.read_binary resolves the request."
+    ],
+    "outcomes": [
+     "The document is read under root A and the startup limit.",
+     "The document is read under root B and the newly read limit, or the request fails if the new values are unusable."
+    ],
+    "observer": "The staff member requesting the document and the operator managing the binary files."
+   },
+   "unit": "context"
+  },
+  {
+   "subject": "staff_bootstrap_cli.run_bootstrap_cli exit contract",
+   "kind": "direct contradiction",
+   "text": "R0-07 says the command's outcome is \"a closed set of exit codes\" and A29 calls the four-code table a \"closed external contract\"; State 5 says a configuration or storage failure \"raises it and returns no exit code\" and that the host process failure status is outside that closed contract.",
+   "question": "What exit code must the CLI process produce for configuration and storage failures, and are those failures members of the closed external contract?",
+   "options": [
+    "Extend the closed exit-code contract with explicit infrastructure-failure code(s).",
+    "Map infrastructure failures to one of the four existing codes.",
+    "Declare that only business outcomes are closed and separately specify the process exit behavior for uncaught infrastructure failures."
+   ],
+   "default_guess": "Add a distinct documented nonzero infrastructure-failure exit code.",
+   "witness": {
+    "initial": "The bootstrap command is run on an empty deployment whose database cannot be opened.",
+    "events": [
+     "The host operator enters matching valid credentials.",
+     "staff_bootstrap_cli attempts to create the bootstrap store."
+    ],
+    "outcomes": [
+     "The command returns a defined member of the closed exit-code contract that a deployment script can branch on.",
+     "The operation raises, and the host/runtime chooses an unspecified process status outside the supposedly closed contract."
+    ],
+    "observer": "The deployment script and host operator."
+   },
+   "unit": "context"
+  },
+  {
+   "subject": "project_tracking_repository.create_project_tracking_schema",
+   "kind": "key constraint contradiction",
+   "text": "M32 defines `section_id: UUID (unique)` and says there is one SectionProgress row per section, while State 5 says the section-progress table has key `(project_id, section_id)`.",
+   "question": "Must the database enforce global uniqueness of `section_id`, or only uniqueness of the `(project_id, section_id)` pair?",
+   "options": [
+    "Make `section_id` alone unique, with project_id stored as the owning project.",
+    "Use only the composite `(project_id, section_id)` key, permitting the same section_id in different projects.",
+    "Use the composite primary key and also add a separate unique constraint on section_id."
+   ],
+   "default_guess": "Enforce section_id uniqueness, matching M32 and the globally identified PortalSection.",
+   "witness": {
+    "initial": "The section-progress table already contains a row for section UUID S in project A.",
+    "events": [
+     "A repository caller attempts to insert another progress row with section UUID S and project B."
+    ],
+    "outcomes": [
+     "The database rejects the insert because section_id is globally unique.",
+     "The database accepts the insert because the composite key differs."
+    ],
+    "observer": "The repository caller and any progress read keyed by section UUID S."
+   },
+   "unit": "context"
+  },
+  {
+   "subject": "credential_security password-operation callers",
+   "kind": "caller contradiction",
+   "text": "State 5 lists `module:viewer_access` as a caller of both `credential_security.hash_password` and `credential_security.verify_password`, while the viewer model has no password and the State 3/4 viewer flows use only `issue_verification_secret`, `parse_verification_secret` and `verify_secret`.",
+   "question": "Is viewer_access genuinely permitted or required to call the password hashing operations, or are staff_identity and staff_bootstrap their only callers?",
+   "options": [
+    "Remove viewer_access from both password-operation caller lists.",
+    "Define the viewer_access operation and purpose that hashes or verifies a password.",
+    "Treat the caller lists as module-level dependency lists rather than operation-level callers, contrary to the State 5 caller convention."
+   ],
+   "default_guess": "Remove viewer_access from the password-operation caller lists.",
+   "unit": "context"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"runtime.create_runtime_app configuration propagation\",\"kind\":\"contradictory configuration authority\",\"text\":\"A30 says runtime knobs have confirmed defaults and \\\"deployment values may differ\\\", but State 5 says \\\"every A30 value without an `_env_name` ... is fixed in the use cases' source, so a deployment cannot change it\\\" and that RuntimeSettings reaches only the store and transport guard.\",\"question\":\"Do use cases receive and honor deployment-configured session TTLs, limits and credential entropy, or must they always use source-fixed values?\",\"options\":[\"Propagate the RuntimeSettings values to the use cases.\",\"Ignore those RuntimeSettings fields and use the source-fixed defaults.\"],\"default_guess\":\"Honor A30 by propagating the deployment-configured values.\",\"witness\":{\"initial\":\"A deployment supplies a staff-session TTL of one hour instead of the confirmed twelve-hour default.\",\"events\":[\"The deployment creates RuntimeSettings with the one-hour value.\",\"A staff member logs in through staff_identity.authenticate_staff.\"],\"outcomes\":[\"The session expires one hour after creation because A30 treats the TTL as a deployment knob.\",\"The session expires twelve hours after creation because create_runtime_app does not propagate the setting and the use case uses its source-fixed value.\"],\"observer\":\"The signed-in staff member and the deployment operator.\"},\"unit\":\"context\"},{\"subject\":\"binary_storage.read_binary configuration lifetime\",\"kind\":\"contradictory environment timing\",\"text\":\"R0-10 says the service is configured by environment variables \\\"which it validates when it starts\\\"; State 3 says RuntimeSettings is read once, but also says binary_storage reads `BINARY_STORAGE_ROOT` and `BINARY_MAX_READ_BYTES` \\\"at each binary read\\\". State 5 gives read_binary no RuntimeSettings input.\",\"question\":\"Are the binary root and read limit fixed from startup-validated RuntimeSettings, or re-read from the process environment for every binary read?\",\"options\":[\"Use the values captured and validated at startup.\",\"Read and validate the current environment values on each binary request.\"],\"default_guess\":\"Use the startup-validated RuntimeSettings values.\",\"witness\":{\"initial\":\"The service starts with a valid binary root A and read limit, then the process environment is changed to root B or a different limit without restarting.\",\"events\":[\"A staff member requests an authorized document after the environment change.\",\"binary_storage.read_binary resolves the request.\"],\"outcomes\":[\"The document is read under root A and the startup limit.\",\"The document is read under root B and the newly read limit, or the request fails if the new values are unusable.\"],\"observer\":\"The staff member requesting the document and the operator managing the binary files.\"},\"unit\":\"context\"},{\"subject\":\"staff_bootstrap_cli.run_bootstrap_cli exit contract\",\"kind\":\"direct contradiction\",\"text\":\"R0-07 says the command's outcome is \\\"a closed set of exit codes\\\" and A29 calls the four-code table a \\\"closed external contract\\\"; State 5 says a configuration or storage failure \\\"raises it and returns no exit code\\\" and that the host process failure status is outside that closed contract.\",\"question\":\"What exit code must the CLI process produce for configuration and storage failures, and are those failures members of the closed external contract?\",\"options\":[\"Extend the closed exit-code contract with explicit infrastructure-failure code(s).\",\"Map infrastructure failures to one of the four existing codes.\",\"Declare that only business outcomes are closed and separately specify the process exit behavior for uncaught infrastructure failures.\"],\"default_guess\":\"Add a distinct documented nonzero infrastructure-failure exit code.\",\"witness\":{\"initial\":\"The bootstrap command is run on an empty deployment whose database cannot be opened.\",\"events\":[\"The host operator enters matching valid credentials.\",\"staff_bootstrap_cli attempts to create the bootstrap store.\"],\"outcomes\":[\"The command returns a defined member of the closed exit-code contract that a deployment script can branch on.\",\"The operation raises, and the host/runtime chooses an unspecified process status outside the supposedly closed contract.\"],\"observer\":\"The deployment script and host operator.\"},\"unit\":\"context\"},{\"subject\":\"project_tracking_repository.create_project_tracking_schema\",\"kind\":\"key constraint contradiction\",\"text\":\"M32 defines `section_id: UUID (unique)` and says there is one SectionProgress row per section, while State 5 says the section-progress table has key `(project_id, section_id)`.\",\"question\":\"Must the database enforce global uniqueness of `section_id`, or only uniqueness of the `(project_id, section_id)` pair?\",\"options\":[\"Make `section_id` alone unique, with project_id stored as the owning project.\",\"Use only the composite `(project_id, section_id)` key, permitting the same section_id in different projects.\",\"Use the composite primary key and also add a separate unique constraint on section_id.\"],\"default_guess\":\"Enforce section_id uniqueness, matching M32 and the globally identified PortalSection.\",\"witness\":{\"initial\":\"The section-progress table already contains a row for section UUID S in project A.\",\"events\":[\"A repository caller attempts to insert another progress row with section UUID S and project B.\"],\"outcomes\":[\"The database rejects the insert because section_id is globally unique.\",\"The database accepts the insert because the composite key differs.\"],\"observer\":\"The repository caller and any progress read keyed by section UUID S.\"},\"unit\":\"context\"},{\"subject\":\"credential_security password-operation callers\",\"kind\":\"caller contradiction\",\"text\":\"State 5 lists `module:viewer_access` as a caller of both `credential_security.hash_password` and `credential_security.verify_password`, while the viewer model has no password and the State 3/4 viewer flows use only `issue_verification_secret`, `parse_verification_secret` and `verify_secret`.\",\"question\":\"Is viewer_access genuinely permitted or required to call the password hashing operations, or are staff_identity and staff_bootstrap their only callers?\",\"options\":[\"Remove viewer_access from both password-operation caller lists.\",\"Define the viewer_access operation and purpose that hashes or verifies a password.\",\"Treat the caller lists as module-level dependency lists rather than operation-level callers, contrary to the State 5 caller convention.\"],\"default_guess\":\"Remove viewer_access from the password-operation caller lists.\",\"unit\":\"context\"}]}",
+ "set_aside": []
+}
