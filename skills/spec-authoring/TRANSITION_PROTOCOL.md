@@ -163,3 +163,39 @@ layer only whether this layer fulfils what it carried here, and a closed unit
 is not audited again. The unit rule of QUESTIONS.md stands: a fix reopens the
 units it edits, and the deterministic context of a round is not part of any
 unit's text, so a changed finding reopens nothing.
+
+## Diagnosing a revision
+
+The transitions stop a case at the first layer that does not hold. To see every
+rule of the standard at once — before a migration starts, or on an old ref —
+use the revision diagnosis (issue #147, second direction):
+
+```bash
+python tools/design_diagnose.py --case examples/<case> [--ref <git ref>]
+python tools/design_diagnose.py --spec <accepted global_spec.json> [--ref <git ref>]
+    [--factory-root <code_factory>] [--code-root <implementation root>] [--json]
+```
+
+It reads the revision from a temporary worktree, runs the rule checks and
+groups their findings by the state that owns each rule (`State 1: 160 identity
+· State 2: 44 time source, 32 witness · …`). A rule whose inputs the revision
+does not hold — identity without State 1, flows without State 4, fresh
+timestamps without State 5 — is `not_checkable`, never omitted and never a
+pass.
+
+Time is reported as two obligations, because a wall-clock source says nothing
+about a monotonic one: the wall-clock requirements and the elapsed-time
+requirements the notes and contracts show, each against its declared sources
+(policy authorities, the clock backend's operations, the modules that import
+them). The report states what it analysed; a requirement it did not detect is
+not proof that none exists.
+
+The Factory's two time checks stay apart from the Workbench's and from each
+other, each with the Factory commit and tool digests: its validator on the
+specification (`--factory-root`), and its time-source gate on an implementation
+(`--code-root`, with the digest of every file scanned). Without code the gate
+is `not_checked`; the specification's results stand regardless. On
+client-portal with `system_clock_backend/v4`, a policy without `elapsed_time`
+passes the validator and fails only the gate on live code, while elapsed
+authority at `transport_guard` fails the validator (KG-003): only the two
+results side by side show both.
