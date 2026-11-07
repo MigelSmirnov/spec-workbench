@@ -967,16 +967,21 @@ carried verbatim at assembly (Factory `0baceacc`).
 
 ### Formal invariants
 
-- No transaction is rolled back twice, rolled back after a commit, or left open.
-- A domain error raised inside a guarded transaction reaches the caller
-  unchanged, never masked by a persistence error of the closed transaction.
+- TXN-001: no transaction is rolled back twice, rolled back after a commit,
+  or left open.
+- TXN-002: a domain error raised inside a guarded transaction reaches the
+  caller unchanged, never masked by a persistence error of the closed
+  transaction.
 
 ### Required tests
 
 - A focused test per use-case module that instruments the store, rejects a
   nested begin and requires exactly one close per call (Factory focused
   checks `*_uow_check`, `0f9ae3ae`, `7eb7ebcc`).
-- Witnesses, the focused Factory verification checks that assert it: closed-once, domain-error-unmasked [witness: verification:transaction_guard_client_portal]; closed-once [witness: verification:staff_identity_uow_client_portal].
+- TXN-001, TXN-002: the transaction guard check
+  [witness: verification:transaction_guard_client_portal].
+- TXN-001: the staff identity unit-of-work check
+  [witness: verification:staff_identity_uow_client_portal].
 
 ### Consequence
 
@@ -1065,17 +1070,23 @@ headers only. Normative value: `rules.http_transport_policy` (Factory
 
 ### Formal invariants
 
-- No request reaches a handler on an untrusted host or with an oversize body.
-- No viewer sign-out succeeds from a foreign origin, and no viewer project
-  read succeeds without the cookie.
-- No credential, cookie or secret appears in a log line.
+- TRN-001: no request reaches a handler on an untrusted host or with an
+  oversize body.
+- TRN-002: no viewer sign-out succeeds from a foreign origin, and no viewer
+  project read succeeds without the cookie.
+- TRN-003: no credential, cookie or secret appears in a log line.
 
 ### Required tests
 
 - Factory focused checks `client_portal_transport_guard`,
   `client_portal_api_transport_check` and `runtime_settings_client_portal`
   (`babd5e52`, `3080ef0d`, `dc351917`).
-- Witnesses, the focused Factory verification checks that assert it: host/body, sign-out origin & cookie, no secret in logs [witness: verification:runtime_behavior_client_portal]; host/body, no secret in logs [witness: verification:transport_guard_client_portal]; sign-out origin & cookie [witness: verification:api_transport_financial_policy_registry_gateway_client_portal].
+- TRN-001, TRN-002, TRN-003: the runtime behaviour check
+  [witness: verification:runtime_behavior_client_portal].
+- TRN-001, TRN-003: the transport guard check
+  [witness: verification:transport_guard_client_portal].
+- TRN-002: the API transport check
+  [witness: verification:api_transport_financial_policy_registry_gateway_client_portal].
 
 ### Consequence
 
@@ -1213,15 +1224,18 @@ The accepted spec held these values as `rules.staff_bootstrap_policy`
 
 ### Formal invariants
 
-- At most one account is ever created by the command, and only on an empty
-  staff table.
-- The exit code of each outcome is the one listed.
+- BOOT-001: at most one account is ever created by the command, and only on
+  an empty staff table.
+- BOOT-002: the exit code of each outcome is the one listed.
 
 ### Required tests
 
 - A bootstrap test on an empty and a non-empty store, with two concurrent
   attempts, and one per exit code.
-- Witnesses, the focused Factory verification checks that assert it: at most one account, only on empty table [witness: verification:staff_bootstrap_store_client_portal]; exit codes [witness: verification:staff_bootstrap_cli_client_portal].
+- BOOT-001: the bootstrap store check
+  [witness: verification:staff_bootstrap_store_client_portal].
+- BOOT-002: the bootstrap command check
+  [witness: verification:staff_bootstrap_cli_client_portal].
 
 ### Consequence
 
