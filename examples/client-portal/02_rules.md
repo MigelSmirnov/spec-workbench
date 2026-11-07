@@ -1148,12 +1148,12 @@ delegated; answers OQ-18 and `open_questions.md` Q18).
 `rules.derived_view_ordering`; `01_models.md` "Projections and answers"
 records the replacement.
 
-## Accepted decision A28 — Clock policy (accepted Factory spec, 2026-08-09)
+## Accepted decision A28 — Clock policy (accepted Factory spec, 2026-08-09; one clock source, coordinator 2026-11-07)
 
 ### Normative rules
 
 Persisted timestamps are UTC, stored as offset-naive datetimes. An operation
-reads the clock once for its own timestamps (`datetime.utcnow()`), and that one
+reads the clock once for its own timestamps, and that one
 instant supplies every portal-owned timestamp it writes (event times such as
 `created_at`, `received_at`, `revoked_at`) and every current-time comparison
 that decides the validity of those writes or of persisted records. Times a
@@ -1174,6 +1174,33 @@ own audit, keeps its one instant. Normative value: `rules.clock_policy` (Factory
 narrows the former convention "Timestamps are timezone-aware UTC" of State 1:
 the instants are UTC, their stored form is offset-naive.
 
+The host has two clocks, and one clock source is the only reader of both;
+every other part of the portal obtains time from it and never reads a host
+clock itself:
+
+- the wall clock gives the instant: the current UTC time as an offset-naive
+  datetime, one reading per request, the same value `datetime.utcnow()`
+  gives (no cache, no local time, no second reading, no arithmetic);
+- the elapsed clock gives a duration scale: one reading per request of a
+  clock that cannot move backwards, in seconds as a float, the same value
+  `time.monotonic()` gives. It measures the viewer-entry rate-limit window of
+  A25 only; a reading is never stored, never turned into an instant and
+  never ordered against a persisted record.
+
+How many readings an operation takes and which instant it reuses stay the
+rules above. Normative value: `rules.time_source_policy` and
+`rules.system_clock_backend` (SPEC_STANDARD §6.9 version 5).
+
+### Carried changes
+
+The accepted spec 459ac96c has no clock source: thirteen modules read
+`datetime.utcnow()` and the transport guard reads `time.monotonic()`
+directly (coordinator decision of 2026-11-06, `SOURCE.md`). The coordinator
+decided on 2026-11-07 to name the one source instead (SPEC_STANDARD §6.9
+version 5, KG-003 closed). The values and moments are unchanged: the wall
+reading equals `datetime.utcnow()` and the elapsed reading equals
+`time.monotonic()`, each read at the same point of the same operation.
+
 ### Formal invariants
 
 - All portal-owned event timestamps written by one operation, other than an
@@ -1188,7 +1215,7 @@ the instants are UTC, their stored form is offset-naive.
 
 ### Consequence
 
-`rules.clock_policy`.
+`rules.clock_policy`; `rules.time_source_policy`; `rules.system_clock_backend`.
 
 ## Accepted decision A29 — First-administrator bootstrap policy (accepted Factory spec, 2026-08-17)
 

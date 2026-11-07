@@ -511,14 +511,35 @@ are written.
 
 | topic | evidence | decision |
 |---|---|---|
-| time source of the operations (revised 2026-11-06, replaces the clock-policy address) | the accepted contracts (459ac96c) have no clock port; the running modules read the time with `datetime.utcnow()` (`application/*.py` call sites); SPEC_STANDARD §15.3.1 (rev 2) and the Factory resolver refuse `= rules.clock_policy.*` in a note (`rules_address_outside_backend_ir`) | the contracts stay unchanged and no clock backend (§6.9) is added; a note that needs the current time states the behaviour: the operation reads the current UTC time once and uses that single instant for every timestamp it writes and every current-time comparison it makes |
+| time source of the operations (revised 2026-11-06, replaces the clock-policy address; **superseded 2026-11-07** by `system_clock_backend/v5`, below) | the accepted contracts (459ac96c) have no clock port; the running modules read the time with `datetime.utcnow()` (`application/*.py` call sites); SPEC_STANDARD §15.3.1 (rev 2) and the Factory resolver refuse `= rules.clock_policy.*` in a note (`rules_address_outside_backend_ir`) | the contracts stay unchanged and no clock backend (§6.9) is added; a note that needs the current time states the behaviour: the operation reads the current UTC time once and uses that single instant for every timestamp it writes and every current-time comparison it makes |
 | addresses in notes | SPEC_STANDARD §15.3.1 (rev 2); Factory `resolve_data_address` refuses every non-backend `= rules.*` and every non-persistence `= config.*`, even where the Workbench gate and `check_note_draft` pass them | a note carries only addresses of registered deterministic backend IR and `config.persistence.*_table_name` / `storage_schema_revision`, each checked with the Factory resolver; the 186 carried notes with another address are rewritten: a behaviour rule in words (154), a closed value by its model symbol (5: `AuditAction`, `Capability`, `RegistryFailureKind`, `StaffRole`/`StaffStatus`/`ActorKind`/`AuditEntityKind`/`AuditResult` members), a literal without a models home first left out (27 notes); revised below: the value is written back in plain words |
 | module- and class-level notes | the gate knows only `module:<name>` tokens of `30_modules.md` (closed at State 3) and no class scope | moved onto the callables they constrain, repeated per callable; the gate behaviour is reported to the coordinator as a tool/document discrepancy (SPEC_STANDARD §2 allows `module_name:`) |
-| `design_closure_gaps.py` `fresh_timestamp_without_source` (36) and `ambient_time_note` (4 after the State 7 notes) | report-only fuse; the time source is the operation's own UTC read stated as behaviour, not a contract parameter | accepted, report-only; no contract or model change |
+| `design_closure_gaps.py` `fresh_timestamp_without_source` (36) and `ambient_time_note` (4 after the State 7 notes) (**superseded 2026-11-07**, below) | report-only fuse; the time source is the operation's own UTC read stated as behaviour, not a contract parameter | accepted, report-only; no contract or model change |
 | `design_closure_gaps.py` `orphan_read_entity` (17: `BinaryPayload`, `BudgetActivationResult`, `ChallengeIssueView`, `ClientViewerView`, `DocumentMutationResult`, `ExpenseMutationResult`, `PhotoMutationResult`, `PresentedSecret`, `ProjectOverview`, `ServiceCredentialIssueResponse`, `ServicePrincipalView`, `SessionRevocationResult`, `StaffAccountView`, `StaffSessionGrant`, `ViewerCredentialIssueResponse`, `ViewerSessionGrant`, `WorkBalanceResult`) | result and view models built by the operations that return them (accepted contracts and notes of 459ac96c) | accepted, report-only; the State 7 notes of the returning operations state the construction |
 
 If the State 7 gate itself blocks on either class, the notes stop and the
 finding goes back to the coordinator.
+
+#### Deviation from 459ac96c: one clock source, `system_clock_backend/v5` (coordinator, 2026-11-07)
+
+Supersedes the row "time source of the operations" of the State 7 coordinator
+decisions of 2026-11-06 ("the contracts stay unchanged and no clock backend
+(§6.9) is added") and the row on `fresh_timestamp_without_source` /
+`ambient_time_note` ("accepted, report-only"). KG-003 is closed by SPEC_STANDARD
+§6.9 version 5. The 2026-11-06 decision stayed in force while one finding
+could not close: `api_irregular.viewer_enter_endpoint` returns the
+`expires_at` that `viewer_access.enter_viewer_access` computes, and
+`fresh_timestamp_without_source` admitted no instant produced by a callee
+(Workbench gap). Workbench #155 closed that gap (a timestamp travels back
+through what a call returns, TRANSITION_PROTOCOL "Time source"), so the
+decision is superseded; `api_irregular` gets no clock import.
+
+| topic | evidence | decision |
+|---|---|---|
+| where time comes from | 459ac96c: twelve kept modules (and the removed `email_delivery_gateway`) read `datetime.utcnow()` in 44 callables (`application/*.py`, `domain/*.py`); `runtime/transport_guard.py:147` reads `time.monotonic()` for the viewer-entry window | a new module `system_clock` (`core/system_clock`, after `models` in `module_order`) is the one reader of both host clocks: `utc_now() -> datetime` (v4 lowering: one `datetime.now(timezone.utc).replace(tzinfo=None)` per call, the value `datetime.utcnow()` gives) and `monotonic_seconds() -> float` (one `time.monotonic()` per call, returned as is). `rules.time_source_policy`: wall `system_clock`, `datetime.datetime.now`, single source, one sample; elapsed `system_clock`, `time.monotonic`, one sample, `persisted: false`. `rules.system_clock_backend` from `70_system_clock_closure.json` |
+| consumers | the 44 callables above and `install_transport_guards` | each takes its one reading through the clock (State 7 note naming `utc_now` / `monotonic_seconds`; `65_imports.json` `uses` with basis `note:`, `code_outdated` until the next Route B); A28 primary owner `system_clock` in `30_trace.json` |
+| values and moments | the v4/v5 lowering reads the same instant at the same point of the same operation | unchanged; `rules.clock_policy` is kept as the accepted value of A28 (its `capture_source` names the equal `datetime.utcnow()` value) |
+| semantic diff against 459ac96c | one module, two contracts, `rules.time_source_policy`, `rules.system_clock_backend`, 44 notes added or rewritten, one note of `install_transport_guards` rewritten, 45 import uses | expected differences; the running code keeps its direct reads until the next Route B, so the Factory time-source gate on the live code blocks until then |
 
 #### Deviation from 459ac96c: parameterless exception constructors (coordinator, 2026-11-07)
 

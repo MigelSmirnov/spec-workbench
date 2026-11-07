@@ -22,13 +22,16 @@ listed in "Changes against the former text" below.
 On 2026-11-07 the owner removed the staff email challenges (`00_product.md`
 R0-23). Three modules leave with them: `staff_challenges` (added by the
 Factory), the repository `email_delivery_repository` (one of the eleven) and
-`email_delivery_gateway` (one of the former 20). The case runs 36 modules: 19
-of the former text and 17 added ones, ten of them repositories.
+`email_delivery_gateway` (one of the former 20). On 2026-11-07 the
+coordinator added `system_clock`, the one reader of the host clocks (A28,
+SPEC_STANDARD §6.9 version 5), which the accepted spec does not have. The case
+runs 37 modules: 19 of the former text, 17 added by the Factory, ten of them
+repositories, and `system_clock`.
 
 A module owns one hidden mechanism and has one reason to change; its public
 surface is smaller than what it hides. Each accepted decision has one primary
 owner, the module that holds the decision's central mechanism, and consumers,
-except the three decisions recorded `cross_cutting` (A22, A26, A28, below).
+except the two decisions recorded `cross_cutting` (A22, A26, below).
 A consumer owns exactly the rules and parts of a decision its own section
 names; the primary owner owns every other rule of the decision. The table is
 the one mapping; `30_trace.json` records the same:
@@ -62,16 +65,18 @@ the one mapping; `30_trace.json` records the same:
 | A25 | `transport_guard` | `api`, `api_irregular`, `runtime`, `runtime_settings` |
 | A26 | cross-cutting | `registry_gateway`, `snapshot_import`, `authorization_guard` |
 | A27 | `derived_views` | — |
-| A28 | cross-cutting | every module that writes a timestamp (listed in `30_trace.json`) |
+| A28 | `system_clock` | every module that reads the time (listed in `30_trace.json`) |
 | A29 | `staff_bootstrap` | `staff_bootstrap_store`, `staff_bootstrap_cli`, `staff_identity`, `credential_security` |
 | A30 | `runtime_settings` | `registry_gateway`, `staff_identity`, `viewer_access`, `credential_security`, `binary_storage`, the ten repositories, `staff_bootstrap_store` |
 | A31 | evidence record | — |
 | A32 | deployment process | — |
 
-A22 (transaction guard), A26 (exception payloads) and A28 (clock) are one rule
-applied the same way by many modules, each to its own transactions, exceptions
-and timestamps; no module holds a mechanism the others call, so they are
-recorded `cross_cutting` in `30_trace.json`. A31, the security review of
+A22 (transaction guard) and A26 (exception payloads) are one rule applied the
+same way by many modules, each to its own transactions and exceptions; no
+module holds a mechanism the others call, so they are recorded
+`cross_cutting` in `30_trace.json`. A28 (clock) was recorded so until
+2026-11-07; its source is now `system_clock`, and each consumer applies the
+one-instant rule to its own timestamps. A31, the security review of
 States 0–2, is an evidence record checked by `design_lint --state 2`. A32, the
 dependency pins and their check, is a deployment process.
 
@@ -82,6 +87,7 @@ may know only modules on earlier lines, never one on a later line:
 
 ```text
 models
+system_clock
 credential_security, financial_policy
 audit_repository, project_tracking_repository, project_section_repository,
   budget_repository, snapshot_import_repository, expense_repository,
@@ -152,6 +158,10 @@ assertion that every module imports every earlier one.
   viewer browser credential is the host-only cookie read only by
   `api_irregular`; service principals and staff present bearer headers read
   only by `api`.
+- **Time.** Only `system_clock` reads the host clocks (A28). An operation
+  that needs the current instant takes one wall reading from it and reuses
+  it; the transport guard takes the elapsed reading for the viewer-entry
+  window from it. No other module reads a host clock.
 - **Configuration.** Environment values are read once, by `runtime_settings`,
   into `RuntimeSettings`; other modules read `config.*` constants or the
   settings they are handed, never the environment, with two exceptions
@@ -223,6 +233,44 @@ authorization, cross-record uniqueness or any lifecycle transition.
 - kind: deep
 - hidden mechanism: type validity of the portal's shared vocabulary; a rule
   placed here would have no single owner
+
+## `system_clock`
+
+### Owns
+
+The source of time of A28: the only reader of the host wall clock and of the
+host elapsed clock. One wall reading per call, the current UTC time as an
+offset-naive datetime, and one elapsed reading per call, a monotonic count of
+seconds as a float. The backend is `rules.system_clock_backend` (SPEC_STANDARD
+§6.9 version 5) under `rules.time_source_policy`; coordinator 2026-11-07
+(the accepted spec 459ac96c has no such module, `SOURCE.md`).
+
+### Knows
+
+Nothing.
+
+### Must not own
+
+When an operation reads the time, how many readings it takes, which instant
+it reuses, any comparison, TTL arithmetic, storage or ordering of a reading,
+and the rate-limit window.
+
+### Hides
+
+Which host primitives give the two readings and how the wall reading is made
+offset-naive UTC.
+
+### Depth assessment
+
+- kind: deep
+- hidden mechanism: the host clocks behind one wall and one elapsed reading
+
+### Candidate public capabilities
+
+```text
+utc_now
+monotonic_seconds
+```
 
 ## `credential_security`
 
@@ -791,7 +839,7 @@ record itself, its `occurred_at` the bootstrap's one instant (A28), and
 
 ### Knows
 
-`models`.
+`models`, `system_clock`.
 
 ### Must not own
 
@@ -827,7 +875,7 @@ observes it.
 
 ### Knows
 
-`models`, `registry_gateway`, `portal_store`.
+`models`, `system_clock`, `registry_gateway`, `portal_store`.
 
 ### Must not own
 
@@ -871,8 +919,8 @@ Factory `3080ef0dbe73`). Session TTL is A30's.
 
 ### Knows
 
-`models`, `credential_security`, `authorization_guard`, `registry_gateway`,
-`audit_writer`, `portal_store`.
+`models`, `system_clock`, `credential_security`, `authorization_guard`,
+`registry_gateway`, `audit_writer`, `portal_store`.
 
 ### Must not own
 
@@ -918,7 +966,7 @@ through `staff_identity`'s input boundary, hash the password through
 
 ### Knows
 
-`models`, `credential_security`, `staff_identity`.
+`models`, `system_clock`, `credential_security`, `staff_identity`.
 
 ### Must not own
 
@@ -953,8 +1001,8 @@ revocation, viewer entry and session resolution, description and sign-out
 
 ### Knows
 
-`models`, `credential_security`, `authorization_guard`, `registry_gateway`,
-`audit_writer`, `portal_store`.
+`models`, `system_clock`, `credential_security`, `authorization_guard`,
+`registry_gateway`, `audit_writer`, `portal_store`.
 
 ### Must not own
 
@@ -996,8 +1044,8 @@ revocation, producer grants, bearer authentication and producer scope.
 
 ### Knows
 
-`models`, `credential_security`, `authorization_guard`, `registry_gateway`,
-`audit_writer`, `portal_store`.
+`models`, `system_clock`, `credential_security`, `authorization_guard`,
+`registry_gateway`, `audit_writer`, `portal_store`.
 
 ### Must not own
 
@@ -1040,8 +1088,8 @@ import result.
 
 ### Knows
 
-`models`, `authorization_guard`, `financial_policy`, `audit_writer`,
-`portal_store`.
+`models`, `system_clock`, `authorization_guard`, `financial_policy`,
+`audit_writer`, `portal_store`.
 
 ### Must not own
 
@@ -1076,7 +1124,7 @@ expense allocations left without a current section after a switch.
 
 ### Knows
 
-`models`, `financial_policy`, `audit_writer`, `portal_store`.
+`models`, `system_clock`, `financial_policy`, `audit_writer`, `portal_store`.
 
 ### Must not own
 
@@ -1115,8 +1163,8 @@ the access and visibility re-check before a document's content is read (A14).
 
 ### Knows
 
-`models`, `financial_policy`, `binary_storage`, `audit_writer`,
-`portal_store`.
+`models`, `system_clock`, `financial_policy`, `binary_storage`,
+`audit_writer`, `portal_store`.
 
 ### Must not own
 
@@ -1156,7 +1204,7 @@ document consistency, and atomic creation of the aggregate with its audit.
 
 ### Knows
 
-`models`, `financial_policy`, `audit_writer`, `portal_store`,
+`models`, `system_clock`, `financial_policy`, `audit_writer`, `portal_store`,
 `expense_management`.
 
 ### Must not own
@@ -1189,8 +1237,8 @@ and the progress and payment lists.
 
 ### Knows
 
-`models`, `financial_policy`, `budget_management`, `audit_writer`,
-`portal_store`.
+`models`, `system_clock`, `financial_policy`, `budget_management`,
+`audit_writer`, `portal_store`.
 
 ### Must not own
 
@@ -1228,7 +1276,7 @@ gallery's order of A27 is `derived_views`') and the access and visibility re-che
 
 ### Knows
 
-`models`, `binary_storage`, `audit_writer`, `portal_store`.
+`models`, `system_clock`, `binary_storage`, `audit_writer`, `portal_store`.
 
 ### Must not own
 
@@ -1395,7 +1443,7 @@ security and `no-store` headers and writes one redacted log line. Factory
 
 ### Knows
 
-`models`.
+`models`, `system_clock`.
 
 ### Must not own
 

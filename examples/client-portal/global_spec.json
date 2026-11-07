@@ -4,6 +4,8 @@
     "RegistryBoundaryError.__init__": "(self, kind: RegistryFailureKind) -> None",
     "BinaryStorageError.__init__": "(self) -> None",
     "PersistenceError.__init__": "(self) -> None",
+    "utc_now": "() -> datetime",
+    "monotonic_seconds": "() -> float",
     "hash_password": "(password: str) -> str",
     "verify_password": "(password: str, password_hash: str) -> bool",
     "issue_verification_secret": "(record_id: UUID, entropy_bytes: int) -> IssuedSecret",
@@ -1021,6 +1023,7 @@
     "BinaryStorageError.__init__: [PATH_OR_ARTIFACT_POLICY] MUST carry no raw path, bucket, provider URL, credential, or file_ref.",
     "read_binary: [PATH_OR_ARTIFACT_POLICY] MUST load only AuthorizedBinaryReference through the binary storage backend, return the exact bytes and derived public metadata, and expose no storage locator or credential.",
     "append_audit: [ORCHESTRATION] MUST validate the closed catalog intent and call repository.insert_audit exactly once for the caller-owned open unit of work; it MUST NOT commit, rollback, inspect repository internals, or catch/translate persistence errors; service actors MUST retain key_version and no secret/file_ref may enter details.",
+    "append_audit: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it writes and every current-time comparison it makes; it MUST NOT read a host clock itself.",
     "_validate_audit_intent: [VALIDATION_ERROR] MUST reject an action that is not an AuditAction member and MUST enforce the result and reason combination: a success record carries no reason_code, a rejected record of a significant mutation carries a non-blank reason_code, and a rejected record of any other action may carry one or none; the significant mutation actions are exactly AuditAction.VIEWER_CREATE, AuditAction.VIEWER_REVOKE, AuditAction.VIEWER_CREDENTIAL_ISSUE, AuditAction.VIEWER_CREDENTIAL_REVOKE, AuditAction.GRANT_CREATE, AuditAction.GRANT_REVOKE, AuditAction.STAFF_ASSIGNMENT_CREATE, AuditAction.STAFF_ASSIGNMENT_REVOKE, AuditAction.STAFF_CREATE, AuditAction.STAFF_SUSPEND, AuditAction.STAFF_REINSTATE, AuditAction.STAFF_DISABLE, AuditAction.STAFF_RECOVERY_OVERRIDE, AuditAction.PRINCIPAL_CREATE, AuditAction.PRINCIPAL_DISABLE, AuditAction.PRINCIPAL_ENABLE, AuditAction.PRINCIPAL_CREDENTIAL_ISSUE, AuditAction.PRINCIPAL_CREDENTIAL_REVOKE, AuditAction.PRODUCER_GRANT_CREATE, AuditAction.PRODUCER_GRANT_REVOKE, AuditAction.BUDGET_SECTION_PLAN_EDIT, AuditAction.BUDGET_MANUAL_VERSION_CREATE, AuditAction.SNAPSHOT_IMPORT, AuditAction.SNAPSHOT_ACTIVATE, AuditAction.EXPENSE_CREATE, AuditAction.EXPENSE_CORRECT, AuditAction.EXPENSE_INCLUDE, AuditAction.EXPENSE_EXCLUDE, AuditAction.EXPENSE_ALLOCATE, AuditAction.DOCUMENT_UPDATE, AuditAction.PROGRESS_UPDATE, AuditAction.PAYMENT_REGISTER, AuditAction.PHOTO_PUBLISH and AuditAction.PHOTO_UPDATE.",
     "_build_audit_record: [FIELD_PROJECTION] MUST copy actor kind/id/key_version, action, result, reason, project/entity provenance and assign occurred_at without session token, secret, hash, or file_ref.",
     "_build_audit_record: [DETERMINISM_OR_ORDERING] MUST assign a new uuid4 audit_id for every record; UUID(int=0), intent-derived IDs, counters, and reused identifiers are forbidden.",
@@ -1044,12 +1047,14 @@
     "authorize_access_management: [DEPENDENCY_BOUNDARY] MUST open its transaction with an explicit assignment, never as a context manager, because the transaction type provides no context-manager protocol and entering one raises TypeError before any read. It MUST reach staff persistence only through tx.staff_access(), use no legacy transaction-level staff method, and close the transaction exactly once: it rolls back once immediately after the last read, sets its local open flag closed, and only then evaluates the outcome and raises any domain error; a failure rolls back only while that flag still marks the transaction open and re-raises the original failure unchanged.",
     "authorize_access_management: [SECURITY_BOUNDARY] MUST validate the session exactly as the project guard does — present, not revoked, not expired — resolve the account from that session, require it active, and then decide the access-management capability from the role stored on that account. Only the administrator role adds Capability.PORTAL_ACCESS_MANAGE to the operator capabilities, so a valid operator session MUST be rejected. Deciding from a role supplied by the caller, or from a fixed administrator role written into the check, makes the capability test vacuous and hands client and service access management to any staff member with a session.",
     "authorize_access_management: [RETURN_SHAPE] MUST return the authorized staff context carrying the identity and role read from persistence, so that a caller recording who acted attributes it to the account the store knows rather than to the claim it was handed.",
+    "authorize_access_management: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it writes and every current-time comparison it makes; it MUST NOT read a host clock itself.",
     "_require_staff_scope: [SECURITY_BOUNDARY] MUST decide from the persisted account it is given: an administrator passes under the single-area policy, an operator passes only with an active project assignment for the same project_id read through the repository it is given, and any other role is rejected. It MUST NOT open, commit, roll back or close a transaction, and MUST NOT take the deciding role from a caller-supplied actor context.",
     "_require_viewer_grant: [SECURITY_BOUNDARY] MUST require an active project grant for the viewer and project_id it is given, read through the repository it is given, and reject through the scoped concealment boundary so that a missing grant and a revoked one are indistinguishable. It MUST NOT open, commit, roll back or close a transaction.",
     "_authorize_project_operation: [DEPENDENCY_BOUNDARY] MUST close its transaction before it validates the project against the registry, and MUST NOT hold an open transaction across that call. The registry is an external service reached over the network, so a transaction left open around it pins a database connection for the length of a remote call and ties the store's liveness to the registry's. The Registry lifecycle step is the last of the five guard steps and needs no persisted state, so nothing forces the two to overlap.",
     "_authorize_project_operation: [SECURITY_BOUNDARY] MUST reject a principal whose persisted record is not active through the same concealment boundary as an unknown session, not as an authorization decision. Suspension and revocation end that principal's sessions, so a session presented for a non-active account or viewer is a session that should no longer exist; answering it differently from an unknown one tells an unauthenticated caller that the account exists and what state it is in, and turns a rejection that means \"authenticate again\" into one that means \"you are known but not permitted\".",
     "_context_from_validation: [FIELD_PROJECTION] MUST project the accepted registry status and MUST NOT decide project lifecycle. An archived project may be read but not mutated, so rejecting every archived project here contradicts the very field this function sets and makes the archived value of registry_status unreachable. The only rejection that belongs here is an absent project; whether a mutation may proceed against an archived one is decided by the caller before this projection is reached.",
     "_authorize_project_operation: [FIELD_ASSIGNMENT] MUST address a service principal by the identity field the persisted ServicePrincipal record returned by tx.get_service_principal declares, service_principal_id, both when it looks up that principal's grant for the project and when it records who acted. The record carries no other identity, so reading one raises the moment a producer first authenticates — which stayed invisible for as long as service persistence was unimplemented and this branch could never run.",
+    "_authorize_project_operation: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it writes and every current-time comparison it makes; it MUST NOT read a host clock itself.",
     "create_staff_account: [ORCHESTRATION] MUST authorize access management, enforce R16 normalized-email uniqueness, hash initial_password exactly as supplied with hash_password, insert the pending-verification account, and append AuditAction.STAFF_CREATE in the same transaction. It MUST return the hash-free StaffAccountView with email_verified derived from email_verified_at and password_hash never leaving this module.",
     "authenticate_staff: [SECURITY_BOUNDARY] MUST normalize email, accept only an account whose status is StaffStatus.ACTIVE with a password verify_password matches, deciding nothing on email_verified_at, issue a hashed fixed-expiry session, audit success or concealed failure, and never reveal which check failed: every rejection raises what conceal_authentication_failure returns.",
     "resolve_staff_session: [SECURITY_BOUNDARY] MUST parse the R17 selector with parse_verification_secret, verify its secret hash with verify_secret, fixed expiry, revocation and that the account status is StaffStatus.ACTIVE before returning StaffActorContext, deciding nothing on email_verified_at; any failure raises AuthenticationRejected.",
@@ -1092,21 +1097,32 @@
     "assign_staff_project: [FIELD_ASSIGNMENT] MUST capture its operation timestamp as offset-naive UTC, compatible with the existing persisted datetime model; it MUST NOT introduce a timezone-aware datetime that cannot be compared with existing offset-naive records.",
     "authenticate_staff: [FIELD_ASSIGNMENT] MUST capture created_at as offset-naive UTC and derive expires_at by adding the configured timedelta to that same offset-naive value; both persisted and returned datetimes MUST remain comparable with existing offset-naive records.",
     "change_staff_password: [FIELD_ASSIGNMENT] MUST capture updated_at and revoked_at as one offset-naive UTC datetime so comparisons with existing offset-naive session expiry values remain valid; it MUST NOT introduce a timezone-aware datetime.",
+    "change_staff_password: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it writes and every current-time comparison it makes; it MUST NOT read a host clock itself.",
     "change_staff_status: [FIELD_ASSIGNMENT] MUST capture updated_at, any activation email_verified_at, and any session revoked_at as one offset-naive UTC datetime so comparisons with existing offset-naive session expiry values remain valid; it MUST NOT introduce a timezone-aware datetime.",
+    "change_staff_status: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it writes and every current-time comparison it makes; it MUST NOT read a host clock itself.",
     "create_staff_account: [FIELD_ASSIGNMENT] MUST capture created_at and updated_at as one offset-naive UTC datetime compatible with the existing persisted datetime model; it MUST NOT introduce a timezone-aware datetime.",
     "perform_recovery_override: [FIELD_ASSIGNMENT] MUST capture email_verified_at and updated_at as one offset-naive UTC datetime compatible with the existing persisted datetime model; it MUST NOT introduce a timezone-aware datetime.",
+    "perform_recovery_override: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it writes and every current-time comparison it makes; it MUST NOT read a host clock itself.",
     "resolve_staff_session: [SECURITY_BOUNDARY] MUST evaluate expiry against a captured offset-naive UTC datetime because persisted session expiry values use the existing offset-naive datetime model; it MUST NOT compare them with a timezone-aware datetime.",
+    "resolve_staff_session: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it writes and every current-time comparison it makes; it MUST NOT read a host clock itself.",
     "revoke_staff_project_assignment: [FIELD_ASSIGNMENT] MUST capture revoked_at as offset-naive UTC compatible with the existing persisted datetime model; it MUST NOT introduce a timezone-aware datetime.",
+    "revoke_staff_project_assignment: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it writes and every current-time comparison it makes; it MUST NOT read a host clock itself.",
     "revoke_staff_sessions: [FIELD_ASSIGNMENT] MUST capture revoked_at as offset-naive UTC so comparisons with existing offset-naive session expiry values remain valid and return that same value in SessionRevocationResult; it MUST NOT introduce a timezone-aware datetime.",
+    "revoke_staff_sessions: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it writes and every current-time comparison it makes; it MUST NOT read a host clock itself.",
     "sign_out_staff: [FIELD_ASSIGNMENT] MUST capture revoked_at as offset-naive UTC so comparisons with the existing offset-naive session expiry value remain valid; it MUST NOT introduce a timezone-aware datetime.",
+    "sign_out_staff: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it writes and every current-time comparison it makes; it MUST NOT read a host clock itself.",
     "assign_staff_project: [FIELD_ASSIGNMENT] MUST allocate assignment_id with uuid4(); it MUST NOT derive an identifier from IssuedSecret or call issue_verification_secret for identifier allocation.",
+    "assign_staff_project: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it writes and every current-time comparison it makes; it MUST NOT read a host clock itself.",
     "authenticate_staff: [FIELD_ASSIGNMENT] MUST allocate session_id with uuid4() before calling issue_verification_secret(session_id, 32); IssuedSecret exposes only plaintext and verification_hash and MUST NOT be used as an identifier source.",
+    "authenticate_staff: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it writes and every current-time comparison it makes; it MUST NOT read a host clock itself.",
     "create_staff_account: [FIELD_ASSIGNMENT] MUST allocate staff_id with uuid4(); it MUST NOT derive an identifier from IssuedSecret or call issue_verification_secret for identifier allocation.",
+    "create_staff_account: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it writes and every current-time comparison it makes; it MUST NOT read a host clock itself.",
     "bootstrap_first_administrator: [ORCHESTRATION] MUST normalize the supplied email and validate the supplied password through the existing staff identity input boundary, hash that password exactly as supplied with hash_password of the credential boundary, build the account with StaffRole.ADMINISTRATOR, StaffStatus.ACTIVE, a set email_verified_at and created_by None, and its audit record with ActorKind.SYSTEM and no actor_id, key_version or project_id, AuditAction.STAFF_CREATE, AuditEntityKind.STAFF_ACCOUNT, AuditResult.SUCCESS and no reason_code, and hand both to the port in one call. It MUST NOT open a transaction, query persistence, or perform an authorization check, because no authorized administrator can exist yet.",
     "bootstrap_first_administrator: [FIELD_ASSIGNMENT] MUST allocate a fresh staff_id with uuid4() and a fresh audit_id, store the normalized email and only the hash of the supplied password, and capture created_at, updated_at and occurred_at from one offset-naive UTC timestamp compatible with the existing persisted datetime model. The audit entity_id MUST be the canonical string of the created staff_id. Every remaining account and audit field MUST take the fixed initial value stated for the first administrator rather than a caller argument.",
     "bootstrap_first_administrator: [SECURITY_BOUNDARY] MUST retain the supplied password only in hashed form and MUST NOT itself write that password or its hash to standard output, standard error, a log, an audit record, a returned value or the message of an exception it raises. It MUST NOT catch, wrap, annotate or re-message a failure raised by the port: that failure propagates unchanged, and keeping the hash out of the port's own failures belongs to the port's persistence boundary, not to this function.",
     "bootstrap_first_administrator: [VALIDATION_ERROR] MUST raise BootstrapAlreadyCompletedError, and never the input rejection, when the port reports an already initialized store, so a repeat attempt changes nothing and the caller can tell a second run apart from a mistyped address. IdentityInputRejected stays reserved for the supplied email and password. A genuine storage failure MUST propagate unchanged and MUST NOT be turned into either refusal. BootstrapAlreadyCompletedError is this module's own exception, defined here at top level as a plain Exception subclass whose body is pass and raised without arguments; it is not imported.",
     "bootstrap_first_administrator: [DEPENDENCY_BOUNDARY] MUST reach persistence only through StaffBootstrapPort and reuse the existing credential and staff identity input boundaries; it MUST NOT import PortalStore, PortalTransaction, any repository, or the adapter implementing the port, and MUST NOT be reachable from the http router.",
+    "bootstrap_first_administrator: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it writes and every current-time comparison it makes; it MUST NOT read a host clock itself.",
     "create_viewer: [PROVENANCE] MUST create portal-owned display_name independently of Registry customer_ref and append AuditAction.VIEWER_CREATE atomically after access-management authorization.",
     "create_viewer: [ORCHESTRATION] MUST persist exactly one new ClientViewer and exactly one AuditAction.VIEWER_CREATE AuditRecord in the same transaction.",
     "revoke_viewer: [BEHAVIOR] MUST revoke the viewer together with its credential and its sessions, revoke viewer sessions atomically with status change, and append AuditAction.VIEWER_REVOKE.",
@@ -1138,22 +1154,32 @@
     "enter_viewer_access: [DEPENDENCY_BOUNDARY] MUST open its transaction with an explicit assignment, never as a context manager, because the transaction type provides no context-manager protocol and entering one raises TypeError before any read. It MUST reach viewer persistence only through tx.viewer_access() and append audits only through tx.audit(), use no legacy transaction-level viewer method, and close the transaction exactly once: a successful write commits once, a successful read rolls back once, and a failure rolls back only while the transaction is still open and re-raises the original failure unchanged.",
     "resolve_viewer_session: [DEPENDENCY_BOUNDARY] MUST open its transaction with an explicit assignment, never as a context manager, because the transaction type provides no context-manager protocol and entering one raises TypeError before any read. It MUST reach viewer persistence only through tx.viewer_access() and append audits only through tx.audit(), use no legacy transaction-level viewer method, and close the transaction exactly once: a successful write commits once, a successful read rolls back once, and a failure rolls back only while the transaction is still open and re-raises the original failure unchanged.",
     "grant_viewer_project: [DEPENDENCY_BOUNDARY] MUST open its transaction with an explicit assignment, never as a context manager, because the transaction type provides no context-manager protocol and entering one raises TypeError before any read. It MUST reach viewer persistence only through tx.viewer_access() and append audits only through tx.audit(), use no legacy transaction-level viewer method, and close the transaction exactly once: a successful write commits once, a successful read rolls back once, and a failure rolls back only while the transaction is still open and re-raises the original failure unchanged.",
+    "grant_viewer_project: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it writes and every current-time comparison it makes; it MUST NOT read a host clock itself.",
     "revoke_viewer_project: [DEPENDENCY_BOUNDARY] MUST open its transaction with an explicit assignment, never as a context manager, because the transaction type provides no context-manager protocol and entering one raises TypeError before any read. It MUST reach viewer persistence only through tx.viewer_access() and append audits only through tx.audit(), use no legacy transaction-level viewer method, and close the transaction exactly once: a successful write commits once, a successful read rolls back once, and a failure rolls back only while the transaction is still open and re-raises the original failure unchanged.",
     "list_viewer_project_grants: [DEPENDENCY_BOUNDARY] MUST open its transaction with an explicit assignment, never as a context manager, because the transaction type provides no context-manager protocol and entering one raises TypeError before any read. It MUST reach viewer persistence only through tx.viewer_access() and append audits only through tx.audit(), use no legacy transaction-level viewer method, and close the transaction exactly once: a successful write commits once, a successful read rolls back once, and a failure rolls back only while the transaction is still open and re-raises the original failure unchanged.",
     "create_viewer: [VALIDATION_ERROR] The transaction guard MUST re-raise the original failure unchanged; substituting a translated persistence error for it is forbidden, because a model validation failure reported as a persistence error hides the defect from every caller and from every gate.",
+    "create_viewer: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it writes and every current-time comparison it makes; it MUST NOT read a host clock itself.",
     "resolve_viewer_session: [VALIDATION_ERROR] MUST raise AuthenticationRejected only for a genuine authentication outcome — unknown session, wrong token hash, expiry, revocation, non-active viewer, or unusable credential. It MUST NOT convert a persistence failure, a model validation failure, or any other programming error into AuthenticationRejected, because concealing a defect as a rejected login makes it invisible.",
+    "resolve_viewer_session: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it writes and every current-time comparison it makes; it MUST NOT read a host clock itself.",
     "enter_viewer_access: [SECURITY_BOUNDARY] MUST generate a fresh uuid4 session_id, issue the session secret for that session_id, and build the session with the same value, so the selector carried in the returned token is the identity under which the session is stored. Issuing the session secret for the credential_id, or storing the session under an identity the token does not carry, makes resolve_viewer_session unable to find it and every client login fail as a rejected authentication. The pattern mirrors issue_viewer_access, which binds its secret to the credential_id it just generated.",
     "enter_viewer_access: [SECURITY_BOUNDARY] MUST verify the parsed secret component against the credential's stored hash, never the presented token as a whole: the token is a selector-and-secret envelope, the selector addresses the credential, and the stored hash covers only the secret component, so verifying the envelope rejects every correct secret. The same parsed value that located the credential MUST supply both parts — the selector for the lookup and the secret for the comparison.",
     "_revoke_viewer_sessions: [DEPENDENCY_BOUNDARY] MUST treat every persisted record as immutable: assigning to a field of a value read from a repository raises, because instances are frozen. It MUST build a replacement instance carrying the changed fields and hand that to the repository, leaving the value it read untouched. It returns the replacement sessions it created for viewer_id with the supplied revoked_at, and leaves an already revoked session out of that list rather than rewriting it.",
     "issue_viewer_access: [DEPENDENCY_BOUNDARY] MUST treat every persisted record as immutable: assigning to a field of a value read from a repository raises, because instances are frozen. It MUST build a replacement instance carrying the changed fields and hand that to the repository, leaving the value it read untouched. Each prior credential it revokes becomes a replacement carrying revoked_at and revoked_by, and the list of replacements is what reaches the repository.",
+    "issue_viewer_access: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it writes and every current-time comparison it makes; it MUST NOT read a host clock itself.",
     "revoke_viewer: [DEPENDENCY_BOUNDARY] MUST treat every persisted record as immutable: assigning to a field of a value read from a repository raises, because instances are frozen. It MUST build a replacement instance carrying the changed fields and hand that to the repository, leaving the value it read untouched. The revoked viewer, every revoked credential and every revoked session are replacement instances; the whole revocation cascade commits in one transaction or not at all.",
+    "revoke_viewer: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it writes and every current-time comparison it makes; it MUST NOT read a host clock itself.",
     "revoke_viewer_access: [DEPENDENCY_BOUNDARY] MUST treat every persisted record as immutable: assigning to a field of a value read from a repository raises, because instances are frozen. It MUST build a replacement instance carrying the changed fields and hand that to the repository, leaving the value it read untouched. The addressed credential becomes a replacement carrying revoked_at and revoked_by, and every session of that viewer a replacement carrying revoked_at (ViewerSession has no revoked_by), so revoking a credential also ends the sessions it authorised.",
+    "revoke_viewer_access: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it writes and every current-time comparison it makes; it MUST NOT read a host clock itself.",
     "revoke_viewer_project: [DEPENDENCY_BOUNDARY] MUST treat every persisted record as immutable: assigning to a field of a value read from a repository raises, because instances are frozen. It MUST build a replacement instance carrying the changed fields and hand that to the repository, leaving the value it read untouched. The addressed grant becomes a replacement carrying REVOKED status, revoked_at and revoked_by; no other grant of that viewer may be touched.",
+    "revoke_viewer_project: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it writes and every current-time comparison it makes; it MUST NOT read a host clock itself.",
     "enter_viewer_access: [FIELD_ASSIGNMENT] MUST set the session expires_at to created_at plus 30 days, the viewer session lifetime, and MUST NOT invent a lifetime or leave expires_at equal to created_at; an expiry that is not strictly later than created_at rejects the client on the next request. created_at and expires_at MUST both come from the one timestamp captured for this entry, so the lifetime is exactly the configured span.",
+    "enter_viewer_access: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it writes and every current-time comparison it makes; it MUST NOT read a host clock itself.",
     "describe_viewer_session: [SECURITY_BOUNDARY] MUST read the selected session through tx.viewer_access().get_viewer_session(actor.session_id), the ViewerAccessRepository operation, never the same-named legacy PortalTransaction.get_viewer_session, require that it still exists, belongs to actor.viewer_id, is unrevoked and unexpired at the one captured current time, and return ViewerSessionView(session_id, viewer_id, expires_at) only; any authentication outcome raises AuthenticationRejected and no token/hash is returned.",
     "describe_viewer_session: [DEPENDENCY_BOUNDARY] MUST use one explicit read transaction, only tx.viewer_access(), and close it by exactly one rollback, rolling back on failure only while it is still open; persistence/programming failures MUST remain visible rather than being concealed as authentication failures. This viewer_access owner boundary closes the complete validated CP-UOW-18C cookie-session dependency route, including its validated mount-based runtime transport policy.",
+    "describe_viewer_session: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it writes and every current-time comparison it makes; it MUST NOT read a host clock itself.",
     "sign_out_viewer: [SECURITY_BOUNDARY] MUST load exactly actor.session_id through tx.viewer_access(), require the stored viewer_id to equal actor.viewer_id, replace only that session with revoked_at set from one current timestamp, persist it, commit once and return None. It MUST NOT expose or return the persisted ViewerSession, revoke every viewer session, accept a session id from request data, or treat an already revoked/missing/mismatched session as success; replay of the old cookie raises AuthenticationRejected.",
     "sign_out_viewer: [DEPENDENCY_BOUNDARY] MUST close its one explicit transaction exactly once, rolling back on failure only while it is still open, and use only tx.viewer_access().get_viewer_session and update_viewer_sessions; failures before commit rollback once and re-raise unchanged.",
+    "sign_out_viewer: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it writes and every current-time comparison it makes; it MUST NOT read a host clock itself.",
     "create_service_principal: [ORCHESTRATION] MUST authorize access management, persist the closed source_type/scope_mode principal, and append AuditAction.PRINCIPAL_CREATE atomically.",
     "change_service_principal_status: [BEHAVIOR] MUST allow only the transitions the principal status transition table lists: active to disabled and disabled to active; revoke every service credential of a principal it disables, and append AuditAction.PRINCIPAL_DISABLE or AuditAction.PRINCIPAL_ENABLE atomically.",
     "issue_service_credential: [SECURITY_BOUNDARY] MUST allocate the next key_version, persist only verification_hash, append AuditAction.PRINCIPAL_CREDENTIAL_ISSUE atomically, and expose plaintext exactly once in ServiceCredentialIssue.",
@@ -1198,13 +1224,13 @@
     "issue_service_credential: [FIELD_ASSIGNMENT] MUST take the two values it needs from the issued secret by their declared names: the plaintext is what ServiceCredentialIssue carries back to the caller once, and the verification hash is what the credential stores. The issued secret exposes exactly those two and nothing else, so reading any other attribute of it raises at the moment a credential is issued and no producer can ever be given one.",
     "revoke_producer_project: [VALIDATION_ERROR] MUST answer with the scoped not-found rejection whenever the grant cannot be revoked — it does not exist, or it exists but is already revoked — and MUST NOT tell those two apart. A grant that is already revoked is no longer a revocable target, so reporting it differently would let a caller probe which grant identifiers were ever issued while adding nothing an administrator can act on.",
     "revoke_service_credential: [VALIDATION_ERROR] MUST answer with the scoped not-found rejection whenever the credential cannot be revoked — it does not exist, or it exists but is already revoked — and MUST NOT tell those two apart, for the same reason its grant counterpart does not: an already revoked credential is no longer a revocable target, and a distinguishable answer turns the revocation surface into a way to enumerate credential identifiers.",
-    "authenticate_service_principal: [BEHAVIOR] MUST read the current UTC time once and use that instant to decide credential usability.",
-    "change_service_principal_status: [BEHAVIOR] MUST read the current UTC time once per operation and use that single instant for every timestamp it writes and every current-time comparison it makes.",
-    "create_service_principal: [BEHAVIOR] MUST read the current UTC time once per operation and use that single instant for every timestamp it writes and every current-time comparison it makes.",
-    "grant_producer_project: [BEHAVIOR] MUST read the current UTC time once per operation and use that single instant for every timestamp it writes and every current-time comparison it makes.",
-    "issue_service_credential: [BEHAVIOR] MUST read the current UTC time once per operation and use that single instant for every timestamp it writes and every current-time comparison it makes.",
-    "revoke_producer_project: [BEHAVIOR] MUST read the current UTC time once per operation and use that single instant for every timestamp it writes and every current-time comparison it makes.",
-    "revoke_service_credential: [BEHAVIOR] MUST read the current UTC time once per operation and use that single instant for every timestamp it writes and every current-time comparison it makes.",
+    "authenticate_service_principal: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it writes and every current-time comparison it makes; it MUST NOT read a host clock itself.",
+    "change_service_principal_status: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it writes and every current-time comparison it makes; it MUST NOT read a host clock itself.",
+    "create_service_principal: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it writes and every current-time comparison it makes; it MUST NOT read a host clock itself.",
+    "grant_producer_project: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it writes and every current-time comparison it makes; it MUST NOT read a host clock itself.",
+    "issue_service_credential: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it writes and every current-time comparison it makes; it MUST NOT read a host clock itself.",
+    "revoke_producer_project: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it writes and every current-time comparison it makes; it MUST NOT read a host clock itself.",
+    "revoke_service_credential: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it writes and every current-time comparison it makes; it MUST NOT read a host clock itself.",
     "issue_service_credential: [VALIDATION_ERROR] MUST issue a credential only when the addressed ServicePrincipal has ACTIVE status. A principal with any other status MUST raise AuthorizationRejected without generating a secret, inserting a credential, or appending an audit, and the open transaction MUST close.",
     "authenticate_service_principal: [DEPENDENCY_BOUNDARY] MUST parse the presented credential before opening any transaction. A malformed envelope MUST raise the concealed AuthenticationRejected while no transaction exists; only a successfully parsed selector may be followed by store.begin(), so the malformed-input path cannot leak an open transaction.",
     "revoke_producer_project: [VALIDATION_ERROR] MUST treat a grant as revocable only when its status is ACTIVE and revoked_at is None. A missing grant or any persisted grant that fails either positive condition MUST raise the same ScopedNotFoundError without mutation or audit; the implementation MUST NOT replace the positive ACTIVE requirement with an enumeration of currently known non-active statuses.",
@@ -1228,6 +1254,7 @@
     "import_snapshot: [ORCHESTRATION] In the ACCEPTED branch repo.insert_snapshot(snapshot) MUST be invoked exactly once before the one repo.insert_snapshot_import(record) call; duplicate insertion of the same snapshot, retry-on-constraint, upsert, replace, and a second accepted-snapshot write are forbidden.",
     "SnapshotContentRejected.__init__: [FIELD_ASSIGNMENT] MUST expose exactly the supplied ImportRejectReason as reason, and MUST carry no PresuPro payload value, section amount, or project identity beyond that reason.",
     "import_snapshot: [ORCHESTRATION] MUST classify a content rejection from the reason field of SnapshotContentRejected and MUST NOT read, compare, or persist the text of any exception message; this leaves the archived, unknown/scoped and scope-denied classifications by exception type unchanged.",
+    "import_snapshot: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it writes and every current-time comparison it makes; it MUST NOT read a host clock itself.",
     "ensure_manual_budget: [ORCHESTRATION] MUST return the existing single manual version or atomically create one with empty plans plus AuditAction.BUDGET_MANUAL_VERSION_CREATE audit; it MUST NOT activate it implicitly.",
     "upsert_manual_section_plan: [ORCHESTRATION] MUST require an active project and the single manual version, create the stable PortalSection when needed (the name is SectionPlan.display_name, so a rename changes the plan, never the section), validate R9 amounts, upsert its plan, and append AuditAction.BUDGET_SECTION_PLAN_EDIT atomically without changing imported plans.",
     "get_budget_version: [SECURITY_BOUNDARY] MUST return the exact project-scoped version with deterministically ordered plans or raise ScopedNotFoundError without revealing another project.",
@@ -1244,6 +1271,7 @@
     "ensure_manual_budget: [DEPENDENCY_BOUNDARY] MUST use only BudgetRepository from tx.budgets() for budget persistence and ProjectSectionRepository from tx.project_sections() for project-section persistence; direct legacy PortalTransaction budget and project-section method calls are forbidden, while tx.list_project_expenses(project_id) remains the only temporary legacy persistence call until ExpenseRepository migration and allocations MUST be flattened from those ExpenseAggregate values.",
     "ensure_manual_budget: [ORCHESTRATION] MUST use at most one transaction at a time and close it exactly once: a successful write MUST commit exactly once, a successful read MUST rollback exactly once before returning, and a failure MUST rollback and re-raise only when the transaction is still open, so a domain error raised after the read was already rolled back MUST NOT trigger a second rollback; nested transactions and rollback after successful commit are forbidden.",
     "ensure_manual_budget: [VALIDATION_ERROR] Its transaction guard MUST track transaction open state in a caller-local boolean flag, catch BaseException, rollback only while that flag still marks the transaction open, and re-raise the original failure unchanged; catching only Exception, a second rollback on an already closed transaction, and probing open state through assert_open or a caught PersistenceError are forbidden.",
+    "ensure_manual_budget: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it writes and every current-time comparison it makes; it MUST NOT read a host clock itself.",
     "upsert_manual_section_plan: [DEPENDENCY_BOUNDARY] MUST perform optional manual-version creation, optional PortalSection insertion, SectionPlan upsert, required audits, and final reads through one shared transaction using tx.budgets(), tx.project_sections(), tx.audit(), and only the temporary tx.list_project_expenses project read with flattened aggregate allocations; it MUST NOT call ensure_manual_budget, validate_project_section, or a legacy budget/project-section method from inside that transaction.",
     "upsert_manual_section_plan: [FIELD_ASSIGNMENT] MUST reuse the repository's existing manual BudgetVersion object when present or create it exactly as ensure_manual_budget specifies; for a supplied section_id it MUST obtain the exact project-scoped PortalSection or raise BudgetValidationError, while a missing section_id MUST create and insert one PortalSection with a fresh uuid4 section_id, context project and actor identity, None source_key, and current created_at.",
     "upsert_manual_section_plan: [PROVENANCE] MUST preserve an existing plan_id when the manual version already has a plan for the stable section_id and otherwise assign a fresh uuid4 plan_id; it MUST upsert a SectionPlan carrying the exact version_id, section_id, display_name, sort_order, validated R9 amounts, None source_section_code, current updated_at, and context actor_id, without altering any imported-version plan.",
@@ -1264,12 +1292,14 @@
     "upsert_manual_section_plan: [DEPENDENCY_BOUNDARY] MUST use only BudgetRepository from tx.budgets() for budget persistence and ProjectSectionRepository from tx.project_sections() for project-section persistence; direct legacy PortalTransaction budget and project-section method calls are forbidden, while tx.list_project_expenses(project_id) remains the only temporary legacy persistence call until ExpenseRepository migration and allocations MUST be flattened from those ExpenseAggregate values.",
     "upsert_manual_section_plan: [ORCHESTRATION] MUST use at most one transaction at a time and close it exactly once: a successful write MUST commit exactly once, a successful read MUST rollback exactly once before returning, and a failure MUST rollback and re-raise only when the transaction is still open, so a domain error raised after the read was already rolled back MUST NOT trigger a second rollback; nested transactions and rollback after successful commit are forbidden.",
     "upsert_manual_section_plan: [VALIDATION_ERROR] Its transaction guard MUST track transaction open state in a caller-local boolean flag, catch BaseException, rollback only while that flag still marks the transaction open, and re-raise the original failure unchanged; catching only Exception, a second rollback on an already closed transaction, and probing open state through assert_open or a caught PersistenceError are forbidden.",
+    "upsert_manual_section_plan: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it writes and every current-time comparison it makes; it MUST NOT read a host clock itself.",
     "_link_snapshot_sections: [RETURN_SHAPE] MUST return exactly one PortalSection per snapshot section in input order, reuse the exact existing object whose source_key matches source_section_id, and otherwise create a new stable section identity with a fresh uuid4 section_id and that source_key, the project_id of the existing sections, created_at, created_by_id actor_id and created_by_kind ActorKind.STAFF; with no existing section it MUST raise BudgetValidationError; it MUST NOT omit already linked sections.",
     "_build_imported_plans: [PROVENANCE] MUST assign each imported plan_id equal to its linked stable section_id, so rebuilding the same snapshot-section linkage preserves plan identity; fresh random plan identities are forbidden.",
     "activate_budget_version: [VALIDATION_ERROR] After flattening allocations and before constructing updates or audit, MUST raise BudgetConflictError when unresolved_allocation_count is greater than zero; that failure MUST rollback and leave both prior and requested budget statuses and audit storage unchanged.",
     "activate_budget_version: [DEPENDENCY_BOUNDARY] MUST use only BudgetRepository from tx.budgets() for budget persistence and ProjectSectionRepository from tx.project_sections() for project-section persistence; direct legacy PortalTransaction budget and project-section method calls are forbidden, while tx.list_project_expenses(project_id) remains the only temporary legacy persistence call until ExpenseRepository migration and allocations MUST be flattened from those ExpenseAggregate values.",
     "activate_budget_version: [ORCHESTRATION] MUST use at most one transaction at a time and close it exactly once: a successful write MUST commit exactly once, a successful read MUST rollback exactly once before returning, and a failure MUST rollback and re-raise only when the transaction is still open, so a domain error raised after the read was already rolled back MUST NOT trigger a second rollback; nested transactions and rollback after successful commit are forbidden.",
     "activate_budget_version: [VALIDATION_ERROR] Its transaction guard MUST track transaction open state in a caller-local boolean flag, catch BaseException, rollback only while that flag still marks the transaction open, and re-raise the original failure unchanged; catching only Exception, a second rollback on an already closed transaction, and probing open state through assert_open or a caught PersistenceError are forbidden.",
+    "activate_budget_version: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it writes and every current-time comparison it makes; it MUST NOT read a host clock itself.",
     "_build_imported_plans: [VALIDATION_ERROR] MUST raise BudgetValidationError when any snapshot source_section_id has no exact linked PortalSection source_key; KeyError and partial plan output are forbidden.",
     "correct_expense: [ORCHESTRATION] MUST call validate_eur_amount with the currency EUR as currency, total_amount as amount, and strictly_positive=False; MUST validate explicit project-scoped allocations, then atomically replace editable expense fields and all allocations plus one AuditAction.EXPENSE_CORRECT audit; no intermediate invalid sum may commit; MUST return ExpenseOperationOutcome containing the corrected aggregate with replayed false.",
     "set_expense_inclusion: [ORCHESTRATION] MUST change only included and updated_at on the project-scoped Expense and append exactly AuditAction.EXPENSE_INCLUDE or AuditAction.EXPENSE_EXCLUDE atomically; MUST return ExpenseOperationOutcome containing the updated aggregate with replayed false.",
@@ -1296,21 +1326,25 @@
     "correct_expense: [VALIDATION_ERROR] Its transaction guard MUST track transaction open state in a caller-local boolean flag, catch BaseException, rollback only while that flag still marks the transaction open, and re-raise the original failure unchanged; catching only Exception, leaving a transaction neither committed nor rolled back on any path, a second rollback on an already closed transaction, and probing open state through assert_open or a caught PersistenceError are forbidden.",
     "correct_expense: [FIELD_ASSIGNMENT] Its AuditAction.EXPENSE_CORRECT audit intent MUST set entity_id to the canonical string of the expense_id; passing a UUID object is forbidden.",
     "correct_expense: [ORCHESTRATION] MUST use at most one transaction at a time and close it exactly once: a successful write MUST commit exactly once, a successful read MUST rollback exactly once before returning, and a failure MUST rollback and re-raise only while the transaction is still open; opening a transaction while another one this module owns is still open is forbidden, and so is rollback after a successful commit.",
+    "correct_expense: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it writes and every current-time comparison it makes; it MUST NOT read a host clock itself.",
     "replace_expense_allocations: [FIELD_ASSIGNMENT] MUST append exactly one AuditAction.EXPENSE_ALLOCATE success audit through tx.audit() with entity_id equal to the canonical string of the expense_id whose allocations were replaced, never the UUID object, and reason_code None.",
     "replace_expense_allocations: [DEPENDENCY_BOUNDARY] MUST use only ExpenseRepository from tx.expenses(), ProjectSectionRepository from tx.project_sections(), and AuditRepository from tx.audit() for persistence; direct legacy PortalTransaction expense and project-section method calls are forbidden, and this module MUST NOT import or call domain.budget_management.",
     "replace_expense_allocations: [VALIDATION_ERROR] Its transaction guard MUST track transaction open state in a caller-local boolean flag, catch BaseException, rollback only while that flag still marks the transaction open, and re-raise the original failure unchanged; catching only Exception, leaving a transaction neither committed nor rolled back on any path, a second rollback on an already closed transaction, and probing open state through assert_open or a caught PersistenceError are forbidden.",
     "replace_expense_allocations: [FIELD_ASSIGNMENT] Its AuditAction.EXPENSE_ALLOCATE audit intent MUST set entity_id to the canonical string of the expense_id; passing a UUID object is forbidden.",
     "replace_expense_allocations: [ORCHESTRATION] MUST use at most one transaction at a time and close it exactly once: a successful write MUST commit exactly once, a successful read MUST rollback exactly once before returning, and a failure MUST rollback and re-raise only while the transaction is still open; opening a transaction while another one this module owns is still open is forbidden, and so is rollback after a successful commit.",
+    "replace_expense_allocations: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it writes and every current-time comparison it makes; it MUST NOT read a host clock itself.",
     "set_expense_inclusion: [FIELD_ASSIGNMENT] MUST append exactly one AuditAction.EXPENSE_INCLUDE audit when included is true and exactly one AuditAction.EXPENSE_EXCLUDE audit when it is false, through tx.audit(), with entity_id equal to the canonical string of the expense_id, never the UUID object, and reason_code None.",
     "set_expense_inclusion: [DEPENDENCY_BOUNDARY] MUST use only ExpenseRepository from tx.expenses(), ProjectSectionRepository from tx.project_sections(), and AuditRepository from tx.audit() for persistence; direct legacy PortalTransaction expense and project-section method calls are forbidden, and this module MUST NOT import or call domain.budget_management.",
     "set_expense_inclusion: [VALIDATION_ERROR] Its transaction guard MUST track transaction open state in a caller-local boolean flag, catch BaseException, rollback only while that flag still marks the transaction open, and re-raise the original failure unchanged; catching only Exception, leaving a transaction neither committed nor rolled back on any path, a second rollback on an already closed transaction, and probing open state through assert_open or a caught PersistenceError are forbidden.",
     "set_expense_inclusion: [FIELD_ASSIGNMENT] Its AuditAction.EXPENSE_INCLUDE and AuditAction.EXPENSE_EXCLUDE audit intent MUST set entity_id to the canonical string of the expense_id; passing a UUID object is forbidden.",
     "set_expense_inclusion: [ORCHESTRATION] MUST use at most one transaction at a time and close it exactly once: a successful write MUST commit exactly once, a successful read MUST rollback exactly once before returning, and a failure MUST rollback and re-raise only while the transaction is still open; opening a transaction while another one this module owns is still open is forbidden, and so is rollback after a successful commit.",
+    "set_expense_inclusion: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it writes and every current-time comparison it makes; it MUST NOT read a host clock itself.",
     "update_expense_document: [FIELD_ASSIGNMENT] MUST append exactly one AuditAction.DOCUMENT_UPDATE success audit through tx.audit() with entity_id equal to the canonical string of the updated document_id, never the UUID object and never the expense_id, and reason_code None.",
     "update_expense_document: [DEPENDENCY_BOUNDARY] MUST use only ExpenseRepository from tx.expenses(), ProjectSectionRepository from tx.project_sections(), and AuditRepository from tx.audit() for persistence; direct legacy PortalTransaction expense and project-section method calls are forbidden, and this module MUST NOT import or call domain.budget_management.",
     "update_expense_document: [VALIDATION_ERROR] Its transaction guard MUST track transaction open state in a caller-local boolean flag, catch BaseException, rollback only while that flag still marks the transaction open, and re-raise the original failure unchanged; catching only Exception, leaving a transaction neither committed nor rolled back on any path, a second rollback on an already closed transaction, and probing open state through assert_open or a caught PersistenceError are forbidden.",
     "update_expense_document: [FIELD_ASSIGNMENT] Its AuditAction.DOCUMENT_UPDATE audit intent MUST set entity_id to the canonical string of the document_id; passing a UUID object is forbidden.",
     "update_expense_document: [ORCHESTRATION] MUST use at most one transaction at a time and close it exactly once: a successful write MUST commit exactly once, a successful read MUST rollback exactly once before returning, and a failure MUST rollback and re-raise only while the transaction is still open; opening a transaction while another one this module owns is still open is forbidden, and so is rollback after a successful commit.",
+    "update_expense_document: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it writes and every current-time comparison it makes; it MUST NOT read a host clock itself.",
     "read_expense_document: [SECURITY_BOUNDARY] MUST raise BinaryAccessRejected whenever the payload cannot be returned, so that these three outcomes are indistinguishable to the caller: no document record exists, the record belongs to another project or is not client visible for this actor, and the record exists but its binary object cannot be read. A storage error MUST NOT reach the caller in any form, because BinaryAccessRejected exists to conceal whether an inaccessible binary record or object exists, and telling the three apart would leak both storage state and the existence of another project's document.",
     "read_expense_document: [DEPENDENCY_BOUNDARY] MUST use only ExpenseRepository from tx.expenses(), ProjectSectionRepository from tx.project_sections(), and AuditRepository from tx.audit() for persistence; direct legacy PortalTransaction expense and project-section method calls are forbidden, and this module MUST NOT import or call domain.budget_management.",
     "read_expense_document: [VALIDATION_ERROR] MUST translate a BinaryStorageError raised by read_binary into BinaryAccessRejected; it owns no transaction guard, because the only transaction is the one _authorize_document_reference opens and closes.",
@@ -1327,6 +1361,7 @@
     "create_expense_from_recognition: [DEPENDENCY_BOUNDARY] MUST use only ExpenseRepository from tx.expenses(), ProjectSectionRepository from tx.project_sections(), and AuditRepository from tx.audit() for persistence; direct legacy PortalTransaction expense and project-section method calls are forbidden, and this module MUST NOT import or call domain.budget_management.",
     "create_expense_from_recognition: [VALIDATION_ERROR] Its transaction guard MUST track transaction open state in a caller-local boolean flag, catch BaseException, rollback only while that flag still marks the transaction open, and re-raise the original failure unchanged; catching only Exception, a second rollback on an already closed transaction, probing open state through an assert-open call or a caught persistence error, and substituting a translated persistence error for the original failure are forbidden.",
     "create_expense_from_recognition: [ORCHESTRATION] MUST use at most one transaction at a time and close it exactly once: a successful write MUST commit exactly once, a successful read MUST rollback exactly once before returning, and a failure MUST rollback and re-raise only while the transaction is still open; opening a transaction while another one this module owns is still open is forbidden, and so is rollback after a successful commit.",
+    "create_expense_from_recognition: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it writes and every current-time comparison it makes; it MUST NOT read a host clock itself.",
     "_validate_initial_allocations: [DEPENDENCY_BOUNDARY] MUST raise FinancialValidationError for a SECTION instruction without section_id, an OTHER_EXPENSES instruction carrying a section_id, any other target, and an allocation total that differs from intake.total_amount, all before opening any transaction; it MUST then open exactly one transaction, resolve every SECTION target only through tx.project_sections().get_project_section with intake.project_id and section_id, and close that read transaction by exactly one rollback, marking it closed before it raises ExpenseValidationError for a missing or cross-project section so that rejection keeps the 422 status the legacy BudgetValidationError produced; it MUST NOT call validate_project_section, a PortalStore lookup, or a legacy PortalTransaction project-section method.",
     "_validate_initial_allocations: [DEPENDENCY_BOUNDARY] MUST use only ExpenseRepository from tx.expenses(), ProjectSectionRepository from tx.project_sections(), and AuditRepository from tx.audit() for persistence; direct legacy PortalTransaction expense and project-section method calls are forbidden, and this module MUST NOT import or call domain.budget_management.",
     "_validate_initial_allocations: [VALIDATION_ERROR] Its transaction guard MUST track transaction open state in a caller-local boolean flag, catch BaseException, rollback only while that flag still marks the transaction open, and re-raise the original failure unchanged; catching only Exception, a second rollback on an already closed transaction, probing open state through an assert-open call or a caught persistence error, and substituting a translated persistence error for the original failure are forbidden.",
@@ -1351,8 +1386,10 @@
     "set_section_progress: [VALIDATION_ERROR] Once its transaction is open, MUST rollback and re-raise every BaseException raised before commit; a failure of validate_project_section happens before any transaction exists and is re-raised with nothing to roll back; a successful commit MUST not be followed by rollback.",
     "register_work_payment: [FIELD_ASSIGNMENT] MUST pass str(payment.payment_id), not a UUID object, as AuditIntent.entity_id so the value satisfies the declared str | None model contract.",
     "set_section_progress: [FIELD_ASSIGNMENT] MUST pass the canonical string of the progress row's section_id, not a UUID object, as AuditIntent.entity_id so the value satisfies the declared str | None model contract.",
+    "set_section_progress: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it writes and every current-time comparison it makes; it MUST NOT read a host clock itself.",
     "list_project_progress: [FIELD_PROJECTION] MUST take the plan order from the section plans the budget detail carries in its plans field, reading section_id and sort_order from each of them. The detail carries no section_plans field, so reading one raises at runtime instead of ordering anything, and a section with no plan keeps its stable section_id tie rather than being dropped.",
     "register_work_payment: [FIELD_ASSIGNMENT] MUST carry the EUR-validated amount rather than the argument as presented: the money validation returns the amount quantized to 2 fraction digits with ROUND_HALF_UP, and it is that returned value which goes into the persisted payment and into the replay comparison. Discarding the validated result persists an amount the money policy forbids and makes an identical payment presented a second time classify as a conflict rather than a replay.",
+    "register_work_payment: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it writes and every current-time comparison it makes; it MUST NOT read a host clock itself.",
     "publish_progress_photo: [ORCHESTRATION] MUST apply intake_id replay, and for a new intake_id validate optional section project scope, persist one file_ref-backed photo, and append AuditAction.PHOTO_PUBLISH atomically; it MUST NOT set progress or financial values.",
     "update_progress_photo: [ORCHESTRATION] MUST validate optional section project scope, change only caption/section/client_visible/updated_at/updated_by, and append AuditAction.PHOTO_UPDATE atomically without changing file_ref, progress, or finance.",
     "list_progress_photos: [SECURITY_BOUNDARY] MUST return project-scoped photos only, exclude non-client-visible items for viewer context, and order chronologically by photo_date then photo_id. It MUST project each eligible record onto ProgressPhotoView, so the storage file_ref and the recognition intake_id never leave this module: this function is the only photo list an HTTP route returns, and a storage location in a JSON body would defeat the binary delivery boundary, which hands stored bytes out only through the binary routes.",
@@ -1367,6 +1404,7 @@
     "publish_progress_photo: [FIELD_ASSIGNMENT] For a newly published photo MUST append exactly one AuditAction.PHOTO_PUBLISH success audit through tx.audit() with entity_kind PROGRESS_PHOTO, entity_id equal to the canonical string of the persisted photo_id, and reason_code None; a non-null reason_code on a success audit is rejected by the audit writer and MUST NOT be supplied.",
     "publish_progress_photo: [RETURN_SHAPE] When a photo already exists for publication.intake_id, MUST close that read transaction by exactly one rollback, marking it closed before the replay content comparison, then return the PhotoMutationResult that _photo_mutation_result projects from the matching existing ProgressPhoto with replayed true, never the ProgressPhoto itself; a cross-project match or any content disagreement MUST raise PhotoConflictError. Neither replay path may insert a row, update a row, or append an audit.",
     "publish_progress_photo: [VALIDATION_ERROR] MUST raise PhotoValidationError when publication.project_id differs from context.project_id before opening any transaction, and when the supplied section is missing or belongs to another project after the scoped read. The transaction guard MUST close its transaction exactly once, roll back on failure only while the transaction is still open, and re-raise the original failure unchanged; substituting a translated persistence error for PhotoValidationError or PhotoConflictError is forbidden.",
+    "publish_progress_photo: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it writes and every current-time comparison it makes; it MUST NOT read a host clock itself.",
     "update_progress_photo: [DEPENDENCY_BOUNDARY] MUST open exactly one transaction, read the photo only through tx.progress_photos().get_progress_photo with photo_id, resolve a supplied section only through tx.project_sections().get_project_section with context.project_id inside that same transaction, write only through tx.progress_photos().update_progress_photo, append the audit only through tx.audit(), and on success commit exactly once (a replay or a validation failure closes it by rollback instead); it MUST NOT call validate_project_section, open a second transaction while its own is active, or use a legacy transaction-level photo or project-section method. These are ProgressPhotoRepository and ProjectSectionRepository operations; the same-named legacy PortalTransaction methods are never called.",
     "update_progress_photo: [FIELD_ASSIGNMENT] MUST append exactly one AuditAction.PHOTO_UPDATE success audit through tx.audit() with entity_kind PROGRESS_PHOTO, entity_id equal to the canonical string of the updated photo_id, and reason_code None; a non-null reason_code on a success audit is rejected by the audit writer and MUST NOT be supplied.",
     "update_progress_photo: [VALIDATION_ERROR] MUST raise PhotoValidationError when no photo matches photo_id, when the matched photo belongs to another project, and when the supplied section is missing or belongs to another project; the write MUST NOT commit in any of those cases. The transaction guard MUST close its transaction exactly once, roll back on failure only while the transaction is still open, and re-raise the original failure unchanged; substituting a translated persistence error for PhotoValidationError is forbidden.",
@@ -1375,6 +1413,7 @@
     "_authorize_photo_reference: [DEPENDENCY_BOUNDARY] MUST open exactly one transaction, read the photo only through tx.progress_photos().get_progress_photo with photo_id, and close that read transaction by exactly one rollback immediately after the read, marking it closed before it evaluates project scope or client visibility and before it raises PhotoValidationError; leaving the transaction open on any path, committing it, and using a legacy transaction-level photo method are forbidden.",
     "_authorize_photo_reference: [VALIDATION_ERROR] The transaction guard MUST close its transaction exactly once, roll back on failure only while the transaction is still open, and re-raise PhotoValidationError unchanged; substituting a translated persistence error for it is forbidden, because the caller and the api error map treat the two as different outcomes.",
     "update_progress_photo: [DEPENDENCY_BOUNDARY] MUST carry the changed caption, section_id, client_visible, updated_at and updated_by by constructing a replacement ProgressPhoto from the one it read. It MUST NOT assign to any field of the photo returned by the repository or of any other model instance it received, because model instances are frozen and such an assignment fails at runtime.",
+    "update_progress_photo: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it writes and every current-time comparison it makes; it MUST NOT read a host clock itself.",
     "list_viewer_projects: [ORCHESTRATION] MUST resolve, through list_viewer_project_grants, only active persisted grants for actor.viewer_id and fetch each live Registry context server-side. A RegistryBoundaryError for one active grant means only that item is inaccessible for this response: omit that item and continue resolving the remaining grants. Apply this independently per grant so NOT_FOUND, TIMEOUT and TRANSPORT_ERROR cannot suppress accessible items, and return an empty list when no granted project is accessible. MUST NOT fabricate display_name, address or registry_status, change persisted grant state, or turn this read projection into an audit write. Omit no accessible item silently, and order accessible items by display_name.casefold() then project_id ascending without changing display_name.",
     "list_viewer_projects: [DEPENDENCY_BOUNDARY] MUST NOT enter a persistence transaction with a `with` statement. The transaction type exposes commit and rollback only, so a context-manager entry raises TypeError before the first read; every builder assigns the transaction explicitly and closes it exactly once, rolling back on failure only while it is still open.",
     "build_project_overview: [RETURN_SHAPE] MUST independently derive all six availability/value pairs from owning records and live project context; available values are populated, unavailable values are None, and failures MUST NOT fabricate zeros. The project pair is one of the six: when the live project context cannot be read, project_availability is temporarily_unavailable and project is None, because a ProjectContext assembled from an empty display name, an empty address and placeholder timestamps is indistinguishable to the client from a real project carrying those values.",
@@ -1523,7 +1562,7 @@
     "list_progress_photos_endpoint: [ORCHESTRATION] MUST resolve staff, authorize project read with the photo-read capability, and delegate list_progress_photos, returning its ProgressPhotoView list unchanged; it MUST NOT filter visibility in the router.",
     "list_progress_photos_endpoint: [SECURITY_BOUNDARY] MUST return metadata only. It MUST NOT emit photo bytes, a base64 field, a storage location, or a direct content URL; the bytes stay behind staff_read_progress_photo_endpoint and its own authorization.",
     "list_active_projects_endpoint: [ORCHESTRATION] MUST bind and execute exactly the administrator-only route the router backend declares for it.",
-    "install_transport_guards: [ORCHESTRATION] MUST register exactly one FastAPI http middleware on the supplied application. For every request the middleware MUST evaluate the checks below in the order they are written, and the order is a pipeline rather than a choice between alternatives: each check either produces the response named for it and ends the request there, or leaves the request untouched for the next check to evaluate. A check that does not produce a response MUST NOT call the next handler, MUST NOT return, and MUST NOT cause any later check to be skipped; the next handler is called exactly once, after every check in the list has left the request unrefused. The checks are: derive a request id carrying no identity or credential material; reject the request with 400 when _host_allowed refuses the request host against settings.trusted_hosts; answer an OPTIONS request carrying an Origin listed in settings.allowed_origins with a 204 preflight echoing the requested method and headers plus Vary Origin, together with the allow-origin and allow-credentials headers every allowed-origin response carries, and reject an unlisted origin with 403; reject POST on the canonical viewer logout path /auth/viewer/logout with 403 unless _normalized_origin of the request Origin equals _normalized_origin of settings.public_origin; reject with 413 when _body_within_limit refuses the declared Content-Length against settings.max_request_body_bytes; reject with 429 when _record_viewer_entry_attempt refuses a POST on the canonical viewer entry path /auth/viewer/enter, keyed by _client_bucket_key, before any credential parsing or verification. A POST to /auth/viewer/logout whose Origin is accepted therefore still passes through the body-size check, and so does every other request that is not refused before it. It MUST supply _record_viewer_entry_attempt with a reading of a monotonic clock that cannot move backwards, never with wall-clock time, so that adjusting the system clock cannot widen the window or discard recorded attempts. Every response it produces or forwards, including each rejection above, MUST pass through _apply_security_headers with the request id and the _requires_no_store decision for the canonical path, and MUST carry the CORS allow-origin, allow-credentials and Vary headers only when the request Origin is listed in settings.allowed_origins. When settings.production_logging is true it MUST emit exactly one INFO record per completed request, built only by _transport_log_record. It MUST classify every path through _canonical_path so a deployment-prefixed path is treated exactly like its stripped inner path, keep its rate-limit state bounded inside the installed guard, and MUST NOT authenticate a principal, read persistence, import a domain or application module, or import starlette directly.",
+    "install_transport_guards: [ORCHESTRATION] MUST register exactly one FastAPI http middleware on the supplied application. For every request the middleware MUST evaluate the checks below in the order they are written, and the order is a pipeline rather than a choice between alternatives: each check either produces the response named for it and ends the request there, or leaves the request untouched for the next check to evaluate. A check that does not produce a response MUST NOT call the next handler, MUST NOT return, and MUST NOT cause any later check to be skipped; the next handler is called exactly once, after every check in the list has left the request unrefused. The checks are: derive a request id carrying no identity or credential material; reject the request with 400 when _host_allowed refuses the request host against settings.trusted_hosts; answer an OPTIONS request carrying an Origin listed in settings.allowed_origins with a 204 preflight echoing the requested method and headers plus Vary Origin, together with the allow-origin and allow-credentials headers every allowed-origin response carries, and reject an unlisted origin with 403; reject POST on the canonical viewer logout path /auth/viewer/logout with 403 unless _normalized_origin of the request Origin equals _normalized_origin of settings.public_origin; reject with 413 when _body_within_limit refuses the declared Content-Length against settings.max_request_body_bytes; reject with 429 when _record_viewer_entry_attempt refuses a POST on the canonical viewer entry path /auth/viewer/enter, keyed by _client_bucket_key, before any credential parsing or verification. A POST to /auth/viewer/logout whose Origin is accepted therefore still passes through the body-size check, and so does every other request that is not refused before it. It MUST supply _record_viewer_entry_attempt with one reading of monotonic_seconds per entry attempt, a clock that cannot move backwards, never with wall-clock time and never with a host clock read directly, so that adjusting the system clock cannot widen the window or discard recorded attempts. Every response it produces or forwards, including each rejection above, MUST pass through _apply_security_headers with the request id and the _requires_no_store decision for the canonical path, and MUST carry the CORS allow-origin, allow-credentials and Vary headers only when the request Origin is listed in settings.allowed_origins. When settings.production_logging is true it MUST emit exactly one INFO record per completed request, built only by _transport_log_record. It MUST classify every path through _canonical_path so a deployment-prefixed path is treated exactly like its stripped inner path, keep its rate-limit state bounded inside the installed guard, and MUST NOT authenticate a principal, read persistence, import a domain or application module, or import starlette directly.",
     "_canonical_path: [BEHAVIOR] MUST map a deployment path to the inner route path by removing exactly one leading /api segment, returning / for the bare prefix and the unchanged path when the prefix is absent. It MUST NOT strip the segment more than once, strip a longer prefix, alter query or fragment, or treat a path that merely begins with the letters api as prefixed.",
     "_normalized_origin: [VALIDATION_ERROR] MUST return the canonical origin: the lowercased scheme, the lowercased host, and the effective port, taking the explicit port when the value carries one and otherwise 443 for https and 80 for http. It MUST return None for a value whose scheme is neither http nor https, and for a value carrying userinfo, a query, a fragment, a non-empty path other than a single trailing slash, or a missing scheme or host. The returned canonical origin MUST discriminate: two values differing in scheme or in host after that lowercasing, differing by any additional host prefix, differing by any additional host suffix, or differing in effective port MUST each receive a different canonical origin. A None result MUST NOT be treated as equal to any value, including another None result.",
     "_host_allowed: [VALIDATION_ERROR] MUST accept the request host only when its lowercased form equals an entry of the supplied trusted host list, MUST reject when the list is empty, and MUST NOT accept a wildcard entry, a suffix match, or a host derived from the public origin or from an allowed CORS origin.",
@@ -10316,6 +10355,47 @@
           "error_translation": "sqlite_database_error_to_error_class"
         }
       }
+    },
+    "time_source_policy": {
+      "kind": "time_source_policy",
+      "schema_version": 1,
+      "wall_clock": {
+        "authority_modules": [
+          "system_clock"
+        ],
+        "allowed_primitives": [
+          "datetime.datetime.now"
+        ],
+        "single_host_source": true,
+        "samples_per_read": 1
+      },
+      "elapsed_time": {
+        "authority_modules": [
+          "system_clock"
+        ],
+        "allowed_primitives": [
+          "time.monotonic"
+        ],
+        "samples_per_read": 1,
+        "persisted": false
+      }
+    },
+    "system_clock_backend": {
+      "kind": "system_clock_backend",
+      "schema_version": 5,
+      "backend": {
+        "emitter": "python_host_naive_utc_and_elapsed_clock_v1"
+      },
+      "wiring": {
+        "module": "system_clock",
+        "wall_clock_function": "utc_now",
+        "elapsed_clock_function": "monotonic_seconds"
+      },
+      "time": {
+        "policy": "rules.time_source_policy",
+        "read": "per_call",
+        "representation": "naive_utc_datetime"
+      }
     }
   },
   "properties": {
@@ -10795,6 +10875,10 @@
       ],
       "staff_bootstrap_cli": [
         "run_bootstrap_cli"
+      ],
+      "system_clock": [
+        "utc_now",
+        "monotonic_seconds"
       ]
     },
     "module_internal": {
@@ -11029,6 +11113,9 @@
           "AuditRecord",
           "AuditRepository",
           "AuditResult"
+        ],
+        "system_clock": [
+          "utc_now"
         ]
       },
       "authorization_guard": {
@@ -11060,6 +11147,9 @@
         ],
         "registry_gateway": [
           "validate_project_reference"
+        ],
+        "system_clock": [
+          "utc_now"
         ]
       },
       "staff_identity": {
@@ -11104,6 +11194,9 @@
         ],
         "registry_gateway": [
           "validate_project_reference"
+        ],
+        "system_clock": [
+          "utc_now"
         ]
       },
       "staff_bootstrap": {
@@ -11125,6 +11218,9 @@
         "staff_identity": [
           "_normalize_staff_email",
           "_validate_new_password"
+        ],
+        "system_clock": [
+          "utc_now"
         ]
       },
       "viewer_access": {
@@ -11169,6 +11265,9 @@
         "registry_gateway": [
           "RegistryBoundaryError",
           "validate_project_reference"
+        ],
+        "system_clock": [
+          "utc_now"
         ]
       },
       "service_identity": {
@@ -11211,6 +11310,9 @@
         ],
         "registry_gateway": [
           "validate_project_reference"
+        ],
+        "system_clock": [
+          "utc_now"
         ]
       },
       "snapshot_import": {
@@ -11243,6 +11345,9 @@
         "portal_store": [
           "PortalStore",
           "PortalTransaction"
+        ],
+        "system_clock": [
+          "utc_now"
         ]
       },
       "budget_management": {
@@ -11278,6 +11383,9 @@
         "portal_store": [
           "PortalStore",
           "PortalTransaction"
+        ],
+        "system_clock": [
+          "utc_now"
         ]
       },
       "expense_management": {
@@ -11312,6 +11420,9 @@
         "portal_store": [
           "PortalStore",
           "PortalTransaction"
+        ],
+        "system_clock": [
+          "utc_now"
         ]
       },
       "expense_intake": {
@@ -11348,6 +11459,9 @@
         "portal_store": [
           "PortalStore",
           "PortalTransaction"
+        ],
+        "system_clock": [
+          "utc_now"
         ]
       },
       "project_tracking": {
@@ -11373,6 +11487,9 @@
         "portal_store": [
           "PortalStore",
           "PortalTransaction"
+        ],
+        "system_clock": [
+          "utc_now"
         ]
       },
       "photo_management": {
@@ -11400,6 +11517,9 @@
         "portal_store": [
           "PortalStore",
           "PortalTransaction"
+        ],
+        "system_clock": [
+          "utc_now"
         ]
       },
       "derived_views": {
@@ -11642,6 +11762,9 @@
       "transport_guard": {
         "models": [
           "RuntimeSettings"
+        ],
+        "system_clock": [
+          "monotonic_seconds"
         ]
       },
       "runtime_settings": {
@@ -12134,10 +12257,15 @@
     ],
     "staff_bootstrap_cli": [
       "run_bootstrap_cli"
+    ],
+    "system_clock": [
+      "utc_now",
+      "monotonic_seconds"
     ]
   },
   "module_order": [
     "models",
+    "system_clock",
     "credential_security",
     "financial_policy",
     "audit_repository",
@@ -12179,6 +12307,8 @@
     "RegistryBoundaryError.__init__",
     "BinaryStorageError.__init__",
     "PersistenceError.__init__",
+    "utc_now",
+    "monotonic_seconds",
     "hash_password",
     "verify_password",
     "issue_verification_secret",
@@ -12665,6 +12795,7 @@
   ],
   "module_paths": {
     "models": "core/models",
+    "system_clock": "core/system_clock",
     "credential_security": "security/credential_security",
     "financial_policy": "domain/financial_policy",
     "audit_repository": "adapters/audit_repository",
