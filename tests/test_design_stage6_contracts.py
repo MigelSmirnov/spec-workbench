@@ -193,6 +193,7 @@ def test_authoring_gate_advances_past_contracts_and_notes_to_the_witness_stop(tm
     # hint on every finding, instead of advancing to assembly.
     monkeypatch.setattr(design_authoring_next, "_promoted_states_step", lambda sequence, project, text: None)
     monkeypatch.setattr(design_authoring_next, "_question_gate", lambda *args: None)  # rounds: test_design_questions_gates.py
+    monkeypatch.setattr(design_authoring_next, "_transition_stop", lambda *args: None)  # below
     report = design_authoring_next.next_step(_ready(tmp_path))
     assert report["phase"] == "decision_witness_resolution"
     assert report["blocked"] is True
@@ -200,6 +201,21 @@ def test_authoring_gate_advances_past_contracts_and_notes_to_the_witness_stop(tm
     findings = report["findings"]
     assert findings and {f["code"] for f in findings} == {"decision_without_witness"}
     assert all(f["severity"] == "error" and f["hint"].startswith("not decided — decide:") for f in findings)
+
+
+def test_a_flow_step_assembly_would_reject_stops_the_state6_transition(tmp_path: Path, monkeypatch) -> None:
+    # Cabinet's flow names capability:synchronization.publish_registry_catalogue,
+    # which the State 6 plan does not contract. Until the transition protocol
+    # this surfaced only at the State 8 flows check; now the obligation State 4
+    # carried to State 6 stops the State 6 handoff, needing no notes.
+    monkeypatch.setattr(design_authoring_next, "_promoted_states_step", lambda sequence, project, text: None)
+    monkeypatch.setattr(design_authoring_next, "_question_gate", lambda *args: None)
+    report = design_authoring_next.next_step(_ready(tmp_path))
+    assert report["phase"] == "state6_exact_contracts"
+    assert report["blocked"] is True
+    assert {(f["code"], f["carried_from"]) for f in report["findings"]} == {
+        ("flow_capability_missing", "state4_reviewed_flows")}
+    assert report["action"]["tool"] == "tools/transition.py"
 
 
 def test_authoring_gate_returns_to_state6_when_contract_is_unresolved(tmp_path: Path, monkeypatch) -> None:

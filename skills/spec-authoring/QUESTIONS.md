@@ -31,6 +31,30 @@ witness. The round is kept under
 with the texts' digests, every topic, how many reviews raised it and, for a
 repeated topic, its judgement.
 
+### A round is asked with its transition
+
+The texts alone hide what the next gate will reject. On client-portal (issue
+#147) States 0–7 closed over ten State 7 rounds while assembly then reported
+270 messages about decisions of States 1, 2, 4 and 6. So a document round's
+instruction also carries the transition of its state
+(`TRANSITION_PROTOCOL.md`): the protocol's five questions, what the state owns,
+the obligations earlier states carried to it with their results, what it
+carries further, and the deterministic findings of its gate and checks. The
+judge sees the same results and may not judge a topic answered or indifferent
+when a result shows it open. The results are not design text: no quote may come
+from them, they are not cut into units, and a changed result reopens no unit.
+The round keeps a digest of what it was shown (`layer`).
+
+`status` keeps two verdicts: `closed`, whether the rounds closed every unit, and
+`ready`, which adds that the transition holds. It exits 0 only when both do; a
+closed round never hides a `not_checked` or blocking result.
+
+A point's witness below is a **defect witness**: a history in which the texts
+give two outcomes. It is not a decision's `[witness: …]` tag, which binds an
+invariant to an existing check (`TRANSITION_PROTOCOL.md`, "Invariant
+evidence"); whether that check asserts the invariants its item names is a point
+of State 2.
+
 ### The Codex CLI is the standard provider
 
 Rounds ask through `codex exec` under the operator's ChatGPT login: `--provider codex`,

@@ -164,6 +164,7 @@ def _precedents(case: Path, state: int) -> list[dict[str, Any]]:
     found: list[dict[str, Any]] = []
     seen: set[str] = set()
     judged = [json.loads(p.read_text(encoding="utf-8")) for p in rounds]
+    evidence_of = {s["round"]: s.get("unit_evidence") or {} for s in judged if "round" in s}
     for summary in [s for s in judged if "judge" in s][-PRECEDENT_ROUNDS:][::-1]:
         for topic in summary.get("topics", []):
             judgement = topic.get("judgement") or {}
@@ -172,18 +173,33 @@ def _precedents(case: Path, state: int) -> list[dict[str, Any]]:
                 continue  # a hypothesis is an open question, not an answer to follow
             source = judgement.get("precedent") or judgement
             seen.add(topic["topic"])
-            found.append({"id": f"P{len(found) + 1}", "round": source.get("round", summary["round"]),
+            origin = source.get("round", summary["round"])
+            found.append({"id": f"P{len(found) + 1}", "round": origin,
                           "topic": topic["topic"], "kind": source["kind"],
                           "quotes": list(source.get("quotes") or []), "why": source.get("why", ""),
+                          "units": list(topic.get("units") or []),
+                          # the evidence the original judgement stood on, per unit
+                          "unit_evidence": dict(evidence_of.get(origin, summary.get("unit_evidence") or {})),
                           **({"deferred_to": source["deferred_to"]} if source.get("deferred_to") else {})})
     return found
+
+
+def _evidence_holds(precedent: dict[str, Any], evidence: dict[str, str], scope: list[str]) -> bool:
+    """A precedent about a unit whose bindings have evidence holds only on the
+    evidence it was judged on. A judgement with no recorded basis for such a
+    unit, or on another basis, is not offered: on changed evidence the same
+    question is judged afresh. A topic naming no unit concerns every unit under
+    review."""
+    units = precedent.get("units") or scope
+    recorded = precedent.get("unit_evidence") or {}
+    return all(recorded.get(unit) == evidence[unit] for unit in units if unit in evidence)
 
 
 def _judge(provider: Provider, state: int, text: str, texts: list[tuple[int, str, str]],
            repeated: list[dict[str, Any]], old: dict[str, str] | None,
            later: dict[str, str] | None = None,
            precedents: list[dict[str, Any]] | None = None,
-           witness: bool = False, case: Path | None = None) -> dict[str, Any]:
+           witness: bool = False, case: Path | None = None, layer: str | None = None) -> dict[str, Any]:
     """Judge the repeated topics. `later` maps the later states' documents to
     their texts; a provider that reads files gets them as files to search, so
     the judge can find a topic already decided below without receiving them
@@ -213,7 +229,7 @@ def _judge(provider: Provider, state: int, text: str, texts: list[tuple[int, str
     except documents.QuestionScopeError:
         scope = None
     instruction = prompts.judge_instruction(state, old is not None, later_files, bool(precedents), scope, witness)
-    judge_text = prompts.judge_input(text, items, change, precedents)
+    judge_text = prompts.judge_input(text, items, change, precedents, layer)
     if later:
         answer = provider.complete_with_files(instruction, judge_text, later)[0]
     else:
@@ -522,13 +538,17 @@ def _old_texts(case: Path, state: int, names: list[str], since: str | None,
 
 def _document_round(provider: Provider, state: int, runs: int, read: StateTexts, scope: list[str],
                     changed: dict[str, tuple[str, list[str]]], old: dict[str, str] | None,
-                    case: Path, referencing: dict[str, list[str]] | None = None
+                    case: Path, referencing: dict[str, list[str]] | None = None,
+                    layer: dict[str, Any] | None = None
                     ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
-    """States 0-6: every review reads the texts of States 0..N, asked about the open units."""
+    """States 0-6: every review reads the texts of States 0..N, asked about the open units,
+    with the transition of the state (TRANSITION_PROTOCOL.md): what it owns, receives and
+    carries, and the deterministic results of its gate and checks."""
     instruction = prompts.ask_instruction(state, documents.question_scope(state))
     instruction += prompts.unit_scope(state, [(key, read.units[key]["title"]) for key in scope],
                                       {key: diff for key, (diff, _) in changed.items()}, referencing)
     instruction += prompts.hypotheses_note(_previous_hypotheses(case, state))
+    instruction += prompts.layer_scope(layer, scope)
     text = prompts.ask_input(read.texts)
     with ThreadPoolExecutor(max_workers=runs) as pool:
         reviews = list(pool.map(lambda _: _review(provider, instruction, text), range(runs)))
@@ -537,8 +557,10 @@ def _document_round(provider: Provider, state: int, runs: int, read: StateTexts,
     topics = _group(provider, reviews, keep_points=True)
     repeated = _judged(topics, witness=True)
     later = {p.name: p.read_text(encoding="utf-8") for _, p in documents.later_documents(case, state)}
-    judged = (_judge(provider, state, text, read.texts, repeated, old, later, _precedents(case, state),
-                     witness=True, case=case) if repeated
+    evidence = (layer or {}).get("unit_evidence") or {}
+    precedents = [p for p in _precedents(case, state) if _evidence_holds(p, evidence, scope)]
+    judged = (_judge(provider, state, text, read.texts, repeated, old, later, precedents,
+                     witness=True, case=case, layer=prompts.layer_judge(layer, scope)) if repeated
               else {"provider": provider.name})
     return reviews, topics, repeated, judged
 
@@ -555,14 +577,22 @@ def _previous_hypotheses(case: Path, state: int) -> list[tuple[str, str]]:
 
 def _module_round(provider: Provider, state: int, runs: int, read: StateTexts, scope: list[str],
                   changed: dict[str, tuple[str, list[str]]], old: dict[str, str] | None,
-                  case: Path, referencing: dict[str, list[str]] | None = None) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
-    """State 7: each review reads one module's prompt, as its generator would."""
+                  case: Path, referencing: dict[str, list[str]] | None = None,
+                  layer: dict[str, Any] | None = None) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
+    """State 7: each review reads one module's prompt, as its generator would, and is
+    asked against the obligations received at State 7 that the module takes part in."""
     scope_text = documents.question_scope(state)
+
+    import transition
+
+    # received obligations, limited to each module (transition.module_obligations);
+    # the Factory prompt itself stays as the Factory builds it
+    obligations = {module: transition.module_obligations(case, layer or {}, module) for module in scope}
 
     def one(job: tuple[str, int]) -> dict[str, Any]:
         module = job[0]
         diff = changed[module][0] if module in changed else None
-        review = _review(provider, prompts.module_ask_instruction(state, scope_text, diff),
+        review = _review(provider, prompts.module_ask_instruction(state, scope_text, diff, obligations[module]),
                          prompts.module_input(module, read.units[module]["text"]))
         review["unit"] = module
         for point in review["open_points"]:
@@ -589,7 +619,8 @@ def _module_round(provider: Provider, state: int, runs: int, read: StateTexts, s
             text = prompts.module_input(module, read.units[module]["text"])
             module_old = None if old is None else {module: old.get(module, "")}
             judged["modules"][module] = _judge(provider, state, text, [(state, module, read.units[module]["text"])],
-                                               again, module_old, None, precedents)
+                                               again, module_old, None, precedents,
+                                               layer=prompts.module_layer_judge(obligations[module]))
             for topic in again:
                 topic["id"] = f"{module}:{topic['id']}"
         topics += mine
@@ -610,11 +641,15 @@ def ask_round(case: Path, state: int, provider: Provider, runs: int = DEFAULT_RU
         raise QuestionRoundError(f"a round needs at least {REPEATED} reviews to tell a repeated topic")
     read = state_texts(case, state, factory_root)
     previous_summaries = unit_summaries(case, state)
-    still_open = units.closed(previous_summaries, read.units)
+    evidence = unit_evidence(case, state)
+    still_open = units.closed(previous_summaries, read.units, evidence)
     scope = [key for key in read.units if not still_open[key]]
     if not scope:
         raise QuestionRoundError(f"every unit of State {state} is closed on its current text; nothing to ask")
     changed = _changed_units(case, read.texts, state, scope, read.units, previous_summaries)
+    # a unit closed on its text whose bound checks changed is asked about the new evidence
+    textually = units.closed(previous_summaries, read.units)
+    evidence_reopened = [key for key in scope if textually[key]]
     # a closed unit that names a decision changed since its closure is asked
     # again, for that change only
     referencing = (units.referencing(read.units, list(changed), scope)
@@ -623,7 +658,11 @@ def ask_round(case: Path, state: int, provider: Provider, runs: int = DEFAULT_RU
         scope = [key for key in read.units if key in scope or key in referencing]
     old = _old_texts(case, state, [name for _, name, _ in read.texts], since, factory_root)
     asked = _module_round if state == documents.MODULE_STATE else _document_round
-    reviews, topics, repeated, judged = asked(provider, state, runs, read, scope, changed, old, case, referencing)
+    layer = layer_context(case, state)
+    layer["evidence_reopened"] = evidence_reopened
+    layer["unit_evidence"] = evidence
+    reviews, topics, repeated, judged = asked(provider, state, runs, read, scope, changed, old, case, referencing,
+                                              layer)
     for topic in topics:
         topic.pop("points", None)
     directory = _next_round(case, state)
@@ -663,15 +702,64 @@ def ask_round(case: Path, state: int, provider: Provider, runs: int = DEFAULT_RU
         "blocked_units": units.blocked(repeated, scope),
         "set_aside": [len(r["set_aside"]) for r in reviews],
         "topics": topics,
+        "layer": layer_record(layer),
+        "unit_evidence": {key: evidence[key] for key in scope if key in evidence},
+        "evidence_reopened": evidence_reopened,
+        "transition_ready": layer["ready"],
     }
     if previous_summaries and str(previous_summaries[0].get("round")).startswith(CARRIED):
         first = previous_summaries[0]
         summary["carried"] = {"from": first["carried_from"], "ref": first["ref"], "units": first["units"]}
-    open_after = units.closed(previous_summaries + [summary], read.units)
+    open_after = units.closed(previous_summaries + [summary], read.units, evidence)
     summary["closed"] = all(open_after.values())
     summary["open_units"] = [key for key, done in open_after.items() if not done]
     (directory / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     return summary
+
+
+def unit_evidence(case: Path, state: int) -> dict[str, str]:
+    """unit -> the digest of the evidence its decision's bindings rest on
+    (design_decision_witness.evidence_basis), for the states that judge bindings."""
+    import design_decision_witness
+    import transition
+
+    sequence = transition.load_sequence()
+    if not any("witness_material" in transition.own_checks(sequence, phase)
+               for phase in transition.state_phases(sequence, state)):
+        return {}
+    try:
+        return design_decision_witness.evidence_basis(design_decision_witness.binding_material(case))
+    except Exception:  # unreadable evidence is reported by witness_material; it closes nothing new
+        return {}
+
+
+def layer_context(case: Path, state: int) -> dict[str, Any]:
+    """The transition a round of `state` is asked with (transition.round_context).
+
+    Kept apart from the texts: it is not cut into units and changes no digest,
+    so a deterministic result that changes reopens no unit.
+    """
+    import transition
+
+    try:
+        return transition.round_context(case, state)
+    except Exception as exc:  # never report a transition clean that could not be read
+        return {"state": state, "owns": [], "carries": [], "results": [], "ready": False,
+                "gate_findings": [{"code": "transition_not_checked", "severity": "error",
+                                   "message": f"the transition of State {state} could not be read ({exc})"}]}
+
+
+def layer_record(layer: dict[str, Any]) -> dict[str, Any]:
+    """What a round keeps of its transition: enough to say what the reviewers were shown."""
+    return {"ready": layer["ready"],
+            "results": [{"check": r["check"], "from": r["from"], "outcome": r["outcome"],
+                         "findings": len(r.get("findings") or [])} for r in layer.get("results") or []],
+            "gate_findings": len(layer.get("gate_findings") or []),
+            # the basis a sufficiency judgement rests on: which content, by digest
+            "materials": [{"decision": m["decision"], "witness": m["witness"], "status": m["status"],
+                           "files": [{"path": f["path"], "sha256": f["sha256"]} for f in m.get("files") or []]}
+                          for m in layer.get("materials") or []],
+            "digest": _sha(json.dumps(layer, sort_keys=True, ensure_ascii=False, default=str))}
 
 
 def _closed_at(case: Path, state: int, summaries: list[dict[str, Any]]) -> str | None:
@@ -687,8 +775,26 @@ def _closed_at(case: Path, state: int, summaries: list[dict[str, Any]]) -> str |
     return None
 
 
-def status(case: Path, state: int, factory_root: Path | None = None) -> dict[str, Any]:
-    """Whether the state is closed on its current texts, unit by unit."""
+def status(case: Path, state: int, factory_root: Path | None = None, with_transition: bool = False) -> dict[str, Any]:
+    """Whether the state is closed on its current texts, unit by unit.
+
+    With `with_transition`, also whether its transition holds: `closed` is the
+    rounds' verdict, `ready` adds what closes at the state (TRANSITION_PROTOCOL.md),
+    so a round that closed never hides a blocking deterministic result."""
+    result = _status(case, state, factory_root)
+    if with_transition:
+        layer = layer_context(case, state)
+        result["transition"] = {**layer_record(layer), "findings": [
+            {"check": r["check"], "from": r["from"], "outcome": r["outcome"], **f}
+            for r in layer["results"] if r["outcome"] not in ("closed", "carried") for f in r.get("findings") or []
+        ] + [{"check": "gate", **f} for f in layer["gate_findings"] if f.get("severity") in ("error", "block")]}
+        result["ready"] = bool(result["closed"]) and layer["ready"]
+        if result["closed"] and not layer["ready"]:
+            result["reason"] += "; the rounds closed, but the transition does not hold (see transition)"
+    return result
+
+
+def _status(case: Path, state: int, factory_root: Path | None = None) -> dict[str, Any]:
     rounds = _summaries(case, state)
     latest = rounds[-1] if rounds else None
     base = {"state": state, "round": latest["round"] if latest else None,
@@ -710,7 +816,9 @@ def status(case: Path, state: int, factory_root: Path | None = None) -> dict[str
                 "closed_at": None, "repeated": repeated,
                 "reason": ("the design texts changed after the latest round" if stale else _open_reason(latest))
                           + "; the state never closed, so every unit is open"}
-    done = units.closed(summaries, read.units)
+    evidence = unit_evidence(case, state)
+    done = units.closed(summaries, read.units, evidence)
+    textually = units.closed(summaries, read.units)
     open_units = [key for key, value in done.items() if not value]
     changed = [key for key in open_units if units.closed_digest(summaries, key) is not None]
     return {
@@ -719,9 +827,13 @@ def status(case: Path, state: int, factory_root: Path | None = None) -> dict[str
         "stale": stale,
         "carried": str(summaries[0].get("round", "")).startswith(CARRIED),
         "reason": ("every unit closed by two clear rounds on its current text" if not open_units
-                   else f"{len(open_units)} of {len(done)} unit(s) open: {', '.join(open_units)}"),
+                   else f"{len(open_units)} of {len(done)} unit(s) open: {', '.join(open_units)}"
+                   + ("; the evidence of " + ", ".join(k for k in open_units if textually[k])
+                      + " changed since its closure" if any(textually[k] for k in open_units) else "")),
         "open_units": open_units,
         "changed_units": changed,
+        # closed on their text, reopened because the checks their bindings name changed
+        "evidence_changed": [key for key in open_units if textually[key]],
         "units": len(done),
         "closed_at": _closed_at(case, state, summaries),
         "repeated": repeated,

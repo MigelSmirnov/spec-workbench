@@ -104,9 +104,35 @@ a point about one of them, away from the change, is set aside.
 {diff}```"""
 
 
-def module_ask_instruction(state: int, scope: str, diff: str | None = None) -> str:
+MODULE_OBLIGATIONS = """
+
+Obligations this module's code takes part in, received from earlier states
+(skills/spec-authoring/TRANSITION_PROTOCOL.md). They are deterministic results,
+not part of the prompt: never quote them. For each one that concerns code this
+module writes, check whether the prompt carries it out. When it does not,
+report a point of kind "unmet_obligation": in "text" copy, verbatim from the
+prompt, the contract or note of the function that should carry it, and in
+"question" say what the note must state.
+{listing}"""
+
+
+def module_ask_instruction(state: int, scope: str, diff: str | None = None,
+                           obligations: list[str] | None = None) -> str:
     instruction = MODULE_ASK.format(state=state, scope=scope)
+    if obligations:
+        instruction += MODULE_OBLIGATIONS.format(listing="\n".join(obligations))
     return instruction + (MODULE_CHANGE.format(diff=diff) if diff is not None else "")
+
+
+MODULE_LAYER_JUDGE = """=== OBLIGATIONS THIS MODULE TAKES PART IN (deterministic results, not prompt text; never quote) ===
+
+A topic about one of these is not judged answered unless the prompt carries it
+out; these results say the design does not yet.
+{listing}"""
+
+
+def module_layer_judge(obligations: list[str]) -> str | None:
+    return MODULE_LAYER_JUDGE.format(listing="\n".join(obligations)) if obligations else None
 
 
 def module_input(module: str, prompt: str) -> str:
@@ -271,7 +297,8 @@ def judge_instruction(state: int, reopened: bool, later_files: list[str] | None 
                         witness_schema=WITNESS_SCHEMA if witness else "")
 
 
-def judge_input(texts: str, topics: list[dict], change: str | None, precedents: list[dict] | None = None) -> str:
+def judge_input(texts: str, topics: list[dict], change: str | None, precedents: list[dict] | None = None,
+                layer: str | None = None) -> str:
     listing = "\n\n".join(
         f"{t['id']}: {t['topic']}\n" + "\n".join(f"  - {p}" for p in t["points"]) for t in topics
     )
@@ -286,5 +313,131 @@ def judge_input(texts: str, topics: list[dict], change: str | None, precedents: 
             for p in precedents
         )
         parts.append(f"=== PRIOR JUDGEMENTS (non-blocking, verified) ===\n\n{prior}")
+    if layer:
+        parts.append(layer)
     parts.append(f"=== TOPICS TO JUDGE ===\n\n{listing}")
     return "\n\n".join(parts)
+
+
+LAYER = """
+
+The transition of State {state} (skills/spec-authoring/TRANSITION_PROTOCOL.md).
+Within the scope above, ask the protocol's five questions of the units under
+review: are the inputs this state needs available; are the decisions it owns
+made; can each be written in the standard; did the obligations earlier states
+carried here close; and is every obligation it carries further a decided
+execution with a receiving state and a check, never an open choice written as
+"later". A choice deferred without being decided is a gap of this state.
+
+This state owns:
+{owns}
+It received from earlier states (result now):
+{received}
+It carries further:
+{carries}
+Deterministic results now. They are not design text: never quote them. A point
+they already state need not be raised, and no point may take a result that is
+not closed or carried for a pass; "not_checked" means an input is missing:
+{findings}
+
+Ask about an earlier state only whether this state fulfils what it carried
+here; its closed units are not audited again. A decision's "[witness: ...]" tag
+binds an invariant to an existing check: it is not the history you give as a
+point's witness. Whether the bound check asserts the very invariant its item
+names, and whether a Required tests item says what would show the invariant
+holds, are points of the state that owns the invariant."""
+
+
+LAYER_JUDGE = """=== DETERMINISTIC RESULTS AT THIS TRANSITION (not design text; never quote) ===
+
+A topic these results show open is not judged answered or indifferent, by
+this state's texts or a later one's: the texts may say it, the check says it
+does not hold.
+{findings}"""
+
+MAX_LAYER_LINES = 40
+
+
+def _layer_lines(context: dict) -> tuple[str, str, str, str]:
+    owns = "\n".join(f"- {item}" for item in context.get("owns") or []) or "- (nothing declared)"
+    received = "\n".join(f"- [{r['outcome']}] {r['obligation']} (from {r['from']}, check {r['check']})"
+                         for r in context.get("results") or []) or "- (nothing)"
+    carries = "\n".join(f"- {c.get('obligation', '')} -> {c.get('to')} (confirmed by {c.get('check')})"
+                        for c in context.get("carries") or []) or "- (nothing)"
+    lines = [f"- [{r['outcome']}] {f.get('code')}: {f.get('message', '')}"
+             for r in context.get("results") or [] if r["outcome"] not in ("closed", "carried")
+             for f in r.get("findings") or []]
+    lines += [f"- [gate] {f.get('code')}: {f.get('message', '')}" for f in context.get("gate_findings") or []]
+    if len(lines) > MAX_LAYER_LINES:
+        lines = lines[:MAX_LAYER_LINES] + [f"- … {len(lines) - MAX_LAYER_LINES} more"]
+    return owns, received, carries, "\n".join(lines) or "- (none)"
+
+
+MATERIALS = """
+
+Evidence of the bindings under review. These are the Factory checks the
+decisions' "[witness: ...]" tags name, read-only, each file with its sha256.
+They are not design text: never quote them. For each binding decide whether
+the content asserts every invariant its item names, as stated — not merely
+that it calls the same function. When it does not, raise a point on the
+decision's unit, quoting the Required tests item: the binding claims what the
+check does not show. A binding listed as not checked has no content to judge:
+say so, and never treat it as sufficient.
+{listing}"""
+
+
+def _materials(context: dict, units: list[str] | None) -> str:
+    rows = []
+    for entry in context.get("materials") or []:
+        if units is not None and entry["decision"] not in units:
+            continue
+        head = (f"- {entry['decision']} binds {', '.join(entry['invariants']) or 'its invariant'} "
+                f"to {entry['witness']}; item: {entry['item']}")
+        if entry["status"] != "available":
+            rows.append(f"{head}\n  NOT CHECKED: {entry.get('reason')}")
+            continue
+        body = [head] + [f"--- {f['path']} sha256 {f['sha256']} ---\n{f['text']}" for f in entry.get("files") or []]
+        if entry.get("basis"):
+            body.append(f"  basis: {entry['basis']}")
+        rows.append("\n".join(body))
+    return "\n\n".join(rows)
+
+
+def layer_scope(context: dict | None, units: list[str] | None = None) -> str:
+    """The transition block of a document round's instruction; "" without a context.
+    `units`: the units under review, which the bindings' evidence is limited to."""
+    if not context:
+        return ""
+    owns, received, carries, findings = _layer_lines(context)
+    text = LAYER.format(state=context["state"], owns=owns, received=received, carries=carries, findings=findings)
+    listing = _materials(context, units)
+    reopened = context.get("evidence_reopened") or []
+    note = EVIDENCE_REOPENED.format(units=", ".join(reopened)) if reopened else ""
+    return text + (MATERIALS.format(listing=listing) if listing else "") + note
+
+
+EVIDENCE_REOPENED = """
+
+Units closed on their text whose evidence changed: {units}. The checks their
+bindings name changed since they were closed (a file, a command or a digest),
+while their text did not. Review them only for whether each binding still
+asserts the invariants its item names on the evidence above; their text is
+closed otherwise."""
+
+
+def layer_judge(context: dict | None, units: list[str] | None = None) -> str | None:
+    if not context:
+        return None
+    text = LAYER_JUDGE.format(findings=_layer_lines(context)[3])
+    listing = _materials(context, units)
+    reopened = context.get("evidence_reopened") or []
+    note = EVIDENCE_REOPENED_JUDGE.format(units=", ".join(reopened)) if reopened else ""
+    return text + (MATERIALS.format(listing=listing) if listing else "") + note
+
+
+EVIDENCE_REOPENED_JUDGE = """
+
+Reopened because their evidence changed: {units}. Their text did not change,
+but a check their bindings name did. Judge whether each binding still asserts
+its invariants on the evidence above; no earlier judgement of these units is
+offered as a precedent, and an earlier "answered" stood on other evidence."""

@@ -34,6 +34,19 @@ findings to stops with a hint, refuses closure-gap waivers, and adds the
 `witness` and `flows` assembly checks. A phase that reports a stop is not
 "ready with remarks"; it is not ready.
 
+## Every transition closes its own rules
+
+A phase may declare a `layer` block: the decisions it `owns`, the `checks` run
+at its own handoff, and the obligations it `carries`, each to a receiving phase
+with the check that confirms it there. After a phase's gate passes, the
+sequencer runs its checks and every obligation carried to it
+(`tools/transition.py --phase <id>`) and stops at that phase unless each is
+`closed` or `carried`; `not_checked` — an input the check needs is missing — is
+never a pass, and a `workbench_gap` (KNOWN_GAPS.md) stops too. The method is
+`TRANSITION_PROTOCOL.md`. A check is added only for a rule of the standard; the
+protocol moves existing rule checks to the layer that owns them rather than
+adding one per way of going wrong.
+
 ## Canonical order
 
 The generic sequence promoted to `main` is:

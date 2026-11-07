@@ -27,6 +27,12 @@ Two fuses close it from opposite sides:
                                  datetime fields while its inputs carry none
                                  and its module declares no clock port
 
+A module-level clock (system_clock_backend v2-v4, SPEC_STANDARD 6.9) is a
+source for the modules that really depend on it: those importing its function
+(the decided imports: 65_imports.json, else an assembled imports.module_internal,
+an empty one included), or, before imports are decided, those whose State 3
+Knows names the clock module (clock_consumers).
+
 Report-only by default; --strict exits 1 when anything is found.
 
     python tools/design_closure_gaps.py examples/<case> [--json] [--strict]
@@ -286,6 +292,102 @@ def time_source_authorities(spec: dict[str, Any]) -> set[str]:
     return {m for m in modules if isinstance(m, str)} if isinstance(modules, list) else set()
 
 
+CLOCK_CLOSURE_FILE = "70_system_clock_closure.json"
+CLOCK_FUNCTION_KEYS = ("function", "wall_clock_function")
+
+
+def declared_clock_function(case: Path, spec: dict[str, Any] | None = None) -> tuple[str, str] | None:
+    """(module, function) of a module-level wall-clock operation the design declares.
+
+    Read from the assembled ``rules.system_clock_backend`` when there is one,
+    else from the closed ``70_system_clock_closure.json`` (SPEC_STANDARD 6.9:
+    v2 ``function``, v3 ``wall_clock_function``, v4 ``function``). A class
+    form (v1) hands out time through a port in ``__init__`` instead.
+    """
+    backend = ((spec or {}).get("rules") or {}).get("system_clock_backend")
+    if not isinstance(backend, dict):
+        path = Path(case) / CLOCK_CLOSURE_FILE
+        try:
+            closure = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            closure = None
+        if not isinstance(closure, dict) or closure.get("status") != "closed":
+            return None
+        backend = closure.get("backend_ir")
+    wiring = backend.get("wiring") if isinstance(backend, dict) else None
+    if not isinstance(wiring, dict) or not isinstance(wiring.get("module"), str):
+        return None
+    function = next((wiring[key] for key in CLOCK_FUNCTION_KEYS if isinstance(wiring.get(key), str)), None)
+    return (wiring["module"], function) if function else None
+
+
+def _state3_knows(case: Path) -> dict[str, list[str]]:
+    try:
+        import design_stage3
+        from value_flow_workbench.case import _knows
+        modules = {item.name for item in design_stage3.parse_modules(Path(case))}
+    except Exception:  # an unreadable State 3 declares no dependency
+        return {}
+    return _knows(Path(case), modules)
+
+
+IMPORTS_TABLE_FILE = "65_imports.json"
+
+
+def decided_imports(case: Path, spec: dict[str, Any] | None = None) -> dict[str, Any] | None:
+    """``module_internal`` once the imports are decided, or None while they are not.
+
+    The imports closure table (65_imports.json, IMPORTS_WORKBENCH.md) is the
+    authoritative decision: when it exists, its derivation is the answer, an
+    empty one included. Without a table, an assembled ``imports.module_internal``
+    that is present — empty or not — is a decision too (a migrated case). Only
+    when neither exists are the imports undecided. Truthiness never decides:
+    a decided empty table hands the clock to nobody.
+    """
+    path = Path(case) / IMPORTS_TABLE_FILE
+    if path.is_file():
+        try:
+            table = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            table = None
+        if isinstance(table, dict) and isinstance(table.get("scopes"), dict):
+            from imports_workbench.service import derive
+            return derive(table)
+    imports = (spec or {}).get("imports")
+    if isinstance(imports, dict) and "module_internal" in imports:
+        decided = imports["module_internal"]
+        return decided if isinstance(decided, dict) else {}
+    return None
+
+
+def clock_consumers(case: Path, spec: dict[str, Any] | None = None) -> set[str]:
+    """Modules handed the declared module-level clock by a real dependency.
+
+    Once the imports are decided (``decided_imports``), a consumer is a module
+    that imports the clock function from the clock module — exactly the edge
+    the Factory's conformance gate treats as a handed clock — and a decided
+    table with no such edge hands it to nobody. While they are undecided
+    (States 6 and 7 of a new case), it is a module whose State 3 ``Knows``
+    names the clock module. A module with neither is not a consumer, however
+    its notes speak of time: an arbitrary module never inherits the clock.
+    """
+    clock = declared_clock_function(case, spec)
+    if clock is None:
+        return set()
+    module, function = clock
+    imports = decided_imports(case, spec)
+    if imports is not None:
+        return {consumer for consumer, providers in imports.items()
+                if isinstance(providers, dict) and function in (providers.get(module) or [])}
+    return {consumer for consumer, known in _state3_knows(case).items() if module in known}
+
+
+def time_sources(case: Path, spec: dict[str, Any] | None = None) -> set[str]:
+    """Modules that have a declared time source without a parameter or port:
+    the policy's authorities and the consumers of a module-level clock."""
+    return (time_source_authorities(spec) if spec else set()) | clock_consumers(case, spec)
+
+
 def ambient_time_findings(models: dict[str, Any], contracts: dict[str, Any],
                           func_module: dict[str, str], notes: list[Any],
                           sources: set[str] = frozenset()) -> list[dict[str, Any]]:
@@ -346,7 +448,7 @@ def check_time_sources(case: Path, spec: dict[str, Any]) -> list[dict[str, Any]]
     contracts = spec.get("contracts") or {}
     func_module = {f: module for module, funcs in (spec.get("module_functions") or {}).items()
                    for f in (funcs or [])}
-    sources = time_source_authorities(spec)
+    sources = time_sources(case, spec)
     return (ambient_time_findings(models, contracts, func_module, spec.get("notes") or [], sources)
             + fresh_timestamp_findings(models, contracts, func_module, parse_state_impacts(case), sources))
 

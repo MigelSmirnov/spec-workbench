@@ -51,6 +51,14 @@ HINTS: dict[str, str] = {
     "imports_code_unused": "drop the use, or record code_outdated with the reason the code lags the specification",
     "imports_projection_drift": "do not edit imports.module_internal by hand: change the decision in 65_imports.json and run tools/design_spec_projection.py <case> --apply",
     "imports_factory_unavailable": "make the Factory reachable (--factory-root or SPEC_WORKBENCH_FACTORY_ROOT) with a slicer report that has --code-root",
+    "fresh_timestamp_without_source": "name the time source State 2 decided in the contract: a datetime parameter, a clock port retained by __init__, a declared time_source_policy authority, or a module-level clock (system_clock_backend v2-v4) the module depends on (State 3 Knows, then imports); do not change the service's accepted behaviour to satisfy the check",
+    "ambient_time_note": "the note needs the current time: give the function the source State 2 decided (a datetime parameter, the module's clock port, or the module-level clock it depends on and names in the note)",
+    "model_closure_absent": "write 60_model_closure_*.json: one record per State 1 model with its identity, and a contract_only file for the runtime models the contracts introduce",
+    "invariant_without_required_test": "say in Required tests what must be shown for this invariant, naming it by its identifier",
+    "invariant_without_witness": "bind the invariant to an existing check that asserts it ([witness: ...] on the Required tests line naming it), or keep it carried and say which check will be written",
+    "witness_binding_ambiguous": "name, in the Required tests item that carries the tag, the invariants its check asserts",
+    "witness_material_not_checked": "make the bound check's content readable (SPEC_WORKBENCH_FACTORY_ROOT, a command that names its files, at most the size a round is given whole) so the round can judge it, or remove the binding and carry it",
+    "flow_reachability_not_checked": "assemble the router (design_spec_projection.py --apply) or close the router closure so the routes the flows start from can be read",
     "table_access_unnamed": "a note naming a record table names its access: spell the match in the row model's field vocabulary, or name the contract that owns it (NOTE_GATE.md 'Table access must be named')",
 }
 
