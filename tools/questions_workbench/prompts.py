@@ -411,7 +411,18 @@ def layer_scope(context: dict | None, units: list[str] | None = None) -> str:
     owns, received, carries, findings = _layer_lines(context)
     text = LAYER.format(state=context["state"], owns=owns, received=received, carries=carries, findings=findings)
     listing = _materials(context, units)
-    return text + (MATERIALS.format(listing=listing) if listing else "")
+    reopened = context.get("evidence_reopened") or []
+    note = EVIDENCE_REOPENED.format(units=", ".join(reopened)) if reopened else ""
+    return text + (MATERIALS.format(listing=listing) if listing else "") + note
+
+
+EVIDENCE_REOPENED = """
+
+Units closed on their text whose evidence changed: {units}. The checks their
+bindings name changed since they were closed (a file, a command or a digest),
+while their text did not. Review them only for whether each binding still
+asserts the invariants its item names on the evidence above; their text is
+closed otherwise."""
 
 
 def layer_judge(context: dict | None, units: list[str] | None = None) -> str | None:

@@ -511,3 +511,56 @@ def test_a_state7_module_review_is_asked_against_the_obligations_it_takes_part_i
     assert kept.read_text(encoding="utf-8") == prompt
     assert any("OBLIGATIONS THIS MODULE TAKES PART IN" in j and "capability:store.save" in j for j in provider.judged)
     assert summary["transition_ready"] is False
+
+
+# ------------- review 5812269729: workbench gates and changed evidence
+
+def test_a_workbench_binding_gives_the_round_the_gate_implementation(tmp_path, monkeypatch):
+    # review r4501770397: the gate's name was given, not what it checks; flows
+    # does not prove "a thing is counted once", and the round must see that
+    _clean_gate(monkeypatch)
+    case = _case(tmp_path, "- INV-001, INV-002: refused. [witness: workbench:flows]")
+    assert transition.run_check(case, "witness_material")["outcome"] == "closed"
+    summary, provider = _ask(case)
+    asked = provider.instructions[0]
+    assert "A01 binds INV-001, INV-002 to workbench:flows" in asked
+    assert "def coverage(project: Path, *, reachability: bool = True)" in asked   # flow_closure's own code
+    source = (Path(flow_closure.__file__)).read_text(encoding="utf-8")
+    digest = __import__("hashlib").sha256(source.encode()).hexdigest()
+    assert summary["layer"]["materials"][0]["files"] == [{"path": "tools/flow_closure.py", "sha256": digest}]
+
+
+def test_a_facade_check_resolves_to_the_implementation_it_delegates_to():
+    files, _ = design_decision_witness.workbench_sources("closure_gaps")
+    assert [f["path"] for f in files] == ["tools/assembly_workbench/checks.py#_closure_gap_coverage",
+                                          "tools/design_closure_gaps.py"]
+    assert design_decision_witness.workbench_sources("no_such_gate") == ([], "no_such_gate is not a Workbench check")
+
+
+def test_an_unknown_workbench_gate_is_not_checked(tmp_path):
+    case = _case(tmp_path, "- INV-001, INV-002: refused. [witness: workbench:no_such_gate]")
+    result = transition.run_check(case, "witness_material")
+    assert result["outcome"] == "not_checked"
+
+
+def test_a_changed_check_reopens_only_the_decision_bound_to_it(tmp_path, monkeypatch):
+    # review r4501770401: A01 closed on a test of INV-001; the external test
+    # loses its assertion, the design text does not change
+    _clean_gate(monkeypatch)
+    case = _case(tmp_path, SufficiencyProvider.ITEM)
+    factory = _factory_with_check(tmp_path, case)
+    monkeypatch.setenv("SPEC_WORKBENCH_FACTORY_ROOT", str(factory))
+    _ask(case)
+    _ask(case)
+    assert service.status(case, 2, with_transition=True)["ready"] is True
+    _write(factory / "verification" / "counts_once_check.py", CHECK_SCRIPT.replace("assert ", "# was: assert "))
+    result = service.status(case, 2, with_transition=True)
+    assert result["open_units"] == ["A01"] and result["evidence_changed"] == ["A01"]
+    assert result["closed"] is False and result["ready"] is False
+    summary, provider = _ask(case)
+    assert summary["scope"] == ["A01"] and summary["evidence_reopened"] == ["A01"]
+    assert "Units closed on their text whose evidence changed: A01" in provider.instructions[0]
+    assert "# was: assert" in provider.instructions[0]
+    assert summary["closed"] is False                  # one review on the new evidence is not two
+    summary, _ = _ask(case)
+    assert summary["closed"] is True and service.status(case, 2)["open_units"] == []

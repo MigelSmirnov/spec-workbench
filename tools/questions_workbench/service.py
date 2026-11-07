@@ -623,11 +623,15 @@ def ask_round(case: Path, state: int, provider: Provider, runs: int = DEFAULT_RU
         raise QuestionRoundError(f"a round needs at least {REPEATED} reviews to tell a repeated topic")
     read = state_texts(case, state, factory_root)
     previous_summaries = unit_summaries(case, state)
-    still_open = units.closed(previous_summaries, read.units)
+    evidence = unit_evidence(case, state)
+    still_open = units.closed(previous_summaries, read.units, evidence)
     scope = [key for key in read.units if not still_open[key]]
     if not scope:
         raise QuestionRoundError(f"every unit of State {state} is closed on its current text; nothing to ask")
     changed = _changed_units(case, read.texts, state, scope, read.units, previous_summaries)
+    # a unit closed on its text whose bound checks changed is asked about the new evidence
+    textually = units.closed(previous_summaries, read.units)
+    evidence_reopened = [key for key in scope if textually[key]]
     # a closed unit that names a decision changed since its closure is asked
     # again, for that change only
     referencing = (units.referencing(read.units, list(changed), scope)
@@ -637,6 +641,7 @@ def ask_round(case: Path, state: int, provider: Provider, runs: int = DEFAULT_RU
     old = _old_texts(case, state, [name for _, name, _ in read.texts], since, factory_root)
     asked = _module_round if state == documents.MODULE_STATE else _document_round
     layer = layer_context(case, state)
+    layer["evidence_reopened"] = evidence_reopened
     reviews, topics, repeated, judged = asked(provider, state, runs, read, scope, changed, old, case, referencing,
                                               layer)
     for topic in topics:
@@ -679,16 +684,34 @@ def ask_round(case: Path, state: int, provider: Provider, runs: int = DEFAULT_RU
         "set_aside": [len(r["set_aside"]) for r in reviews],
         "topics": topics,
         "layer": layer_record(layer),
+        "unit_evidence": {key: evidence[key] for key in scope if key in evidence},
+        "evidence_reopened": evidence_reopened,
         "transition_ready": layer["ready"],
     }
     if previous_summaries and str(previous_summaries[0].get("round")).startswith(CARRIED):
         first = previous_summaries[0]
         summary["carried"] = {"from": first["carried_from"], "ref": first["ref"], "units": first["units"]}
-    open_after = units.closed(previous_summaries + [summary], read.units)
+    open_after = units.closed(previous_summaries + [summary], read.units, evidence)
     summary["closed"] = all(open_after.values())
     summary["open_units"] = [key for key, done in open_after.items() if not done]
     (directory / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     return summary
+
+
+def unit_evidence(case: Path, state: int) -> dict[str, str]:
+    """unit -> the digest of the evidence its decision's bindings rest on
+    (design_decision_witness.evidence_basis), for the states that judge bindings."""
+    import design_decision_witness
+    import transition
+
+    sequence = transition.load_sequence()
+    if not any("witness_material" in transition.own_checks(sequence, phase)
+               for phase in transition.state_phases(sequence, state)):
+        return {}
+    try:
+        return design_decision_witness.evidence_basis(design_decision_witness.binding_material(case))
+    except Exception:  # unreadable evidence is reported by witness_material; it closes nothing new
+        return {}
 
 
 def layer_context(case: Path, state: int) -> dict[str, Any]:
@@ -774,7 +797,9 @@ def _status(case: Path, state: int, factory_root: Path | None = None) -> dict[st
                 "closed_at": None, "repeated": repeated,
                 "reason": ("the design texts changed after the latest round" if stale else _open_reason(latest))
                           + "; the state never closed, so every unit is open"}
-    done = units.closed(summaries, read.units)
+    evidence = unit_evidence(case, state)
+    done = units.closed(summaries, read.units, evidence)
+    textually = units.closed(summaries, read.units)
     open_units = [key for key, value in done.items() if not value]
     changed = [key for key in open_units if units.closed_digest(summaries, key) is not None]
     return {
@@ -783,9 +808,13 @@ def _status(case: Path, state: int, factory_root: Path | None = None) -> dict[st
         "stale": stale,
         "carried": str(summaries[0].get("round", "")).startswith(CARRIED),
         "reason": ("every unit closed by two clear rounds on its current text" if not open_units
-                   else f"{len(open_units)} of {len(done)} unit(s) open: {', '.join(open_units)}"),
+                   else f"{len(open_units)} of {len(done)} unit(s) open: {', '.join(open_units)}"
+                   + ("; the evidence of " + ", ".join(k for k in open_units if textually[k])
+                      + " changed since its closure" if any(textually[k] for k in open_units) else "")),
         "open_units": open_units,
         "changed_units": changed,
+        # closed on their text, reopened because the checks their bindings name changed
+        "evidence_changed": [key for key in open_units if textually[key]],
         "units": len(done),
         "closed_at": _closed_at(case, state, summaries),
         "repeated": repeated,

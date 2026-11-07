@@ -153,15 +153,29 @@ def _clear_for(summary: dict[str, Any], key: str) -> bool:
     return key not in set(summary.get("blocked_units") or [])
 
 
-def closed(summaries: list[dict[str, Any]], current: dict[str, dict[str, str]]) -> dict[str, bool]:
-    """Per unit: closed by the two latest rounds that reviewed it, on its current text."""
+def closed(summaries: list[dict[str, Any]], current: dict[str, dict[str, str]],
+           evidence: dict[str, str] | None = None) -> dict[str, bool]:
+    """Per unit: closed by the two latest rounds that reviewed it, on its current text.
+
+    `evidence` maps a unit to the digest of what its bindings rest on (the
+    checks its decision's witness tags name). A review that recorded another
+    evidence digest for the unit (`unit_evidence`) judged other evidence, so it
+    does not close the unit: a changed check reopens exactly the decisions bound
+    to it. A review that recorded none (kept before evidence was recorded) is
+    taken as it stands. Without `evidence` the closure is on the text alone."""
     result = {}
     for key, unit in current.items():
         reviewed = [s for s in summaries if key in (s.get("scope") or []) and key in (s.get("units") or {})]
         last = reviewed[-2:]
         result[key] = (len(last) == 2 and all(_clear_for(s, key) for s in last)
-                       and all(s["units"][key] == unit["digest"] for s in last))
+                       and all(s["units"][key] == unit["digest"] for s in last)
+                       and (evidence is None or not any(evidence_changed(s, key, evidence) for s in last)))
     return result
+
+
+def evidence_changed(summary: dict[str, Any], key: str, evidence: dict[str, str]) -> bool:
+    recorded = (summary.get("unit_evidence") or {}).get(key)
+    return recorded is not None and recorded != evidence.get(key)
 
 
 def blocked(topics: list[dict[str, Any]], scope: list[str]) -> list[str]:

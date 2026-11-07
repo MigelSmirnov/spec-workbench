@@ -133,7 +133,15 @@ def binding_material(case: Path, factory: Path | None = None) -> list[dict[str, 
                                          "invariants": [i for i in invariant_ids(item) if i in ids] or ids,
                                          "item": item.strip(), "files": []}
                 if kind == "workbench":
-                    entry.update(status="available", basis=f"the Workbench gate {name} (tools/, authoring_sequence.json)")
+                    files, reason = workbench_sources(name)
+                    size = sum(len(f["text"]) for f in files)
+                    if not files:
+                        entry.update(status="not_checked", reason=reason)
+                    elif size > MATERIAL_LIMIT:
+                        entry.update(status="not_checked", files=[{k: f[k] for k in ("path", "sha256")} for f in files],
+                                     reason=f"{size} characters exceed what a round is given whole ({MATERIAL_LIMIT})")
+                    else:
+                        entry.update(status="available", files=files)
                 elif kind == "note":
                     notes = [str(n) for n in (spec.get("notes") or []) if "[TEST_EVIDENCE]" in str(n)
                              and str(n).split(":", 1)[0].split(".", 1)[0] == name.split(".", 1)[0]]
@@ -167,8 +175,94 @@ def binding_material(case: Path, factory: Path | None = None) -> list[dict[str, 
                                          reason=f"{size} characters exceed what a round is given whole ({MATERIAL_LIMIT})")
                         else:
                             entry.update(status="available", files=files)
+                        entry["command"] = list(command.get("command") or [])
                 found.append(entry)
     return found
+
+
+FACADE_MODULE = "assembly_workbench.checks"
+
+
+def _sources(function: Any, root: Path, depth: int = 2) -> list[dict[str, Any]]:
+    """The source a check function rests on. A function defined in its own
+    module gives that module's file; a facade of the assembly check table (a
+    lambda, or a helper defined there) gives its own source and, a level or two
+    down, the implementations it delegates to."""
+    import inspect
+
+    function = inspect.unwrap(function)
+    try:
+        path = Path(inspect.getsourcefile(function) or "").resolve()
+    except TypeError:
+        return []
+    if function.__module__ != FACADE_MODULE:
+        text = path.read_text(encoding="utf-8")
+        return [{"path": path.relative_to(root).as_posix(), "sha256": _sha(text), "text": text}]
+    source = inspect.getsource(function)
+    found = [{"path": f"{path.relative_to(root).as_posix()}#{function.__name__}", "sha256": _sha(source),
+              "text": source}]
+    if depth == 0:
+        return found
+    import dis
+
+    module = sys.modules.get(function.__module__)
+    targets = []
+    previous = None
+    for instruction in dis.get_instructions(function):
+        if instruction.opname == "LOAD_GLOBAL":
+            previous = getattr(module, str(instruction.argval), None)
+            if callable(previous) and not inspect.isclass(previous) and not inspect.ismodule(previous):
+                targets.append(previous)
+        elif instruction.opname in ("LOAD_ATTR", "LOAD_METHOD") and inspect.ismodule(previous):
+            attribute = getattr(previous, str(instruction.argval), None)  # module.function it calls
+            if callable(attribute) and not inspect.isclass(attribute):
+                targets.append(attribute)
+            previous = None
+        else:
+            previous = None
+    for target in targets:
+        if getattr(target, "__module__", "builtins") == "builtins" or inspect.unwrap(target) is function:
+            continue
+        for entry in _sources(target, root, depth - 1):
+            if entry["path"] not in {f["path"] for f in found}:
+                found.append(entry)
+    return found
+
+
+def workbench_sources(name: str) -> tuple[list[dict[str, Any]], str]:
+    """The implementation of a Workbench check a ``workbench:`` tag names, read-only.
+
+    An assembly check resolves through the assembly check table (a facade there
+    resolves to the implementation it delegates to); a design_lint gate of the
+    authoring sequence (``state1_models``, ``state2_rules_decisions``) to
+    ``design_lint.lint_project``. Each file comes with its sha256; a name that
+    resolves to no file gives none, and the caller reports it not checked.
+    """
+    root = Path(__file__).resolve().parents[1]
+    function: Any = None
+    if name in LINT_GATES:
+        import design_lint
+        function = design_lint.lint_project
+    else:
+        try:
+            from assembly_workbench.checks import CHECKS
+        except ImportError:  # pragma: no cover
+            return [], "the assembly check table cannot be loaded"
+        function = CHECKS.get(name)
+    if function is None:
+        return [], f"{name} is not a Workbench check"
+    files = _sources(function, root)
+    return files, "" if files else f"{name} resolves to no source file"
+
+
+def evidence_basis(materials: list[dict[str, Any]]) -> dict[str, str]:
+    """decision -> one digest of everything its bindings rest on: witness, command,
+    status and every file's digest. A change of any of them changes the basis."""
+    by_decision: dict[str, list[Any]] = {}
+    for m in materials:
+        by_decision.setdefault(m["decision"], []).append(
+            [m["witness"], m.get("command") or [], m["status"], sorted((f["path"], f["sha256"]) for f in m.get("files") or [])])
+    return {key: _sha(json.dumps(sorted(rows, key=str), ensure_ascii=False)) for key, rows in by_decision.items()}
 
 
 def _sha(text: str) -> str:

@@ -104,9 +104,17 @@ Three things share the word "witness" and are kept apart:
 
 Whether a bound check really asserts its invariant is a judgement, asked in the
 State 2 round on the check's content: the round is given, read-only, the files
-the check's command names in the Factory checkout (or the assembled
-[TEST_EVIDENCE] notes of a `note:` scope), each with its sha256, and keeps those
-digests as the basis of its result (`layer.materials`). A binding whose content
+the check's command names in the Factory checkout, the assembled
+[TEST_EVIDENCE] notes of a `note:` scope, or the implementation of a
+`workbench:` gate (resolved through the assembly check table to the code it
+delegates to, or to `design_lint` for a lint gate), each with its sha256, and
+keeps those digests as the basis of its result (`layer.materials`).
+The basis is kept per decision unit too (`unit_evidence`): when a bound check
+changes — a file, the command, a digest — while the decision's text does not,
+exactly that decision reopens and is reviewed for whether its bindings still
+hold on the new evidence, until two clear reviews on it close it again
+(`evidence_changed` in `status`). Rounds kept before the basis was recorded are
+taken as they stand. A binding whose content
 cannot be read whole is `not_checked` (`witness_material`, a State 2 check): its
 sufficiency is not judged, and it is never taken as sufficient. On client-portal 28 of 32 decisions were bound to existing
 checks; A7, A15, A20 and A32 have none. A binding found by reading check code
