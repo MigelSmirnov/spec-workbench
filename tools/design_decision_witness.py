@@ -23,7 +23,10 @@ error — a claimed witness that is absent is worse than no claim. A decision
 with formal invariants and no witness at all stops the case (the fence raises
 its warning). A tag binds the invariant identifiers its own Required tests item names, so
 one check cannot stand for a decision's other invariants (by item: a list
-item and its continuation lines); whether the check
+item and its continuation lines). A decision with several formal invariants
+therefore needs an identifier on each once it binds a check: an invariant
+without one cannot be addressed (``invariant_without_identifier``), and a tag
+naming none binds nothing (``witness_binding_ambiguous``). Whether the check
 really asserts the invariant stays a judgement of the State 2 question round.
 
 Two things are kept apart (TRANSITION_PROTOCOL.md, "Invariant evidence"): the
@@ -443,8 +446,9 @@ def coverage(case: Path, factory: Path | None = None) -> dict[str, Any]:
     A tag binds the invariant identifiers named in its own Required tests item
     (the list item with its continuation lines); when the invariants carry
     identifiers, each needs an item that names it and binds it. A tag in an item
-    naming no identifier binds the decision only when the decision has at most
-    one identified invariant; otherwise it is ambiguous and binds nothing. Whether the bound check really asserts
+    naming no identifier binds the decision only when the decision has one
+    formal invariant; otherwise it is ambiguous and binds nothing, and each
+    invariant without an identifier is reported. Whether the bound check really asserts
     the invariant stays a judgement of the State 2 question round.
     """
     case = case.resolve()
@@ -469,6 +473,12 @@ def coverage(case: Path, factory: Path | None = None) -> dict[str, Any]:
             })
             continue
         ids = invariant_ids(invariants[1])
+        statements = required_test_items(invariants[1])
+        # With several formal invariants, a tag can only be addressed to one by
+        # its identifier: a word label ("closed-once") is not checkable, and an
+        # unnamed tag would stand for all of them.
+        several = len(statements) > 1
+        unidentified = [s for s in statements if not invariant_ids(s)] if several else []
         bound: set[str] = set()
         whole = False
         for item in items:
@@ -483,15 +493,24 @@ def coverage(case: Path, factory: Path | None = None) -> dict[str, Any]:
             named = [i for i in invariant_ids(item) if i in ids]
             if named:
                 bound.update(named)
-            elif len(ids) <= 1:
-                whole = True  # one invariant, or none named by identifier: the binding is unambiguous
+            elif len(ids) <= 1 and not several:
+                whole = True  # one invariant: the binding is unambiguous
             else:
                 findings.append({
                     "severity": "warning", "code": "witness_binding_ambiguous", "decision": key,
                     "location": location,
                     "message": (f"{key}: a Required tests item binds a check but names none of the decision's "
-                                f"invariants ({', '.join(ids)}); name the invariants the check asserts in that item"),
+                                f"{len(statements)} invariants ({', '.join(ids) or 'none has an identifier'}); "
+                                "name the invariants the check asserts in that item"),
                 })
+        for statement in unidentified:
+            first = " ".join(ITEM_RE.sub("", statement, count=1).split())
+            findings.append({
+                "severity": "warning", "code": "invariant_without_identifier", "decision": key,
+                "location": invariants[0],
+                "message": (f"{key}: one of {len(statements)} formal invariants has no identifier, so no tag can be "
+                            f"addressed to it: {first[:120]!r}"),
+            })
         unbound = [] if whole else [i for i in ids if i not in bound]
         for ident in unbound:
             findings.append({
@@ -500,7 +519,7 @@ def coverage(case: Path, factory: Path | None = None) -> dict[str, Any]:
                 "message": f"{key}: invariant {ident} is bound to no existing check; a tag binds only the "
                            "invariants its own Required tests item names",
             })
-        if (whole or bound) and not unbound:
+        if (whole or bound) and not unbound and not unidentified:
             witnessed += 1
 
     findings = fence.enforce(findings)

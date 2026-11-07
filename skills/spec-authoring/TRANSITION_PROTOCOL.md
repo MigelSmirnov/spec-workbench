@@ -99,8 +99,11 @@ Three things share the word "witness" and are kept apart:
   its continuation lines). It is carried to
   `decision_witness_resolution`, where `decision_witness` confirms that the
   check exists. One tag does not stand for the decision's other invariants; a
-  tag in an item that names none of several identified invariants binds
-  nothing (`witness_binding_ambiguous`).
+  tag in an item that names none of several invariants binds nothing
+  (`witness_binding_ambiguous`). A decision with several formal invariants
+  gives each an identifier once it binds a check: a word label in the item
+  ("closed-once") is not an address the Workbench can check, and an invariant
+  without an identifier is reported (`invariant_without_identifier`).
 - the **defect witness** of a question round — a history in which the texts give
   two outcomes. It proves a defect; it never proves an invariant.
 
