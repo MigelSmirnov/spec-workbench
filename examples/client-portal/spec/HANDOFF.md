@@ -74,4 +74,3 @@ No Factory check asserts these; a witnessing check would have to show:
 | A18 | INV-028 | a section referenced by an allocation or progress record cannot be deleted |
 | A20 | INV-040 | completion percent accepts only a staff value in [0, 100], and publishing a photo never changes progress |
 | A21 | INV-050 | the same records give the same derived values for staff and viewer, ties included |
-| A32 | pins | the deployment requirements hold one exact pin per direct import (checked by `dependency_pins_client_portal`, not yet cited here) |
