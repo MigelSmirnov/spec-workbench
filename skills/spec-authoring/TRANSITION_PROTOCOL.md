@@ -194,9 +194,10 @@ reports `closed` for the rounds and `ready` for the transition, and exits 1
 unless both hold.
 
 The focus narrows from the general to the particular without losing the
-earlier layers: reviewers still read States 0..N, but ask about an earlier
-layer only whether this layer fulfils what it carried here, and a closed unit
-is not audited again. The unit rule of QUESTIONS.md stands: a fix reopens the
+earlier layers: in States 0–5 a review reads the prompt of its layer — the
+open units, and of the earlier layers the passages they depend on, verbatim
+(QUESTIONS.md, `ask`) — and asks about an earlier layer only whether this
+layer fulfils what it carried here; a closed unit is not audited again. The unit rule of QUESTIONS.md stands: a fix reopens the
 units it edits, and the deterministic context of a round is not part of any
 unit's text, so a changed finding reopens nothing.
 
