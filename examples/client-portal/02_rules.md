@@ -1371,15 +1371,22 @@ This describes the existing deployment and answers OQ-17 and
 
 ### Formal invariants
 
-- Every library from outside its own source that the running portal
-  imports directly is pinned to one exact version in the deployment
+- DEP-001: every library from outside its own source that the running
+  portal imports directly is pinned to one exact version in the deployment
   requirements; the libraries pip resolves for them are not pinned.
-- No deploy ships a pin with a known vulnerability affecting the portal.
+- DEP-002: no deploy ships a pin with a known vulnerability affecting the
+  portal.
 
 ### Required tests
 
-- The deployment requirements contain only `==` pins, one per direct import.
-- The pre-deploy vulnerability check of those pins passes.
+- DEP-001: the deployment requirements contain only `==` pins, one per direct
+  import [witness: verification:dependency_pins_client_portal].
+- DEP-002: the pre-deploy vulnerability check of those pins passes: the deploy
+  step judges every distribution installed in the built image, bound to its
+  content id, against a fresh public advisory snapshot, and starts the
+  service only on a recent passing verdict about that same image; a listed
+  version, stale, missing or unmatchable data, or another image does not
+  start it [witness: verification:dependency_release_gate_client_portal].
 
 ### Consequence
 
