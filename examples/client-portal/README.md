@@ -27,7 +27,7 @@ former layout under `spec/`.
 | `65_imports.json`, `70_sqlite_unit_of_work_closure.json` | imports closure (`imports.module_internal` is its projection) and the SQLite unit-of-work backend IR |
 | `80_notes.md` | State 7, notes (migrated; question rounds closed 2026-11-07) |
 | `questions/` | question rounds |
-| `spec/80_assembly.md`, `spec/HANDOFF.md` | State 8 of the authoring pass of 2026-07-18/19, not yet migrated |
+| `spec/80_assembly.md`, `spec/HANDOFF.md` | State 8: the current assembly verification, admission and open items (2026-11-07) |
 | `baseline/01_product_boundary.md` … `baseline/09_notes.md` | the frozen requirements baseline the authoring pass started from; input, not design |
 | `spec/invariant_ledger.json` | the invariant ledger of 2026-07-19, kept as evidence; its rows are the formal invariants of `02_rules.md` |
 | `open_questions.md` | the owner's open questions Q1–Q19 |

@@ -1,75 +1,59 @@
-# State 8 — `global_spec.json` assembly
+# State 8 — assembly of `global_spec.json` (current output)
 
-## Status
+Replaces the State 8 text of the authoring pass of 2026-07-19. Generated on
+2026-11-07 from Workbench `agent/client-portal` at `451ea6de` with the Factory
+checkout `code_factory` main `cc1910be`. The assembled file is
+`../global_spec.json`; it equals its deterministic projection
+(`design_spec_projection.py --verify`, admission FA016).
 
-**Assembly complete and canonical validation clean.** The assembled file is
-`../global_spec.json`. It serializes States 0–7 without adding product
-behavior.
-
-## Assembly inventory
-
-```text
-models:       104 (26 closed enums + 78 concrete Pydantic shapes)
-contracts:    318
-notes:        337 classified strings
-properties:   21 functions / 29 expressions
-determinism:  47 explicit decisions
-modules:      20
-invariants:   55 / 55 owned and landed
-```
-
-The confirmed runtime defaults are serialized: fixed staff/viewer sessions,
-existence-hiding self-service password reset, staff TTL 12 hours, viewer TTL
-30 days, verification TTL 72 hours, email-change TTL 24 hours, reset TTL 60
-minutes, five challenge issues per account/hour, and Argon2id. Deployment-only
-Registry URL, email gateway URL, and binary byte limit are represented by
-required environment-variable names rather than fabricated values.
-
-## Backward corrections exposed by assembly
-
-1. State 1 now lists every `AuditEntityKind` value derived from the accepted
-   audit action catalog and existing entities.
-2. State 3 generation order places `authorization_guard` before identity
-   modules, matching the already accepted dependency graph.
-3. Factory-safe config/rules keys avoid secret-like words while preserving the
-   accepted policies (`credential_*`, `project_guard_sequence`, and
-   `verification_envelope_policy`).
-4. The HTTP boundary now materializes as `api/router.py`: top-level endpoint
-   functions and an exact unversioned route catalog replace the accidental
-   `PortalApi` class and `api/runtime` path without changing domain behavior.
-
-## Validation evidence
-
-Passed:
+## Assembly verification (`tools/design_assembly.py examples/client-portal`)
 
 ```text
-python -m json.tool global_spec.json
-python tools/semantic_lint.py global_spec.json \
-  --invariants spec/invariant_ledger.json --strict
-  -> 0 errors, 0 warnings
-
-tools.type_resolver.validate_spec_types(global_spec.json)
-  -> 0 findings
+Assembly verification: 12/15 checks ready; 218 errors; 0 warnings; ready=false
+language: ready=true errors=0 warnings=0
+modules: ready=true errors=0 warnings=0
+identity: ready=false errors=160 warnings=0
+fields: ready=true errors=0 warnings=0
+data: ready=true errors=0 warnings=0
+contracts: ready=true errors=0 warnings=0
+external_contracts: ready=true errors=0 warnings=0
+notes: ready=true errors=0 warnings=0
+closure_gaps: ready=false errors=44 warnings=0
+router: ready=true errors=0 warnings=0
+persistence: ready=true errors=0 warnings=0
+witness: ready=false errors=14 warnings=0
+imports: ready=true errors=0 warnings=0
+flows: ready=true errors=0 warnings=0
+factory: ready=true errors=0 warnings=0
 ```
 
-Canonical Factory command:
+What stays open, by owner:
 
-```text
-python tools/validate_spec.py global_spec.json --json
-```
+- `identity` (160): no `60_model_closure_*.json` in the case (State 1 owns the
+  models; the closure is written with State 6). A validated closure exists but
+  lands only together with the clock source, because alone it turns the State 6
+  time-source check from not checked into 35 open findings (`HANDOFF.md`).
+- `closure_gaps` (44): 35 `fresh_timestamp_without_source` and 9
+  `ambient_time_note`; the operations read the time themselves (coordinator
+  decision of 2026-11-06, `SOURCE.md`). Closed by the clock source of
+  SPEC_STANDARD §6.9 version 5 except one finding the Workbench cannot close
+  (`HANDOFF.md`, workbench gap).
+- `witness` (14): A7, A15, A20, A32 have no witness tag; PLAT-REG-002,
+  PLAT-REG-004, PLAT-REG-007 (A4, A5), INV-044 (A9), INV-008 (A11) and INV-028
+  (A18) have no Factory check that asserts them; INV-026, INV-027 (A18),
+  INV-050 (A21) and PLAT-REG-001 (A5) only partially (State 2 round-76).
 
-Result after the Factory resolver migration: `PASS`, exit code 0, zero errors
-and zero warnings. The canonical validator now applies the shared §13 origin
-resolver to ordinary model/enum specs as well as union/interface specs.
+## Imports closure (`tools/design_imports.py --coverage`)
 
-The exact machine-readable result is saved as
-`spec/canonical_validation_report.json`.
+195/195 scopes decided, 0 pending, 0 stale, code evidence available,
+handoff_ready=true, strict_ready=true.
 
-Regression evidence in the Factory covers stdlib-bound types and module-owned
-classes for an ordinary model spec. No fake model, interface, union, or product
-semantic change was added to Client Portal.
+## Stage 8.1 module review (`tools/design_module_review.py --review`)
 
-## Readiness
+Not reachable in the sequence while the assembly is not ready; run for
+information on every one of the 36 modules: 0 blocks and 0 review prompts each.
+No ledger is recorded (admission FA002).
 
-The assembly is coherent; strict Workbench/type checks and canonical Factory
-validation are clean. State 9 no-deploy compatibility probing may proceed.
+## Question rounds
+
+States 0, 1, 2, 3, 4, 5 and 7 closed on their current texts (admission FA019).
