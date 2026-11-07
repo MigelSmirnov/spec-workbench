@@ -29,7 +29,8 @@ Two fuses close it from opposite sides:
 
 A module-level clock (system_clock_backend v2-v4, SPEC_STANDARD 6.9) is a
 source for the modules that really depend on it: those importing its function
-(imports.module_internal), or, before imports are decided, those whose State 3
+(the decided imports: 65_imports.json, else an assembled imports.module_internal,
+an empty one included), or, before imports are decided, those whose State 3
 Knows names the clock module (clock_consumers).
 
 Report-only by default; --strict exits 1 when anything is found.
@@ -330,22 +331,52 @@ def _state3_knows(case: Path) -> dict[str, list[str]]:
     return _knows(Path(case), modules)
 
 
+IMPORTS_TABLE_FILE = "65_imports.json"
+
+
+def decided_imports(case: Path, spec: dict[str, Any] | None = None) -> dict[str, Any] | None:
+    """``module_internal`` once the imports are decided, or None while they are not.
+
+    The imports closure table (65_imports.json, IMPORTS_WORKBENCH.md) is the
+    authoritative decision: when it exists, its derivation is the answer, an
+    empty one included. Without a table, an assembled ``imports.module_internal``
+    that is present — empty or not — is a decision too (a migrated case). Only
+    when neither exists are the imports undecided. Truthiness never decides:
+    a decided empty table hands the clock to nobody.
+    """
+    path = Path(case) / IMPORTS_TABLE_FILE
+    if path.is_file():
+        try:
+            table = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            table = None
+        if isinstance(table, dict) and isinstance(table.get("scopes"), dict):
+            from imports_workbench.service import derive
+            return derive(table)
+    imports = (spec or {}).get("imports")
+    if isinstance(imports, dict) and "module_internal" in imports:
+        decided = imports["module_internal"]
+        return decided if isinstance(decided, dict) else {}
+    return None
+
+
 def clock_consumers(case: Path, spec: dict[str, Any] | None = None) -> set[str]:
     """Modules handed the declared module-level clock by a real dependency.
 
-    Once ``imports.module_internal`` is decided, a consumer is a module that
-    imports the clock function from the clock module — exactly the edge the
-    Factory's conformance gate treats as a handed clock. Before imports are
-    decided (States 6 and 7), it is a module whose State 3 ``Knows`` names the
-    clock module. A module with neither is not a consumer, however its notes
-    speak of time: an arbitrary module never inherits the clock.
+    Once the imports are decided (``decided_imports``), a consumer is a module
+    that imports the clock function from the clock module — exactly the edge
+    the Factory's conformance gate treats as a handed clock — and a decided
+    table with no such edge hands it to nobody. While they are undecided
+    (States 6 and 7 of a new case), it is a module whose State 3 ``Knows``
+    names the clock module. A module with neither is not a consumer, however
+    its notes speak of time: an arbitrary module never inherits the clock.
     """
     clock = declared_clock_function(case, spec)
     if clock is None:
         return set()
     module, function = clock
-    imports = ((spec or {}).get("imports") or {}).get("module_internal")
-    if isinstance(imports, dict) and imports:
+    imports = decided_imports(case, spec)
+    if imports is not None:
         return {consumer for consumer, providers in imports.items()
                 if isinstance(providers, dict) and function in (providers.get(module) or [])}
     return {consumer for consumer, known in _state3_knows(case).items() if module in known}

@@ -361,6 +361,48 @@ def test_once_imports_are_decided_only_an_importing_module_has_the_clock(tmp_pat
         "others": {"clock": ["something_else"]}}}}) == set()
 
 
+NOTES_V4 = """# State 7 — Notes
+
+record_thing: [OBSERVABLE_OUTCOME] MUST stamp the thing with the current time.
+"""
+
+
+def test_a_decided_empty_imports_table_hands_the_clock_to_nobody(tmp_path):
+    # review 5812625435: an explicit empty module_internal is a decision, not
+    # "imports undecided"; Knows must not stand in for it
+    import design_closure_gaps
+
+    case = _clock_case(tmp_path)
+    _write(case / "80_notes.md", NOTES_V4)
+    assert design_closure_gaps.clock_consumers(case) == {"things"}          # undecided: Knows
+    _write(case / "global_spec.json", {"rules": {"system_clock_backend": V4_CLOCK["backend_ir"]},
+                                       "imports": {"module_internal": {}}})
+    assert design_closure_gaps.decided_imports(case, design_closure_gaps.load_spec(case)) == {}
+    assert design_closure_gaps.clock_consumers(case, design_closure_gaps.load_spec(case)) == set()
+    time_source = transition.run_check(case, "time_source")
+    assert sorted(f["contract"] for f in time_source["findings"]) == ["record_other", "record_thing"]
+    ambient = transition.run_check(case, "ambient_time")
+    assert [(f["code"], f["contract"]) for f in ambient["findings"]] == [("ambient_time_note", "record_thing")]
+
+
+def test_the_imports_closure_table_is_the_authoritative_decision(tmp_path):
+    import design_closure_gaps
+
+    case = _clock_case(tmp_path)
+    _write(case / "80_notes.md", NOTES_V4)
+    # a table that decides nothing about the clock: no consumer, whatever Knows says
+    _write(case / "65_imports.json", {"schema_version": "x", "scopes": {"things.record_thing": {"uses": []}}})
+    assert design_closure_gaps.clock_consumers(case) == set()
+    assert len(transition.run_check(case, "time_source")["findings"]) == 2
+    assert transition.run_check(case, "ambient_time")["outcome"] == "open"
+    # the table decides that record_thing calls the clock: things is a consumer, others is not
+    _write(case / "65_imports.json", {"schema_version": "x", "scopes": {"things.record_thing": {"uses": [
+        {"symbol": "utc_now", "provider": "clock", "as": "calls", "basis": "note"}]}}})
+    assert design_closure_gaps.clock_consumers(case) == {"things"}
+    assert [f["contract"] for f in transition.run_check(case, "time_source")["findings"]] == ["record_other"]
+    assert transition.run_check(case, "ambient_time")["outcome"] == "closed"
+
+
 def test_without_a_declared_module_level_clock_nothing_is_a_source(tmp_path):
     import design_closure_gaps
 
