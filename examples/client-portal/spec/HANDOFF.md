@@ -2,75 +2,84 @@
 
 Replaces the handoff of the authoring pass of 2026-07-19 (its key decisions
 are carried into the states that own them, `SOURCE.md`). State of
-`agent/client-portal` on 2026-11-07; the assembly result is `80_assembly.md`.
+`agent/client-portal` on 2026-11-07 at `0411761c`, checked against the
+Factory checkout at `5a3bdec2`; the assembly result is `80_assembly.md`.
 
 ## Where the case stands
 
-- States 0–7 migrated; question rounds of States 0–5 and 7 closed on their
-  current texts.
+- States 0–7 migrated; the clock source (SPEC_STANDARD §6.9 version 5) and the
+  model closure have landed together (`SOURCE.md`, "one clock source").
+- Assembly ready: 15/15 checks, 0 errors (identity 160 → 0, closure gaps
+  44 → 0, witness 14 → 0).
+- Revision diagnosis (`tools/design_diagnose.py`): every state 0 open; time
+  wall closed (81 requirements, 0 without a source), elapsed closed (1, 0);
+  Factory validator 0 errors.
 - Imports closure ready (195/195 scopes, strict).
-- Assembly not ready: identity 160, closure gaps 44 (time), witness 14.
-- Next phase (`tools/authoring.py next client-portal`):
-  `state6_exact_contracts`, whose model-closure and time-source checks are not
-  checked until the model closure lands.
+- Question rounds closed for States 0, 1, 3, 4, 5 and 7. **State 2 is open
+  and cannot be asked** (Workbench gap below); `tools/authoring.py next
+  client-portal` stops at `state2_rules_decisions`.
 
 ## Factory admission (`tools/design_factory_admission.py --update-existing`)
 
 | check | result | owner |
 |---|---|---|
-| FA001, FA004, FA005, FA009, FA010, FA014, FA016, FA017, FA018, FA019, FA022 | PASS | — |
-| FA007 | PASS with `--update-existing`; BLOCK without it | needs the export decision |
-| FA002 | BLOCK: no Stage 8.1 ledger | reachable once the assembly is ready |
-| FA003 | BLOCK: assembly not ready | see below |
-| FA012 | BLOCK: 44 closure-gap findings (time) | clock source, below |
-| FA015 | BLOCK: Factory Spec Inspector rejects the spec | interface findings pending review |
-| FA008 | BLOCK: Factory checkout dirty | not this case |
+| FA001, FA003, FA004, FA005, FA007, FA008, FA009, FA010, FA012, FA014, FA016, FA017, FA018, FA022 | PASS | — |
+| FA006, FA011, FA013, FA020, FA021 | not applicable | — |
+| FA019 | BLOCK: State 2 rounds open (14 units) | Workbench gap below |
+| FA002 | BLOCK: no Stage 8.1 ledger | after State 2 closes (slices must be final) |
+| FA015 | BLOCK: Factory Spec Inspector, 10 `module_type_surface_incomplete` | imports owner, below |
 
-## Model closure and clock source (prepared, not landed)
+FA007 passes only with `--update-existing` (an export replaces the accepted
+spec; the export itself is not part of this pass).
 
-A closure of 32 State 1 models and 64 `contract_only` records validates with 0
-errors. It must land with the time source, or the State 6 time-source check
-goes from not checked to 35 open findings.
+## Workbench gap: the State 2 round does not fit the provider
 
-The time source designed for it is SPEC_STANDARD §6.9 version 5: a module
-`system_clock` (`utc_now() -> datetime`, the value `datetime.utcnow()` gives;
-`monotonic_seconds() -> float`, the value `time.monotonic()` gives) with
-`rules.time_source_policy` naming it the only reader of both host clocks; the
-44 callables that read `datetime.utcnow()` and the transport guard read time
-through it. On that design the elapsed obligation closes, the wall obligation
-closes except one finding, and the Factory validator passes.
+`design_questions.py ask --state 2` fails before any review: the Codex
+provider refuses an input above 1,048,576 characters; the round's is
+1,229,851 (instruction 1,015,608, almost all of it binding materials; texts
+214,243). The scope is 21 units (the 14 open, plus A6, A12, A30, A31 and three
+text units that reference changed decisions). `design_decision_witness`
+`binding_material` gives every `[witness: …]` tag its check files in full,
+so one file is repeated once per binding: 1.09M characters of materials hold
+509k of distinct files (25). `MATERIAL_LIMIT` caps one binding (60k); nothing
+caps or deduplicates the round. The case cannot shorten this honestly: the
+bindings are true, and merging the new items per check (already done) saved
+only 126k. Needed from the Workbench (`tools/questions_workbench/prompts.py`
+`_materials`, or `binding_material`): each file once per round by digest, and
+an input budget that splits the units over several reviews. Until then State 2
+stays open and FA019 blocks.
 
-The remaining finding stops it: `api_irregular.viewer_enter_endpoint` returns
-`ViewerSessionView.expires_at`, which `viewer_access.enter_viewer_access`
-computes; the endpoint itself reads no clock (Factory code `api_irregular.py`).
-`fresh_timestamp_without_source` admits only a datetime parameter, a clock
-port, a policy authority or a clock import in the endpoint's own module, so
-the check cannot see an instant produced by the callee. That is a Workbench
-gap (TRANSITION_PROTOCOL, `workbench_gap`), not a design defect: giving
-`api_irregular` a clock import it never calls would satisfy the check
-without being true. The time-source decision of 2026-11-06 in `SOURCE.md`
-stays in force until the gap is closed.
+## Witness bindings (State 2, identifier form)
 
-Also, on the live code the Factory time-source gate blocks under that policy
-until the next Route B regenerates the consumers (they still read the host
-clocks themselves).
+Each check was read at Factory `5a3bdec2` and run green there.
 
-## Invariants without a witness
-
-No Factory check asserts these; a witnessing check would have to show:
-
-| decision | invariant | what a witnessing check must assert |
+| check | binds | coverage |
 |---|---|---|
-| A4 | PLAT-REG-004 | a request or import that carries Registry context (status, name) of its own is decided by the Registry answer, never by the supplied value |
-| A5 | PLAT-REG-001 | the production `validate_project_reference` refuses a UUID the Registry does not know, for every principal and both producer scopes, and no operation creates a project id |
-| A5 | PLAT-REG-002 | `_validate_reference_identity` refuses a Registry answer whose UUID differs from the requested one; linkage never uses a display name or address |
-| A5 | PLAT-REG-007 | a viewer's display name is kept as written whatever the Registry `customer_ref` says |
-| A7 | INV-031 | an expense is created only from a confirmed, complete recognition result of a supported version, and confidence, provider fields and raw responses are not persisted |
-| A9 | INV-044 | a section whose actual material cost exceeds its plan shows a negative remaining, never clamped to zero, and missing data is shown as missing |
-| A11 | INV-008 | re-issuing a viewer credential revokes the previous one in the same transaction, so the old secret no longer opens a session |
-| A15 | INV-054, INV-055 | the active-project list is ordered by `project_id` whatever the upstream order; the viewer project list by casefolded display name, then `project_id`, display names unchanged |
-| A18 | INV-026 | an import never derives or rewrites planned values from expenses or mutable producer state |
-| A18 | INV-027 | after an owning record changes, the next read reflects it: totals are not stored |
-| A18 | INV-028 | a section referenced by an allocation or progress record cannot be deleted |
-| A20 | INV-040 | completion percent accepts only a staff value in [0, 100], and publishing a photo never changes progress |
-| A21 | INV-050 | the same records give the same derived values for staff and viewer, ties included |
+| `registry_linkage_client_portal` | PLAT-REG-004 (A4); PLAT-REG-001, PLAT-REG-002, PLAT-REG-007 (A5); INV-054, INV-055 (A15) | full |
+| `viewer_credential_reissue_client_portal` | INV-008 (A11) | full |
+| `expense_recognition_projection_client_portal` | INV-031 (A7) | full |
+| `progress_manual_value_client_portal` | INV-040 (A20) | full |
+| `budget_derivation_client_portal` | INV-026, INV-027, INV-028 (A18); INV-050 (A21) | full |
+| `budget_derivation_client_portal` | INV-044 (A9) | **partial** |
+
+INV-044 partial: the check shows the negative remaining, completion `None`
+for a section without progress and the unconfigured views, but records
+without asserting that such a section's `completed_work_value` reads 0 (the
+budget view types it as a non-optional `Decimal`). Whether that is "missing
+data replaced by zero" (INV-044) is a decision of A9 and the State 1 view
+model, for the owner; the running service is unchanged.
+
+## Other open items
+
+- FA015: the Factory Spec Inspector requires a module importing `append_audit`
+  to import `AuditRepository` too (nine modules), and `staff_bootstrap_cli`
+  `StaffBootstrapPort`; the Workbench imports gate accepts the current table.
+  Same 10 findings as before this pass. Owner: imports closure (decide the
+  type uses), or the Factory/Workbench rule discrepancy.
+- On the live code the Factory time-source gate blocks under
+  `rules.time_source_policy` until the next Route B regenerates the consumers
+  (they still read the host clocks; `65_imports.json` marks the 45 uses
+  `code_outdated`).
+- Stage 8.1: every one of the 37 modules has 0 blocks and 0 review prompts;
+  no ledger is written until State 2 closes, since a State 2 fix may change
+  the slices.
