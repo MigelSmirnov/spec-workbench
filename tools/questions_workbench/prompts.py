@@ -430,4 +430,14 @@ def layer_judge(context: dict | None, units: list[str] | None = None) -> str | N
         return None
     text = LAYER_JUDGE.format(findings=_layer_lines(context)[3])
     listing = _materials(context, units)
-    return text + (MATERIALS.format(listing=listing) if listing else "")
+    reopened = context.get("evidence_reopened") or []
+    note = EVIDENCE_REOPENED_JUDGE.format(units=", ".join(reopened)) if reopened else ""
+    return text + (MATERIALS.format(listing=listing) if listing else "") + note
+
+
+EVIDENCE_REOPENED_JUDGE = """
+
+Reopened because their evidence changed: {units}. Their text did not change,
+but a check their bindings name did. Judge whether each binding still asserts
+its invariants on the evidence above; no earlier judgement of these units is
+offered as a precedent, and an earlier "answered" stood on other evidence."""

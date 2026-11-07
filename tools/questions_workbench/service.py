@@ -164,6 +164,7 @@ def _precedents(case: Path, state: int) -> list[dict[str, Any]]:
     found: list[dict[str, Any]] = []
     seen: set[str] = set()
     judged = [json.loads(p.read_text(encoding="utf-8")) for p in rounds]
+    evidence_of = {s["round"]: s.get("unit_evidence") or {} for s in judged if "round" in s}
     for summary in [s for s in judged if "judge" in s][-PRECEDENT_ROUNDS:][::-1]:
         for topic in summary.get("topics", []):
             judgement = topic.get("judgement") or {}
@@ -172,11 +173,26 @@ def _precedents(case: Path, state: int) -> list[dict[str, Any]]:
                 continue  # a hypothesis is an open question, not an answer to follow
             source = judgement.get("precedent") or judgement
             seen.add(topic["topic"])
-            found.append({"id": f"P{len(found) + 1}", "round": source.get("round", summary["round"]),
+            origin = source.get("round", summary["round"])
+            found.append({"id": f"P{len(found) + 1}", "round": origin,
                           "topic": topic["topic"], "kind": source["kind"],
                           "quotes": list(source.get("quotes") or []), "why": source.get("why", ""),
+                          "units": list(topic.get("units") or []),
+                          # the evidence the original judgement stood on, per unit
+                          "unit_evidence": dict(evidence_of.get(origin, summary.get("unit_evidence") or {})),
                           **({"deferred_to": source["deferred_to"]} if source.get("deferred_to") else {})})
     return found
+
+
+def _evidence_holds(precedent: dict[str, Any], evidence: dict[str, str], scope: list[str]) -> bool:
+    """A precedent about a unit whose bindings have evidence holds only on the
+    evidence it was judged on. A judgement with no recorded basis for such a
+    unit, or on another basis, is not offered: on changed evidence the same
+    question is judged afresh. A topic naming no unit concerns every unit under
+    review."""
+    units = precedent.get("units") or scope
+    recorded = precedent.get("unit_evidence") or {}
+    return all(recorded.get(unit) == evidence[unit] for unit in units if unit in evidence)
 
 
 def _judge(provider: Provider, state: int, text: str, texts: list[tuple[int, str, str]],
@@ -541,7 +557,9 @@ def _document_round(provider: Provider, state: int, runs: int, read: StateTexts,
     topics = _group(provider, reviews, keep_points=True)
     repeated = _judged(topics, witness=True)
     later = {p.name: p.read_text(encoding="utf-8") for _, p in documents.later_documents(case, state)}
-    judged = (_judge(provider, state, text, read.texts, repeated, old, later, _precedents(case, state),
+    evidence = (layer or {}).get("unit_evidence") or {}
+    precedents = [p for p in _precedents(case, state) if _evidence_holds(p, evidence, scope)]
+    judged = (_judge(provider, state, text, read.texts, repeated, old, later, precedents,
                      witness=True, case=case, layer=prompts.layer_judge(layer, scope)) if repeated
               else {"provider": provider.name})
     return reviews, topics, repeated, judged
@@ -642,6 +660,7 @@ def ask_round(case: Path, state: int, provider: Provider, runs: int = DEFAULT_RU
     asked = _module_round if state == documents.MODULE_STATE else _document_round
     layer = layer_context(case, state)
     layer["evidence_reopened"] = evidence_reopened
+    layer["unit_evidence"] = evidence
     reviews, topics, repeated, judged = asked(provider, state, runs, read, scope, changed, old, case, referencing,
                                               layer)
     for topic in topics:

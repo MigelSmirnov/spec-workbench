@@ -113,8 +113,11 @@ The basis is kept per decision unit too (`unit_evidence`): when a bound check
 changes — a file, the command, a digest — while the decision's text does not,
 exactly that decision reopens and is reviewed for whether its bindings still
 hold on the new evidence, until two clear reviews on it close it again
-(`evidence_changed` in `status`). Rounds kept before the basis was recorded are
-taken as they stand. A binding whose content
+(`evidence_changed` in `status`). A judgement of such a unit is a precedent
+only on the evidence it was judged on: on changed evidence, or with no
+recorded basis, it is not offered to the judge, and the judge is told the unit
+reopened for its evidence. Rounds kept before the basis was recorded are
+taken as they stand for closure, not as precedents for bound decisions. A binding whose content
 cannot be read whole is `not_checked` (`witness_material`, a State 2 check): its
 sufficiency is not judged, and it is never taken as sufficient. On client-portal 28 of 32 decisions were bound to existing
 checks; A7, A15, A20 and A32 have none. A binding found by reading check code

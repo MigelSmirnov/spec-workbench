@@ -564,3 +564,65 @@ def test_a_changed_check_reopens_only_the_decision_bound_to_it(tmp_path, monkeyp
     assert summary["closed"] is False                  # one review on the new evidence is not two
     summary, _ = _ask(case)
     assert summary["closed"] is True and service.status(case, 2)["open_units"] == []
+
+
+class PrecedentProvider:
+    """Groups points by subject (the topic is the subject); judges each topic
+    with `verdicts[subject]`; keeps what the judge was shown."""
+
+    name = "fake"
+
+    def __init__(self, points, verdicts):
+        self.points, self.verdicts = points, verdicts
+        self.instructions: list[str] = []
+        self.judged: list[str] = []
+
+    def complete(self, instruction: str, text: str):
+        if instruction.startswith("You judge the topics"):
+            self.judged.append(text)
+            judgements = []
+            for line in text.split("=== TOPICS TO JUDGE ===")[1].splitlines():
+                if line[:1] == "T":
+                    tid, subject = line.split(": ", 1)
+                    judgements.append({"id": tid, **self.verdicts[subject]})
+            return json.dumps({"judgements": judgements}), {}
+        if instruction.startswith("You receive the open points"):
+            groups: dict[str, list[str]] = {}
+            for line in text.splitlines():
+                key, rest = line.split(": ", 1)
+                groups.setdefault(rest[1:rest.index("]")], []).append(key)
+            return json.dumps({"groups": [{"topic": s, "members": m} for s, m in groups.items()]}), {}
+        self.instructions.append(instruction)
+        return json.dumps({"open_points": list(self.points)}), {}
+
+
+def test_a_judgement_on_old_evidence_is_no_precedent_after_the_check_changes(tmp_path, monkeypatch):
+    # review r4501801651: the binding was judged sufficient, the test then lost
+    # its assertion; the old "answered" must not close A01 again as judged_before
+    _clean_gate(monkeypatch)
+    case = _case(tmp_path, SufficiencyProvider.ITEM)
+    factory = _factory_with_check(tmp_path, case)
+    monkeypatch.setenv("SPEC_WORKBENCH_FACTORY_ROOT", str(factory))
+    points = [{"subject": "binding", "unit": "A01", "kind": "gap", "text": "x", "question": "is counts_once enough?"},
+              {"subject": "naming", "unit": "A02", "kind": "gap", "text": "y", "question": "which name?"}]
+    answered = {"binding": {"kind": "answered", "quotes": [SufficiencyProvider.ITEM]},
+                "naming": {"kind": "answered", "quotes": ["A thing has a name."]}}
+    for _ in range(2):
+        summary = service.ask_round(case, 2, PrecedentProvider(points, answered))
+    assert summary["closed"] is True
+    before = {p["topic"]: p for p in service._precedents(case, 2)}
+    assert set(before) == {"binding", "naming"}
+
+    _write(factory / "verification" / "counts_once_check.py", CHECK_SCRIPT.replace("assert ", "# was: assert "))
+    stale = before["binding"]["id"]
+    provider = PrecedentProvider(points[:1], {"binding": {"kind": "judged_before", "precedent": stale}})
+    summary = service.ask_round(case, 2, provider)
+    assert summary["scope"] == ["A01"]
+    shown = provider.judged[0].split("=== TOPICS TO JUDGE ===")[0]
+    assert "Reopened because their evidence changed: A01" in shown
+    prior = shown.split("=== PRIOR JUDGEMENTS (non-blocking, verified) ===")[1] if "PRIOR JUDGEMENTS" in shown else ""
+    assert ": binding" not in prior                 # the judgement on the old evidence is not offered
+    assert ": naming" in prior                      # an unaffected decision keeps its precedent
+    judgement = summary["topics"][0]["judgement"]
+    assert judgement["verified"] is False and judgement["blocking"] is True
+    assert summary["blocked_units"] == ["A01"]
