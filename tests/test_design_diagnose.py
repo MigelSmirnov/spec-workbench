@@ -340,3 +340,74 @@ def test_the_report_names_the_workbench_that_produced_it(tmp_path):
     assert "tools/design_diagnose.py" in workbench["tool_sha256"]
     assert "tools/design_closure_gaps.py" in workbench["tool_sha256"]
     assert len(workbench["sequence_sha256"]) == 64 and len(workbench["standard_sha256"]) == 64
+
+
+# ---------------------------------------------- review 5813967614: one Factory checkout
+
+RULES_WITH_BINDING = """# State 2 — Demo rules
+
+## Accepted decision A01 — things are counted
+
+### Normative rules
+
+A thing is counted once.
+
+### Formal invariants
+
+- INV-001: a thing is counted once
+
+### Required tests
+
+- INV-001: refused when counted twice. [witness: verification:counts_once]
+"""
+
+
+def _verification_factory(root: Path, with_check: bool) -> Path:
+    import yaml
+
+    commands = [{"name": "counts_once", "cwd": "../..", "command": ["python", "verification/counts_once.py"]}]
+    _write(root / "verification" / "configs" / "Demo.yaml",
+           yaml.safe_dump({"checks": {"commands": commands if with_check else []}}))
+    _write(root / "verification" / "counts_once.py", "assert counted_once()\n")
+    _write(root / "tools" / "validate_spec.py",
+           "import json, sys\nout = sys.argv[sys.argv.index('--out') + 1]\n"
+           "json.dump({'status': 'PASS', 'findings': []}, open(out, 'w'))\n")
+    return root
+
+
+def test_the_chosen_factory_is_the_one_every_witness_check_reads(tmp_path, monkeypatch):
+    chosen = _verification_factory(tmp_path / "factory_a", with_check=True)
+    other = _verification_factory(tmp_path / "factory_b", with_check=False)
+    monkeypatch.setenv("SPEC_WORKBENCH_FACTORY_ROOT", str(other))
+    case = tmp_path / "demo"
+    _write(case / "02_rules.md", RULES_WITH_BINDING)
+    _write(case / "90_factory_target.json", {"factory_project": "Demo"})
+    _write(case / "global_spec.json", _spec([]))
+    report = design_diagnose.diagnose(case, "case", factory=chosen)
+    rows = {(r["registry"], r["check"]): r for r in report["by_state"]["State 2"]}
+    assert rows[("assembly", "witness")]["outcome"] == "closed"            # A defines counts_once, B does not
+    assert rows[("transition", "decision_witness")]["outcome"] == "closed"
+    assert rows[("transition", "witness_material")]["outcome"] == "closed"
+    for key in [("assembly", "witness"), ("transition", "decision_witness"), ("transition", "witness_material")]:
+        assert rows[key]["factory_root"] == str(chosen)
+    assert report["factory"]["spec"]["factory"]["root"] == str(chosen)
+    # and the other way round: B chosen, the check is unresolved there, whatever the environment says
+    monkeypatch.setenv("SPEC_WORKBENCH_FACTORY_ROOT", str(chosen))
+    report = design_diagnose.diagnose(case, "case", factory=other)
+    rows = {(r["registry"], r["check"]): r for r in report["by_state"]["State 2"]}
+    unresolved = {"witness_unresolved": 1, "invariant_without_witness": 1}
+    assert rows[("assembly", "witness")]["counts"] == unresolved
+    assert rows[("transition", "decision_witness")]["counts"] == unresolved
+    assert rows[("transition", "witness_material")]["outcome"] == "not_checkable"
+
+
+def test_with_no_factory_chosen_or_found_no_check_finds_one_elsewhere(tmp_path, monkeypatch):
+    monkeypatch.delenv("SPEC_WORKBENCH_FACTORY_ROOT", raising=False)
+    monkeypatch.setattr(design_diagnose, "factory_root", lambda explicit: None)
+    case = tmp_path / "demo"
+    _write(case / "02_rules.md", RULES_WITH_BINDING)
+    _write(case / "90_factory_target.json", {"factory_project": "Demo"})
+    report = design_diagnose.diagnose(case, "case")
+    rows = {(r["registry"], r["check"]): r for r in report["by_state"]["State 2"]}
+    assert rows[("transition", "decision_witness")]["outcome"] == "not_checkable"
+    assert rows[("transition", "decision_witness")]["factory_root"] is None

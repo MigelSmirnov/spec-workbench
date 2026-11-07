@@ -53,6 +53,11 @@ SCHEMA = "spec_workbench_revision_diagnosis.v1"
 ROOT = Path(__file__).resolve().parents[1]
 SPEC_FILE = "global_spec.json"
 NOT_CHECKABLE = "not_checkable"
+# Passed as the Factory when none is chosen: it holds no checkout, so a check
+# that reads one reports it unavailable instead of discovering another.
+NO_FACTORY = Path("/nonexistent/no-factory-chosen")
+# Rows whose result depends on the Factory checkout they read.
+FACTORY_READERS = frozenset({"witness", "decision_witness", "witness_material", "persistence", "imports"})
 
 # closure_gaps codes and the state that owns the rule they check
 CLOSURE_OWNERS = {
@@ -243,7 +248,7 @@ def assembly_rows(case: Path, factory: Path | None) -> list[dict[str, Any]]:
     return rows
 
 
-def transition_rows(case: Path) -> list[dict[str, Any]]:
+def transition_rows(case: Path, factory: Path) -> list[dict[str, Any]]:
     import transition
 
     sequence = transition.load_sequence()
@@ -269,7 +274,7 @@ def transition_rows(case: Path) -> list[dict[str, Any]]:
             continue
 
         def run(name=name, owner=owner, rule=rule, needs=needs):
-            result = transition.run_check(case, name)
+            result = transition.run_check(case, name, factory)
             outcome = {"not_checked": NOT_CHECKABLE}.get(result["outcome"], result["outcome"])
             row = _row("transition", name, owner, rule, outcome, result["findings"], needs)
             if outcome == NOT_CHECKABLE:
@@ -522,7 +527,13 @@ def diagnose(path: Path, kind: str, ref: str | None = None, factory: Path | None
     factory = factory_root(factory)
     with materialize(path, ref, kind) as (case, described):
         spec = _load_spec(case)
-        rows = assembly_rows(case, factory) + transition_rows(case)
+        # one Factory checkout for every check that reads one: the chosen root,
+        # or a path that holds none, so no check falls back to another checkout
+        chosen = factory or NO_FACTORY
+        rows = assembly_rows(case, chosen) + transition_rows(case, chosen)
+        for row in rows:
+            if row["check"] in FACTORY_READERS:
+                row["factory_root"] = str(chosen) if factory else None
         time = _section(lambda: time_coverage(case, spec), {
             "wall": {"outcome": "error"}, "elapsed": {"outcome": "error"}, "analysis_bounds": []})
         factory_results = {

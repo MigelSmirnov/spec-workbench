@@ -210,20 +210,20 @@ def check_invariant_tests(project: Path) -> dict[str, Any]:
     return _report(outcome, report["findings"], **report["summary"])
 
 
-def check_decision_witness(project: Path) -> dict[str, Any]:
+def check_decision_witness(project: Path, factory: Path | None = None) -> dict[str, Any]:
     import design_decision_witness
 
-    report = design_decision_witness.coverage(project)
+    report = design_decision_witness.coverage(project, factory)
     outcome = ("not_checked" if report["findings"] and all(f.get("outcome") == "not_checked" for f in report["findings"])
                else "open" if report["findings"] else "closed")
     return _report(outcome, report["findings"], **report["summary"])
 
 
-def check_witness_material(project: Path) -> dict[str, Any]:
+def check_witness_material(project: Path, factory: Path | None = None) -> dict[str, Any]:
     """A binding made at State 2 is judged there: its check's content must be readable whole."""
     import design_decision_witness
 
-    materials = design_decision_witness.binding_material(project)
+    materials = design_decision_witness.binding_material(project, factory)
     missing = [m for m in materials if m["status"] != "available"]
     findings = [{"severity": "error", "code": "witness_material_not_checked", "outcome": "not_checked",
                  "decision": m["decision"], "witness": m["witness"],
@@ -296,14 +296,20 @@ def classify(project: Path, findings: list[dict[str, Any]]) -> list[dict[str, An
 
 # ---------------------------------------------------------------- running
 
-def run_check(project: Path, name: str) -> dict[str, Any]:
+# The checks that read a Factory checkout; run_check hands them the one the caller chose.
+FACTORY_CHECKS = frozenset({"decision_witness", "witness_material"})
+
+
+def run_check(project: Path, name: str, factory: Path | None = None) -> dict[str, Any]:
+    """Run one check. `factory` is the Factory checkout the witness checks read;
+    None keeps their own discovery (SPEC_WORKBENCH_FACTORY_ROOT or the sibling)."""
     function = CHECKS.get(name)
     if function is None:
         return _report("workbench_gap", [{"severity": "error", "code": "transition_check_unknown",
                                           "outcome": "workbench_gap",
                                           "message": f"the sequence names check {name!r}, which the Workbench does not have"}])
     try:
-        report = function(project)
+        report = function(project, factory) if name in FACTORY_CHECKS and factory is not None else function(project)
     except Exception as exc:  # an input that cannot be read is an input that does not exist
         return _not_checked("transition_check_failed", f"check {name} could not read its inputs ({exc})")
     findings = classify(project, report["findings"])
