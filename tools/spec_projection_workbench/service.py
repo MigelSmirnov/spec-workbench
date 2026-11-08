@@ -410,6 +410,92 @@ def _source_check(
     }
 
 
+DATA_PROVIDER_BACKEND_ID = "data_provider"
+
+
+def _insert_in_order(mapping: dict[str, Any], key: str, value: Any, order: list[str]) -> dict[str, Any]:
+    """``mapping`` with ``key`` set to ``value``: in place when present, else
+    right after the nearest module before ``key`` in ``order`` that the mapping
+    holds (first when none does; last when ``key`` is not in the order). The
+    other keys keep their order."""
+    if key in mapping or key not in order:
+        result = dict(mapping)
+        result[key] = value
+        return result
+    preceding = order[: order.index(key)]
+    anchor = next((module for module in reversed(preceding) if module in mapping), None)
+    result: dict[str, Any] = {}
+    if anchor is None:
+        result[key] = value
+    for existing, item in mapping.items():
+        result[existing] = item
+        if existing == anchor:
+            result[key] = value
+    return result
+
+
+def _place_data_provider_module(
+    projected: dict[str, Any],
+    backend: dict[str, Any],
+    findings: list[dict[str, Any]],
+    source: str,
+) -> None:
+    """Place the data provider's module, which has no State 6 contracts.
+
+    The module owns exactly the closure's constants (SPEC_STANDARD 6.10): they
+    are its module_functions and its imports.internal. It imports only the row
+    models and enumerations of ``wiring.models_module``, which equals the path
+    of the models module (6.10, version 2), so a module new to the order is
+    placed right after that module and beside it under the same root. A module
+    already in the order keeps its place and path (SPEC_STANDARD §10).
+    """
+    wiring = backend.get("wiring")
+    module = wiring.get("module") if isinstance(wiring, dict) else None
+    constants = backend.get("constants")
+    if not isinstance(module, str) or not module or not isinstance(constants, dict):
+        findings.append(_finding(
+            "block", "data_provider_module_unplaceable",
+            f"{source} backend_ir names no wiring.module or carries no constants object",
+            source=source,
+        ))
+        return
+    symbols = sorted(str(name) for name in constants)
+
+    order = projected.get("module_order")
+    paths = projected.get("module_paths")
+    if isinstance(order, list) and isinstance(paths, dict) and module not in order:
+        models_module = wiring.get("models_module")
+        anchor = next(
+            (name for name in order
+             if isinstance(paths.get(name), str) and paths[name].replace("/", ".") == models_module),
+            None,
+        )
+        if anchor is None:
+            findings.append(_finding(
+                "block", "data_provider_module_unplaceable",
+                f"{source} wiring.models_module {models_module!r} is the path of no module in "
+                "global_spec.module_paths, so the data-provider module has no place in the order",
+                source=source,
+            ))
+            return
+        parent, separator, _ = paths[anchor].rpartition("/")
+        order = list(order)
+        order.insert(order.index(anchor) + 1, module)
+        paths = {**paths, module: f"{parent}/{module}" if separator else module}
+        _set(projected, "module_order", order)
+        _set(projected, "module_paths", {name: paths[name] for name in order})
+    order = projected.get("module_order") if isinstance(projected.get("module_order"), list) else []
+
+    module_functions = projected.get("module_functions")
+    if isinstance(module_functions, dict):
+        projected["module_functions"] = _insert_in_order(module_functions, module, symbols, order)
+    imports = projected.get("imports")
+    internal = imports.get("internal") if isinstance(imports, dict) else None
+    if isinstance(internal, dict):
+        # a new export surface is appended, as every other owner's is
+        internal[module] = list(symbols)
+
+
 IMPORTS_TABLE = "65_imports.json"
 
 
@@ -610,6 +696,16 @@ def _project(
             if not isinstance(namespace, str) or not namespace:
                 raise SpecProjectionError("structured rules namespace must be a non-empty string")
             _set(projected, f"rules.{namespace}", value)
+        # A namespace the closure retired (its values moved to a data-provider
+        # constant or were a second home of a models enumeration) leaves the
+        # assembled rules. Retirement is authored, because a namespace the
+        # closure never declared (a hand-carried backend binding) looks the same
+        # in the assembled spec as one it dropped; the lint holds a retired
+        # namespace out of sections.rules.
+        projected_rules = projected.get("rules")
+        if isinstance(projected_rules, dict):
+            for namespace in design_stage6_data.retired_rule_namespaces(data_payload):
+                projected_rules.pop(namespace, None)
 
     state6 = design_stage6_contracts.handoff(project)
     state6_ready = state6.get("ready") is True
@@ -834,6 +930,8 @@ def _project(
             )
             continue
         _set(projected, f"rules.{standard.rule_key}", authored)
+        if standard.id == DATA_PROVIDER_BACKEND_ID:
+            _place_data_provider_module(projected, authored, findings, standard.closure_file)
 
     if imports:
         _project_module_internal(project, current, projected, findings, source_checks)
