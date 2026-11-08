@@ -43,6 +43,30 @@ def _fake_factory(tmp_path: Path, standard: str) -> Path:
     factory = tmp_path / "code_factory"
     _write(factory / "SPEC_STANDARD.md", standard)
     _write(factory / "SPEC_STANDARD_INDEX.md", STANDARD_INDEX)
+    _write(factory / "spec_ops_apply.py", '''import hashlib, pathlib, shutil, json
+def remove_module_artifacts(*, structure, project, operations, apply):
+    root = pathlib.Path(structure['root']) / structure['projects_dir'] / project
+    result = {'schema_version': 1, 'required': bool(operations), 'status': 'complete', 'modules': {}}
+    for op in operations:
+        assert op['op'] == 'remove_module'
+        module = op['module']
+        records = []
+        for rel in [f"specs/draft/spec_{module}", f"specs/local_specs/{module}.json", f"build/{module}.py"]:
+            path = root / rel
+            existed = path.exists()
+            files = sorted(path.rglob('*')) if path.is_dir() else [path]
+            hashes = [{'path': str(p.relative_to(path)) if path.is_dir() else p.name,
+                       'sha256': hashlib.sha256(p.read_bytes()).hexdigest(), 'kind': 'file'}
+                      for p in files if p.is_file()]
+            if apply and existed:
+                shutil.rmtree(path) if path.is_dir() else path.unlink()
+            records.append({'path': rel, 'existed_before': existed, 'removed': apply and existed,
+                            'exists_after': path.exists(), 'file_hashes_before': hashes})
+        status = 'incomplete' if any(r['exists_after'] for r in records) else 'complete'
+        result['modules'][module] = {'status': status, 'artifact_paths': records}
+        if status == 'incomplete': result['status'] = status
+    return result
+''')
     _write_json(
         factory / "project_index/structure.json",
         {
@@ -493,3 +517,110 @@ def test_export_blocks_index_drift_before_project_creation(
     with pytest.raises(SystemExit, match=r"^SPEC_STANDARD_INDEX mismatch: update or pin"):
         export_to_factory.main()
     assert not (factory / "projects/demo").exists()
+
+
+def _replacement(tmp_path, monkeypatch):
+    root = Path(export_to_factory.__file__).resolve().parents[1]
+    standard = (root / 'skills/spec-authoring/SPEC_STANDARD.md').read_text()
+    workbench = tmp_path / 'spec-workbench'
+    _write(workbench / 'skills/spec-authoring/SPEC_STANDARD.md', standard)
+    _write(workbench / 'skills/spec-authoring/SPEC_STANDARD_INDEX.md', STANDARD_INDEX)
+    factory = _fake_factory(tmp_path, standard)
+    source = workbench / 'accepted/global_spec.json'
+    spec = {'standard_version': 2, 'contracts': {'main': '() -> None'},
+            'module_functions': {'app': ['main']},
+            'imports': {'stdlib': [], 'third_party': [], 'internal': {}}, 'module_order': ['app']}
+    _write_json(source, spec)
+    project = factory / 'projects/demo'
+    _write_json(project / 'specs/base/global_spec.json', {
+        **spec, 'module_functions': {'app': ['main'], 'retired': ['old']},
+    })
+    for rel in ['specs/draft/spec_retired/draft.py', 'specs/local_specs/retired.json', 'build/retired.py',
+                'build/app.py', 'application/retired.py']:
+        _write(project / rel, 'original artifact')
+    monkeypatch.setattr(export_to_factory, '__file__', str(workbench / 'tools/export_to_factory.py'))
+    monkeypatch.setattr(export_to_factory, 'git_metadata', _clean_git_metadata)
+    monkeypatch.setattr(sys, 'argv', ['export_to_factory.py', '--spec', str(source), '--project', 'demo',
+                                    '--factory-root', str(factory), '--update-existing'])
+    return factory, project, source
+
+
+def test_export_derives_removals_and_records_factory_cleanup(tmp_path, monkeypatch):
+    factory, project, source = _replacement(tmp_path, monkeypatch)
+    # Fixture's delta projector deliberately returns removed_modules=[] (G02).
+    assert export_to_factory.main() == 0
+    lineage = json.loads((project / 'specs/working/spec_editor_manifest.json').read_text())
+    summary = lineage['change_summary']
+    assert summary['removed_modules'] == ['retired']
+    cleanup = summary['artifact_cleanup']
+    assert cleanup['required'] is True and cleanup['status'] == 'complete'
+    records = cleanup['modules']['retired']['artifact_paths']
+    assert len(records) == 3 and all(r['removed'] and not r['exists_after'] for r in records)
+    assert all(r['file_hashes_before'][0]['sha256'] for r in records)
+    assert not (project / 'build/retired.py').exists()
+    assert (project / 'build/app.py').read_text() == 'original artifact'
+    assert (project / 'application/retired.py').read_text() == 'original artifact'
+    tracked = json.loads((project / 'specs/accepted/spec_editor_manifest.json').read_text())
+    assert tracked['change_summary'] == summary
+    # A second export carries the removal debt but does not require existing files.
+    assert export_to_factory.main() == 0
+    second = json.loads((project / 'specs/working/spec_editor_manifest.json').read_text())
+    assert second['change_summary']['removed_modules'] == ['retired']
+    assert second['change_summary']['artifact_cleanup']['status'] == 'complete'
+
+
+def test_export_check_only_previews_cleanup_without_mutation(tmp_path, monkeypatch, capsys):
+    factory, project, source = _replacement(tmp_path, monkeypatch)
+    before = {p.relative_to(project): p.read_bytes() for p in project.rglob('*') if p.is_file()}
+    monkeypatch.setattr(sys, 'argv', [*sys.argv, '--check'])
+    assert export_to_factory.main() == 0
+    report = json.loads(capsys.readouterr().out)
+    scope = report['projected_change_scope']
+    assert scope['removed_modules'] == ['retired']
+    assert scope['artifact_cleanup']['status'] == 'incomplete'
+    assert {p.relative_to(project): p.read_bytes() for p in project.rglob('*') if p.is_file()} == before
+
+
+def test_export_does_not_cleanup_a_reintroduced_module(tmp_path, monkeypatch):
+    factory, project, source = _replacement(tmp_path, monkeypatch)
+    spec = json.loads(source.read_text())
+    _write_json(project / 'specs/base/global_spec.json', spec)
+    _write_json(project / 'specs/working/spec_editor_manifest.json', {
+        'accepted': True, 'status': 'pass',
+        'outputs': {'base_spec_sha256_after': export_to_factory.sha256_file(project / 'specs/base/global_spec.json')},
+        'change_summary': {'removed_modules': ['app'], 'changed_modules': ['app']},
+    })
+    assert export_to_factory.main() == 0
+    summary = json.loads((project / 'specs/working/spec_editor_manifest.json').read_text())['change_summary']
+    assert summary['removed_modules'] == []
+    assert summary['artifact_cleanup']['status'] == 'not_applicable'
+    assert (project / 'build/app.py').is_file()
+
+
+@pytest.mark.parametrize('helper', [None, 'invalid', 'incomplete'])
+def test_export_refuses_missing_invalid_or_incomplete_cleanup(tmp_path, monkeypatch, helper):
+    factory, project, source = _replacement(tmp_path, monkeypatch)
+    path = factory / 'spec_ops_apply.py'
+    if helper is None:
+        path.unlink()
+    elif helper == 'invalid':
+        path.write_text('def remove_module_artifacts(**kwargs): return []')
+    else:
+        path.write_text(path.read_text().replace('if apply and existed:', 'if False and existed:'))
+    with pytest.raises(SystemExit, match='cleanup'):
+        export_to_factory.main()
+    assert not (project / 'specs/accepted/spec_editor_manifest.json').exists()
+    assert not (project / 'specs/working/spec_editor_manifest.json').exists()
+
+
+def test_lineage_refuses_a_removal_without_cleanup_evidence(tmp_path):
+    base = tmp_path / 'global_spec.json'
+    _write_json(base, {'standard_version': 2})
+    with pytest.raises(SystemExit, match='artifact cleanup'):
+        export_to_factory.stage9_lineage_manifest(
+            project='demo', source_sha='s' * 64, source_commit=None, standard_version=2,
+            codec_coverage={}, started_at='now', base_spec_path=base,
+            base_spec_sha_before='b' * 64, base_spec_sha_after='a' * 64,
+            admission_path=tmp_path / 'admission.json', validation_path=tmp_path / 'validation.json',
+            handoff_path=tmp_path / 'handoff.json', change_scope={'removed_modules': ['retired']},
+        )
