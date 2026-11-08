@@ -1,0 +1,141 @@
+{
+ "open_points": [
+  {
+   "unit": "02_rules.md:Status",
+   "subject": "Status description of A22–A29",
+   "kind": "contradictory provenance",
+   "text": "“A22–A29 carry the policies the accepted Factory spec added after 2026-07-19” conflicts with A28’s “The accepted spec 459ac96c has no clock source” and “The coordinator decided on 2026-11-07 to name the one source instead.”",
+   "question": "Does the Status exclude A28’s new single-clock-source policy from the claim that every A22–A29 policy came from the accepted Factory spec?",
+   "options": [
+    "Revise the Status to distinguish A28’s coordinator-added clock source from its Factory-derived clock semantics",
+    "Treat the new clock-source policy as if the accepted Factory spec had added it"
+   ],
+   "default_guess": "Revise the Status to identify the coordinator-added portion of A28."
+  },
+  {
+   "unit": "A18",
+   "subject": "INV-020 idempotent snapshot re-publication test",
+   "kind": "contradiction",
+   "text": "The Required tests item says “a re-publication of its identity with the same content changes nothing,” while R0-25 and M19 require a fresh immutable import result with a fresh import_id, and every classified import attempt also writes an audit record.",
+   "question": "Does “changes nothing” mean only that the existing ApprovedEstimateSnapshot is unchanged, or that no persistent record is added?",
+   "options": [
+    "The snapshot stays unchanged, but a fresh idempotent-replay import result and audit record are appended",
+    "No persistent state changes at all"
+   ],
+   "default_guess": "Interpret it as snapshot immutability only and still append the required import result and audit.",
+   "witness": {
+    "initial": "An accepted snapshot exists for one project and identity, with its content fingerprint stored.",
+    "events": [
+     "The same producer republishes exactly the same snapshot content."
+    ],
+    "outcomes": [
+     "A fresh idempotent-replay SnapshotImportRecord and snapshot.import audit are appended; the snapshot itself is unchanged.",
+     "Nothing persistent changes because the test says the re-publication “changes nothing.”"
+    ],
+    "observer": "The producer sees whether it receives a fresh import_id, and an auditor sees whether a new attempt was recorded."
+   }
+  },
+  {
+   "unit": "A18",
+   "subject": "INV-028 activation refusal test",
+   "kind": "ambiguous refusal condition",
+   "text": "“activating a budget version without an allocated section is refused and writes nothing” does not identify whether the missing thing is a section plan in the candidate version, an allocation targeting that section, or any allocation at all.",
+   "question": "Exactly which candidate-version/allocation relationship makes activation fail under this Required tests item?",
+   "options": [
+    "Refuse when an existing allocation targets a PortalSection for which the candidate version has no SectionPlan",
+    "Refuse whenever the candidate version contains a section with no allocation",
+    "Refuse whenever the project has no section allocations"
+   ],
+   "default_guess": "Refuse only when an existing allocation would be unresolved because its target section has no plan in the candidate version.",
+   "witness": {
+    "initial": "A project has an expense allocated to section A. Candidate budget version V has a plan only for section B.",
+    "events": [
+     "An authorized staff member attempts to activate V."
+    ],
+    "outcomes": [
+     "Activation is refused because the allocation to A would be unresolved against V.",
+     "Activation succeeds because V itself has a section and the phrase does not clearly require every previously allocated section to occur in V."
+    ],
+    "observer": "The staff actor sees success versus refusal, and readers see which budget version remains active."
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "Source-supplied timestamp storage",
+   "kind": "representation contradiction",
+   "text": "The Normative rules require a source-supplied time to keep “the same instant, stored offset-naive UTC,” but CLK-001 and its Required tests say supplied times “keep their supplied values” and are “stored as supplied.”",
+   "question": "For an offset-aware supplied datetime, must storage normalize it to the equivalent offset-naive UTC wall value, or strip/preserve the supplied wall fields?",
+   "options": [
+    "Convert to the same UTC instant and then store an offset-naive UTC datetime",
+    "Remove the offset while preserving the supplied wall-clock fields",
+    "Reject any representation that is not already offset-naive UTC"
+   ],
+   "default_guess": "Normalize to the same UTC instant and store that instant as offset-naive UTC.",
+   "witness": {
+    "initial": "No record exists yet; the source supplies approved_at as 2026-01-01T12:00:00+02:00.",
+    "events": [
+     "An authorized producer publishes a snapshot and the portal accepts it."
+    ],
+    "outcomes": [
+     "approved_at is stored as offset-naive 2026-01-01 10:00:00, preserving the instant.",
+     "approved_at is stored as offset-naive 2026-01-01 12:00:00 because it is stored “as supplied,” changing the instant by two hours."
+    ],
+    "observer": "A later reader of the persisted snapshot sees the different approved_at value."
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "CLK-002 reading-count invariant and test",
+   "kind": "missing invariant test obligation",
+   "text": "The Normative rules require the elapsed clock to take “one reading per request,” but CLK-002 and its Required tests require only that monotonic readings supply elapsed durations, are not persisted, and are not mixed with wall-clock values.",
+   "question": "Must CLK-002 and its Required tests demonstrate exactly one monotonic-clock-source read per viewer-entry request?",
+   "options": [
+    "Require exactly one monotonic reading for each viewer-entry request",
+    "Permit multiple monotonic readings within one request as long as they come from the clock source",
+    "Treat the reading-count rule as untested"
+   ],
+   "default_guess": "Require and test exactly one monotonic reading per viewer-entry request.",
+   "witness": {
+    "initial": "The viewer-entry rate-limit state exists for a viewer credential.",
+    "events": [
+     "A viewer submits one entry request.",
+     "The rate-limit implementation evaluates the window."
+    ],
+    "outcomes": [
+     "The request obtains one monotonic value and reuses it for all rate-limit decisions.",
+     "The request reads the monotonic clock separately while pruning, checking, and recording the attempt; all reads come from the clock source and therefore satisfy the written CLK-002 test."
+    ],
+    "observer": "A deterministic clock-source spy and boundary-time rate-limit behavior reveal the difference."
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "CLK-001 operation read count with audit writer",
+   "kind": "ambiguous test boundary",
+   "text": "The rules allow “the audit writer’s reading of an appended record’s occurred_at” as “one further reading,” but the CLK-001 Required tests say each operation must show “that the operation reads it once” without saying whether the nested audit-writer read is counted.",
+   "question": "For an audited mutation, must the test observe one wall-clock-source call for the whole call graph, or one operation call plus one separately attributed audit-writer call?",
+   "options": [
+    "Expect two source calls: one reused by the owning operation and one taken by the audit writer at append",
+    "Expect one source call total and pass that instant to the audit writer",
+    "Exclude audited operations from the one-read assertion"
+   ],
+   "default_guess": "Expect one owning-operation read plus the explicitly permitted audit-writer read, and state that accounting in the test.",
+   "witness": {
+    "initial": "An authorized mutation will write a business record and append an AuditRecord.",
+    "events": [
+     "The actor performs the mutation.",
+     "The owning operation reads the clock source.",
+     "The audit writer appends the audit record and obtains occurred_at."
+    ],
+    "outcomes": [
+     "A clock spy records two calls, one attributed to the owning operation and one to the audit writer, and the test passes under the stated exception.",
+     "A clock spy records two calls and the test fails because “the operation reads it once” is applied to the entire call graph; an implementation instead passes the first instant into the writer."
+    ],
+    "observer": "The invariant test author and anyone comparing the business timestamp with audit occurred_at see the difference."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"02_rules.md:Status\",\"subject\":\"Status description of A22–A29\",\"kind\":\"contradictory provenance\",\"text\":\"“A22–A29 carry the policies the accepted Factory spec added after 2026-07-19” conflicts with A28’s “The accepted spec 459ac96c has no clock source” and “The coordinator decided on 2026-11-07 to name the one source instead.”\",\"question\":\"Does the Status exclude A28’s new single-clock-source policy from the claim that every A22–A29 policy came from the accepted Factory spec?\",\"options\":[\"Revise the Status to distinguish A28’s coordinator-added clock source from its Factory-derived clock semantics\",\"Treat the new clock-source policy as if the accepted Factory spec had added it\"],\"default_guess\":\"Revise the Status to identify the coordinator-added portion of A28.\"},{\"unit\":\"A18\",\"subject\":\"INV-020 idempotent snapshot re-publication test\",\"kind\":\"contradiction\",\"text\":\"The Required tests item says “a re-publication of its identity with the same content changes nothing,” while R0-25 and M19 require a fresh immutable import result with a fresh import_id, and every classified import attempt also writes an audit record.\",\"question\":\"Does “changes nothing” mean only that the existing ApprovedEstimateSnapshot is unchanged, or that no persistent record is added?\",\"options\":[\"The snapshot stays unchanged, but a fresh idempotent-replay import result and audit record are appended\",\"No persistent state changes at all\"],\"default_guess\":\"Interpret it as snapshot immutability only and still append the required import result and audit.\",\"witness\":{\"initial\":\"An accepted snapshot exists for one project and identity, with its content fingerprint stored.\",\"events\":[\"The same producer republishes exactly the same snapshot content.\"],\"outcomes\":[\"A fresh idempotent-replay SnapshotImportRecord and snapshot.import audit are appended; the snapshot itself is unchanged.\",\"Nothing persistent changes because the test says the re-publication “changes nothing.”\"],\"observer\":\"The producer sees whether it receives a fresh import_id, and an auditor sees whether a new attempt was recorded.\"}},{\"unit\":\"A18\",\"subject\":\"INV-028 activation refusal test\",\"kind\":\"ambiguous refusal condition\",\"text\":\"“activating a budget version without an allocated section is refused and writes nothing” does not identify whether the missing thing is a section plan in the candidate version, an allocation targeting that section, or any allocation at all.\",\"question\":\"Exactly which candidate-version/allocation relationship makes activation fail under this Required tests item?\",\"options\":[\"Refuse when an existing allocation targets a PortalSection for which the candidate version has no SectionPlan\",\"Refuse whenever the candidate version contains a section with no allocation\",\"Refuse whenever the project has no section allocations\"],\"default_guess\":\"Refuse only when an existing allocation would be unresolved because its target section has no plan in the candidate version.\",\"witness\":{\"initial\":\"A project has an expense allocated to section A. Candidate budget version V has a plan only for section B.\",\"events\":[\"An authorized staff member attempts to activate V.\"],\"outcomes\":[\"Activation is refused because the allocation to A would be unresolved against V.\",\"Activation succeeds because V itself has a section and the phrase does not clearly require every previously allocated section to occur in V.\"],\"observer\":\"The staff actor sees success versus refusal, and readers see which budget version remains active.\"}},{\"unit\":\"A28\",\"subject\":\"Source-supplied timestamp storage\",\"kind\":\"representation contradiction\",\"text\":\"The Normative rules require a source-supplied time to keep “the same instant, stored offset-naive UTC,” but CLK-001 and its Required tests say supplied times “keep their supplied values” and are “stored as supplied.”\",\"question\":\"For an offset-aware supplied datetime, must storage normalize it to the equivalent offset-naive UTC wall value, or strip/preserve the supplied wall fields?\",\"options\":[\"Convert to the same UTC instant and then store an offset-naive UTC datetime\",\"Remove the offset while preserving the supplied wall-clock fields\",\"Reject any representation that is not already offset-naive UTC\"],\"default_guess\":\"Normalize to the same UTC instant and store that instant as offset-naive UTC.\",\"witness\":{\"initial\":\"No record exists yet; the source supplies approved_at as 2026-01-01T12:00:00+02:00.\",\"events\":[\"An authorized producer publishes a snapshot and the portal accepts it.\"],\"outcomes\":[\"approved_at is stored as offset-naive 2026-01-01 10:00:00, preserving the instant.\",\"approved_at is stored as offset-naive 2026-01-01 12:00:00 because it is stored “as supplied,” changing the instant by two hours.\"],\"observer\":\"A later reader of the persisted snapshot sees the different approved_at value.\"}},{\"unit\":\"A28\",\"subject\":\"CLK-002 reading-count invariant and test\",\"kind\":\"missing invariant test obligation\",\"text\":\"The Normative rules require the elapsed clock to take “one reading per request,” but CLK-002 and its Required tests require only that monotonic readings supply elapsed durations, are not persisted, and are not mixed with wall-clock values.\",\"question\":\"Must CLK-002 and its Required tests demonstrate exactly one monotonic-clock-source read per viewer-entry request?\",\"options\":[\"Require exactly one monotonic reading for each viewer-entry request\",\"Permit multiple monotonic readings within one request as long as they come from the clock source\",\"Treat the reading-count rule as untested\"],\"default_guess\":\"Require and test exactly one monotonic reading per viewer-entry request.\",\"witness\":{\"initial\":\"The viewer-entry rate-limit state exists for a viewer credential.\",\"events\":[\"A viewer submits one entry request.\",\"The rate-limit implementation evaluates the window.\"],\"outcomes\":[\"The request obtains one monotonic value and reuses it for all rate-limit decisions.\",\"The request reads the monotonic clock separately while pruning, checking, and recording the attempt; all reads come from the clock source and therefore satisfy the written CLK-002 test.\"],\"observer\":\"A deterministic clock-source spy and boundary-time rate-limit behavior reveal the difference.\"}},{\"unit\":\"A28\",\"subject\":\"CLK-001 operation read count with audit writer\",\"kind\":\"ambiguous test boundary\",\"text\":\"The rules allow “the audit writer’s reading of an appended record’s occurred_at” as “one further reading,” but the CLK-001 Required tests say each operation must show “that the operation reads it once” without saying whether the nested audit-writer read is counted.\",\"question\":\"For an audited mutation, must the test observe one wall-clock-source call for the whole call graph, or one operation call plus one separately attributed audit-writer call?\",\"options\":[\"Expect two source calls: one reused by the owning operation and one taken by the audit writer at append\",\"Expect one source call total and pass that instant to the audit writer\",\"Exclude audited operations from the one-read assertion\"],\"default_guess\":\"Expect one owning-operation read plus the explicitly permitted audit-writer read, and state that accounting in the test.\",\"witness\":{\"initial\":\"An authorized mutation will write a business record and append an AuditRecord.\",\"events\":[\"The actor performs the mutation.\",\"The owning operation reads the clock source.\",\"The audit writer appends the audit record and obtains occurred_at.\"],\"outcomes\":[\"A clock spy records two calls, one attributed to the owning operation and one to the audit writer, and the test passes under the stated exception.\",\"A clock spy records two calls and the test fails because “the operation reads it once” is applied to the entire call graph; an implementation instead passes the first instant into the writer.\"],\"observer\":\"The invariant test author and anyone comparing the business timestamp with audit occurred_at see the difference.\"}}]}",
+ "set_aside": []
+}

@@ -948,16 +948,23 @@ The former ledger rows INV-020…INV-029 that no table of R1–R17 carries. Thei
 
 ### Required tests
 
-- INV-020: a focused test at `import_snapshot` showing the invariant holds; a violating input is refused and changes nothing.
-- INV-022: a focused test at `activate_budget_version` showing the invariant holds; a violating input is refused and changes nothing.
-- INV-023: a focused test at `activate_budget_version` showing the invariant holds; a violating input is refused and changes nothing.
-- INV-024: a focused test at `upsert_manual_section_plan` showing the invariant holds; a violating input is refused and changes nothing.
-- INV-025: a focused test at `_link_snapshot_sections` showing the invariant holds; a violating input is refused and changes nothing.
-- INV-026: a focused test at `import_snapshot` showing the invariant holds; a violating input is refused and changes nothing.
-- INV-027: a focused test at `build_budget_view` showing the invariant holds; a violating input is refused and changes nothing.
-- INV-028: a focused test at `PortalTransaction.commit` showing the invariant holds; a violating input is refused and changes nothing.
-- Witnesses, the focused Factory verification checks that assert it: INV-022, INV-023, INV-024, INV-025 [witness: verification:budget_management_sqlite_uow_client_portal].
-- Witnesses, the focused Factory verification checks that assert it: INV-020 [witness: verification:snapshot_import_sqlite_uow_client_portal].
+- INV-022, INV-023, INV-024, INV-025: the budget management check.
+  INV-022: an import activates nothing; a producer cannot activate any
+  version, its own import included. INV-023: after an activation exactly
+  one version of the project is active and the previous one is inactive,
+  both in the same commit; a failed activation leaves the previous active
+  version active. INV-024: a second manual version of a project is
+  refused; a manual section plan changes only while the project is
+  active; an imported plan cannot be changed. INV-025: a section keeps its
+  identity across versions and renames; a snapshot section links to an
+  existing section only by equal `source_key`, never by display name
+  [witness: verification:budget_management_sqlite_uow_client_portal].
+- INV-020: the snapshot import check: an accepted snapshot is never
+  overwritten or deleted and every accepted version stays readable; a
+  re-publication of its identity with the same content changes nothing,
+  and one with different content is a conflict that leaves the snapshot
+  unchanged and is recorded only as its import result and audit (A12, A13)
+  [witness: verification:snapshot_import_sqlite_uow_client_portal].
 - INV-026, INV-027, INV-028: the budget derivation check. INV-026: an
   accepted import stores the published planned values and rewrites no budget
   version, plan or expense; a changed re-publication is a conflict that
@@ -1338,7 +1345,8 @@ reading equals `datetime.utcnow()` and the elapsed reading equals
   operation reads it once and uses that instant for every comparison, that
   its portal-owned event timestamps equal that instant, that a derived
   expiry equals that instant plus the TTL, and that supplied times and
-  dates are stored as supplied.
+  dates are stored as supplied; and that no module other than the clock
+  source reads the host wall or monotonic clock directly.
 - CLK-002: a test showing that the elapsed durations the portal measures
   (the A25 viewer-entry window) come from the clock source's monotonic
   reading, are not persisted, and are not compared with or mixed into

@@ -1,0 +1,126 @@
+{
+ "open_points": [
+  {
+   "unit": "A18",
+   "subject": "INV-020 idempotent snapshot re-publication test",
+   "kind": "contradiction",
+   "text": "The Required test says that “a re-publication of its identity with the same content changes nothing”, while R0-25 and M19 require a fresh immutable import result with a fresh `import_id` and a `snapshot.import` audit for every classified idempotent replay.",
+   "question": "Does “changes nothing” mean only that the existing ApprovedEstimateSnapshot is unchanged, or that the replay writes no records at all?",
+   "options": [
+    "The snapshot remains unchanged, but a fresh idempotent-replay import result and audit are appended.",
+    "No persistent state changes, including import results and audit."
+   ],
+   "default_guess": "Treat “changes nothing” as scoped only to the existing snapshot and append the required import result and audit.",
+   "witness": {
+    "initial": "Snapshot S already exists for project P and publication identity E/V with fingerprint F.",
+    "events": [
+     "The authorized producer republishes E/V with identical content F."
+    ],
+    "outcomes": [
+     "S remains unchanged; a new idempotent-replay SnapshotImportRecord and snapshot.import audit are committed.",
+     "S remains unchanged and no new record is committed because the test requires the replay to change nothing."
+    ],
+    "observer": "The producer reading the returned import_id and an administrator inspecting audit history."
+   }
+  },
+  {
+   "unit": "A18",
+   "subject": "INV-028 activation refusal condition",
+   "kind": "ambiguous refusal",
+   "text": "“activating a budget version without an allocated section is refused and writes nothing” does not define what “without an allocated section” means.",
+   "question": "Is activation refused only when an existing expense allocation targets a PortalSection absent from the candidate version, or whenever the candidate has a section to which no expense is allocated?",
+   "options": [
+    "Refuse only for an unresolved existing allocation whose target section has no plan in the candidate version.",
+    "Refuse if any candidate section has no allocation, including when the project has no expenses."
+   ],
+   "default_guess": "Refuse only when an existing allocation would be unresolved against the candidate version.",
+   "witness": {
+    "initial": "Active version V1 exists. Candidate V2 contains valid section plans, but the project has no expenses or allocations.",
+    "events": [
+     "An authorized staff member activates V2."
+    ],
+    "outcomes": [
+     "Activation succeeds because no existing allocation is unresolved.",
+     "Activation is refused because V2 has no allocated section."
+    ],
+    "observer": "The activating staff member and viewers reading the active budget."
+   }
+  },
+  {
+   "unit": "A18",
+   "subject": "INV-023 activation of the already-active version",
+   "kind": "missing case",
+   "text": "“activation atomically deactivates the previous active version” and the test’s “after an activation exactly one version of the project is active” do not say what happens when the requested version is already active.",
+   "question": "Is activation of the already-active BudgetVersion refused, treated as an idempotent no-op, or performed again with new activation provenance and audit?",
+   "options": [
+    "Refuse because there is no inactive target to activate.",
+    "Return success without changing timestamps or writing an activation audit.",
+    "Perform another activation action, updating activation provenance and recording it."
+   ],
+   "default_guess": "Return an idempotent success without changing persisted state.",
+   "witness": {
+    "initial": "BudgetVersion V1 is the sole active version of project P.",
+    "events": [
+     "An authorized staff member requests activation of V1 again."
+    ],
+    "outcomes": [
+     "The request is refused as an invalid transition.",
+     "The request succeeds while V1 remains active, either as a no-op or with refreshed activation provenance."
+    ],
+    "observer": "The staff caller and an auditor inspecting activation history."
+   }
+  },
+  {
+   "unit": "A18",
+   "subject": "INV-023 reactivation of a previously deactivated version",
+   "kind": "missing transition",
+   "text": "The rules allow activation to make the previous version inactive, but do not say whether that previously active version may later be activated again; M22 states `inactive → active → inactive` without declaring the final inactive state terminal or reusable.",
+   "question": "May a deactivated BudgetVersion be reactivated later?",
+   "options": [
+    "Yes; any eligible inactive version may become active again.",
+    "No; once a version has been active and deactivated, it cannot be activated again."
+   ],
+   "default_guess": "Allow reactivation of any otherwise eligible inactive version.",
+   "witness": {
+    "initial": "V1 was active, then activation of V2 made V1 inactive and V2 active.",
+    "events": [
+     "An authorized staff member requests activation of V1."
+    ],
+    "outcomes": [
+     "V1 is reactivated and V2 is atomically deactivated.",
+     "The request is refused because V1 has already completed its activation lifecycle."
+    ],
+    "observer": "The activating staff member and viewers reading the active budget."
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "CLK-001 operation boundary",
+   "kind": "undefined scope",
+   "text": "“one reading per operation” and “that instant is every current time the operation uses” do not define whether authentication/session resolution, authorization, the use case, and its persistence commit are one operation or separate operations; only the audit writer is explicitly identified as a further-reading exception.",
+   "question": "What is the operation boundary that must share one wall-clock reading, particularly between expiry validation in an authorization guard and the authorized read or mutation it admits?",
+   "options": [
+    "The complete top-level request/use case, including authentication and authorization, is one operation and shares one wall instant.",
+    "Authentication or authorization and the admitted use case are separate operations, each taking its own wall reading.",
+    "Each public application operation is separate, but the text must enumerate which guard and persistence calls belong to it."
+   ],
+   "default_guess": "Treat the complete top-level application use case, including its authentication and authorization checks, as one operation sharing one wall instant, except for the audit-writer reading.",
+   "witness": {
+    "initial": "A staff session expires at T2. The clock source would return T1 before expiry on its first wall read and T2 on its next read. A mutation writes `updated_at`.",
+    "events": [
+     "The staff member submits the mutation.",
+     "Session resolution checks expiry.",
+     "The authorized mutation writes its record."
+    ],
+    "outcomes": [
+     "Authentication, authorization, and mutation are one operation: one read T1 is reused, so the mutation succeeds with `updated_at = T1`.",
+     "Session resolution and mutation are separate operations: resolution reads T1 and the mutation reads T2, so it either writes `updated_at = T2` after the session expiry or refuses if it rechecks expiry."
+    ],
+    "observer": "The staff caller and readers of the mutated record and its timestamp."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A18\",\"subject\":\"INV-020 idempotent snapshot re-publication test\",\"kind\":\"contradiction\",\"text\":\"The Required test says that “a re-publication of its identity with the same content changes nothing”, while R0-25 and M19 require a fresh immutable import result with a fresh `import_id` and a `snapshot.import` audit for every classified idempotent replay.\",\"question\":\"Does “changes nothing” mean only that the existing ApprovedEstimateSnapshot is unchanged, or that the replay writes no records at all?\",\"options\":[\"The snapshot remains unchanged, but a fresh idempotent-replay import result and audit are appended.\",\"No persistent state changes, including import results and audit.\"],\"default_guess\":\"Treat “changes nothing” as scoped only to the existing snapshot and append the required import result and audit.\",\"witness\":{\"initial\":\"Snapshot S already exists for project P and publication identity E/V with fingerprint F.\",\"events\":[\"The authorized producer republishes E/V with identical content F.\"],\"outcomes\":[\"S remains unchanged; a new idempotent-replay SnapshotImportRecord and snapshot.import audit are committed.\",\"S remains unchanged and no new record is committed because the test requires the replay to change nothing.\"],\"observer\":\"The producer reading the returned import_id and an administrator inspecting audit history.\"}},{\"unit\":\"A18\",\"subject\":\"INV-028 activation refusal condition\",\"kind\":\"ambiguous refusal\",\"text\":\"“activating a budget version without an allocated section is refused and writes nothing” does not define what “without an allocated section” means.\",\"question\":\"Is activation refused only when an existing expense allocation targets a PortalSection absent from the candidate version, or whenever the candidate has a section to which no expense is allocated?\",\"options\":[\"Refuse only for an unresolved existing allocation whose target section has no plan in the candidate version.\",\"Refuse if any candidate section has no allocation, including when the project has no expenses.\"],\"default_guess\":\"Refuse only when an existing allocation would be unresolved against the candidate version.\",\"witness\":{\"initial\":\"Active version V1 exists. Candidate V2 contains valid section plans, but the project has no expenses or allocations.\",\"events\":[\"An authorized staff member activates V2.\"],\"outcomes\":[\"Activation succeeds because no existing allocation is unresolved.\",\"Activation is refused because V2 has no allocated section.\"],\"observer\":\"The activating staff member and viewers reading the active budget.\"}},{\"unit\":\"A18\",\"subject\":\"INV-023 activation of the already-active version\",\"kind\":\"missing case\",\"text\":\"“activation atomically deactivates the previous active version” and the test’s “after an activation exactly one version of the project is active” do not say what happens when the requested version is already active.\",\"question\":\"Is activation of the already-active BudgetVersion refused, treated as an idempotent no-op, or performed again with new activation provenance and audit?\",\"options\":[\"Refuse because there is no inactive target to activate.\",\"Return success without changing timestamps or writing an activation audit.\",\"Perform another activation action, updating activation provenance and recording it.\"],\"default_guess\":\"Return an idempotent success without changing persisted state.\",\"witness\":{\"initial\":\"BudgetVersion V1 is the sole active version of project P.\",\"events\":[\"An authorized staff member requests activation of V1 again.\"],\"outcomes\":[\"The request is refused as an invalid transition.\",\"The request succeeds while V1 remains active, either as a no-op or with refreshed activation provenance.\"],\"observer\":\"The staff caller and an auditor inspecting activation history.\"}},{\"unit\":\"A18\",\"subject\":\"INV-023 reactivation of a previously deactivated version\",\"kind\":\"missing transition\",\"text\":\"The rules allow activation to make the previous version inactive, but do not say whether that previously active version may later be activated again; M22 states `inactive → active → inactive` without declaring the final inactive state terminal or reusable.\",\"question\":\"May a deactivated BudgetVersion be reactivated later?\",\"options\":[\"Yes; any eligible inactive version may become active again.\",\"No; once a version has been active and deactivated, it cannot be activated again.\"],\"default_guess\":\"Allow reactivation of any otherwise eligible inactive version.\",\"witness\":{\"initial\":\"V1 was active, then activation of V2 made V1 inactive and V2 active.\",\"events\":[\"An authorized staff member requests activation of V1.\"],\"outcomes\":[\"V1 is reactivated and V2 is atomically deactivated.\",\"The request is refused because V1 has already completed its activation lifecycle.\"],\"observer\":\"The activating staff member and viewers reading the active budget.\"}},{\"unit\":\"A28\",\"subject\":\"CLK-001 operation boundary\",\"kind\":\"undefined scope\",\"text\":\"“one reading per operation” and “that instant is every current time the operation uses” do not define whether authentication/session resolution, authorization, the use case, and its persistence commit are one operation or separate operations; only the audit writer is explicitly identified as a further-reading exception.\",\"question\":\"What is the operation boundary that must share one wall-clock reading, particularly between expiry validation in an authorization guard and the authorized read or mutation it admits?\",\"options\":[\"The complete top-level request/use case, including authentication and authorization, is one operation and shares one wall instant.\",\"Authentication or authorization and the admitted use case are separate operations, each taking its own wall reading.\",\"Each public application operation is separate, but the text must enumerate which guard and persistence calls belong to it.\"],\"default_guess\":\"Treat the complete top-level application use case, including its authentication and authorization checks, as one operation sharing one wall instant, except for the audit-writer reading.\",\"witness\":{\"initial\":\"A staff session expires at T2. The clock source would return T1 before expiry on its first wall read and T2 on its next read. A mutation writes `updated_at`.\",\"events\":[\"The staff member submits the mutation.\",\"Session resolution checks expiry.\",\"The authorized mutation writes its record.\"],\"outcomes\":[\"Authentication, authorization, and mutation are one operation: one read T1 is reused, so the mutation succeeds with `updated_at = T1`.\",\"Session resolution and mutation are separate operations: resolution reads T1 and the mutation reads T2, so it either writes `updated_at = T2` after the session expiry or refuses if it rechecks expiry.\"],\"observer\":\"The staff caller and readers of the mutated record and its timestamp.\"}}]}",
+ "set_aside": []
+}
