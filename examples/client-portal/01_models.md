@@ -2116,6 +2116,37 @@ The former "Candidate constants and catalogs (→ State 2)", kept:
   `contract_version` set, role/type capability tables, status transition
   tables.
 
+## Data-provider enumerations and row models (2026-11-08)
+
+Owner 2026-11-08: the specification is rebuilt by SPEC_STANDARD, starting with
+its data. What generated code reads about the members of an enumeration is a
+data-provider table keyed by that enumeration (SPEC_STANDARD 6.10 version 2,
+15.2 "Соответствие над таксономией"); its rows have a model, and a key that is
+not yet an enumeration becomes one. Each is a closed taxonomy: a new member
+needs code (15.2 check 5). Values are in `70_data_provider_closure.json`, the
+models in `60_model_closure_values.json`; nothing here changes behaviour.
+
+- `CapabilitySet` — closed enum: `operator | administrator_additions |
+  viewer | estimate_producer`, the capability sets of A2 by their names.
+- `ImportAuditReason` — closed enum: `none | outcome | reject_reason`, where
+  the `reason_code` of an import's audit comes from (A13, A18).
+- `TransportGuardRefusal` — closed enum: `untrusted_host | allowed_preflight |
+  unlisted_preflight_origin | logout_origin_mismatch | oversized_body |
+  rate_limited`, the responses the transport guard produces (A25).
+- `BootstrapCommandOutcome` — closed enum: `account_created |
+  confirmation_mismatch | identity_rejected | already_completed`, the outcomes
+  of the bootstrap command (A29).
+- Row models, `identity: value`, runtime-only (no persistence):
+  `WorkBalanceLabelSign` (`label: WorkBalanceLabel`, `balance_sign: int`),
+  `AuditActionSignificance` (`action: AuditAction`, `significant_mutation: bool`),
+  `CapabilitySetMember` (`capability_set: CapabilitySet`, `capability: Capability`, `member: bool`),
+  `StaffStatusTransition` and `PrincipalStatusTransition` (`from_status`,
+  `to_status` of `StaffStatus` / `PrincipalStatus`, `allowed: bool`),
+  `SupportedContractVersion` (`version: int`),
+  `ImportOutcomeAudit` (`outcome: ImportOutcome`, `result: AuditResult`, `reason: ImportAuditReason`),
+  `TransportGuardStatus` (`refusal: TransportGuardRefusal`, `status_code: int`),
+  `BootstrapExitCode` (`outcome: BootstrapCommandOutcome`, `exit_code: int`).
+
 ## Unresolved model questions
 
 The former list, kept. None of them changes a model's identity, so none is a

@@ -111,7 +111,7 @@ portal.estimate_snapshot.activate
 
 ### Consequence
 
-The table is rules data: `rules.capability_catalog` (SPEC_STANDARD 15.3.1, a rules table). The owning functions named in the tests carry it by address.
+The catalog is the closed enumeration `= models.Capability`, its one home (SPEC_STANDARD 15.2 check 5, 15.4). Data placement 2026-11-08 (owner: the specification rebuilt by SPEC_STANDARD; SOURCE.md "Data placement"): the accepted spec's `rules.capability_catalog` repeated its members and is removed.
 
 ## Accepted decision A2 — R2. Principal-type / role capability sets (static, closed)
 
@@ -138,7 +138,7 @@ capability is never read from request data.
 
 ### Consequence
 
-The table is rules data: `rules.principal_capability_sets` (SPEC_STANDARD 15.3.1, a rules table). The owning functions named in the tests carry it by address.
+The sets are data the generated guard reads: the data-provider constant `CAPABILITY_SET_MEMBERS` (SPEC_STANDARD 6.10 version 2), a table keyed by `= models.CapabilitySet` and `= models.Capability` and total over both, in place of `rules.principal_capability_sets`. The administrator set is the operator set together with `administrator_additions`, an operation the notes of `_require_capability` state. Data placement 2026-11-08 (owner: the specification rebuilt by SPEC_STANDARD; SOURCE.md "Data placement"): values unchanged.
 
 ## Accepted decision A3 — R3. Status transition tables
 
@@ -178,7 +178,7 @@ to every account stays the one the accepted spec gave.
 
 ### Consequence
 
-The table is rules data: `rules.status_transitions` (SPEC_STANDARD 15.3.1, a rules table). The owning functions named in the tests carry it by address.
+The staff and principal tables, which generated code reads, are the data-provider constants `STAFF_STATUS_TRANSITIONS` and `PRINCIPAL_STATUS_TRANSITIONS` (SPEC_STANDARD 6.10 version 2: keyed by the pair of statuses, total, `allowed`). The viewer, grant and budget-version tables stay `rules.status_transitions`; no note reads them as data. Data placement 2026-11-08 (owner: the specification rebuilt by SPEC_STANDARD; SOURCE.md "Data placement"): values unchanged.
 
 ## Accepted decision A4 — R4. Authorization guard sequence (policy)
 
@@ -382,7 +382,7 @@ delegated.
 
 ### Consequence
 
-The table is rules data: `rules.registry_failure_translation` (SPEC_STANDARD 15.3.1, a rules table). The owning functions named in the tests carry it by address.
+The failure kinds are the closed enumeration `= models.RegistryFailureKind`; each member names the failure it classifies, and the condition that selects a member is behaviour of the gateway's notes (SPEC_STANDARD §2: a condition that chooses what code does is prose, not a table). Data placement 2026-11-08 (owner: the specification rebuilt by SPEC_STANDARD; SOURCE.md "Data placement"): `rules.registry_failure_translation` keyed the members by internal failure labels no code reads and is removed as a second home of the enumeration.
 
 ## Accepted decision A7 — R7. Supported external contract versions
 
@@ -465,7 +465,7 @@ accepted; technical decisions delegated.
 
 ### Consequence
 
-The table is rules data: `rules.supported_external_contract_versions` (SPEC_STANDARD 15.3.1, a rules table). The owning functions named in the tests carry it by address.
+The accepted versions are the data-provider constants `SUPPORTED_SNAPSHOT_CONTRACT_VERSIONS` and `SUPPORTED_OCR_CONTRACT_VERSIONS` (SPEC_STANDARD 6.10, a `record_tuple` of `SupportedContractVersion` rows, because 6.10 has no integer tuple). Data placement 2026-11-08 (owner: the specification rebuilt by SPEC_STANDARD; SOURCE.md "Data placement"): in place of `rules.supported_external_contract_versions`, values unchanged.
 
 ## Accepted decision A8 — R8. Idempotency identity table
 
@@ -576,7 +576,7 @@ running service still returns 0 until the next Route B regenerates
 
 ### Consequence
 
-The table is rules data: `rules.money_policy` (SPEC_STANDARD 15.3.1, a rules table). The owning functions named in the tests carry it by address.
+The currency, the fraction digits and the rounding mode, which generated code reads, are the data-provider constants `MONEY_CURRENCY`, `MONEY_FRACTION_DIGITS` and `MONEY_ROUNDING`; the sign that selects each `WorkBalanceLabel` is `WORK_BALANCE_LABEL_SIGNS` (SPEC_STANDARD 6.10 version 2, keyed by the label, total). The formulas stay behaviour of their notes; the remaining `rules.money_policy` leaves are the decision's record. Data placement 2026-11-08 (owner: the specification rebuilt by SPEC_STANDARD; SOURCE.md "Data placement"): values unchanged.
 
 ## Accepted decision A10 — R10. No email challenges (owner 2026-11-07)
 
@@ -788,7 +788,7 @@ The accepted Factory spec adds two policies beside the catalog (Factory `5677993
 
 ### Consequence
 
-The normative catalog and significant subset are the two lists above, the rules tables of this decision; INV-051 and INV-053 are checked against them. In the specification the catalog is the `AuditAction` enumeration (`= models.AuditAction`) and the significant subset is named member by member in the State 7 note of `_validate_audit_intent`. Neither has a `rules` namespace: no generated code reads them as data, and SPEC_STANDARD 15.3.1 (edition 2) refuses a `= rules.*` address outside a backend IR. The accepted spec's `rules.audit_action_catalog` and `rules.audit_significant_mutation_actions` are removed (2026-11-07, SOURCE.md).
+The normative catalog and significant subset are the two lists above, the rules tables of this decision; INV-051 and INV-053 are checked against them. In the specification the catalog is the `AuditAction` enumeration (`= models.AuditAction`). Data placement 2026-11-08 (owner: the specification rebuilt by SPEC_STANDARD; SOURCE.md "Data placement"): the significant subset, which `_validate_audit_intent` reads, is the data-provider constant `AUDIT_ACTION_SIGNIFICANCE` (SPEC_STANDARD 6.10 version 2: keyed by the action, total, `significant_mutation`), so an action added without its classification stops the build; the note no longer lists the members. Neither has a `rules` namespace. The accepted spec's `rules.audit_action_catalog` and `rules.audit_significant_mutation_actions` are removed (2026-11-07, SOURCE.md).
 
 ## Accepted decision A14 — R14. Binary delivery policy
 
@@ -901,7 +901,7 @@ behaviour accepted; technical decisions delegated.
 
 ### Consequence
 
-The table is rules data: `rules.staff_identity_input_policy` (SPEC_STANDARD 15.3.1, a rules table). The owning functions named in the tests carry it by address.
+The password bounds, which generated code reads, are the data-provider constants `PASSWORD_MIN_CODEPOINTS` and `PASSWORD_MAX_CODEPOINTS`; the rest of `rules.staff_identity_input_policy` is behaviour its notes state. Data placement 2026-11-08 (owner: the specification rebuilt by SPEC_STANDARD; SOURCE.md "Data placement"): values unchanged.
 
 ## Accepted decision A17 — R17. Verification-secret envelope
 
@@ -988,7 +988,7 @@ The former ledger rows INV-020…INV-029 that no table of R1–R17 carries. Thei
 
 ### Consequence
 
-No value: each invariant is behaviour of its owning function and lands as a note or a property there (States 6–7).
+No value: each invariant is behaviour of its owning function and lands as a note or a property there (States 6–7). Data placement 2026-11-08 (SOURCE.md "Data placement"): the audit of an import takes its result and the source of its reason_code from the data-provider constant `IMPORT_OUTCOME_AUDIT`, keyed by `= models.ImportOutcome` and total (SPEC_STANDARD 6.10 version 2), values as `import_snapshot` stated them.
 
 ## Accepted decision A19 — Expense and allocation invariants
 
@@ -1041,7 +1041,7 @@ The former ledger row INV-040; product text of State 0 ("Operator management") a
 
 ### Consequence
 
-No value: each invariant is behaviour of its owning function and lands as a note or a property there (States 6–7).
+No value: each invariant is behaviour of its owning function and lands as a note or a property there (States 6–7). Data placement 2026-11-08 (SOURCE.md "Data placement"): the upper bound of a completion percent is the data-provider constant `COMPLETION_PERCENT_MAX`; its lower bound, zero, is the meaning of a percent.
 
 ## Accepted decision A21 — Derivation and append-only records
 
@@ -1209,7 +1209,7 @@ headers only. Normative value: `rules.http_transport_policy` (Factory
 ### Consequence
 
 `rules.http_transport_policy` with its runtime settings (A30); the
-deterministic HTTP router and the viewer cookie backend read it.
+deterministic HTTP router and the viewer cookie backend read it. Data placement 2026-11-08 (owner: the specification rebuilt by SPEC_STANDARD; SOURCE.md "Data placement"): the values the generated transport guard and runtime read are data-provider constants: `API_PREFIX`, `VIEWER_ENTRY_PATH`, `VIEWER_LOGOUT_PATH`, `NO_STORE_PATHS`, `NO_STORE_CACHE_CONTROL`, `SECURITY_HEADERS`, `TRANSPORT_LOG_LABELS`, `HEALTH_LIVE_PATH`, `HEALTH_READY_PATH`, `HEALTH_OK_STATUS`, and `TRANSPORT_GUARD_STATUSES`, the status of each refusal of the guard keyed by `= models.TransportGuardRefusal`. Their former leaves (`public_api_prefix`, `security_headers`, `browser_session.logout_path`, `health.liveness_path`, `health.readiness_path`) leave the policy; the cookie name and attributes stay, the viewer cookie backend reads them.
 
 ## Accepted decision A26 — Exceptions carry data in fields, not messages (accepted Factory spec, 2026-08-03)
 
@@ -1413,7 +1413,7 @@ The accepted spec held these values as `rules.staff_bootstrap_policy`
 
 ### Consequence
 
-The policy data behind the invariants is the exit-code table above, the rules table of this decision; the rest of the policy is the decision's rules text. The bootstrap modules of State 3 own it. In the specification the serialized write is lowered by `rules.sqlite_unit_of_work_backend.bootstrap_store`; the account values, the audit, the input boundary, the disclosure limits and the exit codes are stated by the State 7 notes of `bootstrap_first_administrator` and `run_bootstrap_cli`. There is no `rules` namespace for it: no generated code reads the policy as data, so the accepted spec's `rules.staff_bootstrap_policy` is removed (2026-11-07, SOURCE.md).
+The policy data behind the invariants is the exit-code table above, the rules table of this decision; the rest of the policy is the decision's rules text. The bootstrap modules of State 3 own it. In the specification the serialized write is lowered by `rules.sqlite_unit_of_work_backend.bootstrap_store`; the account values, the audit, the input boundary, the disclosure limits and the exit codes are stated by the State 7 notes of `bootstrap_first_administrator` and `run_bootstrap_cli`. There is no `rules` namespace for it (the accepted spec's `rules.staff_bootstrap_policy` was removed 2026-11-07, SOURCE.md). Data placement 2026-11-08 (owner: the specification rebuilt by SPEC_STANDARD; SOURCE.md "Data placement"): `run_bootstrap_cli` reads the exit-code table, so it is the data-provider constant `BOOTSTRAP_EXIT_CODES`, keyed by `= models.BootstrapCommandOutcome` and total, values unchanged.
 
 ## Accepted decision A30 — Configuration
 
@@ -1481,7 +1481,7 @@ to States 6–7.
 
 ### Consequence
 
-`config.*` (SPEC_STANDARD 15.3.1, runtime settings and configuration).
+`config.*` (SPEC_STANDARD 15.3.1, runtime settings and configuration). Data placement 2026-11-08 (owner: the specification rebuilt by SPEC_STANDARD; SOURCE.md "Data placement"): the Registry variable name, request paths and timeout, the staff and viewer session lifetimes and the credential entropy have the same value in every environment and change only by a decision about the product, so by SPEC_STANDARD 15.2 (check 4 before 3) they are data-provider constants that generated code imports (`REGISTRY_BASE_URL_VARIABLE`, `REGISTRY_PROJECTS_PATH`, `REGISTRY_CONTEXT_SEGMENT`, `REGISTRY_VALIDATE_SEGMENT`, `REGISTRY_TIMEOUT_SECONDS`, `STAFF_SESSION_TTL_HOURS`, `VIEWER_SESSION_TTL_DAYS`, `CREDENTIAL_SECRET_BYTES`), values unchanged; the path templates are split into a path and two segments, because a template is not data (15.11). The Registry URL itself stays an environment value read by the gateway; SOURCE.md records that it is read outside `runtime_settings` (SPEC_STANDARD 6.11), an owner question.
 
 ## Accepted decision A31 — Security review of the migrated case
 

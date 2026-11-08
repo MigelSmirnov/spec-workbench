@@ -701,3 +701,70 @@ Checks after the change: `design_emitter_binding.py --coverage` with the
 Factory root unbound 0; `design_factory_slices.py` ready; admission FA010
 (obligations cover every interface-typed dependency), FA017 (every lowered
 repository is reachable) and FA005 (Factory validator) pass.
+
+## Data placement (owner 2026-11-08)
+
+The owner decided on 2026-11-08 to rebuild the specification by SPEC_STANDARD,
+starting with its data. Work list: the owner-checked register of spec-workbench
+`docs/INSTRUMENT_INVENTORY_20261108.md` §5.1 (`935ca484`), groups D01–D30, and its
+table of exceptions. Every value is carried unchanged: placement changes form,
+not behaviour. Values generated code reads are constants of the new
+deterministic module `data_provider` (`70_data_provider_closure.json`,
+SPEC_STANDARD 6.10 version 2); their row models and four new enumerations are
+in `60_model_closure_values.json` and State 1. The State 8 projector does not
+place a module without State 6 contracts, nor remove a `rules` namespace the
+data closure dropped; `experiments/client-portal/frame_data_provider.py` does
+those two things (as the cabinet-kernel skeleton did, `f924c17f`) — a tool gap,
+reported, not patched.
+
+| group | home |
+|---|---|
+| D01 currency | `MONEY_CURRENCY` (A9) |
+| D02 precision, rounding | `MONEY_FRACTION_DIGITS`, `MONEY_ROUNDING` (A9); the formulas stay behaviour |
+| D03 balance sign → label | `WORK_BALANCE_LABEL_SIGNS`, keyed by `WorkBalanceLabel`, total |
+| D04 Registry variable | `REGISTRY_BASE_URL_VARIABLE` |
+| D05 Registry paths | `REGISTRY_PROJECTS_PATH`, `REGISTRY_CONTEXT_SEGMENT`, `REGISTRY_VALIDATE_SEGMENT` |
+| D06 Registry timeout | `REGISTRY_TIMEOUT_SECONDS` |
+| D07 failure → kind | `= models.RegistryFailureKind`; condition → member stays prose (§2); `rules.registry_failure_translation` removed |
+| D08 significant mutation | `AUDIT_ACTION_SIGNIFICANCE`, keyed by `AuditAction`, total |
+| D09 capability sets | `CAPABILITY_SET_MEMBERS`, keyed by `CapabilitySet` × `Capability`, total; `rules.capability_catalog` removed (second home of `Capability`) |
+| D10, D11 transitions | `STAFF_STATUS_TRANSITIONS`, `PRINCIPAL_STATUS_TRANSITIONS`, keyed by the status pair, total |
+| D12 password bounds | `PASSWORD_MIN_CODEPOINTS`, `PASSWORD_MAX_CODEPOINTS` |
+| D13, D14 session lifetimes | `STAFF_SESSION_TTL_HOURS`, `VIEWER_SESSION_TTL_DAYS` |
+| D15 credential entropy | `CREDENTIAL_SECRET_BYTES`, now also named by the viewer and service issuers, which used the same value unnamed |
+| D16 contract versions | `SUPPORTED_SNAPSHOT_CONTRACT_VERSIONS`, `SUPPORTED_OCR_CONTRACT_VERSIONS` |
+| D17 import outcome → audit | `IMPORT_OUTCOME_AUDIT`, keyed by `ImportOutcome`, total |
+| D18 content rejection → reason | `= models.ImportRejectReason`; condition → member stays prose (§2) |
+| D19 exception → reason | stays prose (§2); a key that is an exception type has no §6.10 form |
+| D20 percent range | `COMPLETION_PERCENT_MAX`; zero is the meaning of a percent |
+| D21, D22 binary response | backend-owned (`api_irregular`): notes name the binary delivery policy, values removed from notes |
+| D23 viewer cookie | backend-owned (viewer cookie backend reads `browser_session`): notes name the backend |
+| D24 API prefix | `API_PREFIX` |
+| D25 no-store paths | `NO_STORE_PATHS`; `VIEWER_ENTRY_PATH`, `VIEWER_LOGOUT_PATH` for the guard's single paths |
+| D26 guard statuses | `TRANSPORT_GUARD_STATUSES`, keyed by `TransportGuardRefusal`, total |
+| D27 security headers | `SECURITY_HEADERS`, `NO_STORE_CACHE_CONTROL` |
+| D28 health | `HEALTH_LIVE_PATH`, `HEALTH_READY_PATH`, `HEALTH_OK_STATUS` |
+| D29 bootstrap exit codes | `BOOTSTRAP_EXIT_CODES`, keyed by `BootstrapCommandOutcome`, total |
+| D30 log record | `TRANSPORT_LOG_LABELS` (labels and order); `label=value`, single spaces stay format prose |
+| #959 | `build_project_overview` no longer names `= rules` |
+
+Form decisions (one line each; change-axis of SPEC_STANDARD 15.2 and the
+operating profile — a few clients, one process, SQLite, simplicity first):
+
+- Registry timeout, session lifetimes and credential entropy were `config`; they
+  have one value in every environment and change only by a product decision
+  (15.2 check 4), so they are constants, not new runtime settings.
+- A path template is not data (15.11): the Registry paths are a path and two
+  segments the note joins.
+- A condition that picks an enumeration member (D07, D18, D19) stays prose by
+  §2; a member that carries a value (D03 sign, D26 status, D29 exit code, D17
+  result) is a total `record_tuple` keyed by the enumeration, with a new
+  enumeration where the key set was only prose (`TransportGuardRefusal`,
+  `BootstrapCommandOutcome`, `CapabilitySet`, `ImportAuditReason`).
+- An integer allow-list is a `record_tuple` of `SupportedContractVersion`:
+  6.10 has no integer tuple.
+
+For the owner: the Registry URL is read from the environment by
+`registry_gateway`, outside `runtime_settings` (SPEC_STANDARD 6.11: a second
+settings reader is a defect). Moving it into `RuntimeSettings` changes when and
+how a missing URL fails, so it is behaviour, not placement, and is left open.

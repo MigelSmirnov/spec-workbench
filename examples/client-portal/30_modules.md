@@ -26,7 +26,10 @@ Factory), the repository `email_delivery_repository` (one of the eleven) and
 coordinator added `system_clock`, the one reader of the host clocks (A28,
 SPEC_STANDARD §6.9 version 5), which the accepted spec does not have. The case
 runs 37 modules: 19 of the former text, 17 added by the Factory, ten of them
-repositories, and `system_clock`.
+repositories, and `system_clock`. On 2026-11-08 the owner had the
+specification rebuilt by SPEC_STANDARD, starting with its data; the values
+generated code reads moved into `data_provider`, the deterministic
+provider module of SPEC_STANDARD 6.10. The case runs 38 modules.
 
 A module owns one hidden mechanism and has one reason to change; its public
 surface is smaller than what it hides. Each accepted decision has one primary
@@ -39,35 +42,35 @@ the one mapping; `30_trace.json` records the same:
 | decision | primary owner | consumers |
 |---|---|---|
 | A1 | `authorization_guard` | `models`, `staff_identity`, `viewer_access`, `service_identity` |
-| A2 | `authorization_guard` | `models`, `staff_identity`, `service_identity` |
-| A3 | `staff_identity` | `viewer_access`, `service_identity`, `budget_management`, `staff_access_repository` |
+| A2 | `authorization_guard` | `models`, `staff_identity`, `service_identity`, `data_provider` |
+| A3 | `staff_identity` | `viewer_access`, `service_identity`, `budget_management`, `staff_access_repository`, `data_provider` |
 | A4 | `authorization_guard` | `registry_gateway`, `api`, `api_irregular` |
 | A5 | `authorization_guard` | `registry_gateway`, `staff_identity`, `viewer_access`, `service_identity`, `derived_views` |
-| A6 | `registry_gateway` | `authorization_guard`, `derived_views` |
-| A7 | `snapshot_import` | `expense_intake` |
+| A6 | `registry_gateway` | `authorization_guard`, `derived_views`, `data_provider` |
+| A7 | `snapshot_import` | `expense_intake`, `data_provider` |
 | A8 | `snapshot_import` | `expense_intake`, `project_tracking`, `photo_management`, `progress_photo_repository` |
-| A9 | `financial_policy` | `expense_intake`, `expense_management`, `snapshot_import`, `budget_management`, `project_tracking`, `derived_views` |
+| A9 | `financial_policy` | `expense_intake`, `expense_management`, `snapshot_import`, `budget_management`, `project_tracking`, `derived_views`, `data_provider` |
 | A10 | `staff_identity` | — |
 | A11 | `authorization_guard` | `staff_identity`, `viewer_access`, `service_identity` |
 | A12 | `service_identity` | `authorization_guard`, `snapshot_import` |
-| A13 | `audit_writer` | `audit_repository`, `staff_identity`, `viewer_access`, `service_identity`, `snapshot_import`, `budget_management`, `expense_intake`, `expense_management`, `project_tracking`, `photo_management`, `staff_bootstrap` |
+| A13 | `audit_writer` | `audit_repository`, `staff_identity`, `viewer_access`, `service_identity`, `snapshot_import`, `budget_management`, `expense_intake`, `expense_management`, `project_tracking`, `photo_management`, `staff_bootstrap`, `data_provider` |
 | A14 | `binary_storage` | `expense_management`, `photo_management`, `api`, `api_irregular`, `runtime_settings`, `transport_guard` |
 | A15 | `derived_views` | `registry_gateway` |
-| A16 | `staff_identity` | `staff_access_repository`, `staff_bootstrap` |
+| A16 | `staff_identity` | `staff_access_repository`, `staff_bootstrap`, `data_provider` |
 | A17 | `credential_security` | `staff_identity`, `viewer_access`, `service_identity` |
-| A18 | `budget_management` | `snapshot_import`, `derived_views`, `budget_repository`, `snapshot_import_repository`, `project_section_repository` |
+| A18 | `budget_management` | `snapshot_import`, `derived_views`, `budget_repository`, `snapshot_import_repository`, `project_section_repository`, `data_provider` |
 | A19 | `expense_management` | `expense_intake`, `derived_views`, `budget_management` |
-| A20 | `project_tracking` | `photo_management` |
+| A20 | `project_tracking` | `photo_management`, `data_provider` |
 | A21 | `derived_views` | `financial_policy`, `audit_writer`, `audit_repository`, `snapshot_import_repository` |
 | A22 | cross-cutting | every module that opens a transaction (listed in `30_trace.json`) |
 | A23 | `audit_writer` | the A13 consumers |
 | A24 | `models` | every runtime module |
-| A25 | `transport_guard` | `api`, `api_irregular`, `runtime`, `runtime_settings` |
+| A25 | `transport_guard` | `api`, `api_irregular`, `runtime`, `runtime_settings`, `data_provider` |
 | A26 | cross-cutting | `registry_gateway`, `snapshot_import`, `authorization_guard` |
 | A27 | `derived_views` | — |
 | A28 | `system_clock` | every module that reads the time (listed in `30_trace.json`) |
-| A29 | `staff_bootstrap` | `staff_bootstrap_store`, `staff_bootstrap_cli`, `staff_identity`, `credential_security` |
-| A30 | `runtime_settings` | `registry_gateway`, `staff_identity`, `viewer_access`, `credential_security`, `binary_storage`, the ten repositories, `staff_bootstrap_store` |
+| A29 | `staff_bootstrap` | `staff_bootstrap_store`, `staff_bootstrap_cli`, `staff_identity`, `credential_security`, `data_provider` |
+| A30 | `runtime_settings` | `registry_gateway`, `staff_identity`, `viewer_access`, `credential_security`, `binary_storage`, the ten repositories, `staff_bootstrap_store`, `data_provider` |
 | A31 | evidence record | — |
 | A32 | deployment process | — |
 
@@ -87,6 +90,7 @@ may know only modules on earlier lines, never one on a later line:
 
 ```text
 models
+data_provider
 system_clock
 credential_security, financial_policy
 audit_repository, project_tracking_repository, project_section_repository,
@@ -158,6 +162,7 @@ assertion that every module imports every earlier one.
   viewer browser credential is the host-only cookie read only by
   `api_irregular`; service principals and staff present bearer headers read
   only by `api`.
+- **Data.** Every policy value generated code reads — a threshold, a name, a path, a closed set or a table over a State 1 enumeration — is a typed constant of `data_provider`, imported by name; no other module holds or repeats it (SPEC_STANDARD 6.10, 15.4; 2026-11-08).
 - **Time.** Only `system_clock` reads the host clocks (A28). An operation
   that needs the current instant takes one wall reading from it and reuses
   it; the transport guard takes the elapsed reading for the viewer-entry
@@ -233,6 +238,79 @@ authorization, cross-record uniqueness or any lifecycle transition.
 - kind: deep
 - hidden mechanism: type validity of the portal's shared vocabulary; a rule
   placed here would have no single owner
+
+## `data_provider`
+
+### Owns
+
+The typed constants of `70_data_provider_closure.json`, the one home of each
+value generated code reads (SPEC_STANDARD 6.10 version 2, 15.3.1): the money
+values and work-balance signs (A9), the Registry variable, paths and timeout
+(A6, A30), the session lifetimes and credential entropy (A30), the audit
+significance (A13), the capability sets (A2), the staff and principal
+transitions (A3), the password bounds (A16), the supported contract versions
+(A7), the import audit table (A18), the completion bound (A20), the transport
+values (A25) and the bootstrap exit codes (A29). Emitted deterministically
+(`python_constant_data_v1`); 2026-11-08.
+
+### Knows
+
+`models`, for the row models and enumerations of its tables.
+
+### Must not own
+
+Behaviour, selection, validation, defaults, runtime configuration, or any
+value a deterministic backend reads from its own IR.
+
+### Hides
+
+The values: a consumer sees the name and type of a constant, never its value
+(SPEC_STANDARD 15.9).
+
+### Depth assessment
+
+- kind: deep
+- hidden mechanism: the one home of every policy value; a value moves here
+  once and every reader imports it
+
+### Candidate public capabilities
+
+```text
+API_PREFIX
+AUDIT_ACTION_SIGNIFICANCE
+BOOTSTRAP_EXIT_CODES
+CAPABILITY_SET_MEMBERS
+COMPLETION_PERCENT_MAX
+CREDENTIAL_SECRET_BYTES
+HEALTH_LIVE_PATH
+HEALTH_OK_STATUS
+HEALTH_READY_PATH
+IMPORT_OUTCOME_AUDIT
+MONEY_CURRENCY
+MONEY_FRACTION_DIGITS
+MONEY_ROUNDING
+NO_STORE_CACHE_CONTROL
+NO_STORE_PATHS
+PASSWORD_MAX_CODEPOINTS
+PASSWORD_MIN_CODEPOINTS
+PRINCIPAL_STATUS_TRANSITIONS
+REGISTRY_BASE_URL_VARIABLE
+REGISTRY_CONTEXT_SEGMENT
+REGISTRY_PROJECTS_PATH
+REGISTRY_TIMEOUT_SECONDS
+REGISTRY_VALIDATE_SEGMENT
+SECURITY_HEADERS
+STAFF_SESSION_TTL_HOURS
+STAFF_STATUS_TRANSITIONS
+SUPPORTED_OCR_CONTRACT_VERSIONS
+SUPPORTED_SNAPSHOT_CONTRACT_VERSIONS
+TRANSPORT_GUARD_STATUSES
+TRANSPORT_LOG_LABELS
+VIEWER_ENTRY_PATH
+VIEWER_LOGOUT_PATH
+VIEWER_SESSION_TTL_DAYS
+WORK_BALANCE_LABEL_SIGNS
+```
 
 ## `system_clock`
 
