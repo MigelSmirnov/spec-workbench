@@ -2136,16 +2136,304 @@ models in `60_model_closure_values.json`; nothing here changes behaviour.
 - `BootstrapCommandOutcome` — closed enum: `account_created |
   confirmation_mismatch | identity_rejected | already_completed`, the outcomes
   of the bootstrap command (A29).
-- Row models, `identity: value`, runtime-only (no persistence):
-  `WorkBalanceLabelSign` (`label: WorkBalanceLabel`, `balance_sign: int`),
-  `AuditActionSignificance` (`action: AuditAction`, `significant_mutation: bool`),
-  `CapabilitySetMember` (`capability_set: CapabilitySet`, `capability: Capability`, `member: bool`),
-  `StaffStatusTransition` and `PrincipalStatusTransition` (`from_status`,
-  `to_status` of `StaffStatus` / `PrincipalStatus`, `allowed: bool`),
-  `SupportedContractVersion` (`version: int`),
-  `ImportOutcomeAudit` (`outcome: ImportOutcome`, `result: AuditResult`, `reason: ImportAuditReason`),
-  `TransportGuardStatus` (`refusal: TransportGuardRefusal`, `status_code: int`),
-  `BootstrapExitCode` (`outcome: BootstrapCommandOutcome`, `exit_code: int`).
+- Row models of the tables: M38–M46 below.
+
+## Model M38 — WorkBalanceLabelSign
+
+### Meaning
+
+- **Kind:** row of a data-provider table: the sign of the work balance each WorkBalanceLabel labels (A9).
+- **Fields:** `label: WorkBalanceLabel`, `balance_sign: int`.
+- Read only as rows of the constant WORK_BALANCE_LABEL_SIGNS (`70_data_provider_closure.json`); owner 2026-11-08, data placement.
+
+### Identity
+
+value
+
+### Identity evidence
+
+- Substitution: Two rows with equal fields are the same fact of the table.
+- Continuity: None: a row is a value of the release, not a record that changes.
+
+### Source of truth
+
+The accepted decision the constant cites; the value lives in the data provider.
+
+### Lifecycle candidate
+
+None; a value has no independent lifecycle.
+
+### Persistence candidate
+
+Not persisted; emitted as a typed constant.
+
+### Open questions
+
+None.
+
+## Model M39 — AuditActionSignificance
+
+### Meaning
+
+- **Kind:** row of a data-provider table: whether an AuditAction is a significant mutation (A13).
+- **Fields:** `action: AuditAction`, `significant_mutation: bool`.
+- Read only as rows of the constant AUDIT_ACTION_SIGNIFICANCE (`70_data_provider_closure.json`); owner 2026-11-08, data placement.
+
+### Identity
+
+value
+
+### Identity evidence
+
+- Substitution: Two rows with equal fields are the same fact of the table.
+- Continuity: None: a row is a value of the release, not a record that changes.
+
+### Source of truth
+
+The accepted decision the constant cites; the value lives in the data provider.
+
+### Lifecycle candidate
+
+None; a value has no independent lifecycle.
+
+### Persistence candidate
+
+Not persisted; emitted as a typed constant.
+
+### Open questions
+
+None.
+
+## Model M40 — CapabilitySetMember
+
+### Meaning
+
+- **Kind:** row of a data-provider table: whether a CapabilitySet holds a Capability (A2).
+- **Fields:** `capability_set: CapabilitySet`, `capability: Capability`, `member: bool`.
+- Read only as rows of the constant CAPABILITY_SET_MEMBERS (`70_data_provider_closure.json`); owner 2026-11-08, data placement.
+
+### Identity
+
+value
+
+### Identity evidence
+
+- Substitution: Two rows with equal fields are the same fact of the table.
+- Continuity: None: a row is a value of the release, not a record that changes.
+
+### Source of truth
+
+The accepted decision the constant cites; the value lives in the data provider.
+
+### Lifecycle candidate
+
+None; a value has no independent lifecycle.
+
+### Persistence candidate
+
+Not persisted; emitted as a typed constant.
+
+### Open questions
+
+None.
+
+## Model M41 — StaffStatusTransition
+
+### Meaning
+
+- **Kind:** row of a data-provider table: whether a staff status may change to another (A3).
+- **Fields:** `from_status: StaffStatus`, `to_status: StaffStatus`, `allowed: bool`.
+- Read only as rows of the constant STAFF_STATUS_TRANSITIONS (`70_data_provider_closure.json`); owner 2026-11-08, data placement.
+
+### Identity
+
+value
+
+### Identity evidence
+
+- Substitution: Two rows with equal fields are the same fact of the table.
+- Continuity: None: a row is a value of the release, not a record that changes.
+
+### Source of truth
+
+The accepted decision the constant cites; the value lives in the data provider.
+
+### Lifecycle candidate
+
+None; a value has no independent lifecycle.
+
+### Persistence candidate
+
+Not persisted; emitted as a typed constant.
+
+### Open questions
+
+None.
+
+## Model M42 — PrincipalStatusTransition
+
+### Meaning
+
+- **Kind:** row of a data-provider table: whether a principal status may change to another (A3).
+- **Fields:** `from_status: PrincipalStatus`, `to_status: PrincipalStatus`, `allowed: bool`.
+- Read only as rows of the constant PRINCIPAL_STATUS_TRANSITIONS (`70_data_provider_closure.json`); owner 2026-11-08, data placement.
+
+### Identity
+
+value
+
+### Identity evidence
+
+- Substitution: Two rows with equal fields are the same fact of the table.
+- Continuity: None: a row is a value of the release, not a record that changes.
+
+### Source of truth
+
+The accepted decision the constant cites; the value lives in the data provider.
+
+### Lifecycle candidate
+
+None; a value has no independent lifecycle.
+
+### Persistence candidate
+
+Not persisted; emitted as a typed constant.
+
+### Open questions
+
+None.
+
+## Model M43 — SupportedContractVersion
+
+### Meaning
+
+- **Kind:** row of a data-provider table: one accepted version of an external contract (A7).
+- **Fields:** `version: int`.
+- Read only as rows of the constant SUPPORTED_SNAPSHOT_CONTRACT_VERSIONS and SUPPORTED_OCR_CONTRACT_VERSIONS (`70_data_provider_closure.json`); owner 2026-11-08, data placement.
+
+### Identity
+
+value
+
+### Identity evidence
+
+- Substitution: Two rows with equal fields are the same fact of the table.
+- Continuity: None: a row is a value of the release, not a record that changes.
+
+### Source of truth
+
+The accepted decision the constant cites; the value lives in the data provider.
+
+### Lifecycle candidate
+
+None; a value has no independent lifecycle.
+
+### Persistence candidate
+
+Not persisted; emitted as a typed constant.
+
+### Open questions
+
+None.
+
+## Model M44 — ImportOutcomeAudit
+
+### Meaning
+
+- **Kind:** row of a data-provider table: the audit result and reason source of an ImportOutcome (A13, A18).
+- **Fields:** `outcome: ImportOutcome`, `result: AuditResult`, `reason: ImportAuditReason`.
+- Read only as rows of the constant IMPORT_OUTCOME_AUDIT (`70_data_provider_closure.json`); owner 2026-11-08, data placement.
+
+### Identity
+
+value
+
+### Identity evidence
+
+- Substitution: Two rows with equal fields are the same fact of the table.
+- Continuity: None: a row is a value of the release, not a record that changes.
+
+### Source of truth
+
+The accepted decision the constant cites; the value lives in the data provider.
+
+### Lifecycle candidate
+
+None; a value has no independent lifecycle.
+
+### Persistence candidate
+
+Not persisted; emitted as a typed constant.
+
+### Open questions
+
+None.
+
+## Model M45 — TransportGuardStatus
+
+### Meaning
+
+- **Kind:** row of a data-provider table: the HTTP status of a TransportGuardRefusal (A25).
+- **Fields:** `refusal: TransportGuardRefusal`, `status_code: int`.
+- Read only as rows of the constant TRANSPORT_GUARD_STATUSES (`70_data_provider_closure.json`); owner 2026-11-08, data placement.
+
+### Identity
+
+value
+
+### Identity evidence
+
+- Substitution: Two rows with equal fields are the same fact of the table.
+- Continuity: None: a row is a value of the release, not a record that changes.
+
+### Source of truth
+
+The accepted decision the constant cites; the value lives in the data provider.
+
+### Lifecycle candidate
+
+None; a value has no independent lifecycle.
+
+### Persistence candidate
+
+Not persisted; emitted as a typed constant.
+
+### Open questions
+
+None.
+
+## Model M46 — BootstrapExitCode
+
+### Meaning
+
+- **Kind:** row of a data-provider table: the exit code of a BootstrapCommandOutcome (A29).
+- **Fields:** `outcome: BootstrapCommandOutcome`, `exit_code: int`.
+- Read only as rows of the constant BOOTSTRAP_EXIT_CODES (`70_data_provider_closure.json`); owner 2026-11-08, data placement.
+
+### Identity
+
+value
+
+### Identity evidence
+
+- Substitution: Two rows with equal fields are the same fact of the table.
+- Continuity: None: a row is a value of the release, not a record that changes.
+
+### Source of truth
+
+The accepted decision the constant cites; the value lives in the data provider.
+
+### Lifecycle candidate
+
+None; a value has no independent lifecycle.
+
+### Persistence candidate
+
+Not persisted; emitted as a typed constant.
+
+### Open questions
+
+None.
 
 ## Unresolved model questions
 
