@@ -324,3 +324,21 @@ def test_a_unit_with_one_old_clear_round_closes_by_the_new_rule_with_its_disposi
     assert status["open_units"] == ["A01"] and status["awaiting_disposition"] == {"A01": ["T1"]}
     service.dispose(case, 2, "T1", "accepted", round_name="round-01", reason="the owner's choice")
     assert service.status(case, 2)["closed"] is True
+
+
+# ---------------------------------------------------------------- the review prompt
+
+def test_the_review_instruction_says_what_the_layer_decides_changes_and_receives_and_shrank():
+    context = {"state": 2, "owns": ["where time comes from"], "carries": [], "results": [], "gate_findings": []}
+    instruction = (prompts.ask_instruction(2, documents.question_scope(2))
+                   + prompts.unit_scope(2, [("A01", "Accepted decision A01")], {"A01": "-a\n+b\n"})
+                   + prompts.layer_scope(context, ["A01"]))
+    assert "What State 2 decides (it owns)" in instruction and "where time comes from" in instruction
+    assert "What changed." in instruction and "+b" in instruction
+    assert "What it receives from earlier states" in instruction
+    # the "do not ask" paragraphs the scope already excludes are gone
+    for gone in ("Do not propose designs", "which existing check an item is bound to",
+                 "ask the protocol's five questions", "its closed units are not audited again"):
+        assert gone not in instruction
+    # main at 5bcdd685 built the same instruction in 4,224 characters; now 2,436
+    assert len(instruction) < 2600

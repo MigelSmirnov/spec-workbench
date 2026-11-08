@@ -105,7 +105,8 @@ def test_the_first_round_reviews_every_unit_and_asks_each_point_to_name_one(tmp_
     case = _case(tmp_path)
     summary, provider = _ask(case)
     assert summary["scope"] == ["02_rules.md:preamble", "A01", "A02", "02_rules.md:Carried to later states", "context"]
-    assert "Units under review" in provider.instructions[0] and "- A01: Accepted decision A01" in provider.instructions[0]
+    assert "these units are under review" in provider.instructions[0]
+    assert "- A01: Accepted decision A01" in provider.instructions[0]
 
 
 def test_a_gap_keeps_only_its_unit_open_and_is_not_asked_again_on_the_same_text(tmp_path):
@@ -235,7 +236,7 @@ def test_a_closed_unit_edited_later_is_reviewed_for_its_change_only(tmp_path):
     summary, provider = _ask(case)
     assert summary["scope"] == ["A02"] and summary["changed_units"] == ["A02"]
     instruction = provider.instructions[0]
-    assert "has changed since" in instruction and "+7. The last rule of the second decision is about the spool size, now bounded." in instruction
+    assert "changed since its latest review" in instruction and "+7. The last rule of the second decision is about the spool size, now bounded." in instruction
 
 
 def test_a_point_on_an_unchanged_passage_of_a_changed_unit_is_set_aside(tmp_path):
@@ -256,4 +257,4 @@ def test_without_the_closed_text_in_git_a_changed_unit_is_reviewed_whole(tmp_pat
     _close_all(case)
     (case / "02_rules.md").write_text(RULES.replace("Rule two.", "Rule two, sharper."), encoding="utf-8")
     summary, provider = _ask(case)
-    assert summary["changed_units"] == [] and "has changed since" not in provider.instructions[0]
+    assert summary["changed_units"] == [] and "changed since its latest review" not in provider.instructions[0]

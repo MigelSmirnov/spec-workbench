@@ -48,6 +48,33 @@ witness. The round is kept under
 with the texts' digests, every topic, how many reviews raised it and, for a
 repeated topic, its judgement.
 
+The instruction of a review in States 0–5 says three things (owner decision
+2026-11-08, item 5): **what the layer decides** — its `owns` and its
+`question_scope`; **what changed** — the units under review, each with its
+diff; and **what it receives** — the obligations earlier layers carried here
+(and the topics their authors carried here by a disposition), with the
+passages it depends on given below the instruction, and the deterministic
+results at its handoff. Lists of what not to ask were removed where the scope
+already excludes it (the State 2 paragraph on bound checks, the five protocol
+questions, "do not propose designs"): a long "do not ask about X" list signals
+an unclear layer boundary. The judge's mechanical rules are unchanged. On
+client-portal the fixed part of a State 2 instruction (one unit listed, no
+results) fell from 3,902 to 2,242 characters.
+
+The selection of what a layer receives falls back to the earlier texts whole
+less often (client-portal, units of State 1: 33 of 42 → 18 of 42; State 2: 25
+of 41 → 14 of 41): State 0 has no earlier state and never falls back; a
+level-2 section whose level-3 headings define names (`### R0-23 — …`,
+`### StaffAccount`) is received by those passages, not whole; model numbers
+(`M32`), a section cited by its quoted title, a module heading of one short
+name (`` `api` ``) and a model's id field (`service_principal_id` for
+ServicePrincipal) resolve; a qualified operation heading defines its last name
+only. The closure over what the chosen passages name still runs until nothing
+is added (owner review r4504187842 of #157), but through models, decisions and
+operations only, not through modules or plain sections. A unit that names
+nothing an earlier state defines still reads the earlier texts whole, and the
+round says why.
+
 A review whose answer is not a JSON object with `open_points` is asked once
 more. When the second answer fails too, the review is kept as failed — its
 answers recorded, no point taken from it, never a fabricated one — and the
