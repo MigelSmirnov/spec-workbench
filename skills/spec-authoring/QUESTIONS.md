@@ -21,8 +21,15 @@ python tools/design_questions.py ask examples/<case> --state <N>
 python tools/design_questions.py status examples/<case> --state <N>
 ```
 
-`ask` gives the texts of States 0..N (for State 7: one generated module's
-prompt, below) to several independent reviews (three by default) with the
+`ask` gives the prompt of the layer (owner decision 2026-11-08, #147): in
+States 0–5 the open units of State N whole, the closed units of N that name a
+changed decision, and of the earlier states the units that define what the open
+units name (a decision, a model, an operation, an INV-* or R-* id) or that name
+what they define — the earlier texts whole only when that cannot be decided,
+and the round says why (`questions_workbench/layer_prompt.py`). It gives it
+(for State 7: one generated module's
+prompt, below; for State 6: still the texts of States 0..6) to several
+independent reviews (three by default) with the
 state's `question_scope` from `authoring_sequence.json`, then
 groups their open points into topics, and has every topic raised by two or more
 reviews judged (below) — in States 0–5 also a topic one review raised with a

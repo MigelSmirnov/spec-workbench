@@ -107,7 +107,104 @@ def _verification_commands(case: Path, factory: Path) -> tuple[list[dict[str, An
     return [c for c in commands if isinstance(c, dict) and c.get("name")], config_path, ""
 
 
-MATERIAL_LIMIT = 60_000  # characters of check content one binding may give a round, whole or not at all
+MATERIAL_LIMIT = 120_000  # characters of check content one binding may give a round, whole or not at all
+UNDER_TEST = "projects"  # the product a Factory check exercises: its subject, not its assertions
+
+
+def imported_files(path: Path, root: Path, seen: set[Path] | None = None) -> list[Path]:
+    """The Factory modules a check file imports, transitively, as files under ``root``.
+
+    An import resolves against the importing file's directory (where a check
+    puts its own support module on ``sys.path``) and then against the Factory
+    root; the ``__init__.py`` of every package on the way is taken too, since
+    Python runs it on that import. The product under test (``projects/``), the standard library and
+    installed packages resolve to nothing here: they are what the check
+    exercises, not where it asserts.
+    """
+    import ast
+
+    seen = set() if seen is None else seen
+    found: list[Path] = []
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8", errors="replace"))
+    except (OSError, SyntaxError, ValueError):
+        return found
+    bases: list[tuple[Path, Path]] = []  # (the sys.path entry, the module path without suffix)
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for name in (alias.name for alias in node.names):
+                bases += [(d, d / Path(*name.split("."))) for d in (path.parent, root)]
+        elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+            module = Path(*node.module.split("."))
+            for directory in (path.parent, root):
+                bases.append((directory, directory / module))
+                bases += [(directory, directory / module / alias.name) for alias in node.names]
+        elif isinstance(node, ast.ImportFrom) and node.level:
+            package = path.parent
+            for _ in range(node.level - 1):
+                package = package.parent
+            module = package / Path(*node.module.split(".")) if node.module else package
+            bases.append((root, module))
+            bases += [(root, module / alias.name) for alias in node.names]
+
+    def take(candidate: Path) -> None:
+        candidate = candidate.resolve()
+        if (not candidate.is_file() or root not in candidate.parents or candidate in seen
+                or candidate.relative_to(root).parts[0] == UNDER_TEST):
+            return
+        seen.add(candidate)
+        found.append(candidate)
+        found.extend(imported_files(candidate, root, seen))
+
+    for entry, base in bases:
+        for candidate in (base.with_suffix(".py"), base / "__init__.py"):
+            if not candidate.resolve().is_file():
+                continue
+            # importing a.b.c runs a/__init__.py and a/b/__init__.py first
+            package = candidate.resolve().parent
+            entry = entry.resolve()
+            parents = []
+            while package != entry and entry in package.parents:
+                parents.append(package / "__init__.py")
+                package = package.parent
+            for init in reversed(parents):
+                take(init)
+            take(candidate)
+    return found
+    names: list[str] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            names += [alias.name for alias in node.names]
+        elif isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
+            names.append(node.module)
+            names += [f"{node.module}.{alias.name}" for alias in node.names]
+        elif isinstance(node, ast.ImportFrom) and node.level:
+            base = path.parent
+            for _ in range(node.level - 1):
+                base = base.parent
+            module = (node.module or "").replace(".", "/")
+            for alias in node.names:
+                rel = f"{module}/{alias.name}" if module else alias.name
+                names.append("./" + str((base / rel).relative_to(path.parent)) if base == path.parent
+                             else str(base / rel))
+    for name in names:
+        for directory in (path.parent, root):
+            stem = Path(name) if name.startswith(("./", "/")) else Path(*name.split("."))
+            base = (directory / stem) if not stem.is_absolute() else stem
+            for candidate in (base.with_suffix(".py"), base / "__init__.py"):
+                candidate = candidate.resolve()
+                if not candidate.is_file() or root not in candidate.parents:
+                    continue
+                if candidate.relative_to(root).parts[0] == UNDER_TEST or candidate in seen:
+                    break
+                seen.add(candidate)
+                found.append(candidate)
+                found += imported_files(candidate, root, seen)
+                break
+            else:
+                continue
+            break
+    return found
 
 
 def binding_material(case: Path, factory: Path | None = None) -> list[dict[str, Any]]:
@@ -116,8 +213,9 @@ def binding_material(case: Path, factory: Path | None = None) -> list[dict[str, 
     The round judges whether a bound check asserts the invariants its item
     names; a check's name proves only that it exists. For a ``verification:``
     tag the material is the files its command names, read from the Factory
-    checkout (resolved against the command's ``cwd``) and kept with their
-    sha256; for ``note:`` the assembled [TEST_EVIDENCE] notes of the scope; for
+    checkout (resolved against the command's ``cwd``), with the Factory modules
+    they import (``imported_files``; not the product under test), each kept
+    with its sha256; for ``note:`` the assembled [TEST_EVIDENCE] notes of the scope; for
     ``workbench:`` the Workbench gate itself. Material that cannot be read
     whole is ``not_checked``: sufficiency is then not judged, never assumed.
     """
@@ -164,12 +262,19 @@ def binding_material(case: Path, factory: Path | None = None) -> list[dict[str, 
                         base = (config_path.parent / str(command.get("cwd") or ".")).resolve()
                         root = factory.resolve()
                         files = []
+                        named: list[Path] = []
                         for arg in command.get("command") or []:
                             candidate = (base / str(arg)).resolve()
                             if candidate.is_file() and root in candidate.parents:
-                                text = candidate.read_text(encoding="utf-8", errors="replace")
-                                files.append({"path": candidate.relative_to(root).as_posix(),
-                                              "sha256": _sha(text), "text": text})
+                                named.append(candidate)
+                        seen = set(named)
+                        imported = [i for path in named if path.suffix == ".py"
+                                    for i in imported_files(path, root, seen)]
+                        for candidate in named + imported:
+                            text = candidate.read_text(encoding="utf-8", errors="replace")
+                            files.append({"path": candidate.relative_to(root).as_posix(),
+                                          "sha256": _sha(text), "text": text,
+                                          **({"imported": True} if candidate in imported else {})})
                         size = sum(len(f["text"]) for f in files)
                         if not files:
                             entry.update(status="not_checked", reason=f"the command of {name} names no readable file")

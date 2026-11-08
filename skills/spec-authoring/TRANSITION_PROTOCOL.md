@@ -133,6 +133,20 @@ the check's command names in the Factory checkout, the assembled
 `workbench:` gate (resolved through the assembly check table to the code it
 delegates to, or to `design_lint` for a lint gate), each with its sha256, and
 keeps those digests as the basis of its result (`layer.materials`).
+A check's material is the files its command names and the Factory modules
+they import, with the `__init__.py` of every package on the way (its own
+support modules; not the product under test in `projects/`). A round is given
+each file once, by sha256, and only for the bindings that need judging now.
+Evidence comes first: a unit whose checks are not the ones its last review
+judged gets all its bindings, whatever its text did. A unit never closed gets
+all of them too. A unit reopened by an edit gets the bindings the edit
+provably concerns — an edited Required tests item, or the items naming an
+edited identified invariant — and all of them for any other edit, since a
+normative change may change what the checks must show. A unit asked only
+because it names a changed decision gets none. When the material does not fit one input
+(`ROUND_MATERIAL_BUDGET`), the round is split into passes, each with its own
+reviews and judge over its share of bindings, the first also asking about the
+texts; nothing is cut.
 The basis is kept per decision unit too (`unit_evidence`): when a bound check
 changes — a file, the command, a digest — while the decision's text does not,
 exactly that decision reopens and is reviewed for whether its bindings still
@@ -180,9 +194,10 @@ reports `closed` for the rounds and `ready` for the transition, and exits 1
 unless both hold.
 
 The focus narrows from the general to the particular without losing the
-earlier layers: reviewers still read States 0..N, but ask about an earlier
-layer only whether this layer fulfils what it carried here, and a closed unit
-is not audited again. The unit rule of QUESTIONS.md stands: a fix reopens the
+earlier layers: in States 0–5 a review reads the prompt of its layer — the
+open units, and of the earlier layers the passages they depend on, verbatim
+(QUESTIONS.md, `ask`) — and asks about an earlier layer only whether this
+layer fulfils what it carried here; a closed unit is not audited again. The unit rule of QUESTIONS.md stands: a fix reopens the
 units it edits, and the deterministic context of a round is not part of any
 unit's text, so a changed finding reopens nothing.
 

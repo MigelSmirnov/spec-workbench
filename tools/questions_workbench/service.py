@@ -38,7 +38,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
-from . import documents, judge, prompts, units
+from . import documents, judge, layer_prompt, prompts, units
 from .provenance import QuoteProvenance
 from .provider import LATER_DIR, Provider
 
@@ -544,25 +544,54 @@ def _document_round(provider: Provider, state: int, runs: int, read: StateTexts,
     """States 0-6: every review reads the texts of States 0..N, asked about the open units,
     with the transition of the state (TRANSITION_PROTOCOL.md): what it owns, receives and
     carries, and the deterministic results of its gate and checks."""
-    instruction = prompts.ask_instruction(state, documents.question_scope(state))
-    instruction += prompts.unit_scope(state, [(key, read.units[key]["title"]) for key in scope],
-                                      {key: diff for key, (diff, _) in changed.items()}, referencing)
-    instruction += prompts.hypotheses_note(_previous_hypotheses(case, state))
-    instruction += prompts.layer_scope(layer, scope)
-    text = prompts.ask_input(read.texts)
-    with ThreadPoolExecutor(max_workers=runs) as pool:
-        reviews = list(pool.map(lambda _: _review(provider, instruction, text), range(runs)))
-    for review in reviews:
-        _set_aside(review, scope, changed, read.units)
-    topics = _group(provider, reviews, keep_points=True)
-    repeated = _judged(topics, witness=True)
+    base = prompts.ask_instruction(state, documents.question_scope(state))
+    base += prompts.unit_scope(state, [(key, read.units[key]["title"]) for key in scope],
+                               {key: diff for key, (diff, _) in changed.items()}, referencing)
+    base += prompts.hypotheses_note(_previous_hypotheses(case, state))
+    if state <= layer_prompt.LAST_STATE:
+        # the prompt of the layer, not the texts of States 0..N (owner decision 2026-11-08)
+        selection = layer_prompt.select(read.texts, state, read.units, scope, changed, referencing)
+        text = layer_prompt.render(selection, read.texts, state)
+        base += layer_prompt.note(selection, state)
+    else:
+        text = prompts.ask_input(read.texts)
     later = {p.name: p.read_text(encoding="utf-8") for _, p in documents.later_documents(case, state)}
     evidence = (layer or {}).get("unit_evidence") or {}
     precedents = [p for p in _precedents(case, state) if _evidence_holds(p, evidence, scope)]
-    judged = (_judge(provider, state, text, read.texts, repeated, old, later, precedents,
-                     witness=True, case=case, layer=prompts.layer_judge(layer, scope)) if repeated
-              else {"provider": provider.name})
-    return reviews, topics, repeated, judged
+    # the bindings' checks are split into passes when they do not fit one input
+    # (ROUND_MATERIAL_BUDGET); pass 1 also asks about the texts
+    parts = prompts.material_parts(layer, scope)
+    contexts = ([prompts.material_pass(layer, parts, i) for i in range(len(parts))]
+                if layer is not None and len(parts) > 1 else [layer])
+    reviews_all: list[dict[str, Any]] = []
+    topics_all: list[dict[str, Any]] = []
+    repeated_all: list[dict[str, Any]] = []
+    judged: dict[str, Any] = {"provider": provider.name}
+    for number, context in enumerate(contexts, 1):
+        instruction = base + prompts.layer_scope(context, scope) + prompts.material_pass_note(context or {})
+        with ThreadPoolExecutor(max_workers=runs) as pool:
+            reviews = list(pool.map(lambda _: _review(provider, instruction, text), range(runs)))
+        for review in reviews:
+            _set_aside(review, scope, changed, read.units)
+            if number > 1:
+                review["pass"] = number
+        topics = _group(provider, reviews, keep_points=True)
+        repeated = _judged(topics, witness=True)
+        result = (_judge(provider, state, text, read.texts, repeated, old, later, precedents,
+                         witness=True, case=case, layer=prompts.layer_judge(context, scope)) if repeated
+                  else {"provider": provider.name})
+        if number == 1:
+            judged = result
+        else:
+            for topic in repeated:
+                topic["id"] = f"P{number}:{topic['id']}"
+            judged.setdefault("passes", []).append({"pass": number, **result})
+        reviews_all += reviews
+        topics_all += topics
+        repeated_all += repeated
+    if len(contexts) > 1:
+        judged["material_passes"] = len(contexts)
+    return reviews_all, topics_all, repeated_all, judged
 
 
 def _previous_hypotheses(case: Path, state: int) -> list[tuple[str, str]]:
@@ -661,6 +690,8 @@ def ask_round(case: Path, state: int, provider: Provider, runs: int = DEFAULT_RU
     layer = layer_context(case, state)
     layer["evidence_reopened"] = evidence_reopened
     layer["unit_evidence"] = evidence
+    layer["material_scope"] = material_scope(scope, changed, evidence_reopened, layer.get("materials") or [],
+                                             referencing, evidence_moved(previous_summaries, scope, evidence))
     reviews, topics, repeated, judged = asked(provider, state, runs, read, scope, changed, old, case, referencing,
                                               layer)
     for topic in topics:
@@ -715,6 +746,78 @@ def ask_round(case: Path, state: int, provider: Provider, runs: int = DEFAULT_RU
     summary["open_units"] = [key for key, done in open_after.items() if not done]
     (directory / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     return summary
+
+
+def evidence_moved(summaries: list[dict[str, Any]], scope: list[str], evidence: dict[str, str]) -> set[str]:
+    """Units whose bound checks are not the ones their last review judged.
+
+    The last round that reviewed the unit recorded another evidence digest,
+    or none at all: either way the checks have not been shown on this basis.
+    """
+    moved: set[str] = set()
+    for key in scope:
+        if key not in evidence:
+            continue
+        reviewed = [s for s in summaries if key in (s.get("scope") or [])]
+        if not reviewed or (reviewed[-1].get("unit_evidence") or {}).get(key) != evidence[key]:
+            moved.add(key)
+    return moved
+
+
+def material_scope(scope: list[str], changed: dict[str, tuple[str, list[str]]], evidence_reopened: list[str],
+                   materials: list[dict[str, Any]], referencing: dict[str, list[str]] | None = None,
+                   moved: set[str] | None = None) -> dict[str, list[str] | None]:
+    """unit -> the bindings whose check the round is given (None: all of them).
+
+    Evidence comes first: a unit whose bound checks changed since its last
+    review (``moved``), or reopened for them, gets every binding, whatever its
+    text did. A unit never closed gets every binding. A unit reopened by an
+    edit gets only what the edit provably concerns:
+
+    - a changed line of a Required tests item (an earlier version is matched
+      by its witness tag): that item's binding;
+    - a changed line naming formal invariants by identifier (a strengthened
+      INV-001): the bindings whose item names them;
+    - any other change (normative text, an unidentified invariant, a removed
+      line nothing can be tied to): every binding, since the edit may change
+      what the checks must show.
+
+    A closed unit asked only because it names a changed decision gets none.
+    """
+    import design_decision_witness
+
+    moved = moved or set()
+    selected: dict[str, list[str] | None] = {}
+    for key in scope:
+        if key in moved or key in evidence_reopened:
+            selected[key] = None
+        elif referencing and key in referencing and key not in changed:
+            selected[key] = []
+        elif key not in changed:
+            selected[key] = None
+        else:
+            own = [m for m in materials if m["decision"] == key]
+            item_lines = {m["item"]: {line.strip() for line in str(m["item"]).splitlines() if line.strip()}
+                          for m in own}
+            chosen: list[str] = []
+            provable = True
+            for line in changed[key][0].splitlines():
+                if not line[:1] in "+-" or line.startswith(("+++", "---")) or not line[1:].strip():
+                    continue
+                text = line[1:].strip()
+                items = [item for item, lines in item_lines.items() if text in lines]
+                tags = set(design_decision_witness.WITNESS_RE.findall(text))
+                if not items and tags:  # an earlier version of an item: its witness tag anchors it
+                    items = [m["item"] for m in own if tags & set(design_decision_witness.WITNESS_RE.findall(m["item"]))]
+                if not items:
+                    ids = set(design_decision_witness.invariant_ids(text))
+                    items = [m["item"] for m in own if ids & set(design_decision_witness.invariant_ids(m["item"]))]
+                if not items:
+                    provable = False
+                    break
+                chosen += [item for item in items if item not in chosen]
+            selected[key] = chosen if provable else None
+    return selected
 
 
 def unit_evidence(case: Path, state: int) -> dict[str, str]:
