@@ -8,6 +8,61 @@ merged: accepted spec `018b2e2e`). The assembly, admission and diagnosis
 results are in `80_assembly.md`; the semantic diff, for the owner, is
 `SEMANTIC_DIFF.md` (against `018b2e2e` first, then against `459ac96c`).
 
+## Rebuild by SPEC_STANDARD, data first (2026-11-08, night) — read this first
+
+Owner decision 2026-11-08: rebuild the whole specification by SPEC_STANDARD,
+starting with the data structures. Not exported; no Route B, no deploy.
+`global_spec.json` sha256 `a5bbe66c…`
+(`a5bbe66cc438e15730d72b5cc9dbbec003fb9b4698d9f8c3df6d9442d426aa36`), 38
+modules (new: `data_provider`), 1094 notes. Factory checkout used:
+`code_factory_cp_witnesses` detached at origin/main `89eaed39`.
+
+Done (commits on `agent/client-portal`):
+
+- `7c345323` data D01–D30 of the owner-checked register
+  (`docs/INSTRUMENT_INVENTORY_20261108.md` §5.1): 34 constants of the new
+  deterministic `data_provider` (`70_data_provider_closure.json`,
+  data_provider_backend v2), four new enumerations and nine row models,
+  moved leaves removed from `rules`/`config`, notes name each value by
+  address. Per-group homes and form decisions: `SOURCE.md` "Data placement".
+- `13d99e7a` field maps — withdrawn by `a7cccf89` on the owner's correction
+  (prose maps are not checkable). The construction sites are the gap list
+  `spec/record_construction_gaps.json` (`f92cc3cd`): 84 sites, 1080 target
+  fields, 26 open; `SOURCE.md` "Record construction".
+- `8ce72100` §2 code forms removed from 256 notes of the 16 LLM modules
+  (dotted navigation, calls, keyword syntax, `Enum.MEMBER`).
+- `f10c45fc` State 1 records M38–M46 for the row models.
+- `a7cccf89` the rounds' contradictions fixed (States 0–5 named moved
+  addresses; A30 called the moved values deployment knobs; Knows lists).
+
+Checks at `a5bbe66c`: `design_assembly` 15/15, Factory `validate_spec` 0
+errors, notes gate 0 blocks, `design_imports --coverage` strict_ready,
+`design_diagnose` no open finding (State 2 `witness_material` not
+checkable, as before). Admission `--update-existing`: BLOCKED on two checks
+only — FA002 (Stage 8.1 ledger stale; the owner holds it invalid and a real
+review comes later, so it was not rewritten) and FA019 (question rounds).
+
+Open:
+
+- **Rounds.** One round per changed state ran on the first texts: State 1
+  r48 clear; State 2 r100, 3 r42, 4 r44, 5 r32, 7 r21 found contradictions,
+  fixed in `a7cccf89` (gap topics disposed). The re-rounds on the fixed
+  texts were stopped by the host for low memory and have no record:
+  States 0–5 and 7 each need one round (`design_questions.py ask
+  examples/client-portal --state N`), one state at a time.
+- **Owner questions:** the Registry URL is read from the environment by
+  `registry_gateway`, outside `runtime_settings` (§6.11); seven construction
+  sites where notes and running code disagree or no source exists (gap
+  list `open`); the record construction structure itself.
+- **Tool gaps** (reported, not patched): the projector places no module
+  without State 6 contracts and removes no dropped `rules` namespace
+  (`experiments/client-portal/frame_data_provider.py` does both); the
+  Factory validator does not accept a member name of an enumeration whose
+  values contain dots (`AuditAction`, `Capability`) while the generator
+  surface shows only such names, so those members are named in hyphenated
+  words; the flow closure reads obliged calls only from dotted forms, so
+  methods keep their qualified name (`PortalStore.begin`).
+
 ## Where the case stands
 
 - **Exported once, re-export of the sweep pending merge.** Factory #190
