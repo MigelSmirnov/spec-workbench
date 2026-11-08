@@ -1,0 +1,135 @@
+{
+ "open_points": [
+  {
+   "subject": "context — A30 configuration and session-expiry flows",
+   "kind": "contradictory ownership",
+   "text": "“Runtime knobs with confirmed defaults (deployment values may differ)” contradicts “the Registry variable name, request paths and timeout, the staff and viewer session lifetimes and the credential entropy have the same value in every environment” and State 4 still says “a fixed expiry of `config` staff session TTL” and “`config.viewer_session_ttl_days`”.",
+   "question": "Are Registry timeout, session lifetimes and credential entropy deployment-configurable values, or immutable `data_provider` constants?",
+   "options": [
+    "Keep them deployment-configurable through runtime settings.",
+    "Make them immutable data-provider constants and update the State 4 flow references.",
+    "Split the set explicitly, naming which values are configurable and which are constants."
+   ],
+   "default_guess": "Treat the changed Consequence as authoritative: use immutable data-provider constants and replace the stale `config` references.",
+   "witness": {
+    "initial": "A deployment is configured with a staff-session lifetime of 24 hours instead of the stated 12-hour default.",
+    "events": [
+     "The host operator starts the service with the deployment-specific value.",
+     "A staff member logs in.",
+     "The staff member presents the session after 13 hours."
+    ],
+    "outcomes": [
+     "The session remains valid because deployment values may differ and this deployment selected 24 hours.",
+     "The session is expired because `STAFF_SESSION_TTL_HOURS` is the same immutable value in every environment."
+    ],
+    "observer": "The staff member and the API client"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context — data_provider dependencies of flow modules",
+   "kind": "dependency contradiction",
+   "text": "“Every policy value generated code reads … is a typed constant of `data_provider`, imported by name” conflicts with “Each module's `Knows` section names exactly the modules it imports”, because none of the flow modules that read those constants names `data_provider` in its `Knows` section.",
+   "question": "Must each consumer add `data_provider` to its declared dependencies, or are data-provider imports exempt from the exact `Knows` dependency rule?",
+   "options": [
+    "Add `data_provider` to every consuming module's `Knows` section.",
+    "Declare data-provider imports exempt from `Knows`.",
+    "Have another declared dependency inject the values instead of direct imports."
+   ],
+   "default_guess": "Add `data_provider` to every module that imports one of its constants.",
+   "unit": "?"
+  },
+  {
+   "subject": "context — administer_staff_accounts status change",
+   "kind": "stale rule address",
+   "text": "State 4 says “`capability:staff_identity.change_staff_status` applies only the transitions of `rules.status_transitions`”, while A3 says the staff table is the data-provider constant `STAFF_STATUS_TRANSITIONS` and only the viewer, grant and budget-version tables stay in `rules.status_transitions`.",
+   "question": "Which source must `change_staff_status` read for staff transitions?",
+   "options": [
+    "Read `data_provider.STAFF_STATUS_TRANSITIONS`.",
+    "Continue reading the staff portion of `rules.status_transitions`.",
+    "Treat the transition list as prose embedded in `staff_identity`."
+   ],
+   "default_guess": "Read `data_provider.STAFF_STATUS_TRANSITIONS` and update the State 4 step.",
+   "unit": "?"
+  },
+  {
+   "subject": "context — authorization capability-set source",
+   "kind": "cross-state contradiction",
+   "text": "State 1 says “capability lists (roles map to static capability sets in `rules`)”, while A2 says generated guards read `CAPABILITY_SET_MEMBERS` from `data_provider` “in place of `rules.principal_capability_sets`”.",
+   "question": "Does the authorization guard obtain role/type capabilities from `rules` or from `data_provider.CAPABILITY_SET_MEMBERS`?",
+   "options": [
+    "Use `data_provider.CAPABILITY_SET_MEMBERS` exclusively.",
+    "Retain a capability-set table in `rules`.",
+    "Keep both and define which one is authoritative."
+   ],
+   "default_guess": "Use `data_provider.CAPABILITY_SET_MEMBERS` exclusively and correct the State 1 passage.",
+   "unit": "?"
+  },
+  {
+   "subject": "context — Registry failure classification",
+   "kind": "cross-state contradiction",
+   "text": "State 1 says `RegistryFailureKind` is “Owned by the Registry gateway; State 2 lands the translation table in `rules`”, while A6 says `rules.registry_failure_translation` “is removed” and the selecting conditions are gateway prose rather than a table.",
+   "question": "Is Registry failure translation implemented from a rules table or directly from the gateway operation's specified behavior?",
+   "options": [
+    "Implement the conditions directly in the gateway and remove the stale State 1 table claim.",
+    "Restore a `rules.registry_failure_translation` table.",
+    "Introduce a data-provider table for the translation."
+   ],
+   "default_guess": "Implement the conditions in the gateway and correct the stale State 1 passage.",
+   "unit": "?"
+  },
+  {
+   "subject": "context — TransportGuardRefusal.allowed_preflight",
+   "kind": "taxonomy contradiction",
+   "text": "“`TransportGuardRefusal` — closed enum: `untrusted_host | allowed_preflight | …`” classifies `allowed_preflight` as a refusal, while State 4 says “A refusal there reaches no route” and A25 describes an allowed origin as admitted rather than refused.",
+   "question": "Is an allowed preflight a successful short-circuit response or a transport refusal?",
+   "options": [
+    "Model it as a successful transport response in a separately named outcome taxonomy.",
+    "Keep it in `TransportGuardRefusal` but explicitly define that this taxonomy includes successful short-circuits.",
+    "Remove `allowed_preflight` from the refusal taxonomy and let the request proceed to routing."
+   ],
+   "default_guess": "Rename the taxonomy to a neutral transport-guard outcome type and define allowed preflight as a successful short-circuit.",
+   "witness": {
+    "initial": "CORS is enabled for `https://portal.example`, and a browser prepares a permitted preflight request.",
+    "events": [
+     "The browser sends an OPTIONS preflight from the allowed origin.",
+     "The transport guard recognizes the origin as allowed."
+    ],
+    "outcomes": [
+     "The guard returns the successful preflight response without invoking a route.",
+     "The guard treats `allowed_preflight` as a refusal and returns the refusal behavior/status."
+    ],
+    "observer": "The browser and frontend application"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context — transport-guard failure outcomes",
+   "kind": "unstated failure outcome",
+   "text": "State 4 says “A refusal there reaches no route”, and the changed text says `TRANSPORT_GUARD_STATUSES` contains “the status of each refusal of the guard”, but no status value for any `TransportGuardRefusal` is stated in the provided texts.",
+   "question": "What HTTP status and response shape does each transport-guard outcome produce, including untrusted host, unlisted preflight origin, logout-origin mismatch, oversized body and rate limiting?",
+   "options": [
+    "State the complete refusal-to-status mapping in State 4.",
+    "Include the actual rows of `TRANSPORT_GUARD_STATUSES` among State 4's received text.",
+    "Delegate the mapping explicitly to a later state, despite State 4 owning flow failures."
+   ],
+   "default_guess": "State the complete mapping in State 4 and make `TRANSPORT_GUARD_STATUSES` encode that mapping.",
+   "witness": {
+    "initial": "The service is running and receives a request whose Host is not trusted.",
+    "events": [
+     "A client sends the request.",
+     "The transport guard rejects it before routing."
+    ],
+    "outcomes": [
+     "The guard answers 400 with an empty body.",
+     "The guard answers 403 with an empty body."
+    ],
+    "observer": "The requesting client and any proxy monitoring response status"
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"context — A30 configuration and session-expiry flows\",\"kind\":\"contradictory ownership\",\"text\":\"“Runtime knobs with confirmed defaults (deployment values may differ)” contradicts “the Registry variable name, request paths and timeout, the staff and viewer session lifetimes and the credential entropy have the same value in every environment” and State 4 still says “a fixed expiry of `config` staff session TTL” and “`config.viewer_session_ttl_days`”.\",\"question\":\"Are Registry timeout, session lifetimes and credential entropy deployment-configurable values, or immutable `data_provider` constants?\",\"options\":[\"Keep them deployment-configurable through runtime settings.\",\"Make them immutable data-provider constants and update the State 4 flow references.\",\"Split the set explicitly, naming which values are configurable and which are constants.\"],\"default_guess\":\"Treat the changed Consequence as authoritative: use immutable data-provider constants and replace the stale `config` references.\",\"witness\":{\"initial\":\"A deployment is configured with a staff-session lifetime of 24 hours instead of the stated 12-hour default.\",\"events\":[\"The host operator starts the service with the deployment-specific value.\",\"A staff member logs in.\",\"The staff member presents the session after 13 hours.\"],\"outcomes\":[\"The session remains valid because deployment values may differ and this deployment selected 24 hours.\",\"The session is expired because `STAFF_SESSION_TTL_HOURS` is the same immutable value in every environment.\"],\"observer\":\"The staff member and the API client\"}},{\"subject\":\"context — data_provider dependencies of flow modules\",\"kind\":\"dependency contradiction\",\"text\":\"“Every policy value generated code reads … is a typed constant of `data_provider`, imported by name” conflicts with “Each module's `Knows` section names exactly the modules it imports”, because none of the flow modules that read those constants names `data_provider` in its `Knows` section.\",\"question\":\"Must each consumer add `data_provider` to its declared dependencies, or are data-provider imports exempt from the exact `Knows` dependency rule?\",\"options\":[\"Add `data_provider` to every consuming module's `Knows` section.\",\"Declare data-provider imports exempt from `Knows`.\",\"Have another declared dependency inject the values instead of direct imports.\"],\"default_guess\":\"Add `data_provider` to every module that imports one of its constants.\"},{\"subject\":\"context — administer_staff_accounts status change\",\"kind\":\"stale rule address\",\"text\":\"State 4 says “`capability:staff_identity.change_staff_status` applies only the transitions of `rules.status_transitions`”, while A3 says the staff table is the data-provider constant `STAFF_STATUS_TRANSITIONS` and only the viewer, grant and budget-version tables stay in `rules.status_transitions`.\",\"question\":\"Which source must `change_staff_status` read for staff transitions?\",\"options\":[\"Read `data_provider.STAFF_STATUS_TRANSITIONS`.\",\"Continue reading the staff portion of `rules.status_transitions`.\",\"Treat the transition list as prose embedded in `staff_identity`.\"],\"default_guess\":\"Read `data_provider.STAFF_STATUS_TRANSITIONS` and update the State 4 step.\"},{\"subject\":\"context — authorization capability-set source\",\"kind\":\"cross-state contradiction\",\"text\":\"State 1 says “capability lists (roles map to static capability sets in `rules`)”, while A2 says generated guards read `CAPABILITY_SET_MEMBERS` from `data_provider` “in place of `rules.principal_capability_sets`”.\",\"question\":\"Does the authorization guard obtain role/type capabilities from `rules` or from `data_provider.CAPABILITY_SET_MEMBERS`?\",\"options\":[\"Use `data_provider.CAPABILITY_SET_MEMBERS` exclusively.\",\"Retain a capability-set table in `rules`.\",\"Keep both and define which one is authoritative.\"],\"default_guess\":\"Use `data_provider.CAPABILITY_SET_MEMBERS` exclusively and correct the State 1 passage.\"},{\"subject\":\"context — Registry failure classification\",\"kind\":\"cross-state contradiction\",\"text\":\"State 1 says `RegistryFailureKind` is “Owned by the Registry gateway; State 2 lands the translation table in `rules`”, while A6 says `rules.registry_failure_translation` “is removed” and the selecting conditions are gateway prose rather than a table.\",\"question\":\"Is Registry failure translation implemented from a rules table or directly from the gateway operation's specified behavior?\",\"options\":[\"Implement the conditions directly in the gateway and remove the stale State 1 table claim.\",\"Restore a `rules.registry_failure_translation` table.\",\"Introduce a data-provider table for the translation.\"],\"default_guess\":\"Implement the conditions in the gateway and correct the stale State 1 passage.\"},{\"subject\":\"context — TransportGuardRefusal.allowed_preflight\",\"kind\":\"taxonomy contradiction\",\"text\":\"“`TransportGuardRefusal` — closed enum: `untrusted_host | allowed_preflight | …`” classifies `allowed_preflight` as a refusal, while State 4 says “A refusal there reaches no route” and A25 describes an allowed origin as admitted rather than refused.\",\"question\":\"Is an allowed preflight a successful short-circuit response or a transport refusal?\",\"options\":[\"Model it as a successful transport response in a separately named outcome taxonomy.\",\"Keep it in `TransportGuardRefusal` but explicitly define that this taxonomy includes successful short-circuits.\",\"Remove `allowed_preflight` from the refusal taxonomy and let the request proceed to routing.\"],\"default_guess\":\"Rename the taxonomy to a neutral transport-guard outcome type and define allowed preflight as a successful short-circuit.\",\"witness\":{\"initial\":\"CORS is enabled for `https://portal.example`, and a browser prepares a permitted preflight request.\",\"events\":[\"The browser sends an OPTIONS preflight from the allowed origin.\",\"The transport guard recognizes the origin as allowed.\"],\"outcomes\":[\"The guard returns the successful preflight response without invoking a route.\",\"The guard treats `allowed_preflight` as a refusal and returns the refusal behavior/status.\"],\"observer\":\"The browser and frontend application\"}},{\"subject\":\"context — transport-guard failure outcomes\",\"kind\":\"unstated failure outcome\",\"text\":\"State 4 says “A refusal there reaches no route”, and the changed text says `TRANSPORT_GUARD_STATUSES` contains “the status of each refusal of the guard”, but no status value for any `TransportGuardRefusal` is stated in the provided texts.\",\"question\":\"What HTTP status and response shape does each transport-guard outcome produce, including untrusted host, unlisted preflight origin, logout-origin mismatch, oversized body and rate limiting?\",\"options\":[\"State the complete refusal-to-status mapping in State 4.\",\"Include the actual rows of `TRANSPORT_GUARD_STATUSES` among State 4's received text.\",\"Delegate the mapping explicitly to a later state, despite State 4 owning flow failures.\"],\"default_guess\":\"State the complete mapping in State 4 and make `TRANSPORT_GUARD_STATUSES` encode that mapping.\",\"witness\":{\"initial\":\"The service is running and receives a request whose Host is not trusted.\",\"events\":[\"A client sends the request.\",\"The transport guard rejects it before routing.\"],\"outcomes\":[\"The guard answers 400 with an empty body.\",\"The guard answers 403 with an empty body.\"],\"observer\":\"The requesting client and any proxy monitoring response status\"}}]}",
+ "set_aside": []
+}

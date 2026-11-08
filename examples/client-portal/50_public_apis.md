@@ -301,7 +301,7 @@ None.
 
 ### Enforces
 
-A9 and `rules.money_policy`: EUR only, no conversion, the sign rule the caller
+A9 (`MONEY_CURRENCY`, `MONEY_FRACTION_DIGITS`, `MONEY_ROUNDING`): one currency, no conversion, the sign rule the caller
 names. Only finite amounts are amounts: the request models refuse a
 non-finite value before any operation is called, and a non-finite value
 passed directly is no declared refusal but an unclassified failure (500
@@ -331,7 +331,7 @@ The section's planned work amount and its completion percent (0–100).
 
 ### Outputs
 
-The completed-work amount, rounded per section as `rules.money_policy` says.
+The completed-work amount, rounded per section as A9 says (`MONEY_FRACTION_DIGITS`, `MONEY_ROUNDING`).
 
 ### Observable effect
 
@@ -445,7 +445,7 @@ None.
 
 ### Enforces
 
-A9 and `rules.money_policy`.
+A9 (the money constants of the data provider).
 
 ### Errors
 
@@ -855,19 +855,20 @@ The typed active `ProjectReference` list, by `project_id` ascending
 
 ### Observable effect
 
-One Registry request to `config.registry_request_paths.active_projects` with
-no query parameters, under `config.registry_timeout_seconds`.
+One Registry request to the projects path (data-provider constant
+`REGISTRY_PROJECTS_PATH`) with no query parameters, under the Registry
+timeout (`REGISTRY_TIMEOUT_SECONDS`).
 
 ### Enforces
 
 A6, A15, R0-08; A30 for the endpoint, read from the environment variable
-`config.registry_endpoint_env_name`. Active-only selection happens while
+the data-provider constant `REGISTRY_BASE_URL_VARIABLE` names. Active-only selection happens while
 decoding, never as an upstream filter (A30, State 2).
 
 ### Errors
 
 `RegistryBoundaryError` with its `RegistryFailureKind` for timeout, transport,
-HTTP, schema or identity failure (`rules.registry_failure_translation`).
+HTTP, schema or identity failure (A6: the `RegistryFailureKind` member naming the failure).
 
 ### State impact
 
@@ -894,7 +895,8 @@ requested one.
 
 ### Observable effect
 
-One Registry request to `config.registry_request_paths.project_validate`.
+One Registry request to the project's validate path (data-provider constants
+`REGISTRY_PROJECTS_PATH` and `REGISTRY_VALIDATE_SEGMENT`).
 
 ### Enforces
 
@@ -931,7 +933,8 @@ never `None`. Active and archived projects are both accepted.
 
 ### Observable effect
 
-One Registry request to `config.registry_request_paths.project_context`.
+One Registry request to the project's context path (data-provider constants
+`REGISTRY_PROJECTS_PATH` and `REGISTRY_CONTEXT_SEGMENT`).
 
 ### Enforces
 
@@ -1211,7 +1214,7 @@ None.
 
 A1, A2, R0-14: the session is valid (present, not revoked, not expired), the
 account active, and `portal.access.manage` comes from the stored role through
-`rules.principal_capability_sets` (administrators only); one transaction,
+the capability sets of A2 (`CAPABILITY_SET_MEMBERS`; administrators only); one transaction,
 rolled back once after the last read (A22).
 
 ### Errors
@@ -1298,7 +1301,7 @@ None beyond the session and the audit.
 
 A16 (normalized email), A17 (the session secret is issued for the new
 `session_id`; only its hash is stored), R0-06 (fixed expiry of
-`config.staff_session_ttl_hours`, twelve hours), A13: once the address has
+the staff session lifetime, `STAFF_SESSION_TTL_HOURS`), A13: once the address has
 normalized, exactly one audit on every outcome — `staff.login` success or
 `staff.login_failed` rejected with no reason code. The success audit names
 the signed-in account as both actor and entity. A rejection audit names the
@@ -1460,7 +1463,7 @@ None beyond the change and the audit.
 
 ### Enforces
 
-A3 (`rules.status_transitions`) from the persisted status; A11
+A3 (`STAFF_STATUS_TRANSITIONS`) from the persisted status; A11
 (revocation cascades): suspension and disabling revoke every live
 session at the same timestamp. R0-19: activation from `pending_verification` records
 `email_verified_at`; reinstatement from `suspended` keeps it. A13: one
@@ -1895,7 +1898,7 @@ None.
 A17: the parsed selector locates the credential and its secret is verified
 against the stored hash; the viewer must be active and the credential
 usable; the session secret is issued for a fresh `session_id`; expiry is
-`config.viewer_session_ttl_days` after one captured time (R0-06).
+the viewer session lifetime (`VIEWER_SESSION_TTL_DAYS`) after one captured time (R0-06).
 
 ### Errors
 
@@ -2186,7 +2189,7 @@ None.
 
 ### Enforces
 
-A3 (`rules.status_transitions`), A11 (revocation cascades), A24, A13
+A3 (`PRINCIPAL_STATUS_TRANSITIONS`), A11 (revocation cascades), A24, A13
 (`principal.disable` or `principal.enable`). A request for the status the
 principal already holds is no transition, so A3's refusal of unlisted
 transitions does not apply to it: the operation returns the principal
@@ -2760,7 +2763,7 @@ None.
 ### Enforces
 
 R0-05 and R0-17 (expenses only from confirmed OCR intake, decided by the
-authenticated operator), A7 (`rules.supported_external_contract_versions.ocr`),
+authenticated operator), A7 (`SUPPORTED_OCR_CONTRACT_VERSIONS`),
 A9, A19 (allocations sum exactly to the total, sections of this project),
 A8 (replay by `recognized_document_id`: an equal fingerprint returns the
 existing aggregate with no audit), R0-18 (the new document is client-visible),

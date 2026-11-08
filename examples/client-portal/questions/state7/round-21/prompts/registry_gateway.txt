@@ -1,0 +1,139 @@
+Module: registry_gateway
+Target path: adapters/registry_gateway.py
+Target file: registry_gateway.py
+
+IMPORTS (every listed symbol is available; import the ones the module uses):
+from __future__ import annotations
+from datetime import datetime
+from uuid import UUID
+
+from core.data_provider import REGISTRY_BASE_URL_VARIABLE, REGISTRY_CONTEXT_SEGMENT, REGISTRY_PROJECTS_PATH, REGISTRY_TIMEOUT_SECONDS, REGISTRY_VALIDATE_SEGMENT
+from core.models import ProjectContext, ProjectReference, ProjectValidationResult, RegistryFailureKind, RegistryProjectStatus
+
+CONTRACTS (function signatures — follow exactly):
+def _registry_url(path: str) -> str
+def _translate_registry_failure(project_id: UUID, failure: RegistryFailureKind) -> RegistryBoundaryError
+def _validate_context_identity(requested_id: UUID, context: ProjectContext) -> ProjectContext
+def _validate_reference_identity(requested_id: UUID, result: ProjectValidationResult) -> ProjectValidationResult
+def get_project_context(project_id: UUID) -> ProjectContext
+def list_active_projects() -> list[ProjectReference]
+def validate_project_reference(project_id: UUID) -> ProjectValidationResult
+# RegistryBoundaryError
+def __init__(self, kind: RegistryFailureKind) -> None
+
+IMPORTED DATA ACCESS SIGNATURES (constants from the imports above — read them, never redefine them; their values are not part of this context):
+REGISTRY_BASE_URL_VARIABLE: str
+REGISTRY_CONTEXT_SEGMENT: str
+REGISTRY_PROJECTS_PATH: str
+REGISTRY_TIMEOUT_SECONDS: int
+REGISTRY_VALIDATE_SEGMENT: str
+
+OWNED FUNCTIONS REQUIRED (must be defined as top-level functions):
+- _registry_url: (path: str) -> str
+- _translate_registry_failure: (project_id: UUID, failure: RegistryFailureKind) -> RegistryBoundaryError
+- _validate_context_identity: (requested_id: UUID, context: ProjectContext) -> ProjectContext
+- _validate_reference_identity: (requested_id: UUID, result: ProjectValidationResult) -> ProjectValidationResult
+- get_project_context: (project_id: UUID) -> ProjectContext
+- list_active_projects: () -> list[ProjectReference]
+- validate_project_reference: (project_id: UUID) -> ProjectValidationResult
+
+STATIC GATE CONTRACT (deterministic checks; a violating candidate is rejected without repair):
+- Reflective attribute access is rejected: never call getattr, hasattr,
+  setattr, delattr, or vars; every declared field and operation is
+  addressed directly by name, including in try/finally cleanup.
+- A definition whose parameter list differs from its declared contract
+  signature is rejected; keep names and order exactly.
+- A constructed record accepted by a declared insert_*/upsert_*/append_*
+  operation must reach a call or return; a built-and-dropped record is
+  rejected.
+- Instantiating a spec-declared interface is rejected; construct the
+  module-owned concrete class instead.
+- A stub, placeholder, or fail-closed body for a contracted callable is
+  rejected; implement the complete specified behavior.
+- A top-level import of a package outside the Python standard library and
+  this project's own modules is rejected unless IMPORTS lists it; a note
+  never adds a package to IMPORTS.
+- A model is constructed with values of its declared field types; a field
+  typed tuple[...] receives a tuple, built with tuple(...) where the items
+  were collected in a list, never the list itself.
+- A value passed to a model field is narrowed at the call itself: a name
+  seeded with None, set on some branches and passed later under a test of
+  another name is rejected; build the value where it is obtained and pass
+  it there, or test that same name for None at the call.
+
+OWNED CLASSES REQUIRED (must be defined locally, not merely referenced):
+- RegistryBoundaryError: define locally with methods __init__
+
+CONCRETE IMPLEMENTATION OBLIGATIONS:
+No local concrete-to-interface obligations.
+
+REQUIREMENTS (notes — implement these):
+- _registry_url: [VALIDATION_ERROR] MUST join only the supplied relative path to the deployment URL loaded from the environment variable the imported REGISTRY_BASE_URL_VARIABLE constant names, preserving that URL's own path prefix so a Registry deployed under a prefix keeps it on every request. Each of the following MUST raise RegistryBoundaryError carrying the transport_error member of = models.RegistryFailureKind, never a raw KeyError, ValueError, or other untyped error, and never a repaired URL: the variable is absent or empty; its value is not a usable http or https base URL; its value carries userinfo credentials, which are rejected rather than stripped, retained, or forwarded; the supplied path is absolute or protocol-relative, which MUST NOT be allowed to replace the host or scheme.
+- _translate_registry_failure: [BEHAVIOR] MUST translate each closed failure into its member of = models.RegistryFailureKind, so an invalid identifier gives its invalid_uuid member, an unknown project its not_found member, an inactive project its archived member, a timeout its timeout member, a transport failure its transport_error member, a non-success HTTP status its http_error member, an invalid body its schema_mismatch member and a response for another project its identity_mismatch member, and MUST NOT fall back to cached, client-supplied, or fabricated context.
+- _validate_context_identity: [VALIDATION_ERROR] MUST reject schema/identity mismatch unless the project_id of the project of the context equals requested_id.
+- _validate_reference_identity: [VALIDATION_ERROR] MUST reject schema/identity mismatch unless the project_id of the result equals requested_id.
+- get_project_context: [PROVENANCE] MUST fetch live typed Registry context, accept active or archived status for reads, validate response identity, and MUST NOT persist or treat it as portal-owned current truth; it MUST request exactly the path made of the imported REGISTRY_PROJECTS_PATH constant, that project_id and the imported REGISTRY_CONTEXT_SEGMENT constant, joined by single slashes, relative to the endpoint resolved from the environment variable the imported REGISTRY_BASE_URL_VARIABLE constant names, applying a request timeout of the imported REGISTRY_TIMEOUT_SECONDS constant in seconds, with no extra query parameters.
+- get_project_context: [RETURN_SHAPE] MUST return the exact live ProjectContext whose project identifier matches project_id or raise RegistryBoundaryError; it MUST never return None.
+- get_project_context: [DEPENDENCY_BOUNDARY] MUST reach the Registry over a real http request built from the resolved endpoint, and MUST NOT satisfy its contract by raising a transport failure unconditionally. For a usable configured endpoint, raising the transport_error member of = models.RegistryFailureKind without having attempted a request is forbidden (the configuration failures _registry_url names raise it before any request): it type-checks, it matches every failure clause these notes state, and it silently removes the Registry integration from the product. Each function returns decoded typed data on a successful response and raises RegistryBoundaryError only for an outcome it actually observed.
+- list_active_projects: [DETERMINISM_OR_ORDERING] MUST decode only typed active ProjectReference values and sort by project_id ascending regardless of upstream order.
+- list_active_projects: [PROVENANCE] MUST resolve the Registry endpoint from the environment variable the imported REGISTRY_BASE_URL_VARIABLE constant names, apply a request timeout of the imported REGISTRY_TIMEOUT_SECONDS constant in seconds, and request exactly the path the imported REGISTRY_PROJECTS_PATH constant names with no query parameters; active-only selection happens during decode, never as an upstream request filter.
+- list_active_projects: [DEPENDENCY_BOUNDARY] MUST reach the Registry over a real http request built from the resolved endpoint, and MUST NOT satisfy its contract by raising a transport failure unconditionally. For a usable configured endpoint, raising the transport_error member of = models.RegistryFailureKind without having attempted a request is forbidden (the configuration failures _registry_url names raise it before any request): it type-checks, it matches every failure clause these notes state, and it silently removes the Registry integration from the product. Each function returns decoded typed data on a successful response and raises RegistryBoundaryError only for an outcome it actually observed.
+- validate_project_reference: [PROVENANCE] MUST resolve the Registry endpoint from the environment variable the imported REGISTRY_BASE_URL_VARIABLE constant names and apply a request timeout of the imported REGISTRY_TIMEOUT_SECONDS constant in seconds; it MUST never create a project_id or access Registry storage directly; it MUST request exactly the path made of the imported REGISTRY_PROJECTS_PATH constant, that project_id and the imported REGISTRY_VALIDATE_SEGMENT constant, joined by single slashes, relative to that endpoint with no extra query parameters.
+- validate_project_reference: [VALIDATION_ERROR] MUST return a typed ProjectValidationResult for a decoded response and raise RegistryBoundaryError for timeout, transport, HTTP, schema, or identity failure.
+- validate_project_reference: [DEPENDENCY_BOUNDARY] MUST reach the Registry over a real http request built from the resolved endpoint, and MUST NOT satisfy its contract by raising a transport failure unconditionally. For a usable configured endpoint, raising the transport_error member of = models.RegistryFailureKind without having attempted a request is forbidden (the configuration failures _registry_url names raise it before any request): it type-checks, it matches every failure clause these notes state, and it silently removes the Registry integration from the product. Each function returns decoded typed data on a successful response and raises RegistryBoundaryError only for an outcome it actually observed.
+- RegistryBoundaryError.__init__: [FIELD_ASSIGNMENT] MUST expose exactly the supplied RegistryFailureKind as kind and no raw HTTP body or transport exception.
+
+MODEL DATA DEFINITIONS (READ-ONLY SPEC DATA, NOT CODE):
+The following JSON values are read-only spec data, not Python class definitions.
+Do not emit classes, Pydantic models, create_model calls, or assignments from this section.
+Omitted model-schema/data references:
+- RegistryFailureKind: omitted because it is an imported runtime model schema
+
+MODEL DATA ADDRESSES (SPEC DATA, NOT IMPORT PATHS):
+The following = models.* references are canonical spec data addresses, not Python module paths.
+Read their structured JSON values from MODEL DATA DEFINITIONS when present in this prompt.
+Never convert a spec data address into `import models` or `from models.* import ...`.
+models.* entries listed as spec data are read-only spec addresses, not Python import paths and not core.models imports.
+Only import runtime model symbols from core.models when they are explicitly listed in IMPORTS.
+- models.RegistryFailureKind: runtime model schema omitted from non-model prompt; exported from core.models by IMPORTS.
+
+IMPORTED MODEL OWNERSHIP (DO NOT REDEFINE):
+Imported runtime model symbols are owned by their source modules listed in IMPORTS; use them as imported and do not redefine them here.
+
+RUNTIME MODEL SURFACE (CORE.MODELS IMPORTS):
+These are imported runtime symbols from core.models. Use the listed enum member names and model fields exactly.
+- ProjectContext fields (exact, no others exist): address: str, created_at: datetime, customer_ref: str | None, project: ProjectReference, registry_updated_at: datetime
+- ProjectReference fields (exact, no others exist): display_name: str, project_id: UUID, status: str
+- ProjectValidationResult fields (exact, no others exist): exists: bool, failure: str | None, is_active: bool, project_id: UUID, status: str | None
+- RegistryFailureKind enum members: ARCHIVED='archived', HTTP_ERROR='http_error', IDENTITY_MISMATCH='identity_mismatch', INVALID_UUID='invalid_uuid', NOT_FOUND='not_found', SCHEMA_MISMATCH='schema_mismatch', TIMEOUT='timeout', TRANSPORT_ERROR='transport_error'
+- RegistryProjectStatus enum members: ACTIVE='active', ARCHIVED='archived'
+
+MODULE-LOCAL EXCEPTION EXPORTS:
+If any exception class is listed here, define it in this file at top level.
+Do not import these classes from core.errors or any other module.
+- RegistryBoundaryError: subclass Exception and implement the contracted methods listed under OWNED CLASSES REQUIRED
+
+FUNCTION ORDER (define in this order):
+_registry_url, _translate_registry_failure, _validate_context_identity, _validate_reference_identity, get_project_context, list_active_projects, validate_project_reference
+
+MODELS CONTEXT:
+Runtime models live in core.models. Use IMPORTS and IMPORTED MODEL
+OWNERSHIP for runtime model symbols; do not reproduce model schemas
+or import from a top-level models module.
+
+Generate the complete registry_gateway.py file.
+Every owned function listed above must be implemented exactly once at module top level.
+Define every class and method listed in OWNED CLASSES REQUIRED in this file.
+For every local binding in CONCRETE IMPLEMENTATION OBLIGATIONS, inherit the declared interface and implement its complete method surface with non-placeholder bodies.
+If this is the models module, emit every enum/model in MODEL DEFINITIONS exactly once.
+If this is not the models module, do not emit Pydantic model classes, enums, create_model calls, or local model schema shadows.
+Do not invent model fields or enum values not present in the imported runtime models.
+Use only the IMPORTS listed above plus required standard library imports.
+Import from IMPORTS every symbol the module uses, including symbols used only in annotations, and annotate each parameter with the type its CONTRACTS signature declares, never object or nothing.
+Never import from a top-level models module or models.*; runtime models live in core.models only when listed in IMPORTS.
+`models.<name>` in notes is a canonical spec data address, not an importable Python module.
+When one owner module provides a function and core.models provides a DTO with a similar name, split the imports by source exactly as listed in IMPORTS.
+Construct imported runtime models only with the fields listed in IMPORTED MODEL SURFACE; models are frozen and forbid extra fields, so an invented keyword argument fails at runtime.
+Read from a model value only the fields listed for its type; never use getattr(value, name, default) to probe for a field that is not declared.
+Never assign to an attribute of a model value (models are frozen): derive a changed value with value.model_copy(update={...}) or construct a new instance.
+Define every class listed in MODULE-LOCAL EXCEPTION EXPORTS in this file.

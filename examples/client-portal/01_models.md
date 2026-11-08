@@ -48,7 +48,8 @@ The former status, kept:
 >    `EmailVerificationChallenge`, `PendingEmailChange`,
 >    `EmailDeliveryRecord`, `EmailDeliveryRequest`) are removed.
 > 2. **Administrator is a superset of operator.** Role and principal-type
->    capability sets are static catalog data (`rules`); there is no runtime
+>    capability sets are static catalog data (since 2026-11-08 the data-provider
+>    constant `CAPABILITY_SET_MEMBERS`, A2); there is no runtime
 >    capability editing. Only assignments (grants, scopes) are mutable data.
 > 3. **All monetary amounts are gross (IVA included).** Receipts are gross;
 >    clients see real money. The snapshot publication contract requires gross
@@ -543,7 +544,7 @@ Backend-owned record of the portal.
 
 ### Lifecycle candidate
 
-`active ↔ disabled`: a disabled principal may be enabled again (Meaning; accepted `rules.status_transitions.principal`).
+`active ↔ disabled`: a disabled principal may be enabled again (Meaning; accepted `rules.status_transitions.principal`, now the data-provider constant `PRINCIPAL_STATUS_TRANSITIONS`).
 
 ### Persistence candidate
 
@@ -712,7 +713,9 @@ None.
 - `RegistryFailureKind` — closed enum for boundary error translation:
   `invalid_uuid | not_found | archived | timeout | transport_error |
   http_error | schema_mismatch | identity_mismatch`. Owned by the Registry
-  gateway; State 2 lands the translation table in `rules`.
+  gateway; each member names the failure it classifies (A6; the accepted
+  `rules` translation table was removed 2026-11-08 as a second home of the
+  enumeration).
 
 Portal mutation policy admits the grant and assignment creation
 operations of access management only on an answer whose `exists` and
@@ -2115,6 +2118,12 @@ The former "Candidate constants and catalogs (→ State 2)", kept:
   table, accepted OCR `contract_version` set, accepted snapshot
   `contract_version` set, role/type capability tables, status transition
   tables.
+- The candidates' homes as decided (State 2 A2, A3, A6, A7, A9, A30;
+  2026-11-08): the Registry timeout, session lifetimes, credential entropy,
+  money policy values, contract versions, capability sets and the staff and
+  principal transitions are data-provider constants; the Registry failure
+  kinds are the enumeration `RegistryFailureKind` alone; the Registry URL and
+  the binary read limit stay environment values.
 
 ## Data-provider enumerations and row models (2026-11-08)
 

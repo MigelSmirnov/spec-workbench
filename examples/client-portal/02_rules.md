@@ -106,7 +106,7 @@ portal.estimate_snapshot.activate
 
 ### Required tests
 
-- INV-002: a check against the rules table at `_require_capability` showing the invariant holds; a violating input is refused and changes nothing.
+- INV-002: a check against the capability sets of this decision, held by the data-provider constant `CAPABILITY_SET_MEMBERS`, at `_require_capability` showing the invariant holds; a violating input is refused and changes nothing.
 - Witnesses, the focused Factory verification checks that assert it: INV-002 [witness: verification:authorization_guard_client_portal].
 
 ### Consequence
@@ -133,7 +133,7 @@ capability is never read from request data.
 
 ### Required tests
 
-- INV-007: a check against the rules table at `_require_capability` showing the invariant holds; a violating input is refused and changes nothing.
+- INV-007: a check against the capability sets of A2, held by the data-provider constant `CAPABILITY_SET_MEMBERS`, at `_require_capability` showing the invariant holds; a violating input is refused and changes nothing.
 - Witnesses, the focused Factory verification checks that assert it: INV-007 [witness: verification:authorization_guard_client_portal].
 
 ### Consequence
@@ -350,7 +350,7 @@ call is answered with exactly one kind of the table and never with a
 fallback; which transport condition counts as which kind, and the order the
 gateway tests them in, are the accepted gateway's (notes of
 `validate_project_reference`, `get_project_context`,
-`list_active_projects`; `rules.registry_failure_translation`), carried to
+`list_active_projects`; the `RegistryFailureKind` member naming each failure), carried to
 States 6–7. A decoded validation answer is returned as it is and read by
 its caller as A5 says; the two readings of A5 agree, because the Registry
 sets `is_active = true` exactly when `status` is `active` (Registry v1
@@ -561,7 +561,7 @@ running service still returns 0 until the next Route B regenerates
 
 ### Required tests
 
-- INV-037: a check against the rules table at `validate_eur_amount` showing the invariant holds; a violating input is refused and changes nothing.
+- INV-037: a check against the money values of this decision, held by the data-provider constants `MONEY_CURRENCY`, `MONEY_FRACTION_DIGITS` and `MONEY_ROUNDING`, at `validate_eur_amount` showing the invariant holds; a violating input is refused and changes nothing.
 - INV-041: a check against the rules table at `calculate_overall_progress` showing the invariant holds; a violating input is refused and changes nothing.
 - INV-044: the ledger's property at `calculate_material_balance` showing the invariant holds; a violating input is refused and changes nothing.
 - Witnesses, the focused Factory verification checks that assert it: INV-037 [witness: verification:project_tracking_audit_writer_sqlite_uow_client_portal].
@@ -895,7 +895,7 @@ behaviour accepted; technical decisions delegated.
 ### Required tests
 
 - INV-018: a check against the rules table at `_normalize_staff_email` showing the invariant holds; a violating input is refused and changes nothing.
-- INV-019: a check against the rules table at `_validate_new_password` showing the invariant holds; a violating input is refused and changes nothing.
+- INV-019: a check against the password bounds of this decision, held by the data-provider constants `PASSWORD_MIN_CODEPOINTS` and `PASSWORD_MAX_CODEPOINTS`, at `_validate_new_password` showing the invariant holds; a violating input is refused and changes nothing.
 - Witnesses, the focused Factory verification checks that assert it: INV-018 [witness: verification:staff_identity_uow_client_portal].
 - Witnesses, the focused Factory verification checks that assert it: INV-019 [witness: verification:credential_security_policy_client_portal].
 
@@ -1421,7 +1421,7 @@ The policy data behind the invariants is the exit-code table above, the rules ta
 
 The former configuration, kept (owner-confirmed defaults, R0-06):
 
-Runtime knobs with confirmed defaults (deployment values may differ):
+Values with confirmed defaults:
 
 ```text
 registry_endpoint_env_name            = REGISTRY_BASE_URL
@@ -1433,12 +1433,17 @@ credential_hash_scheme                 = argon2id (library defaults; fixed in so
 binary_read_limit_env_name             = BINARY_MAX_READ_BYTES (required positive integer)
 ```
 
-Values are knobs; the *existence* of a timeout/TTL/rate limit is an
-invariant, its value is config. `REGISTRY_BASE_URL` is read by the Registry
+The *existence* of a timeout/TTL/rate limit is an invariant. The running
+service reads none of the first five values from its environment (only the
+URL `REGISTRY_BASE_URL` names): a deployment cannot change them, a release
+does. Since 2026-11-08 they are data-provider constants (Consequence); the
+owner's defaults are their values. `REGISTRY_BASE_URL` is read by the Registry
 gateway at each call, not at start-up: it is no required start-up variable,
-and its absence fails only Registry calls (A6). Which values the gateway
+and its absence fails only Registry calls (A6). It is therefore no variable
+of `config.runtime_environment_variables`, the table whose variables R0-10's
+start-up check covers. Which values the gateway
 accepts and how it joins them with the request paths are the accepted
-gateway's (note `_registry_url`, `config.registry_request_paths`), carried
+gateway's (note `_registry_url`, the Registry path constants), carried
 to States 6–7.
 
 ### Carried changes
@@ -1453,7 +1458,8 @@ to States 6–7.
 - `binary_read_limit_env_name` now addresses its environment variable entry,
   `= config.runtime_environment_variables.variables.BINARY_MAX_READ_BYTES`
   (Factory `a6916180314d`).
-- `config.registry_request_paths`: the Registry paths are fixed as
+- Registry paths (accepted `config.registry_request_paths`, since 2026-11-08
+  the data-provider constants of the Consequence): the paths are fixed as
   `projects`, `projects/{project_id}/validate`, `projects/{project_id}/context`
   (Factory `300bd11d`). State 0 names `/projects/active` for the active list;
   the accepted spec reads `projects` and keeps only active projects while

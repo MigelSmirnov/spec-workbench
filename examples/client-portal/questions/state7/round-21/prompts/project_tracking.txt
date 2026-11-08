@@ -1,0 +1,216 @@
+Module: project_tracking
+Target path: domain/project_tracking.py
+Target file: project_tracking.py
+
+IMPORTS (every listed symbol is available; import the ones the module uses):
+from __future__ import annotations
+from datetime import date, datetime
+from decimal import Decimal
+from uuid import UUID
+
+from adapters.portal_store import PortalStore, PortalTransaction
+from application.audit_writer import append_audit
+from core.data_provider import COMPLETION_PERCENT_MAX, MONEY_CURRENCY
+from core.models import ActorKind, AuditAction, AuditEntityKind, AuditIntent, AuditRecord, AuditRepository, AuditResult, AuthorizedProjectContext, BudgetVersionDetail, Capability, PortalSection, ProjectContext, ProjectReference, ProjectTrackingRepository, RegistryProjectStatus, SectionProgress, WorkPayment, BudgetVersion, SectionPlan
+from core.system_clock import utc_now
+from domain.budget_management import ensure_manual_budget, validate_project_section
+from domain.financial_policy import FinancialValidationError, validate_eur_amount
+
+CONTRACTS (function signatures — follow exactly):
+def _classify_payment_replay(existing: WorkPayment, amount: Decimal, payment_date: date, description: str) -> WorkPayment
+def _validate_completion_percent(completion_percent: int) -> None
+def list_project_payments(store: PortalStore, context: AuthorizedProjectContext) -> list[WorkPayment]
+def list_project_progress(store: PortalStore, context: AuthorizedProjectContext) -> list[SectionProgress]
+def register_work_payment(store: PortalStore, context: AuthorizedProjectContext, payment_id: UUID, amount: Decimal, payment_date: date, description: str) -> WorkPayment
+def set_section_progress(store: PortalStore, context: AuthorizedProjectContext, section_id: UUID, completion_percent: int) -> SectionProgress
+# PortalStore
+def __init__(self, database_url: str) -> None
+# PortalStore
+def begin(self) -> PortalTransaction
+# PortalTransaction
+def __init__(self, connection: object) -> None
+# PortalTransaction
+def audit(self) -> AuditRepository
+# PortalTransaction
+def commit(self) -> None
+# PortalTransaction
+def get_work_payment(self, payment_id: UUID) -> WorkPayment | None
+# PortalTransaction
+def list_project_payments(self, project_id: UUID) -> list[WorkPayment]
+# PortalTransaction
+def list_project_progress(self, project_id: UUID) -> list[SectionProgress]
+# PortalTransaction
+def project_tracking(self) -> ProjectTrackingRepository
+# PortalTransaction
+def rollback(self) -> None
+# ProjectTrackingRepository
+def get_section_progress(self, project_id: UUID, section_id: UUID) -> SectionProgress | None
+# ProjectTrackingRepository
+def get_work_payment(self, payment_id: UUID) -> WorkPayment | None
+# ProjectTrackingRepository
+def insert_work_payment(self, payment: WorkPayment) -> None
+# ProjectTrackingRepository
+def list_project_payments(self, project_id: UUID) -> list[WorkPayment]
+# ProjectTrackingRepository
+def list_project_progress(self, project_id: UUID) -> list[SectionProgress]
+# ProjectTrackingRepository
+def upsert_section_progress(self, progress: SectionProgress) -> None
+
+IMPORTED FUNCTION SIGNATURES (these come from the imports above):
+def append_audit(repository: AuditRepository, intent: AuditIntent) -> AuditRecord
+def ensure_manual_budget(store: PortalStore, context: AuthorizedProjectContext) -> BudgetVersionDetail
+def validate_project_section(store: PortalStore, project_id: UUID, section_id: UUID) -> PortalSection
+def validate_eur_amount(currency: str, amount: Decimal, strictly_positive: bool = False) -> Decimal
+def utc_now() -> datetime
+
+IMPORTED DATA ACCESS SIGNATURES (constants from the imports above — read them, never redefine them; their values are not part of this context):
+COMPLETION_PERCENT_MAX: int
+MONEY_CURRENCY: str
+
+OWNED FUNCTIONS REQUIRED (must be defined as top-level functions):
+- _classify_payment_replay: (existing: WorkPayment, amount: Decimal, payment_date: date, description: str) -> WorkPayment
+- _validate_completion_percent: (completion_percent: int) -> None
+- list_project_payments: (store: PortalStore, context: AuthorizedProjectContext) -> list[WorkPayment]
+- list_project_progress: (store: PortalStore, context: AuthorizedProjectContext) -> list[SectionProgress]
+- register_work_payment: (store: PortalStore, context: AuthorizedProjectContext, payment_id: UUID, amount: Decimal, payment_date: date, description: str) -> WorkPayment
+- set_section_progress: (store: PortalStore, context: AuthorizedProjectContext, section_id: UUID, completion_percent: int) -> SectionProgress
+
+STATIC GATE CONTRACT (deterministic checks; a violating candidate is rejected without repair):
+- Reflective attribute access is rejected: never call getattr, hasattr,
+  setattr, delattr, or vars; every declared field and operation is
+  addressed directly by name, including in try/finally cleanup.
+- A definition whose parameter list differs from its declared contract
+  signature is rejected; keep names and order exactly.
+- A constructed record accepted by a declared insert_*/upsert_*/append_*
+  operation must reach a call or return; a built-and-dropped record is
+  rejected.
+- Instantiating a spec-declared interface is rejected; construct the
+  module-owned concrete class instead.
+- A stub, placeholder, or fail-closed body for a contracted callable is
+  rejected; implement the complete specified behavior.
+- A top-level import of a package outside the Python standard library and
+  this project's own modules is rejected unless IMPORTS lists it; a note
+  never adds a package to IMPORTS.
+- A model is constructed with values of its declared field types; a field
+  typed tuple[...] receives a tuple, built with tuple(...) where the items
+  were collected in a list, never the list itself.
+- A value passed to a model field is narrowed at the call itself: a name
+  seeded with None, set on some branches and passed later under a test of
+  another name is rejected; build the value where it is obtained and pass
+  it there, or test that same name for None at the call.
+
+OWNED CLASSES REQUIRED (must be defined locally, not merely referenced):
+No owned local classes with contracted methods required; module-local exception exports are listed separately.
+
+CONCRETE IMPLEMENTATION OBLIGATIONS:
+No local concrete-to-interface obligations.
+
+REQUIREMENTS (notes — implement these):
+- _classify_payment_replay: [BEHAVIOR] MUST return existing only when amount, payment_date, and description all match; otherwise raise TrackingConflictError without mutation, payment_id being the replay identity.
+- _validate_completion_percent: [VALIDATION_ERROR] MUST reject bool, non-integer, negative, and values greater than the imported COMPLETION_PERCENT_MAX constant rather than clamp.
+- list_project_payments: [SECURITY_BOUNDARY] MUST return every payment for the project_id of the context only ordered by payment_date descending then payment_id descending.
+- list_project_payments: [DETERMINISM_OR_ORDERING] MUST return all and only project payments ordered by payment_date descending then payment_id descending; an empty list means no recorded payments.
+- list_project_payments: [DEPENDENCY_BOUNDARY] MUST read only through ProjectTrackingRepository.list_project_payments on the project_tracking repository PortalTransaction.project_tracking returns, never the same-named legacy PortalTransaction method, and close the read transaction by rollback without using legacy tracking methods.
+- list_project_progress: [SECURITY_BOUNDARY] MUST return every persisted progress record for the project_id of the context only in active-budget plan order, with stable section_id ties.
+- list_project_progress: [RETURN_SHAPE] MUST return all and only SectionProgress records whose project_id equals the project_id of the context; an empty list means no recorded progress.
+- list_project_progress: [DEPENDENCY_BOUNDARY] MUST read only through ProjectTrackingRepository.list_project_progress on the project_tracking repository PortalTransaction.project_tracking returns, never the same-named legacy PortalTransaction method, and close the read transaction by rollback without using legacy tracking methods.
+- list_project_progress: [ORCHESTRATION] MUST read tracking rows through one transaction, rollback that read transaction, then obtain the active manual budget through ensure_manual_budget and sort rows by plan sort_order with section_id as the stable tie; it MUST NOT open a nested transaction while the tracking transaction remains active.
+- list_project_progress: [FIELD_PROJECTION] MUST take the plan order from the section plans the budget detail carries in its plans field, reading section_id and sort_order from each of them. The detail carries no section_plans field, so reading one raises at runtime instead of ordering anything, and a section with no plan keeps its stable section_id tie rather than being dropped.
+- register_work_payment: [BEHAVIOR] MUST validate the amount through validate_eur_amount with the portal currency, the imported MONEY_CURRENCY constant, and strictly_positive true before opening any transaction, so a FinancialValidationError changes nothing; payment_id is the replay identity: equal payment_id/content returns existing, conflict changes nothing, and a new payment plus the payment-register member of = models.AuditAction audit commits atomically without creating an invoice/accounting posting.
+- register_work_payment: [DEPENDENCY_BOUNDARY] MUST perform all WorkPayment reads/writes through the project_tracking repository PortalTransaction.project_tracking returns, pass the audit repository PortalTransaction.audit returns to append_audit with reason_code None for success, and commit both writes once; any failure MUST rollback both repositories on the shared transaction.
+- register_work_payment: [ORCHESTRATION] MUST call ProjectTrackingRepository.get_work_payment on the project_tracking repository PortalTransaction.project_tracking returns, never the same-named legacy PortalTransaction method, with exactly payment_id, never project_id plus payment_id; it MUST verify an existing payment belongs to the project_id of the context before replay classification.
+- register_work_payment: [VALIDATION_ERROR] Once its transaction is open, MUST rollback and re-raise every BaseException raised before commit; a FinancialValidationError from the amount validation happens before any transaction exists and is re-raised with nothing to roll back; replay MUST rollback once and return without audit, while a successful commit MUST not be followed by rollback.
+- register_work_payment: [FIELD_ASSIGNMENT] MUST pass the string form of the payment_id of the payment, not a UUID object, as the entity_id of AuditIntent so the value satisfies the declared optional-string model contract.
+- register_work_payment: [FIELD_ASSIGNMENT] MUST carry the validated amount rather than the argument as presented: the money validation returns the amount quantized as the money policy requires, and it is that returned value which goes into the persisted payment and into the replay comparison. Discarding the validated result persists an amount the money policy forbids and makes an identical payment presented a second time classify as a conflict rather than a replay.
+- register_work_payment: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it writes and every current-time comparison it makes; it MUST NOT read a host clock itself.
+- register_work_payment: [FIELD_ASSIGNMENT] A new WorkPayment MUST take payment_id, payment_date and description from the same-named arguments, amount from the amount validate_eur_amount returned, project_id from the project_id of the authorized context, recorded_at from the captured timestamp and recorded_by from the actor_id of that context.
+- register_work_payment: [FIELD_ASSIGNMENT] Its audit intent with the payment-register member of = models.AuditAction MUST take result the success member of = models.AuditResult, actor_kind, actor_id, key_version and project_id from the same-named fields of the authorized context and entity_kind the work_payment member of = models.AuditEntityKind, beside the entity_id and reason_code its other notes state.
+- set_section_progress: [BEHAVIOR] MUST validate the project section and completion percent as an integer from zero to the imported COMPLETION_PERCENT_MAX constant inclusive, upsert the manual value, and append the progress-update member of = models.AuditAction atomically; photographs MUST NOT alter it.
+- set_section_progress: [DEPENDENCY_BOUNDARY] MUST open one transaction by beginning a transaction on the store through PortalStore.begin, which returns a PortalTransaction, only after validate_project_section has completed; it MUST perform all SectionProgress reads/writes through the project_tracking repository PortalTransaction.project_tracking returns, pass the audit repository PortalTransaction.audit returns to append_audit with reason_code None for success, and commit both writes once; any failure after that transaction is opened MUST rollback both repositories on the shared transaction.
+- set_section_progress: [ORCHESTRATION] MUST complete validate_project_section before opening the tracking transaction, then use one tracking repository and one audit repository from that transaction for the atomic write.
+- set_section_progress: [VALIDATION_ERROR] Once its transaction is open, MUST rollback and re-raise every BaseException raised before commit; a failure of validate_project_section happens before any transaction exists and is re-raised with nothing to roll back; a successful commit MUST not be followed by rollback.
+- set_section_progress: [FIELD_ASSIGNMENT] MUST pass the canonical string of the progress row's section_id, not a UUID object, as the entity_id of AuditIntent so the value satisfies the declared optional-string model contract.
+- set_section_progress: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it writes and every current-time comparison it makes; it MUST NOT read a host clock itself.
+- set_section_progress: [FIELD_ASSIGNMENT] The upserted SectionProgress MUST take project_id from the project_id of the authorized context; section_id and completion_percent from the same-named arguments; updated_at from the captured timestamp and updated_by from the actor_id of that context.
+- set_section_progress: [FIELD_ASSIGNMENT] Its audit intent with the progress-update member of = models.AuditAction MUST take result the success member of = models.AuditResult, actor_kind, actor_id, key_version and project_id from the same-named fields of the authorized context and entity_kind the section_progress member of = models.AuditEntityKind, beside the entity_id and reason_code its other notes state.
+
+MODEL DATA DEFINITIONS (READ-ONLY SPEC DATA, NOT CODE):
+The following JSON values are read-only spec data, not Python class definitions.
+Do not emit classes, Pydantic models, create_model calls, or assignments from this section.
+Omitted model-schema/data references:
+- AuditAction: omitted because it is an imported runtime model schema
+- AuditEntityKind: omitted because it is an imported runtime model schema
+- AuditResult: omitted because it is an imported runtime model schema
+
+MODEL DATA ADDRESSES (SPEC DATA, NOT IMPORT PATHS):
+The following = models.* references are canonical spec data addresses, not Python module paths.
+Read their structured JSON values from MODEL DATA DEFINITIONS when present in this prompt.
+Never convert a spec data address into `import models` or `from models.* import ...`.
+models.* entries listed as spec data are read-only spec addresses, not Python import paths and not core.models imports.
+Only import runtime model symbols from core.models when they are explicitly listed in IMPORTS.
+- models.AuditAction: runtime model schema omitted from non-model prompt; exported from core.models by IMPORTS.
+- models.AuditEntityKind: runtime model schema omitted from non-model prompt; exported from core.models by IMPORTS.
+- models.AuditResult: runtime model schema omitted from non-model prompt; exported from core.models by IMPORTS.
+
+IMPORTED MODEL OWNERSHIP (DO NOT REDEFINE):
+Imported runtime model symbols are owned by their source modules listed in IMPORTS; use them as imported and do not redefine them here.
+
+RUNTIME MODEL SURFACE (CORE.MODELS IMPORTS):
+These are imported runtime symbols from core.models. Use the listed enum member names and model fields exactly.
+- ActorKind enum members: SERVICE='service', STAFF='staff', SYSTEM='system', VIEWER='viewer'
+- AuditAction enum members: BUDGET_MANUAL_VERSION_CREATE='budget.manual_version_create', BUDGET_SECTION_PLAN_EDIT='budget.section_plan_edit', DOCUMENT_UPDATE='document.update', EXPENSE_ALLOCATE='expense.allocate', EXPENSE_CORRECT='expense.correct', EXPENSE_CREATE='expense.create', EXPENSE_EXCLUDE='expense.exclude', EXPENSE_INCLUDE='expense.include', GRANT_CREATE='grant.create', GRANT_REVOKE='grant.revoke', PAYMENT_REGISTER='payment.register', PHOTO_PUBLISH='photo.publish', PHOTO_UPDATE='photo.update', PRINCIPAL_CREATE='principal.create', PRINCIPAL_CREDENTIAL_ISSUE='principal.credential_issue', PRINCIPAL_CREDENTIAL_REVOKE='principal.credential_revoke', PRINCIPAL_DISABLE='principal.disable', PRINCIPAL_ENABLE='principal.enable', PRODUCER_GRANT_CREATE='producer_grant.create', PRODUCER_GRANT_REVOKE='producer_grant.revoke', PROGRESS_UPDATE='progress.update', SNAPSHOT_ACTIVATE='snapshot.activate', SNAPSHOT_IMPORT='snapshot.import', STAFF_ASSIGNMENT_CREATE='staff_assignment.create', STAFF_ASSIGNMENT_REVOKE='staff_assignment.revoke', STAFF_CREATE='staff.create', STAFF_DISABLE='staff.disable', STAFF_LOGIN='staff.login', STAFF_LOGIN_FAILED='staff.login_failed', STAFF_LOGOUT='staff.logout', STAFF_RECOVERY_OVERRIDE='staff.recovery_override', STAFF_REINSTATE='staff.reinstate', STAFF_SESSIONS_REVOKE='staff.sessions_revoke', STAFF_SUSPEND='staff.suspend', VIEWER_CREATE='viewer.create', VIEWER_CREDENTIAL_ISSUE='viewer.credential_issue', VIEWER_CREDENTIAL_REVOKE='viewer.credential_revoke', VIEWER_REVOKE='viewer.revoke'
+- AuditEntityKind enum members: BUDGET_VERSION='budget_version', EXPENSE='expense', EXPENSE_ALLOCATION='expense_allocation', EXPENSE_DOCUMENT='expense_document', PRODUCER_GRANT='producer_grant', PROGRESS_PHOTO='progress_photo', SECTION_PLAN='section_plan', SECTION_PROGRESS='section_progress', SERVICE_CREDENTIAL='service_credential', SERVICE_PRINCIPAL='service_principal', SNAPSHOT_IMPORT='snapshot_import', STAFF_ACCOUNT='staff_account', STAFF_ASSIGNMENT='staff_assignment', STAFF_SESSION='staff_session', VIEWER='viewer', VIEWER_CREDENTIAL='viewer_credential', VIEWER_GRANT='viewer_grant', WORK_PAYMENT='work_payment'
+- AuditIntent fields (exact, no others exist): action: AuditAction, actor_id: UUID | None, actor_kind: ActorKind, entity_id: str | None, entity_kind: AuditEntityKind | None, key_version: int | None, project_id: UUID | None, reason_code: str | None, result: AuditResult
+- AuditRecord fields (exact, no others exist): action: AuditAction, actor_id: UUID | None, actor_kind: ActorKind, audit_id: UUID, entity_id: str | None, entity_kind: AuditEntityKind | None, key_version: int | None, occurred_at: datetime, project_id: UUID | None, reason_code: str | None, result: AuditResult
+- AuditRepository operations (exact, no others exist):
+    insert_audit(self, record: AuditRecord) -> None
+- AuditResult enum members: REJECTED='rejected', SUCCESS='success'
+- AuthorizedProjectContext fields (exact, no others exist): actor_id: UUID, actor_kind: ActorKind, capability: Capability, key_version: int | None, project_id: UUID, registry_status: RegistryProjectStatus
+- BudgetVersion fields (exact, no others exist): activated_at: datetime | None, activated_by: UUID | None, created_at: datetime, created_by_id: UUID, created_by_kind: ActorKind, deactivated_at: datetime | None, project_id: UUID, snapshot_id: UUID | None, source: BudgetSource, status: BudgetVersionStatus, version_id: UUID
+- BudgetVersionDetail fields (exact, no others exist): plans: list[SectionPlan], unresolved_allocation_count: int, version: BudgetVersion
+- Capability enum members: PORTAL_ACCESS_MANAGE='portal.access.manage', PORTAL_BUDGET_MANAGE='portal.budget.manage', PORTAL_BUDGET_READ='portal.budget.read', PORTAL_ESTIMATE_SNAPSHOT_ACTIVATE='portal.estimate_snapshot.activate', PORTAL_ESTIMATE_SNAPSHOT_IMPORT='portal.estimate_snapshot.import', PORTAL_ESTIMATE_SNAPSHOT_READ_IMPORT_RESULT='portal.estimate_snapshot.read_import_result', PORTAL_EXPENSE_MANAGE='portal.expense.manage', PORTAL_EXPENSE_READ='portal.expense.read', PORTAL_PAYMENT_MANAGE='portal.payment.manage', PORTAL_PAYMENT_READ='portal.payment.read', PORTAL_PHOTO_MANAGE='portal.photo.manage', PORTAL_PHOTO_READ='portal.photo.read', PORTAL_PROGRESS_MANAGE='portal.progress.manage', PORTAL_PROGRESS_READ='portal.progress.read', PORTAL_PROJECT_READ='portal.project.read'
+- PortalSection fields (exact, no others exist): created_at: datetime, created_by_id: UUID, created_by_kind: ActorKind, project_id: UUID, section_id: UUID, source_key: str | None
+- ProjectContext fields (exact, no others exist): address: str, created_at: datetime, customer_ref: str | None, project: ProjectReference, registry_updated_at: datetime
+- ProjectReference fields (exact, no others exist): display_name: str, project_id: UUID, status: str
+- ProjectTrackingRepository operations (exact, no others exist):
+    get_section_progress(self, project_id: UUID, section_id: UUID) -> SectionProgress | None
+    get_work_payment(self, payment_id: UUID) -> WorkPayment | None
+    insert_work_payment(self, payment: WorkPayment) -> None
+    list_project_payments(self, project_id: UUID) -> list[WorkPayment]
+    list_project_progress(self, project_id: UUID) -> list[SectionProgress]
+    upsert_section_progress(self, progress: SectionProgress) -> None
+- RegistryProjectStatus enum members: ACTIVE='active', ARCHIVED='archived'
+- SectionPlan fields (exact, no others exist): display_name: str, material_planned: Decimal, plan_id: UUID, section_id: UUID, sort_order: int, source_section_code: str | None, updated_at: datetime, updated_by: UUID | None, version_id: UUID, work_planned: Decimal
+- SectionProgress fields (exact, no others exist): completion_percent: int, project_id: UUID, section_id: UUID, updated_at: datetime, updated_by: UUID
+- WorkPayment fields (exact, no others exist): amount: Decimal, description: str, payment_date: date, payment_id: UUID, project_id: UUID, recorded_at: datetime, recorded_by: UUID
+
+MODULE-LOCAL EXCEPTION EXPORTS:
+If any exception class is listed here, define it in this file at top level.
+Do not import these classes from core.errors or any other module.
+- class TrackingConflictError(Exception): pass
+- class TrackingValidationError(Exception): pass
+
+FUNCTION ORDER (define in this order):
+_classify_payment_replay, _validate_completion_percent, list_project_payments, list_project_progress, register_work_payment, set_section_progress
+
+MODELS CONTEXT:
+Runtime models live in core.models. Use IMPORTS and IMPORTED MODEL
+OWNERSHIP for runtime model symbols; do not reproduce model schemas
+or import from a top-level models module.
+
+Generate the complete project_tracking.py file.
+Every owned function listed above must be implemented exactly once at module top level.
+Define every class and method listed in OWNED CLASSES REQUIRED in this file.
+For every local binding in CONCRETE IMPLEMENTATION OBLIGATIONS, inherit the declared interface and implement its complete method surface with non-placeholder bodies.
+If this is the models module, emit every enum/model in MODEL DEFINITIONS exactly once.
+If this is not the models module, do not emit Pydantic model classes, enums, create_model calls, or local model schema shadows.
+Do not invent model fields or enum values not present in the imported runtime models.
+Use only the IMPORTS listed above plus required standard library imports.
+Import from IMPORTS every symbol the module uses, including symbols used only in annotations, and annotate each parameter with the type its CONTRACTS signature declares, never object or nothing.
+Never import from a top-level models module or models.*; runtime models live in core.models only when listed in IMPORTS.
+`models.<name>` in notes is a canonical spec data address, not an importable Python module.
+When one owner module provides a function and core.models provides a DTO with a similar name, split the imports by source exactly as listed in IMPORTS.
+Construct imported runtime models only with the fields listed in IMPORTED MODEL SURFACE; models are frozen and forbid extra fields, so an invented keyword argument fails at runtime.
+Read from a model value only the fields listed for its type; never use getattr(value, name, default) to probe for a field that is not declared.
+Never assign to an attribute of a model value (models are frozen): derive a changed value with value.model_copy(update={...}) or construct a new instance.
+Define every class listed in MODULE-LOCAL EXCEPTION EXPORTS in this file.

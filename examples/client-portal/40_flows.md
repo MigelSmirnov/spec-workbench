@@ -206,7 +206,8 @@ authentication failure and the access-management check (A1, A11).
    accepts only an active account and a matching password (`capability:credential_security.verify_password`), issues a
    session secret for a fresh session id
    (`capability:credential_security.issue_verification_secret`), stores only
-   its hash with a fixed expiry of `config` staff session TTL, and appends
+   its hash with a fixed expiry of the staff session lifetime (data-provider
+   constant `STAFF_SESSION_TTL_HOURS`, A30), and appends
    `staff.login` through `capability:audit_writer.append_audit` in the same
    transaction.
 2. A malformed email is refused with `IdentityInputRejected` before any
@@ -272,7 +273,8 @@ projects. `module:credential_security` hashes the initial password.
    (`capability:credential_security.hash_password`), inserts the account as
    `pending_verification` and appends `staff.create`.
 3. `capability:staff_identity.change_staff_status` applies only the
-   transitions of `rules.status_transitions`; activation of a pending account
+   transitions of the staff transition table (data-provider constant
+   `STAFF_STATUS_TRANSITIONS`, A3); activation of a pending account
    sets `email_verified_at`; suspension or disabling revokes the account's
    sessions; the audit is `staff.reinstate`, `staff.suspend` or
    `staff.disable`.
@@ -391,7 +393,8 @@ client address; it checks the origin of sign-out only.
    against the stored hash of an active credential of an active viewer
    (`capability:credential_security.parse_verification_secret`,
    `capability:credential_security.verify_secret`), and creates a session with
-   a fresh id and a fixed expiry of `config.viewer_session_ttl_days`
+   a fresh id and a fixed expiry of the viewer session lifetime (data-provider
+   constant `VIEWER_SESSION_TTL_DAYS`, A30)
    (`capability:credential_security.issue_verification_secret`). Entry is not
    an audited action.
 3. The endpoint sets the session cookie and answers the secret-free session

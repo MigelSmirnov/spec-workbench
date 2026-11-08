@@ -551,8 +551,9 @@ principals authenticate only with a bearer header (Factory `35a0a09c`,
 The portal runs as one service with one SQLite database file and one local
 directory under which `file_ref` resolves to stored bytes; the binary read
 bound `binary_max_read_bytes` stays a deployment setting. The service is
-configured only by environment variables, which it validates when it starts,
-and answers only on the trusted hosts it is
+configured only by environment variables, which it validates when it starts
+(except the Registry address, which the Registry gateway reads at each call
+and whose absence fails only Registry calls, State 2 A30), and answers only on the trusted hosts it is
 configured with; wildcard hosts and origins are refused. This decides the
 "physical storage undecided" of "Persistent data" (Factory `4bdaa008`,
 `38626cc7`, `dc351917`, `8387e0a3`, `d1280708`; `config.persistence`,

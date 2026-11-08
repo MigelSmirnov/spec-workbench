@@ -219,7 +219,9 @@ delegated):
 
 ### Owns
 
-The State 1 records M01–M37, their projections and answers, the request
+The State 1 records M01–M46 (M38–M46 the row models of the data provider's
+tables, with their enumerations `CapabilitySet`, `ImportAuditReason`,
+`TransportGuardRefusal` and `BootstrapCommandOutcome`), their projections and answers, the request
 models, the repository interfaces and the runtime models, as plain frozen typed
 data with their closed enumerations (A24). No behaviour beyond the local
 validators of their closed choices (State 1 modeling conventions).
@@ -264,8 +266,9 @@ value a deterministic backend reads from its own IR.
 
 ### Hides
 
-The values: a consumer sees the name and type of a constant, never its value
-(SPEC_STANDARD 15.9).
+The values from every generator's prompt: a generated consumer is given the
+name and type of a constant and imports it, so the running code reads the
+value while the generator never sees it (SPEC_STANDARD 15.9).
 
 ### Depth assessment
 
@@ -396,14 +399,14 @@ verify_secret
 
 ### Owns
 
-A9 and the arithmetic of A21: EUR amount and two-fraction-digit validation,
-ROUND_HALF_UP quantization, section completed work, weighted overall
+A9 and the arithmetic of A21: amount validation in the portal currency and
+its quantization (the money constants of `data_provider`), section completed work, weighted overall
 progress, remaining material without clamping, work balance and its label,
 and the unavailable result where an input is missing.
 
 ### Knows
 
-`models`.
+`models`, `data_provider`.
 
 ### Must not own
 
@@ -833,14 +836,14 @@ SqliteStaffBootstrapStore
 
 A6 and the Registry part of A5 and A15: HTTP calls to the Registry for the
 active project list, project validation and project context at the
-configured endpoint, paths and timeout (A30, `config.registry_request_paths`),
+configured endpoint, paths and timeout (A30; the data-provider constants),
 decoding, UUID identity matching, keeping only active projects while decoding
 the list, and translation of every failure to `RegistryFailureKind` carried in
 the `kind` field of `RegistryBoundaryError` (A26).
 
 ### Knows
 
-`models`.
+`models`, `data_provider`.
 
 ### Must not own
 
@@ -917,7 +920,7 @@ record itself, its `occurred_at` the bootstrap's one instant (A28), and
 
 ### Knows
 
-`models`, `system_clock`.
+`models`, `data_provider`, `system_clock`.
 
 ### Must not own
 
@@ -953,7 +956,7 @@ observes it.
 
 ### Knows
 
-`models`, `system_clock`, `registry_gateway`, `portal_store`.
+`models`, `data_provider`, `system_clock`, `registry_gateway`, `portal_store`.
 
 ### Must not own
 
@@ -997,7 +1000,7 @@ Factory `3080ef0dbe73`). Session TTL is A30's.
 
 ### Knows
 
-`models`, `system_clock`, `credential_security`, `authorization_guard`,
+`models`, `data_provider`, `system_clock`, `credential_security`, `authorization_guard`,
 `registry_gateway`, `audit_writer`, `portal_store`.
 
 ### Must not own
@@ -1079,7 +1082,7 @@ revocation, viewer entry and session resolution, description and sign-out
 
 ### Knows
 
-`models`, `system_clock`, `credential_security`, `authorization_guard`,
+`models`, `data_provider`, `system_clock`, `credential_security`, `authorization_guard`,
 `registry_gateway`, `audit_writer`, `portal_store`.
 
 ### Must not own
@@ -1122,7 +1125,7 @@ revocation, producer grants, bearer authentication and producer scope.
 
 ### Knows
 
-`models`, `system_clock`, `credential_security`, `authorization_guard`,
+`models`, `data_provider`, `system_clock`, `credential_security`, `authorization_guard`,
 `registry_gateway`, `audit_writer`, `portal_store`.
 
 ### Must not own
@@ -1166,7 +1169,7 @@ import result.
 
 ### Knows
 
-`models`, `system_clock`, `authorization_guard`, `financial_policy`,
+`models`, `data_provider`, `system_clock`, `authorization_guard`, `financial_policy`,
 `audit_writer`, `portal_store`.
 
 ### Must not own
@@ -1241,7 +1244,7 @@ the access and visibility re-check before a document's content is read (A14).
 
 ### Knows
 
-`models`, `system_clock`, `financial_policy`, `binary_storage`,
+`models`, `data_provider`, `system_clock`, `financial_policy`, `binary_storage`,
 `audit_writer`, `portal_store`.
 
 ### Must not own
@@ -1282,7 +1285,7 @@ document consistency, and atomic creation of the aggregate with its audit.
 
 ### Knows
 
-`models`, `system_clock`, `financial_policy`, `audit_writer`, `portal_store`,
+`models`, `data_provider`, `system_clock`, `financial_policy`, `audit_writer`, `portal_store`,
 `expense_management`.
 
 ### Must not own
@@ -1315,7 +1318,7 @@ and the progress and payment lists.
 
 ### Knows
 
-`models`, `system_clock`, `financial_policy`, `budget_management`,
+`models`, `data_provider`, `system_clock`, `financial_policy`, `budget_management`,
 `audit_writer`, `portal_store`.
 
 ### Must not own
@@ -1521,7 +1524,7 @@ security and `no-store` headers and writes one redacted log line. Factory
 
 ### Knows
 
-`models`, `system_clock`.
+`models`, `data_provider`, `system_clock`.
 
 ### Must not own
 
@@ -1586,7 +1589,7 @@ readiness answers that change nothing. Factory `38626cc7be12`,
 
 ### Knows
 
-`models`, `portal_store`, `api`, `transport_guard`, `runtime_settings`.
+`models`, `data_provider`, `portal_store`, `api`, `transport_guard`, `runtime_settings`.
 
 ### Must not own
 
@@ -1619,7 +1622,7 @@ bootstrap. Factory `6011ac93b143`.
 
 ### Knows
 
-`models`, `runtime_settings`, `staff_bootstrap`, `staff_bootstrap_store`,
+`models`, `data_provider`, `runtime_settings`, `staff_bootstrap`, `staff_bootstrap_store`,
 `staff_identity`.
 
 ### Must not own
