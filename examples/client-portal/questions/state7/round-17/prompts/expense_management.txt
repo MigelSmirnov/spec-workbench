@@ -1,0 +1,256 @@
+Module: expense_management
+Target path: domain/expense_management.py
+Target file: expense_management.py
+
+IMPORTS (every listed symbol is available; import the ones the module uses):
+from __future__ import annotations
+from datetime import date, datetime
+from decimal import Decimal
+from uuid import UUID
+from uuid import uuid4
+
+from adapters.binary_storage import BinaryStorageError, read_binary
+from adapters.portal_store import PortalStore, PortalTransaction
+from application.audit_writer import append_audit
+from core.models import ActorKind, AllocationInstruction, AllocationTargetKind, AuditAction, AuditEntityKind, AuditIntent, AuditRecord, AuditRepository, AuditResult, AuthorizedBinaryReference, AuthorizedProjectContext, BinaryObjectKind, BinaryPayload, Capability, Expense, ExpenseAggregate, ExpenseAllocation, ExpenseDocument, ExpenseOperationOutcome, ExpenseRepository, PortalSection, ProjectContext, ProjectReference, ProjectSectionRepository, RegistryProjectStatus
+from core.system_clock import utc_now
+from domain.financial_policy import validate_eur_amount
+
+CONTRACTS (function signatures — follow exactly):
+def _authorize_document_reference(store: PortalStore, context: AuthorizedProjectContext, document_id: UUID) -> AuthorizedBinaryReference
+def _build_replacement_allocations(expense: Expense, instructions: list[AllocationInstruction], actor_id: UUID, changed_at: datetime) -> list[ExpenseAllocation]
+def _validate_allocation_sum(total_amount: Decimal, allocations: list[AllocationInstruction]) -> None
+def correct_expense(store: PortalStore, context: AuthorizedProjectContext, expense_id: UUID, supplier: str, document_date: date, total_amount: Decimal, included: bool, allocations: list[AllocationInstruction]) -> ExpenseOperationOutcome
+def read_expense_document(store: PortalStore, context: AuthorizedProjectContext, document_id: UUID) -> BinaryPayload
+def replace_expense_allocations(store: PortalStore, context: AuthorizedProjectContext, expense_id: UUID, allocations: list[AllocationInstruction]) -> ExpenseOperationOutcome
+def set_expense_inclusion(store: PortalStore, context: AuthorizedProjectContext, expense_id: UUID, included: bool) -> ExpenseOperationOutcome
+def update_expense_document(store: PortalStore, context: AuthorizedProjectContext, document_id: UUID, description: str | None, client_visible: bool) -> ExpenseDocument
+# BinaryStorageError
+def __init__(self) -> None
+# PortalStore
+def __init__(self, database_url: str) -> None
+# PortalStore
+def begin(self) -> PortalTransaction
+# PortalTransaction
+def __init__(self, connection: object) -> None
+# PortalTransaction
+def assert_open(self) -> None
+# PortalTransaction
+def audit(self) -> AuditRepository
+# PortalTransaction
+def commit(self) -> None
+# PortalTransaction
+def expenses(self) -> ExpenseRepository
+# PortalTransaction
+def get_expense_aggregate(self, expense_id: UUID) -> ExpenseAggregate | None
+# PortalTransaction
+def get_expense_document(self, document_id: UUID) -> ExpenseDocument | None
+# PortalTransaction
+def get_project_section(self, project_id: UUID, section_id: UUID) -> PortalSection | None
+# PortalTransaction
+def project_sections(self) -> ProjectSectionRepository
+# PortalTransaction
+def rollback(self) -> None
+# PortalTransaction
+def update_expense_aggregate(self, aggregate: ExpenseAggregate) -> None
+# PortalTransaction
+def update_expense_document(self, document: ExpenseDocument) -> None
+# ProjectSectionRepository
+def get_project_section(self, project_id: UUID, section_id: UUID) -> PortalSection | None
+# ProjectSectionRepository
+def insert_project_sections(self, sections: list[PortalSection]) -> None
+# ProjectSectionRepository
+def list_project_sections(self, project_id: UUID) -> list[PortalSection]
+# ExpenseRepository
+def get_expense_aggregate(self, expense_id: UUID) -> ExpenseAggregate | None
+# ExpenseRepository
+def get_expense_by_recognition_id(self, recognized_document_id: str) -> ExpenseAggregate | None
+# ExpenseRepository
+def get_expense_document(self, document_id: UUID) -> ExpenseDocument | None
+# ExpenseRepository
+def insert_expense_aggregate(self, aggregate: ExpenseAggregate) -> None
+# ExpenseRepository
+def list_project_expenses(self, project_id: UUID) -> list[ExpenseAggregate]
+# ExpenseRepository
+def update_expense(self, expense: Expense) -> None
+# ExpenseRepository
+def update_expense_aggregate(self, aggregate: ExpenseAggregate) -> None
+# ExpenseRepository
+def update_expense_document(self, document: ExpenseDocument) -> None
+
+IMPORTED FUNCTION SIGNATURES (these come from the imports above):
+def append_audit(repository: AuditRepository, intent: AuditIntent) -> AuditRecord
+def read_binary(reference: AuthorizedBinaryReference) -> BinaryPayload
+def validate_eur_amount(currency: str, amount: Decimal, strictly_positive: bool = False) -> Decimal
+def utc_now() -> datetime
+
+OWNED FUNCTIONS REQUIRED (must be defined as top-level functions):
+- _authorize_document_reference: (store: PortalStore, context: AuthorizedProjectContext, document_id: UUID) -> AuthorizedBinaryReference
+- _build_replacement_allocations: (expense: Expense, instructions: list[AllocationInstruction], actor_id: UUID, changed_at: datetime) -> list[ExpenseAllocation]
+- _validate_allocation_sum: (total_amount: Decimal, allocations: list[AllocationInstruction]) -> None
+- correct_expense: (store: PortalStore, context: AuthorizedProjectContext, expense_id: UUID, supplier: str, document_date: date, total_amount: Decimal, included: bool, allocations: list[AllocationInstruction]) -> ExpenseOperationOutcome
+- read_expense_document: (store: PortalStore, context: AuthorizedProjectContext, document_id: UUID) -> BinaryPayload
+- replace_expense_allocations: (store: PortalStore, context: AuthorizedProjectContext, expense_id: UUID, allocations: list[AllocationInstruction]) -> ExpenseOperationOutcome
+- set_expense_inclusion: (store: PortalStore, context: AuthorizedProjectContext, expense_id: UUID, included: bool) -> ExpenseOperationOutcome
+- update_expense_document: (store: PortalStore, context: AuthorizedProjectContext, document_id: UUID, description: str | None, client_visible: bool) -> ExpenseDocument
+
+STATIC GATE CONTRACT (deterministic checks; a violating candidate is rejected without repair):
+- Reflective attribute access is rejected: never call getattr, hasattr,
+  setattr, delattr, or vars; every declared field and operation is
+  addressed directly by name, including in try/finally cleanup.
+- A definition whose parameter list differs from its declared contract
+  signature is rejected; keep names and order exactly.
+- A constructed record accepted by a declared insert_*/upsert_*/append_*
+  operation must reach a call or return; a built-and-dropped record is
+  rejected.
+- Instantiating a spec-declared interface is rejected; construct the
+  module-owned concrete class instead.
+- A stub, placeholder, or fail-closed body for a contracted callable is
+  rejected; implement the complete specified behavior.
+- A top-level import of a package outside the Python standard library and
+  this project's own modules is rejected unless IMPORTS lists it; a note
+  never adds a package to IMPORTS.
+- A model is constructed with values of its declared field types; a field
+  typed tuple[...] receives a tuple, built with tuple(...) where the items
+  were collected in a list, never the list itself.
+- A value passed to a model field is narrowed at the call itself: a name
+  seeded with None, set on some branches and passed later under a test of
+  another name is rejected; build the value where it is obtained and pass
+  it there, or test that same name for None at the call.
+
+OWNED CLASSES REQUIRED (must be defined locally, not merely referenced):
+No owned local classes with contracted methods required; module-local exception exports are listed separately.
+
+CONCRETE IMPLEMENTATION OBLIGATIONS:
+No local concrete-to-interface obligations.
+
+REQUIREMENTS (notes — implement these):
+- _authorize_document_reference: [SECURITY_BOUNDARY] MUST require the owning expense's project_id (ExpenseDocument carries none; it is reached by the document's expense_id) to equal context.project_id and client visibility for viewer context, then return the sole trusted file_ref carrier.
+- _authorize_document_reference: [DEPENDENCY_BOUNDARY] MUST open exactly one transaction, read the document and its owning aggregate only through tx.expenses(), and close that read transaction by exactly one rollback immediately after the last read, marking it closed before it evaluates project scope or client visibility and before it raises BinaryAccessRejected; leaving the transaction open on any path, committing it, and using a legacy PortalTransaction expense method are forbidden.
+- _authorize_document_reference: [DEPENDENCY_BOUNDARY] MUST use only ExpenseRepository from tx.expenses(), ProjectSectionRepository from tx.project_sections(), and AuditRepository from tx.audit() for persistence; direct legacy PortalTransaction expense and project-section method calls are forbidden, and this module MUST NOT import or call domain.budget_management.
+- _authorize_document_reference: [VALIDATION_ERROR] Its transaction guard MUST track transaction open state in a caller-local boolean flag, catch BaseException, rollback only while that flag still marks the transaction open, and re-raise the original failure unchanged; catching only Exception, leaving a transaction neither committed nor rolled back on any path, a second rollback on an already closed transaction, and probing open state through assert_open or a caught PersistenceError are forbidden.
+- _authorize_document_reference: [ORCHESTRATION] MUST use at most one transaction at a time and close it exactly once: a successful write MUST commit exactly once, a successful read MUST rollback exactly once before returning, and a failure MUST rollback and re-raise only while the transaction is still open; opening a transaction while another one this module owns is still open is forbidden, and so is rollback after a successful commit.
+- _build_replacement_allocations: [FORBIDDEN_ACTION] MUST create exactly one allocation per instruction with supplied amount/target, expense project provenance, actor_id, and changed_at; MUST NOT proportion, split, or invent a remainder.
+- _build_replacement_allocations: [PROVENANCE] MUST assign a fresh uuid4 allocation_id to every replacement allocation, because allocation_id is the persisted primary key and the replacement path deletes then reinserts the whole allocation set; assigning UUID(int=0) or one shared allocation_id to more than one allocation is forbidden.
+- _validate_allocation_sum: [VALIDATION_ERROR] MUST require the quantized sum of instruction amounts to equal total_amount exactly and reject empty/residual/proportional repair.
+- correct_expense: [ORCHESTRATION] MUST call validate_eur_amount with the currency EUR as currency, total_amount as amount, and strictly_positive=False; MUST validate explicit project-scoped allocations, then atomically replace editable expense fields and all allocations plus one AuditAction.EXPENSE_CORRECT audit; no intermediate invalid sum may commit; MUST return ExpenseOperationOutcome containing the corrected aggregate with replayed false.
+- correct_expense: [DEPENDENCY_BOUNDARY] MUST open exactly one transaction with store.begin(), which returns a PortalTransaction, read the aggregate only through tx.expenses().get_expense_aggregate with expense_id, resolve every SECTION target inside that same transaction only through tx.project_sections().get_project_section with context.project_id and section_id, write only through tx.expenses().update_expense_aggregate, append the audit only through tx.audit(), and commit exactly once; it MUST NOT call validate_project_section, open a nested transaction while this one is active, or use a legacy PortalTransaction expense or project-section method.
+- correct_expense: [VALIDATION_ERROR] MUST raise ExpenseValidationError when a SECTION instruction carries no section_id or when tx.project_sections() returns no section for context.project_id and that section_id, so a cross-project or unknown section can never be allocated and no partial correction commits.
+- correct_expense: [FIELD_ASSIGNMENT] MUST append exactly one AuditAction.EXPENSE_CORRECT success audit through tx.audit() with entity_id equal to the canonical string of the corrected expense_id, never the UUID object, and reason_code None.
+- correct_expense: [DEPENDENCY_BOUNDARY] MUST use only ExpenseRepository from tx.expenses(), ProjectSectionRepository from tx.project_sections(), and AuditRepository from tx.audit() for persistence; direct legacy PortalTransaction expense and project-section method calls are forbidden, and this module MUST NOT import or call domain.budget_management.
+- correct_expense: [VALIDATION_ERROR] Its transaction guard MUST track transaction open state in a caller-local boolean flag, catch BaseException, rollback only while that flag still marks the transaction open, and re-raise the original failure unchanged; catching only Exception, leaving a transaction neither committed nor rolled back on any path, a second rollback on an already closed transaction, and probing open state through assert_open or a caught PersistenceError are forbidden.
+- correct_expense: [FIELD_ASSIGNMENT] Its AuditAction.EXPENSE_CORRECT audit intent MUST set entity_id to the canonical string of the expense_id; passing a UUID object is forbidden.
+- correct_expense: [ORCHESTRATION] MUST use at most one transaction at a time and close it exactly once: a successful write MUST commit exactly once, a successful read MUST rollback exactly once before returning, and a failure MUST rollback and re-raise only while the transaction is still open; opening a transaction while another one this module owns is still open is forbidden, and so is rollback after a successful commit.
+- correct_expense: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it writes and every current-time comparison it makes; it MUST NOT read a host clock itself.
+- read_expense_document: [SECURITY_BOUNDARY] MUST authorize the document project and client_visible rule for the actor context before constructing AuthorizedBinaryReference and calling read_binary.
+- read_expense_document: [DEPENDENCY_BOUNDARY] MUST obtain the AuthorizedBinaryReference from _authorize_document_reference, whose read transaction is already closed when it returns, and only then call read_binary; it MUST NOT open a transaction of its own, hold any transaction open across the binary object read, or reach persistence directly.
+- read_expense_document: [SECURITY_BOUNDARY] MUST raise BinaryAccessRejected whenever the payload cannot be returned, so that these three outcomes are indistinguishable to the caller: no document record exists, the record belongs to another project or is not client visible for this actor, and the record exists but its binary object cannot be read. A storage error MUST NOT reach the caller in any form, because BinaryAccessRejected exists to conceal whether an inaccessible binary record or object exists, and telling the three apart would leak both storage state and the existence of another project's document.
+- read_expense_document: [DEPENDENCY_BOUNDARY] MUST use only ExpenseRepository from tx.expenses(), ProjectSectionRepository from tx.project_sections(), and AuditRepository from tx.audit() for persistence; direct legacy PortalTransaction expense and project-section method calls are forbidden, and this module MUST NOT import or call domain.budget_management.
+- read_expense_document: [VALIDATION_ERROR] MUST translate a BinaryStorageError raised by read_binary into BinaryAccessRejected; it owns no transaction guard, because the only transaction is the one _authorize_document_reference opens and closes.
+- read_expense_document: [ORCHESTRATION] MUST use at most one transaction at a time and close it exactly once: a successful write MUST commit exactly once, a successful read MUST rollback exactly once before returning, and a failure MUST rollback and re-raise only while the transaction is still open; opening a transaction while another one this module owns is still open is forbidden, and so is rollback after a successful commit.
+- replace_expense_allocations: [ORCHESTRATION] MUST replace all allocations with explicit operator instructions whose sum equals the unchanged total_amount and append AuditAction.EXPENSE_ALLOCATE atomically; MUST return ExpenseOperationOutcome containing the updated aggregate with replayed false.
+- replace_expense_allocations: [DEPENDENCY_BOUNDARY] MUST open exactly one transaction, read the aggregate only through tx.expenses().get_expense_aggregate with expense_id, resolve every SECTION target inside that same transaction only through tx.project_sections().get_project_section with context.project_id and section_id, write only through tx.expenses().update_expense_aggregate, append the audit only through tx.audit(), and commit exactly once; it MUST NOT call validate_project_section, open a nested transaction while this one is active, or use a legacy PortalTransaction expense or project-section method.
+- replace_expense_allocations: [VALIDATION_ERROR] MUST raise ExpenseValidationError when a SECTION instruction carries no section_id or when tx.project_sections() returns no section for context.project_id and that section_id, and MUST validate the instruction sum against the unchanged persisted total_amount before constructing any replacement allocation.
+- replace_expense_allocations: [FIELD_ASSIGNMENT] MUST append exactly one AuditAction.EXPENSE_ALLOCATE success audit through tx.audit() with entity_id equal to the canonical string of the expense_id whose allocations were replaced, never the UUID object, and reason_code None.
+- replace_expense_allocations: [DEPENDENCY_BOUNDARY] MUST use only ExpenseRepository from tx.expenses(), ProjectSectionRepository from tx.project_sections(), and AuditRepository from tx.audit() for persistence; direct legacy PortalTransaction expense and project-section method calls are forbidden, and this module MUST NOT import or call domain.budget_management.
+- replace_expense_allocations: [VALIDATION_ERROR] Its transaction guard MUST track transaction open state in a caller-local boolean flag, catch BaseException, rollback only while that flag still marks the transaction open, and re-raise the original failure unchanged; catching only Exception, leaving a transaction neither committed nor rolled back on any path, a second rollback on an already closed transaction, and probing open state through assert_open or a caught PersistenceError are forbidden.
+- replace_expense_allocations: [FIELD_ASSIGNMENT] Its AuditAction.EXPENSE_ALLOCATE audit intent MUST set entity_id to the canonical string of the expense_id; passing a UUID object is forbidden.
+- replace_expense_allocations: [ORCHESTRATION] MUST use at most one transaction at a time and close it exactly once: a successful write MUST commit exactly once, a successful read MUST rollback exactly once before returning, and a failure MUST rollback and re-raise only while the transaction is still open; opening a transaction while another one this module owns is still open is forbidden, and so is rollback after a successful commit.
+- replace_expense_allocations: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it writes and every current-time comparison it makes; it MUST NOT read a host clock itself.
+- set_expense_inclusion: [ORCHESTRATION] MUST change only included and updated_at on the project-scoped Expense and append exactly AuditAction.EXPENSE_INCLUDE or AuditAction.EXPENSE_EXCLUDE atomically; MUST return ExpenseOperationOutcome containing the updated aggregate with replayed false.
+- set_expense_inclusion: [DEPENDENCY_BOUNDARY] MUST open exactly one transaction, read the aggregate only through tx.expenses().get_expense_aggregate with expense_id, write only through tx.expenses().update_expense_aggregate, append the audit only through tx.audit(), and commit exactly once, using no legacy PortalTransaction expense method.
+- set_expense_inclusion: [FIELD_ASSIGNMENT] MUST append exactly one AuditAction.EXPENSE_INCLUDE audit when included is true and exactly one AuditAction.EXPENSE_EXCLUDE audit when it is false, through tx.audit(), with entity_id equal to the canonical string of the expense_id, never the UUID object, and reason_code None.
+- set_expense_inclusion: [DEPENDENCY_BOUNDARY] MUST use only ExpenseRepository from tx.expenses(), ProjectSectionRepository from tx.project_sections(), and AuditRepository from tx.audit() for persistence; direct legacy PortalTransaction expense and project-section method calls are forbidden, and this module MUST NOT import or call domain.budget_management.
+- set_expense_inclusion: [VALIDATION_ERROR] Its transaction guard MUST track transaction open state in a caller-local boolean flag, catch BaseException, rollback only while that flag still marks the transaction open, and re-raise the original failure unchanged; catching only Exception, leaving a transaction neither committed nor rolled back on any path, a second rollback on an already closed transaction, and probing open state through assert_open or a caught PersistenceError are forbidden.
+- set_expense_inclusion: [FIELD_ASSIGNMENT] Its AuditAction.EXPENSE_INCLUDE and AuditAction.EXPENSE_EXCLUDE audit intent MUST set entity_id to the canonical string of the expense_id; passing a UUID object is forbidden.
+- set_expense_inclusion: [ORCHESTRATION] MUST use at most one transaction at a time and close it exactly once: a successful write MUST commit exactly once, a successful read MUST rollback exactly once before returning, and a failure MUST rollback and re-raise only while the transaction is still open; opening a transaction while another one this module owns is still open is forbidden, and so is rollback after a successful commit.
+- set_expense_inclusion: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it writes and every current-time comparison it makes; it MUST NOT read a host clock itself.
+- update_expense_document: [ORCHESTRATION] MUST change only description, client_visible, and updated_at on the project-scoped document and append AuditAction.DOCUMENT_UPDATE atomically; file_ref is unchanged.
+- update_expense_document: [DEPENDENCY_BOUNDARY] MUST open exactly one transaction, read the document through tx.expenses().get_expense_document and its owning aggregate through tx.expenses().get_expense_aggregate for the project-scope check, write only through tx.expenses().update_expense_document, append the audit only through tx.audit(), and commit exactly once, using no legacy PortalTransaction expense method.
+- update_expense_document: [FIELD_ASSIGNMENT] MUST append exactly one AuditAction.DOCUMENT_UPDATE success audit through tx.audit() with entity_id equal to the canonical string of the updated document_id, never the UUID object and never the expense_id, and reason_code None.
+- update_expense_document: [DEPENDENCY_BOUNDARY] MUST use only ExpenseRepository from tx.expenses(), ProjectSectionRepository from tx.project_sections(), and AuditRepository from tx.audit() for persistence; direct legacy PortalTransaction expense and project-section method calls are forbidden, and this module MUST NOT import or call domain.budget_management.
+- update_expense_document: [VALIDATION_ERROR] Its transaction guard MUST track transaction open state in a caller-local boolean flag, catch BaseException, rollback only while that flag still marks the transaction open, and re-raise the original failure unchanged; catching only Exception, leaving a transaction neither committed nor rolled back on any path, a second rollback on an already closed transaction, and probing open state through assert_open or a caught PersistenceError are forbidden.
+- update_expense_document: [FIELD_ASSIGNMENT] Its AuditAction.DOCUMENT_UPDATE audit intent MUST set entity_id to the canonical string of the document_id; passing a UUID object is forbidden.
+- update_expense_document: [ORCHESTRATION] MUST use at most one transaction at a time and close it exactly once: a successful write MUST commit exactly once, a successful read MUST rollback exactly once before returning, and a failure MUST rollback and re-raise only while the transaction is still open; opening a transaction while another one this module owns is still open is forbidden, and so is rollback after a successful commit.
+- update_expense_document: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it writes and every current-time comparison it makes; it MUST NOT read a host clock itself.
+
+MODEL DATA DEFINITIONS (READ-ONLY SPEC DATA, NOT CODE):
+No = models.* spec data addresses referenced by notes.
+
+MODEL DATA ADDRESSES (SPEC DATA, NOT IMPORT PATHS):
+No = models.* spec data addresses referenced by notes.
+
+IMPORTED MODEL OWNERSHIP (DO NOT REDEFINE):
+Imported runtime model symbols are owned by their source modules listed in IMPORTS; use them as imported and do not redefine them here.
+
+RUNTIME MODEL SURFACE (CORE.MODELS IMPORTS):
+These are imported runtime symbols from core.models. Use the listed enum member names and model fields exactly.
+- ActorKind enum members: SERVICE='service', STAFF='staff', SYSTEM='system', VIEWER='viewer'
+- AllocationInstruction fields (exact, no others exist): amount: Decimal, section_id: UUID | None, target: AllocationTargetKind
+- AllocationTargetKind enum members: OTHER_EXPENSES='other_expenses', SECTION='section'
+- AuditAction enum members: BUDGET_MANUAL_VERSION_CREATE='budget.manual_version_create', BUDGET_SECTION_PLAN_EDIT='budget.section_plan_edit', DOCUMENT_UPDATE='document.update', EXPENSE_ALLOCATE='expense.allocate', EXPENSE_CORRECT='expense.correct', EXPENSE_CREATE='expense.create', EXPENSE_EXCLUDE='expense.exclude', EXPENSE_INCLUDE='expense.include', GRANT_CREATE='grant.create', GRANT_REVOKE='grant.revoke', PAYMENT_REGISTER='payment.register', PHOTO_PUBLISH='photo.publish', PHOTO_UPDATE='photo.update', PRINCIPAL_CREATE='principal.create', PRINCIPAL_CREDENTIAL_ISSUE='principal.credential_issue', PRINCIPAL_CREDENTIAL_REVOKE='principal.credential_revoke', PRINCIPAL_DISABLE='principal.disable', PRINCIPAL_ENABLE='principal.enable', PRODUCER_GRANT_CREATE='producer_grant.create', PRODUCER_GRANT_REVOKE='producer_grant.revoke', PROGRESS_UPDATE='progress.update', SNAPSHOT_ACTIVATE='snapshot.activate', SNAPSHOT_IMPORT='snapshot.import', STAFF_ASSIGNMENT_CREATE='staff_assignment.create', STAFF_ASSIGNMENT_REVOKE='staff_assignment.revoke', STAFF_CREATE='staff.create', STAFF_DISABLE='staff.disable', STAFF_LOGIN='staff.login', STAFF_LOGIN_FAILED='staff.login_failed', STAFF_LOGOUT='staff.logout', STAFF_RECOVERY_OVERRIDE='staff.recovery_override', STAFF_REINSTATE='staff.reinstate', STAFF_SESSIONS_REVOKE='staff.sessions_revoke', STAFF_SUSPEND='staff.suspend', VIEWER_CREATE='viewer.create', VIEWER_CREDENTIAL_ISSUE='viewer.credential_issue', VIEWER_CREDENTIAL_REVOKE='viewer.credential_revoke', VIEWER_REVOKE='viewer.revoke'
+- AuditEntityKind enum members: BUDGET_VERSION='budget_version', EXPENSE='expense', EXPENSE_ALLOCATION='expense_allocation', EXPENSE_DOCUMENT='expense_document', PRODUCER_GRANT='producer_grant', PROGRESS_PHOTO='progress_photo', SECTION_PLAN='section_plan', SECTION_PROGRESS='section_progress', SERVICE_CREDENTIAL='service_credential', SERVICE_PRINCIPAL='service_principal', SNAPSHOT_IMPORT='snapshot_import', STAFF_ACCOUNT='staff_account', STAFF_ASSIGNMENT='staff_assignment', STAFF_SESSION='staff_session', VIEWER='viewer', VIEWER_CREDENTIAL='viewer_credential', VIEWER_GRANT='viewer_grant', WORK_PAYMENT='work_payment'
+- AuditIntent fields (exact, no others exist): action: AuditAction, actor_id: UUID | None, actor_kind: ActorKind, entity_id: str | None, entity_kind: AuditEntityKind | None, key_version: int | None, project_id: UUID | None, reason_code: str | None, result: AuditResult
+- AuditRecord fields (exact, no others exist): action: AuditAction, actor_id: UUID | None, actor_kind: ActorKind, audit_id: UUID, entity_id: str | None, entity_kind: AuditEntityKind | None, key_version: int | None, occurred_at: datetime, project_id: UUID | None, reason_code: str | None, result: AuditResult
+- AuditRepository operations (exact, no others exist):
+    insert_audit(self, record: AuditRecord) -> None
+- AuditResult enum members: REJECTED='rejected', SUCCESS='success'
+- AuthorizedBinaryReference fields (exact, no others exist): file_ref: str, object_id: UUID, object_kind: BinaryObjectKind, project_context: AuthorizedProjectContext
+- AuthorizedProjectContext fields (exact, no others exist): actor_id: UUID, actor_kind: ActorKind, capability: Capability, key_version: int | None, project_id: UUID, registry_status: RegistryProjectStatus
+- BinaryObjectKind enum members: EXPENSE_DOCUMENT='expense_document', PROGRESS_PHOTO='progress_photo'
+- BinaryPayload fields (exact, no others exist): content: bytes, content_length: int, download_name: str, media_type: str
+- Capability enum members: PORTAL_ACCESS_MANAGE='portal.access.manage', PORTAL_BUDGET_MANAGE='portal.budget.manage', PORTAL_BUDGET_READ='portal.budget.read', PORTAL_ESTIMATE_SNAPSHOT_ACTIVATE='portal.estimate_snapshot.activate', PORTAL_ESTIMATE_SNAPSHOT_IMPORT='portal.estimate_snapshot.import', PORTAL_ESTIMATE_SNAPSHOT_READ_IMPORT_RESULT='portal.estimate_snapshot.read_import_result', PORTAL_EXPENSE_MANAGE='portal.expense.manage', PORTAL_EXPENSE_READ='portal.expense.read', PORTAL_PAYMENT_MANAGE='portal.payment.manage', PORTAL_PAYMENT_READ='portal.payment.read', PORTAL_PHOTO_MANAGE='portal.photo.manage', PORTAL_PHOTO_READ='portal.photo.read', PORTAL_PROGRESS_MANAGE='portal.progress.manage', PORTAL_PROGRESS_READ='portal.progress.read', PORTAL_PROJECT_READ='portal.project.read'
+- Expense fields (exact, no others exist): confirmed_at: datetime, confirmed_by: UUID, created_at: datetime, document_date: date, expense_id: UUID, included: bool, intake_fingerprint: str, project_id: UUID, provenance_ref: str, recognized_document_id: str, supplier: str, total_amount: Decimal, updated_at: datetime | None, updated_by: UUID | None
+- ExpenseAggregate fields (exact, no others exist): allocations: list[ExpenseAllocation], document: ExpenseDocument, expense: Expense
+- ExpenseAllocation fields (exact, no others exist): allocation_id: UUID, amount: Decimal, created_at: datetime, created_by: UUID, expense_id: UUID, section_id: UUID | None, target: AllocationTargetKind, updated_at: datetime | None, updated_by: UUID | None
+- ExpenseDocument fields (exact, no others exist): client_visible: bool, created_at: datetime, description: str | None, document_id: UUID, document_reference: str, expense_id: UUID, file_ref: str, updated_at: datetime | None, updated_by: UUID | None
+- ExpenseOperationOutcome fields (exact, no others exist): aggregate: ExpenseAggregate, replayed: bool
+- ExpenseRepository operations (exact, no others exist):
+    get_expense_aggregate(self, expense_id: UUID) -> ExpenseAggregate | None
+    get_expense_by_recognition_id(self, recognized_document_id: str) -> ExpenseAggregate | None
+    get_expense_document(self, document_id: UUID) -> ExpenseDocument | None
+    insert_expense_aggregate(self, aggregate: ExpenseAggregate) -> None
+    list_project_expenses(self, project_id: UUID) -> list[ExpenseAggregate]
+    update_expense(self, expense: Expense) -> None
+    update_expense_aggregate(self, aggregate: ExpenseAggregate) -> None
+    update_expense_document(self, document: ExpenseDocument) -> None
+- PortalSection fields (exact, no others exist): created_at: datetime, created_by_id: UUID, created_by_kind: ActorKind, project_id: UUID, section_id: UUID, source_key: str | None
+- ProjectContext fields (exact, no others exist): address: str, created_at: datetime, customer_ref: str | None, project: ProjectReference, registry_updated_at: datetime
+- ProjectReference fields (exact, no others exist): display_name: str, project_id: UUID, status: str
+- ProjectSectionRepository operations (exact, no others exist):
+    get_project_section(self, project_id: UUID, section_id: UUID) -> PortalSection | None
+    insert_project_sections(self, sections: list[PortalSection]) -> None
+    list_project_sections(self, project_id: UUID) -> list[PortalSection]
+- RegistryProjectStatus enum members: ACTIVE='active', ARCHIVED='archived'
+
+MODULE-LOCAL EXCEPTION EXPORTS:
+If any exception class is listed here, define it in this file at top level.
+Do not import these classes from core.errors or any other module.
+- class BinaryAccessRejected(Exception): pass
+- class ExpenseConflictError(Exception): pass
+- class ExpenseValidationError(Exception): pass
+
+FUNCTION ORDER (define in this order):
+_authorize_document_reference, _build_replacement_allocations, _validate_allocation_sum, correct_expense, read_expense_document, replace_expense_allocations, set_expense_inclusion, update_expense_document
+
+MODELS CONTEXT:
+Runtime models live in core.models. Use IMPORTS and IMPORTED MODEL
+OWNERSHIP for runtime model symbols; do not reproduce model schemas
+or import from a top-level models module.
+
+Generate the complete expense_management.py file.
+Every owned function listed above must be implemented exactly once at module top level.
+Define every class and method listed in OWNED CLASSES REQUIRED in this file.
+For every local binding in CONCRETE IMPLEMENTATION OBLIGATIONS, inherit the declared interface and implement its complete method surface with non-placeholder bodies.
+If this is the models module, emit every enum/model in MODEL DEFINITIONS exactly once.
+If this is not the models module, do not emit Pydantic model classes, enums, create_model calls, or local model schema shadows.
+Do not invent model fields or enum values not present in the imported runtime models.
+Use only the IMPORTS listed above plus required standard library imports.
+Import from IMPORTS every symbol the module uses, including symbols used only in annotations, and annotate each parameter with the type its CONTRACTS signature declares, never object or nothing.
+Never import from a top-level models module or models.*; runtime models live in core.models only when listed in IMPORTS.
+`models.<name>` in notes is a canonical spec data address, not an importable Python module.
+When one owner module provides a function and core.models provides a DTO with a similar name, split the imports by source exactly as listed in IMPORTS.
+Construct imported runtime models only with the fields listed in IMPORTED MODEL SURFACE; models are frozen and forbid extra fields, so an invented keyword argument fails at runtime.
+Read from a model value only the fields listed for its type; never use getattr(value, name, default) to probe for a field that is not declared.
+Never assign to an attribute of a model value (models are frozen): derive a changed value with value.model_copy(update={...}) or construct a new instance.
+Define every class listed in MODULE-LOCAL EXCEPTION EXPORTS in this file.
