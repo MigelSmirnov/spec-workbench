@@ -34,8 +34,35 @@ Done (commits on `agent/client-portal`):
 
 Checks: `design_record_construction --coverage` 0 findings (RC001–RC015),
 `design_imports --coverage` strict_ready, notes gate 0 blocks, projection
-`--verify` in sync. Rounds, State 8 assembly, `design_diagnose`, admission
-and Stage 8.1 follow in this section once run.
+`--verify` in sync (tool only since Workbench #172, merged at `2708670a`;
+the case script is deleted, the result is byte-identical). State 8
+`design_assembly` 15/15, 0 errors; `design_diagnose` no open finding (State 2
+`witness_material` not checkable, as before); Factory `normalize_spec`
+passes. Admission `--update-existing`: BLOCKED on FA002 (Stage 8.1: 16
+modules `AMBIGUITY`, `81_module_review.md`) and FA019 (rounds), nothing else.
+
+Rounds (one state at a time, one round per change):
+
+- State 0 r34: clear, **closed**.
+- State 1 r49: 3 blocking (two §5 violations, one photo contradiction) fixed
+  in `ae1afb08`; r50 on the fix clear. Still open: ten unchanged units hold
+  r49's topics T1/T3/T9 because the judge attributed them to no unit, and a
+  unit-less topic holds every unit under review until that unit's text
+  changes (`questions_workbench/units.py` `topic_units`) — a tool question.
+  `f72843a3` changed M17 again (RegistryFailureKind): one State 1 round due.
+- State 2 r101: 21 blocking. Fixed T9 (A30 vs Q12); T16, T20 accepted (Q11),
+  T6 carried to factory_checks. Open and pre-existing: 8 verified standard
+  violations against SPEC_STANDARD edition 3 (prose `rules.*`/`config.*`
+  addresses in A30 and the policy tables, clock IR addresses, the Registry URL
+  outside `runtime_settings`), 9 test-specification gaps and a hypothesis
+  awaiting disposition. One round due on `c2fde183`/`50cd85cd`.
+- State 3 r43: 3 blocking fixed in `f72843a3` (T4 disposed fixed); one round due.
+- State 4 r45: T2 fixed in `4ab32bb2`, T1 accepted; one round due.
+- State 5 r33: 5 contradictions (Q03, Q09, Q12 not yet carried into State 5
+  and A30) fixed in `50cd85cd`; one round due.
+- State 7 r22: 93 blocking over 16 modules; 7 caused by the migration notes
+  fixed in `a4e6b444`. The rest is in `81_module_review.md` (§2 note forms,
+  the Factory prompt's `model_copy` line, enum NAME vs value, Q10 mechanism).
 
 Waits on the projector fix (`tools/projector-record-builders`, `cb901290`):
 `experiments/client-portal/frame_record_builders.py` (untracked, never
