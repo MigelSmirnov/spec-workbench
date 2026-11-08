@@ -38,7 +38,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
-from . import documents, judge, layer_prompt, prompts, units
+from . import documents, judge, judge_context, layer_prompt, prompts, units
 from .provenance import QuoteProvenance
 from .provider import LATER_DIR, Provider
 
@@ -72,12 +72,57 @@ def _next_round(case: Path, state: int) -> Path:
     return base / f"round-{max(taken, default=0) + 1:02d}"
 
 
+class ReviewFailed(QuestionRoundError):
+    """A review whose answer was not a JSON object with open_points, twice."""
+
+    def __init__(self, reason: str, answers: list[str]):
+        super().__init__(reason)
+        self.answers = answers
+
+
+REVIEW_ATTEMPTS = 2
+
+
 def _review(provider: Provider, instruction: str, text: str) -> dict[str, Any]:
-    answer, usage = provider.complete(instruction, text)
-    points = _json_object(answer).get("open_points")
-    if not isinstance(points, list):
-        raise QuestionRoundError("a review answered without open_points")
-    return {"open_points": points, "usage": usage, "raw": answer}
+    """One review. An answer that is not a JSON object with open_points is
+    asked again once: one malformed answer must not lose a round whose other
+    reviews answered (#147). A second failure raises ReviewFailed, which keeps
+    both answers; a provider error is not retried here."""
+    answers = []
+    for _ in range(REVIEW_ATTEMPTS):
+        answer, usage = provider.complete(instruction, text)
+        answers.append(answer)
+        try:
+            points = _json_object(answer).get("open_points")
+        except QuestionRoundError as exc:
+            reason = str(exc)
+            continue
+        if isinstance(points, list):
+            return {"open_points": points, "usage": usage, "raw": answer,
+                    **({"retried": answers[:-1]} if len(answers) > 1 else {})}
+        reason = "a review answered without open_points"
+    raise ReviewFailed(f"{reason} ({len(answers)} attempts)", answers)
+
+
+def _failed_review(exc: ReviewFailed) -> dict[str, Any]:
+    """A review recorded as failed: its answers kept, no point taken from it."""
+    return {"failed": str(exc), "answers": exc.answers, "open_points": []}
+
+
+def _valid_reviews(reviews: list[dict[str, Any]], what: str) -> None:
+    """A round goes on without a failed review only while REPEATED reviews answered."""
+    valid = sum(1 for r in reviews if "failed" not in r)
+    if valid < REPEATED:
+        reasons = "; ".join(r["failed"] for r in reviews if "failed" in r)
+        raise QuestionRoundError(f"{what}: only {valid} of {len(reviews)} reviews answered, "
+                                 f"and a round needs {REPEATED} ({reasons})")
+
+
+def _review_or_failed(provider: Provider, instruction: str, text: str) -> dict[str, Any]:
+    try:
+        return _review(provider, instruction, text)
+    except ReviewFailed as exc:
+        return _failed_review(exc)
 
 
 def _group(provider: Provider, reviews: list[dict[str, Any]], keep_points: bool = False) -> list[dict[str, Any]]:
@@ -116,6 +161,8 @@ def _group(provider: Provider, reviews: list[dict[str, Any]], keep_points: bool 
                                + (f" | reviewer's witness: {json.dumps(points[m]['witness'], ensure_ascii=False)}"
                                   if _has_witness(points[m]) else "")
                                for m in topic["members"]]
+            # the passages the points quote, which the judge is given inline (judge_context.py)
+            topic["quoted"] = [q for m in topic["members"] for q in judge_context.topic_quotes(points[m])]
     return sorted(topics, key=lambda t: (-len(t["runs"]), t["topic"]))
 
 
@@ -199,24 +246,32 @@ def _judge(provider: Provider, state: int, text: str, texts: list[tuple[int, str
            repeated: list[dict[str, Any]], old: dict[str, str] | None,
            later: dict[str, str] | None = None,
            precedents: list[dict[str, Any]] | None = None,
-           witness: bool = False, case: Path | None = None, layer: str | None = None) -> dict[str, Any]:
+           witness: bool = False, case: Path | None = None, layer: str | None = None,
+           scope: list[str] | None = None) -> dict[str, Any]:
     """Judge the repeated topics. `later` maps the later states' documents to
-    their texts; a provider that reads files gets them as files to search, so
-    the judge can find a topic already decided below without receiving them
-    whole. Other providers judge without them. `precedents` are the state's
-    prior non-blocking judgements, which the judge may follow for the same
-    question on unchanged passages."""
-    change = None
-    if old is not None:
-        change = "".join(
-            "".join(difflib.unified_diff(old[name].splitlines(True), body.splitlines(True), name, name, n=2))
-            for _, name, body in texts
-        )
-    items = []
+    their texts; `precedents` are the state's prior non-blocking judgements,
+    which the judge may follow for the same question on unchanged passages.
+
+    What the judge reads depends on the provider (owner decision 2026-11-08, #147):
+
+    - a provider that reads files (`reads_files`), in a document state with the
+      round's `scope` given, gets inline only the topics, the units they
+      concern with their diff, the passages they quote or name, the precedents
+      and the layer block (judge_context.py); the full texts of States 0..N,
+      the later documents and the texts a reopened state was closed with are
+      files it searches;
+    - any other provider, and State 7 (whose text is one module's prompt), gets
+      the round text `text` inline as before, the change since `old` whole,
+      and no later documents.
+
+    Either way judge.check finds every quote in the full texts, which it gets
+    here from `texts`, never from what the judge was shown."""
     for index, topic in enumerate(repeated, 1):
         topic["id"] = f"T{index}"
-        items.append({"id": topic["id"], "topic": topic["topic"], "points": topic.get("points", topic["questions"])})
-    later = later if later and getattr(provider, "reads_files", False) else None
+    items = [{"id": t["id"], "topic": t["topic"], "points": t.get("points", t["questions"])} for t in repeated]
+    reads_files = bool(getattr(provider, "reads_files", False))
+    searched = reads_files and scope is not None and state != documents.MODULE_STATE
+    later = later if later and reads_files else None
     later_files = [f"{LATER_DIR}/{name}" for name in sorted(later)] if later else None
     # Offer only a precedent the judge can still follow. One whose quoted
     # passages changed invites `judged_before`, which `judge.check` then rejects
@@ -225,13 +280,32 @@ def _judge(provider: Provider, state: int, text: str, texts: list[tuple[int, str
     later_text = "\n\n".join(later.values()) if later else None
     precedents = [p for p in precedents or [] if judge.precedent_holds(p, current, later_text)]
     try:
-        scope = documents.question_scope(state)
+        question_scope = documents.question_scope(state)
     except documents.QuestionScopeError:
-        scope = None
-    instruction = prompts.judge_instruction(state, old is not None, later_files, bool(precedents), scope, witness)
-    judge_text = prompts.judge_input(text, items, change, precedents, layer)
-    if later:
-        answer = provider.complete_with_files(instruction, judge_text, later)[0]
+        question_scope = None
+    files: dict[str, str] = {}
+    if searched:
+        selected = judge_context.select(texts, state, repeated, scope or [], old, later)
+        files = selected.files
+        state_files = [f"{judge_context.STATES_DIR}/{name}" for _, name, _ in texts]
+        closed_files = ([f"{judge_context.CLOSED_DIR}/{name}" for _, name, _ in texts]
+                        if old is not None else None)
+        instruction = prompts.judge_instruction(state, old is not None, later_files, bool(precedents),
+                                                question_scope, witness, state_files, closed_files)
+        judge_text = prompts.judge_input(judge_context.render(selected, state), items, None, precedents, layer)
+    else:
+        change = None
+        if old is not None:
+            change = "".join(
+                "".join(difflib.unified_diff(old[name].splitlines(True), body.splitlines(True), name, name, n=2))
+                for _, name, body in texts
+            )
+        instruction = prompts.judge_instruction(state, old is not None, later_files, bool(precedents),
+                                                question_scope, witness)
+        judge_text = prompts.judge_input(text, items, change, precedents, layer)
+        files = {f"{LATER_DIR}/{name}": body for name, body in later.items()} if later else {}
+    if files:
+        answer = provider.complete_with_files(instruction, judge_text, files)[0]
     else:
         answer = provider.complete(instruction, judge_text)[0]
     judgements = {j.get("id"): j for j in _json_object(answer).get("judgements") or [] if isinstance(j, dict)}
@@ -250,7 +324,9 @@ def _judge(provider: Provider, state: int, text: str, texts: list[tuple[int, str
             found = provenance.of_judgement(topic["judgement"])
             if found:
                 topic["judgement"]["provenance"] = found
-    result = {"provider": provider.name, "raw": answer}
+    result = {"provider": provider.name, "raw": answer, "inline_characters": len(judge_text)}
+    if searched:
+        result["searched_files"] = sorted(files)
     if later:
         result["later_documents"] = {name: hashlib.sha256(body.encode("utf-8")).hexdigest()
                                      for name, body in later.items()}
@@ -560,13 +636,14 @@ def _document_round(provider: Provider, state: int, runs: int, read: StateTexts,
     precedents = [p for p in _precedents(case, state) if _evidence_holds(p, evidence, scope)]
     instruction = base + prompts.layer_scope(layer, scope)
     with ThreadPoolExecutor(max_workers=runs) as pool:
-        reviews = list(pool.map(lambda _: _review(provider, instruction, text), range(runs)))
+        reviews = list(pool.map(lambda _: _review_or_failed(provider, instruction, text), range(runs)))
+    _valid_reviews(reviews, f"State {state}")
     for review in reviews:
         _set_aside(review, scope, changed, read.units)
     topics = _group(provider, reviews, keep_points=True)
     repeated = _judged(topics, witness=True)
     judged = (_judge(provider, state, text, read.texts, repeated, old, later, precedents,
-                     witness=True, case=case, layer=prompts.layer_judge(layer, scope)) if repeated
+                     witness=True, case=case, layer=prompts.layer_judge(layer, scope), scope=scope) if repeated
               else {"provider": provider.name})
     return reviews, topics, repeated, judged
 
@@ -598,8 +675,9 @@ def _module_round(provider: Provider, state: int, runs: int, read: StateTexts, s
     def one(job: tuple[str, int]) -> dict[str, Any]:
         module = job[0]
         diff = changed[module][0] if module in changed else None
-        review = _review(provider, prompts.module_ask_instruction(state, scope_text, diff, obligations[module]),
-                         prompts.module_input(module, read.units[module]["text"]))
+        review = _review_or_failed(provider,
+                                   prompts.module_ask_instruction(state, scope_text, diff, obligations[module]),
+                                   prompts.module_input(module, read.units[module]["text"]))
         review["unit"] = module
         for point in review["open_points"]:
             if isinstance(point, dict):
@@ -610,6 +688,8 @@ def _module_round(provider: Provider, state: int, runs: int, read: StateTexts, s
     jobs = [(module, run) for module in scope for run in range(runs)]
     with ThreadPoolExecutor(max_workers=min(MODULE_WORKERS, len(jobs))) as pool:
         reviews = list(pool.map(one, jobs))
+    for module in scope:
+        _valid_reviews([r for r in reviews if r["unit"] == module], f"State {state} module {module}")
     precedents = _precedents(case, state)
     topics: list[dict[str, Any]] = []
     repeated: list[dict[str, Any]] = []
@@ -672,11 +752,12 @@ def ask_round(case: Path, state: int, provider: Provider, runs: int = DEFAULT_RU
                                               layer)
     for topic in topics:
         topic.pop("points", None)
+        topic.pop("quoted", None)
     directory = _next_round(case, state)
     directory.mkdir(parents=True)
-    for index, review in enumerate(reviews, 1):
-        name = (f"review-{review['unit']}-{(index - 1) % runs + 1}.json" if "unit" in review
-                else f"review-{index}.json")
+    names = [f"review-{review['unit']}-{(index - 1) % runs + 1}.json" if "unit" in review
+             else f"review-{index}.json" for index, review in enumerate(reviews, 1)]
+    for name, review in zip(names, reviews):
         (directory / name).write_text(json.dumps(review, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     if state == documents.MODULE_STATE:
         kept = directory / PROMPTS_DIR
@@ -693,6 +774,9 @@ def ask_round(case: Path, state: int, provider: Provider, runs: int = DEFAULT_RU
         "documents": read.digests,
         "reviews": runs,
         "points": [len(r["open_points"]) for r in reviews],
+        # a review whose answer was not valid JSON twice (#147): kept, no point taken from it
+        "failed_reviews": [{"review": name, "reason": r["failed"]} for name, r in zip(names, reviews)
+                           if "failed" in r],
         "since": since,
         "judge": judged,
         "repeated_topics": len(repeated),
