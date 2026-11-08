@@ -13,8 +13,12 @@ results are in `80_assembly.md`; the semantic diff, for the owner, is
 - **Exported once, re-export of the sweep pending merge.** Factory #190
   accepted `018b2e2e`. The sweep below changes two notes and gives
   `global_spec.json` sha256 `cbcc7537…` (`cbcc75374b82a3ffda85edb4a933275dc3844572a78bc5f3e83a843ab3caf9ef`).
-  It is exported to Factory branch `spec/client-portal-staff-auth-note`
-  (a separate PR, not merged by the agent). No Route B or deploy was run.
+  It is exported to Factory branch `spec/client-portal-staff-auth-note`,
+  MigelSmirnov/code-factory#192 (commit `334b5534`, CI green: 4/4), not
+  merged by the agent. Export `--check` READY_TO_EXPORT,
+  `verify_workbench_handoff` valid, Spec Inspector PASS (BLOCK 0, WARN 0),
+  `route_b_affected --changed global --require-complete` exit 0 (37
+  modules, `removed_modules` []). No Route B or deploy was run.
 - States 0-5 and 7 are closed on their current texts (`status` per state:
   closed, ready). `authoring next` stops at `state8_assembly`, which is
   ready. Admission reads `READY_TO_EXPORT` (22 checks: 17 PASS, 5
