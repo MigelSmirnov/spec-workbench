@@ -193,7 +193,7 @@ def test_the_round_of_state_2_reads_its_layer_prompt(tmp_path, monkeypatch):
     provider = Provider()
     service.ask_round(case, 2, provider)
     instruction, text = provider.asked[0]
-    assert "What you read. Not the whole specification" in instruction
+    assert "What you read: the units of State 2 under review" in instruction
     assert "Currency policy" in text            # A03 names nothing: honest fallback, said so
     assert "their texts whole, because" in instruction
     assert "A03 names nothing an earlier state defines" in instruction
@@ -242,3 +242,84 @@ def test_reviewers_and_judge_both_read_the_closed_selection(tmp_path, monkeypatc
     service.ask_round(case, 2, provider)
     assert all("MONEY RULE" in text for text in provider.asked)
     assert provider.judged and "MONEY RULE" in provider.judged[0]
+
+
+# ---- the main causes of whole-text fallback on client-portal (#147 comment 6721261089)
+
+PRODUCT_WITH_DECISIONS = """# State 0 — Demo product
+
+## Principals
+
+### StaffAccount
+
+A staff member signs in.
+
+### ServicePrincipal
+
+A service calls in.
+
+## Primary outcomes
+
+### Operator management
+
+An operator sets progress.
+
+## Decisions
+
+Numbered so later states can cite them.
+
+### R0-01 — Sole trader
+
+Few projects.
+
+### R0-23 — No email challenge
+
+No password reset.
+"""
+
+
+def test_state0_has_no_earlier_state_and_never_falls_back():
+    t = [(0, "00_product.md", PRODUCT_WITH_DECISIONS)]
+    selection = lp.select(t, 0, units.units(t, 0), ["00_product.md:Decisions"], {}, None)
+    assert selection.whole == []
+
+
+def test_a_cited_r0_decision_brings_its_own_level3_passage_not_the_whole_section():
+    models = "# State 1 — Models\n\n## Model M06 — StaffSession\n\nNo password reset exists (R0-23).\n"
+    t = [(0, "00_product.md", PRODUCT_WITH_DECISIONS), (1, "01_models.md", models)]
+    selection = lp.select(t, 1, units.units(t, 1), ["01_models.md:Model M06 — StaffSession"], {}, None)
+    received = [key for _, _, key, _ in selection.received]
+    assert selection.whole == []
+    assert received == ["00_product.md:Decisions / R0-23 — No email challenge"]
+    assert "### R0-23 — No email challenge\n\nNo password reset.\n" in lp.render(selection, t, 1)   # verbatim
+
+
+def test_model_numbers_quoted_titles_and_id_fields_resolve():
+    models = ("# State 1 — Models\n\n## Model M14 — ServiceCredential\n\n- `service_principal_id: UUID`\n\n"
+              "## Model M32 — SectionProgress\n\n- `percent: int`\n")
+    rules = ("# State 2 — Rules\n\n## Accepted decision A20 — Progress\n\n"
+             "Product text of State 0 (\"Primary outcomes\") and M32.\n")
+    t = [(0, "00_product.md", PRODUCT_WITH_DECISIONS), (1, "01_models.md", models), (2, "02_rules.md", rules)]
+    selection = lp.select(t, 2, units.units(t, 2), ["A20"], {}, None)
+    received = [key for _, _, key, _ in selection.received]
+    assert "01_models.md:Model M32 — SectionProgress" in received                     # M32
+    assert "00_product.md:Primary outcomes" in received                                # quoted title
+    selection = lp.select(t, 1, units.units(t, 1), ["01_models.md:Model M14 — ServiceCredential"], {}, None)
+    assert [key for _, _, key, _ in selection.received] == ["00_product.md:Principals / ServicePrincipal"]
+
+
+def test_a_qualified_operation_heading_defines_its_own_name_only():
+    assert lp.defined("x", "## `public_op:derived_views.build_budget_view`\n") == {"build_budget_view"}
+    assert "api" in lp.defined("30_modules.md:`api`", "## `api`\n\nRoutes.\n")
+
+
+def test_the_closure_runs_through_models_and_decisions_not_through_modules():
+    modules = ("# State 3 — Modules\n\n## `ledger`\n\nOwns A01 and A03.\n\n## `reports`\n\nOwns A02.\n")
+    flows = "# State 4 — Flows\n\n## `flow:record`\n\n1. `ledger` records an entry.\n"
+    t = [*texts(), (3, "30_modules.md", modules), (4, "40_flows.md", flows)]
+    selection = lp.select(t, 4, units.units(t, 4), ["40_flows.md:`flow:record`"], {}, None)
+    received = [key for _, _, key, _ in selection.received]
+    assert "30_modules.md:`ledger`" in received                     # named by the open unit
+    assert "A01" in received and "A03" in received                  # named by the module: one step
+    assert "01_models.md:Model M01 — Entry" in received             # A01 -> Entry: the closure goes on
+    assert "30_modules.md:`reports`" not in received                # never reached through a module
