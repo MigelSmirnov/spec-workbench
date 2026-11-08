@@ -836,3 +836,161 @@ def test_record_construction_closure_is_projected_into_rules(tmp_path, monkeypat
     assert findings == []
     assert projected["rules"]["record_construction_backend"] == backend
     assert any(row["source"] == "70_record_construction_closure.json" and row["ready"] for row in source_checks)
+
+
+# ── the record builders' module (client-portal migration onto 6.13, 2026-11-08) ──
+# Several module roots, as client-portal has: the module must be placed from its
+# IR, not from a shared root, and its edges come from the IR (SPEC_STANDARD 6.13).
+
+def _builders_backend(**wiring):
+    return {
+        "kind": "record_construction_backend", "schema_version": 1,
+        "backend": {"emitter": "python_record_builders_v1"},
+        "wiring": {"module": "record_builders", "models_module": "core.models", **wiring},
+        "constructions": {
+            "build_row": {
+                "form": "construct", "target": "Row", "consumers": ["alpha"],
+                "over": None, "element": None, "base": None,
+                "parts": {"tag": {"target": "Tag", "over": None, "element": None,
+                                  "fields": {"limit": {"ref": "constant", "symbol": "ZETA_LIMIT"}}}},
+                "fields": {"prefix": {"ref": "constant", "symbol": "ALPHA_PREFIX"},
+                           "amount": {"ref": "call", "function": "round_amount", "args": ["amount"]},
+                           "tag": {"ref": "part", "name": "tag"}},
+                "dropped": {},
+            },
+            # a builder calling a builder of the same IR imports nothing
+            "build_rows": {
+                "form": "construct", "target": "Rows", "consumers": ["alpha"],
+                "over": None, "element": None, "base": None, "parts": {},
+                "fields": {"row": {"ref": "call", "function": "build_row", "args": ["amount"]}},
+                "dropped": {},
+            },
+        },
+    }
+
+
+def _write_builders(project, backend=None):
+    (project / "70_record_construction_closure.json").write_text(json.dumps({
+        "schema_version": "spec_workbench_record_construction_backend_closure.v1",
+        "status": "closed", "source_refs": ["test"], "rationale": "test",
+        "backend_ir": backend or _builders_backend(),
+    }), encoding="utf-8")
+
+
+def _patch_builder_contracts(monkeypatch):
+    contracts = {
+        "new": {"module": "module:alpha", "signature": "() -> str"},
+        "round_amount": {"module": "module:policy", "signature": "(amount: Decimal) -> Decimal"},
+        "build_row": {"module": "module:record_builders", "signature": "(amount: Decimal) -> Row"},
+        "build_rows": {"module": "module:record_builders", "signature": "(amount: Decimal) -> Rows"},
+    }
+    monkeypatch.setattr(service.design_stage6_contracts, "handoff", lambda project: {
+        "ready": True, "summary": {"errors": 0, "plan_closed": True}, "contracts": contracts})
+
+
+def _builders_case(tmp_path, monkeypatch, *, order=("models", "policy", "alpha"), paths=None, edges=None):
+    project = _project(tmp_path)
+    current = json.loads((project / "global_spec.json").read_text(encoding="utf-8"))
+    current["module_order"] = list(order)
+    current["module_paths"] = paths or {"models": "core/models", "policy": "domain/policy",
+                                        "alpha": "application/alpha"}
+    current["module_functions"]["policy"] = ["round_amount"]
+    if edges is not None:
+        current["imports"]["module_internal"] = edges
+    (project / "global_spec.json").write_text(json.dumps(current, indent=2) + "\n", encoding="utf-8")
+    _patch_ready_sources(monkeypatch)
+    _patch_builder_contracts(monkeypatch)
+    _write_data_provider(project)
+    _write_builders(project)
+    return project
+
+
+def test_builders_module_is_placed_after_its_last_provider_under_several_roots(tmp_path, monkeypatch) -> None:
+    project = _builders_case(tmp_path, monkeypatch)
+
+    _, projected, findings, _ = service._project(project)
+
+    assert findings == []
+    # after data_provider and policy, the modules it imports; before alpha, which imports it
+    assert projected["module_order"] == ["models", "data_provider", "policy", "record_builders", "alpha"]
+    assert projected["module_paths"] == {
+        "models": "core/models", "data_provider": "core/data_provider", "policy": "domain/policy",
+        "record_builders": "core/record_builders", "alpha": "application/alpha"}
+    assert projected["module_functions"]["record_builders"] == ["build_row", "build_rows"]
+
+
+def test_builders_module_edges_are_the_ir_constants_and_calls(tmp_path, monkeypatch) -> None:
+    # a hand edit of the builders' edges does not survive: the IR states them
+    project = _builders_case(tmp_path, monkeypatch, edges={"record_builders": {"models": ["Stale"]}})
+
+    _, projected, findings, _ = service._project(project)
+
+    assert findings == []
+    assert projected["imports"]["module_internal"] == {
+        "record_builders": {"data_provider": ["ALPHA_PREFIX", "ZETA_LIMIT"], "policy": ["round_amount"]}}
+
+
+def test_builders_module_without_providers_has_no_edges(tmp_path, monkeypatch) -> None:
+    project = _builders_case(tmp_path, monkeypatch)
+    backend = _builders_backend()
+    backend["constructions"]["build_row"]["fields"]["prefix"] = {"ref": "literal", "value": True}
+    backend["constructions"]["build_row"]["fields"]["amount"] = {"ref": "name", "name": "amount"}
+    backend["constructions"]["build_row"]["parts"]["tag"]["fields"]["limit"] = {"ref": "none"}
+    _write_builders(project, backend)
+
+    _, projected, findings, _ = service._project(project)
+
+    assert findings == []
+    # right after the models module, its only provider
+    assert projected["module_order"][:3] == ["models", "record_builders", "data_provider"]
+    assert "record_builders" not in projected["imports"]["module_internal"]
+
+
+def test_placed_builders_module_is_not_duplicated_or_moved(tmp_path, monkeypatch) -> None:
+    order = ("models", "data_provider", "policy", "alpha", "record_builders")
+    paths = {"models": "core/models", "data_provider": "core/data_provider", "policy": "domain/policy",
+             "alpha": "application/alpha", "record_builders": "builders/record_builders"}
+    project = _builders_case(tmp_path, monkeypatch, order=order, paths=paths)
+
+    _, projected, findings, _ = service._project(project)
+
+    assert findings == []
+    assert projected["module_order"] == list(order)
+    assert projected["module_paths"] == paths
+
+
+def test_builders_projection_is_idempotent(tmp_path, monkeypatch) -> None:
+    project = _builders_case(tmp_path, monkeypatch)
+    service.apply(project)
+    first = (project / "global_spec.json").read_text(encoding="utf-8")
+    assert service.verify(project)["in_sync"] is True
+    service.apply(project)
+    assert (project / "global_spec.json").read_text(encoding="utf-8") == first
+    assert json.loads(first)["module_order"].count("record_builders") == 1
+
+
+def test_builders_module_after_a_consumer_blocks(tmp_path, monkeypatch) -> None:
+    project = _builders_case(tmp_path, monkeypatch, order=("models", "alpha", "policy"))
+
+    plan = service.build_plan(project)
+
+    assert plan["ready_to_apply"] is False
+    assert [row["code"] for row in plan["findings"]] == ["record_builders_module_unplaceable"]
+
+
+def test_builders_without_a_models_module_path_blocks(tmp_path, monkeypatch) -> None:
+    project = _builders_case(tmp_path, monkeypatch)
+    _write_builders(project, _builders_backend(models_module="elsewhere.models"))
+
+    plan = service.build_plan(project)
+
+    assert plan["ready_to_apply"] is False
+    assert [row["code"] for row in plan["findings"]] == ["record_builders_module_unplaceable"]
+
+
+def test_backend_placed_module_needs_no_shared_root() -> None:
+    contracts = {"f": {"module": "module:record_builders"}}
+    order, paths = service._sync_module_topology(
+        list(_MIXED_PATHS), dict(_MIXED_PATHS), contracts, frozenset({"record_builders"}))
+    assert order == list(_MIXED_PATHS)
+    assert paths == _MIXED_PATHS
