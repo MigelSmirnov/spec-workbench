@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import subprocess
 
+import pytest
 
 from questions_workbench import judge_context, service
 
@@ -155,3 +156,52 @@ def test_the_topics_and_their_units_bring_the_earlier_units_they_name():
     selected = judge_context.select(texts, 2, [topic], ["A1", "A2"], None)
     assert [key for _, _, key, _ in selected.received] == ["01_models.md:Model M01 — Invoice"]
 
+
+class Malformed(Provider):
+    """The first review to arrive answers prose `bad` times before JSON."""
+
+    def __init__(self, verdict: dict, bad: int):
+        super().__init__(verdict)
+        import threading
+        self.lock, self.bad, self.owner, self.calls = threading.Lock(), bad, None, 0
+
+    def complete(self, instruction: str, text: str):
+        import threading
+        if instruction.startswith(("You judge the topics", "You receive the open points")):
+            return super().complete(instruction, text)
+        with self.lock:
+            if self.owner is None:
+                self.owner = threading.get_ident()
+            if self.owner == threading.get_ident() and self.bad:
+                self.bad -= 1
+                self.calls += 1
+                return "I could not decide; here are my thoughts.", {}
+        return super().complete(instruction, text)
+
+
+def test_a_review_answering_prose_once_is_asked_again(tmp_path):
+    case = _case(tmp_path)
+    provider = Malformed(ANSWERED, bad=1)
+    summary = service.ask_round(case, 2, provider)
+    assert summary["failed_reviews"] == [] and summary["points"] == [1, 1, 1]
+    kept = [json.loads(p.read_text()) for p in sorted((case / "questions" / "state2" / "round-01").glob("review-*"))]
+    assert sum(1 for r in kept if r.get("retried")) == 1
+
+
+def test_a_review_answering_prose_twice_is_recorded_failed_and_the_round_goes_on(tmp_path):
+    case = _case(tmp_path)
+    provider = Malformed(ANSWERED, bad=2)
+    provider.reviews = [[_point("A1", QUOTED_EARLIER)], [_point("A1", QUOTED_EARLIER)]]
+    summary = service.ask_round(case, 2, provider)
+    failed, = summary["failed_reviews"]
+    assert "JSON object" in failed["reason"]
+    kept = json.loads((case / "questions" / "state2" / "round-01" / failed["review"]).read_text())
+    assert kept["open_points"] == [] and len(kept["answers"]) == 2  # nothing fabricated
+    assert summary["repeated_topics"] == 1  # the two answering reviews still raise and judge it
+
+
+def test_a_round_with_fewer_than_two_answering_reviews_is_refused():
+    failed = service._failed_review(service.ReviewFailed("no JSON", ["a", "b"]))
+    with pytest.raises(service.QuestionRoundError, match="only 1 of 3 reviews answered"):
+        service._valid_reviews([failed, dict(failed), {"open_points": []}], "State 2")
+    service._valid_reviews([failed, {"open_points": []}, {"open_points": []}], "State 2")

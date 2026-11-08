@@ -72,12 +72,57 @@ def _next_round(case: Path, state: int) -> Path:
     return base / f"round-{max(taken, default=0) + 1:02d}"
 
 
+class ReviewFailed(QuestionRoundError):
+    """A review whose answer was not a JSON object with open_points, twice."""
+
+    def __init__(self, reason: str, answers: list[str]):
+        super().__init__(reason)
+        self.answers = answers
+
+
+REVIEW_ATTEMPTS = 2
+
+
 def _review(provider: Provider, instruction: str, text: str) -> dict[str, Any]:
-    answer, usage = provider.complete(instruction, text)
-    points = _json_object(answer).get("open_points")
-    if not isinstance(points, list):
-        raise QuestionRoundError("a review answered without open_points")
-    return {"open_points": points, "usage": usage, "raw": answer}
+    """One review. An answer that is not a JSON object with open_points is
+    asked again once: one malformed answer must not lose a round whose other
+    reviews answered (#147). A second failure raises ReviewFailed, which keeps
+    both answers; a provider error is not retried here."""
+    answers = []
+    for _ in range(REVIEW_ATTEMPTS):
+        answer, usage = provider.complete(instruction, text)
+        answers.append(answer)
+        try:
+            points = _json_object(answer).get("open_points")
+        except QuestionRoundError as exc:
+            reason = str(exc)
+            continue
+        if isinstance(points, list):
+            return {"open_points": points, "usage": usage, "raw": answer,
+                    **({"retried": answers[:-1]} if len(answers) > 1 else {})}
+        reason = "a review answered without open_points"
+    raise ReviewFailed(f"{reason} ({len(answers)} attempts)", answers)
+
+
+def _failed_review(exc: ReviewFailed) -> dict[str, Any]:
+    """A review recorded as failed: its answers kept, no point taken from it."""
+    return {"failed": str(exc), "answers": exc.answers, "open_points": []}
+
+
+def _valid_reviews(reviews: list[dict[str, Any]], what: str) -> None:
+    """A round goes on without a failed review only while REPEATED reviews answered."""
+    valid = sum(1 for r in reviews if "failed" not in r)
+    if valid < REPEATED:
+        reasons = "; ".join(r["failed"] for r in reviews if "failed" in r)
+        raise QuestionRoundError(f"{what}: only {valid} of {len(reviews)} reviews answered, "
+                                 f"and a round needs {REPEATED} ({reasons})")
+
+
+def _review_or_failed(provider: Provider, instruction: str, text: str) -> dict[str, Any]:
+    try:
+        return _review(provider, instruction, text)
+    except ReviewFailed as exc:
+        return _failed_review(exc)
 
 
 def _group(provider: Provider, reviews: list[dict[str, Any]], keep_points: bool = False) -> list[dict[str, Any]]:
@@ -591,7 +636,8 @@ def _document_round(provider: Provider, state: int, runs: int, read: StateTexts,
     precedents = [p for p in _precedents(case, state) if _evidence_holds(p, evidence, scope)]
     instruction = base + prompts.layer_scope(layer, scope)
     with ThreadPoolExecutor(max_workers=runs) as pool:
-        reviews = list(pool.map(lambda _: _review(provider, instruction, text), range(runs)))
+        reviews = list(pool.map(lambda _: _review_or_failed(provider, instruction, text), range(runs)))
+    _valid_reviews(reviews, f"State {state}")
     for review in reviews:
         _set_aside(review, scope, changed, read.units)
     topics = _group(provider, reviews, keep_points=True)
@@ -629,8 +675,9 @@ def _module_round(provider: Provider, state: int, runs: int, read: StateTexts, s
     def one(job: tuple[str, int]) -> dict[str, Any]:
         module = job[0]
         diff = changed[module][0] if module in changed else None
-        review = _review(provider, prompts.module_ask_instruction(state, scope_text, diff, obligations[module]),
-                         prompts.module_input(module, read.units[module]["text"]))
+        review = _review_or_failed(provider,
+                                   prompts.module_ask_instruction(state, scope_text, diff, obligations[module]),
+                                   prompts.module_input(module, read.units[module]["text"]))
         review["unit"] = module
         for point in review["open_points"]:
             if isinstance(point, dict):
@@ -641,6 +688,8 @@ def _module_round(provider: Provider, state: int, runs: int, read: StateTexts, s
     jobs = [(module, run) for module in scope for run in range(runs)]
     with ThreadPoolExecutor(max_workers=min(MODULE_WORKERS, len(jobs))) as pool:
         reviews = list(pool.map(one, jobs))
+    for module in scope:
+        _valid_reviews([r for r in reviews if r["unit"] == module], f"State {state} module {module}")
     precedents = _precedents(case, state)
     topics: list[dict[str, Any]] = []
     repeated: list[dict[str, Any]] = []
@@ -706,9 +755,9 @@ def ask_round(case: Path, state: int, provider: Provider, runs: int = DEFAULT_RU
         topic.pop("quoted", None)
     directory = _next_round(case, state)
     directory.mkdir(parents=True)
-    for index, review in enumerate(reviews, 1):
-        name = (f"review-{review['unit']}-{(index - 1) % runs + 1}.json" if "unit" in review
-                else f"review-{index}.json")
+    names = [f"review-{review['unit']}-{(index - 1) % runs + 1}.json" if "unit" in review
+             else f"review-{index}.json" for index, review in enumerate(reviews, 1)]
+    for name, review in zip(names, reviews):
         (directory / name).write_text(json.dumps(review, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     if state == documents.MODULE_STATE:
         kept = directory / PROMPTS_DIR
@@ -725,6 +774,9 @@ def ask_round(case: Path, state: int, provider: Provider, runs: int = DEFAULT_RU
         "documents": read.digests,
         "reviews": runs,
         "points": [len(r["open_points"]) for r in reviews],
+        # a review whose answer was not valid JSON twice (#147): kept, no point taken from it
+        "failed_reviews": [{"review": name, "reason": r["failed"]} for name, r in zip(names, reviews)
+                           if "failed" in r],
         "since": since,
         "judge": judged,
         "repeated_topics": len(repeated),

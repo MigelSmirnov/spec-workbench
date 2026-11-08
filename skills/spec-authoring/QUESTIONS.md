@@ -38,6 +38,14 @@ witness. The round is kept under
 with the texts' digests, every topic, how many reviews raised it and, for a
 repeated topic, its judgement.
 
+A review whose answer is not a JSON object with `open_points` is asked once
+more. When the second answer fails too, the review is kept as failed — its
+answers recorded, no point taken from it, never a fabricated one — and the
+round goes on with the others while at least two answered; `summary.json`
+lists it under `failed_reviews`. With fewer than two answering reviews the
+round is refused. Before this, one malformed answer lost a round of three
+reviews already paid for (#147).
+
 ### A round is asked with its transition
 
 The texts alone hide what the next gate will reject. On client-portal (issue
