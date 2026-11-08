@@ -127,6 +127,42 @@ class CodexCliProvider:
             files,
         )
 
+    def explore(self, instruction: str, text: str, workspace: Path) -> tuple[str, dict[str, Any], list[dict[str, Any]]]:
+        """An exploring review (questions_workbench/explore.py): the model works in
+        ``workspace``, read-only, and may run its navigation tool and read its
+        files. Returns the answer, the usage and the trace of the commands it ran."""
+        import json
+
+        rule = ("Your working directory is a read-only snapshot. You may run `python3 nav.py ...` and read "
+                "files in it; read nothing outside it, change nothing, and reply with the requested output "
+                "and nothing else.")
+        prompt = f"{instruction}\n\n{rule}\n\n=== TEXT ===\n{text}"
+        answer_file = Path(workspace).parent / f"{Path(workspace).name}.answer.txt"
+        command = [
+            os.environ.get("DESIGN_QUESTIONS_CODEX_BIN", "codex"), "exec",
+            "-m", self.model,
+            "-c", f"model_reasoning_effort={self.reasoning}",
+            "--ephemeral", "--skip-git-repo-check", "--ignore-user-config",
+            "--sandbox", "read-only", "--json",
+            "-o", str(answer_file),
+            "-",
+        ]
+        completed = subprocess.run(command, input=prompt, cwd=workspace, capture_output=True, text=True,
+                                   timeout=CODEX_TIMEOUT_SECONDS)
+        if completed.returncode != 0 or not answer_file.is_file():
+            tail = (completed.stderr or "").strip().splitlines()[-3:]
+            raise RuntimeError(f"codex exec failed ({completed.returncode}): {' | '.join(tail)}")
+        trace = []
+        for line in completed.stdout.splitlines():
+            try:
+                event = json.loads(line)
+            except ValueError:
+                continue
+            item = event.get("item") if isinstance(event, dict) else None
+            if isinstance(item, dict) and "command" in str(item.get("type", "")):
+                trace.append({"command": item.get("command"), "exit_code": item.get("exit_code")})
+        return answer_file.read_text(encoding="utf-8"), {}, trace
+
     def _exec(self, instruction: str, text: str, rule: str, files: dict[str, str]) -> tuple[str, dict[str, Any]]:
         prompt = f"{instruction}\n\n{rule}\n\n=== TEXT ===\n{text}"
         with tempfile.TemporaryDirectory(prefix="design-questions-codex-") as work:

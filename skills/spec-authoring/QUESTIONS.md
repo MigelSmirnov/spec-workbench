@@ -62,6 +62,46 @@ invariant to an existing check (`TRANSITION_PROTOCOL.md`, "Invariant
 evidence"); whether that check asserts the invariants its item names is a point
 of State 2.
 
+### State 2 is explored, not handed a package
+
+Issue #159. A review of State 2 is an agent with tools, not one request over a
+mechanically chosen package. It starts from the task and questions of the
+layer, the open units with their diff, the passages the layer prompt selected
+(`layer_prompt.py`, navigation only) and the deterministic results with the
+check verdicts (#158). It works in a read-only workspace
+(`questions_workbench/explore.py`): the snapshot of States 0..2 under `docs/`,
+the phase's methodology under `methodology/` (TRANSITION_PROTOCOL.md,
+SECURITY_REVIEW_EVIDENCE.md, SPEC_STANDARD.md — the documents
+`authoring_sequence.json` names for the phase, given to the reviewer, not only
+listed), and `nav.py` (`tools/design_navigate.py`):
+
+```bash
+python3 nav.py toc [DOCUMENT]      # sections, nested sections, #preamble
+python3 nav.py ids R0-             # written identifiers and where each is defined
+python3 nav.py read R0-07          # verbatim, with document, lines, sha256, snapshot id
+python3 nav.py refs R0-07          # explicit references both ways
+python3 nav.py search "deleted"    # lexical results, not dependencies
+python3 nav.py verdicts A29        # whether each bound check asserts (#158)
+```
+
+The same navigation answers people: `python tools/design_navigate.py --root
+<snapshot or case directory> read R0-07`. Earlier texts the selection could
+not narrow are pointed to, not pasted. The review works from the general
+(complete requirements, decisions free of contradiction: behaviour, refusals,
+priorities, the source of time, invariants nothing could check) to the
+particular, one history or defect with a basis. It does not ask State 2 for
+contracts or implementation.
+
+What it brings back is checked by tools: every point names its basis — a key
+and a verbatim quote — and the quote must be found in that section of the
+round's snapshot (`basis_verified`). A review that says it did not finish,
+lists unresolved questions or answers unreadably is `not_checked`: the round
+is not clean and keeps its units open (`not_checked_reviews`). The trace of
+the commands it ran and the snapshot id are kept with the review. The reviews
+stay independent and their topics are judged apart. A provider that cannot
+explore (the Responses API) asks State 2 as before, and the round says so
+(`judge.exploration.not_available`).
+
 ### The Codex CLI is the standard provider
 
 Rounds ask through `codex exec` under the operator's ChatGPT login: `--provider codex`,
