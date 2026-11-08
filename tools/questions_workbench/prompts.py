@@ -343,9 +343,11 @@ not closed or carried for a pass; "not_checked" means an input is missing:
 Ask about an earlier state only whether this state fulfils what it carried
 here; its closed units are not audited again. A decision's "[witness: ...]" tag
 binds an invariant to an existing check: it is not the history you give as a
-point's witness. Whether the bound check asserts the very invariant its item
-names, and whether a Required tests item says what would show the invariant
-holds, are points of the state that owns the invariant."""
+point's witness. Whether a Required tests item says what would show the
+invariant holds is a point of the state that owns the invariant. Unless
+verdicts are listed below, whether a bound check asserts what its item names
+is not a point of this round: it is judged per check after State 7, where the
+witnesses are written, at the State 8 handoff."""
 
 
 LAYER_JUDGE = """=== DETERMINISTIC RESULTS AT THIS TRANSITION (not design text; never quote) ===

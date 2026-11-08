@@ -59,8 +59,31 @@ closed round never hides a `not_checked` or blocking result.
 A point's witness below is a **defect witness**: a history in which the texts
 give two outcomes. It is not a decision's `[witness: …]` tag, which binds an
 invariant to an existing check (`TRANSITION_PROTOCOL.md`, "Invariant
-evidence"); whether that check asserts the invariants its item names is a point
-of State 2.
+evidence"); whether that check asserts the invariants its item names is judged
+per check after State 7, at the State 8 handoff, never in a round of State 2.
+
+### State 2's own work
+
+State 2 decides rules and invariants: what always holds, the one responsibility
+that owns each invariant, and a Required tests item that says what a witness
+must show. The author writes the decisions; the reviewers of a round ask why —
+what is missing, which decisions contradict each other, who owns each
+invariant — and the judge decides which of those questions the texts leave
+open. Its check at the handoff is `invariant_tests`: every invariant has a
+Required tests item.
+
+Whether an existing check asserts what an item names is not a State 2 question
+(owner decision 2026-11-08, issue #147). A new application has no code and no
+checks at State 2, and the layer must work the same way for it as for a
+migrated one: a decision is never fitted to the checks or the code that exist.
+So a State 2 round is given neither check code nor verdicts, a `[witness: …]`
+tag is only text of its item, and a changed check reopens no State 2 unit.
+State 2 carries the obligation to `state8_assembly`, where `witness_material`
+runs on the per-check judgement (`design_questions.py judge-checks`) and
+`partial` or `does_not` blocks before export. On client-portal per-check
+judgement inside State 2 stopped the round on 52 `partial` verdicts out of 68
+bindings and drove it to the ping-pong limit; those were gaps of Factory checks,
+not of the decisions.
 
 ### The Codex CLI is the standard provider
 

@@ -77,6 +77,22 @@ def own_checks(sequence: dict[str, Any], phase_id: str) -> list[str]:
     return []
 
 
+def closing_checks(sequence: dict[str, Any], phase_id: str) -> list[str]:
+    """Every check that runs at `phase_id`'s handoff: its own, and those carried to it."""
+    return own_checks(sequence, phase_id) + [item["check"] for item in received(sequence, phase_id)]
+
+
+def judges_witnesses(sequence: dict[str, Any], state: int) -> bool:
+    """Whether `witness_material` closes at one of the state's phases.
+
+    The per-check verdicts, the judgement of bound checks and the evidence a
+    decision unit rests on follow the layer where that check runs. State 2
+    only carries it (owner decision 2026-11-08, #147): its rounds get neither
+    check code nor verdicts, and a changed check reopens none of its units.
+    """
+    return any("witness_material" in closing_checks(sequence, phase) for phase in state_phases(sequence, state))
+
+
 def layer(sequence: dict[str, Any], phase_id: str) -> dict[str, Any]:
     """The static protocol of one phase: what it owns, checks, carries and receives."""
     phase = next((p for p in _phases(sequence) if p["id"] == phase_id), {})
@@ -422,7 +438,7 @@ def round_context(project: Path, state: int, sequence: dict[str, Any] | None = N
         gate = [{"code": "state_gate_not_checked", "severity": "error",
                  "message": f"the State {state} gate could not read the case ({exc}) — not checked is not a pass"}]
     verdicts: list[dict[str, Any]] = []
-    if "witness_material" in [c for phase in phases for c in own_checks(sequence, phase)]:
+    if judges_witnesses(sequence, state):
         import design_decision_witness
         import witness_judgement
         verdicts = witness_judgement.verdicts(project, design_decision_witness.binding_material(project))
