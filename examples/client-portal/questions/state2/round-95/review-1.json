@@ -1,0 +1,84 @@
+{
+ "open_points": [
+  {
+   "unit": "A8",
+   "subject": "Snapshot replay/conflict recording transaction",
+   "kind": "atomicity and failure gap",
+   "text": "“either changes no business state and is recorded as its own import result and `snapshot.import` audit” does not say what happens when one of those two records cannot be stored after the attempt has been classified; R0-25 specifies only an import that fails before classification.",
+   "question": "Must the import result and `snapshot.import` audit be committed atomically, and what response and persisted state are required if either write fails?",
+   "options": [
+    "Rollback both records and return a storage failure.",
+    "Keep whichever record was written, return a storage failure, and allow the other record to be absent.",
+    "Retry or otherwise require both records before returning the classified result."
+   ],
+   "default_guess": "Commit the import result and audit atomically; on either write failure, persist neither and return a storage failure.",
+   "witness": {
+    "initial": "An accepted snapshot already exists for a publication identity, and storage can write a new SnapshotImportRecord but fails while appending its audit record.",
+    "events": [
+     "The producer republishes identical content.",
+     "The import classifies the request as `idempotent_replay`.",
+     "The import-result write succeeds and the audit write fails."
+    ],
+    "outcomes": [
+     "The transaction rolls back, the producer receives a storage failure, and neither record exists.",
+     "The fresh import result remains readable even though its required `snapshot.import` audit is absent; the request may still fail or may return the replay result."
+    ],
+    "observer": "The producer reading the import result and an administrator inspecting the audit history."
+   }
+  },
+  {
+   "unit": "A8",
+   "subject": "Audit classification of snapshot replay and integrity conflict",
+   "kind": "required field mapping unspecified",
+   "text": "“is recorded as its own import result and `snapshot.import` audit” names the audit action but does not assign the audit model's required `result` (`success | rejected`) for `idempotent_replay` or `integrity_conflict`. M20 states the conflict's audit reason code, but not its `result`.",
+   "question": "For each of `idempotent_replay` and `integrity_conflict`, what `AuditResult` must the `snapshot.import` audit carry, and what reason code, if any, must accompany it?",
+   "options": [
+    "Replay is `success` with no reason; conflict is `rejected` with reason `integrity_conflict`.",
+    "Both are `success`, because both are completed classified import attempts.",
+    "Both are `rejected`, because neither stores a new snapshot."
+   ],
+   "default_guess": "Record an idempotent replay as `success` with no reason and an integrity conflict as `rejected` with reason `integrity_conflict`.",
+   "witness": {
+    "initial": "An accepted snapshot exists, and the audit schema requires every `snapshot.import` record to choose `success` or `rejected`.",
+    "events": [
+     "The producer first republishes identical content.",
+     "The producer later republishes different content under the same snapshot identity."
+    ],
+    "outcomes": [
+     "The audits classify replay as `success` and conflict as `rejected`.",
+     "The audits classify both attempts alike, either both `success` because classification completed or both `rejected` because no new snapshot was stored."
+    ],
+    "observer": "An administrator or security reviewer querying audit results."
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "Wall-clock read position within an operation",
+   "kind": "missing decided execution",
+   "text": "“their accepted forms and checks, and where in an operation its one clock read happens, are the accepted spec's, carried to States 6–7” and “each read at the same point of the same operation” refer to a point that is not stated in the supplied design texts.",
+   "question": "For each operation, at what exact stage must its single wall-clock reading occur relative to decoding, authentication, authorization, Registry calls, validation, replay classification, mutation, and commit?",
+   "options": [
+    "Read immediately on entering the application operation, before external checks.",
+    "Read after all non-time-dependent guards and external calls succeed, immediately before time comparisons and writes.",
+    "Read at each operation-specific point from the unavailable accepted spec."
+   ],
+   "default_guess": "Read once after decoding and non-time-dependent external guards succeed, immediately before the first current-time comparison or timestamped mutation.",
+   "witness": {
+    "initial": "A mutation requires a Registry check and writes `created_at`; the clock advances while the Registry call is in progress.",
+    "events": [
+     "An authenticated caller starts the mutation at instant T1.",
+     "The operation performs a slow Registry call.",
+     "The Registry succeeds at instant T2 and the mutation commits."
+    ],
+    "outcomes": [
+     "An implementation reading on operation entry stores T1 and uses T1 for every expiry comparison.",
+     "An implementation reading after the Registry call stores T2 and uses T2 for every expiry comparison."
+    ],
+    "observer": "A caller at an expiry boundary and anyone reading the persisted event timestamp."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A8\",\"subject\":\"Snapshot replay/conflict recording transaction\",\"kind\":\"atomicity and failure gap\",\"text\":\"“either changes no business state and is recorded as its own import result and `snapshot.import` audit” does not say what happens when one of those two records cannot be stored after the attempt has been classified; R0-25 specifies only an import that fails before classification.\",\"question\":\"Must the import result and `snapshot.import` audit be committed atomically, and what response and persisted state are required if either write fails?\",\"options\":[\"Rollback both records and return a storage failure.\",\"Keep whichever record was written, return a storage failure, and allow the other record to be absent.\",\"Retry or otherwise require both records before returning the classified result.\"],\"default_guess\":\"Commit the import result and audit atomically; on either write failure, persist neither and return a storage failure.\",\"witness\":{\"initial\":\"An accepted snapshot already exists for a publication identity, and storage can write a new SnapshotImportRecord but fails while appending its audit record.\",\"events\":[\"The producer republishes identical content.\",\"The import classifies the request as `idempotent_replay`.\",\"The import-result write succeeds and the audit write fails.\"],\"outcomes\":[\"The transaction rolls back, the producer receives a storage failure, and neither record exists.\",\"The fresh import result remains readable even though its required `snapshot.import` audit is absent; the request may still fail or may return the replay result.\"],\"observer\":\"The producer reading the import result and an administrator inspecting the audit history.\"}},{\"unit\":\"A8\",\"subject\":\"Audit classification of snapshot replay and integrity conflict\",\"kind\":\"required field mapping unspecified\",\"text\":\"“is recorded as its own import result and `snapshot.import` audit” names the audit action but does not assign the audit model's required `result` (`success | rejected`) for `idempotent_replay` or `integrity_conflict`. M20 states the conflict's audit reason code, but not its `result`.\",\"question\":\"For each of `idempotent_replay` and `integrity_conflict`, what `AuditResult` must the `snapshot.import` audit carry, and what reason code, if any, must accompany it?\",\"options\":[\"Replay is `success` with no reason; conflict is `rejected` with reason `integrity_conflict`.\",\"Both are `success`, because both are completed classified import attempts.\",\"Both are `rejected`, because neither stores a new snapshot.\"],\"default_guess\":\"Record an idempotent replay as `success` with no reason and an integrity conflict as `rejected` with reason `integrity_conflict`.\",\"witness\":{\"initial\":\"An accepted snapshot exists, and the audit schema requires every `snapshot.import` record to choose `success` or `rejected`.\",\"events\":[\"The producer first republishes identical content.\",\"The producer later republishes different content under the same snapshot identity.\"],\"outcomes\":[\"The audits classify replay as `success` and conflict as `rejected`.\",\"The audits classify both attempts alike, either both `success` because classification completed or both `rejected` because no new snapshot was stored.\"],\"observer\":\"An administrator or security reviewer querying audit results.\"}},{\"unit\":\"A28\",\"subject\":\"Wall-clock read position within an operation\",\"kind\":\"missing decided execution\",\"text\":\"“their accepted forms and checks, and where in an operation its one clock read happens, are the accepted spec's, carried to States 6–7” and “each read at the same point of the same operation” refer to a point that is not stated in the supplied design texts.\",\"question\":\"For each operation, at what exact stage must its single wall-clock reading occur relative to decoding, authentication, authorization, Registry calls, validation, replay classification, mutation, and commit?\",\"options\":[\"Read immediately on entering the application operation, before external checks.\",\"Read after all non-time-dependent guards and external calls succeed, immediately before time comparisons and writes.\",\"Read at each operation-specific point from the unavailable accepted spec.\"],\"default_guess\":\"Read once after decoding and non-time-dependent external guards succeed, immediately before the first current-time comparison or timestamped mutation.\",\"witness\":{\"initial\":\"A mutation requires a Registry check and writes `created_at`; the clock advances while the Registry call is in progress.\",\"events\":[\"An authenticated caller starts the mutation at instant T1.\",\"The operation performs a slow Registry call.\",\"The Registry succeeds at instant T2 and the mutation commits.\"],\"outcomes\":[\"An implementation reading on operation entry stores T1 and uses T1 for every expiry comparison.\",\"An implementation reading after the Registry call stores T2 and uses T2 for every expiry comparison.\"],\"observer\":\"A caller at an expiry boundary and anyone reading the persisted event timestamp.\"}}]}",
+ "set_aside": []
+}

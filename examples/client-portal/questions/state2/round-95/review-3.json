@@ -1,0 +1,85 @@
+{
+ "open_points": [
+  {
+   "unit": "A28",
+   "subject": "CLK-001 operation boundary",
+   "kind": "undefined operation scope",
+   "text": "“An operation that reads the current time … takes one wall reading from the clock source” does not define whether authentication/authorization, the application use case, persistence, and other nested module calls for one request are one operation or separate operations.",
+   "question": "Across which boundary must one wall reading be reused, especially when an authorization expiry comparison and the resulting mutation occur in different modules?",
+   "options": [
+    "One reading for the entire externally invoked use case, including authentication, authorization, comparisons, and writes",
+    "One reading per application/module operation, allowing the guard and mutation to read separately",
+    "One reading per transaction, even if pre-transaction authorization uses another reading"
+   ],
+   "default_guess": "Treat the entire externally invoked use case, including its authorization checks and committed writes, as one operation; only the audit writer may take the stated additional reading.",
+   "witness": {
+    "initial": "A staff session expires at T. A payment-registration request begins just before T; the clock source would return T−1 ms to the authorization guard and T+1 ms to the payment use case if called twice.",
+    "events": [
+     "The staff actor submits a payment registration.",
+     "The authorization guard checks the session expiry.",
+     "The payment operation writes recorded_at and commits the payment."
+    ],
+    "outcomes": [
+     "The request is one operation: it reads T−1 ms once, accepts the session, and stores recorded_at = T−1 ms.",
+     "The guard and payment use case are separate operations: the guard accepts at T−1 ms and the payment is stored with recorded_at = T+1 ms, or a second expiry check rejects it at T+1 ms."
+    ],
+    "observer": "The caller sees acceptance versus rejection in one implementation; even if both accept, staff and audit readers see different recorded times."
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "source-supplied datetime acceptance and normalization",
+   "kind": "deferred representation rule",
+   "text": "“their accepted forms and checks … are the accepted spec's, carried to States 6–7” leaves those forms and checks unstated, while source-supplied times must be kept as “the same instant, stored offset-naive UTC”.",
+   "question": "Which source datetime forms are accepted, and specifically are offset-naive values rejected or interpreted as UTC, and are aware non-zero-offset values accepted and normalized?",
+   "options": [
+    "Accept only offset-aware UTC values and reject naive or non-UTC-offset values",
+    "Accept any offset-aware value and normalize the represented instant to offset-naive UTC; reject naive values",
+    "Also accept offset-naive values by interpreting them as UTC"
+   ],
+   "default_guess": "Accept offset-aware datetimes, normalize their instants to offset-naive UTC, and reject offset-naive source datetimes.",
+   "witness": {
+    "initial": "An authorized producer submits an otherwise valid snapshot whose approved_at is the offset-naive value 2026-11-08 12:00:00.",
+    "events": [
+     "The import route decodes the publication.",
+     "The import validates and attempts to persist the source-supplied approved_at."
+    ],
+    "outcomes": [
+     "The decoder or import rejects the publication because the value does not identify an instant.",
+     "The portal interprets the value as UTC, accepts the import, and stores 2026-11-08 12:00:00 as an offset-naive UTC timestamp."
+    ],
+    "observer": "The producer sees rejection versus an accepted import result, and later readers may see the stored snapshot."
+   }
+  },
+  {
+   "unit": "A8",
+   "subject": "snapshot replay/conflict result and audit persistence",
+   "kind": "missing failure atomicity",
+   "text": "“either changes no business state and is recorded as its own import result and snapshot.import audit” does not state what happens if storing either of those two records fails after classification.",
+   "question": "Must the SnapshotImportRecord and its snapshot.import audit be committed atomically, and what response and persisted state result from a failure while writing either one?",
+   "options": [
+    "Commit both atomically; on either write failure commit neither and return the storage failure",
+    "Permit the import result to commit before an audit failure, returning a failure with the result retained",
+    "Retry or otherwise complete the audit before answering, while retaining the already-written import result"
+   ],
+   "default_guess": "Write the import result and audit in one transaction; if either write fails, roll back both and return the storage failure without changing the snapshot or other business state.",
+   "witness": {
+    "initial": "An accepted snapshot already exists. A producer republishes identical content, and storage can write the new SnapshotImportRecord but fails when appending its snapshot.import audit.",
+    "events": [
+     "The authorized producer republishes the snapshot.",
+     "The import classifies it as idempotent_replay.",
+     "The portal writes the fresh import result.",
+     "The audit append fails."
+    ],
+    "outcomes": [
+     "Atomic interpretation: both writes roll back, the producer receives a storage failure, and neither result nor audit exists.",
+     "Independent-write interpretation: the import result remains persisted but its audit is absent, with the request either failing or being reported as a replay."
+    ],
+    "observer": "The producer sees a potentially different response; administrators and audit consumers see whether an unaudited import result exists."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A28\",\"subject\":\"CLK-001 operation boundary\",\"kind\":\"undefined operation scope\",\"text\":\"“An operation that reads the current time … takes one wall reading from the clock source” does not define whether authentication/authorization, the application use case, persistence, and other nested module calls for one request are one operation or separate operations.\",\"question\":\"Across which boundary must one wall reading be reused, especially when an authorization expiry comparison and the resulting mutation occur in different modules?\",\"options\":[\"One reading for the entire externally invoked use case, including authentication, authorization, comparisons, and writes\",\"One reading per application/module operation, allowing the guard and mutation to read separately\",\"One reading per transaction, even if pre-transaction authorization uses another reading\"],\"default_guess\":\"Treat the entire externally invoked use case, including its authorization checks and committed writes, as one operation; only the audit writer may take the stated additional reading.\",\"witness\":{\"initial\":\"A staff session expires at T. A payment-registration request begins just before T; the clock source would return T−1 ms to the authorization guard and T+1 ms to the payment use case if called twice.\",\"events\":[\"The staff actor submits a payment registration.\",\"The authorization guard checks the session expiry.\",\"The payment operation writes recorded_at and commits the payment.\"],\"outcomes\":[\"The request is one operation: it reads T−1 ms once, accepts the session, and stores recorded_at = T−1 ms.\",\"The guard and payment use case are separate operations: the guard accepts at T−1 ms and the payment is stored with recorded_at = T+1 ms, or a second expiry check rejects it at T+1 ms.\"],\"observer\":\"The caller sees acceptance versus rejection in one implementation; even if both accept, staff and audit readers see different recorded times.\"}},{\"unit\":\"A28\",\"subject\":\"source-supplied datetime acceptance and normalization\",\"kind\":\"deferred representation rule\",\"text\":\"“their accepted forms and checks … are the accepted spec's, carried to States 6–7” leaves those forms and checks unstated, while source-supplied times must be kept as “the same instant, stored offset-naive UTC”.\",\"question\":\"Which source datetime forms are accepted, and specifically are offset-naive values rejected or interpreted as UTC, and are aware non-zero-offset values accepted and normalized?\",\"options\":[\"Accept only offset-aware UTC values and reject naive or non-UTC-offset values\",\"Accept any offset-aware value and normalize the represented instant to offset-naive UTC; reject naive values\",\"Also accept offset-naive values by interpreting them as UTC\"],\"default_guess\":\"Accept offset-aware datetimes, normalize their instants to offset-naive UTC, and reject offset-naive source datetimes.\",\"witness\":{\"initial\":\"An authorized producer submits an otherwise valid snapshot whose approved_at is the offset-naive value 2026-11-08 12:00:00.\",\"events\":[\"The import route decodes the publication.\",\"The import validates and attempts to persist the source-supplied approved_at.\"],\"outcomes\":[\"The decoder or import rejects the publication because the value does not identify an instant.\",\"The portal interprets the value as UTC, accepts the import, and stores 2026-11-08 12:00:00 as an offset-naive UTC timestamp.\"],\"observer\":\"The producer sees rejection versus an accepted import result, and later readers may see the stored snapshot.\"}},{\"unit\":\"A8\",\"subject\":\"snapshot replay/conflict result and audit persistence\",\"kind\":\"missing failure atomicity\",\"text\":\"“either changes no business state and is recorded as its own import result and snapshot.import audit” does not state what happens if storing either of those two records fails after classification.\",\"question\":\"Must the SnapshotImportRecord and its snapshot.import audit be committed atomically, and what response and persisted state result from a failure while writing either one?\",\"options\":[\"Commit both atomically; on either write failure commit neither and return the storage failure\",\"Permit the import result to commit before an audit failure, returning a failure with the result retained\",\"Retry or otherwise complete the audit before answering, while retaining the already-written import result\"],\"default_guess\":\"Write the import result and audit in one transaction; if either write fails, roll back both and return the storage failure without changing the snapshot or other business state.\",\"witness\":{\"initial\":\"An accepted snapshot already exists. A producer republishes identical content, and storage can write the new SnapshotImportRecord but fails when appending its snapshot.import audit.\",\"events\":[\"The authorized producer republishes the snapshot.\",\"The import classifies it as idempotent_replay.\",\"The portal writes the fresh import result.\",\"The audit append fails.\"],\"outcomes\":[\"Atomic interpretation: both writes roll back, the producer receives a storage failure, and neither result nor audit exists.\",\"Independent-write interpretation: the import result remains persisted but its audit is absent, with the request either failing or being reported as a replay.\"],\"observer\":\"The producer sees a potentially different response; administrators and audit consumers see whether an unaudited import result exists.\"}}]}",
+ "set_aside": []
+}
