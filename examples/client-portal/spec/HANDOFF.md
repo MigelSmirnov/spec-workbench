@@ -1,7 +1,8 @@
 # Handoff — Client Portal (current)
 
 Replaces the handoff of 2026-11-07. State of `agent/client-portal` on
-2026-11-08 at `3876e1bc` (plus this handoff), checked against the Factory
+2026-11-08 after the State 2 rounds 82-91 (on `fe8814d3`, origin/main with
+#161 merged), checked against the Factory
 checkout `code_factory_cp_witnesses` at origin/main `5a3bdec2`; the assembly
 result is `80_assembly.md`.
 
@@ -13,10 +14,17 @@ result is `80_assembly.md`.
 - Witness judgement (Workbench #156-#158) ran: 68 bindings, 16 asserts,
   52 partial, 0 does_not, 0 not_checked (below).
 - Only State 2 rounds were run (coordinator, 2026-11-08: the other states'
-  rounds still read the full texts and are to be cut down first). State 2
-  is open: three blocking rounds (79-81), stopped by the ping-pong rule;
-  17 units open, all on the coverage gaps below. Its transition is not
-  ready (`witness_material`: 52 partial).
+  rounds still read the full texts and are to be cut down first). After
+  Workbench #161 (owner decision 2026-11-08, #147: whether a check asserts
+  is judged at State 8) the State 2 transition is ready (`invariant_tests`
+  closed, 32 decisions). Rounds 82-91 (below) closed the 17 units that
+  rounds 79-81 held open on check coverage; State 2 is still open: 4 units
+  (Status, A18, A28, A32) need their second clear review, and A28 blocks
+  on two topics of round 91 (below). Stopped by the coordinator after
+  round 91 (ping-pong rule).
+- The 52 partial verdicts below are now a State 8 obligation
+  (`witness_material` at `state8_assembly`), Factory work in
+  code-factory #189; they no longer hold State 2.
 - Reopened and not asked: State 1 (`Projections and answers`: one clear
   review of the two it needs), States 3 and 4 (`context`, earlier-layer
   text changed), State 5 (`build_budget_view`, `build_progress_view`,
@@ -74,9 +82,11 @@ A11 `end_to_end_walkthrough` (INV-005), `viewer_credential_reissue`
 suffix.)
 
 Partial (52) — each a real finding: the check asserts less than the
-invariant it is bound to. Owner of each: the Factory check (extend it), or
-the owner of the decision (narrow the invariant), never a narrowed binding
-text. The State 2 round raises each as a blocking `consequential_gap`.
+invariant it is bound to. Owner of each: the Factory check (extend it,
+code-factory #189), never a narrowed invariant or binding text. Since #161
+they block at State 8 (`witness_material`), not in the State 2 round. The
+texts of A18, A21, A28 and A32 changed on 2026-11-08 (below), so their
+bindings are judged again at State 8.
 
 | decision | check | binds | what it does not assert |
 |---|---|---|---|
@@ -145,7 +155,7 @@ PLAT-REG-006, INV-003, INV-029 split across checks). The per-binding
 judgement has no form for joint coverage: each binding is judged against
 the whole invariant. Workbench gap, to the Workbench owner.
 
-## State 2 rounds of 2026-11-08 (input size per request)
+## State 2 rounds 79-81 of 2026-11-08, before #161 (input size per request)
 
 | round | requests | reviews | grouping | judge (instruction + text + files) | blocking |
 |---|---|---|---|---|---|
@@ -178,6 +188,91 @@ A18, A19, A21, A22, A25, A28, A30, A32 — the coverage gaps of the table
 above, plus singletons on A28 (where in an operation the one wall reading
 happens; accepted forms of source-supplied datetimes) and A32 (whether the
 vulnerable-image rule covers builds or only deploys).
+
+## State 2 rounds 82-91 (2026-11-08, after #161)
+
+Run with `--since 451ea6de` (the round-81 `closed_at`), provider
+`codex-cli:gpt-5.6-sol:medium`, 5 requests per round (3 reviews, grouping,
+judge). Input characters per request:
+
+| round | review (each of 3) | grouping | judge (instruction + text + files) | blocking | blocked units |
+|---|---|---|---|---|---|
+| 82 | 239,236 | 4,109 | 811,853 (5,411 + 252,193 + 554,249) | 10 | A18, A21, A28, A32 |
+| 83 | 245,051 | 1,879 | 807,080 | 2 | A28, A32 |
+| 84 | 175,189 | 1,695 | 761,903 | 1 | A32 |
+| 85 | 166,010 | 3,455 | 762,766 | 5 | A28, A32 |
+| 86 | 166,136 | 5,113 | 770,126 | 6 | A28, A32 |
+| 87 | 166,136 | 4,389 | 767,038 | 3 | A28, A32 |
+| 88 | 168,297 | 3,725 | 768,008 | 5 | A28, A32 |
+| 89 | 169,061 | 2,231 | 761,508 | 4 | A28, A32 |
+| 90 | 169,950 | 4,753 | 769,344 | 2 | A32 |
+| 91 | 165,937 | 8,484 | 782,086 | 2 | A28 |
+
+Two attempts (rounds 83 and 85) failed after their three reviews on a
+review answer that was not valid JSON and saved nothing; they were rerun
+(3 more requests each at the sizes above). Round 87 repeats round 86 on the
+same text (a retry loop treated `ask`'s exit 1 for "not closed" as a
+failure). The judge's 554,249 characters of files are constant: the later
+states' texts it reads for `answered_later`.
+
+No round raised a check's coverage as a blocking topic. The reviewers still
+asked "which existing check is bound to CLK-002" in rounds 83-90; the judge
+set it aside each time (`answered`, `judged_before`). Workbench defect, to
+the Workbench owner: the State 2 review prompt still invites questions about
+bound checks.
+
+What changed in the decisions (`02_rules.md`), each on its substance:
+
+- A18 INV-027 (r82 T6, T12): the test covers every write of an owning
+  record, budget-version activation included (the list read as exhaustive
+  and left activation out), and forbids stored values of a derived view,
+  not every derived column (an import's content fingerprint is stored by
+  the models).
+- A21 INV-050 (r82 T7): every overview component (budget, expenses,
+  progress, payments, photos) equals a recomputation, not only budget and
+  payments.
+- A28 (r82 T5, T9, T11; r85 T9): `document_date` and `payment_date` are
+  calendar dates kept as supplied, not instants (they were listed among
+  UTC instants, against the State 1 models); "no arithmetic" is the clock
+  source's, an operation derives an expiry as instant + TTL; CLK-001 now
+  states one wall reading from the clock source, the only reader of the
+  host clocks, derived expiry = instant + TTL, supplied times and dates
+  kept; its test covers every timestamp-writing operation with the clock
+  fixed.
+- A32 (r82 T2, T8, T10; r83 T6): OSV (ecosystem PyPI) is the advisory
+  source; the checked set is every distribution installed in the image
+  (rule 3 said pins and their resolved libraries, DEP-002 every installed
+  one); a deploy is the start of the service from an image (DEP-002 said
+  "ships", its test "starts"); a passing rebuild under the same pins may
+  deploy. How the snapshot is obtained and verified and how a version is
+  matched to an advisory is the deploy route's and its State 8 witness's
+  (code-factory #189); the age limits stay the deploy route's values.
+- Rounds 83-90 drove A28 and A32 into witness mechanics (OSV export
+  completeness, transport authentication, PEP 440 matching; clock
+  instrumentation, read counts). On the coordinator's instruction those
+  additions were removed before round 91 and the simplest form above kept.
+
+Open after round 91 (blocking, A28), verbatim:
+
+- T1 "Clock-source and reading-count verification for read-only
+  current-time checks": "CLK-001 governs current-time comparisons, but its
+  Required test omits operations that compare persisted expiry without
+  writing timestamps."
+- T2 "Elapsed-clock source, request scope, reading count, use, and
+  non-persistence policy": "The later operation text resolves that the
+  reading is per viewer-entry attempt, but State 2 still supplies no formal
+  invariant or Required test for any elapsed-clock property." (Round 82 T9
+  raised the same; a CLK-002 added for it in rounds 82-90 was removed with
+  the mechanics before round 91.)
+
+A32 no longer blocks (its round-91 topics are `later_state` or
+`answered`); Status, A18 and A32 need one more clear review.
+
+Reopened by these edits and not asked (coordinator: State 2 only): State 1
+(`Projections and answers`), States 3 and 4 (`context`), State 5
+(`build_budget_view`, `build_progress_view`, `context`), State 7
+(`financial_policy`, `derived_views`) — the same units as before round 82;
+the State 2 edits enter the `context` of States 3-5. State 0 stays closed.
 
 ## Other open items
 
