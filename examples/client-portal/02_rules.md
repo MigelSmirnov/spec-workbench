@@ -62,8 +62,11 @@ The former status, kept:
 
 ## Invariant ledger overview
 
-Full statements live in `invariant_ledger.json`. Owners and expected primary
-landings:
+The current statements are each decision's `Formal invariants`;
+`spec/invariant_ledger.json` is the 2026-07-19 evidence and keeps the
+withdrawn email-challenge wording (INV-001, INV-003, INV-004 and INV-014 are
+narrowed and INV-010…INV-013, INV-016 removed, R0-23). Owners and expected
+primary landings:
 
 | ID range | Area | Owning responsibility | Expected landing |
 | --- | --- | --- | --- |
