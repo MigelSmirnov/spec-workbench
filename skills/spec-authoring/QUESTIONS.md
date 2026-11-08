@@ -92,11 +92,15 @@ priorities, the source of time, invariants nothing could check) to the
 particular, one history or defect with a basis. It does not ask State 2 for
 contracts or implementation.
 
-What it brings back is checked by tools: every point names its basis — a key
-and a verbatim quote — and the quote must be found in that section of the
-round's snapshot (`basis_verified`). A review that says it did not finish,
-lists unresolved questions or answers unreadably is `not_checked`: the round
-is not clean and keeps its units open (`not_checked_reviews`). The trace of
+What it brings back is checked by tools: the answer must be the review asked
+for (a list of points, each an object with subject, text, question and a
+non-empty basis of `{key, quote}`; `complete` true or false; `unresolved` and
+`read` lists of strings), and every quote must be found in its section of the
+round's snapshot (`basis_verified`). A verified basis keeps that section,
+verbatim, and the judge is given the sections the judged points quote. A
+review whose answer is not that, that says it did not finish, or that lists
+unresolved questions is `not_checked`: the round is not clean and keeps its
+units open (`not_checked_reviews`). Every exploring call has its own output. The trace of
 the commands it ran and the snapshot id are kept with the review. The reviews
 stay independent and their topics are judged apart. A provider that cannot
 explore (the Responses API) asks State 2 as before, and the round says so

@@ -115,7 +115,14 @@ def _group(provider: Provider, reviews: list[dict[str, Any]], keep_points: bool 
             topic["points"] = [f"{points[m].get('text', '')} -> {points[m].get('question', '')}"
                                + (f" | reviewer's witness: {json.dumps(points[m]['witness'], ensure_ascii=False)}"
                                   if _has_witness(points[m]) else "")
+                               + "".join(f" | basis {b.get('key')}: \"{b.get('quote')}\""
+                                         + ("" if b.get("verified") else " (NOT FOUND in the snapshot)")
+                                         for b in points[m].get("basis") or [] if isinstance(b, dict))
                                for m in topic["members"]]
+            bases = [b for m in topic["members"] for b in points[m].get("basis") or []
+                     if isinstance(b, dict) and b.get("verified")]
+            if bases:
+                topic["bases"] = bases
     return sorted(topics, key=lambda t: (-len(t["runs"]), t["topic"]))
 
 
@@ -580,8 +587,10 @@ def _document_round(provider: Provider, state: int, runs: int, read: StateTexts,
         _set_aside(review, scope, changed, read.units)
     topics = _group(provider, reviews, keep_points=True)
     repeated = _judged(topics, witness=True)
+    judge_layer = (prompts.layer_judge(layer, scope) or "") + (
+        explore.bases_for_judge(repeated, exploration["snapshot"]) if exploration is not None else "")
     judged = (_judge(provider, state, text, read.texts, repeated, old, later, precedents,
-                     witness=True, case=case, layer=prompts.layer_judge(layer, scope)) if repeated
+                     witness=True, case=case, layer=judge_layer or None) if repeated
               else {"provider": provider.name})
     if exploration is not None:
         judged["exploration"] = exploration

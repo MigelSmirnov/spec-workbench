@@ -123,8 +123,39 @@ def _parse(answer: str) -> dict[str, Any] | None:
     return found if isinstance(found, dict) else None
 
 
+def _violations(found: dict[str, Any]) -> list[str]:
+    """What makes an answer no review at all: the schema the instruction asks for."""
+    wrong: list[str] = []
+    points = found.get("open_points")
+    if not isinstance(points, list):
+        return ["open_points is not a list"]
+    for index, point in enumerate(points, 1):
+        if not isinstance(point, dict):
+            wrong.append(f"point {index} is not an object")
+            continue
+        for name in ("subject", "text", "question"):
+            if not isinstance(point.get(name), str) or not point[name].strip():
+                wrong.append(f"point {index} has no {name}")
+        basis = point.get("basis")
+        if not isinstance(basis, list) or not basis:
+            wrong.append(f"point {index} names no basis")
+        elif not all(isinstance(b, dict) and isinstance(b.get("key"), str) and isinstance(b.get("quote"), str)
+                     for b in basis):
+            wrong.append(f"point {index} has a basis that is not {{key, quote}}")
+    if not isinstance(found.get("complete"), bool):
+        wrong.append("complete is not true or false")
+    for name in ("unresolved", "read"):
+        value = found.get(name, [])
+        if not isinstance(value, list) or not all(isinstance(v, str) for v in value):
+            wrong.append(f"{name} is not a list of strings")
+    return wrong
+
+
 def review(provider: Any, instruction: str, text: str, root: Path, snapshot: str) -> dict[str, Any]:
-    """One exploring review: the provider explores the workspace; tools check what it brings back."""
+    """One exploring review: the provider explores the workspace; tools check what it brings back.
+
+    A verified basis keeps the verbatim section it was quoted from, read from
+    the snapshot while the workspace exists: the judge is given it (#160 review)."""
     import design_navigate
 
     answer, usage, trace = provider.explore(instruction, text, root)
@@ -132,19 +163,49 @@ def review(provider: Any, instruction: str, text: str, root: Path, snapshot: str
     result: dict[str, Any] = {"snapshot": snapshot, "trace": trace, "usage": usage, "raw": answer}
     if found is None:
         return {**result, "open_points": [], "not_checked": "the review's answer is not readable JSON"}
+    wrong = _violations(found)
+    if wrong:
+        return {**result, "open_points": [],
+                "not_checked": "the review's answer is not the review asked for: " + "; ".join(wrong)}
     nav = design_navigate.Snapshot(root)
     points = []
-    for point in found.get("open_points") or []:
-        if not isinstance(point, dict):
-            continue
-        basis = [b for b in point.get("basis") or [] if isinstance(b, dict)]
-        checked = [{**b, "verified": nav.verify_quote(str(b.get("key", "")), str(b.get("quote", "")), snapshot)}
-                   for b in basis]
-        points.append({**point, "basis": checked,
-                       "basis_verified": bool(checked) and all(b["verified"] for b in checked)})
+    for point in found["open_points"]:
+        checked = []
+        for basis in point["basis"]:
+            verified = nav.verify_quote(basis["key"], basis["quote"], snapshot)
+            entry = {**basis, "verified": verified}
+            if verified:
+                section = nav.read(basis["key"], snapshot)
+                entry["section"] = {k: section[k] for k in ("key", "document", "lines", "sha256", "text")}
+            checked.append(entry)
+        points.append({**point, "basis": checked, "basis_verified": all(b["verified"] for b in checked)})
     result.update(open_points=points, read=list(found.get("read") or []),
-                  unresolved=[str(u) for u in found.get("unresolved") or []])
-    if found.get("complete") is not True or result["unresolved"]:
+                  unresolved=list(found.get("unresolved") or []))
+    if found["complete"] is not True or result["unresolved"]:
         result["not_checked"] = ("the review did not finish its exploration: "
                                  + ("; ".join(result["unresolved"]) or "it did not say it was complete"))
     return result
+
+
+BASES = """=== BASES THE REVIEWS READ (verbatim from snapshot {snapshot}; design text you may quote) ===
+
+The reviews of this round explored the texts with tools; each section below is
+one a point quoted, as it stands in the round's snapshot. Quote from them as
+from the texts above.
+
+{sections}"""
+
+
+def bases_for_judge(topics: list[dict[str, Any]], snapshot: str | None) -> str:
+    """The verbatim sections the points of these topics quote, each once."""
+    seen: dict[str, dict[str, Any]] = {}
+    for topic in topics:
+        for basis in topic.get("bases") or []:
+            section = basis.get("section")
+            if section and section["key"] not in seen:
+                seen[section["key"]] = section
+    if not seen:
+        return ""
+    sections = "\n\n".join(f"--- {s['key']} ({s['document']}, lines {s['lines'][0]}-{s['lines'][1]}) ---\n{s['text']}"
+                            for s in seen.values())
+    return "\n\n" + BASES.format(snapshot=snapshot, sections=sections)

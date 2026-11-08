@@ -137,7 +137,19 @@ class CodexCliProvider:
                 "files in it; read nothing outside it, change nothing, and reply with the requested output "
                 "and nothing else.")
         prompt = f"{instruction}\n\n{rule}\n\n=== TEXT ===\n{text}"
-        answer_file = Path(workspace).parent / f"{Path(workspace).name}.answer.txt"
+        # one output per call: reviews run in parallel on the same workspace
+        own = Path(tempfile.mkdtemp(prefix="design-questions-answer-"))
+        answer_file = own / "answer.txt"
+        try:
+            return self._explore_into(prompt, workspace, answer_file)
+        finally:
+            import shutil
+
+            shutil.rmtree(own, ignore_errors=True)
+
+    def _explore_into(self, prompt: str, workspace: Path, answer_file: Path):
+        import json
+
         command = [
             os.environ.get("DESIGN_QUESTIONS_CODEX_BIN", "codex"), "exec",
             "-m", self.model,

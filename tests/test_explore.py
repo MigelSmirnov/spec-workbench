@@ -144,6 +144,11 @@ def test_an_exploring_reviewer_finds_and_reads_the_basis_in_state_0(tmp_path, mo
     assert point["basis_verified"] is True and all(b["verified"] for b in point["basis"])
     assert summary["not_checked_reviews"] == [] and summary["repeated_topics"] == 1
     assert provider.judged and "may the owner delete an entry before ten years?" in provider.judged[0]
+    # review r4505410895: the basis the reviewer read outside the initial text reaches the judge, verbatim
+    assert "The owner may delete any entry at once, whatever its age." not in provider.inputs[0]
+    judged = provider.judged[0]
+    assert "BASES THE REVIEWS READ" in judged and "The owner may delete any entry at once, whatever its age." in judged
+    assert f"snapshot {exploration['snapshot']}" in judged
 
 
 def test_a_quote_not_in_the_snapshot_is_not_a_verified_basis(tmp_path):
@@ -208,3 +213,61 @@ def test_the_workspace_holds_the_snapshot_the_tool_and_the_phase_methodology(tmp
     done = subprocess.run([sys.executable, "nav.py", "read", "methodology/SPEC_STANDARD.md#title"], cwd=root,
                           capture_output=True, text=True)
     assert done.returncode == 0 and json.loads(done.stdout)["snapshot"] == workspace["snapshot"]
+
+
+def test_an_answer_that_is_not_a_review_never_closes_the_round(tmp_path, monkeypatch):
+    # review r4505410897: a well-formed JSON without a valid open_points list is no review
+    case = _case(tmp_path)
+    _layer(monkeypatch)
+    for answer, reason in (({"complete": True, "unresolved": []}, "open_points is not a list"),
+                           ({"open_points": "none", "complete": True}, "open_points is not a list"),
+                           ({"open_points": [1, "x"], "complete": True}, "point 1 is not an object"),
+                           ({"open_points": [{"subject": "A02", "text": "t", "question": "q"}], "complete": True},
+                            "point 1 names no basis"),
+                           ({"open_points": [], "complete": "yes"}, "complete is not true or false")):
+
+        class Odd(Explorer):
+            def explore(self, instruction, text, ws, answer=answer):
+                return json.dumps(answer), {}, []
+
+        for _ in range(2):
+            summary = service.ask_round(case, 2, Odd(), runs=3)
+            assert summary["clear"] is False and set(summary["blocked_units"]) == set(summary["scope"])
+            assert reason in summary["not_checked_reviews"][0]["reason"]
+        assert summary["closed"] is False and service.status(case, 2)["open_units"]
+
+
+def test_parallel_codex_explorations_each_read_their_own_answer(tmp_path, monkeypatch):
+    # review r4505410892: every call writes and reads its own -o, never a shared file
+    import random
+    import threading
+    import time
+    from concurrent.futures import ThreadPoolExecutor
+
+    from questions_workbench import provider as providers
+
+    outputs: list[str] = []
+    lock = threading.Lock()
+
+    def fake_run(command, input, cwd, capture_output, text, timeout):
+        out = Path(command[command.index("-o") + 1])
+        with lock:
+            outputs.append(str(out))
+        marker = input.split("MARKER:", 1)[1].split()[0]
+        time.sleep(random.uniform(0, 0.05))
+        out.write_text(json.dumps({"marker": marker}), encoding="utf-8")
+        time.sleep(random.uniform(0, 0.05))
+        events = json.dumps({"item": {"type": "command_execution", "command": f"python3 nav.py read {marker}",
+                                      "exit_code": 0}})
+        return subprocess.CompletedProcess(command, 0, stdout=events + "\n", stderr="")
+
+    monkeypatch.setattr(providers.subprocess, "run", fake_run)
+    codex = providers.CodexCliProvider("m", "low")
+    workspace = tmp_path / "ws"
+    workspace.mkdir()
+    markers = [f"R{i}" for i in range(9)]
+    with ThreadPoolExecutor(max_workers=9) as pool:
+        results = list(pool.map(lambda m: codex.explore(f"MARKER:{m} go", "", workspace), markers))
+    assert [json.loads(answer)["marker"] for answer, _, _ in results] == markers
+    assert [trace[0]["command"] for _, _, trace in results] == [f"python3 nav.py read {m}" for m in markers]
+    assert len(set(outputs)) == len(markers) and all(not Path(o).exists() for o in outputs)
