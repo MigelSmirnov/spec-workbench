@@ -59,6 +59,7 @@ the standard's owner decides the form. Citing a gap never hides a finding.
 | every fresh timestamp has a source | State 2: where time comes from, its representation, readings per operation | State 6 handoff (contracts), State 7 handoff (notes) | `time_source`, `ambient_time` | model closure; notes |
 | every formal invariant is witnessed | State 2: the invariant, its owner and the test that would show it | State 2 handoff (described), witness phase (bound), State 8 assembly (asserts, or carried to Factory verification) | `invariant_tests`, `decision_witness`, `witness_material` | Required tests; the Factory verification config; the assembled notes; the per-check verdicts |
 | every flow step is executed | State 4: the steps and who executes each | State 6 handoff (declared, contracted), State 7 handoff (called) | `flow_steps`, `flow_reachability` | plan and contracts; notes, router, backend closures |
+| every built record has one source per field | State 6: the builder contract and its `record_construction_backend` IR (§6.13) | State 6 handoff (`deterministic_record_construction_closure`) | `RC001`–`RC015` (`tools/design_record_construction.py`) | State 1 models, `60_contracts.json`, ownership, determinism, `70_record_construction_closure.json` |
 
 ### Models and closure
 

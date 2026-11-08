@@ -313,6 +313,15 @@ STANDARD_BACKENDS = (
             factory_tool="tools/generate_keyed_file_spool_draft.py",
         ),
     ),
+    # record builders (§6.13): one module owns exactly the builders, one per
+    # constructions entry; each is emitted, so each is a deterministic scope
+    StandardBackend(
+        id="record_construction",
+        closure_file="70_record_construction_closure.json",
+        closure_schema="spec_workbench_record_construction_backend_closure.v1",
+        rule_key="record_construction_backend",
+        scope_mapping_path=("constructions",),
+    ),
     # the unit of work over the persistence_backend repositories (§6.12): its
     # classes and every contract they declare are emitted, in up to two modules
     StandardBackend(

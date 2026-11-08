@@ -95,6 +95,13 @@ nobody made.
   classes its IR wires, and the emitter writes each of them or refuses the IR
   (exact module ownership, every transaction method delegated or listed
   unbacked); the Factory validator runs that emitter at `FA005`.
+- `FA023` — a source that declares `rules.record_construction_backend`
+  (SPEC_STANDARD §6.13): the builders module `wiring.module` owns exactly the
+  `constructions` keys (no other module owns one of them), and the target
+  Factory has `tools/generate_record_construction_draft.py` whose literals
+  `RULE_KEY` and `EMITTER` name this backend and the source's emitter, read
+  without running Factory code. The closed form itself is judged by the
+  Factory validator at `FA005`. No such backend is not applicable.
 
 `FA019` exists because a late decision passed every other check. On
 2026-10-10 Cabinet Kernel decision 25 added a note allowing pydantic to a
