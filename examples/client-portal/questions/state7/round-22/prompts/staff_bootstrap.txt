@@ -1,0 +1,139 @@
+Module: staff_bootstrap
+Target path: application/staff_bootstrap.py
+Target file: staff_bootstrap.py
+
+IMPORTS (every listed symbol is available; import the ones the module uses):
+from __future__ import annotations
+from datetime import datetime
+from uuid import UUID
+
+from application.staff_identity import IdentityInputRejected, _normalize_staff_email, _validate_new_password
+from core.models import ActorKind, AuditAction, AuditEntityKind, AuditRecord, AuditResult, StaffAccount, StaffAccountView, StaffBootstrapPort, StaffRole, StaffStatus
+from core.record_builders import build_bootstrap_audit_record, build_bootstrap_staff_account, build_staff_account_view
+from core.system_clock import utc_now
+from security.credential_security import hash_password
+
+CONTRACTS (function signatures — follow exactly):
+def bootstrap_first_administrator(store: StaffBootstrapPort, email: str, initial_password: str) -> StaffAccountView
+# StaffBootstrapPort
+def create_if_empty(self, account: StaffAccount, audit: AuditRecord) -> bool
+
+IMPORTED FUNCTION SIGNATURES (these come from the imports above):
+def hash_password(password: str) -> str
+def build_bootstrap_audit_record(now: datetime, staff_account: StaffAccount) -> AuditRecord
+def build_bootstrap_staff_account(email: str, now: datetime, password_hash: str) -> StaffAccount
+def build_staff_account_view(staff_account: StaffAccount) -> StaffAccountView
+def _normalize_staff_email(email: str) -> str
+def _validate_new_password(password: str) -> None
+def utc_now() -> datetime
+
+OWNED FUNCTIONS REQUIRED (must be defined as top-level functions):
+- bootstrap_first_administrator: (store: StaffBootstrapPort, email: str, initial_password: str) -> StaffAccountView
+
+STATIC GATE CONTRACT (deterministic checks; a violating candidate is rejected without repair):
+- Reflective attribute access is rejected: never call getattr, hasattr,
+  setattr, delattr, or vars; every declared field and operation is
+  addressed directly by name, including in try/finally cleanup.
+- A definition whose parameter list differs from its declared contract
+  signature is rejected; keep names and order exactly.
+- A constructed record accepted by a declared insert_*/upsert_*/append_*
+  operation must reach a call or return; a built-and-dropped record is
+  rejected.
+- Instantiating a spec-declared interface is rejected; construct the
+  module-owned concrete class instead.
+- A stub, placeholder, or fail-closed body for a contracted callable is
+  rejected; implement the complete specified behavior.
+- A top-level import of a package outside the Python standard library and
+  this project's own modules is rejected unless IMPORTS lists it; a note
+  never adds a package to IMPORTS.
+- A model is constructed with values of its declared field types; a field
+  typed tuple[...] receives a tuple, built with tuple(...) where the items
+  were collected in a list, never the list itself.
+- A value passed to a model field is narrowed at the call itself: a name
+  seeded with None, set on some branches and passed later under a test of
+  another name is rejected; build the value where it is obtained and pass
+  it there, or test that same name for None at the call.
+
+OWNED CLASSES REQUIRED (must be defined locally, not merely referenced):
+No owned local classes with contracted methods required; module-local exception exports are listed separately.
+
+CONCRETE IMPLEMENTATION OBLIGATIONS:
+No local concrete-to-interface obligations.
+
+REQUIREMENTS (notes — implement these):
+- bootstrap_first_administrator: [ORCHESTRATION] MUST normalize the supplied email and validate the supplied password through the existing staff identity input boundary, hash that password exactly as supplied with hash_password of the credential boundary, build the account with the imported build_bootstrap_staff_account from the normalized email, that hash and the one utc_now instant, build its audit record with the imported build_bootstrap_audit_record from that same instant and the built account, and hand both to the port in one call. It MUST NOT open a transaction, query persistence, or perform an authorization check, because no authorized administrator can exist yet.
+- bootstrap_first_administrator: [FIELD_ASSIGNMENT] MUST pass to both builders as now one offset-naive UTC instant compatible with the existing persisted datetime model, and MUST NOT take any account or audit value from a caller argument other than the supplied email and password.
+- bootstrap_first_administrator: [SECURITY_BOUNDARY] MUST retain the supplied password only in hashed form and MUST NOT itself write that password or its hash to standard output, standard error, a log, an audit record, a returned value or the message of an exception it raises. It MUST NOT catch, wrap, annotate or re-message a failure raised by the port: that failure propagates unchanged, and keeping the hash out of the port's own failures belongs to the port's persistence boundary, not to this function.
+- bootstrap_first_administrator: [VALIDATION_ERROR] MUST raise BootstrapAlreadyCompletedError, and never the input rejection, when the port reports an already initialized store, so a repeat attempt changes nothing and the caller can tell a second run apart from a mistyped address. IdentityInputRejected stays reserved for the supplied email and password. A genuine storage failure MUST propagate unchanged and MUST NOT be turned into either refusal. BootstrapAlreadyCompletedError is this module's own exception, defined here at top level as a plain Exception subclass whose body is pass and raised without arguments; it is not imported.
+- bootstrap_first_administrator: [DEPENDENCY_BOUNDARY] MUST reach persistence only through StaffBootstrapPort and reuse the existing credential and staff identity input boundaries; it MUST NOT import PortalStore, PortalTransaction, any repository, or the adapter implementing the port, and MUST NOT be reachable from the http router.
+- bootstrap_first_administrator: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it writes and every current-time comparison it makes; it MUST NOT read a host clock itself.
+- bootstrap_first_administrator: [RETURN_SHAPE] MUST return the hash-free = models.StaffAccountView the imported build_staff_account_view builds from the account it handed to the port, so the password hash never leaves this module.
+
+MODEL DATA DEFINITIONS (READ-ONLY SPEC DATA, NOT CODE):
+The following JSON values are read-only spec data, not Python class definitions.
+Do not emit classes, Pydantic models, create_model calls, or assignments from this section.
+Omitted model-schema/data references:
+- StaffAccountView: omitted because it is an imported runtime model schema
+
+MODEL DATA ADDRESSES (SPEC DATA, NOT IMPORT PATHS):
+The following = models.* references are canonical spec data addresses, not Python module paths.
+Read their structured JSON values from MODEL DATA DEFINITIONS when present in this prompt.
+Never convert a spec data address into `import models` or `from models.* import ...`.
+models.* entries listed as spec data are read-only spec addresses, not Python import paths and not core.models imports.
+Only import runtime model symbols from core.models when they are explicitly listed in IMPORTS.
+- models.StaffAccountView: runtime model schema omitted from non-model prompt; exported from core.models by IMPORTS.
+
+IMPORTED MODEL OWNERSHIP (DO NOT REDEFINE):
+Imported runtime model symbols are owned by their source modules listed in IMPORTS; use them as imported and do not redefine them here.
+
+RUNTIME MODEL SURFACE (CORE.MODELS IMPORTS):
+These are imported runtime symbols from core.models. Use the listed enum member names and model fields exactly.
+- ActorKind enum members: SERVICE='service', STAFF='staff', SYSTEM='system', VIEWER='viewer'
+- AuditAction enum members: BUDGET_MANUAL_VERSION_CREATE='budget.manual_version_create', BUDGET_SECTION_PLAN_EDIT='budget.section_plan_edit', DOCUMENT_UPDATE='document.update', EXPENSE_ALLOCATE='expense.allocate', EXPENSE_CORRECT='expense.correct', EXPENSE_CREATE='expense.create', EXPENSE_EXCLUDE='expense.exclude', EXPENSE_INCLUDE='expense.include', GRANT_CREATE='grant.create', GRANT_REVOKE='grant.revoke', PAYMENT_REGISTER='payment.register', PHOTO_PUBLISH='photo.publish', PHOTO_UPDATE='photo.update', PRINCIPAL_CREATE='principal.create', PRINCIPAL_CREDENTIAL_ISSUE='principal.credential_issue', PRINCIPAL_CREDENTIAL_REVOKE='principal.credential_revoke', PRINCIPAL_DISABLE='principal.disable', PRINCIPAL_ENABLE='principal.enable', PRODUCER_GRANT_CREATE='producer_grant.create', PRODUCER_GRANT_REVOKE='producer_grant.revoke', PROGRESS_UPDATE='progress.update', SNAPSHOT_ACTIVATE='snapshot.activate', SNAPSHOT_IMPORT='snapshot.import', STAFF_ASSIGNMENT_CREATE='staff_assignment.create', STAFF_ASSIGNMENT_REVOKE='staff_assignment.revoke', STAFF_CREATE='staff.create', STAFF_DISABLE='staff.disable', STAFF_LOGIN='staff.login', STAFF_LOGIN_FAILED='staff.login_failed', STAFF_LOGOUT='staff.logout', STAFF_RECOVERY_OVERRIDE='staff.recovery_override', STAFF_REINSTATE='staff.reinstate', STAFF_SESSIONS_REVOKE='staff.sessions_revoke', STAFF_SUSPEND='staff.suspend', VIEWER_CREATE='viewer.create', VIEWER_CREDENTIAL_ISSUE='viewer.credential_issue', VIEWER_CREDENTIAL_REVOKE='viewer.credential_revoke', VIEWER_REVOKE='viewer.revoke'
+- AuditEntityKind enum members: BUDGET_VERSION='budget_version', EXPENSE='expense', EXPENSE_ALLOCATION='expense_allocation', EXPENSE_DOCUMENT='expense_document', PRODUCER_GRANT='producer_grant', PROGRESS_PHOTO='progress_photo', SECTION_PLAN='section_plan', SECTION_PROGRESS='section_progress', SERVICE_CREDENTIAL='service_credential', SERVICE_PRINCIPAL='service_principal', SNAPSHOT_IMPORT='snapshot_import', STAFF_ACCOUNT='staff_account', STAFF_ASSIGNMENT='staff_assignment', STAFF_SESSION='staff_session', VIEWER='viewer', VIEWER_CREDENTIAL='viewer_credential', VIEWER_GRANT='viewer_grant', WORK_PAYMENT='work_payment'
+- AuditRecord fields (exact, no others exist): action: AuditAction, actor_id: UUID | None, actor_kind: ActorKind, audit_id: UUID, entity_id: str | None, entity_kind: AuditEntityKind | None, key_version: int | None, occurred_at: datetime, project_id: UUID | None, reason_code: str | None, result: AuditResult
+- AuditResult enum members: REJECTED='rejected', SUCCESS='success'
+- StaffAccount fields (exact, no others exist): created_at: datetime, created_by: UUID | None, email: str, email_verified_at: datetime | None, password_hash: str, role: StaffRole, staff_id: UUID, status: StaffStatus, updated_at: datetime
+- StaffAccountView fields (exact, no others exist): created_at: datetime, email: str, email_verified: bool, role: StaffRole, staff_id: UUID, status: StaffStatus, updated_at: datetime
+- StaffBootstrapPort operations (exact, no others exist):
+    create_if_empty(self, account: StaffAccount, audit: AuditRecord) -> bool
+- StaffRole enum members: ADMINISTRATOR='administrator', OPERATOR='operator'
+- StaffStatus enum members: ACTIVE='active', DISABLED='disabled', PENDING_VERIFICATION='pending_verification', SUSPENDED='suspended'
+
+MODULE-LOCAL EXCEPTION EXPORTS:
+If any exception class is listed here, define it in this file at top level.
+Do not import these classes from core.errors or any other module.
+- class BootstrapAlreadyCompletedError(Exception): pass
+
+RECORDS BUILT FOR THIS MODULE (record_construction_backend):
+Each record below is built by the imported builder named after it; call the builder.
+Constructing such a record here — its constructor, model_construct, model_validate,
+or model_copy of a parameter of that type — is rejected (record_construction_bypassed).
+- AuditRecord: build_bootstrap_audit_record
+- StaffAccount: build_bootstrap_staff_account
+- StaffAccountView: build_staff_account_view
+
+FUNCTION ORDER (define in this order):
+bootstrap_first_administrator
+
+MODELS CONTEXT:
+Runtime models live in core.models. Use IMPORTS and IMPORTED MODEL
+OWNERSHIP for runtime model symbols; do not reproduce model schemas
+or import from a top-level models module.
+
+Generate the complete staff_bootstrap.py file.
+Every owned function listed above must be implemented exactly once at module top level.
+Define every class and method listed in OWNED CLASSES REQUIRED in this file.
+For every local binding in CONCRETE IMPLEMENTATION OBLIGATIONS, inherit the declared interface and implement its complete method surface with non-placeholder bodies.
+If this is the models module, emit every enum/model in MODEL DEFINITIONS exactly once.
+If this is not the models module, do not emit Pydantic model classes, enums, create_model calls, or local model schema shadows.
+Do not invent model fields or enum values not present in the imported runtime models.
+Use only the IMPORTS listed above plus required standard library imports.
+Import from IMPORTS every symbol the module uses, including symbols used only in annotations, and annotate each parameter with the type its CONTRACTS signature declares, never object or nothing.
+Never import from a top-level models module or models.*; runtime models live in core.models only when listed in IMPORTS.
+`models.<name>` in notes is a canonical spec data address, not an importable Python module.
+When one owner module provides a function and core.models provides a DTO with a similar name, split the imports by source exactly as listed in IMPORTS.
+Construct imported runtime models only with the fields listed in IMPORTED MODEL SURFACE; models are frozen and forbid extra fields, so an invented keyword argument fails at runtime.
+Read from a model value only the fields listed for its type; never use getattr(value, name, default) to probe for a field that is not declared.
+Never assign to an attribute of a model value (models are frozen): derive a changed value with value.model_copy(update={...}) or construct a new instance.
+Define every class listed in MODULE-LOCAL EXCEPTION EXPORTS in this file.
