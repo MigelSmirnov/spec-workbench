@@ -62,11 +62,11 @@ The former status, kept:
 
 ## Invariant ledger overview
 
-The current statements are each decision's `Formal invariants`;
-`spec/invariant_ledger.json` is the 2026-07-19 evidence and keeps the
-withdrawn email-challenge wording (INV-001, INV-003, INV-004 and INV-014 are
-narrowed and INV-010…INV-013, INV-016 removed, R0-23). Owners and expected
-primary landings:
+`invariant_ledger.json` is the evidence of 2026-07-19 whose rows were
+distributed into the decisions (Status above). It keeps wording the owner
+withdrew with the email challenges (R0-23): the verified email of INV-001
+and INV-014, the challenge tokens of INV-003 and INV-004, and INV-010…INV-013
+and INV-016. Owners and expected primary landings:
 
 | ID range | Area | Owning responsibility | Expected landing |
 | --- | --- | --- | --- |

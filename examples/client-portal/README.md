@@ -29,7 +29,7 @@ former layout under `spec/`.
 | `questions/` | question rounds |
 | `spec/80_assembly.md`, `spec/HANDOFF.md` | State 8: the current assembly verification, admission and open items (2026-11-07) |
 | `baseline/01_product_boundary.md` … `baseline/09_notes.md` | the frozen requirements baseline the authoring pass started from; input, not design |
-| `spec/invariant_ledger.json` | the invariant ledger of 2026-07-19, kept as evidence; the current statements are the `Formal invariants` of `02_rules.md`, which narrowed INV-001, INV-003, INV-004, INV-014 and removed INV-010…INV-013, INV-016 with the email challenges (R0-23) |
+| `spec/invariant_ledger.json` | the invariant ledger of 2026-07-19, kept as evidence; its rows were distributed into the decisions of `02_rules.md`, and it keeps the email-challenge wording the owner withdrew (R0-23) |
 | `open_questions.md` | the owner's open questions Q1–Q19 |
 | `global_spec.json` | the assembly of 2026-07-19; superseded by the accepted Factory spec (`SOURCE.md`) and replaced when State 8 is reached again |
 
