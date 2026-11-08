@@ -1,0 +1,108 @@
+{
+ "open_points": [
+  {
+   "subject": "Clock-policy operation boundary",
+   "kind": "undefined operation scope",
+   "text": "“An operation reads the clock once” and “the audit writer's reading … is the one further reading” do not define whether transport authorization, guards, the use case, repository work, and audit append are one operation or separate operations.",
+   "question": "What exact boundary shares one wall-clock reading, especially when a request performs an expiry check in a guard and then writes timestamps in a use case?",
+   "options": [
+    "The entire request, including authorization and the use case, shares one reading; only the audit writer may take the stated additional reading.",
+    "Each application/guard/use-case call is a separate operation and may take its own reading.",
+    "Only the mutating use case shares one reading; preceding transport and authorization checks may read separately."
+   ],
+   "default_guess": "Treat the complete authorized use-case execution as one operation, sharing one wall reading through its guards and writes, with only the audit-writer exception.",
+   "witness": {
+    "initial": "A staff session expires at 12:00:00, and a mutation request reaches the authorization guard just before that instant.",
+    "events": [
+     "The HTTP route authorizes the staff session at 11:59:59.999.",
+     "The use case begins just after 12:00:00 and writes a portal-owned event timestamp."
+    ],
+    "outcomes": [
+     "If the route and use case are one operation, the shared 11:59:59.999 reading keeps the session valid and supplies the written timestamp.",
+     "If they are separate operations, the use case may read 12:00:00 or later; it may either write that later timestamp after authorization or recheck and refuse the now-expired session."
+    ],
+    "observer": "The caller sees success versus refusal, and on success staff can observe the persisted event time."
+   },
+   "unit": "A28"
+  },
+  {
+   "subject": "Source-supplied datetime inputs",
+   "kind": "deferred input meaning",
+   "text": "“Times a source supplies … are kept as supplied: the same instant, stored offset-naive UTC” but “their accepted forms and checks … are … carried to States 6–7.”",
+   "question": "Which representations of a source-supplied datetime are accepted, and how is an offset-naive supplied value interpreted: rejected, treated as UTC, or interpreted by some other rule?",
+   "options": [
+    "Require an offset-aware UTC value and reject naive or non-UTC-offset values.",
+    "Accept any offset-aware value and normalize the represented instant to offset-naive UTC.",
+    "Also accept offset-naive values and interpret them as UTC."
+   ],
+   "default_guess": "Accept offset-aware datetimes, normalize their instant to offset-naive UTC, and reject offset-naive source values.",
+   "witness": {
+    "initial": "An authorized producer has a valid snapshot publication whose `approved_at` is `2026-11-08T10:00:00` with no offset.",
+    "events": [
+     "The producer submits the publication.",
+     "Request decoding and snapshot import apply the clock and timestamp rules."
+    ],
+    "outcomes": [
+     "An implementation rejects the body because the supplied value does not identify an instant.",
+     "An implementation treats the value as 10:00 UTC, stores `2026-11-08 10:00:00`, and continues the import."
+    ],
+    "observer": "The producer sees decoding refusal versus a classified import result."
+   },
+   "unit": "A28"
+  },
+  {
+   "subject": "Snapshot replay/conflict recording transaction",
+   "kind": "atomicity unspecified",
+   "text": "“either changes no business state and is recorded as its own import result and `snapshot.import` audit” requires two persisted records but does not say whether they are atomic or what happens when one write fails.",
+   "question": "Must the fresh SnapshotImportRecord and its `snapshot.import` AuditRecord commit atomically, and what result is returned if either persistence step fails after classification?",
+   "options": [
+    "Commit both atomically or commit neither; return a storage failure when the transaction cannot commit.",
+    "Allow the import result to commit even if the audit append fails, while surfacing or repairing the audit failure separately.",
+    "Allow the audit to commit before the import result and retain it if the result write fails."
+   ],
+   "default_guess": "Write the import result and audit in one transaction and return a storage failure with neither record committed if either write fails.",
+   "witness": {
+    "initial": "A snapshot already exists, and an authorized producer republishes identical content.",
+    "events": [
+     "The import is classified as `idempotent_replay`.",
+     "The fresh import-result write succeeds.",
+     "Appending the required `snapshot.import` audit fails."
+    ],
+    "outcomes": [
+     "The implementation rolls back the import result, returns a storage failure, and leaves neither new record.",
+     "The implementation retains and returns the fresh import result despite the missing audit, or retains it while reporting failure."
+    ],
+    "observer": "The producer sees whether an `import_id` exists and can be read; auditors see whether the classified attempt has an audit record."
+   },
+   "unit": "A8"
+  },
+  {
+   "subject": "Concurrent snapshot publications",
+   "kind": "missing concurrency rule",
+   "text": "The replay table defines behavior when an existing snapshot is found, and the changed rule requires each replay or conflict to have its own result and audit, but it does not define classification when concurrent attempts initially observe no snapshot.",
+   "question": "How must concurrent publications for the same `(project_id, estimate_id, estimate_version)` be serialized or classified so that every classified attempt receives the required import result and audit?",
+   "options": [
+    "Linearize by snapshot identity: one attempt is accepted and each later equal attempt is an idempotent replay; a later different attempt is an integrity conflict.",
+    "Allow both attempts to classify as accepted and convert a uniqueness failure for one into an idempotent replay or integrity conflict.",
+    "Permit the losing attempt to fail as a storage/concurrency error without an import result or audit."
+   ],
+   "default_guess": "Linearize the identity transaction so exactly one attempt is accepted and every other attempt is reclassified against the committed snapshot and records its own result and audit.",
+   "witness": {
+    "initial": "No snapshot exists for a particular project, estimate, and version.",
+    "events": [
+     "Producer request A and producer request B concurrently publish identical content for that identity.",
+     "Both pass access and content checks before either snapshot insert is committed."
+    ],
+    "outcomes": [
+     "The implementation serializes classification: one request records `accepted`, and the other records `idempotent_replay`, both with their own import result and audit.",
+     "Both classify as accepted; one later loses the unique-key race and returns an unrecorded storage conflict instead of the required replay result and audit."
+    ],
+    "observer": "The producers see an idempotent import result versus a storage failure, and auditors see one versus two classified-attempt records."
+   },
+   "unit": "A8"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"Clock-policy operation boundary\",\"kind\":\"undefined operation scope\",\"text\":\"“An operation reads the clock once” and “the audit writer's reading … is the one further reading” do not define whether transport authorization, guards, the use case, repository work, and audit append are one operation or separate operations.\",\"question\":\"What exact boundary shares one wall-clock reading, especially when a request performs an expiry check in a guard and then writes timestamps in a use case?\",\"options\":[\"The entire request, including authorization and the use case, shares one reading; only the audit writer may take the stated additional reading.\",\"Each application/guard/use-case call is a separate operation and may take its own reading.\",\"Only the mutating use case shares one reading; preceding transport and authorization checks may read separately.\"],\"default_guess\":\"Treat the complete authorized use-case execution as one operation, sharing one wall reading through its guards and writes, with only the audit-writer exception.\",\"witness\":{\"initial\":\"A staff session expires at 12:00:00, and a mutation request reaches the authorization guard just before that instant.\",\"events\":[\"The HTTP route authorizes the staff session at 11:59:59.999.\",\"The use case begins just after 12:00:00 and writes a portal-owned event timestamp.\"],\"outcomes\":[\"If the route and use case are one operation, the shared 11:59:59.999 reading keeps the session valid and supplies the written timestamp.\",\"If they are separate operations, the use case may read 12:00:00 or later; it may either write that later timestamp after authorization or recheck and refuse the now-expired session.\"],\"observer\":\"The caller sees success versus refusal, and on success staff can observe the persisted event time.\"},\"unit\":\"A28\"},{\"subject\":\"Source-supplied datetime inputs\",\"kind\":\"deferred input meaning\",\"text\":\"“Times a source supplies … are kept as supplied: the same instant, stored offset-naive UTC” but “their accepted forms and checks … are … carried to States 6–7.”\",\"question\":\"Which representations of a source-supplied datetime are accepted, and how is an offset-naive supplied value interpreted: rejected, treated as UTC, or interpreted by some other rule?\",\"options\":[\"Require an offset-aware UTC value and reject naive or non-UTC-offset values.\",\"Accept any offset-aware value and normalize the represented instant to offset-naive UTC.\",\"Also accept offset-naive values and interpret them as UTC.\"],\"default_guess\":\"Accept offset-aware datetimes, normalize their instant to offset-naive UTC, and reject offset-naive source values.\",\"witness\":{\"initial\":\"An authorized producer has a valid snapshot publication whose `approved_at` is `2026-11-08T10:00:00` with no offset.\",\"events\":[\"The producer submits the publication.\",\"Request decoding and snapshot import apply the clock and timestamp rules.\"],\"outcomes\":[\"An implementation rejects the body because the supplied value does not identify an instant.\",\"An implementation treats the value as 10:00 UTC, stores `2026-11-08 10:00:00`, and continues the import.\"],\"observer\":\"The producer sees decoding refusal versus a classified import result.\"},\"unit\":\"A28\"},{\"subject\":\"Snapshot replay/conflict recording transaction\",\"kind\":\"atomicity unspecified\",\"text\":\"“either changes no business state and is recorded as its own import result and `snapshot.import` audit” requires two persisted records but does not say whether they are atomic or what happens when one write fails.\",\"question\":\"Must the fresh SnapshotImportRecord and its `snapshot.import` AuditRecord commit atomically, and what result is returned if either persistence step fails after classification?\",\"options\":[\"Commit both atomically or commit neither; return a storage failure when the transaction cannot commit.\",\"Allow the import result to commit even if the audit append fails, while surfacing or repairing the audit failure separately.\",\"Allow the audit to commit before the import result and retain it if the result write fails.\"],\"default_guess\":\"Write the import result and audit in one transaction and return a storage failure with neither record committed if either write fails.\",\"witness\":{\"initial\":\"A snapshot already exists, and an authorized producer republishes identical content.\",\"events\":[\"The import is classified as `idempotent_replay`.\",\"The fresh import-result write succeeds.\",\"Appending the required `snapshot.import` audit fails.\"],\"outcomes\":[\"The implementation rolls back the import result, returns a storage failure, and leaves neither new record.\",\"The implementation retains and returns the fresh import result despite the missing audit, or retains it while reporting failure.\"],\"observer\":\"The producer sees whether an `import_id` exists and can be read; auditors see whether the classified attempt has an audit record.\"},\"unit\":\"A8\"},{\"subject\":\"Concurrent snapshot publications\",\"kind\":\"missing concurrency rule\",\"text\":\"The replay table defines behavior when an existing snapshot is found, and the changed rule requires each replay or conflict to have its own result and audit, but it does not define classification when concurrent attempts initially observe no snapshot.\",\"question\":\"How must concurrent publications for the same `(project_id, estimate_id, estimate_version)` be serialized or classified so that every classified attempt receives the required import result and audit?\",\"options\":[\"Linearize by snapshot identity: one attempt is accepted and each later equal attempt is an idempotent replay; a later different attempt is an integrity conflict.\",\"Allow both attempts to classify as accepted and convert a uniqueness failure for one into an idempotent replay or integrity conflict.\",\"Permit the losing attempt to fail as a storage/concurrency error without an import result or audit.\"],\"default_guess\":\"Linearize the identity transaction so exactly one attempt is accepted and every other attempt is reclassified against the committed snapshot and records its own result and audit.\",\"witness\":{\"initial\":\"No snapshot exists for a particular project, estimate, and version.\",\"events\":[\"Producer request A and producer request B concurrently publish identical content for that identity.\",\"Both pass access and content checks before either snapshot insert is committed.\"],\"outcomes\":[\"The implementation serializes classification: one request records `accepted`, and the other records `idempotent_replay`, both with their own import result and audit.\",\"Both classify as accepted; one later loses the unique-key race and returns an unrecorded storage conflict instead of the required replay result and audit.\"],\"observer\":\"The producers see an idempotent import result versus a storage failure, and auditors see one versus two classified-attempt records.\"},\"unit\":\"A8\"}]}",
+ "set_aside": []
+}

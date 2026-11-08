@@ -473,7 +473,7 @@ The table is rules data: `rules.supported_external_contract_versions` (SPEC_STAN
 | Expense | `recognized_document_id` + canonical `intake_fingerprint` | same fingerprint → existing Expense/Document; different fingerprint → integrity conflict, nothing changed |
 | ProgressPhoto | `intake_id` | a publication whose kept fields (project, section, caption, visibility, `file_ref`, `photo_date`) equal the photo as now stored → return it; otherwise conflict, nothing changed; `intake_source`, never kept, is not compared |
 | WorkPayment | `payment_id` (command-supplied UUID) | a registration equal to the stored payment → return it; otherwise conflict, nothing changed |
-| ApprovedEstimateSnapshot | `(project_id, estimate_id, estimate_version)` + `content_fingerprint` | same fingerprint → existing snapshot (`idempotent_replay`); different → `integrity_conflict`, nothing stored |
+| ApprovedEstimateSnapshot | `(project_id, estimate_id, estimate_version)` + `content_fingerprint` | same fingerprint → existing snapshot (`idempotent_replay`); different → `integrity_conflict`, no snapshot stored; either changes no business state and is recorded as its own import result and `snapshot.import` audit |
 
 A fingerprint is a deterministic digest of the content it covers, computed
 by the portal: a re-publication with an equal fingerprint is an idempotent
@@ -486,7 +486,7 @@ current service behaviour accepted; technical decisions delegated).
 ### Formal invariants
 
 - INV-009: at most one active grant per (viewer_id, project_id) and per (service_principal_id, project_id)
-- INV-021: re-publication with identical (project, estimate_id, estimate_version) and identical fingerprint is an idempotent replay; a different fingerprint for the same identity is an integrity conflict storing nothing
+- INV-021: re-publication with identical (project, estimate_id, estimate_version) and identical fingerprint is an idempotent replay; a different fingerprint for the same identity is an integrity conflict storing no snapshot; either changes no business state and is recorded as its own import result and `snapshot.import` audit
 - INV-030: one recognized_document_id creates at most one Expense and one ExpenseDocument; equal intake_fingerprint replay returns the existing records, while a different fingerprint is an integrity conflict changing nothing
 - INV-042: a WorkPayment is idempotent by payment_id and is never a factura or accounting posting; payments total is derived
 - INV-043: a ProgressPhoto is idempotent by intake_id; the gallery is chronological; visibility changes never alter financial or progress data
@@ -494,7 +494,7 @@ current service behaviour accepted; technical decisions delegated).
 ### Required tests
 
 - INV-009: a focused test at `PortalTransaction.commit` showing the invariant holds; a violating input is refused and changes nothing.
-- INV-021: a check against the rules table at `_classify_snapshot_replay` showing the invariant holds; a violating input is refused and changes nothing.
+- INV-021: a re-publication with an equal fingerprint is classified an idempotent replay of the existing snapshot, which is not stored again, one with a different fingerprint an integrity conflict storing no snapshot; either changes no business state and is recorded as its own import result and `snapshot.import` audit.
 - INV-030: a focused test at `create_expense_from_recognition` showing the invariant holds; a violating input is refused and changes nothing.
 - INV-042: a focused test at `register_work_payment` showing the invariant holds; a violating input is refused and changes nothing.
 - INV-043: a focused test at `publish_progress_photo` showing the invariant holds; a violating input is refused and changes nothing.
@@ -961,9 +961,10 @@ The former ledger rows INV-020…INV-029 that no table of R1–R17 carries. Thei
   [witness: verification:budget_management_sqlite_uow_client_portal].
 - INV-020: the snapshot import check: an accepted snapshot is never
   overwritten or deleted and every accepted version stays readable; a
-  re-publication of its identity with the same content changes nothing,
-  and one with different content is a conflict that leaves the snapshot
-  unchanged and is recorded only as its import result and audit (A12, A13)
+  re-publication of its identity with the same content is an idempotent
+  replay and one with different content a conflict; each leaves the
+  snapshot unchanged, changes no business state and is recorded as its
+  own import result and `snapshot.import` audit (A12, A13)
   [witness: verification:snapshot_import_sqlite_uow_client_portal].
 - INV-026, INV-027, INV-028: the budget derivation check. INV-026: an
   accepted import stores the published planned values and rewrites no budget
@@ -1333,7 +1334,8 @@ reading equals `datetime.utcnow()` and the elapsed reading equals
   plus its TTL; source-supplied times and dates, a service credential's
   supplied `expires_at` among them, keep their supplied values.
 - CLK-002: elapsed durations are measured only through the clock source's
-  monotonic reading; they are used within one process, never persisted,
+  monotonic reading, one elapsed reading per viewer-entry request; they
+  are used within one process, never persisted,
   and never compared with or mixed into wall-clock values. Owner: the
   clock source.
 
@@ -1349,7 +1351,7 @@ reading equals `datetime.utcnow()` and the elapsed reading equals
   source reads the host wall or monotonic clock directly.
 - CLK-002: a test showing that the elapsed durations the portal measures
   (the A25 viewer-entry window) come from the clock source's monotonic
-  reading, are not persisted, and are not compared with or mixed into
+  reading, one elapsed reading per viewer-entry request, are not persisted, and are not compared with or mixed into
   wall-clock values.
 - Witnesses, the focused Factory verification checks that assert it: CLK-001 [witness: verification:service_identity_consumer_uow_client_portal]; CLK-001 [witness: verification:staff_bootstrap_client_portal].
 
