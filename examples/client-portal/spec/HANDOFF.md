@@ -8,6 +8,49 @@ merged: accepted spec `018b2e2e`). The assembly, admission and diagnosis
 results are in `80_assembly.md`; the semantic diff, for the owner, is
 `SEMANTIC_DIFF.md` (against `018b2e2e` first, then against `459ac96c`).
 
+## Record construction on `record_construction_backend/v1` (2026-11-08/09) — read this first
+
+Owner decision 2026-11-08: every record a model-written module builds from its
+inputs is built by an emitted builder of the new deterministic module
+`record_builders` (SPEC_STANDARD 6.13, Workbench #170). Not exported; no
+Route B, no deploy. Factory checkout: `code_factory_cp_witnesses` at main
+`9a8a5c14`. Workbench main merged at `7f8af7ff` (#171).
+
+Done (commits on `agent/client-portal`):
+
+- `1db2c06b` States 1–6 and the IR: `70_record_construction_closure.json`,
+  86 builders for 74 construction sites; owner decisions Q01–Q12 recorded
+  (`SOURCE.md` table; Q07 answered again the same day: a section allocation
+  is named by its plan in the active version). Two IR defects fixed:
+  `confirmed_at` converts `naive_utc` (A28), and the two credential-issue
+  builders take `credential_id` from the caller, who issues the secret for it
+  first.
+- `b3d01e50` State 7: notes of 16 modules name the builders and keep only
+  behaviour; propagated (`--replace-all`), 1085 notes.
+- `776ba023` imports closure: builder edges accepted with `code_outdated`
+  against the accepted code `459ac96c`; strict_ready.
+- this commit: the gap list `spec/record_construction_gaps.json` is removed
+  (its content is the IR; git keeps it at `7316b443`).
+
+Checks: `design_record_construction --coverage` 0 findings (RC001–RC015),
+`design_imports --coverage` strict_ready, notes gate 0 blocks, projection
+`--verify` in sync. Rounds, State 8 assembly, `design_diagnose`, admission
+and Stage 8.1 follow in this section once run.
+
+Waits on the projector fix (`tools/projector-record-builders`, `cb901290`):
+`experiments/client-portal/frame_record_builders.py` (untracked, never
+committed) places `record_builders` in `module_order`/`module_paths`, sets
+its edge to `data_provider` and — a gap the pending fix does not cover — its
+export surface `imports.internal.record_builders` (every builder of the IR),
+without which no consumer edge is importable. After that PR merges: merge
+main, re-project without the script, check that `imports.internal` still
+carries the builders.
+
+Behaviour changes against the running service (`SEMANTIC_DIFF.md`): Q07
+(section allocation name), Q09 (decoding boundary), Q10 (typed refusal of an
+incomplete publication), Q12 (Registry path `projects/active`, a live bug
+fix), plus the credential_id and confirmed_at corrections.
+
 ## Rebuild by SPEC_STANDARD, data first (2026-11-08, night) — read this first
 
 Owner decision 2026-11-08: rebuild the whole specification by SPEC_STANDARD,
