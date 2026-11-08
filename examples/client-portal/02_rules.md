@@ -1302,11 +1302,12 @@ clock itself:
   the operation, no arithmetic in the clock source; an operation derives
   an expiry by adding its TTL to the instant it read); the audit writer's reading of an appended
   record's `occurred_at` is the one further reading (the exception above);
-- the elapsed clock gives a duration scale: one reading per request of a
+- the elapsed clock gives a duration scale: one reading per call of a
   clock that cannot move backwards, in seconds as a float, the same value
-  `time.monotonic()` gives. It measures the viewer-entry rate-limit window of
-  A25 only; a reading is never stored, never turned into an instant and
-  never ordered against a persisted record.
+  `time.monotonic()` gives. Its one user is the viewer-entry rate limit of
+  A25, which takes one reading per viewer-entry request and measures its
+  window with it; a reading is never stored, never turned into an instant
+  and never ordered against a persisted record.
 
 How many readings an operation takes and which instant it reuses stay the
 rules above. Normative value: `rules.time_source_policy` and
@@ -1336,8 +1337,9 @@ reading equals `datetime.utcnow()` and the elapsed reading equals
 - CLK-002: elapsed durations are measured only through the clock source's
   monotonic reading, one elapsed reading per viewer-entry request; they
   are used within one process, never persisted,
-  and never compared with or mixed into wall-clock values. Owner: the
-  clock source.
+  and never compared with or mixed into wall-clock values. Owners: the
+  clock source, as the only reader of the monotonic clock; the viewer-entry
+  rate limit of A25, for its one reading per request and its window.
 
 ### Required tests
 
