@@ -106,8 +106,12 @@ migrated one: a decision is never fitted to the checks or the code that exist.
 So a State 2 round is given neither check code nor verdicts, a `[witness: …]`
 tag is only text of its item, and a changed check reopens no State 2 unit.
 State 2 carries the obligation to `state8_assembly`, where `witness_material`
-runs on the per-check judgement (`design_questions.py judge-checks`) and
-`partial` or `does_not` blocks before export. On client-portal per-check
+runs on the per-check judgement (`design_questions.py judge-checks`). A Factory
+check judged `partial` or `does_not`, or whose material cannot be read whole,
+is carried from there to Factory verification, addressed to the case's
+`factory_checks_issue` (owner decision 2026-11-08, item 6): it does not block
+State 8 or export. A State 2 invariant with no Required tests item still
+blocks State 2 (`invariant_tests`). On client-portal per-check
 judgement inside State 2 stopped the round on 52 `partial` verdicts out of 68
 bindings and drove it to the ping-pong limit; those were gaps of Factory checks,
 not of the decisions.

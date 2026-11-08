@@ -825,7 +825,11 @@ def test_a_check_is_judged_once_and_state8_reads_its_verdict(tmp_path, monkeypat
     assert "invariant: INV-002: a count never decreases" in provider.checks[0]   # as stated
     assert _verdicts(case)[0]["outcome"] == "partial"
     result = transition.run_check(case, "witness_material")
-    assert result["outcome"] == "open" and result["findings"][0]["code"] == "witness_does_not_assert"
+    assert result["outcome"] == "open"                                 # carried, but addressed to nothing
+    assert [f["code"] for f in result["findings"]] == ["witness_assertion_carried", "witness_carry_unaddressed"]
+    _write(case / "90_factory_target.json", {"factory_project": "Demo", "factory_checks_issue": "code-factory#189"})
+    result = transition.run_check(case, "witness_material")
+    assert result["outcome"] == "carried" and result["findings"][0]["issue"] == "code-factory#189"
     assert _judge_checks(case, "partial").checks == []                 # kept by digest: not judged again
 
 
@@ -840,19 +844,48 @@ def test_state2_is_ready_with_partial_verdicts_present(tmp_path, monkeypatch):
 
 
 @pytest.mark.parametrize("outcome", ["partial", "does_not"])
-def test_state8_blocks_on_a_check_that_does_not_fully_assert(tmp_path, monkeypatch, outcome):
+def test_state8_is_ready_with_a_check_that_does_not_fully_assert_and_carries_it(tmp_path, monkeypatch, outcome):
+    # owner decision 2026-11-08 (#147 comment 6721261089, item 6): a Factory
+    # check that asserts in part is carried to Factory verification, addressed
+    # to the case's issue, and no longer blocks State 8 or export
     case = _case(tmp_path, SufficiencyProvider.ITEM)
     monkeypatch.setenv("SPEC_WORKBENCH_FACTORY_ROOT", str(_factory_with_check(tmp_path, case)))
     _judge_checks(case, outcome)
     report = transition.run_phase(case, "state8_assembly")
-    assert report["ready"] is False
-    assert [(r["id"], r["from"], r["outcome"]) for r in report["results"]] == [
-        ("witness_assertion", "state2_rules_decisions", "open")]
-    assert [f["code"] for f in report["findings"]] == ["witness_does_not_assert"]
+    assert report["ready"] is False                                    # no issue to carry it to
+    assert [f["code"] for f in report["findings"]] == ["witness_assertion_carried", "witness_carry_unaddressed"]
+    _write(case / "90_factory_target.json", {"factory_project": "Demo",
+                                              "factory_checks_issue": "MigelSmirnov/code-factory#189"})
+    report = transition.run_phase(case, "state8_assembly")
+    assert report["ready"] is True and report["findings"] == []
+    [result] = report["results"]
+    assert (result["id"], result["from"], result["outcome"]) == ("witness_assertion", "state2_rules_decisions",
+                                                                 "carried")
+    [carried] = result["findings"]
+    assert carried["code"] == "witness_assertion_carried" and carried["verdict"] == outcome
+    assert carried["to"] == "factory_checks" and carried["issue"] == "MigelSmirnov/code-factory#189"
+    assert carried["decision"] == "A01" and carried["invariants"] == ["INV-001", "INV-002"]
     asserting = _case(tmp_path / "asserting", SufficiencyProvider.ITEM)
     monkeypatch.setenv("SPEC_WORKBENCH_FACTORY_ROOT", str(_factory_with_check(tmp_path / "asserting", asserting)))
     _judge_checks(asserting, "asserts")
-    assert transition.run_phase(asserting, "state8_assembly")["ready"] is True
+    assert transition.run_phase(asserting, "state8_assembly")["results"][0]["outcome"] == "closed"
+
+
+def test_a_workbench_gate_that_does_not_fully_assert_still_blocks(tmp_path, monkeypatch):
+    # only a Factory check is carried to Factory verification
+    _clean_gate(monkeypatch)
+    case = _case(tmp_path, "- INV-001, INV-002: refused. [witness: workbench:flows]")
+    _write(case / "90_factory_target.json", {"factory_project": "Demo", "factory_checks_issue": "code-factory#189"})
+    _judge_checks(case, "partial")
+    result = transition.run_check(case, "witness_material")
+    assert result["outcome"] == "open" and [f["code"] for f in result["findings"]] == ["witness_does_not_assert"]
+
+
+def test_a_state2_invariant_without_a_required_tests_item_still_blocks_state2(tmp_path):
+    case = _case(tmp_path, "- INV-001: a thing counted twice is refused.")
+    report = transition.run_phase(case, "state2_rules_decisions")
+    assert report["ready"] is False
+    assert [r["outcome"] for r in report["results"] if r["check"] == "invariant_tests"] == ["open"]
 
 
 def test_the_state2_round_input_holds_no_verdict_and_no_check_text(tmp_path, monkeypatch):
@@ -875,13 +908,13 @@ def test_the_state2_round_input_holds_no_verdict_and_no_check_text(tmp_path, mon
     assert summary["transition_ready"] is True
 
 
-def test_a_binding_whose_check_cannot_be_read_is_not_judged_sufficient(tmp_path, monkeypatch):
+def test_a_binding_whose_factory_cannot_be_read_is_not_judged_sufficient(tmp_path, monkeypatch):
     _clean_gate(monkeypatch)
     case = _case(tmp_path, SufficiencyProvider.ITEM)
-    _write(case / "90_factory_target.json", {"factory_project": "Demo"})
+    _write(case / "90_factory_target.json", {"factory_project": "Demo", "factory_checks_issue": "code-factory#189"})
     monkeypatch.setenv("SPEC_WORKBENCH_FACTORY_ROOT", str(tmp_path / "no-factory"))
     result = transition.run_check(case, "witness_material")
-    assert result["outcome"] == "not_checked" and transition.blocking(result)
+    assert result["outcome"] == "not_checked" and transition.blocking(result)   # an input missing here
     assert [f["code"] for f in result["findings"]] == ["witness_material_not_checked"]
     summary, provider = _ask(case)
     assert "NOT CHECKED:" not in provider.instructions[0]               # not State 2's question
@@ -889,6 +922,24 @@ def test_a_binding_whose_check_cannot_be_read_is_not_judged_sufficient(tmp_path,
     report = transition.run_phase(case, "state8_assembly")                # it stops where it is received
     assert report["ready"] is False
     assert [f["code"] for f in report["findings"]] == ["witness_material_not_checked"]
+
+
+def test_a_check_whose_material_cannot_be_read_whole_is_carried_with_its_reason(tmp_path, monkeypatch):
+    import yaml
+
+    case = _case(tmp_path, SufficiencyProvider.ITEM)
+    factory = _factory_with_check(tmp_path, case)
+    _write(factory / "verification" / "configs" / "Demo.yaml", yaml.safe_dump({"checks": {"commands": [
+        {"name": "counts_once", "cwd": "../..", "command": ["python", "verification/missing_check.py"]}]}}))
+    monkeypatch.setenv("SPEC_WORKBENCH_FACTORY_ROOT", str(factory))
+    result = transition.run_check(case, "witness_material")
+    assert result["outcome"] == "open"                                  # carried, but addressed to nothing
+    assert [f["code"] for f in result["findings"]] == ["witness_material_carried", "witness_carry_unaddressed"]
+    _write(case / "90_factory_target.json", {"factory_project": "Demo", "factory_checks_issue": "code-factory#189"})
+    report = transition.run_phase(case, "state8_assembly")
+    assert report["ready"] is True and report["results"][0]["outcome"] == "carried"
+    [carried] = report["results"][0]["findings"]
+    assert carried["verdict"] == "not_checked" and "names no readable file" in carried["reason"]
 
 
 # ------------------------------- 4. a closed round hides no blocking result

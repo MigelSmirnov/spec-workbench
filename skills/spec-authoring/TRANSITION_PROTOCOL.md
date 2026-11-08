@@ -57,7 +57,7 @@ the standard's owner decides the form. Citing a gap never hides a finding.
 |---|---|---|---|---|
 | every model has one identity and one closure | State 1: meaning and identity (who mints it, from what) | State 6 handoff | `model_closure` | State 1, `60_model_closure_*.json`, `60_contracts.json` |
 | every fresh timestamp has a source | State 2: where time comes from, its representation, readings per operation | State 6 handoff (contracts), State 7 handoff (notes) | `time_source`, `ambient_time` | model closure; notes |
-| every formal invariant is witnessed | State 2: the invariant, its owner and the test that would show it | State 2 handoff (described), witness phase (bound), State 8 assembly (asserts) | `invariant_tests`, `decision_witness`, `witness_material` | Required tests; the Factory verification config; the assembled notes; the per-check verdicts |
+| every formal invariant is witnessed | State 2: the invariant, its owner and the test that would show it | State 2 handoff (described), witness phase (bound), State 8 assembly (asserts, or carried to Factory verification) | `invariant_tests`, `decision_witness`, `witness_material` | Required tests; the Factory verification config; the assembled notes; the per-check verdicts |
 | every flow step is executed | State 4: the steps and who executes each | State 6 handoff (declared, contracted), State 7 handoff (called) | `flow_steps`, `flow_reachability` | plan and contracts; notes, router, backend closures |
 
 ### Models and closure
@@ -157,10 +157,21 @@ files and of the bound items with their invariants, and made again only when
 one of them changes; an item left unverified is asked again on the next
 judgement, the verified ones reused and the earlier attempt kept
 (`design_questions.py judge-checks`). At the State 8 handoff `witness_material`
-stops on a binding without a current verdict (`not_checked`) and on one whose
-check does not assert, or asserts in part, what its item names
-(`witness_does_not_assert`). Material that cannot be given whole is
-`not_checked`, never cut.
+stops on a binding without a current verdict (`judge-checks` not run on its
+current files, or a judgement whose quotes failed: `not_checked`). A Factory
+check (`verification:`) that asserts what its item names only in part
+(`partial`) or not at all (`does_not`), and one whose material cannot be given
+whole (never cut; its reason kept), is **carried** to Factory verification
+(owner decision 2026-11-08, #147 comment 6721261089, item 6): an obligation
+addressed to the Factory issue the case names in `90_factory_target.json` as
+`factory_checks_issue` (client-portal: code-factory #189), listed in the
+check's result with the decision, the invariants, the verdict and the
+check's digest (`witness_assertion_carried`, `witness_material_carried`). It
+no longer blocks State 8 or export. A carried obligation with no issue to
+address it to stops (`witness_carry_unaddressed`). A `note:` or `workbench:`
+binding is not a Factory check: one that does not fully assert still stops
+(`witness_does_not_assert`). A State 2 invariant with no Required tests item
+still blocks at State 2: that is State 2's own decision (`invariant_tests`).
 
 A State 2 round is given neither the check code nor the verdicts, and a
 `[witness: …]` tag is to it only text of the Required tests item: the reviewer
