@@ -814,3 +814,25 @@ def test_retired_rules_namespace_is_removed_and_an_undeclared_one_kept(tmp_path,
     assert "capability_catalog" not in projected["rules"]
     assert projected["rules"]["legacy_policy"] == {"old": True}  # never declared, never retired: kept
     assert {"address": "rules.capability_catalog", "action": "remove"} in plan["changes"]
+
+
+def test_record_construction_closure_is_projected_into_rules(tmp_path, monkeypatch) -> None:
+    from pathlib import Path
+
+    fixture = Path(__file__).resolve().parent / "fixtures" / "record_construction" / "accept_reference.json"
+    backend = json.loads(fixture.read_text(encoding="utf-8"))["rules"]["record_construction_backend"]
+    project = _project(tmp_path)
+    _patch_ready_sources(monkeypatch)
+    (project / "70_record_construction_closure.json").write_text(json.dumps({
+        "schema_version": "spec_workbench_record_construction_backend_closure.v1",
+        "status": "closed",
+        "source_refs": ["60_contracts.json"],
+        "rationale": "fixture",
+        "backend_ir": backend,
+    }), encoding="utf-8")
+
+    _, projected, findings, source_checks = service._project(project)
+
+    assert findings == []
+    assert projected["rules"]["record_construction_backend"] == backend
+    assert any(row["source"] == "70_record_construction_closure.json" and row["ready"] for row in source_checks)

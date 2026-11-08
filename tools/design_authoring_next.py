@@ -21,6 +21,7 @@ from imports_workbench import service as imports_closure
 from imports_workbench.model import ImportsError
 import design_emitter_binding
 import design_lint
+import design_record_construction
 import design_router_context
 import design_stage3
 import design_stage4
@@ -636,6 +637,23 @@ def _post_state5_step(sequence: dict[str, Any], project: Path, project_text: str
     stop = _transition_stop(sequence, project, project_text, "state6_exact_contracts")
     if stop is not None:
         return stop
+
+    # Conditional on rules.record_construction_backend: a case without the
+    # closure file declares no record builder and skips the phase.
+    constructions = design_record_construction.coverage(project)
+    if constructions["summary"]["enabled"] and not constructions["summary"]["handoff_ready"]:
+        return _result(
+            sequence=sequence, project=project, project_text=project_text,
+            phase="deterministic_record_construction_closure",
+            blocked=bool(constructions["summary"]["blocks"]),
+            reason=(
+                "Canonical contracts are ready; the record constructions in "
+                f"{design_record_construction.CLOSURE_FILE} must close against the State 1 models and the "
+                "State 6 builder contracts (RC001-RC015) and be marked closed before Notes."
+            ),
+            summary=constructions["summary"], findings=constructions["findings"],
+            router_allowed=False, persistence_allowed=False,
+        )
 
     persistence = persistence_authoring.coverage(project)
     if not persistence["summary"]["handoff_ready"]:

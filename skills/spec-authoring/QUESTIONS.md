@@ -561,6 +561,13 @@ deterministic backends have such a rule (§6.1 `projections` cover the return
 model's fields exactly; §6.2 the aggregate's fields are covered by root and
 relations). Until the standard states one for notes, a round does not ask it.
 
+Since §6.13 (`record_construction_backend/v1`) the field defect has a home that
+is not prose: a case that declares a builder writes each field's source in
+`70_record_construction_closure.json`, and the State 6 gate
+(`tools/design_record_construction.py`, RC001–RC015) refuses an unknown or
+unsourced field before any round. A note then names the builder, not the
+fields, so a round still has nothing to ask about them.
+
 To measure a change of the round's own instruction on a case whose units are
 closed, `ask --probe <dir> [--module <m>]` asks State 7 over every generated
 module (or the named ones) on its current prompt, offers no precedent, logs the

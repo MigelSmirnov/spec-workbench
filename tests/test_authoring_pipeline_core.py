@@ -26,6 +26,7 @@ def test_machine_sequence_covers_promoted_state0_through_state5_tools():
         "state5_public_module_operations",
         "pre_contract_structured_data_closure",
         "state6_exact_contracts",
+        "deterministic_record_construction_closure",
         "deterministic_persistence_closure",
         "deterministic_http_router_closure",
         "deterministic_http_router_context_closure",
