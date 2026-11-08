@@ -1531,12 +1531,13 @@ to States 6–7.
   (Factory `a6916180314d`).
 - Registry paths (accepted `config.registry_request_paths`, since 2026-11-08
   the data-provider constants of the Consequence): the paths are fixed as
-  `projects`, `projects/{project_id}/validate`, `projects/{project_id}/context`
-  (Factory `300bd11d`). State 0 names `/projects/active` for the active list;
-  the accepted spec reads `projects` and keeps only active projects while
-  decoding. Registry v1 serves both paths (`projects/registry_sandbox/api/runtime.py`).
-  Which Registry endpoint the gateway calls is an external contract of State 6
-  (EXTERNAL_CONTRACT_EVIDENCE); recorded there, not decided here.
+  `projects/active` for the active list (owner 2026-11-08, Q12, A6: the
+  constants `REGISTRY_PROJECTS_PATH` and `REGISTRY_ACTIVE_SEGMENT` joined),
+  `projects/{project_id}/validate` and `projects/{project_id}/context`
+  (Factory `300bd11d`). The accepted spec read `projects` and kept only
+  active projects while decoding; since Q12 the gateway reads
+  `projects/active`, as State 0 names it, and still keeps only active
+  references while decoding.
 - `config.runtime_environment_variables`: the closed table of environment
   variables, their types, requiredness, normalization and per-environment
   defaults, read into `RuntimeSettings` (R0-10; Factory `a6916180314d`,
