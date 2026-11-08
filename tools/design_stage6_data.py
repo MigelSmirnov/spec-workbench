@@ -121,6 +121,77 @@ def _two_home_findings(project: Path, sections: Any) -> list[dict[str, Any]]:
     return findings
 
 
+_NAMESPACE_CHARS = set("abcdefghijklmnopqrstuvwxyz0123456789_")
+
+
+def _retired_entries(payload: dict[str, Any]) -> list[Any]:
+    retired = payload.get("retired", [])
+    return retired if isinstance(retired, list) else []
+
+
+def retired_rule_namespaces(payload: dict[str, Any]) -> list[str]:
+    """The rules namespaces the closure retired, as the projector removes them.
+
+    ``retired`` is a list of ``{"address": "rules.<namespace>", "reason",
+    "source_refs"}``: a namespace the closure declared once and no longer
+    declares, because its values moved to a data-provider constant or were a
+    second home of a models enumeration (SPEC_STANDARD 6.10, 15.4). Only a
+    lint-clean entry counts; the projector reads this only from a closure the
+    lint accepts.
+    """
+    names: list[str] = []
+    for entry in _retired_entries(payload):
+        address = entry.get("address") if isinstance(entry, dict) else None
+        if isinstance(address, str) and address.startswith("rules."):
+            namespace = address.removeprefix("rules.")
+            if namespace and not set(namespace) - _NAMESPACE_CHARS and namespace not in names:
+                names.append(namespace)
+    return names
+
+
+def _retirement_findings(payload: dict[str, Any], sections: Any) -> list[dict[str, Any]]:
+    """A retired namespace is one rules namespace, with a reason and evidence,
+    that sections.rules no longer declares and that no backend closure owns."""
+    if "retired" in payload and not isinstance(payload.get("retired"), list):
+        return [{"severity": "error", "code": "invalid_retired", "message": "retired must be a list"}]
+    rules = sections.get("rules") if isinstance(sections, dict) else None
+    declared = set(rules) if isinstance(rules, dict) else set()
+    findings: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for index, entry in enumerate(_retired_entries(payload)):
+        if not isinstance(entry, dict):
+            findings.append({"severity": "error", "code": "invalid_retirement",
+                             "message": f"retired entry {index} must be an object"})
+            continue
+        address = entry.get("address")
+        namespace = address.removeprefix("rules.") if isinstance(address, str) else ""
+        if (not isinstance(address, str) or not address.startswith("rules.") or not namespace
+                or set(namespace) - _NAMESPACE_CHARS):
+            findings.append({"severity": "error", "code": "invalid_retirement",
+                             "message": f"retired entry {index} must address one rules namespace as rules.<namespace>"})
+            continue
+        if address in seen:
+            findings.append({"severity": "error", "code": "duplicate_retirement",
+                             "message": f"duplicate retirement: {address}"})
+        seen.add(address)
+        if namespace in declared:
+            findings.append({"severity": "error", "code": "retired_namespace_declared",
+                             "message": f"{address} is retired and still declared by sections.rules"})
+        if namespace.endswith("_backend"):
+            findings.append({"severity": "error", "code": "retired_backend_namespace",
+                             "message": (f"{address} is a backend IR: it leaves the specification with its "
+                                         "closure, not through the data closure")})
+        refs = entry.get("source_refs")
+        if not isinstance(refs, list) or not refs or not all(isinstance(v, str) and v.strip() for v in refs):
+            findings.append({"severity": "error", "code": "missing_source_evidence",
+                             "message": f"{address} requires non-empty source_refs"})
+        reason = entry.get("reason")
+        if not isinstance(reason, str) or not reason.strip():
+            findings.append({"severity": "error", "code": "missing_retirement_reason",
+                             "message": f"{address} requires a retirement reason"})
+    return findings
+
+
 def lint(project: Path) -> dict[str, Any]:
     payload = load(project)
     findings: list[dict[str, str]] = []
@@ -229,6 +300,7 @@ def lint(project: Path) -> dict[str, Any]:
         findings.append({"severity":"error","code":"untraced_structured_value","message":f"structured value lacks placement evidence: {address}"})
 
     findings.extend(_two_home_findings(project, sections))
+    findings.extend(_retirement_findings(payload, sections))
 
     unresolved = payload.get("unresolved", [])
     if not isinstance(unresolved, list):
