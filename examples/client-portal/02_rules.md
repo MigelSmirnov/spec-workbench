@@ -504,7 +504,9 @@ The table is rules data: `rules.idempotency_identities` (SPEC_STANDARD 15.3.1, a
   stored amounts are already 2-digit exact.
 - All amounts gross (IVA included); snapshot `tax_mode` is provenance only.
 - Completed work value: `work_planned × completion_percent / 100`, rounded
-  half-up to 2 digits per section, summed after rounding.
+  half-up to 2 digits per section, summed after rounding. A section without
+  a progress record has no completed work value (`None`, never 0) and is
+  left out of the sum, as it is left out of overall progress.
 - Overall progress: `Σ(work_planned × percent) / Σ(work_planned)` over
   sections of the active version with `work_planned > 0` and a recorded
   progress (a section without a progress record is left out of both sums);
@@ -524,11 +526,20 @@ in the running service (Factory code `domain/financial_policy.py`
 `calculate_overall_progress`). Owner 2026-11-06: current service
 behaviour accepted; technical decisions delegated.
 
+The completed work value of a section without a progress record is `None`,
+not 0 (owner 2026-11-08: "«Нет данных» не должно выглядеть как ноль" —
+missing data must not look like zero). This replaces the reading accepted
+with the running service on 2026-11-06, where that value was `Decimal` 0
+while its percent was `None`; the two now both say "not recorded". State 1
+`BudgetSectionView` and `ProgressSectionView` type it `Decimal | None`. The
+running service still returns 0 until the next Route B regenerates
+`derived_views` (`spec/HANDOFF.md`).
+
 ### Formal invariants
 
 - INV-037: all monetary values are EUR with decimal 2-digit semantics and ROUND_HALF_UP; foreign currency input is rejected explicitly, never converted
 - INV-041: completed work value and overall progress follow the R9 formulas; overall progress is unavailable, never guessed, when no planned work cost exists
-- INV-044: remaining materials show overspend as negative values, never clamped or hidden; missing data is presented explicitly, never replaced by zero unless zero is confirmed
+- INV-044: remaining materials show overspend as negative values, never clamped or hidden; missing data is presented explicitly, never replaced by zero unless zero is confirmed: a section without a progress record reads completion_percent None and completed_work_value None
 
 ### Required tests
 
@@ -536,13 +547,11 @@ behaviour accepted; technical decisions delegated.
 - INV-041: a check against the rules table at `calculate_overall_progress` showing the invariant holds; a violating input is refused and changes nothing.
 - INV-044: the ledger's property at `calculate_material_balance` showing the invariant holds; a violating input is refused and changes nothing.
 - Witnesses, the focused Factory verification checks that assert it: INV-037 [witness: verification:project_tracking_audit_writer_sqlite_uow_client_portal]; INV-037 [witness: verification:snapshot_import_sqlite_uow_client_portal]; INV-041 [witness: verification:derived_views_uow_client_portal].
-- INV-044 (partial): the budget derivation check:
+- INV-044: the budget derivation check:
   `calculate_material_balance` and the budget view show an overspent section
   as a negative remaining, a section without a progress record reads
-  completion `None`, and a project without a budget reads its views as not
-  configured. It records, without asserting, that the `completed_work_value`
-  of a section without progress reads 0; that half of "missing data is
-  presented explicitly" has no witness
+  completion `None` and completed work value `None`, and a project without a
+  budget reads its views as not configured
   [witness: verification:budget_derivation_client_portal].
 
 ### Consequence

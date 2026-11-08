@@ -3384,7 +3384,8 @@ The `PortalStore`, an `AuthorizedProjectContext` and an optional
 ### Outputs
 
 `BudgetView`: the version, sections, planned and actual material, planned and
-completed work, other expenses and the count of section allocations whose
+completed work (a section's completed work absent when it has no recorded
+progress), other expenses and the count of section allocations whose
 section has no plan in the viewed version. Everything is computed against
 the viewed version: the named one when `version_id` is given, active or not,
 otherwise the active one; no other version is consulted. A section row of
@@ -3459,8 +3460,9 @@ The `PortalStore` and an `AuthorizedProjectContext`.
 
 ### Outputs
 
-`ProgressView`: sections with their percent (absent when none is recorded),
-completed work per section and in total, and the weighted overall percent or
+`ProgressView`: sections with their percent and completed work (both
+absent when no progress is recorded), the completed work total over the
+sections with a recorded progress, and the weighted overall percent or
 `None`.
 
 ### Observable effect

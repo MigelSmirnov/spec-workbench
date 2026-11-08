@@ -1470,9 +1470,9 @@ None.
   photo-derived progress; history beyond audit records is not required.
 - **Created by:** the first staff progress update of a section; nothing
   creates a record automatically. A section without a record has no
-  recorded progress: its views show `completion_percent = None` and a
-  completed work value of zero, never an invented 0 %. Later updates change
-  the same record.
+  recorded progress: its views show `completion_percent = None` and
+  `completed_work_value = None`, never an invented 0 % or an invented zero
+  amount (owner 2026-11-08, A9). Later updates change the same record.
 
 ### Carried changes
 
@@ -1897,8 +1897,9 @@ Recomputable at read time from owning records; no stored totals:
 - completed work value per section (`work_planned × completion_percent /
   100`);
 - overall progress (weighted by `work_planned` across sections with planned
-  work; unavailable when total planned work is zero — never an arithmetic
-  mean, never a guess);
+  work and a recorded progress, A9: a section without a progress record is
+  left out of both sums; unavailable when that planned work is zero — never
+  an arithmetic mean, never a guess);
 - payments total; work balance (`completed work value − payments total`,
   presented as `Completed ahead of payments` / `Unused advance payment`);
 - unresolved allocations against the active version (allocations targeting
@@ -1931,7 +1932,10 @@ persisted, and none contains `file_ref`.
   `sort_order: int`, `material_planned: Decimal`,
   `material_actual: Decimal`, `material_remaining: Decimal` (may be negative),
   `work_planned: Decimal`, `completion_percent: int | None`,
-  `completed_work_value: Decimal`, `has_unresolved_allocations: bool`.
+  `completed_work_value: Decimal | None`, `has_unresolved_allocations: bool`.
+  `completed_work_value` is `None` exactly when `completion_percent` is
+  `None`: a section without a progress record has no completed work value,
+  never a zero (owner 2026-11-08, A9 INV-044).
 - `BudgetView` fields: `version_id: UUID`, `source: BudgetSource`,
   `sections: list[BudgetSectionView]`, `material_planned_total: Decimal`,
   `material_actual_total: Decimal`, `work_planned_total: Decimal`,
@@ -1971,12 +1975,17 @@ persisted, and none contains `file_ref`.
 
 - `ProgressSectionView` fields: `section_id: UUID`, `display_name: str`,
   `work_planned: Decimal`, `completion_percent: int | None`,
-  `completed_work_value: Decimal`.
+  `completed_work_value: Decimal | None` (`None` exactly when
+  `completion_percent` is `None`; owner 2026-11-08, A9 INV-044).
 - `ProgressView` fields: `sections: list[ProgressSectionView]`,
   `overall_progress_percent: Decimal | None`,
   `completed_work_total: Decimal`.
 - `overall_progress_percent = None` means the R9 denominator is zero; it is
   never replaced with zero. Sections use the active budget order.
+- `completed_work_total` (here and in `BudgetView`) is the sum of the
+  sections' `completed_work_value` that are not `None`; a section without a
+  progress record is left out of the sum, as it is left out of overall
+  progress (A9).
 
 #### PaymentView and PaymentSummaryView
 
