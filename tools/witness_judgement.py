@@ -54,7 +54,7 @@ def group(materials: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
                                                      "reason": None, "files": [], "items": [],
                                                      "declaration": entry.get("declaration")})
         if entry["status"] != "available" and check["status"] == "available":
-            check.update(status=entry["status"], reason=entry.get("reason"))
+            check.update(status=entry["status"], reason=entry.get("reason"), unreadable=bool(entry.get("unreadable")))
         if not check["files"] and entry.get("files"):
             check["files"] = entry["files"]
         item = {"decision": entry["decision"], "item": entry["item"], "invariants": list(entry.get("invariants") or []),

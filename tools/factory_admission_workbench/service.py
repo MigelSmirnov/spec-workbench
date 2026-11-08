@@ -931,8 +931,10 @@ def _question_rounds_check(case_root: Path | None, factory_root: Path) -> Admiss
     the module it was cut into, and decision 26 rewrote States 3–5; no round
     was asked about either, the assembly and every other check passed, and
     Route B stopped twice. A state is closed only unit by unit on the texts
-    it has now (skills/spec-authoring/QUESTIONS.md); State 7 on the prompts
-    this Factory builds. A state with a document and no round blocks too.
+    it has now (skills/spec-authoring/QUESTIONS.md): by one round per change
+    with no open contradiction and the author's disposition of every other
+    judged topic; State 7 on the prompts this Factory builds. A state with a
+    document and no round blocks too.
     """
     if case_root is None:
         return AdmissionCheck(
@@ -952,6 +954,10 @@ def _question_rounds_check(case_root: Path | None, factory_root: Path) -> Admiss
             "reason": status["reason"],
             "units": status.get("units"),
             "open_units": status.get("open_units", []),
+            # one round per change (owner decision 2026-11-08): what keeps each open unit open
+            "needs_round": status.get("needs_round", []),
+            "contradictions": status.get("contradictions", {}),
+            "awaiting_disposition": status.get("awaiting_disposition", {}),
             "closed_at": status.get("closed_at"),
         }
     still_open = {name: row for name, row in states.items() if not row["closed"]}

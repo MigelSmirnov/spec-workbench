@@ -140,11 +140,25 @@ def _result(
         "ask": [str(item) for item in _phase(sequence, phase).get("questions") or []],
         "question_round": _question_round(sequence, phase, project_text),
         "layer": transition.layer(sequence, phase),
+        "carried_dispositions": _carried_dispositions(project, _phase(sequence, phase)),
         "summary": summary or {},
         "findings": findings or [],
     }
     payload.update(extra)
     return payload
+
+
+def _carried_dispositions(project: Path, phase: dict[str, Any]) -> dict[str, Any]:
+    """What authors carried on by a topic's disposition (owner decision
+    2026-11-08, #147): the items received by this phase's state, and how many
+    wait at each later layer (`design_questions.py carried` lists them)."""
+    items = question_rounds.carried_items(project)
+    state = phase.get("semantic_state")
+    waiting: dict[str, int] = {}
+    for item in items:
+        target = f"state{item['to']}" if isinstance(item["to"], int) else str(item["to"])
+        waiting[target] = waiting.get(target, 0) + 1
+    return {"received": [i for i in items if state is not None and i["to"] == state], "by_layer": waiting}
 
 
 def _question_round(sequence: dict[str, Any], phase: str, project_text: str) -> str | None:
@@ -241,6 +255,10 @@ def _question_gate(sequence: dict[str, Any], project: Path, project_text: str, r
             "python", "tools/design_questions.py", "ask", project_text, "--state", str(state),
             *(["--since", since] if since else []),
         ]
+        if not status.get("needs_round") and status.get("awaiting_disposition"):
+            # one round per change: the text did not change, the author disposes of the topics
+            command = ["python", "tools/design_questions.py", "dispose", project_text, "--state", str(state),
+                       "--topic", "<id>", "--fixed|--carried|--accepted", "..."]
         return _result(
             sequence=sequence, project=project, project_text=project_text,
             phase=phase["id"], blocked=True,
@@ -252,6 +270,9 @@ def _question_gate(sequence: dict[str, Any], project: Path, project_text: str, r
                 "units": status.get("units"),
                 "open_units": status.get("open_units", []),
                 "changed_units": status.get("changed_units", []),
+                "needs_round": status.get("needs_round", []),
+                "contradictions": status.get("contradictions", {}),
+                "awaiting_disposition": status.get("awaiting_disposition", {}),
                 "closed_at": since,
             },
             question_round=shlex.join(command),

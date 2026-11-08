@@ -60,8 +60,11 @@ nobody made.
 
 - `FA019` — question rounds closed on the current texts: every state whose
   phase declares a `question_scope` (States 0–7) and that has a document is
-  closed by `design_questions.py status` — every unit closed by its two latest
-  reviews, clear on the text it has now; State 7 on the prompts this Factory
+  closed by `design_questions.py status` — every unit's latest round on the text
+  it has now raised no open contradiction, and every other judged topic of it
+  has the author's disposition (one round per change, owner decision
+  2026-11-08; units closed by two clear rounds before then stay closed); State
+  7 on the prompts this Factory
   builds for the generated modules. A state with no round blocks ("no question
   round yet"). The evidence lists, per state, the reason, the open units and
   the ref it was last closed at (`ask --since`). Explicit `--spec` admission

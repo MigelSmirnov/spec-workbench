@@ -1,27 +1,24 @@
 """The two instructions of a round: ask, then group what was asked."""
 from __future__ import annotations
 
-ASK = """You review a design BEFORE the next states, modules and code exist.
-You receive the accepted design texts up to State {state}. Later, other agents will
-write the next states and the code from these texts alone; whatever the texts leave
-open, they will decide silently, and different agents will decide differently.
+# The review instruction of a document state says three things (owner
+# decision 2026-11-08, #147 comment 6721261089): what the layer decides, what
+# changed, and what it receives. Lists of what not to ask were removed where
+# the layer's scope already excludes it; they signalled an unclear boundary.
+ASK = """You review State {state} of a design before the later states and the code are
+written from it. Whatever it leaves open, later agents decide silently, each
+differently. List every point where continuing from it forces a guess.
 
-List every point where continuing from these texts would force a guess.
-
-Scope of State {state} — report a point only if it belongs here:
+The points of State {state}:
 {scope}
+A contradiction between two texts is always one; what the texts carry on
+purpose to a later state is not.
 
-Two texts that contradict each other always belong here. Points the texts list on
-purpose as carried to a later state do not.
-
-Do not propose designs as settled. Report only genuine gaps, not style.
-
-When you can, give the point a witness: one history the texts allow — a
-state the product can be in, the events in order with who acts, and the two
-outcomes careful implementers could both read from the texts (or, for a
-contradiction, the outcome each passage gives) and who would see the
-difference. A point with a witness is judged even when no other review raises
-it; a point without one is judged only when several reviews raise it.
+A point may carry a witness: one history the texts allow — a state the product
+can be in, the events in order with who acts, the two outcomes careful
+implementers could both read from the texts (for a contradiction, the outcome
+each passage gives), and who sees the difference. A point with a witness is
+judged even when no other review raises it.
 
 Output strict JSON, nothing else:
 {{"open_points":[{{"subject":"<model, decision, action or section>","kind":"<short kind>","text":"<the exact phrase that is silent, vague or contradictory>","question":"<the question the texts must answer>","options":["<option you see>"],"default_guess":"<what you would do if forced>","witness":{{"initial":"<state>","events":["<who does what>"],"outcomes":["<outcome one>","<outcome two>"],"observer":"<who sees the difference>"}}}}]}}
@@ -29,32 +26,20 @@ Output strict JSON, nothing else:
 
 UNIT_SCOPE = """
 
-Units under review. State {state} closes unit by unit: the units listed below are
-not closed yet, and every other part of State {state} is closed. Report points only
-about these units — a gap in one of them, or a contradiction between one of them
-and any other text. Every point carries one more member, "unit": the key of the
-unit it is about, exactly as listed. A point about anything else is not asked for
-and is set aside.
-
+What changed. State {state} closes unit by unit; these units are under review,
+the rest of it is closed. Each point names its "unit", exactly as listed; a
+point about another unit is set aside.
 {listing}"""
 
 
-CHANGED_UNIT = """- {key}: {title}
-  This unit was closed and has changed since. Review only this change and what
-  it affects — a gap the change opens, or a contradiction it makes with any
-  text. Its unchanged passages were closed; a point about one of them, away
-  from the change, is set aside.
+CHANGED_UNIT = """- {key}: {title} — changed since its latest review. Review this change and what
+  it affects; a point on an unchanged passage away from it is set aside.
 ```diff
 {diff}```"""
 
 
-REFERENCING_UNIT = """- {key}: {title}
-  This unit was closed and has not changed, but it names {names}, which
-  changed since its closure (the diff is listed with {it}). Review only
-  whether this unit still agrees with that change — a rule here that the
-  change contradicts or leaves without its exception. Its other passages are
-  closed; a point about one of them, away from what the change touches, is
-  not asked for."""
+REFERENCING_UNIT = """- {key}: {title} — unchanged, but it names {names}, which changed (the diff is
+  listed with {it}). Review only whether it still agrees with that change."""
 
 
 def unit_scope(state: int, scope: list[tuple[str, str]], changed: dict[str, str] | None = None,
@@ -212,9 +197,8 @@ WITNESS_SCHEMA = ',"witness":{"initial":"","events":[""],"outcomes":["",""],"obs
 
 HYPOTHESES = """
 
-Hypotheses of the previous round. These were raised without a witness and did
-not block. Raise one again only with a witness (a history in which the texts
-give two different outcomes); without one, do not repeat it.
+Hypotheses of the previous round, raised without a witness. Raise one again
+only with a witness.
 {listing}"""
 
 
@@ -353,34 +337,18 @@ def judge_input(texts: str, topics: list[dict], change: str | None, precedents: 
 
 LAYER = """
 
-The transition of State {state} (skills/spec-authoring/TRANSITION_PROTOCOL.md).
-Within the scope above, ask the protocol's five questions of the units under
-review: are the inputs this state needs available; are the decisions it owns
-made; can each be written in the standard; did the obligations earlier states
-carried here close; and is every obligation it carries further a decided
-execution with a receiving state and a check, never an open choice written as
-"later". A choice deferred without being decided is a gap of this state.
-
-This state owns:
+What State {state} decides (it owns):
 {owns}
-It received from earlier states (result now):
+What it receives from earlier states: the passages given below, verbatim, and
+these obligations (result now):
 {received}
-It carries further:
+What it carries further, decided there, not here:
 {carries}
-Deterministic results now. They are not design text: never quote them. A point
-they already state need not be raised, and no point may take a result that is
-not closed or carried for a pass; "not_checked" means an input is missing:
+Deterministic results at its handoff. They are not design text: never quote
+them; one not closed or carried is never a pass, and "not_checked" means an
+input is missing:
 {findings}
-
-Ask about an earlier state only whether this state fulfils what it carried
-here; its closed units are not audited again. A decision's "[witness: ...]" tag
-is text of its Required tests item, not the history you give as a point's
-witness. Of an invariant's test, the state that owns the invariant answers one
-question: does its Required tests item say what must be shown? Unless verdicts
-are listed below, which existing check an item is bound to, and whether that
-check asserts what the item names, are not points of this round: they are
-carried, and judged per check after State 7, where the witnesses are written,
-at the State 8 handoff."""
+A choice written as "later" without being decided is a gap of this state."""
 
 
 LAYER_JUDGE = """=== DETERMINISTIC RESULTS AT THIS TRANSITION (not design text; never quote) ===
@@ -403,8 +371,10 @@ MAX_LAYER_LINES = 40
 
 def _layer_lines(context: dict) -> tuple[str, str, str, str]:
     owns = "\n".join(f"- {item}" for item in context.get("owns") or []) or "- (nothing declared)"
-    received = "\n".join(f"- [{r['outcome']}] {r['obligation']} (from {r['from']}, check {r['check']})"
-                         for r in context.get("results") or []) or "- (nothing)"
+    received = "\n".join([f"- [{r['outcome']}] {r['obligation']} (from {r['from']}, check {r['check']})"
+                          for r in context.get("results") or []]
+                         + [f"- [carried by the author] {c['what']} (State {c['state']} {c['round']} {c['topic']})"
+                            for c in context.get("carried_in") or []]) or "- (nothing)"
     carries = "\n".join(f"- {c.get('obligation', '')} -> {c.get('to')} (confirmed by {c.get('check')})"
                         for c in context.get("carries") or []) or "- (nothing)"
     lines = [f"- [{r['outcome']}] {f.get('code')}: {f.get('message', '')}"
