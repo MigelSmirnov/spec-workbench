@@ -204,3 +204,20 @@ def test_the_unsplit_state1_document_is_read_too(tmp_path):
     report = fields.lint(tmp_path)
     assert report["summary"]["models_designed"] == 1
     assert _codes(report["findings"]) == ["model_missing_in_closure"]
+
+
+def test_dotted_enum_value_next_to_its_address_is_a_member_not_an_attribute(tmp_path):
+    """SPEC_STANDARD §5/§6.10/§15.3.1: a member is its value; the note names it beside `= models.X`."""
+    closure = {**ATTR_CLOSURE, "AuditAction": {"kind": "enum", "values": ["totals.gross_total", "invoice.create"]}}
+    project = _write(tmp_path, closure=closure, contracts=ATTR_CONTRACTS, modules="## `module:catalogue`\n")
+    index = ModelIndex.load(project)
+    assert index.enum_values()["AuditAction"] == ("totals.gross_total", "invoice.create")
+
+    def check(text):
+        return attributes.findings([{"line": 1, "scope": "validate", "text": text}], index)
+
+    assert check("MUST append the totals.gross_total member of = models.AuditAction.") == []
+    # the same token without the enumeration's address is still read as navigation
+    assert [f["attribute"] for f in check("MUST append totals.gross_total.")] == ["gross_total"]
+    # a value of another enumeration than the one addressed is not exempt
+    assert [f["attribute"] for f in check("MUST append totals.gross_total, = models.Kind.")] == ["gross_total"]

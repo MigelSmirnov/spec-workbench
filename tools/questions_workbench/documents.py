@@ -79,3 +79,28 @@ def factory_root() -> Path | None:
         if (candidate / "tools" / "generate_agent.py").is_file():
             return candidate
     return None
+
+
+STANDARD_PATH = "skills/spec-authoring/SPEC_STANDARD.md"
+
+
+def standard_sections(state: int, sequence_path: Path = SEQUENCE, repo: Path | None = None) -> list[dict[str, str]]:
+    """The SPEC_STANDARD sections the phase asked at `state` lists in its `docs`,
+    each verbatim with its subsections, cut by the extractor `spec_standard`
+    uses (notes_authoring.standard.section). A reviewer and the judge of the
+    state's round are given exactly these: the rules the state is written by,
+    never the whole standard and never a paraphrase."""
+    from notes_authoring import standard
+
+    sequence = json.loads(sequence_path.read_text(encoding="utf-8"))
+    found: list[dict[str, str]] = []
+    for phase in sequence["phases"]:
+        if phase.get("semantic_state") != state or not phase.get("question_scope"):
+            continue
+        for doc in phase.get("docs") or []:
+            if doc.get("path") != STANDARD_PATH or not doc.get("section"):
+                continue
+            cut = standard.section(str(doc["section"]), repo or ROOT)
+            found.append({"section": cut["section"] or "", "title": cut["title"], "why": str(doc.get("why") or ""),
+                          "text": cut["text"]})
+    return found

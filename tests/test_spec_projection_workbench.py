@@ -709,3 +709,130 @@ def test_new_module_is_placed_under_the_shared_root() -> None:
     order, result = service._sync_module_topology(list(paths), dict(paths), contracts)
     assert order[-1] == "fresh_module"
     assert result["fresh_module"] == "app/fresh_module"
+
+
+# ── the data provider's module and retired rules namespaces (client-portal, 2026-11-08) ──
+
+_DATA_PROVIDER = {
+    "kind": "data_provider_backend", "schema_version": 2,
+    "backend": {"emitter": "python_constant_data_v1"},
+    "wiring": {"module": "data_provider", "models_module": "core.models"},
+    "constants": {"ZETA_LIMIT": {"value_type": "int", "value": 3},
+                  "ALPHA_PREFIX": {"value_type": "string", "value": "/api"}},
+}
+
+
+def _with_topology(project, **extra):
+    current = json.loads((project / "global_spec.json").read_text(encoding="utf-8"))
+    current["module_order"] = ["models", "alpha"]
+    current["module_paths"] = {"models": "core/models", "alpha": "domain/alpha"}
+    current.update(extra)
+    (project / "global_spec.json").write_text(json.dumps(current, indent=2) + "\n", encoding="utf-8")
+
+
+def _write_data_provider(project, backend=None):
+    (project / "70_data_provider_closure.json").write_text(json.dumps({
+        "schema_version": "spec_workbench_data_provider_backend_closure.v1",
+        "status": "closed", "backend_ir": backend or _DATA_PROVIDER,
+    }), encoding="utf-8")
+
+
+def test_data_provider_module_is_placed_after_the_models_module(tmp_path, monkeypatch) -> None:
+    project = _project(tmp_path)
+    _with_topology(project)
+    _patch_ready_sources(monkeypatch)
+    _write_data_provider(project)
+
+    _, projected, findings, _ = service._project(project)
+
+    assert findings == []
+    assert projected["module_order"] == ["models", "data_provider", "alpha"]
+    assert projected["module_paths"] == {
+        "models": "core/models", "data_provider": "core/data_provider", "alpha": "domain/alpha"}
+    # module_functions holds alpha before models; the new module follows models, its predecessor in the order
+    assert list(projected["module_functions"]) == ["alpha", "models", "data_provider"]
+    assert projected["module_functions"]["data_provider"] == ["ALPHA_PREFIX", "ZETA_LIMIT"]
+    assert projected["imports"]["internal"]["data_provider"] == ["ALPHA_PREFIX", "ZETA_LIMIT"]
+
+
+def test_placed_data_provider_module_keeps_its_place_and_follows_its_constants(tmp_path, monkeypatch) -> None:
+    project = _project(tmp_path)
+    _with_topology(project)
+    current = json.loads((project / "global_spec.json").read_text(encoding="utf-8"))
+    current["module_order"] = ["models", "alpha", "data_provider"]
+    current["module_paths"]["data_provider"] = "constants/data_provider"
+    current["module_functions"]["data_provider"] = ["DROPPED_CONSTANT"]
+    (project / "global_spec.json").write_text(json.dumps(current, indent=2) + "\n", encoding="utf-8")
+    _patch_ready_sources(monkeypatch)
+    _write_data_provider(project)
+
+    _, projected, findings, _ = service._project(project)
+
+    assert findings == []
+    assert projected["module_order"] == ["models", "alpha", "data_provider"]
+    assert projected["module_paths"]["data_provider"] == "constants/data_provider"
+    assert projected["module_functions"]["data_provider"] == ["ALPHA_PREFIX", "ZETA_LIMIT"]
+
+
+def test_data_provider_projection_is_idempotent(tmp_path, monkeypatch) -> None:
+    project = _project(tmp_path)
+    _with_topology(project)
+    _patch_ready_sources(monkeypatch)
+    _write_data_provider(project)
+    service.apply(project)
+    assert service.verify(project)["in_sync"] is True
+
+
+def test_data_provider_without_a_models_module_path_blocks(tmp_path, monkeypatch) -> None:
+    project = _project(tmp_path)
+    _with_topology(project)
+    _patch_ready_sources(monkeypatch)
+    _write_data_provider(project, {**_DATA_PROVIDER, "wiring": {"module": "data_provider",
+                                                                 "models_module": "elsewhere.models"}})
+
+    plan = service.build_plan(project)
+
+    assert plan["ready_to_apply"] is False
+    assert [row["code"] for row in plan["findings"]] == ["data_provider_module_unplaceable"]
+
+
+def test_retired_rules_namespace_is_removed_and_an_undeclared_one_kept(tmp_path, monkeypatch) -> None:
+    project = _project(tmp_path)
+    _patch_ready_sources(monkeypatch)
+    current = json.loads((project / "global_spec.json").read_text(encoding="utf-8"))
+    current["rules"]["capability_catalog"] = {"kind": "catalog"}
+    (project / "global_spec.json").write_text(json.dumps(current, indent=2) + "\n", encoding="utf-8")
+    data = dict(service.design_stage6_data.load(project))
+    data["retired"] = [{"address": "rules.capability_catalog", "reason": "second home of models.Capability",
+                        "source_refs": ["test"]}]
+    monkeypatch.setattr(service.design_stage6_data, "load", lambda project: data)
+
+    plan = service.build_plan(project)
+    _, projected, findings, _ = service._project(project)
+
+    assert findings == []
+    assert "capability_catalog" not in projected["rules"]
+    assert projected["rules"]["legacy_policy"] == {"old": True}  # never declared, never retired: kept
+    assert {"address": "rules.capability_catalog", "action": "remove"} in plan["changes"]
+
+
+def test_record_construction_closure_is_projected_into_rules(tmp_path, monkeypatch) -> None:
+    from pathlib import Path
+
+    fixture = Path(__file__).resolve().parent / "fixtures" / "record_construction" / "accept_reference.json"
+    backend = json.loads(fixture.read_text(encoding="utf-8"))["rules"]["record_construction_backend"]
+    project = _project(tmp_path)
+    _patch_ready_sources(monkeypatch)
+    (project / "70_record_construction_closure.json").write_text(json.dumps({
+        "schema_version": "spec_workbench_record_construction_backend_closure.v1",
+        "status": "closed",
+        "source_refs": ["60_contracts.json"],
+        "rationale": "fixture",
+        "backend_ir": backend,
+    }), encoding="utf-8")
+
+    _, projected, findings, source_checks = service._project(project)
+
+    assert findings == []
+    assert projected["rules"]["record_construction_backend"] == backend
+    assert any(row["source"] == "70_record_construction_closure.json" and row["ready"] for row in source_checks)

@@ -251,3 +251,38 @@ def test_bound_parameter_name_is_not_an_attribute_once_renamed(tmp_path):
     ), "store", "portal_store")
     finding = _by_code(language.report(project), "unknown_app_state_attribute")[0]
     assert finding["bound_attributes"] == ["portal_store"]
+
+
+def test_note_surface_gate_reads_a_dotted_enum_value_beside_its_address_as_a_member(tmp_path):
+    """The same rule in the language gate: `= models.X` with one of X's values is a member (§5, §6.10, §15.3.1)."""
+    import json
+    import shutil
+
+    from notes_workbench import language
+
+    case = tmp_path / "cabinet-backend"
+    shutil.copytree(ROOT / "examples" / "cabinet-backend", case)
+    spec = json.loads((case / "global_spec.json").read_text(encoding="utf-8"))
+
+    def model_typed(sig):
+        for name, typ in language.signature_parameters(sig):
+            model = spec["models"].get(typ.split("|")[0].strip())
+            if isinstance(model, dict) and model.get("fields"):
+                return name
+        return None
+
+    scope, parameter = next(
+        (name, model_typed(sig)) for name, sig in spec["contracts"].items()
+        if "." not in name and model_typed(sig)
+    )
+    spec["models"]["DottedAction"] = {"kind": "enum", "values": [f"{parameter}.no_such_field"]}
+    notes = case / "80_notes.md"
+    notes.write_text(
+        notes.read_text(encoding="utf-8").rstrip("\n")
+        + f"\n{scope}: [BEHAVIOR] MUST record the {parameter}.no_such_field member of = models.DottedAction.\n"
+        + f"{scope}: [BEHAVIOR] MUST read {parameter}.no_such_field.\n",
+        encoding="utf-8",
+    )
+    findings = language.surface_findings(case, spec)
+    lines = [f["line"] for f in findings if f["code"] == "note_attribute_unknown"]
+    assert len(lines) == 1  # only the note without the enumeration's address
