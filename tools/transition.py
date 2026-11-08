@@ -444,7 +444,19 @@ def round_context(project: Path, state: int, sequence: dict[str, Any] | None = N
         verdicts = witness_judgement.verdicts(project, design_decision_witness.binding_material(project))
     return {"state": state, "owns": owns, "carries": carries, "results": report["results"],
             "ready": report["ready"] and not any(f.get("severity") in {"error", "block"} for f in gate),
-            "gate_findings": gate, "verdicts": verdicts}
+            "gate_findings": gate, "verdicts": verdicts, "carried_in": carried_in(project, state)}
+
+
+def carried_in(project: Path, state: int) -> list[dict[str, Any]]:
+    """What the authors of earlier states carried to this one by a topic's
+    disposition (questions_workbench: `design_questions.py dispose --carried`).
+    It reaches the round of this state as an obligation it received."""
+    from questions_workbench import service as rounds
+
+    try:
+        return rounds.carried_items(project, to=state)
+    except (OSError, ValueError):
+        return []
 
 
 def module_obligations(project: Path, context: dict[str, Any], module: str) -> list[str]:

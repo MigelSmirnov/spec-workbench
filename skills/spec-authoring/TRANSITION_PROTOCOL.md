@@ -172,8 +172,8 @@ handoff `witness_material` runs (`transition.judges_witnesses`); a layer with
 question rounds there is given the verdicts, one line per binding with its
 digest and outcome, never the code, and when a bound check changes while the
 decision's text does not, exactly that decision reopens there and is reviewed
-for whether its bindings still hold on the new evidence, until two clear
-reviews on it close it again (`evidence_changed` in `status`). A judgement of
+for whether its bindings still hold on the new evidence, until one round on
+it closes it again (`evidence_changed` in `status`). A judgement of
 such a unit is a precedent only on the evidence it was judged on. State 8 has
 no question round: its verdicts are the per-check judgement itself.
 On client-portal 28 of 32 decisions were bound to existing
@@ -194,6 +194,13 @@ the schemas of the repositories it writes). A call a backend emits needs no
 note; do not write one to satisfy the analyser.
 
 ## Question rounds at a transition
+
+A round closes its state by one round per change (QUESTIONS.md, "Closing a
+round"): an open contradiction blocks; every other judged topic gets the
+author's disposition — `fixed`, `accepted`, or `carried` to a later state,
+`generation`, `factory_checks` or `deploy`. A topic carried to a later state is
+an obligation that state receives: its round lists it with the obligations of
+`layer.receives`, and `authoring next` shows it (`carried_dispositions`).
 
 A round is asked with its layer (`questions_workbench`): the reviewers and the
 judge are given what the layer owns, the obligations it received and their

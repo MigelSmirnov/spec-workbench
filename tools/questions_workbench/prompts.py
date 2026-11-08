@@ -403,8 +403,10 @@ MAX_LAYER_LINES = 40
 
 def _layer_lines(context: dict) -> tuple[str, str, str, str]:
     owns = "\n".join(f"- {item}" for item in context.get("owns") or []) or "- (nothing declared)"
-    received = "\n".join(f"- [{r['outcome']}] {r['obligation']} (from {r['from']}, check {r['check']})"
-                         for r in context.get("results") or []) or "- (nothing)"
+    received = "\n".join([f"- [{r['outcome']}] {r['obligation']} (from {r['from']}, check {r['check']})"
+                          for r in context.get("results") or []]
+                         + [f"- [carried by the author] {c['what']} (State {c['state']} {c['round']} {c['topic']})"
+                            for c in context.get("carried_in") or []]) or "- (nothing)"
     carries = "\n".join(f"- {c.get('obligation', '')} -> {c.get('to')} (confirmed by {c.get('check')})"
                         for c in context.get("carries") or []) or "- (nothing)"
     lines = [f"- [{r['outcome']}] {f.get('code')}: {f.get('message', '')}"

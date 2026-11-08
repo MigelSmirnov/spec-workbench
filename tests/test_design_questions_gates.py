@@ -133,7 +133,6 @@ def test_a_state_without_decisions_reviews_its_sections_as_units(tmp_path):
     (case / "30_modules.md").write_text(MODULES, encoding="utf-8")
     summary = service.ask_round(case, 3, Provider())
     assert summary["scope"] == ["30_modules.md:preamble", "30_modules.md:Module store", "30_modules.md:Module surface"]
-    summary = service.ask_round(case, 3, Provider())
     assert summary["closed"] is True and service.status(case, 3)["closed"] is True
 
 
@@ -172,7 +171,6 @@ def test_the_carried_closure_survives_the_first_unit_rounds(tmp_path):
     case = _closed_as_one_text(tmp_path)
     (case / "30_modules.md").write_text(MODULES.replace("serves the owner.", "serves the owner only."),
                                         encoding="utf-8")
-    service.ask_round(case, 3, Provider())
     summary = service.ask_round(case, 3, Provider())
     assert summary["scope"] == ["30_modules.md:Module surface"] and summary["closed"] is True
     assert service.status(case, 3)["closed"] is True
@@ -261,7 +259,6 @@ def test_state7_units_are_the_generated_modules_and_their_text_the_prompt(tmp_pa
 def test_editing_one_modules_note_reopens_only_that_module_and_asks_its_prompt_diff(tmp_path, monkeypatch):
     case, factory = _notes_case(tmp_path, monkeypatch)
     service.ask_round(case, 7, Provider(), factory_root=factory)
-    service.ask_round(case, 7, Provider(), factory_root=factory)
     assert service.status(case, 7, factory)["closed"] is True
     spec = json.loads(json.dumps(SPEC))
     spec["notes"][1] += " Like every module it may import pydantic."
@@ -311,6 +308,8 @@ def test_state7_judges_a_contradiction_one_review_found_and_only_contradictions_
     assert len(pydantic) == 1 and len(pydantic[0]["runs"]) == 1
     assert pydantic[0]["judgement"]["blocking"] is True and summary["blocked_units"] == ["surface"]
 
+    spec["notes"][1] += " It answers in JSON."  # one round per change: the next round asks the change
+    _write(case / "global_spec.json", json.dumps(spec))
     gap = Provider([_point("error text", text="x")], blocking={"error text"})
     summary = service.ask_round(case, 7, gap, factory_root=factory)
     judged = [t["judgement"] for t in summary["topics"]]
@@ -420,7 +419,6 @@ def test_admission_blocks_on_an_open_unit_and_passes_when_every_state_is_closed(
     check = _question_rounds_check(case, tmp_path)
     assert check.status == CHECK_BLOCK and check.evidence["open"] == ["state3"]
     assert check.evidence["states"]["state3"]["open_units"] == ["30_modules.md:Module surface"]
-    service.ask_round(case, 3, Provider())
     service.ask_round(case, 3, Provider())
     assert _question_rounds_check(case, tmp_path).status == CHECK_PASS
 

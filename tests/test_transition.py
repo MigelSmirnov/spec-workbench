@@ -902,7 +902,6 @@ def _clean_gate(monkeypatch, findings=()):
 def test_a_state_closed_by_its_rounds_is_not_ready_while_its_transition_stops(tmp_path, capsys, monkeypatch):
     _clean_gate(monkeypatch)
     case = _case(tmp_path, "- INV-001: a thing counted twice is refused.")
-    _ask(case)
     summary, _ = _ask(case)
     assert summary["closed"] is True and summary["transition_ready"] is False
     result = service.status(case, 2, with_transition=True)
@@ -985,7 +984,6 @@ def test_a_changed_deterministic_result_reopens_no_unit(tmp_path, monkeypatch):
     # (a tool fix, a later artifact): the closed units stay closed
     _clean_gate(monkeypatch, [{"code": "some_gate_finding", "severity": "error", "message": "x"}])
     case = _case(tmp_path)
-    _ask(case)
     summary, _ = _ask(case)
     assert summary["closed"] is True and summary["transition_ready"] is False
     _clean_gate(monkeypatch)
@@ -996,7 +994,6 @@ def test_a_changed_deterministic_result_reopens_no_unit(tmp_path, monkeypatch):
 
 def test_binding_one_invariant_reopens_only_its_decision(tmp_path):
     case = _case(tmp_path)
-    _ask(case)
     _ask(case)
     text = (case / "02_rules.md").read_text()
     _write(case / "02_rules.md", text.replace("- INV-002: a lower count is refused.",
@@ -1093,14 +1090,13 @@ def test_a_changed_check_reopens_no_state2_unit(tmp_path, monkeypatch):
     monkeypatch.setenv("SPEC_WORKBENCH_FACTORY_ROOT", str(factory))
     _judge_checks(case)
     _ask(case)
-    _ask(case)
     assert service.status(case, 2, with_transition=True)["ready"] is True
     assert transition.run_phase(case, "state8_assembly")["ready"] is True
     _write(factory / "verification" / "counts_once_check.py", CHECK_SCRIPT.replace("assert ", "# was: assert "))
     result = service.status(case, 2, with_transition=True)
     assert result["open_units"] == [] and result["evidence_changed"] == []
     assert result["closed"] is True and result["ready"] is True
-    assert transition.run_phase(case, "state8_assembly")["ready"] is False   # reopened where it is received
+    assert transition.run_phase(case, "state8_assembly")["ready"] is False   # not judged on the new code: stops
     provider = _judge_checks(case)
     assert len(provider.checks) == 1 and "# was: assert" in provider.checks[0]
 
@@ -1127,7 +1123,6 @@ def test_a_changed_check_reopens_only_the_decision_bound_to_it(tmp_path, monkeyp
     factory = _factory_with_check(tmp_path, case)
     monkeypatch.setenv("SPEC_WORKBENCH_FACTORY_ROOT", str(factory))
     _ask(case)
-    _ask(case)
     assert service.status(case, 2, with_transition=True)["ready"] is True
     _write(factory / "verification" / "counts_once_check.py", CHECK_SCRIPT.replace("assert ", "# was: assert "))
     result = service.status(case, 2, with_transition=True)
@@ -1137,8 +1132,7 @@ def test_a_changed_check_reopens_only_the_decision_bound_to_it(tmp_path, monkeyp
     assert summary["scope"] == ["A01"] and summary["evidence_reopened"] == ["A01"]
     assert "Units closed on their text whose evidence changed: A01" in provider.instructions[0]
     assert len(provider.checks) == 1 and "# was: assert" in provider.checks[0]   # judged again on the new code
-    assert summary["closed"] is False                  # one review on the new evidence is not two
-    summary, _ = _ask(case)
+    # one round on the new evidence closes it (owner decision 2026-11-08)
     assert summary["closed"] is True and service.status(case, 2)["open_units"] == []
 
 
@@ -1269,8 +1263,7 @@ def test_a_judgement_on_old_evidence_is_no_precedent_after_the_check_changes(tmp
               {"subject": "naming", "unit": "A02", "kind": "gap", "text": "y", "question": "which name?"}]
     answered = {"binding": {"kind": "answered", "quotes": [SufficiencyProvider.ITEM]},
                 "naming": {"kind": "answered", "quotes": ["A thing has a name."]}}
-    for _ in range(2):
-        summary = service.ask_round(case, 2, PrecedentProvider(points, answered))
+    summary = service.ask_round(case, 2, PrecedentProvider(points, answered))
     assert summary["closed"] is True
     before = {p["topic"]: p for p in service._precedents(case, 2)}
     assert set(before) == {"binding", "naming"}
@@ -1310,8 +1303,7 @@ def _closed_a01(tmp_path: Path, monkeypatch) -> tuple[Path, Path]:
     monkeypatch.setenv("SPEC_WORKBENCH_FACTORY_ROOT", str(factory))
     points = [{"subject": "binding", "unit": "A01", "kind": "gap", "text": "x", "question": "is counts_once enough?"}]
     answered = {"binding": {"kind": "answered", "quotes": [SufficiencyProvider.ITEM]}}
-    for _ in range(2):
-        summary = service.ask_round(case, 2, PrecedentProvider(points, answered))
+    summary = service.ask_round(case, 2, PrecedentProvider(points, answered))
     assert summary["closed"] is True
     _git_commit(case)
     return case, factory
@@ -1387,8 +1379,7 @@ def test_a_check_brings_the_init_of_each_package_it_imports_through(tmp_path):
 def test_a_changed_package_helper_reopens_the_decision(tmp_path, monkeypatch):
     case, factory = _closed_a01(tmp_path, monkeypatch)
     _packaged_support(factory)
-    for _ in range(2):
-        service.ask_round(case, 2, PrecedentProvider([], {}))
+    service.ask_round(case, 2, PrecedentProvider([], {}))   # one round on the new evidence
     _write(factory / "verification" / "support" / "policy.py", "STRICT = False  # LOOSENED\n")
     summary, provider = _asked_again(case)
     assert summary["evidence_reopened"] == ["A01"]
