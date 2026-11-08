@@ -123,6 +123,7 @@ def _sync_module_topology(
     current_order: Any,
     current_paths: Any,
     handoff_contracts: dict[str, Any],
+    backend_placed: frozenset[str] = frozenset(),
 ) -> tuple[list[str] | None, dict[str, str] | None]:
     order_present = current_order is not None
     paths_present = current_paths is not None
@@ -159,7 +160,12 @@ def _sync_module_topology(
     # Existing paths are taken as given (SPEC_STANDARD §10 allows several
     # roots, root-level modules and a leaf that differs from the module name).
     # A deterministic root is needed only to place a module the handoff adds.
-    new_modules = [m for m in _handoff_modules(handoff_contracts) if m not in result_paths]
+    # A module a standard backend's wiring names (``backend_placed``) is placed
+    # by that backend from its IR, after the contracts are synced.
+    new_modules = [
+        m for m in _handoff_modules(handoff_contracts)
+        if m not in result_paths and m not in backend_placed
+    ]
     result_order = list(current_order)
     if not new_modules:
         return result_order, result_paths
@@ -496,6 +502,154 @@ def _place_data_provider_module(
         internal[module] = list(symbols)
 
 
+RECORD_CONSTRUCTION_BACKEND_ID = "record_construction"
+# standard backends whose wiring.module the projector places from the IR
+BACKEND_PLACED_MODULES = (DATA_PROVIDER_BACKEND_ID, RECORD_CONSTRUCTION_BACKEND_ID)
+
+
+def _backend_placed_modules(project: Path, exclude_ids: set[str]) -> frozenset[str]:
+    """The modules closed standard-backend closures place (their wiring.module)."""
+    modules: set[str] = set()
+    for standard in standard_backends(exclude_ids=exclude_ids):
+        if standard.id not in BACKEND_PLACED_MODULES:
+            continue
+        authored = standard.authored_backend(project)
+        wiring = authored.get("wiring") if isinstance(authored, dict) else None
+        module = wiring.get("module") if isinstance(wiring, dict) else None
+        if isinstance(module, str) and module:
+            modules.add(module)
+    return frozenset(modules)
+
+
+def _construction_refs(row: dict[str, Any]):
+    """Every ref of a construction row: over, fields, and the parts' over and fields."""
+    for owner in [row, *(row.get("parts") or {}).values()]:
+        if not isinstance(owner, dict):
+            continue
+        if isinstance(owner.get("over"), dict):
+            yield owner["over"]
+        fields = owner.get("fields")
+        if isinstance(fields, dict):
+            yield from (ref for ref in fields.values() if isinstance(ref, dict))
+
+
+def _record_builder_edges(backend: dict[str, Any], projected: dict[str, Any]) -> dict[str, list[str]]:
+    """imports.module_internal of the builders module, from the IR alone.
+
+    SPEC_STANDARD 6.13 names the builders module's edges exactly: to the data
+    provider with each ``constant`` symbol, and to the owner of each ``call``ed
+    function that is not a builder of the same IR, with its name. Types named
+    by the builders' contracts are imported structurally (§7), and the emitter
+    imports models from ``wiring.models_module`` itself, so no models edge is
+    derived. A call whose owner is not exactly one other module derives no edge:
+    RC012/RC014 report it. Providers follow module_order, symbols are sorted.
+    """
+    module = backend["wiring"]["module"]
+    constructions = backend.get("constructions") if isinstance(backend.get("constructions"), dict) else {}
+    rules = projected.get("rules") if isinstance(projected.get("rules"), dict) else {}
+    provider_backend = rules.get("data_provider_backend")
+    provider_wiring = provider_backend.get("wiring") if isinstance(provider_backend, dict) else None
+    provider = provider_wiring.get("module") if isinstance(provider_wiring, dict) else None
+    functions = projected.get("module_functions") if isinstance(projected.get("module_functions"), dict) else {}
+    owners: dict[str, list[str]] = {}
+    for owner, names in functions.items():
+        for name in names if isinstance(names, list) else []:
+            owners.setdefault(str(name), []).append(str(owner))
+
+    edges: dict[str, set[str]] = {}
+    for row in constructions.values():
+        if not isinstance(row, dict):
+            continue
+        for ref in _construction_refs(row):
+            if ref.get("ref") == "constant" and isinstance(provider, str) and isinstance(ref.get("symbol"), str):
+                edges.setdefault(provider, set()).add(ref["symbol"])
+            elif ref.get("ref") == "call" and isinstance(ref.get("function"), str) \
+                    and ref["function"] not in constructions:
+                found = [name for name in owners.get(ref["function"], []) if name != module]
+                if len(found) == 1:
+                    edges.setdefault(found[0], set()).add(ref["function"])
+    order = [str(name) for name in projected.get("module_order") or []]
+    ranked = sorted(edges, key=lambda name: (order.index(name) if name in order else len(order), name))
+    return {name: sorted(edges[name]) for name in ranked}
+
+
+def _place_record_builders_module(
+    projected: dict[str, Any],
+    backend: dict[str, Any],
+    findings: list[dict[str, Any]],
+    source: str,
+) -> dict[str, dict[str, list[str]]]:
+    """Place the builders module and return its import edges (SPEC_STANDARD 6.13).
+
+    The module imports only the models module (``wiring.models_module``, the
+    path of ``module_paths.models``) and the providers its IR names
+    (``_record_builder_edges``); every builder's consumer imports it. A module
+    new to the order is therefore placed right after the last of its providers,
+    beside the models module under the same root, and it is unplaceable when a
+    consumer does not come after that point. A module already in the order keeps
+    its place and path (SPEC_STANDARD §10).
+    """
+    wiring = backend.get("wiring")
+    module = wiring.get("module") if isinstance(wiring, dict) else None
+    constructions = backend.get("constructions")
+    if not isinstance(module, str) or not module or not isinstance(constructions, dict):
+        findings.append(_finding(
+            "block", "record_builders_module_unplaceable",
+            f"{source} backend_ir names no wiring.module or carries no constructions object",
+            source=source,
+        ))
+        return {}
+    edges = _record_builder_edges(backend, projected)
+
+    order = projected.get("module_order")
+    paths = projected.get("module_paths")
+    if isinstance(order, list) and isinstance(paths, dict) and module not in order:
+        models_module = wiring.get("models_module")
+        models = next(
+            (name for name in order
+             if isinstance(paths.get(name), str) and paths[name].replace("/", ".") == models_module),
+            None,
+        )
+        if models is None:
+            findings.append(_finding(
+                "block", "record_builders_module_unplaceable",
+                f"{source} wiring.models_module {models_module!r} is the path of no module in "
+                "global_spec.module_paths, so the builders module has no place in the order",
+                source=source,
+            ))
+            return edges
+        missing = [name for name in edges if name not in order]
+        if missing:
+            findings.append(_finding(
+                "block", "record_builders_module_unplaceable",
+                f"{source}: the builders module imports {missing}, which global_spec.module_order "
+                "does not hold",
+                source=source,
+            ))
+            return edges
+        anchor = max([models, *edges], key=order.index)
+        consumers = sorted({
+            str(name) for row in constructions.values() if isinstance(row, dict)
+            for name in row.get("consumers") or [] if name in order
+        })
+        early = [name for name in consumers if order.index(name) <= order.index(anchor)]
+        if early:
+            findings.append(_finding(
+                "block", "record_builders_module_unplaceable",
+                f"{source}: consumers {early} come before {anchor!r}, the builders module's last "
+                "provider in global_spec.module_order",
+                source=source,
+            ))
+            return edges
+        parent, separator, _ = paths[models].rpartition("/")
+        order = list(order)
+        order.insert(order.index(anchor) + 1, module)
+        paths = {**paths, module: f"{parent}/{module}" if separator else module}
+        _set(projected, "module_order", order)
+        _set(projected, "module_paths", {name: paths[name] for name in order})
+    return {module: edges}
+
+
 IMPORTS_TABLE = "65_imports.json"
 
 
@@ -505,12 +659,15 @@ def _project_module_internal(
     projected: dict[str, Any],
     findings: list[dict[str, Any]],
     source_checks: list[dict[str, Any]],
+    emitted_edges: dict[str, dict[str, list[str]]] | None = None,
 ) -> None:
     """imports.module_internal is derived from the imports closure table, never hand-edited.
 
     The table's scopes name the modules the closure judges; their edges are
     exactly the table's uses (IMPORTS_WORKBENCH.md §4). A module the closure does
-    not judge (``models``, modules an emitter writes) keeps its edges. Whether
+    not judge whose edges a backend IR states (``emitted_edges``: the builders
+    module, SPEC_STANDARD 6.13) gets exactly those; any other such module
+    (``models``, other modules an emitter writes) keeps its edges. Whether
     every candidate is decided is the imports_closure gate's question, not the
     projector's: the gate reads the case through this projection, so asking it
     here would be circular.
@@ -538,12 +695,19 @@ def _project_module_internal(
     derived = derive(table)
     current_edges = _get(current, "imports.module_internal")
     current_edges = current_edges if isinstance(current_edges, dict) else {}
+    stated = {m: v for m, v in (emitted_edges or {}).items() if m not in judged}
     order = [str(m) for m in projected.get("module_order") or []]
-    modules = [m for m in order if m in judged or m in current_edges]
-    modules += sorted((set(judged) | set(current_edges)) - set(modules))
+    known = set(judged) | set(current_edges) | set(stated)
+    modules = [m for m in order if m in known]
+    modules += sorted(known - set(modules))
     edges: dict[str, Any] = {}
     for module in modules:
-        value = derived.get(module) if module in judged else current_edges.get(module)
+        if module in judged:
+            value = derived.get(module)
+        elif module in stated:
+            value = stated[module]
+        else:
+            value = current_edges.get(module)
         if value:
             edges[module] = copy.deepcopy(value)
     source_checks.append(_source_check(IMPORTS_TABLE, enabled=True, ready=True, status="present"))
@@ -748,6 +912,7 @@ def _project(
             current.get("module_order"),
             current.get("module_paths"),
             handoff_contracts,
+            _backend_placed_modules(project, {entry["id"] for entry in declared_backends(project)}),
         )
         if module_order is not None and module_paths is not None:
             _set(projected, "module_order", module_order)
@@ -904,6 +1069,7 @@ def _project(
     # the projection carries that IR into rules verbatim so no hand edit of the
     # assembled spec is ever the way a backend arrives.
     legacy_ids = {entry["id"] for entry in declared_backends(project)}
+    emitted_edges: dict[str, dict[str, list[str]]] = {}
     for standard in standard_backends(exclude_ids=legacy_ids):
         if not (project / standard.closure_file).is_file():
             continue
@@ -932,9 +1098,12 @@ def _project(
         _set(projected, f"rules.{standard.rule_key}", authored)
         if standard.id == DATA_PROVIDER_BACKEND_ID:
             _place_data_provider_module(projected, authored, findings, standard.closure_file)
+        elif standard.id == RECORD_CONSTRUCTION_BACKEND_ID:
+            emitted_edges.update(
+                _place_record_builders_module(projected, authored, findings, standard.closure_file))
 
     if imports:
-        _project_module_internal(project, current, projected, findings, source_checks)
+        _project_module_internal(project, current, projected, findings, source_checks, emitted_edges)
 
     return current, projected, findings, source_checks
 
