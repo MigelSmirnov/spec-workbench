@@ -1316,20 +1316,33 @@ reading equals `datetime.utcnow()` and the elapsed reading equals
 
 ### Formal invariants
 
-- CLK-001: an operation takes one wall reading from the clock source, the
-  only reader of the host clocks; every portal-owned event timestamp it
-  writes, other than an audit record's `occurred_at` taken by the audit
+- CLK-001: an operation that reads the current time — to write a
+  timestamp or to compare the current time with a stored one, a session or
+  credential expiry check included — takes one wall reading from the clock
+  source, the only reader of the host clocks; that instant is every
+  current time the operation uses, and every portal-owned event timestamp
+  it writes, other than an audit record's `occurred_at` taken by the audit
   writer, is that instant; an expiry it derives from a TTL is that instant
   plus its TTL; source-supplied times and dates, a service credential's
   supplied `expires_at` among them, keep their supplied values.
+- CLK-002: elapsed durations are measured only through the clock source's
+  monotonic reading; they are used within one process, never persisted,
+  and never compared with or mixed into wall-clock values. Owner: the
+  clock source.
 
 ### Required tests
 
-- CLK-001: a test per operation that writes timestamps, with the clock
-  source fixed at a known instant, that the operation reads it once, that
+- CLK-001: a test per operation that reads the current time — writing a
+  timestamp or comparing it with a stored one, expiry checks included —
+  with the clock source fixed at a known instant, showing that the
+  operation reads it once and uses that instant for every comparison, that
   its portal-owned event timestamps equal that instant, that a derived
   expiry equals that instant plus the TTL, and that supplied times and
   dates are stored as supplied.
+- CLK-002: a test showing that the elapsed durations the portal measures
+  (the A25 viewer-entry window) come from the clock source's monotonic
+  reading, are not persisted, and are not compared with or mixed into
+  wall-clock values.
 - Witnesses, the focused Factory verification checks that assert it: CLK-001 [witness: verification:service_identity_consumer_uow_client_portal]; CLK-001 [witness: verification:staff_bootstrap_client_portal].
 
 ### Consequence

@@ -1,0 +1,344 @@
+{
+ "open_points": [
+  {
+   "unit": "A18",
+   "subject": "INV-020 immutability and append-only retention",
+   "kind": "insufficient required test",
+   "text": "“an accepted ApprovedEstimateSnapshot is immutable; versions are append-only and never overwritten or deleted” versus “a focused test at `import_snapshot` showing the invariant holds; a violating input is refused and changes nothing.”",
+   "question": "What must the required test do to demonstrate that accepted snapshots cannot be modified, overwritten, or deleted through every relevant service and store surface, rather than only that one conflicting import is refused?",
+   "options": [
+    "Test only same-key/different-content import refusal",
+    "Also verify that no mutation, replacement, or deletion surface can alter an accepted snapshot"
+   ],
+   "default_guess": "Verify conflict refusal and inspect or exercise every persistence surface to show accepted snapshots can only be inserted and read.",
+   "witness": {
+    "initial": "An accepted snapshot S is stored.",
+    "events": [
+     "A test submits a changed publication with S's identity and observes refusal.",
+     "Later code exposes a repository delete or update path for S."
+    ],
+    "outcomes": [
+     "The required test is considered sufficient because the conflicting import changed nothing, so the destructive path can remain undetected.",
+     "The required test must also fail because any update or deletion path violates append-only immutability."
+    ],
+    "observer": "The State 8 test author and an operator whose historical snapshot is changed or removed"
+   }
+  },
+  {
+   "unit": "A18",
+   "subject": "INV-022 import/activation separation",
+   "kind": "insufficient required test",
+   "text": "“a producer holds no activation capability and never activates its own import” versus “a focused test at `activate_budget_version` showing the invariant holds; a violating input is refused and changes nothing.”",
+   "question": "Must the test prove both that the producer capability catalog excludes activation and that producer-authenticated activation is refused, or is one refused activation example sufficient?",
+   "options": [
+    "Check one producer activation request is refused",
+    "Check the static capability set and producer-authenticated activation for imported versions"
+   ],
+   "default_guess": "Check both the capability catalog and the externally observable refusal with no state change.",
+   "witness": {
+    "initial": "A producer has imported snapshot S; its capability catalog is assembled separately from the activation guard.",
+    "events": [
+     "The producer attempts to activate the budget version associated with S."
+    ],
+    "outcomes": [
+     "A test checks only that this request is refused, even if the producer catalog erroneously contains activation and another guard happened to refuse it.",
+     "A test also requires the producer catalog never to confer activation, catching the erroneous catalog."
+    ],
+    "observer": "A future authorization implementer or security reviewer"
+   }
+  },
+  {
+   "unit": "A18",
+   "subject": "INV-023 budget activation",
+   "kind": "rule/test conflict",
+   "text": "The invariant says “activation atomically deactivates the previous active version,” while its Required test says “a violating input is refused and changes nothing.”",
+   "question": "When a project already has an active version and another version is activated, is that the normal atomic replacement required by the invariant, or a violating input that must be refused? If refusal is meant for another case, which case is it?",
+   "options": [
+    "Activate the new version and atomically deactivate the old one",
+    "Refuse activation whenever another version is active",
+    "Reserve refusal for a specifically defined corrupt or invalid state"
+   ],
+   "default_guess": "Treat an existing active version as the normal case: deactivate it and activate the selected version atomically; separately define any refusal case.",
+   "witness": {
+    "initial": "Project P has active budget version V1 and inactive version V2.",
+    "events": [
+     "An authorized staff member activates V2."
+    ],
+    "outcomes": [
+     "V1 becomes inactive and V2 active in one commit.",
+     "The request is refused and both versions remain unchanged because accepting it would otherwise momentarily conflict with the at-most-one rule."
+    ],
+    "observer": "The staff member and viewers of P's budget"
+   }
+  },
+  {
+   "unit": "A18",
+   "subject": "INV-024 manual and imported budget versions",
+   "kind": "insufficient required test",
+   "text": "INV-024 combines “at most one manual BudgetVersion per project,” “manual section plans are mutable only while the project is active,” and “imported plans are immutable copies of their snapshot,” but requires only “a focused test at `upsert_manual_section_plan` …; a violating input is refused.”",
+   "question": "What tests demonstrate each of the three independent obligations, especially uniqueness of the manual version and immutability/exact copying of imported plans, which `upsert_manual_section_plan` need not exercise?",
+   "options": [
+    "One refused manual-plan upsert is enough",
+    "Separate evidence for manual-version uniqueness, archived-project refusal, and imported-plan copy/immutability"
+   ],
+   "default_guess": "Require separate cases for all three obligations.",
+   "witness": {
+    "initial": "A project has one manual version and one imported version whose plan differs from its snapshot.",
+    "events": [
+     "A test attempts a manual-plan edit on an archived project and observes refusal.",
+     "No test compares the imported plan with its snapshot or attempts to alter it."
+    ],
+    "outcomes": [
+     "INV-024 is marked proven by the one refused manual upsert.",
+     "INV-024 remains unproven because imported-copy immutability and manual-version uniqueness were never shown."
+    ],
+    "observer": "The test author and viewers whose imported planned amounts differ from the approved snapshot"
+   }
+  },
+  {
+   "unit": "A18",
+   "subject": "INV-025 section identity and automatic linking",
+   "kind": "rule/test mismatch",
+   "text": "INV-025 requires stable identity across versions and renames, source-key-only automatic linking, and forbids display-name matching, while the Required test says “a violating input is refused and changes nothing.”",
+   "question": "What is the expected behavior when names match but source keys do not, or when a source key matches after a rename: refusal, creation of a distinct section, or reuse of the existing section? What exact observations prove stable identity and source-key-only linking?",
+   "options": [
+    "Refuse publications containing misleading name/key combinations",
+    "Ignore display-name equality, reuse only equal source keys, and create a distinct section for unmatched keys",
+    "Leave unmatched sections unresolved without creating or reusing a section"
+   ],
+   "default_guess": "Reuse a section only for equal source keys; a rename does not change identity, while equal names with unequal keys do not link.",
+   "witness": {
+    "initial": "Project P has section A with source_key `k1` and display name `Kitchen`. A later snapshot contains `k2` with display name `Kitchen`.",
+    "events": [
+     "The linking operation processes the later snapshot."
+    ],
+    "outcomes": [
+     "The input is refused as the Required test's “violating input.”",
+     "The name match is ignored and a new section is created for `k2`, preserving A separately."
+    ],
+    "observer": "Staff mapping allocations and viewers reading section history"
+   }
+  },
+  {
+   "unit": "A18",
+   "subject": "INV-027 derived values",
+   "kind": "inapplicable refusal requirement",
+   "text": "The Required test at `build_budget_view` says “a violating input is refused and changes nothing,” while the detailed test requires reads to recompute values from stored owning rows and says “reading the views writes nothing.”",
+   "question": "What input to a read-only view builder counts as violating INV-027 and must be refused, rather than simply recomputed without using stored editable aggregates?",
+   "options": [
+    "There is no refusal case; prove recomputation and absence of stored derived fields",
+    "Define a malformed persisted-state condition that the view builder refuses",
+    "Treat any supplied aggregate value as invalid input even though the model exposes no such input"
+   ],
+   "default_guess": "Remove the refusal expectation for this invariant and prove it through schema/store inspection, read purity, and recomputation after owning-record writes.",
+   "witness": {
+    "initial": "Owning plan, allocation, progress, payment, and activation rows form a valid project state.",
+    "events": [
+     "A caller invokes `build_budget_view`."
+    ],
+    "outcomes": [
+     "The builder always recomputes and returns the view; there is no violating aggregate input to refuse.",
+     "The implementer invents an additional consistency check and refusal condition to satisfy the generic Required-test sentence."
+    ],
+    "observer": "The caller of the budget view"
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "normalization of source-supplied instants",
+   "kind": "representation ambiguity",
+   "text": "Source-supplied times are “kept as supplied: the same instant, stored offset-naive UTC,” their “accepted forms and checks” are carried to States 6–7, and the Required test says they are “stored as supplied.”",
+   "question": "Which input datetime forms are accepted, and how is an aware non-UTC offset or an offset-naive supplied datetime converted or interpreted before offset-naive UTC storage?",
+   "options": [
+    "Accept aware datetimes with any offset and convert the instant to naive UTC",
+    "Accept only UTC-aware datetimes and reject other offsets and naive values",
+    "Treat naive input as UTC and normalize aware input",
+    "Strip `tzinfo` without converting the wall value"
+   ],
+   "default_guess": "Accept offset-aware instants, convert them to UTC, then remove the offset; reject source-supplied naive instants unless their contract explicitly defines them as UTC.",
+   "witness": {
+    "initial": "A producer supplies `published_at = 2026-08-09T12:00:00+02:00`.",
+    "events": [
+     "The snapshot import stores the supplied instant."
+    ],
+    "outcomes": [
+     "It stores naive `2026-08-09 10:00:00`, preserving the instant.",
+     "It stores naive `2026-08-09 12:00:00`, preserving the displayed fields but changing the instant; another implementation rejects the input entirely."
+    ],
+    "observer": "A producer reading import chronology and staff comparing event times"
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "CLK-001 sole host-clock reader",
+   "kind": "untested invariant clause",
+   "text": "CLK-001 says the clock source is “the only reader of the host clocks,” but its Required test describes fixing the clock source per operation and checking that operation's readings and values; it does not state what demonstrates that no module reads `datetime.utcnow()` or another host clock directly.",
+   "question": "What required check proves the architectural prohibition on direct host-clock reads outside the clock source?",
+   "options": [
+    "Behavioral tests with a fixed source are sufficient",
+    "A static/import-boundary check must reject direct host-clock calls outside the source",
+    "Every module's tests must monkeypatch both the source and host clocks to detect bypasses"
+   ],
+   "default_guess": "Add a static boundary check, supplemented by operation tests using a fixed source.",
+   "witness": {
+    "initial": "Most operations use the clock source, but one rarely used rejection branch calls `datetime.utcnow()` directly.",
+    "events": [
+     "CLK-001 tests run with the clock source fixed at instant T but do not execute that branch."
+    ],
+    "outcomes": [
+     "The suite passes because tested operations used T once.",
+     "The suite fails because a boundary check finds a forbidden direct host-clock read."
+    ],
+    "observer": "The State 8 verifier and a caller who reaches the untested branch"
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "CLK-001 witness coverage",
+   "kind": "missing per-operation witnesses",
+   "text": "The Required test demands “a test per operation that reads the current time,” but the only bound witnesses name `verification:service_identity_consumer_uow_client_portal` and `verification:staff_bootstrap_client_portal`.",
+   "question": "Which witness checks cover every other time-reading operation required by the per-operation test rule?",
+   "options": [
+    "The two named checks are representative and sufficient",
+    "Each time-reading operation needs a named witness check",
+    "One explicitly named aggregate check may enumerate and exercise all time-reading operations"
+   ],
+   "default_guess": "Bind either one exhaustive aggregate witness or an explicit witness for every time-reading operation.",
+   "witness": {
+    "initial": "The portal has time-reading operations beyond service identity and bootstrap, including sessions, viewer entry, imports, expenses, payments, and photos.",
+    "events": [
+     "State 8 resolves only the two named witness checks."
+    ],
+    "outcomes": [
+     "CLK-001 is accepted because it has at least one witness tag.",
+     "CLK-001 remains incomplete because the mandated per-operation cases have no bound witness material."
+    ],
+    "observer": "The handoff verifier"
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "CLK-002 witness binding",
+   "kind": "missing witness",
+   "text": "CLK-002 has a Required tests item, but the witness line binds only CLK-001 and names no check for CLK-002.",
+   "question": "Which existing witness check is bound to the monotonic-source, non-persistence, and no-mixing requirements of CLK-002?",
+   "options": [
+    "Reuse one of the unnamed CLK-001 checks implicitly",
+    "Bind the A25 viewer-entry verification check explicitly",
+    "Create or name a dedicated clock-source check"
+   ],
+   "default_guess": "Explicitly bind the viewer-entry rate-limit verification check to CLK-002.",
+   "witness": {
+    "initial": "The viewer-entry limiter uses a persisted wall-clock value instead of the monotonic source.",
+    "events": [
+     "Only the two CLK-001 witness checks run."
+    ],
+    "outcomes": [
+     "State 8 passes because CLK-002's prose test is treated as enough without a witness.",
+     "State 8 blocks because no bound check can demonstrate CLK-002."
+    ],
+    "observer": "The State 8 assembly gate"
+   }
+  },
+  {
+   "unit": "A32",
+   "subject": "OSV version-to-advisory matching",
+   "kind": "deferred open refusal decision",
+   "text": "A distribution blocks deployment when “OSV lists a known vulnerability for its version,” but “how a version is matched to an advisory” is carried to the deploy route as procedure.",
+   "question": "What matching semantics decide whether an OSV advisory applies to an installed version, including affected ranges, explicit events, prereleases, local version identifiers, withdrawn records, and malformed or unmatchable data?",
+   "options": [
+    "Use OSV's range-event semantics exactly and fail closed on unmatchable data",
+    "Require an exact version string in the advisory",
+    "Delegate all matching behavior to whichever scanner the deploy route selects"
+   ],
+   "default_guess": "Use OSV's published ecosystem/version-range semantics and fail closed when the installed version or advisory cannot be evaluated.",
+   "witness": {
+    "initial": "Image I contains distribution D version 2.0; an OSV advisory describes an introduced/fixed range rather than listing 2.0 literally.",
+    "events": [
+     "The deploy gate evaluates I against the same fresh OSV snapshot."
+    ],
+    "outcomes": [
+     "The matcher determines 2.0 lies in the affected range and blocks deployment.",
+     "An exact-string matcher finds no listed `2.0` entry and starts the service."
+    ],
+    "observer": "The deployment operator and portal users exposed to the vulnerable image"
+   }
+  },
+  {
+   "unit": "A32",
+   "subject": "deployment age limits",
+   "kind": "undecided policy values",
+   "text": "DEP-002 relies on `max_snapshot_age` and `max_environment_age`, described only as “deployment procedure values of the Factory deploy route, rule 3, not portal rules.”",
+   "question": "What are the maximum ages, what configuration or authority sets them, and are they fixed policy values or freely chosen per deploy?",
+   "options": [
+    "Fixed values declared by the Factory route",
+    "Required deployment configuration with defined validation",
+    "Values chosen independently by each deploy invocation"
+   ],
+   "default_guess": "Make both required, validated Factory-route configuration values with owner-approved defaults or fixed limits.",
+   "witness": {
+    "initial": "The latest available OSV snapshot and a passing verdict are both 48 hours old.",
+    "events": [
+     "An operator starts the service from the checked image."
+    ],
+    "outcomes": [
+     "Deployment starts because the route uses a 72-hour maximum.",
+     "Deployment is refused because the route uses a 24-hour maximum."
+    ],
+    "observer": "The deployment operator"
+   }
+  },
+  {
+   "unit": "A32",
+   "subject": "maximum environment age",
+   "kind": "undefined age origin",
+   "text": "The Required test permits starting only on a verdict “no older than its maximum environment age,” but neither the normative rule nor the invariant defines “environment age” or the instant from which it is measured.",
+   "question": "What object is aging, which timestamp starts that age, and must a restart of the same image obtain a new verdict after the limit?",
+   "options": [
+    "Age the built image from its build time",
+    "Age the vulnerability verdict from scan completion",
+    "Age the deployment environment from creation",
+    "Apply the limit only to the interval between check completion and the first service start"
+   ],
+   "default_guess": "Measure from completion of the vulnerability verdict to each service start, requiring a new check once the verdict is too old.",
+   "witness": {
+    "initial": "Image I was built ten days ago, scanned one hour ago, started once, then restarted two days later.",
+    "events": [
+     "The route evaluates `max_environment_age = 24 hours` for the restart."
+    ],
+    "outcomes": [
+     "The restart is allowed because the image's latest scan is treated as the relevant fresh environment evidence.",
+     "The restart is refused because the environment or prior verdict is more than 24 hours old; implementations choosing build age produce a third result."
+    ],
+    "observer": "The deployment operator"
+   }
+  },
+  {
+   "unit": "A30",
+   "subject": "configuration ownership of A32 age bounds",
+   "kind": "cross-decision contradiction",
+   "text": "A30 says “The existence of every timeout, TTL, rate limit and bound is invariant; its value is configuration,” while A32 calls `max_snapshot_age` and `max_environment_age` “deployment procedure values … not portal rules.”",
+   "question": "Do A32's two age bounds fall under A30's universal configuration invariant and required-configuration testing, or are deployment-route bounds explicitly outside A30?",
+   "options": [
+    "A30 covers the two deployment bounds as configuration",
+    "A30 covers portal runtime bounds only, with an explicit exception for Factory deployment policy",
+    "A32's bounds are fixed procedure constants rather than configuration"
+   ],
+   "default_guess": "Narrow A30 explicitly to portal runtime configuration and leave the two ages as separately validated Factory-route configuration.",
+   "witness": {
+    "initial": "The Factory route has no value for `max_environment_age`, while all portal runtime variables are valid.",
+    "events": [
+     "The deploy is attempted and the portal process is started."
+    ],
+    "outcomes": [
+     "A30 makes the missing bound invalid configuration, so deployment/start-up is refused.",
+     "A32 treats it as an external procedure concern outside A30; the portal starts if the route supplies or assumes its own policy."
+    ],
+    "observer": "The deployment operator and configuration verifier"
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A18\",\"subject\":\"INV-020 immutability and append-only retention\",\"kind\":\"insufficient required test\",\"text\":\"“an accepted ApprovedEstimateSnapshot is immutable; versions are append-only and never overwritten or deleted” versus “a focused test at `import_snapshot` showing the invariant holds; a violating input is refused and changes nothing.”\",\"question\":\"What must the required test do to demonstrate that accepted snapshots cannot be modified, overwritten, or deleted through every relevant service and store surface, rather than only that one conflicting import is refused?\",\"options\":[\"Test only same-key/different-content import refusal\",\"Also verify that no mutation, replacement, or deletion surface can alter an accepted snapshot\"],\"default_guess\":\"Verify conflict refusal and inspect or exercise every persistence surface to show accepted snapshots can only be inserted and read.\",\"witness\":{\"initial\":\"An accepted snapshot S is stored.\",\"events\":[\"A test submits a changed publication with S's identity and observes refusal.\",\"Later code exposes a repository delete or update path for S.\"],\"outcomes\":[\"The required test is considered sufficient because the conflicting import changed nothing, so the destructive path can remain undetected.\",\"The required test must also fail because any update or deletion path violates append-only immutability.\"],\"observer\":\"The State 8 test author and an operator whose historical snapshot is changed or removed\"}},{\"unit\":\"A18\",\"subject\":\"INV-022 import/activation separation\",\"kind\":\"insufficient required test\",\"text\":\"“a producer holds no activation capability and never activates its own import” versus “a focused test at `activate_budget_version` showing the invariant holds; a violating input is refused and changes nothing.”\",\"question\":\"Must the test prove both that the producer capability catalog excludes activation and that producer-authenticated activation is refused, or is one refused activation example sufficient?\",\"options\":[\"Check one producer activation request is refused\",\"Check the static capability set and producer-authenticated activation for imported versions\"],\"default_guess\":\"Check both the capability catalog and the externally observable refusal with no state change.\",\"witness\":{\"initial\":\"A producer has imported snapshot S; its capability catalog is assembled separately from the activation guard.\",\"events\":[\"The producer attempts to activate the budget version associated with S.\"],\"outcomes\":[\"A test checks only that this request is refused, even if the producer catalog erroneously contains activation and another guard happened to refuse it.\",\"A test also requires the producer catalog never to confer activation, catching the erroneous catalog.\"],\"observer\":\"A future authorization implementer or security reviewer\"}},{\"unit\":\"A18\",\"subject\":\"INV-023 budget activation\",\"kind\":\"rule/test conflict\",\"text\":\"The invariant says “activation atomically deactivates the previous active version,” while its Required test says “a violating input is refused and changes nothing.”\",\"question\":\"When a project already has an active version and another version is activated, is that the normal atomic replacement required by the invariant, or a violating input that must be refused? If refusal is meant for another case, which case is it?\",\"options\":[\"Activate the new version and atomically deactivate the old one\",\"Refuse activation whenever another version is active\",\"Reserve refusal for a specifically defined corrupt or invalid state\"],\"default_guess\":\"Treat an existing active version as the normal case: deactivate it and activate the selected version atomically; separately define any refusal case.\",\"witness\":{\"initial\":\"Project P has active budget version V1 and inactive version V2.\",\"events\":[\"An authorized staff member activates V2.\"],\"outcomes\":[\"V1 becomes inactive and V2 active in one commit.\",\"The request is refused and both versions remain unchanged because accepting it would otherwise momentarily conflict with the at-most-one rule.\"],\"observer\":\"The staff member and viewers of P's budget\"}},{\"unit\":\"A18\",\"subject\":\"INV-024 manual and imported budget versions\",\"kind\":\"insufficient required test\",\"text\":\"INV-024 combines “at most one manual BudgetVersion per project,” “manual section plans are mutable only while the project is active,” and “imported plans are immutable copies of their snapshot,” but requires only “a focused test at `upsert_manual_section_plan` …; a violating input is refused.”\",\"question\":\"What tests demonstrate each of the three independent obligations, especially uniqueness of the manual version and immutability/exact copying of imported plans, which `upsert_manual_section_plan` need not exercise?\",\"options\":[\"One refused manual-plan upsert is enough\",\"Separate evidence for manual-version uniqueness, archived-project refusal, and imported-plan copy/immutability\"],\"default_guess\":\"Require separate cases for all three obligations.\",\"witness\":{\"initial\":\"A project has one manual version and one imported version whose plan differs from its snapshot.\",\"events\":[\"A test attempts a manual-plan edit on an archived project and observes refusal.\",\"No test compares the imported plan with its snapshot or attempts to alter it.\"],\"outcomes\":[\"INV-024 is marked proven by the one refused manual upsert.\",\"INV-024 remains unproven because imported-copy immutability and manual-version uniqueness were never shown.\"],\"observer\":\"The test author and viewers whose imported planned amounts differ from the approved snapshot\"}},{\"unit\":\"A18\",\"subject\":\"INV-025 section identity and automatic linking\",\"kind\":\"rule/test mismatch\",\"text\":\"INV-025 requires stable identity across versions and renames, source-key-only automatic linking, and forbids display-name matching, while the Required test says “a violating input is refused and changes nothing.”\",\"question\":\"What is the expected behavior when names match but source keys do not, or when a source key matches after a rename: refusal, creation of a distinct section, or reuse of the existing section? What exact observations prove stable identity and source-key-only linking?\",\"options\":[\"Refuse publications containing misleading name/key combinations\",\"Ignore display-name equality, reuse only equal source keys, and create a distinct section for unmatched keys\",\"Leave unmatched sections unresolved without creating or reusing a section\"],\"default_guess\":\"Reuse a section only for equal source keys; a rename does not change identity, while equal names with unequal keys do not link.\",\"witness\":{\"initial\":\"Project P has section A with source_key `k1` and display name `Kitchen`. A later snapshot contains `k2` with display name `Kitchen`.\",\"events\":[\"The linking operation processes the later snapshot.\"],\"outcomes\":[\"The input is refused as the Required test's “violating input.”\",\"The name match is ignored and a new section is created for `k2`, preserving A separately.\"],\"observer\":\"Staff mapping allocations and viewers reading section history\"}},{\"unit\":\"A18\",\"subject\":\"INV-027 derived values\",\"kind\":\"inapplicable refusal requirement\",\"text\":\"The Required test at `build_budget_view` says “a violating input is refused and changes nothing,” while the detailed test requires reads to recompute values from stored owning rows and says “reading the views writes nothing.”\",\"question\":\"What input to a read-only view builder counts as violating INV-027 and must be refused, rather than simply recomputed without using stored editable aggregates?\",\"options\":[\"There is no refusal case; prove recomputation and absence of stored derived fields\",\"Define a malformed persisted-state condition that the view builder refuses\",\"Treat any supplied aggregate value as invalid input even though the model exposes no such input\"],\"default_guess\":\"Remove the refusal expectation for this invariant and prove it through schema/store inspection, read purity, and recomputation after owning-record writes.\",\"witness\":{\"initial\":\"Owning plan, allocation, progress, payment, and activation rows form a valid project state.\",\"events\":[\"A caller invokes `build_budget_view`.\"],\"outcomes\":[\"The builder always recomputes and returns the view; there is no violating aggregate input to refuse.\",\"The implementer invents an additional consistency check and refusal condition to satisfy the generic Required-test sentence.\"],\"observer\":\"The caller of the budget view\"}},{\"unit\":\"A28\",\"subject\":\"normalization of source-supplied instants\",\"kind\":\"representation ambiguity\",\"text\":\"Source-supplied times are “kept as supplied: the same instant, stored offset-naive UTC,” their “accepted forms and checks” are carried to States 6–7, and the Required test says they are “stored as supplied.”\",\"question\":\"Which input datetime forms are accepted, and how is an aware non-UTC offset or an offset-naive supplied datetime converted or interpreted before offset-naive UTC storage?\",\"options\":[\"Accept aware datetimes with any offset and convert the instant to naive UTC\",\"Accept only UTC-aware datetimes and reject other offsets and naive values\",\"Treat naive input as UTC and normalize aware input\",\"Strip `tzinfo` without converting the wall value\"],\"default_guess\":\"Accept offset-aware instants, convert them to UTC, then remove the offset; reject source-supplied naive instants unless their contract explicitly defines them as UTC.\",\"witness\":{\"initial\":\"A producer supplies `published_at = 2026-08-09T12:00:00+02:00`.\",\"events\":[\"The snapshot import stores the supplied instant.\"],\"outcomes\":[\"It stores naive `2026-08-09 10:00:00`, preserving the instant.\",\"It stores naive `2026-08-09 12:00:00`, preserving the displayed fields but changing the instant; another implementation rejects the input entirely.\"],\"observer\":\"A producer reading import chronology and staff comparing event times\"}},{\"unit\":\"A28\",\"subject\":\"CLK-001 sole host-clock reader\",\"kind\":\"untested invariant clause\",\"text\":\"CLK-001 says the clock source is “the only reader of the host clocks,” but its Required test describes fixing the clock source per operation and checking that operation's readings and values; it does not state what demonstrates that no module reads `datetime.utcnow()` or another host clock directly.\",\"question\":\"What required check proves the architectural prohibition on direct host-clock reads outside the clock source?\",\"options\":[\"Behavioral tests with a fixed source are sufficient\",\"A static/import-boundary check must reject direct host-clock calls outside the source\",\"Every module's tests must monkeypatch both the source and host clocks to detect bypasses\"],\"default_guess\":\"Add a static boundary check, supplemented by operation tests using a fixed source.\",\"witness\":{\"initial\":\"Most operations use the clock source, but one rarely used rejection branch calls `datetime.utcnow()` directly.\",\"events\":[\"CLK-001 tests run with the clock source fixed at instant T but do not execute that branch.\"],\"outcomes\":[\"The suite passes because tested operations used T once.\",\"The suite fails because a boundary check finds a forbidden direct host-clock read.\"],\"observer\":\"The State 8 verifier and a caller who reaches the untested branch\"}},{\"unit\":\"A28\",\"subject\":\"CLK-001 witness coverage\",\"kind\":\"missing per-operation witnesses\",\"text\":\"The Required test demands “a test per operation that reads the current time,” but the only bound witnesses name `verification:service_identity_consumer_uow_client_portal` and `verification:staff_bootstrap_client_portal`.\",\"question\":\"Which witness checks cover every other time-reading operation required by the per-operation test rule?\",\"options\":[\"The two named checks are representative and sufficient\",\"Each time-reading operation needs a named witness check\",\"One explicitly named aggregate check may enumerate and exercise all time-reading operations\"],\"default_guess\":\"Bind either one exhaustive aggregate witness or an explicit witness for every time-reading operation.\",\"witness\":{\"initial\":\"The portal has time-reading operations beyond service identity and bootstrap, including sessions, viewer entry, imports, expenses, payments, and photos.\",\"events\":[\"State 8 resolves only the two named witness checks.\"],\"outcomes\":[\"CLK-001 is accepted because it has at least one witness tag.\",\"CLK-001 remains incomplete because the mandated per-operation cases have no bound witness material.\"],\"observer\":\"The handoff verifier\"}},{\"unit\":\"A28\",\"subject\":\"CLK-002 witness binding\",\"kind\":\"missing witness\",\"text\":\"CLK-002 has a Required tests item, but the witness line binds only CLK-001 and names no check for CLK-002.\",\"question\":\"Which existing witness check is bound to the monotonic-source, non-persistence, and no-mixing requirements of CLK-002?\",\"options\":[\"Reuse one of the unnamed CLK-001 checks implicitly\",\"Bind the A25 viewer-entry verification check explicitly\",\"Create or name a dedicated clock-source check\"],\"default_guess\":\"Explicitly bind the viewer-entry rate-limit verification check to CLK-002.\",\"witness\":{\"initial\":\"The viewer-entry limiter uses a persisted wall-clock value instead of the monotonic source.\",\"events\":[\"Only the two CLK-001 witness checks run.\"],\"outcomes\":[\"State 8 passes because CLK-002's prose test is treated as enough without a witness.\",\"State 8 blocks because no bound check can demonstrate CLK-002.\"],\"observer\":\"The State 8 assembly gate\"}},{\"unit\":\"A32\",\"subject\":\"OSV version-to-advisory matching\",\"kind\":\"deferred open refusal decision\",\"text\":\"A distribution blocks deployment when “OSV lists a known vulnerability for its version,” but “how a version is matched to an advisory” is carried to the deploy route as procedure.\",\"question\":\"What matching semantics decide whether an OSV advisory applies to an installed version, including affected ranges, explicit events, prereleases, local version identifiers, withdrawn records, and malformed or unmatchable data?\",\"options\":[\"Use OSV's range-event semantics exactly and fail closed on unmatchable data\",\"Require an exact version string in the advisory\",\"Delegate all matching behavior to whichever scanner the deploy route selects\"],\"default_guess\":\"Use OSV's published ecosystem/version-range semantics and fail closed when the installed version or advisory cannot be evaluated.\",\"witness\":{\"initial\":\"Image I contains distribution D version 2.0; an OSV advisory describes an introduced/fixed range rather than listing 2.0 literally.\",\"events\":[\"The deploy gate evaluates I against the same fresh OSV snapshot.\"],\"outcomes\":[\"The matcher determines 2.0 lies in the affected range and blocks deployment.\",\"An exact-string matcher finds no listed `2.0` entry and starts the service.\"],\"observer\":\"The deployment operator and portal users exposed to the vulnerable image\"}},{\"unit\":\"A32\",\"subject\":\"deployment age limits\",\"kind\":\"undecided policy values\",\"text\":\"DEP-002 relies on `max_snapshot_age` and `max_environment_age`, described only as “deployment procedure values of the Factory deploy route, rule 3, not portal rules.”\",\"question\":\"What are the maximum ages, what configuration or authority sets them, and are they fixed policy values or freely chosen per deploy?\",\"options\":[\"Fixed values declared by the Factory route\",\"Required deployment configuration with defined validation\",\"Values chosen independently by each deploy invocation\"],\"default_guess\":\"Make both required, validated Factory-route configuration values with owner-approved defaults or fixed limits.\",\"witness\":{\"initial\":\"The latest available OSV snapshot and a passing verdict are both 48 hours old.\",\"events\":[\"An operator starts the service from the checked image.\"],\"outcomes\":[\"Deployment starts because the route uses a 72-hour maximum.\",\"Deployment is refused because the route uses a 24-hour maximum.\"],\"observer\":\"The deployment operator\"}},{\"unit\":\"A32\",\"subject\":\"maximum environment age\",\"kind\":\"undefined age origin\",\"text\":\"The Required test permits starting only on a verdict “no older than its maximum environment age,” but neither the normative rule nor the invariant defines “environment age” or the instant from which it is measured.\",\"question\":\"What object is aging, which timestamp starts that age, and must a restart of the same image obtain a new verdict after the limit?\",\"options\":[\"Age the built image from its build time\",\"Age the vulnerability verdict from scan completion\",\"Age the deployment environment from creation\",\"Apply the limit only to the interval between check completion and the first service start\"],\"default_guess\":\"Measure from completion of the vulnerability verdict to each service start, requiring a new check once the verdict is too old.\",\"witness\":{\"initial\":\"Image I was built ten days ago, scanned one hour ago, started once, then restarted two days later.\",\"events\":[\"The route evaluates `max_environment_age = 24 hours` for the restart.\"],\"outcomes\":[\"The restart is allowed because the image's latest scan is treated as the relevant fresh environment evidence.\",\"The restart is refused because the environment or prior verdict is more than 24 hours old; implementations choosing build age produce a third result.\"],\"observer\":\"The deployment operator\"}},{\"unit\":\"A30\",\"subject\":\"configuration ownership of A32 age bounds\",\"kind\":\"cross-decision contradiction\",\"text\":\"A30 says “The existence of every timeout, TTL, rate limit and bound is invariant; its value is configuration,” while A32 calls `max_snapshot_age` and `max_environment_age` “deployment procedure values … not portal rules.”\",\"question\":\"Do A32's two age bounds fall under A30's universal configuration invariant and required-configuration testing, or are deployment-route bounds explicitly outside A30?\",\"options\":[\"A30 covers the two deployment bounds as configuration\",\"A30 covers portal runtime bounds only, with an explicit exception for Factory deployment policy\",\"A32's bounds are fixed procedure constants rather than configuration\"],\"default_guess\":\"Narrow A30 explicitly to portal runtime configuration and leave the two ages as separately validated Factory-route configuration.\",\"witness\":{\"initial\":\"The Factory route has no value for `max_environment_age`, while all portal runtime variables are valid.\",\"events\":[\"The deploy is attempted and the portal process is started.\"],\"outcomes\":[\"A30 makes the missing bound invalid configuration, so deployment/start-up is refused.\",\"A32 treats it as an external procedure concern outside A30; the portal starts if the route supplies or assumes its own policy.\"],\"observer\":\"The deployment operator and configuration verifier\"}}]}",
+ "set_aside": []
+}

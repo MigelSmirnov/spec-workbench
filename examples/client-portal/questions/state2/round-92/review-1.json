@@ -1,0 +1,245 @@
+{
+ "open_points": [
+  {
+   "subject": "INV-020 snapshot conflict test",
+   "kind": "contradictory effects",
+   "text": "The Required test says \"a violating input is refused and changes nothing\", while the detailed budget-derivation test says a changed re-publication \"is recorded only as its import result and audit\".",
+   "question": "When an existing snapshot identity is re-published with different content, does \"changes nothing\" exclude the required fresh import result and audit record, or must those records still be appended?",
+   "options": [
+    "Refuse with no writes at all",
+    "Leave snapshot and budget state unchanged but append the import result and audit record"
+   ],
+   "default_guess": "Append the import result and audit record while leaving snapshot and budget state unchanged.",
+   "witness": {
+    "initial": "Snapshot S exists for one project, estimate_id and estimate_version.",
+    "events": [
+     "The producer republishes that identity with a different content fingerprint."
+    ],
+    "outcomes": [
+     "The request is refused and no record is written.",
+     "The snapshot is unchanged, but a fresh integrity-conflict import result and its audit record are appended."
+    ],
+    "observer": "The producer reading the import result and an auditor inspecting the records."
+   },
+   "unit": "A18"
+  },
+  {
+   "subject": "INV-020 append-only verification",
+   "kind": "incomplete required test",
+   "text": "INV-020 requires versions to be \"append-only and never overwritten or deleted\", but its Required test mentions only a focused test at `import_snapshot`, a refused violating input, and no change.",
+   "question": "What Required test demonstrates that no operation or store surface can delete an accepted snapshot or an older version?",
+   "options": [
+    "A repository/surface test proving deletion and replacement are unavailable or refused",
+    "Only the conflicting re-import test, which covers overwrite but not deletion"
+   ],
+   "default_guess": "Require an explicit test of all mutation/store surfaces showing accepted snapshots cannot be replaced or deleted.",
+   "unit": "A18"
+  },
+  {
+   "subject": "INV-023 activation atomicity",
+   "kind": "incomplete required test",
+   "text": "INV-023 requires activation to \"atomically deactivate[] the previous active version\", but its Required test describes only \"a violating input is refused and changes nothing\".",
+   "question": "What test must show the successful atomic transition, including rollback if either the old-version deactivation or new-version activation cannot commit?",
+   "options": [
+    "Test a successful one-transaction swap and failure rollback",
+    "Test only refusal of an already-invalid state"
+   ],
+   "default_guess": "Test the successful swap and a forced commit failure showing neither version changes partially.",
+   "unit": "A18"
+  },
+  {
+   "subject": "INV-025 stable linking and rename",
+   "kind": "incomplete required test",
+   "text": "INV-025 requires stable identity across versions and renames and linking by `source_key` equality only, but its Required test describes only a violating input being refused.",
+   "question": "What test shows the permitted positive case: an equal source key with a changed display name reuses the existing PortalSection, while an equal display name with a different source key does not link?",
+   "options": [
+    "Test both positive source-key reuse and negative display-name matching",
+    "Test only refusal of an unspecified violating input"
+   ],
+   "default_guess": "Test both contrasting cases and assert the reused or newly created section identities.",
+   "unit": "A18"
+  },
+  {
+   "subject": "INV-027 storage of derived values",
+   "kind": "contradictory invariant strength",
+   "text": "The formal invariant says derived totals are \"never stored as editable values\", while its detailed Required test says \"no table stores a value of a derived view\".",
+   "question": "May the portal store a non-editable derived cache, or is every stored derived-view value forbidden?",
+   "options": [
+    "Allow a non-editable cache if it is recomputable",
+    "Forbid storing derived-view values in any table"
+   ],
+   "default_guess": "Forbid storing derived-view values in any table.",
+   "witness": {
+    "initial": "A project has plans and allocations from which a material total can be computed.",
+    "events": [
+     "A write changes an allocation.",
+     "The implementation prepares the next budget read."
+    ],
+    "outcomes": [
+     "It updates a non-editable cached total and later returns it.",
+     "It stores no total and recomputes the total from owning rows on every read."
+    ],
+    "observer": "A persistence inspection or the INV-027 verification check."
+   },
+   "unit": "A18"
+  },
+  {
+   "subject": "Meaning of one clock operation",
+   "kind": "undefined operation boundary",
+   "text": "A28 requires \"one reading per operation\" and reuse for every comparison and timestamp, but it does not define whether request authorization, the use case, transaction work, and response construction are one operation or separate operations.",
+   "question": "Which exact boundary shares one wall-clock reading, especially when a request first validates session expiry and then performs a timestamped mutation?",
+   "options": [
+    "The whole portal request, including authorization and mutation, is one operation",
+    "Each invoked authorization/use-case operation takes its own reading",
+    "Only the mutating transaction is the operation; authorization has another reading"
+   ],
+   "default_guess": "Treat the complete application use case, including its authorization checks, as one operation with one shared reading.",
+   "witness": {
+    "initial": "A staff session expires at 12:00:00; the host clock reads 11:59:59.999 during authorization and 12:00:00.001 when mutation work begins.",
+    "events": [
+     "The staff member submits a timestamped project mutation."
+    ],
+    "outcomes": [
+     "One request-wide reading is reused, so authorization succeeds and the written timestamp is 11:59:59.999.",
+     "Authorization and mutation take separate readings, so the mutation either writes 12:00:00.001 after the session expiry or is refused by a repeated expiry check."
+    ],
+    "observer": "The caller and an auditor reading the mutation timestamp."
+   },
+   "unit": "A28"
+  },
+  {
+   "subject": "Accepted forms of source-supplied instants",
+   "kind": "deferred representation choice",
+   "text": "Source times are kept as \"the same instant, stored offset-naive UTC\", but \"their accepted forms and checks\" are merely carried to States 6–7 as \"the accepted spec's\" without stating those forms here.",
+   "question": "Are offset-aware inputs accepted and normalized, are offset-naive inputs assumed to be UTC or rejected, and which malformed or non-UTC forms are refused?",
+   "options": [
+    "Accept aware datetimes, convert to UTC, and strip the offset; reject naive inputs",
+    "Accept naive inputs as already UTC and normalize aware inputs",
+    "Accept only offset-naive UTC inputs"
+   ],
+   "default_guess": "Accept offset-aware values by converting to UTC and stripping the offset, and accept naive values only under an explicit UTC contract.",
+   "witness": {
+    "initial": "A producer supplies `published_at` as 2026-11-08 12:00:00+02:00, representing 10:00:00 UTC.",
+    "events": [
+     "The producer submits an otherwise valid snapshot."
+    ],
+    "outcomes": [
+     "The snapshot is accepted and stores 10:00:00 as an offset-naive UTC datetime.",
+     "The snapshot is rejected because only offset-naive source datetimes are accepted."
+    ],
+    "observer": "The producer and a reader of the stored snapshot."
+   },
+   "unit": "A28"
+  },
+  {
+   "subject": "Retention of monotonic readings",
+   "kind": "contradictory storage rule",
+   "text": "The normative elapsed-clock rule says \"a reading is never stored\", while CLK-002 says readings are \"used within one process, never persisted\".",
+   "question": "May the viewer-entry limiter retain monotonic readings in process memory across requests, or is any retention of the float forbidden?",
+   "options": [
+    "Retain readings in process memory but never persist them",
+    "Never retain a reading, even in memory across requests"
+   ],
+   "default_guess": "Allow in-process retention needed by the rate-limit window, while forbidding persistence.",
+   "witness": {
+    "initial": "A viewer-entry attempt occurs when the monotonic clock reads 100.0.",
+    "events": [
+     "The limiter processes the first attempt.",
+     "A second entry attempt arrives at monotonic time 101.0."
+    ],
+    "outcomes": [
+     "The limiter retained 100.0 in memory and can classify the second attempt inside the window.",
+     "The literal no-storage rule prevented retaining 100.0, so the second attempt cannot be classified from the two readings in the same way."
+    ],
+    "observer": "The viewer, through whether the second entry is admitted or rate-limited."
+   },
+   "unit": "A28"
+  },
+  {
+   "subject": "CLK-002 witness binding",
+   "kind": "missing required-test witness",
+   "text": "The Required tests contain a CLK-002 item, but the only witness bindings are \"CLK-001 [witness: verification:service_identity_consumer_uow_client_portal]\" and \"CLK-001 [witness: verification:staff_bootstrap_client_portal]\".",
+   "question": "Which existing witness check is bound to CLK-002 and asserts the monotonic-source, non-persistence, and no-mixing requirements?",
+   "options": [
+    "Bind CLK-002 to a viewer-entry rate-limit verification check",
+    "Add CLK-002 coverage to a named existing check",
+    "Leave CLK-002 without a witness"
+   ],
+   "default_guess": "Bind CLK-002 to a dedicated viewer-entry rate-limit verification check.",
+   "unit": "A28"
+  },
+  {
+   "subject": "Dependency security-review scope",
+   "kind": "stale cross-reference",
+   "text": "A31 lists the dependency category's affected set as \"deploy/requirements.txt (fastapi, pydantic, argon2-cffi, uvicorn pinned)\", while changed A32 makes every distribution installed in the image, including libraries pip resolves transitively, subject to the vulnerability gate.",
+   "question": "Does the security review's dependency category cover all installed distributions or only the four direct pins named in A31?",
+   "options": [
+    "All installed direct and transitive distributions",
+    "Only the four direct pinned requirements"
+   ],
+   "default_guess": "Expand the affected set to every distribution installed in the built image.",
+   "witness": {
+    "initial": "The four direct pins have no listed vulnerability, but one transitively resolved distribution does.",
+    "events": [
+     "The image undergoes the dependency security review and pre-deploy gate."
+    ],
+    "outcomes": [
+     "Reading A31's affected set as exhaustive, the dependency review covers the four pins and passes.",
+     "Applying A32, the transitive distribution is checked and the deploy is blocked."
+    ],
+    "observer": "The release operator and the security-review gate."
+   },
+   "unit": "A31"
+  },
+  {
+   "subject": "OSV and environment age limits",
+   "kind": "undecided refusal threshold",
+   "text": "A32 requires a snapshot \"no older than the deploy route's maximum snapshot age\" and a verdict \"no older than its maximum environment age\", but names both as later \"deployment procedure values\" without giving their values or the events from which their ages are measured.",
+   "question": "What are `max_snapshot_age` and `max_environment_age`, which timestamps start those ages, and at what instant during each service start are they evaluated?",
+   "options": [
+    "Fixed durations and age origins decided in State 2",
+    "Values supplied later by the deploy route",
+    "Configuration values that may differ by environment"
+   ],
+   "default_guess": "Define fixed deploy-route values, measure snapshot age from its verified creation timestamp and environment age from verdict completion, and evaluate both immediately before service start.",
+   "witness": {
+    "initial": "The image has a passing verdict produced 10 minutes ago from an OSV snapshot produced 25 hours ago.",
+    "events": [
+     "The release operator starts the service from that image."
+    ],
+    "outcomes": [
+     "The start is allowed under age limits longer than those ages.",
+     "The start is refused under shorter age limits."
+    ],
+    "observer": "The release operator and service users waiting for startup."
+   },
+   "unit": "A32"
+  },
+  {
+   "subject": "OSV snapshot verdict semantics",
+   "kind": "open delegated decision",
+   "text": "A32 carries \"how the snapshot is obtained and verified\" and \"how a version is matched to an advisory\" to the deploy route and State 8 instead of deciding them.",
+   "question": "What exact snapshot authenticity/completeness evidence and package-name/version/range matching rules produce a passing or blocking verdict?",
+   "options": [
+    "Specify a concrete verified snapshot format and deterministic OSV matching algorithm now",
+    "Let the later deployment implementation choose its snapshot verification and matching behavior"
+   ],
+   "default_guess": "Specify a deterministic OSV snapshot format, verification procedure, normalization rules, and ecosystem version-range evaluation before handoff.",
+   "witness": {
+    "initial": "A built image contains a distribution whose normalized package name and version fall inside an OSV affected range, but its installed metadata uses an alternate name spelling or version normalization.",
+    "events": [
+     "The deploy route checks the image against its OSV snapshot."
+    ],
+    "outcomes": [
+     "The matcher normalizes the metadata, finds the advisory, and blocks startup.",
+     "The matcher performs a different permitted match, finds no listed version, and starts the service."
+    ],
+    "observer": "The release operator and the vulnerability-gate verification check."
+   },
+   "unit": "A32"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"INV-020 snapshot conflict test\",\"kind\":\"contradictory effects\",\"text\":\"The Required test says \\\"a violating input is refused and changes nothing\\\", while the detailed budget-derivation test says a changed re-publication \\\"is recorded only as its import result and audit\\\".\",\"question\":\"When an existing snapshot identity is re-published with different content, does \\\"changes nothing\\\" exclude the required fresh import result and audit record, or must those records still be appended?\",\"options\":[\"Refuse with no writes at all\",\"Leave snapshot and budget state unchanged but append the import result and audit record\"],\"default_guess\":\"Append the import result and audit record while leaving snapshot and budget state unchanged.\",\"witness\":{\"initial\":\"Snapshot S exists for one project, estimate_id and estimate_version.\",\"events\":[\"The producer republishes that identity with a different content fingerprint.\"],\"outcomes\":[\"The request is refused and no record is written.\",\"The snapshot is unchanged, but a fresh integrity-conflict import result and its audit record are appended.\"],\"observer\":\"The producer reading the import result and an auditor inspecting the records.\"},\"unit\":\"A18\"},{\"subject\":\"INV-020 append-only verification\",\"kind\":\"incomplete required test\",\"text\":\"INV-020 requires versions to be \\\"append-only and never overwritten or deleted\\\", but its Required test mentions only a focused test at `import_snapshot`, a refused violating input, and no change.\",\"question\":\"What Required test demonstrates that no operation or store surface can delete an accepted snapshot or an older version?\",\"options\":[\"A repository/surface test proving deletion and replacement are unavailable or refused\",\"Only the conflicting re-import test, which covers overwrite but not deletion\"],\"default_guess\":\"Require an explicit test of all mutation/store surfaces showing accepted snapshots cannot be replaced or deleted.\",\"unit\":\"A18\"},{\"subject\":\"INV-023 activation atomicity\",\"kind\":\"incomplete required test\",\"text\":\"INV-023 requires activation to \\\"atomically deactivate[] the previous active version\\\", but its Required test describes only \\\"a violating input is refused and changes nothing\\\".\",\"question\":\"What test must show the successful atomic transition, including rollback if either the old-version deactivation or new-version activation cannot commit?\",\"options\":[\"Test a successful one-transaction swap and failure rollback\",\"Test only refusal of an already-invalid state\"],\"default_guess\":\"Test the successful swap and a forced commit failure showing neither version changes partially.\",\"unit\":\"A18\"},{\"subject\":\"INV-025 stable linking and rename\",\"kind\":\"incomplete required test\",\"text\":\"INV-025 requires stable identity across versions and renames and linking by `source_key` equality only, but its Required test describes only a violating input being refused.\",\"question\":\"What test shows the permitted positive case: an equal source key with a changed display name reuses the existing PortalSection, while an equal display name with a different source key does not link?\",\"options\":[\"Test both positive source-key reuse and negative display-name matching\",\"Test only refusal of an unspecified violating input\"],\"default_guess\":\"Test both contrasting cases and assert the reused or newly created section identities.\",\"unit\":\"A18\"},{\"subject\":\"INV-027 storage of derived values\",\"kind\":\"contradictory invariant strength\",\"text\":\"The formal invariant says derived totals are \\\"never stored as editable values\\\", while its detailed Required test says \\\"no table stores a value of a derived view\\\".\",\"question\":\"May the portal store a non-editable derived cache, or is every stored derived-view value forbidden?\",\"options\":[\"Allow a non-editable cache if it is recomputable\",\"Forbid storing derived-view values in any table\"],\"default_guess\":\"Forbid storing derived-view values in any table.\",\"witness\":{\"initial\":\"A project has plans and allocations from which a material total can be computed.\",\"events\":[\"A write changes an allocation.\",\"The implementation prepares the next budget read.\"],\"outcomes\":[\"It updates a non-editable cached total and later returns it.\",\"It stores no total and recomputes the total from owning rows on every read.\"],\"observer\":\"A persistence inspection or the INV-027 verification check.\"},\"unit\":\"A18\"},{\"subject\":\"Meaning of one clock operation\",\"kind\":\"undefined operation boundary\",\"text\":\"A28 requires \\\"one reading per operation\\\" and reuse for every comparison and timestamp, but it does not define whether request authorization, the use case, transaction work, and response construction are one operation or separate operations.\",\"question\":\"Which exact boundary shares one wall-clock reading, especially when a request first validates session expiry and then performs a timestamped mutation?\",\"options\":[\"The whole portal request, including authorization and mutation, is one operation\",\"Each invoked authorization/use-case operation takes its own reading\",\"Only the mutating transaction is the operation; authorization has another reading\"],\"default_guess\":\"Treat the complete application use case, including its authorization checks, as one operation with one shared reading.\",\"witness\":{\"initial\":\"A staff session expires at 12:00:00; the host clock reads 11:59:59.999 during authorization and 12:00:00.001 when mutation work begins.\",\"events\":[\"The staff member submits a timestamped project mutation.\"],\"outcomes\":[\"One request-wide reading is reused, so authorization succeeds and the written timestamp is 11:59:59.999.\",\"Authorization and mutation take separate readings, so the mutation either writes 12:00:00.001 after the session expiry or is refused by a repeated expiry check.\"],\"observer\":\"The caller and an auditor reading the mutation timestamp.\"},\"unit\":\"A28\"},{\"subject\":\"Accepted forms of source-supplied instants\",\"kind\":\"deferred representation choice\",\"text\":\"Source times are kept as \\\"the same instant, stored offset-naive UTC\\\", but \\\"their accepted forms and checks\\\" are merely carried to States 6–7 as \\\"the accepted spec's\\\" without stating those forms here.\",\"question\":\"Are offset-aware inputs accepted and normalized, are offset-naive inputs assumed to be UTC or rejected, and which malformed or non-UTC forms are refused?\",\"options\":[\"Accept aware datetimes, convert to UTC, and strip the offset; reject naive inputs\",\"Accept naive inputs as already UTC and normalize aware inputs\",\"Accept only offset-naive UTC inputs\"],\"default_guess\":\"Accept offset-aware values by converting to UTC and stripping the offset, and accept naive values only under an explicit UTC contract.\",\"witness\":{\"initial\":\"A producer supplies `published_at` as 2026-11-08 12:00:00+02:00, representing 10:00:00 UTC.\",\"events\":[\"The producer submits an otherwise valid snapshot.\"],\"outcomes\":[\"The snapshot is accepted and stores 10:00:00 as an offset-naive UTC datetime.\",\"The snapshot is rejected because only offset-naive source datetimes are accepted.\"],\"observer\":\"The producer and a reader of the stored snapshot.\"},\"unit\":\"A28\"},{\"subject\":\"Retention of monotonic readings\",\"kind\":\"contradictory storage rule\",\"text\":\"The normative elapsed-clock rule says \\\"a reading is never stored\\\", while CLK-002 says readings are \\\"used within one process, never persisted\\\".\",\"question\":\"May the viewer-entry limiter retain monotonic readings in process memory across requests, or is any retention of the float forbidden?\",\"options\":[\"Retain readings in process memory but never persist them\",\"Never retain a reading, even in memory across requests\"],\"default_guess\":\"Allow in-process retention needed by the rate-limit window, while forbidding persistence.\",\"witness\":{\"initial\":\"A viewer-entry attempt occurs when the monotonic clock reads 100.0.\",\"events\":[\"The limiter processes the first attempt.\",\"A second entry attempt arrives at monotonic time 101.0.\"],\"outcomes\":[\"The limiter retained 100.0 in memory and can classify the second attempt inside the window.\",\"The literal no-storage rule prevented retaining 100.0, so the second attempt cannot be classified from the two readings in the same way.\"],\"observer\":\"The viewer, through whether the second entry is admitted or rate-limited.\"},\"unit\":\"A28\"},{\"subject\":\"CLK-002 witness binding\",\"kind\":\"missing required-test witness\",\"text\":\"The Required tests contain a CLK-002 item, but the only witness bindings are \\\"CLK-001 [witness: verification:service_identity_consumer_uow_client_portal]\\\" and \\\"CLK-001 [witness: verification:staff_bootstrap_client_portal]\\\".\",\"question\":\"Which existing witness check is bound to CLK-002 and asserts the monotonic-source, non-persistence, and no-mixing requirements?\",\"options\":[\"Bind CLK-002 to a viewer-entry rate-limit verification check\",\"Add CLK-002 coverage to a named existing check\",\"Leave CLK-002 without a witness\"],\"default_guess\":\"Bind CLK-002 to a dedicated viewer-entry rate-limit verification check.\",\"unit\":\"A28\"},{\"subject\":\"Dependency security-review scope\",\"kind\":\"stale cross-reference\",\"text\":\"A31 lists the dependency category's affected set as \\\"deploy/requirements.txt (fastapi, pydantic, argon2-cffi, uvicorn pinned)\\\", while changed A32 makes every distribution installed in the image, including libraries pip resolves transitively, subject to the vulnerability gate.\",\"question\":\"Does the security review's dependency category cover all installed distributions or only the four direct pins named in A31?\",\"options\":[\"All installed direct and transitive distributions\",\"Only the four direct pinned requirements\"],\"default_guess\":\"Expand the affected set to every distribution installed in the built image.\",\"witness\":{\"initial\":\"The four direct pins have no listed vulnerability, but one transitively resolved distribution does.\",\"events\":[\"The image undergoes the dependency security review and pre-deploy gate.\"],\"outcomes\":[\"Reading A31's affected set as exhaustive, the dependency review covers the four pins and passes.\",\"Applying A32, the transitive distribution is checked and the deploy is blocked.\"],\"observer\":\"The release operator and the security-review gate.\"},\"unit\":\"A31\"},{\"subject\":\"OSV and environment age limits\",\"kind\":\"undecided refusal threshold\",\"text\":\"A32 requires a snapshot \\\"no older than the deploy route's maximum snapshot age\\\" and a verdict \\\"no older than its maximum environment age\\\", but names both as later \\\"deployment procedure values\\\" without giving their values or the events from which their ages are measured.\",\"question\":\"What are `max_snapshot_age` and `max_environment_age`, which timestamps start those ages, and at what instant during each service start are they evaluated?\",\"options\":[\"Fixed durations and age origins decided in State 2\",\"Values supplied later by the deploy route\",\"Configuration values that may differ by environment\"],\"default_guess\":\"Define fixed deploy-route values, measure snapshot age from its verified creation timestamp and environment age from verdict completion, and evaluate both immediately before service start.\",\"witness\":{\"initial\":\"The image has a passing verdict produced 10 minutes ago from an OSV snapshot produced 25 hours ago.\",\"events\":[\"The release operator starts the service from that image.\"],\"outcomes\":[\"The start is allowed under age limits longer than those ages.\",\"The start is refused under shorter age limits.\"],\"observer\":\"The release operator and service users waiting for startup.\"},\"unit\":\"A32\"},{\"subject\":\"OSV snapshot verdict semantics\",\"kind\":\"open delegated decision\",\"text\":\"A32 carries \\\"how the snapshot is obtained and verified\\\" and \\\"how a version is matched to an advisory\\\" to the deploy route and State 8 instead of deciding them.\",\"question\":\"What exact snapshot authenticity/completeness evidence and package-name/version/range matching rules produce a passing or blocking verdict?\",\"options\":[\"Specify a concrete verified snapshot format and deterministic OSV matching algorithm now\",\"Let the later deployment implementation choose its snapshot verification and matching behavior\"],\"default_guess\":\"Specify a deterministic OSV snapshot format, verification procedure, normalization rules, and ecosystem version-range evaluation before handoff.\",\"witness\":{\"initial\":\"A built image contains a distribution whose normalized package name and version fall inside an OSV affected range, but its installed metadata uses an alternate name spelling or version normalization.\",\"events\":[\"The deploy route checks the image against its OSV snapshot.\"],\"outcomes\":[\"The matcher normalizes the metadata, finds the advisory, and blocks startup.\",\"The matcher performs a different permitted match, finds no listed version, and starts the service.\"],\"observer\":\"The release operator and the vulnerability-gate verification check.\"},\"unit\":\"A32\"}]}",
+ "set_aside": []
+}
