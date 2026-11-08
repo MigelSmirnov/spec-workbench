@@ -125,6 +125,19 @@ Only `READY_TO_EXPORT` authorizes export. A successful export writes
 manifest name represents accepted deterministic spec lineage; its producer and
 route identify the external Stage 9 handoff rather than `spec_ops`.
 
+For an existing target, export derives removed modules from the previous
+canonical spec's `module_functions` and the new source. It calls the target
+Factory's `spec_ops_apply.remove_module_artifacts` for those modules, preserving
+that owner's artifact paths and file hashes in `change_summary.artifact_cleanup`
+beside `change_summary.removed_modules`. A missing helper, malformed receipt or
+incomplete cleanup blocks accepted lineage. Only generated/spec-derived
+artifacts covered by the Factory helper are removed; deployed product files
+remain the responsibility of the Factory deploy route.
+
+`--check` previews the same cleanup with `apply=False` and does not delete files.
+Uncarried removals remain owed across exports; a reintroduced module is excluded
+from cleanup. Both working and tracked acceptance receipts carry the result.
+
 ## Completion
 
 Stage 9 is complete when the Factory canonical JSON is semantically identical
