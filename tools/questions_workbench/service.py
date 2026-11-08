@@ -667,7 +667,7 @@ def ask_round(case: Path, state: int, provider: Provider, runs: int = DEFAULT_RU
     judge_checks(case, state, provider)  # each bound check judged once, kept by digest
     layer = layer_context(case, state)
     layer["evidence_reopened"] = evidence_reopened
-    layer["unit_evidence"] = evidence
+    layer["unit_evidence"] = evidence or {}
     reviews, topics, repeated, judged = asked(provider, state, runs, read, scope, changed, old, case, referencing,
                                               layer)
     for topic in topics:
@@ -710,7 +710,7 @@ def ask_round(case: Path, state: int, provider: Provider, runs: int = DEFAULT_RU
         "set_aside": [len(r["set_aside"]) for r in reviews],
         "topics": topics,
         "layer": layer_record(layer),
-        "unit_evidence": {key: evidence[key] for key in scope if key in evidence},
+        "unit_evidence": {key: evidence[key] for key in scope if key in (evidence or {})},
         "evidence_reopened": evidence_reopened,
         "transition_ready": layer["ready"],
     }
@@ -726,28 +726,29 @@ def ask_round(case: Path, state: int, provider: Provider, runs: int = DEFAULT_RU
 
 def judge_checks(case: Path, state: int, provider: Provider) -> list[dict[str, Any]]:
     """Judge the bound checks that have no judgement on their current files and
-    items, for the states that judge bindings (witness_judgement)."""
+    items, at a state where witness_material closes (transition.judges_witnesses;
+    State 2 only carries it). The judgement itself does not depend on the
+    state: `design_questions.py judge-checks` makes it for any case."""
     import design_decision_witness
     import transition
     import witness_judgement
 
-    sequence = transition.load_sequence()
-    if not any("witness_material" in transition.own_checks(sequence, phase)
-               for phase in transition.state_phases(sequence, state)):
+    if not transition.judges_witnesses(transition.load_sequence(), state):
         return []
     return witness_judgement.judge(case, provider, design_decision_witness.binding_material(case))
 
 
-def unit_evidence(case: Path, state: int) -> dict[str, str]:
+def unit_evidence(case: Path, state: int) -> dict[str, str] | None:
     """unit -> the digest of the evidence its decision's bindings rest on
-    (design_decision_witness.evidence_basis), for the states that judge bindings."""
+    (design_decision_witness.evidence_basis), at a state where witness_material
+    closes. Elsewhere None: units close on their text alone, so a changed check
+    reopens none of them, and neither does an evidence digest a round recorded
+    before the owner decision of 2026-11-08 (State 2 only describes the test)."""
     import design_decision_witness
     import transition
 
-    sequence = transition.load_sequence()
-    if not any("witness_material" in transition.own_checks(sequence, phase)
-               for phase in transition.state_phases(sequence, state)):
-        return {}
+    if not transition.judges_witnesses(transition.load_sequence(), state):
+        return None
     try:
         return design_decision_witness.evidence_basis(design_decision_witness.binding_material(case))
     except Exception:  # unreadable evidence is reported by witness_material; it closes nothing new

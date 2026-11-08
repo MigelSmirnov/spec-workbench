@@ -18,6 +18,7 @@ import design_decision_witness
 import design_questions
 import flow_closure
 import transition
+import witness_judgement
 from questions_workbench import service
 
 
@@ -671,6 +672,7 @@ class LayerProvider:
     def __init__(self, reviews):
         self.reviews = list(reviews)
         self.instructions: list[str] = []
+        self.inputs: list[str] = []
         self.judged: list[str] = []
         self.checks: list[str] = []
 
@@ -687,6 +689,7 @@ class LayerProvider:
             keys = [line.split(": ", 1)[0] for line in text.splitlines()]
             return json.dumps({"groups": [{"topic": "one", "members": keys}]}), {}
         self.instructions.append(instruction)
+        self.inputs.append(text)
         return json.dumps({"open_points": self.reviews.pop(0)}), {}
 
 
@@ -751,28 +754,110 @@ class SufficiencyProvider(LayerProvider):
         return super().complete(instruction, text)
 
 
-def test_a_check_is_judged_once_and_the_round_gets_its_verdict_not_its_code(tmp_path, monkeypatch):
-    # owner review of #156: one judgement per check, kept by digest; the round reads the verdict
-    _clean_gate(monkeypatch)
+def _judge_checks(case: Path, outcome: str = "asserts") -> LayerProvider:
+    """`design_questions.py judge-checks`: each bound check judged once, kept by digest."""
+    provider = LayerProvider([])
+    provider.check_outcome = outcome
+    witness_judgement.judge(case, provider, design_decision_witness.binding_material(case))
+    return provider
+
+
+def _verdicts(case: Path) -> list[dict]:
+    return witness_judgement.verdicts(case, design_decision_witness.binding_material(case))
+
+
+def _witness_owned_at_state2(monkeypatch) -> None:
+    """Put witness_material back at State 2's own handoff, for these tests only.
+
+    The judgement at the start of a round, the verdicts a round reads and the
+    evidence a unit rests on follow the layer where witness_material runs
+    (transition.judges_witnesses). Since the owner decision of 2026-11-08 no
+    layer with question rounds runs it: State 2 carries it to State 8. These
+    tests keep that machinery proven at a layer that asks rounds.
+    """
+    import copy
+
+    sequence = copy.deepcopy(transition.load_sequence())
+    for phase in sequence["phases"]:
+        block = phase.get("layer") or {}
+        if phase["id"] == "state2_rules_decisions":
+            block["checks"] = [*block.get("checks", []), "witness_material"]
+        block["carries"] = [c for c in block.get("carries") or [] if c.get("check") != "witness_material"]
+    monkeypatch.setattr(transition, "load_sequence", lambda path=transition.SEQUENCE_FILE: sequence)
+
+
+def test_state2_only_describes_the_test_and_carries_the_assertion_to_state8():
+    # owner decision 2026-11-08 (#147, comment 6719629995)
+    sequence = transition.load_sequence()
+    assert transition.own_checks(sequence, "state2_rules_decisions") == ["invariant_tests"]
+    carried = {c["id"]: c for c in transition.layer(sequence, "state2_rules_decisions")["carries"]}
+    assert carried["witness_assertion"]["to"] == "state8_assembly"
+    assert carried["witness_assertion"]["check"] == "witness_material"
+    assert transition.closing_checks(sequence, "state8_assembly") == ["witness_material"]
+    assert [s for s in range(8) if transition.judges_witnesses(sequence, s)] == []
+
+
+def test_a_check_is_judged_once_and_state8_reads_its_verdict(tmp_path, monkeypatch):
+    # owner review of #156: one judgement per check, kept by digest
     case = _case(tmp_path, SufficiencyProvider.ITEM)
     factory = _factory_with_check(tmp_path, case)
     monkeypatch.setenv("SPEC_WORKBENCH_FACTORY_ROOT", str(factory))
     result = transition.run_check(case, "witness_material")
     assert result["outcome"] == "not_checked"                           # not judged yet: never a pass
     assert "no judgement of this check" in result["findings"][0]["message"]
+    provider = _judge_checks(case, "partial")
+    assert len(provider.checks) == 1 and "INV-001 only: nothing here lowers a count" in provider.checks[0]
+    assert "invariant: INV-002: a count never decreases" in provider.checks[0]   # as stated
+    assert _verdicts(case)[0]["outcome"] == "partial"
+    result = transition.run_check(case, "witness_material")
+    assert result["outcome"] == "open" and result["findings"][0]["code"] == "witness_does_not_assert"
+    assert _judge_checks(case, "partial").checks == []                 # kept by digest: not judged again
+
+
+def test_state2_is_ready_with_partial_verdicts_present(tmp_path, monkeypatch):
+    case = _case(tmp_path, SufficiencyProvider.ITEM)
+    monkeypatch.setenv("SPEC_WORKBENCH_FACTORY_ROOT", str(_factory_with_check(tmp_path, case)))
+    _judge_checks(case, "partial")
+    assert _verdicts(case)[0]["outcome"] == "partial"
+    report = transition.run_phase(case, "state2_rules_decisions")
+    assert report["ready"] is True and report["findings"] == []
+    assert [r["check"] for r in report["results"]] == ["invariant_tests"]
+
+
+@pytest.mark.parametrize("outcome", ["partial", "does_not"])
+def test_state8_blocks_on_a_check_that_does_not_fully_assert(tmp_path, monkeypatch, outcome):
+    case = _case(tmp_path, SufficiencyProvider.ITEM)
+    monkeypatch.setenv("SPEC_WORKBENCH_FACTORY_ROOT", str(_factory_with_check(tmp_path, case)))
+    _judge_checks(case, outcome)
+    report = transition.run_phase(case, "state8_assembly")
+    assert report["ready"] is False
+    assert [(r["id"], r["from"], r["outcome"]) for r in report["results"]] == [
+        ("witness_assertion", "state2_rules_decisions", "open")]
+    assert [f["code"] for f in report["findings"]] == ["witness_does_not_assert"]
+    asserting = _case(tmp_path / "asserting", SufficiencyProvider.ITEM)
+    monkeypatch.setenv("SPEC_WORKBENCH_FACTORY_ROOT", str(_factory_with_check(tmp_path / "asserting", asserting)))
+    _judge_checks(asserting, "asserts")
+    assert transition.run_phase(asserting, "state8_assembly")["ready"] is True
+
+
+def test_the_state2_round_input_holds_no_verdict_and_no_check_text(tmp_path, monkeypatch):
+    _clean_gate(monkeypatch)
+    case = _case(tmp_path, SufficiencyProvider.ITEM)
+    monkeypatch.setenv("SPEC_WORKBENCH_FACTORY_ROOT", str(_factory_with_check(tmp_path, case)))
+    _judge_checks(case, "partial")                                      # a verdict exists
     provider = LayerProvider([[], [], [], [], [], []])
     provider.check_outcome = "partial"
     summary = service.ask_round(case, 2, provider)
-    assert len(provider.checks) == 1 and "INV-001 only: nothing here lowers a count" in provider.checks[0]
-    assert "invariant: INV-002: a count never decreases" in provider.checks[0]   # as stated
-    asked = provider.instructions[0]
-    assert "INV-001 only: nothing here lowers a count" not in asked             # no check code in the round
-    assert "A01 binds INV-001, INV-002 to verification:counts_once (check " in asked and "PARTIAL" in asked
-    assert summary["layer"]["verdicts"][0]["outcome"] == "partial"
-    result = transition.run_check(case, "witness_material")
-    assert result["outcome"] == "open" and result["findings"][0]["code"] == "witness_does_not_assert"
-    service.ask_round(case, 2, provider)
-    assert len(provider.checks) == 1                                    # kept by digest: not judged again
+    assert provider.checks == []                                       # the round judges no check
+    shown = "\n".join(provider.instructions + provider.inputs + provider.judged)
+    assert "INV-001 only: nothing here lowers a count" not in shown    # no check code
+    assert "def test_counted_once" not in shown
+    assert "binds INV-001, INV-002 to verification:counts_once" not in shown   # no verdict
+    assert "PARTIAL" not in shown and "Verdicts on the bindings" not in shown
+    assert "-> state8_assembly (confirmed by witness_material)" in provider.instructions[0]   # carried
+    assert summary["layer"]["verdicts"] == [] and summary["unit_evidence"] == {}
+    assert "witness_material" not in [r["check"] for r in summary["layer"]["results"]]
+    assert summary["transition_ready"] is True
 
 
 def test_a_binding_whose_check_cannot_be_read_is_not_judged_sufficient(tmp_path, monkeypatch):
@@ -784,8 +869,11 @@ def test_a_binding_whose_check_cannot_be_read_is_not_judged_sufficient(tmp_path,
     assert result["outcome"] == "not_checked" and transition.blocking(result)
     assert [f["code"] for f in result["findings"]] == ["witness_material_not_checked"]
     summary, provider = _ask(case)
-    assert "NOT CHECKED:" in provider.instructions[0]
-    assert summary["transition_ready"] is False
+    assert "NOT CHECKED:" not in provider.instructions[0]               # not State 2's question
+    assert summary["transition_ready"] is True
+    report = transition.run_phase(case, "state8_assembly")                # it stops where it is received
+    assert report["ready"] is False
+    assert [f["code"] for f in report["findings"]] == ["witness_material_not_checked"]
 
 
 # ------------------------------- 4. a closed round hides no blocking result
@@ -947,7 +1035,7 @@ def test_a_changed_run_command_judges_the_check_again(tmp_path, monkeypatch):
     case = _case(tmp_path, SufficiencyProvider.ITEM)
     factory = _factory_with_check(tmp_path, case)
     monkeypatch.setenv("SPEC_WORKBENCH_FACTORY_ROOT", str(factory))
-    summary, provider = _ask(case)
+    provider = _judge_checks(case)
     assert len(provider.checks) == 1 and '"effective_cwd": "."' in provider.checks[0]
     assert transition.run_check(case, "witness_material")["outcome"] == "closed"
     config = factory / "verification" / "configs" / "Demo.yaml"
@@ -955,7 +1043,7 @@ def test_a_changed_run_command_judges_the_check_again(tmp_path, monkeypatch):
     data["checks"]["commands"][0]["command"] += ["-k", "subset"]
     _write(config, yaml.safe_dump(data))
     assert transition.run_check(case, "witness_material")["outcome"] == "not_checked"   # old judgement not current
-    summary, provider = _ask(case)
+    provider = _judge_checks(case)
     assert len(provider.checks) == 1 and '"subset"' in provider.checks[0]
 
 
@@ -963,11 +1051,10 @@ def test_a_workbench_binding_is_judged_on_the_gate_implementation(tmp_path, monk
     # review r4501770397: the gate's name was given, not what it checks
     _clean_gate(monkeypatch)
     case = _case(tmp_path, "- INV-001, INV-002: refused. [witness: workbench:flows]")
-    summary, provider = _ask(case)
+    provider = _judge_checks(case)
     assert "def coverage(project: Path, *, reachability: bool = True)" in provider.checks[0]   # flow_closure's code
-    assert "A01 binds INV-001, INV-002 to workbench:flows (check " in provider.instructions[0]
-    assert "def coverage(" not in provider.instructions[0]
-    assert summary["layer"]["verdicts"][0]["outcome"] == "asserts"
+    assert _verdicts(case)[0]["outcome"] == "asserts"
+    assert transition.run_check(case, "witness_material")["outcome"] == "closed"
 
 
 def test_a_facade_check_resolves_to_the_implementation_it_delegates_to():
@@ -983,9 +1070,43 @@ def test_an_unknown_workbench_gate_is_not_checked(tmp_path):
     assert result["outcome"] == "not_checked"
 
 
+def test_a_changed_check_reopens_no_state2_unit(tmp_path, monkeypatch):
+    # owner decision 2026-11-08: State 2 describes the test; the check is judged at State 8
+    _clean_gate(monkeypatch)
+    case = _case(tmp_path, SufficiencyProvider.ITEM)
+    factory = _factory_with_check(tmp_path, case)
+    monkeypatch.setenv("SPEC_WORKBENCH_FACTORY_ROOT", str(factory))
+    _judge_checks(case)
+    _ask(case)
+    _ask(case)
+    assert service.status(case, 2, with_transition=True)["ready"] is True
+    assert transition.run_phase(case, "state8_assembly")["ready"] is True
+    _write(factory / "verification" / "counts_once_check.py", CHECK_SCRIPT.replace("assert ", "# was: assert "))
+    result = service.status(case, 2, with_transition=True)
+    assert result["open_units"] == [] and result["evidence_changed"] == []
+    assert result["closed"] is True and result["ready"] is True
+    assert transition.run_phase(case, "state8_assembly")["ready"] is False   # reopened where it is received
+    provider = _judge_checks(case)
+    assert len(provider.checks) == 1 and "# was: assert" in provider.checks[0]
+
+
+def test_evidence_a_state2_round_recorded_before_the_decision_reopens_nothing(tmp_path, monkeypatch):
+    # client-portal: its State 2 rounds of #158 recorded unit_evidence; with the
+    # judgement moved to State 8 that record is no basis of a State 2 unit
+    original = transition.load_sequence
+    case, factory = _closed_a01(tmp_path, monkeypatch)
+    assert service._summaries(case, 2)[-1]["unit_evidence"]                  # recorded at State 2
+    monkeypatch.setattr(transition, "load_sequence", original)
+    _write(factory / "verification" / "counts_once_check.py", CHECK_SCRIPT.replace("assert ", "# was: assert "))
+    result = service.status(case, 2)
+    assert result["closed"] is True and result["open_units"] == [] and result["evidence_changed"] == []
+
+
 def test_a_changed_check_reopens_only_the_decision_bound_to_it(tmp_path, monkeypatch):
     # review r4501770401: A01 closed on a test of INV-001; the external test
-    # loses its assertion, the design text does not change
+    # loses its assertion, the design text does not change. Proven at a layer
+    # that runs witness_material and asks rounds.
+    _witness_owned_at_state2(monkeypatch)
     _clean_gate(monkeypatch)
     case = _case(tmp_path, SufficiencyProvider.ITEM)
     factory = _factory_with_check(tmp_path, case)
@@ -1079,12 +1200,12 @@ def test_a_check_shared_by_bindings_is_judged_once_for_all_of_them(tmp_path, mon
         tmp_path, "- INV-001: refused. [witness: verification:counts_once]",
         "- INV-003: kept. [witness: verification:counts_once]", {"counts_once": IMPORTING_CHECK})
     monkeypatch.setenv("SPEC_WORKBENCH_FACTORY_ROOT", str(factory))
-    summary, provider = _ask(case)
+    provider = _judge_checks(case)
     assert len(provider.checks) == 1
     judged = provider.checks[0]
     assert "I1: A01 binds INV-001" in judged and "I2: A03 binds INV-003" in judged
     assert "the assertion lives here" in judged and "class Store" not in judged   # its import, not the product
-    assert [v["outcome"] for v in summary["layer"]["verdicts"]] == ["asserts", "asserts"]
+    assert [v["outcome"] for v in _verdicts(case)] == ["asserts", "asserts"]
 
 
 class PrecedentProvider:
@@ -1124,6 +1245,7 @@ class PrecedentProvider:
 def test_a_judgement_on_old_evidence_is_no_precedent_after_the_check_changes(tmp_path, monkeypatch):
     # review r4501801651: the binding was judged sufficient, the test then lost
     # its assertion; the old "answered" must not close A01 again as judged_before
+    _witness_owned_at_state2(monkeypatch)
     _clean_gate(monkeypatch)
     case = _case(tmp_path, SufficiencyProvider.ITEM)
     factory = _factory_with_check(tmp_path, case)
@@ -1166,6 +1288,7 @@ def _git_commit(case: Path) -> None:
 
 
 def _closed_a01(tmp_path: Path, monkeypatch) -> tuple[Path, Path]:
+    _witness_owned_at_state2(monkeypatch)   # the round machinery at a layer that judges checks
     _clean_gate(monkeypatch)
     case = _case(tmp_path, SufficiencyProvider.ITEM)
     factory = _factory_with_check(tmp_path, case)
