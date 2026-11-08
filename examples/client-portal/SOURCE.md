@@ -711,11 +711,15 @@ table of exceptions. Every value is carried unchanged: placement changes form,
 not behaviour. Values generated code reads are constants of the new
 deterministic module `data_provider` (`70_data_provider_closure.json`,
 SPEC_STANDARD 6.10 version 2); their row models and four new enumerations are
-in `60_model_closure_values.json` and State 1. The State 8 projector does not
-place a module without State 6 contracts, nor remove a `rules` namespace the
-data closure dropped; `experiments/client-portal/frame_data_provider.py` does
-those two things (as the cabinet-kernel skeleton did, `f924c17f`) — a tool gap,
-reported, not patched.
+in `60_model_closure_values.json` and State 1. Since Workbench #167 the State 8
+projector places the data-provider module and removes each `rules` namespace
+the data closure retires: `60_data_closure.json` `retired` names
+`rules.capability_catalog`, `rules.principal_capability_sets`,
+`rules.registry_failure_translation` and
+`rules.supported_external_contract_versions` with the reasons below (D07, D09,
+D16), and the case script `experiments/client-portal/frame_data_provider.py`
+that did those two things is retired (2026-11-08, migration onto the new
+tools); the projection reproduces `global_spec.json` unchanged.
 
 | group | home |
 |---|---|
