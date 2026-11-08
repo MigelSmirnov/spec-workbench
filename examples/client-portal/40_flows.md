@@ -666,7 +666,8 @@ through `module:portal_store`'s section repository (Factory code
    `capability:expense_intake.decode_recognition_publication`, which refuses
    a malformed payload or a `contract_version` outside
    `SUPPORTED_OCR_CONTRACT_VERSIONS` with `ExpenseValidationError` before
-   anything else runs (A7; owner 2026-11-08, Q09). The route's own request
+   the payload reaches `create_expense_from_recognition`; decoding reads and
+   writes nothing (A7; owner 2026-11-08, Q09). The route's own request
    decoding keeps its model check; the consumer below checks the version
    again.
 2. `capability:expense_intake.create_expense_from_recognition` accepts only a

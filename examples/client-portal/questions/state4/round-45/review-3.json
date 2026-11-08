@@ -1,0 +1,123 @@
+{
+ "open_points": [
+  {
+   "subject": "40_flows.md:`flow:expense_intake_and_management`",
+   "kind": "order contradiction",
+   "text": "The route authorizes with `capability:authorization_guard.authorize_staff_project_mutation`. A recognition payload that arrives undecoded from the OCR service is decoded at expense_intake's public boundary, `capability:expense_intake.decode_recognition_publication`, which refuses a malformed payload or a `contract_version` outside `SUPPORTED_OCR_CONTRACT_VERSIONS` with `ExpenseValidationError` before anything else runs",
+   "question": "Does recognition decoding run before the project authorization guard, or does the guard run first?",
+   "options": [
+    "Decode first, so malformed or unsupported input returns 422 before authentication or authorization",
+    "Authorize first, so a guard failure wins and decoding runs only after authorization succeeds"
+   ],
+   "default_guess": "Run request decoding first, because `before anything else runs` is the stronger explicit ordering statement.",
+   "witness": {
+    "initial": "A request has a malformed recognition payload and an invalid or unauthorized staff session.",
+    "events": [
+     "The caller submits the request through the expense-creation route.",
+     "The transport guard admits the request.",
+     "The route either invokes recognition decoding or project authorization first."
+    ],
+    "outcomes": [
+     "Decoding first returns 422 without an authorization or Registry check.",
+     "Authorization first returns the applicable 401, 403, 404, 409 or 502 and never reaches recognition decoding."
+    ],
+    "observer": "The HTTP caller, and possibly the Registry through whether it receives a validation call."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "40_flows.md:`flow:expense_intake_and_management`",
+   "kind": "caller ambiguity",
+   "text": "A recognition payload that arrives undecoded from the OCR service is decoded at expense_intake's public boundary, `capability:expense_intake.decode_recognition_publication` / The route's own request decoding keeps its model check; the consumer below checks the version again.",
+   "question": "Who calls `decode_recognition_publication`, and what exact value does it receive after the route's own model decoding?",
+   "options": [
+    "The API route retains the recognition payload as untrusted JSON and calls the decoder before calling `create_expense_from_recognition`",
+    "The route model-decodes the recognition publication and `create_expense_from_recognition` calls the decoder again",
+    "An OCR-side adapter calls the decoder before the authenticated staff request reaches the route"
+   ],
+   "default_guess": "Have the API route call the decoder on a raw nested recognition payload, while treating the authenticated staff member—not the OCR service—as the caller.",
+   "witness": {
+    "initial": "An authenticated staff member has an OCR-produced JSON payload and an allocation request.",
+    "events": [
+     "The staff member submits the expense request.",
+     "The route performs its own request-model check.",
+     "The recognition publication must be turned into `ConfirmedRecognitionPublication`."
+    ],
+    "outcomes": [
+     "The route passes raw JSON to `decode_recognition_publication` and then passes its result to the consumer.",
+     "The route has already constructed the publication model, leaving the public decoder redundant or requiring a different caller."
+    ],
+    "observer": "The State 6 signature author and the State 7 route author."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "missing capability",
+   "text": "every record a model-written module built from its inputs is built by an emitted builder of `record_builders` / `decode_recognition_publication` turns an untrusted payload into a `ConfirmedRecognitionPublication` / A model-written module whose `Knows` omits `record_builders` builds no record of the rule.",
+   "question": "How does `expense_intake.decode_recognition_publication` construct `ConfirmedRecognitionPublication` when `record_builders` offers no builder for that model and the decoder is not listed among the construction exceptions?",
+   "options": [
+    "Add an emitted `build_confirmed_recognition_publication` capability",
+    "Explicitly exempt public wire decoders such as this one from the builder rule",
+    "Make the decoder return a non-model intermediate value and let an existing builder construct the publication"
+   ],
+   "default_guess": "Add `build_confirmed_recognition_publication` to `record_builders` and use it from `expense_intake`.",
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "missing dependency",
+   "text": "the credential entropy have the same value in every environment and change only by a decision about the product, so by SPEC_STANDARD 15.2 (check 4 before 3) they are data-provider constants that generated code imports (`CREDENTIAL_SECRET_BYTES`) / `credential_security` / ### Knows / `models`.",
+   "question": "How does `credential_security.issue_verification_secret` obtain `CREDENTIAL_SECRET_BYTES` when its exact `Knows` list does not permit importing `data_provider`?",
+   "options": [
+    "Add `data_provider` to `credential_security`'s `Knows` list and import the constant",
+    "Pass the entropy count into every call from identity modules",
+    "Move the entropy value into the credential-security backend IR instead of the data provider"
+   ],
+   "default_guess": "Add `data_provider` to `credential_security`'s `Knows` list and import `CREDENTIAL_SECRET_BYTES`.",
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "missing constant",
+   "text": "the active-project list is read from the Registry path `projects/active` — the data-provider constants `REGISTRY_PROJECTS_PATH` and `REGISTRY_ACTIVE_SEGMENT` joined / Candidate public capabilities / `REGISTRY_PROJECTS_PATH` / `REGISTRY_CONTEXT_SEGMENT` / `REGISTRY_VALIDATE_SEGMENT`",
+   "question": "Where is `REGISTRY_ACTIVE_SEGMENT` defined and exported so `registry_gateway` can construct the required active-project path?",
+   "options": [
+    "Add `REGISTRY_ACTIVE_SEGMENT` to `data_provider`",
+    "Make `REGISTRY_PROJECTS_PATH` contain the complete `projects/active` path and remove the stated join",
+    "Keep `active` as gateway behavior rather than data and amend the constant-placement text"
+   ],
+   "default_guess": "Add `REGISTRY_ACTIVE_SEGMENT` to `data_provider` with value `active`.",
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "configuration contradiction",
+   "text": "a deployment cannot change them, a release does. Since 2026-11-08 they are data-provider constants / The existence of every timeout, TTL, rate limit and bound is invariant; its value is configuration.",
+   "question": "Are the Registry timeout, session lifetimes and credential entropy fixed release constants, or runtime configuration values that a deployment may change?",
+   "options": [
+    "They are fixed data-provider constants changed only by a release",
+    "They are runtime configuration values with the listed defaults",
+    "Only some are release constants; enumerate which values remain deployment configuration"
+   ],
+   "default_guess": "Treat the Registry timeout, session lifetimes and credential entropy as fixed data-provider constants; retain only the Registry URL and binary read limit as environment configuration.",
+   "witness": {
+    "initial": "Two deployments run the same release, and one deployment supplies a staff-session TTL different from 12 hours.",
+    "events": [
+     "Both services start.",
+     "A staff member logs in at the same instant on each deployment.",
+     "Each service computes the session expiry."
+    ],
+    "outcomes": [
+     "The fixed-constant reading gives both sessions a 12-hour expiry and ignores or rejects the override.",
+     "The configuration reading gives the overridden deployment a different expiry."
+    ],
+    "observer": "The staff member and deployment operator."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"40_flows.md:`flow:expense_intake_and_management`\",\"kind\":\"order contradiction\",\"text\":\"The route authorizes with `capability:authorization_guard.authorize_staff_project_mutation`. A recognition payload that arrives undecoded from the OCR service is decoded at expense_intake's public boundary, `capability:expense_intake.decode_recognition_publication`, which refuses a malformed payload or a `contract_version` outside `SUPPORTED_OCR_CONTRACT_VERSIONS` with `ExpenseValidationError` before anything else runs\",\"question\":\"Does recognition decoding run before the project authorization guard, or does the guard run first?\",\"options\":[\"Decode first, so malformed or unsupported input returns 422 before authentication or authorization\",\"Authorize first, so a guard failure wins and decoding runs only after authorization succeeds\"],\"default_guess\":\"Run request decoding first, because `before anything else runs` is the stronger explicit ordering statement.\",\"witness\":{\"initial\":\"A request has a malformed recognition payload and an invalid or unauthorized staff session.\",\"events\":[\"The caller submits the request through the expense-creation route.\",\"The transport guard admits the request.\",\"The route either invokes recognition decoding or project authorization first.\"],\"outcomes\":[\"Decoding first returns 422 without an authorization or Registry check.\",\"Authorization first returns the applicable 401, 403, 404, 409 or 502 and never reaches recognition decoding.\"],\"observer\":\"The HTTP caller, and possibly the Registry through whether it receives a validation call.\"}},{\"subject\":\"40_flows.md:`flow:expense_intake_and_management`\",\"kind\":\"caller ambiguity\",\"text\":\"A recognition payload that arrives undecoded from the OCR service is decoded at expense_intake's public boundary, `capability:expense_intake.decode_recognition_publication` / The route's own request decoding keeps its model check; the consumer below checks the version again.\",\"question\":\"Who calls `decode_recognition_publication`, and what exact value does it receive after the route's own model decoding?\",\"options\":[\"The API route retains the recognition payload as untrusted JSON and calls the decoder before calling `create_expense_from_recognition`\",\"The route model-decodes the recognition publication and `create_expense_from_recognition` calls the decoder again\",\"An OCR-side adapter calls the decoder before the authenticated staff request reaches the route\"],\"default_guess\":\"Have the API route call the decoder on a raw nested recognition payload, while treating the authenticated staff member—not the OCR service—as the caller.\",\"witness\":{\"initial\":\"An authenticated staff member has an OCR-produced JSON payload and an allocation request.\",\"events\":[\"The staff member submits the expense request.\",\"The route performs its own request-model check.\",\"The recognition publication must be turned into `ConfirmedRecognitionPublication`.\"],\"outcomes\":[\"The route passes raw JSON to `decode_recognition_publication` and then passes its result to the consumer.\",\"The route has already constructed the publication model, leaving the public decoder redundant or requiring a different caller.\"],\"observer\":\"The State 6 signature author and the State 7 route author.\"}},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"missing capability\",\"text\":\"every record a model-written module built from its inputs is built by an emitted builder of `record_builders` / `decode_recognition_publication` turns an untrusted payload into a `ConfirmedRecognitionPublication` / A model-written module whose `Knows` omits `record_builders` builds no record of the rule.\",\"question\":\"How does `expense_intake.decode_recognition_publication` construct `ConfirmedRecognitionPublication` when `record_builders` offers no builder for that model and the decoder is not listed among the construction exceptions?\",\"options\":[\"Add an emitted `build_confirmed_recognition_publication` capability\",\"Explicitly exempt public wire decoders such as this one from the builder rule\",\"Make the decoder return a non-model intermediate value and let an existing builder construct the publication\"],\"default_guess\":\"Add `build_confirmed_recognition_publication` to `record_builders` and use it from `expense_intake`.\"},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"missing dependency\",\"text\":\"the credential entropy have the same value in every environment and change only by a decision about the product, so by SPEC_STANDARD 15.2 (check 4 before 3) they are data-provider constants that generated code imports (`CREDENTIAL_SECRET_BYTES`) / `credential_security` / ### Knows / `models`.\",\"question\":\"How does `credential_security.issue_verification_secret` obtain `CREDENTIAL_SECRET_BYTES` when its exact `Knows` list does not permit importing `data_provider`?\",\"options\":[\"Add `data_provider` to `credential_security`'s `Knows` list and import the constant\",\"Pass the entropy count into every call from identity modules\",\"Move the entropy value into the credential-security backend IR instead of the data provider\"],\"default_guess\":\"Add `data_provider` to `credential_security`'s `Knows` list and import `CREDENTIAL_SECRET_BYTES`.\"},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"missing constant\",\"text\":\"the active-project list is read from the Registry path `projects/active` — the data-provider constants `REGISTRY_PROJECTS_PATH` and `REGISTRY_ACTIVE_SEGMENT` joined / Candidate public capabilities / `REGISTRY_PROJECTS_PATH` / `REGISTRY_CONTEXT_SEGMENT` / `REGISTRY_VALIDATE_SEGMENT`\",\"question\":\"Where is `REGISTRY_ACTIVE_SEGMENT` defined and exported so `registry_gateway` can construct the required active-project path?\",\"options\":[\"Add `REGISTRY_ACTIVE_SEGMENT` to `data_provider`\",\"Make `REGISTRY_PROJECTS_PATH` contain the complete `projects/active` path and remove the stated join\",\"Keep `active` as gateway behavior rather than data and amend the constant-placement text\"],\"default_guess\":\"Add `REGISTRY_ACTIVE_SEGMENT` to `data_provider` with value `active`.\"},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"configuration contradiction\",\"text\":\"a deployment cannot change them, a release does. Since 2026-11-08 they are data-provider constants / The existence of every timeout, TTL, rate limit and bound is invariant; its value is configuration.\",\"question\":\"Are the Registry timeout, session lifetimes and credential entropy fixed release constants, or runtime configuration values that a deployment may change?\",\"options\":[\"They are fixed data-provider constants changed only by a release\",\"They are runtime configuration values with the listed defaults\",\"Only some are release constants; enumerate which values remain deployment configuration\"],\"default_guess\":\"Treat the Registry timeout, session lifetimes and credential entropy as fixed data-provider constants; retain only the Registry URL and binary read limit as environment configuration.\",\"witness\":{\"initial\":\"Two deployments run the same release, and one deployment supplies a staff-session TTL different from 12 hours.\",\"events\":[\"Both services start.\",\"A staff member logs in at the same instant on each deployment.\",\"Each service computes the session expiry.\"],\"outcomes\":[\"The fixed-constant reading gives both sessions a 12-hour expiry and ignores or rejects the override.\",\"The configuration reading gives the overridden deployment a different expiry.\"],\"observer\":\"The staff member and deployment operator.\"}}]}",
+ "set_aside": []
+}
