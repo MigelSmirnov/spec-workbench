@@ -20,6 +20,24 @@ _SKIP_ATTRIBUTES = frozenset({
 })
 
 
+_ENUM_ADDRESS = re.compile(r"=\s*models\.([A-Za-z_][A-Za-z0-9_]*)")
+
+
+def addressed_enum_values(text: str, enums: dict[str, Any]) -> set[str]:
+    """The declared values of every enumeration the note addresses (``= models.X``).
+
+    A note names an enum member by its value next to the enumeration's address
+    (SPEC_STANDARD §5: an enum is a closed list of values; §6.10 v2: a member is
+    its value, ``OrderStatus('shipped')``; §15.3.1: the enumeration is
+    addressed whole). A value such as ``expense.create`` is that member, not
+    navigation over a value (§2), so no attribute check reads it.
+    """
+    values: set[str] = set()
+    for name in _ENUM_ADDRESS.findall(text):
+        values.update(str(value) for value in enums.get(name) or ())
+    return values
+
+
 def _bind_head(head: str, bindings: dict[str, str], index: ModelIndex) -> tuple[list[str], str]:
     """Return (candidate type names, how they were bound).
 
@@ -61,13 +79,17 @@ def findings(notes: list[dict[str, Any]], index: ModelIndex) -> list[dict[str, A
     if not index.classes:
         return result
     cache: dict[str, dict[str, str]] = {}
+    enums = index.enum_values()
     for note in notes:
         scope = note.get("scope") or ""
         text = note.get("text") or ""
         if scope not in cache:
             cache[scope] = index.scope_bindings(scope)
         bindings = cache[scope]
+        members = addressed_enum_values(text, enums)
         for match in _DOTTED.finditer(text):
+            if match.group(0) in members:
+                continue
             head = match.group("head")
             if head in _SKIP_HEADS or head.isupper() or (head in index.modules and head not in bindings):
                 continue
