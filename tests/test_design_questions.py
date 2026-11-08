@@ -329,7 +329,7 @@ def test_later_documents_are_the_states_after_the_asked_one(tmp_path):
 def test_a_judge_that_reads_files_gets_the_later_states_and_may_find_a_topic_decided_there(tmp_path):
     case = _case(tmp_path)
     summary, provider = _repeated_with_files(case, {"kind": "answered_later", "quotes": ["# State 2 — Demo rules"]})
-    assert provider.files == [{"02_rules.md": "# State 2 — Demo rules\n"}]
+    assert provider.files[0]["later/02_rules.md"] == "# State 2 — Demo rules\n"
     assert "later/02_rules.md" in provider.instructions[0]
     assert "# State 2 — Demo rules" not in provider.judged[0]  # searched, not pasted
     judgement = summary["topics"][0]["judgement"]
@@ -407,7 +407,7 @@ def test_codex_provider_with_files_offers_only_those_under_later(monkeypatch):
     monkeypatch.setattr(provider.subprocess, "run", fake_run)
     asked = provider.CodexCliProvider("m", "low")
     assert asked.reads_files is True
-    answer, _ = asked.complete_with_files("JUDGE", "TOPICS", {"80_notes.md": "NOTE TEXT"})
+    answer, _ = asked.complete_with_files("JUDGE", "TOPICS", {"later/80_notes.md": "NOTE TEXT"})
     assert answer == '{"judgements": []}'
     assert seen["files"] == ["later/80_notes.md"] and seen["body"] == "NOTE TEXT"
     assert seen["sandbox"] == "read-only"

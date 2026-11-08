@@ -174,7 +174,7 @@ from those that need not.{scope_rule} Judge each topic by exactly one kind:
 
 Quotes are checked mechanically against the texts: copy them character for
 character, without ellipsis, at least a full clause. A quote not found in the
-texts counts against your judgement, so never paraphrase. {unsure_rule}
+texts counts against your judgement, so never paraphrase. {unsure_rule}{state_files}
 
 Output strict JSON, nothing else:
 {{"judgements":[{{"id":"<topic id>","kind":"<kind>","quotes":["<verbatim passage>"],"later_state":<number or null>,"precedent":"<prior judgement id or null>","divergence":"<two behaviours and who notices, or empty>","why":"<one sentence>"{witness_schema}}}]}}"""
@@ -224,6 +224,27 @@ def hypotheses_note(hypotheses: list[tuple[str, str]]) -> str:
         return ""
     return HYPOTHESES.format(listing="\n".join(f"- {topic} ({why})" if why else f"- {topic}"
                                                for topic, why in hypotheses))
+
+STATE_FILES = """
+
+What you are given. The text below is not the whole of States 0 to {state}:
+it gives the units of State {state} the topics concern{change}, the units
+holding a passage the reviews quote, and the earlier-state passages the topics
+name. The full texts of States 0 to {state} are the files {files} in your
+working directory. Search them (by the names, ids, fields and operations a
+topic is about) before you judge: whether a passage the reviews did not quote
+answers the topic, contradicts one they did, or makes it a question of
+another state (answered, answered_later, a gap quoting only another state,
+a contradiction). Quote from those files verbatim: every quote is checked
+against the full texts."""
+
+PREEXISTING_FILES = """
+- "preexisting": only for a state reopened after it was closed. The texts it was
+  closed with are the files {closed}; the change since, of each unit the topics
+  concern, is given below with that unit. The topic concerns a passage the
+  change did not touch and the change did not make it matter. Quote that
+  passage verbatim; it must appear unchanged in both versions."""
+
 
 PREEXISTING = """
 - "preexisting": only for a state reopened after it was closed. The texts it was
@@ -281,20 +302,31 @@ LAST_DESIGN_STATE = 7
 
 
 def judge_instruction(state: int, reopened: bool, later_files: list[str] | None = None,
-                      precedents: bool = False, scope: str | None = None, witness: bool = False) -> str:
+                      precedents: bool = False, scope: str | None = None, witness: bool = False,
+                      state_files: list[str] | None = None, closed_files: list[str] | None = None) -> str:
     """`witness`: a blocking kind needs a witness and a contradiction its
-    bases (document states; State 7 keeps its own rule)."""
+    bases (document states; State 7 keeps its own rule). `state_files`: the
+    judge reads the round text as files and gets only the topics' units and
+    passages inline (judge_context.py); `closed_files`, the texts a reopened
+    state was closed with, likewise."""
     answered_later = ANSWERED_LATER.format(files=", ".join(later_files), state=state) if later_files else ""
     unquoted_gap = DEFERRED_GAP if state <= LAST_DEFERRING_STATE else ANSWERING_STATE_GAP.format(state=state)
     scope_rule = SCOPE_RULE.format(state=state, scope=scope) if scope else ""
     bases = CONTRADICTION_BASES.format(before=state - 1) if witness and state > 0 else ""
-    return JUDGE.format(state=state, preexisting=PREEXISTING if reopened else "", answered_later=answered_later,
+    preexisting = ""
+    if reopened:
+        preexisting = (PREEXISTING_FILES.format(closed=", ".join(closed_files)) if state_files and closed_files
+                       else PREEXISTING)
+    files = (STATE_FILES.format(state=state, files=", ".join(state_files),
+                                change=", each with its change since the state was closed" if reopened else "")
+             if state_files else "")
+    return JUDGE.format(state=state, preexisting=preexisting, answered_later=answered_later,
                         judged_before=JUDGED_BEFORE if precedents else "", unquoted_gap=unquoted_gap,
                         later_state=LATER_STATE.format(state=state) if state < LAST_DESIGN_STATE else "",
                         scope_rule=scope_rule, contradiction_extra=bases,
                         witness_rule=WITNESS_RULE if witness else "",
                         unsure_rule=UNSURE_WITNESS if witness else UNSURE_BLOCKING,
-                        witness_schema=WITNESS_SCHEMA if witness else "")
+                        witness_schema=WITNESS_SCHEMA if witness else "", state_files=files)
 
 
 def judge_input(texts: str, topics: list[dict], change: str | None, precedents: list[dict] | None = None,
@@ -342,12 +374,13 @@ not closed or carried for a pass; "not_checked" means an input is missing:
 
 Ask about an earlier state only whether this state fulfils what it carried
 here; its closed units are not audited again. A decision's "[witness: ...]" tag
-binds an invariant to an existing check: it is not the history you give as a
-point's witness. Whether a Required tests item says what would show the
-invariant holds is a point of the state that owns the invariant. Unless
-verdicts are listed below, whether a bound check asserts what its item names
-is not a point of this round: it is judged per check after State 7, where the
-witnesses are written, at the State 8 handoff."""
+is text of its Required tests item, not the history you give as a point's
+witness. Of an invariant's test, the state that owns the invariant answers one
+question: does its Required tests item say what must be shown? Unless verdicts
+are listed below, which existing check an item is bound to, and whether that
+check asserts what the item names, are not points of this round: they are
+carried, and judged per check after State 7, where the witnesses are written,
+at the State 8 handoff."""
 
 
 LAYER_JUDGE = """=== DETERMINISTIC RESULTS AT THIS TRANSITION (not design text; never quote) ===
@@ -355,7 +388,15 @@ LAYER_JUDGE = """=== DETERMINISTIC RESULTS AT THIS TRANSITION (not design text; 
 A topic these results show open is not judged answered or indifferent, by
 this state's texts or a later one's: the texts may say it, the check says it
 does not hold.
-{findings}"""
+{findings}{witness}"""
+
+WITNESS_CARRIED_JUDGE = """
+
+Of an invariant's test, this state answers only whether its Required tests item
+says what must be shown. A topic asking which existing check an item is bound
+to, or whether a bound check asserts it, is later_state 8: the binding and its
+assertion are carried and judged per check after State 7, at the State 8
+handoff."""
 
 MAX_LAYER_LINES = 40
 
@@ -427,8 +468,10 @@ closed otherwise."""
 def layer_judge(context: dict | None, units: list[str] | None = None) -> str | None:
     if not context:
         return None
-    text = LAYER_JUDGE.format(findings=_layer_lines(context)[3])
     listing = _verdicts(context, units)
+    text = LAYER_JUDGE.format(findings=_layer_lines(context)[3],
+                              witness="" if listing or context.get("state", 0) >= LAST_DESIGN_STATE
+                              else WITNESS_CARRIED_JUDGE)
     reopened = context.get("evidence_reopened") or []
     note = EVIDENCE_REOPENED_JUDGE.format(units=", ".join(reopened)) if reopened else ""
     return text + (VERDICTS.format(listing=listing) if listing else "") + note

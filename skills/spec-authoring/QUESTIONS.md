@@ -38,6 +38,14 @@ witness. The round is kept under
 with the texts' digests, every topic, how many reviews raised it and, for a
 repeated topic, its judgement.
 
+A review whose answer is not a JSON object with `open_points` is asked once
+more. When the second answer fails too, the review is kept as failed — its
+answers recorded, no point taken from it, never a fabricated one — and the
+round goes on with the others while at least two answered; `summary.json`
+lists it under `failed_reviews`. With fewer than two answering reviews the
+round is refused. Before this, one malformed answer lost a round of three
+reviews already paid for (#147).
+
 ### A round is asked with its transition
 
 The texts alone hide what the next gate will reject. On client-portal (issue
@@ -61,6 +69,11 @@ give two outcomes. It is not a decision's `[witness: …]` tag, which binds an
 invariant to an existing check (`TRANSITION_PROTOCOL.md`, "Invariant
 evidence"); whether that check asserts the invariants its item names is judged
 per check after State 7, at the State 8 handoff, never in a round of State 2.
+Nor is which existing check an item is bound to: of an invariant's test, a
+State 2 round asks only whether its Required tests item says what must be
+shown, and its judge takes a question about a binding as `later_state` 8. On
+client-portal rounds 84–91 reviewers kept asking which existing check is bound
+to CLK-002, because the scope still read "an invariant nothing can verify".
 
 ### State 2's own work
 
@@ -224,6 +237,40 @@ State 2 judge grows by what it reads, not by ~40k tokens of contracts and notes;
 the reviews are unchanged. Their digests are kept in the round's `judge` as
 `later_documents`; the state's closure still compares only States 0..N. A judge
 that cannot read files (the Responses API) is not offered `answered_later`.
+
+### What the judge receives
+
+The judge decides a few repeated topics, each carrying the reviewers' verbatim
+quotes. Until 2026-11-08 it was also given the whole round text — on
+client-portal State 2 round-91 the same 148k-character layer prompt the
+reviewers got, plus the whole 34k diff since closure: 223k characters for 16
+topics. A judge that reads files (`--provider codex`) in States 0–5 now gets
+the round text the way it gets the later states (owner decision 2026-11-08,
+#147; `questions_workbench/judge_context.py`). Inline it receives only:
+
+- the topics, with the reviewers' questions, points, quotes and witnesses;
+- the units of State N the topics concern, each with its diff since closure
+  when the round has `--since`; a topic naming no unit concerns every unit
+  under review;
+- the units, of State N or an earlier state, that hold a passage the reviews
+  quote, and the earlier-state units whose definitions the topics or their
+  units name (the identifier selection of the layer prompt, one step);
+- the prior judgements and the transition block, as before.
+
+The full texts of States 0..N are files under `states/` of its working
+directory, beside `later/`, and for a reopened state the texts it was closed
+with under `closed/`. The instruction tells it to search them before judging a
+topic answered, answered later, quoted only from another state, or contradicted
+by a passage the reviews did not quote. On round-91 the inline request falls
+from 222,746 to 71,899 characters; what is left is mostly the topics
+themselves (33k) and the four units they concern.
+
+Nothing about the check changes: `judge.check` receives the full texts from the
+round, not what the judge was shown, and finds every quote verbatim in them. A
+quote the judge found by searching a file passes; a quote found nowhere still
+blocks. The round keeps `searched_files` and `inline_characters` in its
+`judge`. A judge that cannot read files, and the State 7 judge, whose text is
+one module's prompt, still get the round text inline.
 
 ### The same question gets the same answer
 

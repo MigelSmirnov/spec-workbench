@@ -709,11 +709,26 @@ def test_the_state2_round_is_asked_with_what_it_owns_receives_carries_and_its_fi
     assert "where time comes from" in asked                       # owns
     assert "-> state6_exact_contracts (confirmed by time_source)" in asked   # carries
     assert "[open] invariant_without_required_test" in asked      # its own check, now
-    assert "it is not the history you give" in asked
+    assert "not the history you give" in asked
     assert "DETERMINISTIC RESULTS AT THIS TRANSITION" in provider.judged[0]
     assert summary["layer"]["ready"] is False and summary["transition_ready"] is False
     assert {"check": "invariant_tests", "from": "state2_rules_decisions", "outcome": "open", "findings": 1} \
         in summary["layer"]["results"]
+
+
+def test_state2_asks_what_a_test_must_show_never_which_check_is_bound(tmp_path):
+    """#147, 2026-11-08: after #161 a bound check's assertion is judged after
+    State 7; reviewers kept asking which existing check is bound to CLK-002."""
+    case = _case(tmp_path, "- INV-001: a thing counted twice is refused.")
+    summary, provider = _ask(case, [POINT])
+    asked, judged = provider.instructions[0], provider.judged[0]
+    assert "nothing can verify" not in asked
+    assert "Required tests item does not say what must be shown" in asked     # the scope
+    assert "does its Required tests item say what must be shown?" in asked     # the layer block
+    assert "which existing check an item is bound to" in asked
+    assert "are not points of this round" in asked
+    assert "is later_state 8" in judged                                        # the judge's layer block
+    assert "nothing can verify" not in judged
 
 
 CHECK_SCRIPT = """def test_counted_once():
