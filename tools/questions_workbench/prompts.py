@@ -373,118 +373,31 @@ def _layer_lines(context: dict) -> tuple[str, str, str, str]:
     return owns, received, carries, "\n".join(lines) or "- (none)"
 
 
-MATERIALS = """
+VERDICTS = """
 
-Evidence of the bindings under review. These are the Factory checks the
-decisions' "[witness: ...]" tags name, read-only, each file with its sha256.
-They are not design text: never quote them. For each binding decide whether
-the content asserts every invariant its item names, as stated — not merely
-that it calls the same function. When it does not, raise a point on the
-decision's unit, quoting the Required tests item: the binding claims what the
-check does not show. A binding listed as not checked has no content to judge:
-say so, and never treat it as sufficient.
+Verdicts on the bindings of the units under review. Each "[witness: ...]" tag
+binds a Factory check to the invariants its item names; whether the check
+asserts them is judged once per check, outside this round, and kept by the
+digest of the check's files and bound items. These verdicts are not design
+text: never quote them. A binding whose check does not assert, or asserts only
+in part, what its item names claims what the check does not show: raise a point
+on the decision's unit, quoting the Required tests item. A binding not checked
+has no verdict: say so, and never treat it as sufficient.
 {listing}"""
 
 
-ROUND_MATERIAL_BUDGET = 240_000  # characters of distinct check content one pass of a round is given
-
-
-def _selected(context: dict, entry: dict) -> bool:
-    scope = context.get("material_scope")
-    return (scope is None or entry["decision"] not in scope or scope[entry["decision"]] is None
-            or entry["item"] in scope[entry["decision"]])
-
-
-def material_parts(context: dict | None, units: list[str] | None,
-                   budget: int | None = None) -> list[dict[str, list[str]]]:
-    """The passes a round's bindings are split into: per pass, unit -> the items it is given.
-
-    Each binding goes to the pass where its files add the fewest characters
-    not already there (shared checks stay together), within the budget; a new
-    pass opens only when none can take it. Nothing is cut: every selected,
-    available binding is in exactly one pass. One pass (or none) means the
-    round is not split.
-    """
-    budget = ROUND_MATERIAL_BUDGET if budget is None else budget
-    passes: list[tuple[dict[str, list[str]], dict[str, int]]] = []
-    for entry in (context or {}).get("materials") or []:
-        if units is not None and entry["decision"] not in units:
-            continue
-        if entry["status"] != "available" or not _selected(context, entry):
-            continue
-        files = {f["sha256"]: len(f["text"]) for f in entry.get("files") or []}
-        best, cost = None, None
-        for index, (_, shown) in enumerate(passes):
-            added = sum(size for sha, size in files.items() if sha not in shown)
-            if sum(shown.values()) + added <= budget and (cost is None or added < cost):
-                best, cost = index, added
-        if best is None:
-            passes.append(({}, {}))
-            best = len(passes) - 1
-        part, shown = passes[best]
-        part.setdefault(entry["decision"], []).append(entry["item"])
-        shown.update(files)
-    return [part for part, _ in passes]
-
-
-def material_pass(context: dict, parts: list[dict[str, list[str]]], index: int) -> dict:
-    """The context of pass ``index``: its own bindings given, the others named with their pass."""
-    elsewhere = {(unit, item): number for number, part in enumerate(parts, 1) if number != index + 1
-                 for unit, items in part.items() for item in items}
-    return {**context, "material_scope": {unit: list(parts[index].get(unit, []))
-                                          for unit in {u for part in parts for u in part}
-                                          | set(context.get("material_scope") or {})},
-            "material_elsewhere": elsewhere, "material_pass": (index + 1, len(parts))}
-
-
-def _materials(context: dict, units: list[str] | None) -> str:
-    """The checks the bindings of the units under review rest on, each file once.
-
-    A file shared by several bindings is given at its first binding and named
-    by path and sha256 at the others. A binding the edit did not touch
-    (``material_scope``) is listed without its check; one given to another
-    pass of the round (``material_parts``) is named with its pass. A single
-    binding over the budget is NOT CHECKED, with the reason: never cut.
-    """
-    shown: set[str] = set()
-    used = 0
+def _verdicts(context: dict, units: list[str] | None) -> str:
     rows = []
-    for entry in context.get("materials") or []:
-        if units is not None and entry["decision"] not in units:
+    for row in context.get("verdicts") or []:
+        if units is not None and row["decision"] not in units:
             continue
-        head = (f"- {entry['decision']} binds {', '.join(entry['invariants']) or 'its invariant'} "
-                f"to {entry['witness']}; item: {entry['item']}")
-        files = entry.get("files") or []
-        if entry["status"] != "available":
-            rows.append(f"{head}\n  NOT CHECKED: {entry.get('reason')}")
-            continue
-        selected = _selected(context, entry)
-        listed = ", ".join(f"{f['path']} sha256 {f['sha256']}" for f in files)
-        elsewhere = (context.get("material_elsewhere") or {}).get((entry["decision"], entry["item"]))
-        if elsewhere:
-            rows.append(f"{head}\n  judged in pass {elsewhere} of this round, with its check: {listed}")
-            continue
-        if not selected:
-            rows.append(f"{head}\n  unchanged by the edit under review; its check is not given again: {listed}")
-            continue
-        new = {f["sha256"]: len(f["text"]) for f in files if f["sha256"] not in shown}
-        if used + sum(new.values()) > ROUND_MATERIAL_BUDGET:
-            rows.append(f"{head}\n  NOT CHECKED: the checks of this round exceed what one round is given "
-                        f"({ROUND_MATERIAL_BUDGET} characters); judge this binding in a round of its own: {listed}")
-            continue
-        body = [head]
-        for f in files:
-            label = f"{f['path']} sha256 {f['sha256']}" + (" (imported by the check)" if f.get("imported") else "")
-            if f["sha256"] in shown:
-                body.append(f"--- {label}: given above ---")
-            else:
-                body.append(f"--- {label} ---\n{f['text']}")
-                shown.add(f["sha256"])
-        used += sum(new.values())
-        if entry.get("basis"):
-            body.append(f"  basis: {entry['basis']}")
-        rows.append("\n".join(body))
-    return "\n\n".join(rows)
+        head = (f"- {row['decision']} binds {', '.join(row['invariants']) or 'its invariant'} to {row['witness']} "
+                f"(check {row['digest'][:12]}): ")
+        if row["outcome"] == "not_checked":
+            rows.append(head + f"NOT CHECKED: {row.get('reason')}")
+        else:
+            rows.append(head + row["outcome"].upper().replace("_", " ") + (f" — {row['why']}" if row.get("why") else ""))
+    return "\n".join(rows)
 
 
 def layer_scope(context: dict | None, units: list[str] | None = None) -> str:
@@ -494,10 +407,10 @@ def layer_scope(context: dict | None, units: list[str] | None = None) -> str:
         return ""
     owns, received, carries, findings = _layer_lines(context)
     text = LAYER.format(state=context["state"], owns=owns, received=received, carries=carries, findings=findings)
-    listing = _materials(context, units)
+    listing = _verdicts(context, units)
     reopened = context.get("evidence_reopened") or []
     note = EVIDENCE_REOPENED.format(units=", ".join(reopened)) if reopened else ""
-    return text + (MATERIALS.format(listing=listing) if listing else "") + note
+    return text + (VERDICTS.format(listing=listing) if listing else "") + note
 
 
 EVIDENCE_REOPENED = """
@@ -505,36 +418,23 @@ EVIDENCE_REOPENED = """
 Units closed on their text whose evidence changed: {units}. The checks their
 bindings name changed since they were closed (a file, a command or a digest),
 while their text did not. Review them only for whether each binding still
-asserts the invariants its item names on the evidence above; their text is
+asserts the invariants its item names on the verdicts above; their text is
 closed otherwise."""
-
-
-MATERIAL_PASS = """
-
-This is pass {number} of {total} of this round, split because the checks of
-its bindings do not fit one input. Ask only whether each binding given with
-its check above asserts the invariants its item names, and about nothing else:
-the texts are asked about in pass 1."""
-
-
-def material_pass_note(context: dict) -> str:
-    number, total = context.get("material_pass") or (1, 1)
-    return MATERIAL_PASS.format(number=number, total=total) if number > 1 else ""
 
 
 def layer_judge(context: dict | None, units: list[str] | None = None) -> str | None:
     if not context:
         return None
     text = LAYER_JUDGE.format(findings=_layer_lines(context)[3])
-    listing = _materials(context, units)
+    listing = _verdicts(context, units)
     reopened = context.get("evidence_reopened") or []
     note = EVIDENCE_REOPENED_JUDGE.format(units=", ".join(reopened)) if reopened else ""
-    return text + (MATERIALS.format(listing=listing) if listing else "") + note
+    return text + (VERDICTS.format(listing=listing) if listing else "") + note
 
 
 EVIDENCE_REOPENED_JUDGE = """
 
 Reopened because their evidence changed: {units}. Their text did not change,
 but a check their bindings name did. Judge whether each binding still asserts
-its invariants on the evidence above; no earlier judgement of these units is
+its invariants on the verdicts above; no earlier judgement of these units is
 offered as a precedent, and an earlier "answered" stood on other evidence."""

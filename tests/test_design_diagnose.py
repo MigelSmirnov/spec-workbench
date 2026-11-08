@@ -387,7 +387,10 @@ def test_the_chosen_factory_is_the_one_every_witness_check_reads(tmp_path, monke
     rows = {(r["registry"], r["check"]): r for r in report["by_state"]["State 2"]}
     assert rows[("assembly", "witness")]["outcome"] == "closed"            # A defines counts_once, B does not
     assert rows[("transition", "decision_witness")]["outcome"] == "closed"
-    assert rows[("transition", "witness_material")]["outcome"] == "closed"
+    # A has the check: readable, but not judged yet (witness_judgement) — never a pass
+    material = rows[("transition", "witness_material")]
+    assert material["outcome"] == "not_checkable"
+    assert "no judgement of this check" in material["findings"][0]["message"]
     for key in [("assembly", "witness"), ("transition", "decision_witness"), ("transition", "witness_material")]:
         assert rows[key]["factory_root"] == str(chosen)
     assert report["factory"]["spec"]["factory"]["root"] == str(chosen)
@@ -398,7 +401,9 @@ def test_the_chosen_factory_is_the_one_every_witness_check_reads(tmp_path, monke
     unresolved = {"witness_unresolved": 1, "invariant_without_witness": 1}
     assert rows[("assembly", "witness")]["counts"] == unresolved
     assert rows[("transition", "decision_witness")]["counts"] == unresolved
-    assert rows[("transition", "witness_material")]["outcome"] == "not_checkable"
+    material = rows[("transition", "witness_material")]
+    assert material["outcome"] == "not_checkable"
+    assert "is not a check of" in material["findings"][0]["message"]     # B: the check does not exist there
 
 
 def test_with_no_factory_chosen_or_found_no_check_finds_one_elsewhere(tmp_path, monkeypatch):

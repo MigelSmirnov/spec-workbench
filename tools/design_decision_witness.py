@@ -107,7 +107,7 @@ def _verification_commands(case: Path, factory: Path) -> tuple[list[dict[str, An
     return [c for c in commands if isinstance(c, dict) and c.get("name")], config_path, ""
 
 
-MATERIAL_LIMIT = 120_000  # characters of check content one binding may give a round, whole or not at all
+MATERIAL_LIMIT = 900_000  # characters of a check one judgement is given whole (witness_judgement.INPUT_LIMIT)
 UNDER_TEST = "projects"  # the product a Factory check exercises: its subject, not its assertions
 
 
@@ -230,8 +230,11 @@ def binding_material(case: Path, factory: Path | None = None) -> list[dict[str, 
         ids = invariant_ids(invariants[1])
         for item in required_test_items(tests[1]) if tests else []:
             for kind, name in WITNESS_RE.findall(item):
+                named = [i for i in invariant_ids(item) if i in ids] or ids
+                statements = [ITEM_RE.sub("", s, count=1).strip() for s in required_test_items(invariants[1])
+                              if not named or set(invariant_ids(s)) & set(named)]
                 entry: dict[str, Any] = {"decision": key, "witness": f"{kind}:{name}",
-                                         "invariants": [i for i in invariant_ids(item) if i in ids] or ids,
+                                         "invariants": named, "statements": statements,
                                          "item": item.strip(), "files": []}
                 if kind == "workbench":
                     files, reason = workbench_sources(name)
@@ -284,6 +287,11 @@ def binding_material(case: Path, factory: Path | None = None) -> list[dict[str, 
                         else:
                             entry.update(status="available", files=files)
                         entry["command"] = list(command.get("command") or [])
+                        # how the check is run decides what it asserts: argv, the effective
+                        # working directory and every other field of its declaration
+                        cwd = base.relative_to(root).as_posix() if root in base.parents or base == root else str(base)
+                        entry["declaration"] = {**{k: v for k, v in command.items() if k != "name"},
+                                                "effective_cwd": cwd}
                 found.append(entry)
     return found
 

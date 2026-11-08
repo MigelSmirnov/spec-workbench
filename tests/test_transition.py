@@ -648,17 +648,36 @@ def test_the_state6_contract_gate_recognises_the_same_dependants(tmp_path):
 
 # ------------------------------------- 3. the round is given its layer
 
+CHECK_JUDGE = "You judge whether one Factory check"
+
+
+def _check_answer(text: str, outcome: str = "asserts"):
+    """A judgement of one check that quotes its first line of code for every bound item."""
+    import re
+
+    ids = re.findall(r"^(I\d+):", text, re.M)
+    body = text.split("=== THE CHECK ===", 1)[1]
+    line = next(l for l in body.splitlines() if l.strip() and not l.startswith("---"))
+    return json.dumps({"verdicts": [{"id": i, "outcome": outcome, "quotes": [line.strip()], "why": "fake"}
+                                    for i in ids]}), {}
+
+
 class LayerProvider:
-    """Reviews from a script; every topic judged indifferent; keeps what it was asked."""
+    """Reviews from a script; every topic judged indifferent; every check asserts; keeps what it was asked."""
 
     name = "fake"
+    check_outcome = "asserts"
 
     def __init__(self, reviews):
         self.reviews = list(reviews)
         self.instructions: list[str] = []
         self.judged: list[str] = []
+        self.checks: list[str] = []
 
     def complete(self, instruction: str, text: str):
+        if instruction.startswith(CHECK_JUDGE):
+            self.checks.append(text)
+            return _check_answer(text, self.check_outcome)
         if instruction.startswith("You judge the topics"):
             self.judged.append(text)
             ids = [line.split(":", 1)[0] for line in text.split("=== TOPICS TO JUDGE ===")[1].splitlines()
@@ -732,27 +751,28 @@ class SufficiencyProvider(LayerProvider):
         return super().complete(instruction, text)
 
 
-def test_the_round_judges_a_binding_on_the_check_content_it_is_given(tmp_path, monkeypatch):
-    # review r4501731322: a check's name proves it exists, not what it asserts
+def test_a_check_is_judged_once_and_the_round_gets_its_verdict_not_its_code(tmp_path, monkeypatch):
+    # owner review of #156: one judgement per check, kept by digest; the round reads the verdict
     _clean_gate(monkeypatch)
     case = _case(tmp_path, SufficiencyProvider.ITEM)
     factory = _factory_with_check(tmp_path, case)
     monkeypatch.setenv("SPEC_WORKBENCH_FACTORY_ROOT", str(factory))
-    assert transition.run_check(case, "witness_material")["outcome"] == "closed"
-    point = {**POINT, "text": SufficiencyProvider.ITEM, "question": "does counts_once assert INV-002?"}
-    provider = SufficiencyProvider([[point], [point], []])
+    result = transition.run_check(case, "witness_material")
+    assert result["outcome"] == "not_checked"                           # not judged yet: never a pass
+    assert "no judgement of this check" in result["findings"][0]["message"]
+    provider = LayerProvider([[], [], [], [], [], []])
+    provider.check_outcome = "partial"
     summary = service.ask_round(case, 2, provider)
+    assert len(provider.checks) == 1 and "INV-001 only: nothing here lowers a count" in provider.checks[0]
+    assert "invariant: INV-002: a count never decreases" in provider.checks[0]   # as stated
     asked = provider.instructions[0]
-    assert "Evidence of the bindings under review" in asked
-    assert "A01 binds INV-001, INV-002 to verification:counts_once" in asked
-    assert "INV-001 only: nothing here lowers a count" in asked          # the check's own content
-    assert "INV-001 only: nothing here lowers a count" in provider.judged[0]
-    digest = __import__("hashlib").sha256(CHECK_SCRIPT.encode()).hexdigest()
-    assert summary["layer"]["materials"] == [{"decision": "A01", "witness": "verification:counts_once",
-                                              "status": "available",
-                                              "files": [{"path": "verification/counts_once_check.py",
-                                                         "sha256": digest}]}]
-    assert summary["blocked_units"] == ["A01"] and summary["clear"] is False
+    assert "INV-001 only: nothing here lowers a count" not in asked             # no check code in the round
+    assert "A01 binds INV-001, INV-002 to verification:counts_once (check " in asked and "PARTIAL" in asked
+    assert summary["layer"]["verdicts"][0]["outcome"] == "partial"
+    result = transition.run_check(case, "witness_material")
+    assert result["outcome"] == "open" and result["findings"][0]["code"] == "witness_does_not_assert"
+    service.ask_round(case, 2, provider)
+    assert len(provider.checks) == 1                                    # kept by digest: not judged again
 
 
 def test_a_binding_whose_check_cannot_be_read_is_not_judged_sufficient(tmp_path, monkeypatch):
@@ -919,19 +939,35 @@ def test_a_state7_module_review_is_asked_against_the_obligations_it_takes_part_i
 
 # ------------- review 5812269729: workbench gates and changed evidence
 
-def test_a_workbench_binding_gives_the_round_the_gate_implementation(tmp_path, monkeypatch):
-    # review r4501770397: the gate's name was given, not what it checks; flows
-    # does not prove "a thing is counted once", and the round must see that
+def test_a_changed_run_command_judges_the_check_again(tmp_path, monkeypatch):
+    # review r4505323285, end to end through the Factory config
+    import yaml
+
+    _clean_gate(monkeypatch)
+    case = _case(tmp_path, SufficiencyProvider.ITEM)
+    factory = _factory_with_check(tmp_path, case)
+    monkeypatch.setenv("SPEC_WORKBENCH_FACTORY_ROOT", str(factory))
+    summary, provider = _ask(case)
+    assert len(provider.checks) == 1 and '"effective_cwd": "."' in provider.checks[0]
+    assert transition.run_check(case, "witness_material")["outcome"] == "closed"
+    config = factory / "verification" / "configs" / "Demo.yaml"
+    data = yaml.safe_load(config.read_text())
+    data["checks"]["commands"][0]["command"] += ["-k", "subset"]
+    _write(config, yaml.safe_dump(data))
+    assert transition.run_check(case, "witness_material")["outcome"] == "not_checked"   # old judgement not current
+    summary, provider = _ask(case)
+    assert len(provider.checks) == 1 and '"subset"' in provider.checks[0]
+
+
+def test_a_workbench_binding_is_judged_on_the_gate_implementation(tmp_path, monkeypatch):
+    # review r4501770397: the gate's name was given, not what it checks
     _clean_gate(monkeypatch)
     case = _case(tmp_path, "- INV-001, INV-002: refused. [witness: workbench:flows]")
-    assert transition.run_check(case, "witness_material")["outcome"] == "closed"
     summary, provider = _ask(case)
-    asked = provider.instructions[0]
-    assert "A01 binds INV-001, INV-002 to workbench:flows" in asked
-    assert "def coverage(project: Path, *, reachability: bool = True)" in asked   # flow_closure's own code
-    source = (Path(flow_closure.__file__)).read_text(encoding="utf-8")
-    digest = __import__("hashlib").sha256(source.encode()).hexdigest()
-    assert summary["layer"]["materials"][0]["files"] == [{"path": "tools/flow_closure.py", "sha256": digest}]
+    assert "def coverage(project: Path, *, reachability: bool = True)" in provider.checks[0]   # flow_closure's code
+    assert "A01 binds INV-001, INV-002 to workbench:flows (check " in provider.instructions[0]
+    assert "def coverage(" not in provider.instructions[0]
+    assert summary["layer"]["verdicts"][0]["outcome"] == "asserts"
 
 
 def test_a_facade_check_resolves_to_the_implementation_it_delegates_to():
@@ -964,7 +1000,7 @@ def test_a_changed_check_reopens_only_the_decision_bound_to_it(tmp_path, monkeyp
     summary, provider = _ask(case)
     assert summary["scope"] == ["A01"] and summary["evidence_reopened"] == ["A01"]
     assert "Units closed on their text whose evidence changed: A01" in provider.instructions[0]
-    assert "# was: assert" in provider.instructions[0]
+    assert len(provider.checks) == 1 and "# was: assert" in provider.checks[0]   # judged again on the new code
     assert summary["closed"] is False                  # one review on the new evidence is not two
     summary, _ = _ask(case)
     assert summary["closed"] is True and service.status(case, 2)["open_units"] == []
@@ -1037,81 +1073,18 @@ def test_a_binding_brings_the_factory_modules_its_check_imports_but_not_the_prod
         ("verification/counts_once.py", False), ("verification/witness_support.py", True)]
 
 
-def test_a_check_shared_by_bindings_is_given_once(tmp_path, monkeypatch):
+def test_a_check_shared_by_bindings_is_judged_once_for_all_of_them(tmp_path, monkeypatch):
     _clean_gate(monkeypatch)
     case, factory = _two_decision_factory(
         tmp_path, "- INV-001: refused. [witness: verification:counts_once]",
         "- INV-003: kept. [witness: verification:counts_once]", {"counts_once": IMPORTING_CHECK})
     monkeypatch.setenv("SPEC_WORKBENCH_FACTORY_ROOT", str(factory))
     summary, provider = _ask(case)
-    asked = provider.instructions[0]
-    assert asked.count("the assertion lives here") == 1 and asked.count("assert_refused(Store()") == 1
-    assert "verification/counts_once.py sha256" in asked and ": given above ---" in asked
-    assert "(imported by the check)" in asked and "class Store" not in asked
-
-
-def test_material_goes_only_to_bindings_the_edit_touched(tmp_path):
-    from questions_workbench import service as qs
-
-    materials = [{"decision": "A11", "item": "- INV-1: x [witness: verification:a]"},
-                 {"decision": "A11", "item": "- INV-2: y [witness: verification:b]"},
-                 {"decision": "A12", "item": "- INV-3: z [witness: verification:c]"},
-                 {"decision": "A13", "item": "- INV-4: w [witness: verification:d]"},
-                 {"decision": "A14", "item": "- INV-5: v [witness: verification:e]"}]
-    edit_elsewhere = ("--- closed\n+++ now\n@@\n-Time comes from the host.\n+Time comes from utc_now.\n", [])
-    edit_item = ("--- closed\n+++ now\n@@\n-- INV-2: old [witness: verification:b]\n"
-                 "+- INV-2: y [witness: verification:b]\n", [])
-    strengthened = ("--- closed\n+++ now\n@@\n-- INV-1: a count never decreases\n"
-                    "+- INV-1: a count never decreases, even on retry\n", [])
-    selected = qs.material_scope(["A11", "A12", "A13", "A14"], {"A11": edit_item, "A12": edit_elsewhere},
-                                 ["A14"], materials, {"A13": ["A12"]})
-    assert selected == {"A11": ["- INV-2: y [witness: verification:b]"],   # its edited binding only
-                        "A12": None,       # normative text: what its checks must show may have changed
-                        "A13": [],                                        # asked for A12's change
-                        "A14": None}                                      # its checks changed
-    # review r4504107250: a strengthened invariant brings the checks bound to it
-    assert qs.material_scope(["A11"], {"A11": strengthened}, [], materials) == {
-        "A11": ["- INV-1: x [witness: verification:a]"]}
-    # evidence first: a check changed with the text, the item untouched -> every binding
-    assert qs.material_scope(["A11"], {"A11": edit_item}, [], materials, None, {"A11"}) == {"A11": None}
-
-
-def test_checks_over_the_round_budget_split_the_round_and_none_is_cut(tmp_path, monkeypatch):
-    from questions_workbench import prompts as qp
-
-    _clean_gate(monkeypatch)
-    big = "# padding\n" * 300
-    case, factory = _two_decision_factory(
-        tmp_path, "- INV-001: refused. [witness: verification:check_one]",
-        "- INV-003: kept. [witness: verification:check_two]",
-        {"check_one": big + "def one(): assert ONE\n", "check_two": big + "def two(): assert TWO\n"})
-    monkeypatch.setenv("SPEC_WORKBENCH_FACTORY_ROOT", str(factory))
-    monkeypatch.setattr(qp, "ROUND_MATERIAL_BUDGET", 4000)
-    provider = LayerProvider([[], [], [], [], [], []])
-    summary = service.ask_round(case, 2, provider)
-    assert len(provider.instructions) == 6                      # two passes of three reviews
-    first, second = provider.instructions[0], provider.instructions[3]
-    assert "def one(): assert ONE" in first and "def two(): assert TWO" not in first
-    assert "def two(): assert TWO" in second and "def one(): assert ONE" not in second
-    assert "This is pass 2 of 2" in second and "judged in pass 1 of this round" in second
-    assert "judged in pass 2 of this round" in first and "NOT CHECKED" not in first + second
-    assert summary["judge"]["material_passes"] == 2
-
-
-def test_a_single_binding_over_the_budget_is_not_checked_never_cut(tmp_path):
-    from questions_workbench import prompts as qp
-
-    entry = {"decision": "A01", "invariants": ["INV-001"], "witness": "verification:huge", "item": "- INV-001",
-             "status": "available", "files": [{"path": "huge.py", "sha256": "0" * 64, "text": "x" * 50}]}
-    listing = qp._materials({"materials": [entry]}, ["A01"]).replace("\n", " ")
-    assert "x" * 50 in listing
-    qp_budget = qp.ROUND_MATERIAL_BUDGET
-    try:
-        qp.ROUND_MATERIAL_BUDGET = 10
-        listing = qp._materials({"materials": [entry]}, ["A01"])
-        assert "NOT CHECKED" in listing and "x" * 50 not in listing
-    finally:
-        qp.ROUND_MATERIAL_BUDGET = qp_budget
+    assert len(provider.checks) == 1
+    judged = provider.checks[0]
+    assert "I1: A01 binds INV-001" in judged and "I2: A03 binds INV-003" in judged
+    assert "the assertion lives here" in judged and "class Store" not in judged   # its import, not the product
+    assert [v["outcome"] for v in summary["layer"]["verdicts"]] == ["asserts", "asserts"]
 
 
 class PrecedentProvider:
@@ -1124,8 +1097,12 @@ class PrecedentProvider:
         self.points, self.verdicts = points, verdicts
         self.instructions: list[str] = []
         self.judged: list[str] = []
+        self.checks: list[str] = []
 
     def complete(self, instruction: str, text: str):
+        if instruction.startswith(CHECK_JUDGE):
+            self.checks.append(text)
+            return _check_answer(text)
         if instruction.startswith("You judge the topics"):
             self.judged.append(text)
             judgements = []
@@ -1208,54 +1185,35 @@ def _asked_again(case: Path) -> tuple[dict, PrecedentProvider]:
     return service.ask_round(case, 2, provider), provider
 
 
-def test_a_check_changed_with_the_normative_text_is_shown_although_the_item_is_not(tmp_path, monkeypatch):
-    # review r4504107250: text and check change together, Required tests does not;
-    # the new check must reach reviewers and judge, not only its digest
+def test_a_check_changed_with_the_normative_text_is_judged_again(tmp_path, monkeypatch):
+    # review r4504107250: text and check change together, Required tests does not
     case, factory = _closed_a01(tmp_path, monkeypatch)
     rules = (case / "02_rules.md").read_text()
     _write(case / "02_rules.md", rules.replace("A thing is counted once.", "A thing is counted once per ledger."))
     _write(factory / "verification" / "counts_once_check.py", CHECK_SCRIPT + "# NEW ASSERTION: per ledger\n")
     summary, provider = _asked_again(case)
-    assert summary["changed_units"] == ["A01"] and "A01" not in summary["evidence_reopened"]
-    assert "NEW ASSERTION: per ledger" in provider.instructions[0]
-    assert "NEW ASSERTION: per ledger" in provider.judged[0]
+    assert summary["changed_units"] == ["A01"]
+    assert len(provider.checks) == 1 and "NEW ASSERTION: per ledger" in provider.checks[0]
+    assert "A01 binds INV-001, INV-002 to verification:counts_once" in provider.instructions[0]
 
 
-def test_a_strengthened_invariant_brings_its_unchanged_check(tmp_path, monkeypatch):
+def test_a_strengthened_invariant_is_judged_again_on_its_unchanged_check(tmp_path, monkeypatch):
     case, _ = _closed_a01(tmp_path, monkeypatch)
     rules = (case / "02_rules.md").read_text()
     _write(case / "02_rules.md", rules.replace("- INV-002: a count never decreases",
                                                "- INV-002: a count never decreases, even on retry"))
     summary, provider = _asked_again(case)
     assert summary["changed_units"] == ["A01"]
-    assert "INV-001 only: nothing here lowers a count" in provider.instructions[0]
-    assert "INV-001 only: nothing here lowers a count" in provider.judged[0]
+    assert len(provider.checks) == 1 and "a count never decreases, even on retry" in provider.checks[0]
 
 
-def test_an_edit_of_one_required_test_brings_only_its_check(tmp_path, monkeypatch):
-    import yaml
-
-    case, factory = _closed_a01(tmp_path, monkeypatch)
-    _write(factory / "verification" / "other_check.py", "# OTHER CHECK BODY\n")
-    config = factory / "verification" / "configs" / "Demo.yaml"
-    data = yaml.safe_load(config.read_text())
-    data["checks"]["commands"].append({"name": "other", "cwd": "../..",
-                                       "command": ["python", "verification/other_check.py"]})
-    _write(config, yaml.safe_dump(data))
+def test_a_normative_edit_alone_does_not_judge_the_check_again(tmp_path, monkeypatch):
+    case, _ = _closed_a01(tmp_path, monkeypatch)
     rules = (case / "02_rules.md").read_text()
-    _write(case / "02_rules.md", rules.replace(SufficiencyProvider.ITEM, SufficiencyProvider.ITEM
-                                               + "\n- INV-002: a lower count is refused. [witness: verification:other]"))
-    _git_commit(case)
-    for _ in range(2):  # close it again on the new text and evidence
-        service.ask_round(case, 2, PrecedentProvider([], {}))
-    _git_commit(case)
-    _write(case / "02_rules.md", (case / "02_rules.md").read_text().replace(
-        "- INV-002: a lower count is refused. [witness: verification:other]",
-        "- INV-002: a lower count is refused and logged. [witness: verification:other]"))
+    _write(case / "02_rules.md", rules.replace("A thing is counted once.", "A thing is counted exactly once."))
     summary, provider = _asked_again(case)
-    assert "OTHER CHECK BODY" in provider.instructions[0]
-    assert "INV-001 only: nothing here lowers a count" not in provider.instructions[0]
-    assert "counts_once_check.py sha256" in provider.instructions[0]   # named, not given
+    assert summary["changed_units"] == ["A01"] and provider.checks == []     # same files, items and invariants
+    assert "A01 binds INV-001, INV-002 to verification:counts_once" in provider.instructions[0]
 
 
 PACKAGED_CHECK = "from support.assertions import expect\n\ndef test_counted_once():\n    expect(True)  # INV-001\n"
@@ -1296,7 +1254,8 @@ def test_a_changed_package_helper_reopens_the_decision(tmp_path, monkeypatch):
     _write(factory / "verification" / "support" / "policy.py", "STRICT = False  # LOOSENED\n")
     summary, provider = _asked_again(case)
     assert summary["evidence_reopened"] == ["A01"]
-    assert "LOOSENED" in provider.instructions[0] and "LOOSENED" in provider.judged[0]
+    assert len(provider.checks) == 1 and "LOOSENED" in provider.checks[0]   # judged again on its helper
+    assert "LOOSENED" not in provider.instructions[0]
 
 
 def test_a_v5_clock_is_read_by_its_wall_operation_and_handed_to_its_dependants(tmp_path):
