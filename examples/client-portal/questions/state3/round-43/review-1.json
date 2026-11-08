@@ -1,0 +1,330 @@
+{
+ "open_points": [
+  {
+   "subject": "30_modules.md:`models`",
+   "kind": "contradictory_owner",
+   "text": "The State 1 records M01–M46 (M38–M46 the row models of the data provider's tables, with their enumerations `CapabilitySet`, `ImportAuditReason`, `TransportGuardRefusal` and `BootstrapCommandOutcome`), their projections and answers, the request models, the repository interfaces and the runtime models, as plain frozen typed data with their closed enumerations (A24).",
+   "question": "Does `models` own `RegistryFailureKind`, as the closed-enum rule and M01–M46 ownership imply, or does `registry_gateway` own it as State 1 M17 says: \"Owned by the Registry gateway\"?",
+   "options": [
+    "`models` owns the enum; `registry_gateway` owns only failure classification and translation",
+    "`registry_gateway` owns the enum as well as translation"
+   ],
+   "default_guess": "`models` owns the enum; `registry_gateway` owns only the behavior that selects its members.",
+   "witness": {
+    "initial": "A Registry request times out.",
+    "events": [
+     "`registry_gateway` classifies the failure and must construct a `RegistryBoundaryError` carrying a `RegistryFailureKind`."
+    ],
+    "outcomes": [
+     "The gateway imports the enum from `models`.",
+     "The gateway declares or exports the enum itself."
+    ],
+    "observer": "The generated import graph and callers that catch and compare the error kind."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:`data_provider`",
+   "kind": "missing_constant",
+   "text": "the Registry variable, paths and timeout",
+   "question": "Where is `REGISTRY_ACTIVE_SEGMENT` owned and exported? A6 and A30 require `REGISTRY_PROJECTS_PATH` and `REGISTRY_ACTIVE_SEGMENT` to be joined, but the candidate public capabilities omit `REGISTRY_ACTIVE_SEGMENT`.",
+   "options": [
+    "Add `REGISTRY_ACTIVE_SEGMENT` to `data_provider`",
+    "Make `REGISTRY_PROJECTS_PATH` contain the complete `projects/active` path",
+    "Let `registry_gateway` hard-code the `active` segment"
+   ],
+   "default_guess": "Add `REGISTRY_ACTIVE_SEGMENT` to `data_provider`, matching A6 and A30.",
+   "witness": {
+    "initial": "The Registry serves different schemas at `projects` and `projects/active`.",
+    "events": [
+     "`registry_gateway.list_active_projects` constructs its request URL."
+    ],
+    "outcomes": [
+     "It joins `REGISTRY_PROJECTS_PATH` with an exported `REGISTRY_ACTIVE_SEGMENT` and decodes the active-reference schema.",
+     "It uses only the exported `REGISTRY_PROJECTS_PATH`, guesses whether that value is already `projects/active`, or hard-codes `active`."
+    ],
+    "observer": "Deployments whose plain `projects` response is non-empty and fails strict active-reference decoding."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:`data_provider`",
+   "kind": "scope_contradiction",
+   "text": "The typed constants of `70_data_provider_closure.json`, the one home of each value generated code reads",
+   "question": "Does \"each value generated code reads\" include environment values such as the Registry URL, binary root and binary read limit, or only release policy constants?",
+   "options": [
+    "Only release policy constants live in `data_provider`; environment values remain runtime configuration",
+    "Every value read by generated code, including environment-derived values, must be copied into `data_provider`"
+   ],
+   "default_guess": "Narrow the claim to release policy constants; environment-derived values remain runtime configuration.",
+   "witness": {
+    "initial": "Two deployments use different Registry URLs and binary roots with the same release.",
+    "events": [
+     "Each deployment starts or performs its first Registry and binary calls."
+    ],
+    "outcomes": [
+     "Generated code reads deployment-specific environment values outside `data_provider`.",
+     "The values must be emitted into `data_provider`, making the supposedly deployment-specific settings release-specific."
+    ],
+    "observer": "The deploy operator and requests sent to the Registry or binary filesystem."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "configuration_contradiction",
+   "text": "The service is configured only by environment variables, which it validates when it starts (except the Registry address, which the Registry gateway reads at each call and whose absence fails only Registry calls, State 2 A30)",
+   "question": "Are timeout, session TTL and credential entropy deployment environment configuration validated at startup, or release constants that a deployment cannot change, as State 2 A30 now says?",
+   "options": [
+    "They are `data_provider` release constants; only the remaining runtime settings come from the environment",
+    "They remain environment variables with the stated defaults"
+   ],
+   "default_guess": "Treat timeout, TTL and entropy as `data_provider` release constants and rewrite the State 0 sentence so it does not say the service is configured only by environment variables.",
+   "witness": {
+    "initial": "An operator sets a different staff-session TTL in the deployment environment.",
+    "events": [
+     "The service starts and issues a staff session."
+    ],
+    "outcomes": [
+     "The environment override is ignored and the release constant determines expiry.",
+     "The environment override is validated and determines expiry."
+    ],
+    "observer": "The staff member at the configured-versus-constant expiry time."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: agreement of the earlier states' texts with this state",
+   "kind": "startup_vs_call_contradiction",
+   "text": "with two exceptions kept from the running service: `registry_gateway` reads `REGISTRY_BASE_URL` at each Registry call (A6, A30) and `binary_storage` reads `BINARY_STORAGE_ROOT` and `BINARY_MAX_READ_BYTES` at each binary read, each refusing that call when its value is missing or unusable",
+   "question": "Are `BINARY_STORAGE_ROOT` and `BINARY_MAX_READ_BYTES` required and validated at startup, or may startup succeed and only a later binary read fail when either is missing or unusable?",
+   "options": [
+    "Validate both at startup and refuse startup",
+    "Read and validate both per binary call, allowing startup without them",
+    "Validate at startup and also reread them per call"
+   ],
+   "default_guess": "Preserve the stated running-service exception: read and validate them per binary call, and narrow R0-10 and the runtime-settings obligation accordingly.",
+   "witness": {
+    "initial": "`BINARY_MAX_READ_BYTES` is absent, but no binary endpoint has yet been called.",
+    "events": [
+     "The host starts the service.",
+     "A client later requests an otherwise authorized document."
+    ],
+    "outcomes": [
+     "Startup fails because a required runtime variable is missing.",
+     "Startup succeeds; only the document request fails."
+    ],
+    "observer": "The deploy operator before traffic and the client making the later binary request."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:`registry_gateway`",
+   "kind": "value_source_ambiguity",
+   "text": "configured endpoint, paths and timeout (A30; the data-provider constants)",
+   "question": "Which of the endpoint, paths and timeout are data-provider constants, and which value is read from the environment at each call?",
+   "options": [
+    "The variable name, paths and timeout are constants; the endpoint URL value is read from `REGISTRY_BASE_URL` per call",
+    "The endpoint URL, paths and timeout are all constants",
+    "The endpoint URL and timeout are runtime environment values; only paths are constants"
+   ],
+   "default_guess": "The variable name, paths and timeout are constants; the endpoint URL value is read from the named environment variable per call.",
+   "witness": {
+    "initial": "The process environment changes `REGISTRY_BASE_URL` between two Registry calls.",
+    "events": [
+     "The gateway makes the first validation call.",
+     "The host changes the environment value.",
+     "The gateway makes the second validation call."
+    ],
+    "outcomes": [
+     "The second call uses the new endpoint because the URL value is read per call.",
+     "Both calls use a data-provider endpoint constant."
+    ],
+    "observer": "The Registry servers receiving the calls."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:`data_provider`",
+   "kind": "missing_dependency",
+   "text": "the session lifetimes and credential entropy (A30)",
+   "question": "How can `credential_security` obtain `CREDENTIAL_SECRET_BYTES` when its `Knows` section names only `models`?",
+   "options": [
+    "Add `data_provider` to `credential_security.Knows` and import `CREDENTIAL_SECRET_BYTES`",
+    "Pass the entropy value into every credential-security operation from its callers",
+    "Keep a duplicate entropy value inside `credential_security`"
+   ],
+   "default_guess": "Add the direct `data_provider` dependency and import `CREDENTIAL_SECRET_BYTES`.",
+   "witness": {
+    "initial": "A viewer-access credential is issued.",
+    "events": [
+     "`viewer_access` asks `credential_security` to generate a verification secret."
+    ],
+    "outcomes": [
+     "`credential_security` reads `CREDENTIAL_SECRET_BYTES` directly from `data_provider`.",
+     "The caller supplies the size or `credential_security` retains its own value."
+    ],
+    "observer": "Generated imports and the length of issued random secrets."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:`record_builders`",
+   "kind": "construction_scope_ambiguity",
+   "text": "every record a model-written module built from its inputs is built by an emitted builder of `record_builders`",
+   "question": "Does this cover records reconstructed by repositories, Registry wire decoders, runtime-settings decoding, credential-envelope parsing and binary responses, or only the constructions explicitly present in `70_record_construction_closure.json`?",
+   "options": [
+    "Every model instance created by model-written code must use a builder",
+    "Only the enumerated business constructions use builders; decoding, hydration and parsing are explicitly exempt",
+    "Adapters and repositories also need additional emitted builders not listed here"
+   ],
+   "default_guess": "Limit the rule to the enumerated closure and explicitly exempt wire decoding, persistence hydration and other boundary parsing; otherwise the declared dependency graph is incomplete.",
+   "witness": {
+    "initial": "A stored Expense row is read from SQLite, or a Registry context response is decoded.",
+    "events": [
+     "A model-written repository or gateway converts external fields into a State 1 record."
+    ],
+    "outcomes": [
+     "It calls an emitted `record_builders` function, requiring an undeclared dependency and an additional builder.",
+     "It constructs the decoded or hydrated model directly because boundary decoding is outside the builder rule."
+    ],
+    "observer": "The strict-import validator and any read operation exercising repository hydration or Registry decoding."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:Dependency direction",
+   "kind": "incomplete_import_surface",
+   "text": "Each module's `Knows` section names exactly the modules it imports (the accepted `imports.module_internal`, plus the one edge `api` → `api_irregular` of the running code).",
+   "question": "For every new `data_provider` and `record_builders` edge, which exact exported symbols form the complete and minimal direct runtime import surface?",
+   "options": [
+    "List the exact constants and builder functions per consumer now",
+    "Infer symbols later from prose and capability names",
+    "Import every public constant or builder from the named provider"
+   ],
+   "default_guess": "List the exact symbols per consumer now; do not infer them or import a provider's whole public surface.",
+   "witness": {
+    "initial": "`expense_management` is declared to know both `data_provider` and `record_builders`, whose public surfaces contain many symbols.",
+    "events": [
+     "A later agent generates `expense_management` under strict imports."
+    ],
+    "outcomes": [
+     "It imports only specifically declared constants and revision/build functions.",
+     "It guesses from prose, imports all exports, or omits a symbol that the implementation directly names."
+    ],
+    "observer": "The strict-import validator, affected-set computation and generated module import errors."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:`audit_writer`",
+   "kind": "dual_owner",
+   "text": "Record construction and the catalogue checks.",
+   "question": "Does `audit_writer` own AuditRecord construction, or does it only compute/validate builder parameters while `record_builders` exclusively owns how the record is constructed?",
+   "options": [
+    "`audit_writer` owns validation and orchestration; `record_builders` owns field construction",
+    "Both modules own AuditRecord construction",
+    "`audit_writer` constructs AuditRecord directly and does not use the builder"
+   ],
+   "default_guess": "Narrow `audit_writer` to validation and orchestration; `build_audit_record` exclusively owns field construction.",
+   "witness": {
+    "initial": "A valid `AuditIntent` is appended.",
+    "events": [
+     "`audit_writer` validates the intent and obtains the audit instant.",
+     "It creates the `AuditRecord`."
+    ],
+    "outcomes": [
+     "It passes computed parameters to `build_audit_record`.",
+     "It constructs the model itself under its claimed hidden mechanism."
+    ],
+    "observer": "The generated AuditRecord fields and the record-construction bypass check."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:`staff_bootstrap`",
+   "kind": "dual_owner",
+   "text": "Account and audit construction for the bootstrap and the disclosure rules of the password.",
+   "question": "Does `staff_bootstrap` own construction of the bootstrap account and audit record, or only the decision and parameter computation while `record_builders` owns their construction?",
+   "options": [
+    "`staff_bootstrap` orchestrates and computes parameters; emitted builders construct both records",
+    "`staff_bootstrap` directly constructs both records",
+    "Construction ownership is shared"
+   ],
+   "default_guess": "Narrow this to bootstrap orchestration and disclosure; use `build_bootstrap_staff_account` and `build_bootstrap_audit_record` for construction.",
+   "witness": {
+    "initial": "The staff table is empty and the operator supplies valid bootstrap credentials.",
+    "events": [
+     "`staff_bootstrap` reads its one instant and hashes the password.",
+     "It creates the administrator account and `staff.create` audit record."
+    ],
+    "outcomes": [
+     "It calls the two emitted bootstrap builders.",
+     "It directly instantiates the two models because its section says it hides their construction."
+    ],
+    "observer": "The record-construction bypass check and the persisted bootstrap rows."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:`expense_intake`",
+   "kind": "decoder_contract_gap",
+   "text": "which turns an untrusted recognition payload into a `ConfirmedRecognitionPublication` and refuses a malformed payload or a `contract_version` outside `SUPPORTED_OCR_CONTRACT_VERSIONS` with `ExpenseValidationError`",
+   "question": "What is the exact input representation and unknown-field policy of `decode_recognition_publication`, including how provider-specific and raw fields are recognized?",
+   "options": [
+    "Accept a decoded JSON object and reject every unknown field",
+    "Accept a decoded JSON object and reject only a named provider/raw-field blacklist while ignoring other unknown fields",
+    "Accept raw JSON bytes/text and perform JSON parsing as part of this function"
+   ],
+   "default_guess": "Accept a decoded JSON object, require exactly the declared model fields, and reject all unknown fields; state this explicitly.",
+   "witness": {
+    "initial": "An otherwise valid recognition payload contains `provider_name` or an unrelated extra field `trace_note`.",
+    "events": [
+     "The API passes the payload to `decode_recognition_publication`."
+    ],
+    "outcomes": [
+     "Strict decoding rejects either extra field with `ExpenseValidationError`.",
+     "A blacklist rejects `provider_name` but accepts or ignores `trace_note`."
+    ],
+    "observer": "The authenticated staff caller and the no-write verification test."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:`runtime`",
+   "kind": "failure_contract_gap",
+   "text": "the public liveness and readiness answers that change nothing",
+   "question": "What exact status and response body does readiness return when opening or rolling back the storage-probe transaction fails?",
+   "options": [
+    "Return a fixed non-success health response with no diagnostic detail",
+    "Raise and let the framework produce its generic error response",
+    "Return the same `HealthStatus(ok)` body with a non-success HTTP status"
+   ],
+   "default_guess": "Return a fixed non-success health response with no diagnostic detail, distinct from `HealthStatus(ok)`, and specify its HTTP status and body.",
+   "witness": {
+    "initial": "The service process is alive but SQLite cannot open the readiness probe transaction.",
+    "events": [
+     "A load balancer calls the public readiness endpoint."
+    ],
+    "outcomes": [
+     "It receives a deliberately specified non-ready response.",
+     "It receives a framework-dependent exception response or an `ok`-shaped body."
+    ],
+    "observer": "The load balancer deciding whether to route traffic."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:Dependency direction",
+   "kind": "standard_violation",
+   "text": "Each module's `Knows` section names exactly the modules it imports (the accepted `imports.module_internal`, plus the one edge `api` → `api_irregular` of the running code).",
+   "rule": "`module_internal` — явный граф зависимостей: consumer → provider → список\n  импортируемых символов. Имена consumer/provider — логические ключи из\n  `module_functions`; каждый символ обязан принадлежать provider. Это\n  **единственный авторитетный источник** внутренних импортов consumer-а:\n  объявленные символы входят в его локальную спеку всегда",
+   "section": "7",
+   "question": "Replace the provider-only `Knows` claim with, or point it to, an explicit authoritative consumer → provider → imported-symbol mapping for every edge.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"30_modules.md:`models`\",\"kind\":\"contradictory_owner\",\"text\":\"The State 1 records M01–M46 (M38–M46 the row models of the data provider's tables, with their enumerations `CapabilitySet`, `ImportAuditReason`, `TransportGuardRefusal` and `BootstrapCommandOutcome`), their projections and answers, the request models, the repository interfaces and the runtime models, as plain frozen typed data with their closed enumerations (A24).\",\"question\":\"Does `models` own `RegistryFailureKind`, as the closed-enum rule and M01–M46 ownership imply, or does `registry_gateway` own it as State 1 M17 says: \\\"Owned by the Registry gateway\\\"?\",\"options\":[\"`models` owns the enum; `registry_gateway` owns only failure classification and translation\",\"`registry_gateway` owns the enum as well as translation\"],\"default_guess\":\"`models` owns the enum; `registry_gateway` owns only the behavior that selects its members.\",\"witness\":{\"initial\":\"A Registry request times out.\",\"events\":[\"`registry_gateway` classifies the failure and must construct a `RegistryBoundaryError` carrying a `RegistryFailureKind`.\"],\"outcomes\":[\"The gateway imports the enum from `models`.\",\"The gateway declares or exports the enum itself.\"],\"observer\":\"The generated import graph and callers that catch and compare the error kind.\"}},{\"subject\":\"30_modules.md:`data_provider`\",\"kind\":\"missing_constant\",\"text\":\"the Registry variable, paths and timeout\",\"question\":\"Where is `REGISTRY_ACTIVE_SEGMENT` owned and exported? A6 and A30 require `REGISTRY_PROJECTS_PATH` and `REGISTRY_ACTIVE_SEGMENT` to be joined, but the candidate public capabilities omit `REGISTRY_ACTIVE_SEGMENT`.\",\"options\":[\"Add `REGISTRY_ACTIVE_SEGMENT` to `data_provider`\",\"Make `REGISTRY_PROJECTS_PATH` contain the complete `projects/active` path\",\"Let `registry_gateway` hard-code the `active` segment\"],\"default_guess\":\"Add `REGISTRY_ACTIVE_SEGMENT` to `data_provider`, matching A6 and A30.\",\"witness\":{\"initial\":\"The Registry serves different schemas at `projects` and `projects/active`.\",\"events\":[\"`registry_gateway.list_active_projects` constructs its request URL.\"],\"outcomes\":[\"It joins `REGISTRY_PROJECTS_PATH` with an exported `REGISTRY_ACTIVE_SEGMENT` and decodes the active-reference schema.\",\"It uses only the exported `REGISTRY_PROJECTS_PATH`, guesses whether that value is already `projects/active`, or hard-codes `active`.\"],\"observer\":\"Deployments whose plain `projects` response is non-empty and fails strict active-reference decoding.\"}},{\"subject\":\"30_modules.md:`data_provider`\",\"kind\":\"scope_contradiction\",\"text\":\"The typed constants of `70_data_provider_closure.json`, the one home of each value generated code reads\",\"question\":\"Does \\\"each value generated code reads\\\" include environment values such as the Registry URL, binary root and binary read limit, or only release policy constants?\",\"options\":[\"Only release policy constants live in `data_provider`; environment values remain runtime configuration\",\"Every value read by generated code, including environment-derived values, must be copied into `data_provider`\"],\"default_guess\":\"Narrow the claim to release policy constants; environment-derived values remain runtime configuration.\",\"witness\":{\"initial\":\"Two deployments use different Registry URLs and binary roots with the same release.\",\"events\":[\"Each deployment starts or performs its first Registry and binary calls.\"],\"outcomes\":[\"Generated code reads deployment-specific environment values outside `data_provider`.\",\"The values must be emitted into `data_provider`, making the supposedly deployment-specific settings release-specific.\"],\"observer\":\"The deploy operator and requests sent to the Registry or binary filesystem.\"}},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"configuration_contradiction\",\"text\":\"The service is configured only by environment variables, which it validates when it starts (except the Registry address, which the Registry gateway reads at each call and whose absence fails only Registry calls, State 2 A30)\",\"question\":\"Are timeout, session TTL and credential entropy deployment environment configuration validated at startup, or release constants that a deployment cannot change, as State 2 A30 now says?\",\"options\":[\"They are `data_provider` release constants; only the remaining runtime settings come from the environment\",\"They remain environment variables with the stated defaults\"],\"default_guess\":\"Treat timeout, TTL and entropy as `data_provider` release constants and rewrite the State 0 sentence so it does not say the service is configured only by environment variables.\",\"witness\":{\"initial\":\"An operator sets a different staff-session TTL in the deployment environment.\",\"events\":[\"The service starts and issues a staff session.\"],\"outcomes\":[\"The environment override is ignored and the release constant determines expiry.\",\"The environment override is validated and determines expiry.\"],\"observer\":\"The staff member at the configured-versus-constant expiry time.\"}},{\"subject\":\"context: agreement of the earlier states' texts with this state\",\"kind\":\"startup_vs_call_contradiction\",\"text\":\"with two exceptions kept from the running service: `registry_gateway` reads `REGISTRY_BASE_URL` at each Registry call (A6, A30) and `binary_storage` reads `BINARY_STORAGE_ROOT` and `BINARY_MAX_READ_BYTES` at each binary read, each refusing that call when its value is missing or unusable\",\"question\":\"Are `BINARY_STORAGE_ROOT` and `BINARY_MAX_READ_BYTES` required and validated at startup, or may startup succeed and only a later binary read fail when either is missing or unusable?\",\"options\":[\"Validate both at startup and refuse startup\",\"Read and validate both per binary call, allowing startup without them\",\"Validate at startup and also reread them per call\"],\"default_guess\":\"Preserve the stated running-service exception: read and validate them per binary call, and narrow R0-10 and the runtime-settings obligation accordingly.\",\"witness\":{\"initial\":\"`BINARY_MAX_READ_BYTES` is absent, but no binary endpoint has yet been called.\",\"events\":[\"The host starts the service.\",\"A client later requests an otherwise authorized document.\"],\"outcomes\":[\"Startup fails because a required runtime variable is missing.\",\"Startup succeeds; only the document request fails.\"],\"observer\":\"The deploy operator before traffic and the client making the later binary request.\"}},{\"subject\":\"30_modules.md:`registry_gateway`\",\"kind\":\"value_source_ambiguity\",\"text\":\"configured endpoint, paths and timeout (A30; the data-provider constants)\",\"question\":\"Which of the endpoint, paths and timeout are data-provider constants, and which value is read from the environment at each call?\",\"options\":[\"The variable name, paths and timeout are constants; the endpoint URL value is read from `REGISTRY_BASE_URL` per call\",\"The endpoint URL, paths and timeout are all constants\",\"The endpoint URL and timeout are runtime environment values; only paths are constants\"],\"default_guess\":\"The variable name, paths and timeout are constants; the endpoint URL value is read from the named environment variable per call.\",\"witness\":{\"initial\":\"The process environment changes `REGISTRY_BASE_URL` between two Registry calls.\",\"events\":[\"The gateway makes the first validation call.\",\"The host changes the environment value.\",\"The gateway makes the second validation call.\"],\"outcomes\":[\"The second call uses the new endpoint because the URL value is read per call.\",\"Both calls use a data-provider endpoint constant.\"],\"observer\":\"The Registry servers receiving the calls.\"}},{\"subject\":\"30_modules.md:`data_provider`\",\"kind\":\"missing_dependency\",\"text\":\"the session lifetimes and credential entropy (A30)\",\"question\":\"How can `credential_security` obtain `CREDENTIAL_SECRET_BYTES` when its `Knows` section names only `models`?\",\"options\":[\"Add `data_provider` to `credential_security.Knows` and import `CREDENTIAL_SECRET_BYTES`\",\"Pass the entropy value into every credential-security operation from its callers\",\"Keep a duplicate entropy value inside `credential_security`\"],\"default_guess\":\"Add the direct `data_provider` dependency and import `CREDENTIAL_SECRET_BYTES`.\",\"witness\":{\"initial\":\"A viewer-access credential is issued.\",\"events\":[\"`viewer_access` asks `credential_security` to generate a verification secret.\"],\"outcomes\":[\"`credential_security` reads `CREDENTIAL_SECRET_BYTES` directly from `data_provider`.\",\"The caller supplies the size or `credential_security` retains its own value.\"],\"observer\":\"Generated imports and the length of issued random secrets.\"}},{\"subject\":\"30_modules.md:`record_builders`\",\"kind\":\"construction_scope_ambiguity\",\"text\":\"every record a model-written module built from its inputs is built by an emitted builder of `record_builders`\",\"question\":\"Does this cover records reconstructed by repositories, Registry wire decoders, runtime-settings decoding, credential-envelope parsing and binary responses, or only the constructions explicitly present in `70_record_construction_closure.json`?\",\"options\":[\"Every model instance created by model-written code must use a builder\",\"Only the enumerated business constructions use builders; decoding, hydration and parsing are explicitly exempt\",\"Adapters and repositories also need additional emitted builders not listed here\"],\"default_guess\":\"Limit the rule to the enumerated closure and explicitly exempt wire decoding, persistence hydration and other boundary parsing; otherwise the declared dependency graph is incomplete.\",\"witness\":{\"initial\":\"A stored Expense row is read from SQLite, or a Registry context response is decoded.\",\"events\":[\"A model-written repository or gateway converts external fields into a State 1 record.\"],\"outcomes\":[\"It calls an emitted `record_builders` function, requiring an undeclared dependency and an additional builder.\",\"It constructs the decoded or hydrated model directly because boundary decoding is outside the builder rule.\"],\"observer\":\"The strict-import validator and any read operation exercising repository hydration or Registry decoding.\"}},{\"subject\":\"30_modules.md:Dependency direction\",\"kind\":\"incomplete_import_surface\",\"text\":\"Each module's `Knows` section names exactly the modules it imports (the accepted `imports.module_internal`, plus the one edge `api` → `api_irregular` of the running code).\",\"question\":\"For every new `data_provider` and `record_builders` edge, which exact exported symbols form the complete and minimal direct runtime import surface?\",\"options\":[\"List the exact constants and builder functions per consumer now\",\"Infer symbols later from prose and capability names\",\"Import every public constant or builder from the named provider\"],\"default_guess\":\"List the exact symbols per consumer now; do not infer them or import a provider's whole public surface.\",\"witness\":{\"initial\":\"`expense_management` is declared to know both `data_provider` and `record_builders`, whose public surfaces contain many symbols.\",\"events\":[\"A later agent generates `expense_management` under strict imports.\"],\"outcomes\":[\"It imports only specifically declared constants and revision/build functions.\",\"It guesses from prose, imports all exports, or omits a symbol that the implementation directly names.\"],\"observer\":\"The strict-import validator, affected-set computation and generated module import errors.\"}},{\"subject\":\"30_modules.md:`audit_writer`\",\"kind\":\"dual_owner\",\"text\":\"Record construction and the catalogue checks.\",\"question\":\"Does `audit_writer` own AuditRecord construction, or does it only compute/validate builder parameters while `record_builders` exclusively owns how the record is constructed?\",\"options\":[\"`audit_writer` owns validation and orchestration; `record_builders` owns field construction\",\"Both modules own AuditRecord construction\",\"`audit_writer` constructs AuditRecord directly and does not use the builder\"],\"default_guess\":\"Narrow `audit_writer` to validation and orchestration; `build_audit_record` exclusively owns field construction.\",\"witness\":{\"initial\":\"A valid `AuditIntent` is appended.\",\"events\":[\"`audit_writer` validates the intent and obtains the audit instant.\",\"It creates the `AuditRecord`.\"],\"outcomes\":[\"It passes computed parameters to `build_audit_record`.\",\"It constructs the model itself under its claimed hidden mechanism.\"],\"observer\":\"The generated AuditRecord fields and the record-construction bypass check.\"}},{\"subject\":\"30_modules.md:`staff_bootstrap`\",\"kind\":\"dual_owner\",\"text\":\"Account and audit construction for the bootstrap and the disclosure rules of the password.\",\"question\":\"Does `staff_bootstrap` own construction of the bootstrap account and audit record, or only the decision and parameter computation while `record_builders` owns their construction?\",\"options\":[\"`staff_bootstrap` orchestrates and computes parameters; emitted builders construct both records\",\"`staff_bootstrap` directly constructs both records\",\"Construction ownership is shared\"],\"default_guess\":\"Narrow this to bootstrap orchestration and disclosure; use `build_bootstrap_staff_account` and `build_bootstrap_audit_record` for construction.\",\"witness\":{\"initial\":\"The staff table is empty and the operator supplies valid bootstrap credentials.\",\"events\":[\"`staff_bootstrap` reads its one instant and hashes the password.\",\"It creates the administrator account and `staff.create` audit record.\"],\"outcomes\":[\"It calls the two emitted bootstrap builders.\",\"It directly instantiates the two models because its section says it hides their construction.\"],\"observer\":\"The record-construction bypass check and the persisted bootstrap rows.\"}},{\"subject\":\"30_modules.md:`expense_intake`\",\"kind\":\"decoder_contract_gap\",\"text\":\"which turns an untrusted recognition payload into a `ConfirmedRecognitionPublication` and refuses a malformed payload or a `contract_version` outside `SUPPORTED_OCR_CONTRACT_VERSIONS` with `ExpenseValidationError`\",\"question\":\"What is the exact input representation and unknown-field policy of `decode_recognition_publication`, including how provider-specific and raw fields are recognized?\",\"options\":[\"Accept a decoded JSON object and reject every unknown field\",\"Accept a decoded JSON object and reject only a named provider/raw-field blacklist while ignoring other unknown fields\",\"Accept raw JSON bytes/text and perform JSON parsing as part of this function\"],\"default_guess\":\"Accept a decoded JSON object, require exactly the declared model fields, and reject all unknown fields; state this explicitly.\",\"witness\":{\"initial\":\"An otherwise valid recognition payload contains `provider_name` or an unrelated extra field `trace_note`.\",\"events\":[\"The API passes the payload to `decode_recognition_publication`.\"],\"outcomes\":[\"Strict decoding rejects either extra field with `ExpenseValidationError`.\",\"A blacklist rejects `provider_name` but accepts or ignores `trace_note`.\"],\"observer\":\"The authenticated staff caller and the no-write verification test.\"}},{\"subject\":\"30_modules.md:`runtime`\",\"kind\":\"failure_contract_gap\",\"text\":\"the public liveness and readiness answers that change nothing\",\"question\":\"What exact status and response body does readiness return when opening or rolling back the storage-probe transaction fails?\",\"options\":[\"Return a fixed non-success health response with no diagnostic detail\",\"Raise and let the framework produce its generic error response\",\"Return the same `HealthStatus(ok)` body with a non-success HTTP status\"],\"default_guess\":\"Return a fixed non-success health response with no diagnostic detail, distinct from `HealthStatus(ok)`, and specify its HTTP status and body.\",\"witness\":{\"initial\":\"The service process is alive but SQLite cannot open the readiness probe transaction.\",\"events\":[\"A load balancer calls the public readiness endpoint.\"],\"outcomes\":[\"It receives a deliberately specified non-ready response.\",\"It receives a framework-dependent exception response or an `ok`-shaped body.\"],\"observer\":\"The load balancer deciding whether to route traffic.\"}},{\"subject\":\"30_modules.md:Dependency direction\",\"kind\":\"standard_violation\",\"text\":\"Each module's `Knows` section names exactly the modules it imports (the accepted `imports.module_internal`, plus the one edge `api` → `api_irregular` of the running code).\",\"rule\":\"`module_internal` — явный граф зависимостей: consumer → provider → список\\n  импортируемых символов. Имена consumer/provider — логические ключи из\\n  `module_functions`; каждый символ обязан принадлежать provider. Это\\n  **единственный авторитетный источник** внутренних импортов consumer-а:\\n  объявленные символы входят в его локальную спеку всегда\",\"section\":\"7\",\"question\":\"Replace the provider-only `Knows` claim with, or point it to, an explicit authoritative consumer → provider → imported-symbol mapping for every edge.\"}]}",
+ "set_aside": []
+}

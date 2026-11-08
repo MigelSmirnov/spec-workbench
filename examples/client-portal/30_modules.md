@@ -125,7 +125,11 @@ staff_bootstrap_cli
 Each module's `Knows` section names exactly the modules it imports (the
 accepted `imports.module_internal`, plus the one edge `api` → `api_irregular`
 of the running code). Lines of the list are layers, not an
-assertion that every module imports every earlier one.
+assertion that every module imports every earlier one. `Knows` is the
+module-level edge only: which symbols a consumer imports from each provider
+is the imports closure (`65_imports.json`, projected into
+`imports.module_internal`, SPEC_STANDARD §7), the one authoritative
+consumer → provider → symbols map.
 
 ## Facts several modules touch, and their one owner
 
@@ -331,6 +335,17 @@ element of a collection) from its parameters, with the source of every field
 and the disposal of every input field fixed by the IR. Emitted
 deterministically (`python_record_builders_v1`), never model-written; owner
 2026-11-08.
+
+Scope of the rule: the constructions a model-written module makes from its
+inputs, the 74 sites of `70_record_construction_closure.json` (`SOURCE.md`
+"Record construction"). Outside it, and constructing their records
+themselves: the three Registry decoders of `registry_gateway` (wire decoding,
+Q11); the projections of the deterministic router `api` and the viewer cookie
+backend `api_irregular` (SPEC_STANDARD 6.1); and every emitted module, which
+builds its records from its own backend IR — the repositories when they hydrate
+rows, `credential_security` (its secret envelopes), `binary_storage`
+(`BinaryPayload`) and `runtime_settings` (`RuntimeSettings`). A model-written
+module whose `Knows` omits `record_builders` builds no record of the rule.
 
 ### Knows
 

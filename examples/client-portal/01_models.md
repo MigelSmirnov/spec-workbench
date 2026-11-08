@@ -744,8 +744,9 @@ follow-up outside the Workbench route.
 
 - `RegistryFailureKind` — closed enum for boundary error translation:
   `invalid_uuid | not_found | archived | timeout | transport_error |
-  http_error | schema_mismatch | identity_mismatch`. Owned by the Registry
-  gateway; each member names the failure it classifies (A6; the accepted
+  http_error | schema_mismatch | identity_mismatch`. Defined in `models`
+  like every closed enumeration; the Registry gateway alone classifies a
+  failure with it, and each member names the failure it classifies (A6; the accepted
   `rules` translation table was removed 2026-11-08 as a second home of the
   enumeration).
 
