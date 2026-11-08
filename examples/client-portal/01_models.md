@@ -710,7 +710,9 @@ None.
   `registry_updated_at: datetime`.
 
 - `ProjectValidationResult` — `project_id: UUID`, `exists: bool`,
-  `status: str | None`, `is_active: bool`, `failure: str | None`.
+  `status: str | None`, `is_active: bool`, `failure: str | None`;
+  identity `value` (a decoded answer, compared by its fields; it names a
+  project but is not one).
 
 **Registry v1 wire contract** (owner 2026-11-08, Q11). The three Registry
 answers the portal decodes have exactly these 16 field positions, with these
@@ -1072,7 +1074,7 @@ None.
   (PortalSection), `display_name: str`, `sort_order: int`,
   `material_planned: Decimal`, `work_planned: Decimal`,
   `source_section_code: str | None` (imported provenance),
-  `updated_at`, `updated_by | None` (manual plans only: an imported plan's
+  `updated_at: datetime`, `updated_by: UUID | None` (manual plans only: an imported plan's
   `updated_by` is `None` and its `updated_at` the import's instant; the
   author of an imported version stays on `BudgetVersion.created_by_id`,
   owner 2026-11-08, Q05; when an imported budget is built stays open
@@ -1660,9 +1662,10 @@ None.
 
 - **Kind:** persisted entity.
 - **Fields:** `photo_id: UUID`, `project_id: UUID`, `intake_id: str`
-  (unique), `file_ref: str`, `photo_date: datetime`, `published_at`,
+  (unique), `file_ref: str`, `photo_date: datetime`, `published_at: datetime`,
   `published_by: UUID`, `section_id: UUID | None`, `caption: str | None`,
-  `client_visible: bool`, `updated_at | None`, `updated_by | None`.
+  `client_visible: bool`, `updated_at: datetime | None`,
+  `updated_by: UUID | None`.
 - **Rules:** replay of one `intake_id` never duplicates; optional section
   must belong to the same project; visibility/caption/section changes are
   staff actions on an active project; hiding a photo never touches
@@ -1671,12 +1674,15 @@ None.
   `published_at`; it has no `provenance_ref` (that field is the confirmed
   recognition's, kept on the Expense, R0-17) and does not keep the
   publication's `intake_source`.
-- **Change metadata:** a new photo's `updated_at` and `updated_by` equal its
-  `published_at` and `published_by` — the publication's one instant and the
-  publishing staff member — and are never `None` on a published photo; an
-  accepted update sets them again (owner 2026-11-08, Q04, which confirms the
-  running service; the Expense rule "None until amended" is not carried
-  over to photos).
+- **Change metadata:** the portal writes both on every photo it publishes:
+  a new photo's `updated_at` and `updated_by` equal its `published_at` and
+  `published_by` — the publication's one instant and the publishing staff
+  member — and an accepted update sets them again (owner 2026-11-08, Q04,
+  which confirms the running service; the Expense rule "None until amended"
+  is not carried over to photos). The field types keep `None` as the
+  accepted model and the persisted columns do (nullable), so a reader
+  accepts a stored `None`; no portal operation writes one. Tightening the
+  types to non-null is a schema change, not taken here (owner question).
 
 ### Carried changes
 

@@ -1,0 +1,195 @@
+{
+ "open_points": [
+  {
+   "subject": "Model M17 — ProjectValidationResult",
+   "kind": "standard_violation",
+   "text": "- `ProjectValidationResult` — `project_id: UUID`, `exists: bool`,\n  `status: str | None`, `is_active: bool`, `failure: str | None`.",
+   "rule": "Каждая runtime-модель без `kind` обязана объявлять\n  `identity: \"value\"|\"entity\"`; модели с `kind` поле `identity` не содержат.",
+   "section": "5",
+   "question": "Declare whether `ProjectValidationResult` has value or entity identity.",
+   "unit": "?"
+  },
+  {
+   "subject": "Model M23 — SectionPlan",
+   "kind": "creation_lifecycle_open",
+   "text": "when an imported budget is built stays open\n  question Q11 of `open_questions.md`",
+   "question": "Which product action creates the imported BudgetVersion and its SectionPlan records, and at what lifecycle point does that happen?",
+   "options": [
+    "Snapshot acceptance immediately creates the inactive imported BudgetVersion and plans",
+    "A later explicit preparation action creates the inactive imported BudgetVersion and plans",
+    "Activation creates the imported BudgetVersion and plans"
+   ],
+   "default_guess": "Use a separate explicit preparation action after snapshot acceptance and before activation.",
+   "witness": {
+    "initial": "An approved snapshot has been accepted and stored, but no BudgetVersion derived from it exists.",
+    "events": [
+     "The producer imports the snapshot.",
+     "A staff member opens the budget-version review or activation workflow."
+    ],
+    "outcomes": [
+     "The imported BudgetVersion and SectionPlan records already exist because import created them.",
+     "They do not exist until a later preparation or activation action creates them."
+    ],
+    "observer": "The staff member listing or activating budget versions"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "Model M23 — SectionPlan.updated_at",
+   "kind": "timestamp_source_ambiguous",
+   "text": "an imported plan's\n  `updated_by` is `None` and its `updated_at` the import's instant",
+   "question": "Which exact event supplies an imported SectionPlan's `updated_at`: snapshot receipt/classification, creation of the imported BudgetVersion, or activation?",
+   "options": [
+    "Snapshot import classification or receipt instant",
+    "Imported BudgetVersion construction instant",
+    "Budget activation instant"
+   ],
+   "default_guess": "Use the instant at which the imported BudgetVersion and its SectionPlan records are created.",
+   "witness": {
+    "initial": "A snapshot is accepted at t1 and its imported BudgetVersion is constructed at t2.",
+    "events": [
+     "The producer's import is accepted at t1.",
+     "A staff-triggered or system action constructs the imported budget at t2."
+    ],
+    "outcomes": [
+     "The SectionPlan has `updated_at = t1`.",
+     "The SectionPlan has `updated_at = t2`."
+    ],
+    "observer": "Staff or clients reading plan change metadata"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "Model M23 — SectionPlan identity",
+   "kind": "identity_minting_open",
+   "text": "`plan_id: UUID`",
+   "question": "Who mints a SectionPlan's `plan_id`, and is a fresh identity minted for every plan in every BudgetVersion or derived/reused from its section identity?",
+   "options": [
+    "The portal mints a fresh UUID for each `(version_id, section_id)` plan",
+    "The identity is derived from `(version_id, section_id)`",
+    "The same plan identity is reused across versions for the same PortalSection"
+   ],
+   "default_guess": "The portal mints a fresh UUID for each plan record in each BudgetVersion.",
+   "witness": {
+    "initial": "A PortalSection exists in one budget version and a later imported version also contains that section.",
+    "events": [
+     "The portal constructs the later version's SectionPlan."
+    ],
+    "outcomes": [
+     "The later plan receives a fresh `plan_id`.",
+     "The later plan reuses or derives an identity associated with the section."
+    ],
+    "observer": "Repositories, audit consumers, and callers addressing plans by `plan_id`"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "Model M23 — SectionPlan fields",
+   "kind": "standard_violation",
+   "text": "- **Fields:** `plan_id: UUID`, `version_id: UUID`, `section_id: UUID`\n  (PortalSection), `display_name: str`, `sort_order: int`,\n  `material_planned: Decimal`, `work_planned: Decimal`,\n  `source_section_code: str | None` (imported provenance),\n  `updated_at`, `updated_by | None` (manual plans only: an imported plan's\n  `updated_by` is `None` and its `updated_at` the import's instant; the\n  author of an imported version stays on `BudgetVersion.created_by_id`,\n  owner 2026-11-08, Q05; when an imported budget is built stays open\n  question Q11 of `open_questions.md`).",
+   "rule": "Указывай все поля с типами",
+   "section": "5",
+   "question": "Give explicit types for `updated_at` and `updated_by`, including their nullability.",
+   "unit": "?"
+  },
+  {
+   "subject": "Model M35 — ProgressPhoto change metadata",
+   "kind": "field_invariant_contradiction",
+   "text": "a new photo's `updated_at` and `updated_by` equal its\n  `published_at` and `published_by` — the publication's one instant and the\n  publishing staff member — and are never `None` on a published photo",
+   "question": "Must persisted ProgressPhoto records require non-null `updated_at` and `updated_by`, or do the declared optional fields permit published photos with either value absent?",
+   "options": [
+    "Both fields are required and non-null for every persisted published photo",
+    "The fields remain optional and older or partially created published photos may contain `None`"
+   ],
+   "default_guess": "Make both fields non-null for every persisted ProgressPhoto.",
+   "witness": {
+    "initial": "A new photo is successfully published.",
+    "events": [
+     "The publishing operation constructs and persists the ProgressPhoto."
+    ],
+    "outcomes": [
+     "Persistence rejects or cannot construct the photo unless both change-metadata fields equal the publication metadata.",
+     "Persistence permits the photo with `updated_at = None` and `updated_by = None` because the field declarations are optional."
+    ],
+    "observer": "Staff reading the photo and code validating or persisting it"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "Model M35 — ProgressPhoto no-op update",
+   "kind": "action_semantics_open",
+   "text": "an\n  accepted update sets them again",
+   "question": "When an update request supplies caption, section and visibility values identical to the stored values, is it accepted and does it advance `updated_at` and `updated_by`, or is it treated as no change/refused?",
+   "options": [
+    "Accept it and refresh both metadata fields",
+    "Accept it as an idempotent no-op without changing metadata",
+    "Refuse it because no model fact changes"
+   ],
+   "default_guess": "Accept it and refresh both metadata fields, matching the explicit no-op metadata behavior of Expense and ExpenseDocument.",
+   "witness": {
+    "initial": "A published photo has caption, section and visibility values V and update metadata from t1.",
+    "events": [
+     "At t2 a staff member submits an update containing the same values V."
+    ],
+    "outcomes": [
+     "The photo's `updated_at` and `updated_by` change to t2 and the acting staff member.",
+     "The stored photo and its metadata remain unchanged, or the request is refused."
+    ],
+    "observer": "Staff reading `updated_at` and audit consumers"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "Model M35 — ProgressPhoto fields",
+   "kind": "standard_violation",
+   "text": "- **Fields:** `photo_id: UUID`, `project_id: UUID`, `intake_id: str`\n  (unique), `file_ref: str`, `photo_date: datetime`, `published_at`,\n  `published_by: UUID`, `section_id: UUID | None`, `caption: str | None`,\n  `client_visible: bool`, `updated_at | None`, `updated_by | None`.",
+   "rule": "Указывай все поля с типами",
+   "section": "5",
+   "question": "Give explicit types for `published_at`, `updated_at`, and `updated_by`, and reconcile the latter fields' nullability with the non-null published-photo invariant.",
+   "unit": "?"
+  },
+  {
+   "subject": "Catalogs carried to State 2 — status transitions",
+   "kind": "lifecycle_catalog_home_open",
+   "text": "status transition\n  tables.\n- The candidates' homes as decided (State 2 A2, A3, A6, A7, A9, A30;\n  2026-11-08): the Registry timeout, session lifetimes, credential entropy,\n  money policy values, contract versions, capability sets and the staff and\n  principal transitions are data-provider constants",
+   "question": "Are staff and principal transitions the only status-transition tables, or where are the transitions for the other status-bearing models and enums defined?",
+   "options": [
+    "Only staff and principal have transition tables; every other status is immutable or has transitions stated directly by its model",
+    "All status-bearing lifecycles have data-provider transition constants",
+    "The remaining transition tables have another explicitly named home"
+   ],
+   "default_guess": "Require an explicit transition declaration or explicit immutability statement for every status-bearing lifecycle, with each structural transition table represented as model data.",
+   "unit": "?"
+  },
+  {
+   "subject": "Status — capability sets",
+   "kind": "standard_violation",
+   "text": "Role and principal-type\n>    capability sets are static catalog data (since 2026-11-08 the data-provider\n>    constant `CAPABILITY_SET_MEMBERS`, A2); there is no runtime\n>    capability editing.",
+   "rule": "Большие структурные доменные справочники и catalog/mapping tables тоже живут в `models`, если это domain taxonomy или upstream/downstream contract. Справочник, который читает генерируемый код, доставляет константа поставщика данных (§15.3.1): запись `models` с таким `kind` до кода не доходит.",
+   "section": "5",
+   "question": "Replace the prose-only capability mapping with a `models` record of an allowed structural-data `kind`, while retaining `CAPABILITY_SET_MEMBERS` as its data-provider constant.",
+   "unit": "?"
+  },
+  {
+   "subject": "Model M13 — principal status transitions",
+   "kind": "standard_violation",
+   "text": "`active ↔ disabled`: a disabled principal may be enabled again (Meaning; accepted `rules.status_transitions.principal`, now the data-provider constant `PRINCIPAL_STATUS_TRANSITIONS`).",
+   "rule": "Большие структурные доменные справочники и catalog/mapping tables тоже живут в `models`, если это domain taxonomy или upstream/downstream contract. Справочник, который читает генерируемый код, доставляет константа поставщика данных (§15.3.1): запись `models` с таким `kind` до кода не доходит.",
+   "section": "5",
+   "question": "Declare the principal transition mapping as a structural `models` record with an allowed `kind`, delivered to generated code by `PRINCIPAL_STATUS_TRANSITIONS`.",
+   "unit": "?"
+  },
+  {
+   "subject": "Catalogs carried to State 2 — data-provider catalogs",
+   "kind": "standard_violation",
+   "text": "- The candidates' homes as decided (State 2 A2, A3, A6, A7, A9, A30;\n  2026-11-08): the Registry timeout, session lifetimes, credential entropy,\n  money policy values, contract versions, capability sets and the staff and\n  principal transitions are data-provider constants; the Registry failure\n  kinds are the enumeration `RegistryFailureKind` alone; the Registry URL and\n  the binary read limit stay environment values.",
+   "rule": "Большие структурные доменные справочники и catalog/mapping tables тоже живут в `models`, если это domain taxonomy или upstream/downstream contract. Справочник, который читает генерируемый код, доставляет константа поставщика данных (§15.3.1): запись `models` с таким `kind` до кода не доходит.",
+   "section": "5",
+   "question": "Turn each structural contract-version set, capability mapping, and status-transition table in this passage into a separate `models` record with the appropriate allowed `kind`; leave its named provider constant as the delivery mechanism.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"Model M17 — ProjectValidationResult\",\"kind\":\"standard_violation\",\"text\":\"- `ProjectValidationResult` — `project_id: UUID`, `exists: bool`,\\n  `status: str | None`, `is_active: bool`, `failure: str | None`.\",\"rule\":\"Каждая runtime-модель без `kind` обязана объявлять\\n  `identity: \\\"value\\\"|\\\"entity\\\"`; модели с `kind` поле `identity` не содержат.\",\"section\":\"5\",\"question\":\"Declare whether `ProjectValidationResult` has value or entity identity.\"},{\"subject\":\"Model M23 — SectionPlan\",\"kind\":\"creation_lifecycle_open\",\"text\":\"when an imported budget is built stays open\\n  question Q11 of `open_questions.md`\",\"question\":\"Which product action creates the imported BudgetVersion and its SectionPlan records, and at what lifecycle point does that happen?\",\"options\":[\"Snapshot acceptance immediately creates the inactive imported BudgetVersion and plans\",\"A later explicit preparation action creates the inactive imported BudgetVersion and plans\",\"Activation creates the imported BudgetVersion and plans\"],\"default_guess\":\"Use a separate explicit preparation action after snapshot acceptance and before activation.\",\"witness\":{\"initial\":\"An approved snapshot has been accepted and stored, but no BudgetVersion derived from it exists.\",\"events\":[\"The producer imports the snapshot.\",\"A staff member opens the budget-version review or activation workflow.\"],\"outcomes\":[\"The imported BudgetVersion and SectionPlan records already exist because import created them.\",\"They do not exist until a later preparation or activation action creates them.\"],\"observer\":\"The staff member listing or activating budget versions\"}},{\"subject\":\"Model M23 — SectionPlan.updated_at\",\"kind\":\"timestamp_source_ambiguous\",\"text\":\"an imported plan's\\n  `updated_by` is `None` and its `updated_at` the import's instant\",\"question\":\"Which exact event supplies an imported SectionPlan's `updated_at`: snapshot receipt/classification, creation of the imported BudgetVersion, or activation?\",\"options\":[\"Snapshot import classification or receipt instant\",\"Imported BudgetVersion construction instant\",\"Budget activation instant\"],\"default_guess\":\"Use the instant at which the imported BudgetVersion and its SectionPlan records are created.\",\"witness\":{\"initial\":\"A snapshot is accepted at t1 and its imported BudgetVersion is constructed at t2.\",\"events\":[\"The producer's import is accepted at t1.\",\"A staff-triggered or system action constructs the imported budget at t2.\"],\"outcomes\":[\"The SectionPlan has `updated_at = t1`.\",\"The SectionPlan has `updated_at = t2`.\"],\"observer\":\"Staff or clients reading plan change metadata\"}},{\"subject\":\"Model M23 — SectionPlan identity\",\"kind\":\"identity_minting_open\",\"text\":\"`plan_id: UUID`\",\"question\":\"Who mints a SectionPlan's `plan_id`, and is a fresh identity minted for every plan in every BudgetVersion or derived/reused from its section identity?\",\"options\":[\"The portal mints a fresh UUID for each `(version_id, section_id)` plan\",\"The identity is derived from `(version_id, section_id)`\",\"The same plan identity is reused across versions for the same PortalSection\"],\"default_guess\":\"The portal mints a fresh UUID for each plan record in each BudgetVersion.\",\"witness\":{\"initial\":\"A PortalSection exists in one budget version and a later imported version also contains that section.\",\"events\":[\"The portal constructs the later version's SectionPlan.\"],\"outcomes\":[\"The later plan receives a fresh `plan_id`.\",\"The later plan reuses or derives an identity associated with the section.\"],\"observer\":\"Repositories, audit consumers, and callers addressing plans by `plan_id`\"}},{\"subject\":\"Model M23 — SectionPlan fields\",\"kind\":\"standard_violation\",\"text\":\"- **Fields:** `plan_id: UUID`, `version_id: UUID`, `section_id: UUID`\\n  (PortalSection), `display_name: str`, `sort_order: int`,\\n  `material_planned: Decimal`, `work_planned: Decimal`,\\n  `source_section_code: str | None` (imported provenance),\\n  `updated_at`, `updated_by | None` (manual plans only: an imported plan's\\n  `updated_by` is `None` and its `updated_at` the import's instant; the\\n  author of an imported version stays on `BudgetVersion.created_by_id`,\\n  owner 2026-11-08, Q05; when an imported budget is built stays open\\n  question Q11 of `open_questions.md`).\",\"rule\":\"Указывай все поля с типами\",\"section\":\"5\",\"question\":\"Give explicit types for `updated_at` and `updated_by`, including their nullability.\"},{\"subject\":\"Model M35 — ProgressPhoto change metadata\",\"kind\":\"field_invariant_contradiction\",\"text\":\"a new photo's `updated_at` and `updated_by` equal its\\n  `published_at` and `published_by` — the publication's one instant and the\\n  publishing staff member — and are never `None` on a published photo\",\"question\":\"Must persisted ProgressPhoto records require non-null `updated_at` and `updated_by`, or do the declared optional fields permit published photos with either value absent?\",\"options\":[\"Both fields are required and non-null for every persisted published photo\",\"The fields remain optional and older or partially created published photos may contain `None`\"],\"default_guess\":\"Make both fields non-null for every persisted ProgressPhoto.\",\"witness\":{\"initial\":\"A new photo is successfully published.\",\"events\":[\"The publishing operation constructs and persists the ProgressPhoto.\"],\"outcomes\":[\"Persistence rejects or cannot construct the photo unless both change-metadata fields equal the publication metadata.\",\"Persistence permits the photo with `updated_at = None` and `updated_by = None` because the field declarations are optional.\"],\"observer\":\"Staff reading the photo and code validating or persisting it\"}},{\"subject\":\"Model M35 — ProgressPhoto no-op update\",\"kind\":\"action_semantics_open\",\"text\":\"an\\n  accepted update sets them again\",\"question\":\"When an update request supplies caption, section and visibility values identical to the stored values, is it accepted and does it advance `updated_at` and `updated_by`, or is it treated as no change/refused?\",\"options\":[\"Accept it and refresh both metadata fields\",\"Accept it as an idempotent no-op without changing metadata\",\"Refuse it because no model fact changes\"],\"default_guess\":\"Accept it and refresh both metadata fields, matching the explicit no-op metadata behavior of Expense and ExpenseDocument.\",\"witness\":{\"initial\":\"A published photo has caption, section and visibility values V and update metadata from t1.\",\"events\":[\"At t2 a staff member submits an update containing the same values V.\"],\"outcomes\":[\"The photo's `updated_at` and `updated_by` change to t2 and the acting staff member.\",\"The stored photo and its metadata remain unchanged, or the request is refused.\"],\"observer\":\"Staff reading `updated_at` and audit consumers\"}},{\"subject\":\"Model M35 — ProgressPhoto fields\",\"kind\":\"standard_violation\",\"text\":\"- **Fields:** `photo_id: UUID`, `project_id: UUID`, `intake_id: str`\\n  (unique), `file_ref: str`, `photo_date: datetime`, `published_at`,\\n  `published_by: UUID`, `section_id: UUID | None`, `caption: str | None`,\\n  `client_visible: bool`, `updated_at | None`, `updated_by | None`.\",\"rule\":\"Указывай все поля с типами\",\"section\":\"5\",\"question\":\"Give explicit types for `published_at`, `updated_at`, and `updated_by`, and reconcile the latter fields' nullability with the non-null published-photo invariant.\"},{\"subject\":\"Catalogs carried to State 2 — status transitions\",\"kind\":\"lifecycle_catalog_home_open\",\"text\":\"status transition\\n  tables.\\n- The candidates' homes as decided (State 2 A2, A3, A6, A7, A9, A30;\\n  2026-11-08): the Registry timeout, session lifetimes, credential entropy,\\n  money policy values, contract versions, capability sets and the staff and\\n  principal transitions are data-provider constants\",\"question\":\"Are staff and principal transitions the only status-transition tables, or where are the transitions for the other status-bearing models and enums defined?\",\"options\":[\"Only staff and principal have transition tables; every other status is immutable or has transitions stated directly by its model\",\"All status-bearing lifecycles have data-provider transition constants\",\"The remaining transition tables have another explicitly named home\"],\"default_guess\":\"Require an explicit transition declaration or explicit immutability statement for every status-bearing lifecycle, with each structural transition table represented as model data.\"},{\"subject\":\"Status — capability sets\",\"kind\":\"standard_violation\",\"text\":\"Role and principal-type\\n>    capability sets are static catalog data (since 2026-11-08 the data-provider\\n>    constant `CAPABILITY_SET_MEMBERS`, A2); there is no runtime\\n>    capability editing.\",\"rule\":\"Большие структурные доменные справочники и catalog/mapping tables тоже живут в `models`, если это domain taxonomy или upstream/downstream contract. Справочник, который читает генерируемый код, доставляет константа поставщика данных (§15.3.1): запись `models` с таким `kind` до кода не доходит.\",\"section\":\"5\",\"question\":\"Replace the prose-only capability mapping with a `models` record of an allowed structural-data `kind`, while retaining `CAPABILITY_SET_MEMBERS` as its data-provider constant.\"},{\"subject\":\"Model M13 — principal status transitions\",\"kind\":\"standard_violation\",\"text\":\"`active ↔ disabled`: a disabled principal may be enabled again (Meaning; accepted `rules.status_transitions.principal`, now the data-provider constant `PRINCIPAL_STATUS_TRANSITIONS`).\",\"rule\":\"Большие структурные доменные справочники и catalog/mapping tables тоже живут в `models`, если это domain taxonomy или upstream/downstream contract. Справочник, который читает генерируемый код, доставляет константа поставщика данных (§15.3.1): запись `models` с таким `kind` до кода не доходит.\",\"section\":\"5\",\"question\":\"Declare the principal transition mapping as a structural `models` record with an allowed `kind`, delivered to generated code by `PRINCIPAL_STATUS_TRANSITIONS`.\"},{\"subject\":\"Catalogs carried to State 2 — data-provider catalogs\",\"kind\":\"standard_violation\",\"text\":\"- The candidates' homes as decided (State 2 A2, A3, A6, A7, A9, A30;\\n  2026-11-08): the Registry timeout, session lifetimes, credential entropy,\\n  money policy values, contract versions, capability sets and the staff and\\n  principal transitions are data-provider constants; the Registry failure\\n  kinds are the enumeration `RegistryFailureKind` alone; the Registry URL and\\n  the binary read limit stay environment values.\",\"rule\":\"Большие структурные доменные справочники и catalog/mapping tables тоже живут в `models`, если это domain taxonomy или upstream/downstream contract. Справочник, который читает генерируемый код, доставляет константа поставщика данных (§15.3.1): запись `models` с таким `kind` до кода не доходит.\",\"section\":\"5\",\"question\":\"Turn each structural contract-version set, capability mapping, and status-transition table in this passage into a separate `models` record with the appropriate allowed `kind`; leave its named provider constant as the delivery mechanism.\"}]}",
+ "set_aside": []
+}
