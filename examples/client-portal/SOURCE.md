@@ -768,3 +768,37 @@ For the owner: the Registry URL is read from the environment by
 `registry_gateway`, outside `runtime_settings` (SPEC_STANDARD 6.11: a second
 settings reader is a defect). Moving it into `RuntimeSettings` changes when and
 how a missing URL fails, so it is behaviour, not placement, and is left open.
+
+## Record construction: emitters first, gaps to the owner (2026-11-08)
+
+Owner correction of the same day: a prose map of which field comes from
+where is no more checkable than prose without one. Whatever an existing
+deterministic emitter or closure can own is emitted, and a note names the
+address; a record a domain function builds from an input, which no emitter
+owns, keeps a minimal note of the decided facts and is recorded as a gap.
+
+- Emitters checked against each construction and validation site (Factory
+  `emitter_catalog`, SPEC_STANDARD §6): `data_provider_backend` owns the
+  tables and values of "Data placement" above. `validation_rules_backend`
+  does not fit D01/D02, D12, D18 or D20: its evaluator takes one model and
+  returns `tuple[ValidationIssue, ...]`, its formula vocabulary has no
+  range or length operator, its rounding quantum is fixed at 0.01, and the
+  portal's validators return the quantized amount or raise typed
+  rejections — adopting it would change contracts, not placement. Router
+  and persistence projections (§6.1, §6.2) already own the route and
+  repository mappings; no LLM construction site is one of them.
+- `spec/record_construction_gaps.json`: 84 construction sites in the LLM
+  modules, each with its target models, every target field once with its
+  source (parameter field, result, clock, fresh id, None, constant,
+  unchanged, or open), and the source fields consumed or dropped with a
+  reason — 1080 target fields, 26 open (18 Registry decoder fields whose
+  wire names no text states, 8 where notes and the running code disagree).
+  It is the case for a record construction/projection structure with an
+  emitter and a closure check, analogous to §6.1 projections; the owner
+  decides it.
+- Notes kept minimal: `_project_expense_intake` (into `= models.ExpenseIntake`;
+  document_reference and file_ref, no fingerprint field) and
+  `_build_expense_aggregate` (document_reference and file_ref on
+  `= models.ExpenseDocument`, the fingerprint from
+  `_canonical_intake_fingerprint` on `= models.Expense`, the currency validated
+  and stored nowhere).
