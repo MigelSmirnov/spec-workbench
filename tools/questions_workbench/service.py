@@ -1,17 +1,18 @@
 """A question round: several independent reviews, grouped, judged, kept with the case.
 
-A topic raised by two or more reviews is judged (judge.py). A round is clear
-when no judged topic blocks: no contradiction, no gap with an observable
-consequence, and no judgement whose evidence failed its check. A topic raised
-by one review only is recorded and may be closed or carried, but it does not
-keep the state open.
+A topic raised by two or more reviews is judged (judge.py). A topic raised
+by one review only is recorded, but it asks nothing of the author.
 
-Every state closes unit by unit (units.py): a unit is closed when its two
-latest reviews were clear for it on its current text, and the state when every
-unit is. A state closed as one text before units existed (its two latest
-rounds clear on the same documents) carries that closure to each of its units
-on the text it closed on, found in the case's git history; a later edit then
-reopens only the units it touched.
+Every state closes unit by unit (units.py), by ONE round per change (owner
+decision 2026-11-08, #147): a unit is closed when the latest round on its
+current text raised no open contradiction against it and every other judged
+topic of that round that concerns it has an author disposition — ``fixed``,
+``carried`` or ``accepted``, kept in ``dispositions.json`` beside the round
+(``dispose``). The state is closed when every unit is. Units closed by two
+clear rounds before this rule stay closed. A state closed as one text before
+units existed carries that closure to each of its units on the text it closed
+on, found in the case's git history; a later edit then reopens only the units
+it touched.
 
 State 7 is asked module by module: each review gets the prompt the Factory
 builds for one generated module (factory_slice_workbench.module_prompts), from
@@ -38,7 +39,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
-from . import documents, explore, judge, layer_prompt, prompts, units
+from . import documents, explore, judge, judge_context, layer_prompt, prompts, units
 from .provenance import QuoteProvenance
 from .provider import LATER_DIR, Provider
 
@@ -72,12 +73,57 @@ def _next_round(case: Path, state: int) -> Path:
     return base / f"round-{max(taken, default=0) + 1:02d}"
 
 
+class ReviewFailed(QuestionRoundError):
+    """A review whose answer was not a JSON object with open_points, twice."""
+
+    def __init__(self, reason: str, answers: list[str]):
+        super().__init__(reason)
+        self.answers = answers
+
+
+REVIEW_ATTEMPTS = 2
+
+
 def _review(provider: Provider, instruction: str, text: str) -> dict[str, Any]:
-    answer, usage = provider.complete(instruction, text)
-    points = _json_object(answer).get("open_points")
-    if not isinstance(points, list):
-        raise QuestionRoundError("a review answered without open_points")
-    return {"open_points": points, "usage": usage, "raw": answer}
+    """One review. An answer that is not a JSON object with open_points is
+    asked again once: one malformed answer must not lose a round whose other
+    reviews answered (#147). A second failure raises ReviewFailed, which keeps
+    both answers; a provider error is not retried here."""
+    answers = []
+    for _ in range(REVIEW_ATTEMPTS):
+        answer, usage = provider.complete(instruction, text)
+        answers.append(answer)
+        try:
+            points = _json_object(answer).get("open_points")
+        except QuestionRoundError as exc:
+            reason = str(exc)
+            continue
+        if isinstance(points, list):
+            return {"open_points": points, "usage": usage, "raw": answer,
+                    **({"retried": answers[:-1]} if len(answers) > 1 else {})}
+        reason = "a review answered without open_points"
+    raise ReviewFailed(f"{reason} ({len(answers)} attempts)", answers)
+
+
+def _failed_review(exc: ReviewFailed) -> dict[str, Any]:
+    """A review recorded as failed: its answers kept, no point taken from it."""
+    return {"failed": str(exc), "answers": exc.answers, "open_points": []}
+
+
+def _valid_reviews(reviews: list[dict[str, Any]], what: str) -> None:
+    """A round goes on without a failed review only while REPEATED reviews answered."""
+    valid = sum(1 for r in reviews if "failed" not in r)
+    if valid < REPEATED:
+        reasons = "; ".join(r["failed"] for r in reviews if "failed" in r)
+        raise QuestionRoundError(f"{what}: only {valid} of {len(reviews)} reviews answered, "
+                                 f"and a round needs {REPEATED} ({reasons})")
+
+
+def _review_or_failed(provider: Provider, instruction: str, text: str) -> dict[str, Any]:
+    try:
+        return _review(provider, instruction, text)
+    except ReviewFailed as exc:
+        return _failed_review(exc)
 
 
 def _group(provider: Provider, reviews: list[dict[str, Any]], keep_points: bool = False) -> list[dict[str, Any]]:
@@ -119,10 +165,14 @@ def _group(provider: Provider, reviews: list[dict[str, Any]], keep_points: bool 
                                          + ("" if b.get("verified") else " (NOT FOUND in the snapshot)")
                                          for b in points[m].get("basis") or [] if isinstance(b, dict))
                                for m in topic["members"]]
+            # the passages the points quote, which the judge is given inline (judge_context.py)
+            topic["quoted"] = [q for m in topic["members"] for q in judge_context.topic_quotes(points[m])]
+            # an exploring review's verified bases (#159): their quotes, and the verbatim sections
             bases = [b for m in topic["members"] for b in points[m].get("basis") or []
                      if isinstance(b, dict) and b.get("verified")]
             if bases:
                 topic["bases"] = bases
+                topic["quoted"] += [b["quote"] for b in bases if b.get("quote") not in topic["quoted"]]
     return sorted(topics, key=lambda t: (-len(t["runs"]), t["topic"]))
 
 
@@ -206,24 +256,32 @@ def _judge(provider: Provider, state: int, text: str, texts: list[tuple[int, str
            repeated: list[dict[str, Any]], old: dict[str, str] | None,
            later: dict[str, str] | None = None,
            precedents: list[dict[str, Any]] | None = None,
-           witness: bool = False, case: Path | None = None, layer: str | None = None) -> dict[str, Any]:
+           witness: bool = False, case: Path | None = None, layer: str | None = None,
+           scope: list[str] | None = None) -> dict[str, Any]:
     """Judge the repeated topics. `later` maps the later states' documents to
-    their texts; a provider that reads files gets them as files to search, so
-    the judge can find a topic already decided below without receiving them
-    whole. Other providers judge without them. `precedents` are the state's
-    prior non-blocking judgements, which the judge may follow for the same
-    question on unchanged passages."""
-    change = None
-    if old is not None:
-        change = "".join(
-            "".join(difflib.unified_diff(old[name].splitlines(True), body.splitlines(True), name, name, n=2))
-            for _, name, body in texts
-        )
-    items = []
+    their texts; `precedents` are the state's prior non-blocking judgements,
+    which the judge may follow for the same question on unchanged passages.
+
+    What the judge reads depends on the provider (owner decision 2026-11-08, #147):
+
+    - a provider that reads files (`reads_files`), in a document state with the
+      round's `scope` given, gets inline only the topics, the units they
+      concern with their diff, the passages they quote or name, the precedents
+      and the layer block (judge_context.py); the full texts of States 0..N,
+      the later documents and the texts a reopened state was closed with are
+      files it searches;
+    - any other provider, and State 7 (whose text is one module's prompt), gets
+      the round text `text` inline as before, the change since `old` whole,
+      and no later documents.
+
+    Either way judge.check finds every quote in the full texts, which it gets
+    here from `texts`, never from what the judge was shown."""
     for index, topic in enumerate(repeated, 1):
         topic["id"] = f"T{index}"
-        items.append({"id": topic["id"], "topic": topic["topic"], "points": topic.get("points", topic["questions"])})
-    later = later if later and getattr(provider, "reads_files", False) else None
+    items = [{"id": t["id"], "topic": t["topic"], "points": t.get("points", t["questions"])} for t in repeated]
+    reads_files = bool(getattr(provider, "reads_files", False))
+    searched = reads_files and scope is not None and state != documents.MODULE_STATE
+    later = later if later and reads_files else None
     later_files = [f"{LATER_DIR}/{name}" for name in sorted(later)] if later else None
     # Offer only a precedent the judge can still follow. One whose quoted
     # passages changed invites `judged_before`, which `judge.check` then rejects
@@ -232,13 +290,32 @@ def _judge(provider: Provider, state: int, text: str, texts: list[tuple[int, str
     later_text = "\n\n".join(later.values()) if later else None
     precedents = [p for p in precedents or [] if judge.precedent_holds(p, current, later_text)]
     try:
-        scope = documents.question_scope(state)
+        question_scope = documents.question_scope(state)
     except documents.QuestionScopeError:
-        scope = None
-    instruction = prompts.judge_instruction(state, old is not None, later_files, bool(precedents), scope, witness)
-    judge_text = prompts.judge_input(text, items, change, precedents, layer)
-    if later:
-        answer = provider.complete_with_files(instruction, judge_text, later)[0]
+        question_scope = None
+    files: dict[str, str] = {}
+    if searched:
+        selected = judge_context.select(texts, state, repeated, scope or [], old, later)
+        files = selected.files
+        state_files = [f"{judge_context.STATES_DIR}/{name}" for _, name, _ in texts]
+        closed_files = ([f"{judge_context.CLOSED_DIR}/{name}" for _, name, _ in texts]
+                        if old is not None else None)
+        instruction = prompts.judge_instruction(state, old is not None, later_files, bool(precedents),
+                                                question_scope, witness, state_files, closed_files)
+        judge_text = prompts.judge_input(judge_context.render(selected, state), items, None, precedents, layer)
+    else:
+        change = None
+        if old is not None:
+            change = "".join(
+                "".join(difflib.unified_diff(old[name].splitlines(True), body.splitlines(True), name, name, n=2))
+                for _, name, body in texts
+            )
+        instruction = prompts.judge_instruction(state, old is not None, later_files, bool(precedents),
+                                                question_scope, witness)
+        judge_text = prompts.judge_input(text, items, change, precedents, layer)
+        files = {f"{LATER_DIR}/{name}": body for name, body in later.items()} if later else {}
+    if files:
+        answer = provider.complete_with_files(instruction, judge_text, files)[0]
     else:
         answer = provider.complete(instruction, judge_text)[0]
     judgements = {j.get("id"): j for j in _json_object(answer).get("judgements") or [] if isinstance(j, dict)}
@@ -257,16 +334,41 @@ def _judge(provider: Provider, state: int, text: str, texts: list[tuple[int, str
             found = provenance.of_judgement(topic["judgement"])
             if found:
                 topic["judgement"]["provenance"] = found
-    result = {"provider": provider.name, "raw": answer}
+    result = {"provider": provider.name, "raw": answer, "inline_characters": len(judge_text)}
+    if searched:
+        result["searched_files"] = sorted(files)
     if later:
         result["later_documents"] = {name: hashlib.sha256(body.encode("utf-8")).hexdigest()
                                      for name, body in later.items()}
     return result
 
 
+DISPOSITIONS_FILE = "dispositions.json"
+DISPOSITIONS_SCHEMA = "spec_workbench_topic_dispositions.v1"
+DISPOSITION_KINDS = ("fixed", "carried", "accepted")
+# Layers past the design states a topic may be carried to (besides a later state).
+CARRY_LAYERS = ("generation", "factory_checks", "deploy")
+ASSEMBLY_STATE = 8  # State 8 assembly: the last state a topic may be carried to by number
+
+
+def _dispositions(directory: Path) -> list[dict[str, Any]]:
+    path = directory / DISPOSITIONS_FILE
+    if not path.is_file():
+        return []
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    return [d for d in payload.get("dispositions") or [] if isinstance(d, dict)]
+
+
 def _summaries(case: Path, state: int) -> list[dict[str, Any]]:
+    """The rounds of a state, oldest first, each with the author's dispositions
+    of its topics (`dispositions`, read from beside its summary)."""
     paths = sorted(rounds_dir(case, state).glob("round-*/summary.json"), key=_round_number)
-    return [json.loads(p.read_text(encoding="utf-8")) for p in paths]
+    found = []
+    for path in paths:
+        summary = json.loads(path.read_text(encoding="utf-8"))
+        summary["dispositions"] = _dispositions(path.parent)
+        found.append(summary)
+    return found
 
 
 def _git_out(case: Path, *args: str) -> str | None:
@@ -582,7 +684,8 @@ def _document_round(provider: Provider, state: int, runs: int, read: StateTexts,
                     lambda _: explore.review(provider, asked, text, root, exploration["snapshot"]), range(runs)))
     else:
         with ThreadPoolExecutor(max_workers=runs) as pool:
-            reviews = list(pool.map(lambda _: _review(provider, instruction, text), range(runs)))
+            reviews = list(pool.map(lambda _: _review_or_failed(provider, instruction, text), range(runs)))
+        _valid_reviews(reviews, f"State {state}")
     for review in reviews:
         _set_aside(review, scope, changed, read.units)
     topics = _group(provider, reviews, keep_points=True)
@@ -590,7 +693,7 @@ def _document_round(provider: Provider, state: int, runs: int, read: StateTexts,
     judge_layer = (prompts.layer_judge(layer, scope) or "") + (
         explore.bases_for_judge(repeated, exploration["snapshot"]) if exploration is not None else "")
     judged = (_judge(provider, state, text, read.texts, repeated, old, later, precedents,
-                     witness=True, case=case, layer=judge_layer or None) if repeated
+                     witness=True, case=case, layer=judge_layer or None, scope=scope) if repeated
               else {"provider": provider.name})
     if exploration is not None:
         judged["exploration"] = exploration
@@ -626,8 +729,9 @@ def _module_round(provider: Provider, state: int, runs: int, read: StateTexts, s
     def one(job: tuple[str, int]) -> dict[str, Any]:
         module = job[0]
         diff = changed[module][0] if module in changed else None
-        review = _review(provider, prompts.module_ask_instruction(state, scope_text, diff, obligations[module]),
-                         prompts.module_input(module, read.units[module]["text"]))
+        review = _review_or_failed(provider,
+                                   prompts.module_ask_instruction(state, scope_text, diff, obligations[module]),
+                                   prompts.module_input(module, read.units[module]["text"]))
         review["unit"] = module
         for point in review["open_points"]:
             if isinstance(point, dict):
@@ -638,6 +742,8 @@ def _module_round(provider: Provider, state: int, runs: int, read: StateTexts, s
     jobs = [(module, run) for module in scope for run in range(runs)]
     with ThreadPoolExecutor(max_workers=min(MODULE_WORKERS, len(jobs))) as pool:
         reviews = list(pool.map(one, jobs))
+    for module in scope:
+        _valid_reviews([r for r in reviews if r["unit"] == module], f"State {state} module {module}")
     precedents = _precedents(case, state)
     topics: list[dict[str, Any]] = []
     repeated: list[dict[str, Any]] = []
@@ -676,14 +782,19 @@ def ask_round(case: Path, state: int, provider: Provider, runs: int = DEFAULT_RU
     read = state_texts(case, state, factory_root)
     previous_summaries = unit_summaries(case, state)
     evidence = unit_evidence(case, state)
-    still_open = units.closed(previous_summaries, read.units, evidence)
-    scope = [key for key in read.units if not still_open[key]]
+    before = units.states(previous_summaries, read.units, evidence)
+    # One round per change: a round reviews only the units that need one —
+    # never reviewed, changed since their latest review, or with evidence that
+    # changed. A unit waiting for dispositions or for the fix of a
+    # contradiction is not asked again on the same text.
+    scope = [key for key in read.units if before[key]["needs_round"]]
     if not scope:
-        raise QuestionRoundError(f"every unit of State {state} is closed on its current text; nothing to ask")
+        if all(value["closed"] for value in before.values()):
+            raise QuestionRoundError(f"every unit of State {state} is closed on its current text; nothing to ask")
+        raise QuestionRoundError(_nothing_to_ask(state, before))
     changed = _changed_units(case, read.texts, state, scope, read.units, previous_summaries)
-    # a unit closed on its text whose bound checks changed is asked about the new evidence
-    textually = units.closed(previous_summaries, read.units)
-    evidence_reopened = [key for key in scope if textually[key]]
+    # a unit reviewed on its text whose bound checks changed is asked about the new evidence
+    evidence_reopened = [key for key in scope if before[key]["needs_round"] == units.EVIDENCE_CHANGED]
     # a closed unit that names a decision changed since its closure is asked
     # again, for that change only
     referencing = (units.referencing(read.units, list(changed), scope)
@@ -695,16 +806,17 @@ def ask_round(case: Path, state: int, provider: Provider, runs: int = DEFAULT_RU
     judge_checks(case, state, provider)  # each bound check judged once, kept by digest
     layer = layer_context(case, state)
     layer["evidence_reopened"] = evidence_reopened
-    layer["unit_evidence"] = evidence
+    layer["unit_evidence"] = evidence or {}
     reviews, topics, repeated, judged = asked(provider, state, runs, read, scope, changed, old, case, referencing,
                                               layer)
     for topic in topics:
         topic.pop("points", None)
+        topic.pop("quoted", None)
     directory = _next_round(case, state)
     directory.mkdir(parents=True)
-    for index, review in enumerate(reviews, 1):
-        name = (f"review-{review['unit']}-{(index - 1) % runs + 1}.json" if "unit" in review
-                else f"review-{index}.json")
+    names = [f"review-{review['unit']}-{(index - 1) % runs + 1}.json" if "unit" in review
+             else f"review-{index}.json" for index, review in enumerate(reviews, 1)]
+    for name, review in zip(names, reviews):
         (directory / name).write_text(json.dumps(review, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     if state == documents.MODULE_STATE:
         kept = directory / PROMPTS_DIR
@@ -715,12 +827,16 @@ def ask_round(case: Path, state: int, provider: Provider, runs: int = DEFAULT_RU
     deferred = [t for t in repeated if t["judgement"].get("deferred_to")]
     summary = {
         "schema_version": SCHEMA,
+        "closure": units.CLOSURE_RULE,
         "state": state,
         "round": directory.name,
         "provider": provider.name,
         "documents": read.digests,
         "reviews": runs,
         "points": [len(r["open_points"]) for r in reviews],
+        # a review whose answer was not valid JSON twice (#147): kept, no point taken from it
+        "failed_reviews": [{"review": name, "reason": r["failed"]} for name, r in zip(names, reviews)
+                           if "failed" in r],
         "since": since,
         "judge": judged,
         "repeated_topics": len(repeated),
@@ -742,44 +858,48 @@ def ask_round(case: Path, state: int, provider: Provider, runs: int = DEFAULT_RU
         "set_aside": [len(r["set_aside"]) for r in reviews],
         "topics": topics,
         "layer": layer_record(layer),
-        "unit_evidence": {key: evidence[key] for key in scope if key in evidence},
+        "unit_evidence": {key: evidence[key] for key in scope if key in (evidence or {})},
         "evidence_reopened": evidence_reopened,
         "transition_ready": layer["ready"],
     }
     if previous_summaries and str(previous_summaries[0].get("round")).startswith(CARRIED):
         first = previous_summaries[0]
         summary["carried"] = {"from": first["carried_from"], "ref": first["ref"], "units": first["units"]}
-    open_after = units.closed(previous_summaries + [summary], read.units, evidence)
-    summary["closed"] = all(open_after.values())
-    summary["open_units"] = [key for key, done in open_after.items() if not done]
+    after = units.states(previous_summaries + [summary], read.units, evidence)
+    summary["closed"] = all(value["closed"] for value in after.values())
+    summary["open_units"] = [key for key, value in after.items() if not value["closed"]]
+    # what this round asks of the author: topics to dispose, units whose contradiction needs a fix
+    summary["awaiting_disposition"] = sorted({t for key in scope for t in after[key]["awaiting"]})
+    summary["contradiction_units"] = [key for key in scope if after[key]["contradictions"] or after[key]["unverified"]]
     (directory / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     return summary
 
 
 def judge_checks(case: Path, state: int, provider: Provider) -> list[dict[str, Any]]:
     """Judge the bound checks that have no judgement on their current files and
-    items, for the states that judge bindings (witness_judgement)."""
+    items, at a state where witness_material closes (transition.judges_witnesses;
+    State 2 only carries it). The judgement itself does not depend on the
+    state: `design_questions.py judge-checks` makes it for any case."""
     import design_decision_witness
     import transition
     import witness_judgement
 
-    sequence = transition.load_sequence()
-    if not any("witness_material" in transition.own_checks(sequence, phase)
-               for phase in transition.state_phases(sequence, state)):
+    if not transition.judges_witnesses(transition.load_sequence(), state):
         return []
     return witness_judgement.judge(case, provider, design_decision_witness.binding_material(case))
 
 
-def unit_evidence(case: Path, state: int) -> dict[str, str]:
+def unit_evidence(case: Path, state: int) -> dict[str, str] | None:
     """unit -> the digest of the evidence its decision's bindings rest on
-    (design_decision_witness.evidence_basis), for the states that judge bindings."""
+    (design_decision_witness.evidence_basis), at a state where witness_material
+    closes. Elsewhere None: units close on their text alone, so a changed check
+    reopens none of them, and neither does an evidence digest a round recorded
+    before the owner decision of 2026-11-08 (State 2 only describes the test)."""
     import design_decision_witness
     import transition
 
-    sequence = transition.load_sequence()
-    if not any("witness_material" in transition.own_checks(sequence, phase)
-               for phase in transition.state_phases(sequence, state)):
-        return {}
+    if not transition.judges_witnesses(transition.load_sequence(), state):
+        return None
     try:
         return design_decision_witness.evidence_basis(design_decision_witness.binding_material(case))
     except Exception:  # unreadable evidence is reported by witness_material; it closes nothing new
@@ -811,17 +931,28 @@ def layer_record(layer: dict[str, Any]) -> dict[str, Any]:
             # the verdicts the round was given: which check judgement, by digest
             "verdicts": [{"decision": v["decision"], "witness": v["witness"], "digest": v["digest"],
                           "outcome": v["outcome"]} for v in layer.get("verdicts") or []],
+            # what the authors of earlier states carried here by a disposition
+            "carried_in": [{"state": c["state"], "round": c["round"], "topic": c["topic"]}
+                           for c in layer.get("carried_in") or []],
             "digest": _sha(json.dumps(layer, sort_keys=True, ensure_ascii=False, default=str))}
 
 
 def _closed_at(case: Path, state: int, summaries: list[dict[str, Any]]) -> str | None:
-    """The git ref the state was last closed at, for `ask --since`: the commit
-    that kept the latest closing round, or that held a carried closure's texts."""
-    for summary in reversed(summaries):
+    """The git ref the state was last closed at, for `ask --since`: the latest
+    commit of the round that closed every unit of its text (with the author's
+    dispositions, kept in the same directory), or that held a carried
+    closure's texts."""
+    for index in range(len(summaries) - 1, -1, -1):
+        summary = summaries[index]
         if str(summary.get("round", "")).startswith(CARRIED):
             return summary.get("ref") or "HEAD"
-        if summary.get("closed"):
-            ref = _added_at(case, rounds_dir(case, state) / summary["round"] / "summary.json")
+        digests = summary.get("units") or {}
+        closing = summary.get("closed") or (digests and all(
+            units.unit_state(summaries[:index + 1], key, digest)["closed"] for key, digest in digests.items()))
+        if closing:
+            directory = rounds_dir(case, state) / summary["round"]
+            found = _git_out(case, "log", "-1", "--format=%H", "--", str(directory.resolve()))
+            ref = (found or "").strip() or _added_at(case, directory / "summary.json")
             if ref:
                 return ref
     return None
@@ -850,7 +981,8 @@ def _status(case: Path, state: int, factory_root: Path | None = None) -> dict[st
     rounds = _summaries(case, state)
     latest = rounds[-1] if rounds else None
     base = {"state": state, "round": latest["round"] if latest else None,
-            "provider": latest.get("provider") if latest else None}
+            "provider": latest.get("provider") if latest else None,
+            "carried_in": carried_items(case, to=state)}
     try:
         read = state_texts(case, state, factory_root)
     except QuestionRoundError as exc:
@@ -869,27 +1001,65 @@ def _status(case: Path, state: int, factory_root: Path | None = None) -> dict[st
                 "reason": ("the design texts changed after the latest round" if stale else _open_reason(latest))
                           + "; the state never closed, so every unit is open"}
     evidence = unit_evidence(case, state)
-    done = units.closed(summaries, read.units, evidence)
-    textually = units.closed(summaries, read.units)
-    open_units = [key for key, value in done.items() if not value]
-    changed = [key for key in open_units if units.closed_digest(summaries, key) is not None]
+    per_unit = units.states(summaries, read.units, evidence)
+    open_units = [key for key, value in per_unit.items() if not value["closed"]]
+    changed = [key for key in open_units if per_unit[key]["needs_round"] == units.CHANGED]
     return {
         **base,
         "closed": not open_units,
         "stale": stale,
         "carried": str(summaries[0].get("round", "")).startswith(CARRIED),
-        "reason": ("every unit closed by two clear rounds on its current text" if not open_units
-                   else f"{len(open_units)} of {len(done)} unit(s) open: {', '.join(open_units)}"
-                   + ("; the evidence of " + ", ".join(k for k in open_units if textually[k])
-                      + " changed since its closure" if any(textually[k] for k in open_units) else "")),
+        "reason": _units_reason(per_unit),
         "open_units": open_units,
         "changed_units": changed,
-        # closed on their text, reopened because the checks their bindings name changed
-        "evidence_changed": [key for key in open_units if textually[key]],
-        "units": len(done),
+        # reviewed on their text, reopened because the checks their bindings name changed
+        "evidence_changed": [key for key in open_units if per_unit[key]["needs_round"] == units.EVIDENCE_CHANGED],
+        # per unit: what keeps it open, and what its latest round carried on (owner decision 2026-11-08)
+        "unit_status": {key: _unit_row(value) for key, value in per_unit.items()
+                        if not value["closed"] or value["carried"]},
+        "needs_round": [key for key in open_units if per_unit[key]["needs_round"]],
+        "contradictions": {key: per_unit[key]["contradictions"] + per_unit[key]["unverified"]
+                           for key in open_units if per_unit[key]["contradictions"] or per_unit[key]["unverified"]},
+        "awaiting_disposition": {key: per_unit[key]["awaiting"] for key in open_units if per_unit[key]["awaiting"]},
+        "closed_by": {rule: sum(1 for v in per_unit.values() if v["rule"] == rule)
+                      for rule in ("two_clear_rounds", units.CLOSURE_RULE)},
+        "units": len(per_unit),
         "closed_at": _closed_at(case, state, summaries),
         "repeated": repeated,
     }
+
+
+def _unit_row(value: dict[str, Any]) -> dict[str, Any]:
+    return {k: value[k] for k in ("closed", "rule", "round", "needs_round", "contradictions", "unverified",
+                                  "awaiting", "carried") if value[k] not in (None, [], False) or k == "closed"}
+
+
+def _units_reason(per_unit: dict[str, dict[str, Any]]) -> str:
+    open_units = [key for key, value in per_unit.items() if not value["closed"]]
+    if not open_units:
+        return ("every unit closed on its current text: its latest round raised no open contradiction, "
+                "and every topic of it has a disposition (or it closed by two clear rounds before 2026-11-08)")
+    parts = []
+    rounds = [k for k in open_units if per_unit[k]["needs_round"]]
+    fixes = [k for k in open_units if per_unit[k]["contradictions"]]
+    waiting = [k for k in open_units if per_unit[k]["awaiting"]]
+    if rounds:
+        parts.append(f"{len(rounds)} need a round ({', '.join(rounds)})")
+    if fixes:
+        parts.append(f"{len(fixes)} hold an open contradiction, closed by a change of the text and one round on it "
+                     f"({', '.join(fixes)})")
+    if waiting:
+        topics = len({t for k in waiting for t in per_unit[k]["awaiting"]})
+        parts.append(f"{len(waiting)} wait for the author's disposition of {topics} topic(s) "
+                     f"({', '.join(waiting)}): design_questions.py dispose")
+    return f"{len(open_units)} of {len(per_unit)} unit(s) open: " + "; ".join(parts)
+
+
+def _nothing_to_ask(state: int, per_unit: dict[str, dict[str, Any]]) -> str:
+    """Why a round would ask nothing although the state is open: one round per change."""
+    return (f"no unit of State {state} needs a round: its text has not changed since its latest review. "
+            + _units_reason(per_unit) + ". Dispose of the topics, or change the text a contradiction quotes; "
+            "a second round on the same text is not asked (owner decision 2026-11-08, #147)")
 
 
 def _open_reason(summary: dict[str, Any]) -> str:
@@ -897,4 +1067,125 @@ def _open_reason(summary: dict[str, Any]) -> str:
         return f"{summary['repeated_topics']} topic(s) raised by two or more reviews"
     if summary["blocking_topics"]:
         return f"{summary['blocking_topics']} blocking topic(s): contradiction, consequential gap or unverified judgement"
-    return "one clear round; the state closes after a second clear round on the same texts"
+    return "a clear round"
+
+
+# ---------------------------------------------------------------- dispositions
+
+def _topic(summary: dict[str, Any], topic_id: str) -> tuple[str, dict[str, Any]] | None:
+    for index, topic in enumerate(summary.get("topics") or [], 1):
+        if str(topic.get("id") or f"#{index}") == topic_id:
+            return topic_id, topic
+    return None
+
+
+def _carry_target(state: int, to: str) -> int | str:
+    """A receiving layer from the closed set: a later state, or generation,
+    factory_checks, deploy."""
+    text = str(to).strip().lower().removeprefix("state").strip()
+    if text.isdigit():
+        number = int(text)
+        if not state < number <= ASSEMBLY_STATE:
+            raise QuestionRoundError(f"carried to State {number}: a topic of State {state} is carried to a later "
+                                     f"state (State {state + 1} to {ASSEMBLY_STATE}) or to {', '.join(CARRY_LAYERS)}")
+        return number
+    if text in CARRY_LAYERS:
+        return text
+    raise QuestionRoundError(f"carried to {to!r}: the receiving layer is a later state number or one of "
+                             f"{', '.join(CARRY_LAYERS)}")
+
+
+def _fix_ref(case: Path, directory: Path, ref: str) -> str:
+    """The commit a `fixed` disposition references: it exists, changes the
+    case, and does not precede the round it answers."""
+    commit = (_git_out(case, "rev-parse", "--verify", f"{ref}^{{commit}}") or "").strip()
+    if not commit:
+        raise QuestionRoundError(f"fixed: {ref!r} is not a commit of the case's history")
+    touched = _git_out(case, "diff-tree", "--no-commit-id", "--name-only", "-r", "--root", commit, "--",
+                       str(case.resolve()))
+    if not (touched or "").strip():
+        raise QuestionRoundError(f"fixed: commit {commit[:12]} changes nothing in {case.name}")
+    kept = _added_at(case, directory / "summary.json")
+    if kept and subprocess.run(["git", "-C", str(case), "merge-base", "--is-ancestor", kept, commit],
+                               capture_output=True).returncode != 0:
+        raise QuestionRoundError(f"fixed: commit {commit[:12]} does not follow the round it answers ({kept[:12]})")
+    return commit
+
+
+def dispose(case: Path, state: int, topic_id: str, disposition: str, *, round_name: str | None = None,
+            unit: str | None = None, ref: str | None = None, to: str | None = None, what: str | None = None,
+            reason: str | None = None) -> dict[str, Any]:
+    """Record the author's disposition of one topic of a round (owner decision
+    2026-11-08, #147): `fixed` with the commit of the change, `carried` to a
+    later state or to generation, factory_checks or deploy with what it must
+    decide there, or `accepted` with the author's reason. A contradiction takes
+    none: it closes by a change of the text and a round on it. Kept in
+    questions/state<N>/round-<k>/dispositions.json; returns the entry."""
+    summaries = _summaries(case, state)
+    if not summaries:
+        raise QuestionRoundError(f"State {state} has no question round")
+    if round_name is None:
+        summary = summaries[-1]
+    else:
+        summary = next((s for s in summaries if s.get("round") == round_name), None)
+        if summary is None:
+            raise QuestionRoundError(f"State {state} has no round {round_name}")
+    found = _topic(summary, topic_id)
+    if found is None:
+        raise QuestionRoundError(f"{summary['round']} of State {state} has no topic {topic_id}")
+    _, topic = found
+    need = units.topic_need(topic, summary)
+    if need == units.CONTRADICTION:
+        raise QuestionRoundError(f"{topic_id} is a contradiction: it takes no disposition and closes when a round "
+                                 "on the changed text no longer raises it")
+    if need is None:
+        raise QuestionRoundError(f"{topic_id} needs no disposition: "
+                                 f"{(topic.get('judgement') or {}).get('kind') or 'it was not judged'}")
+    concerned = units.topic_units(topic, list(summary.get("scope") or []))
+    if unit is not None and unit not in concerned:
+        raise QuestionRoundError(f"{topic_id} does not concern unit {unit!r}; it concerns {', '.join(concerned)}")
+    directory = rounds_dir(case, state) / summary["round"]
+    entry: dict[str, Any] = {"topic": topic_id, "topic_text": topic.get("topic", ""),
+                             **({"unit": unit} if unit else {}), "disposition": disposition}
+    if disposition == "fixed":
+        if not (ref or "").strip():
+            raise QuestionRoundError("fixed needs --ref: the commit of the change")
+        entry["ref"] = _fix_ref(case, directory, ref)
+    elif disposition == "carried":
+        if to is None or not (what or "").strip():
+            raise QuestionRoundError("carried needs --to (the receiving layer) and --what (what it must decide)")
+        entry["to"], entry["what"] = _carry_target(state, to), what.strip()
+    elif disposition == "accepted":
+        if not (reason or "").strip():
+            raise QuestionRoundError("accepted needs --reason: the author's reason")
+        entry["reason"] = reason.strip()
+    else:
+        raise QuestionRoundError(f"unknown disposition {disposition!r}; one of {', '.join(DISPOSITION_KINDS)}")
+    kept = [d for d in _dispositions(directory) if (d.get("topic"), d.get("unit")) != (topic_id, unit)]
+    kept.append(entry)
+    payload = {"schema_version": DISPOSITIONS_SCHEMA, "state": state, "round": summary["round"],
+               "dispositions": kept}
+    (directory / DISPOSITIONS_FILE).write_text(json.dumps(payload, ensure_ascii=False, indent=1) + "\n",
+                                               encoding="utf-8")
+    return entry
+
+
+def carried_items(case: Path, to: int | str | None = None) -> list[dict[str, Any]]:
+    """Every topic the author carried to a later layer, across the states'
+    rounds: {state, round, topic, topic_text, unit, to, what}. With `to`, only
+    those carried to that layer (a state number, or generation, factory_checks,
+    deploy)."""
+    base = case / "questions"
+    if not base.is_dir():
+        return []
+    found = []
+    for directory in sorted(base.glob("state*/round-*"), key=lambda p: (p.parent.name, _round_number(p / "x"))):
+        state_name = directory.parent.name.removeprefix("state")
+        if not state_name.isdigit():
+            continue
+        for entry in _dispositions(directory):
+            if entry.get("disposition") != "carried" or (to is not None and entry.get("to") != to):
+                continue
+            found.append({"state": int(state_name), "round": directory.name,
+                          **{k: entry.get(k) for k in ("topic", "topic_text", "unit", "to", "what")}})
+    return found

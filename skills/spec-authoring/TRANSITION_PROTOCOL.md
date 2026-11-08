@@ -57,7 +57,7 @@ the standard's owner decides the form. Citing a gap never hides a finding.
 |---|---|---|---|---|
 | every model has one identity and one closure | State 1: meaning and identity (who mints it, from what) | State 6 handoff | `model_closure` | State 1, `60_model_closure_*.json`, `60_contracts.json` |
 | every fresh timestamp has a source | State 2: where time comes from, its representation, readings per operation | State 6 handoff (contracts), State 7 handoff (notes) | `time_source`, `ambient_time` | model closure; notes |
-| every formal invariant is witnessed | State 2: the invariant and the test that would show it | State 2 handoff (described), witness phase (bound) | `invariant_tests`, `decision_witness` | Required tests; the Factory verification config; the assembled notes |
+| every formal invariant is witnessed | State 2: the invariant, its owner and the test that would show it | State 2 handoff (described), witness phase (bound), State 8 assembly (asserts, or carried to Factory verification) | `invariant_tests`, `decision_witness`, `witness_material` | Required tests; the Factory verification config; the assembled notes; the per-check verdicts |
 | every flow step is executed | State 4: the steps and who executes each | State 6 handoff (declared, contracted), State 7 handoff (called) | `flow_steps`, `flow_reachability` | plan and contracts; notes, router, backend closures |
 
 ### Models and closure
@@ -126,9 +126,22 @@ Three things share the word "witness" and are kept apart:
 - the **defect witness** of a question round — a history in which the texts give
   two outcomes. It proves a defect; it never proves an invariant.
 
-Whether a bound check really asserts its invariant is a judgement made once
-per check, outside the document round (`tools/witness_judgement.py`, owner
-review of #156, 2026-11-08). Its input is the check's material — the files its
+Whether a bound check really asserts its invariant is not State 2's work
+(owner decision 2026-11-08, #147, comment 6719629995). State 2 decides which
+witnesses must exist: every invariant has a Required tests item that says what
+must be shown. The witnesses are written after State 7, so whether a bound check
+asserts is judged there: State 2 carries the obligation `witness_assertion` to
+`state8_assembly`, whose handoff runs `witness_material` before export. A new
+application has no checks at State 2, and the layer works the same way for it
+as for a migrated one; a State 2 decision is never fitted to the product code
+or to the checks that exist. On client-portal per-check judgement in State 2
+stopped the round on 52 `partial` verdicts out of 68 bindings: gaps of Factory
+checks, or of the code they would expose, not defects of the decisions. They
+are a work list of Factory checks.
+
+The judgement is made once per check, outside any document round
+(`tools/witness_judgement.py`, owner review of #156). Its input is the check's
+material — the files its
 command names in the Factory checkout and the Factory modules they import, with
 the `__init__.py` of every package on the way (not the product under test in
 `projects/`), the assembled [TEST_EVIDENCE] notes of a `note:` scope, or the
@@ -142,22 +155,39 @@ by the sha256 of the check's declaration (argv, effective cwd and the rest of
 its entry: a subset run asserts less, and the judge is shown the run), of the
 files and of the bound items with their invariants, and made again only when
 one of them changes; an item left unverified is asked again on the next
-judgement, the verified ones reused and the earlier attempt kept (`design_questions.py judge-checks`,
-or at the start of a State 2 round). The round receives the verdicts only, one
-line per binding with its digest and outcome (`layer.verdicts`), never the
-code. `witness_material` stops the transition on a binding without a current
-verdict (`not_checked`) and on one whose check does not assert, or asserts in
-part, what its item names (`witness_does_not_assert`). Material that cannot be
-given whole is `not_checked`, never cut.
-The basis is kept per decision unit too (`unit_evidence`): when a bound check
-changes — a file, the command, a digest — while the decision's text does not,
-exactly that decision reopens and is reviewed for whether its bindings still
-hold on the new evidence, until two clear reviews on it close it again
-(`evidence_changed` in `status`). A judgement of such a unit is a precedent
-only on the evidence it was judged on: on changed evidence, or with no
-recorded basis, it is not offered to the judge, and the judge is told the unit
-reopened for its evidence. Rounds kept before the basis was recorded are
-taken as they stand for closure, not as precedents for bound decisions. On client-portal 28 of 32 decisions were bound to existing
+judgement, the verified ones reused and the earlier attempt kept
+(`design_questions.py judge-checks`). At the State 8 handoff `witness_material`
+stops on a binding without a current verdict (`judge-checks` not run on its
+current files, or a judgement whose quotes failed: `not_checked`). A Factory
+check (`verification:`) that asserts what its item names only in part
+(`partial`) or not at all (`does_not`), and one whose material cannot be given
+whole (never cut; its reason kept), is **carried** to Factory verification
+(owner decision 2026-11-08, #147 comment 6721261089, item 6): an obligation
+addressed to the Factory issue the case names in `90_factory_target.json` as
+`factory_checks_issue` (client-portal: code-factory #189), listed in the
+check's result with the decision, the invariants, the verdict and the
+check's digest (`witness_assertion_carried`, `witness_material_carried`). It
+no longer blocks State 8 or export. A carried obligation with no issue to
+address it to stops (`witness_carry_unaddressed`). A `note:` or `workbench:`
+binding is not a Factory check: one that does not fully assert still stops
+(`witness_does_not_assert`). A State 2 invariant with no Required tests item
+still blocks at State 2: that is State 2's own decision (`invariant_tests`).
+
+A State 2 round is given neither the check code nor the verdicts, and a
+`[witness: …]` tag is to it only text of the Required tests item: the reviewer
+asks whether the item says what must be shown, not whether a check shows it. A
+changed check — a file, the command, a digest — reopens no State 2 unit. The
+verdicts (`layer.verdicts`), the judgement at the start of a round and the
+evidence basis of a decision unit (`unit_evidence`) follow the layer at whose
+handoff `witness_material` runs (`transition.judges_witnesses`); a layer with
+question rounds there is given the verdicts, one line per binding with its
+digest and outcome, never the code, and when a bound check changes while the
+decision's text does not, exactly that decision reopens there and is reviewed
+for whether its bindings still hold on the new evidence, until one round on
+it closes it again (`evidence_changed` in `status`). A judgement of
+such a unit is a precedent only on the evidence it was judged on. State 8 has
+no question round: its verdicts are the per-check judgement itself.
+On client-portal 28 of 32 decisions were bound to existing
 checks; A7, A15, A20 and A32 have none. A binding found by reading check code
 is evidence; a binding to a check that does not assert the invariant is a
 false claim.
@@ -175,6 +205,13 @@ the schemas of the repositories it writes). A call a backend emits needs no
 note; do not write one to satisfy the analyser.
 
 ## Question rounds at a transition
+
+A round closes its state by one round per change (QUESTIONS.md, "Closing a
+round"): an open contradiction blocks; every other judged topic gets the
+author's disposition — `fixed`, `accepted`, or `carried` to a later state,
+`generation`, `factory_checks` or `deploy`. A topic carried to a later state is
+an obligation that state receives: its round lists it with the obligations of
+`layer.receives`, and `authoring next` shows it (`carried_dispositions`).
 
 A round is asked with its layer (`questions_workbench`): the reviewers and the
 judge are given what the layer owns, the obligations it received and their

@@ -279,10 +279,14 @@ def binding_material(case: Path, factory: Path | None = None) -> list[dict[str, 
                                           "sha256": _sha(text), "text": text,
                                           **({"imported": True} if candidate in imported else {})})
                         size = sum(len(f["text"]) for f in files)
+                        # the check exists, its material cannot be read whole: `unreadable`
+                        # (witness_material carries it to Factory verification)
                         if not files:
-                            entry.update(status="not_checked", reason=f"the command of {name} names no readable file")
+                            entry.update(status="not_checked", unreadable=True,
+                                         reason=f"the command of {name} names no readable file")
                         elif size > MATERIAL_LIMIT:
-                            entry.update(status="not_checked", files=[{k: f[k] for k in ("path", "sha256")} for f in files],
+                            entry.update(status="not_checked", unreadable=True,
+                                         files=[{k: f[k] for k in ("path", "sha256")} for f in files],
                                          reason=f"{size} characters exceed what a round is given whole ({MATERIAL_LIMIT})")
                         else:
                             entry.update(status="available", files=files)

@@ -173,7 +173,8 @@ def test_an_unfinished_exploration_is_never_a_clean_round(tmp_path, monkeypatch)
     summary = service.ask_round(case, 2, Explorer(complete=False), runs=3)
     assert [r["review"] for r in summary["not_checked_reviews"]] == [1, 2, 3]
     assert "did not read the methodology" in summary["not_checked_reviews"][0]["reason"]
-    assert summary["clear"] is False and set(summary["blocked_units"]) == set(summary["scope"])
+    assert summary["clear"] is False and summary["closed"] is False
+    assert set(summary["open_units"]) == set(summary["scope"])          # a new round is needed
 
     class Garbled(Explorer):
         def explore(self, instruction, text, ws):
@@ -194,9 +195,8 @@ def test_requirements_without_contracts_are_reviewed_in_full(tmp_path, monkeypat
             self.nav(ws, "toc")
             return json.dumps({"open_points": [], "complete": True, "unresolved": [], "read": []}), {}, self.trace
 
-    for _ in range(2):
-        summary = service.ask_round(case, 2, Quiet(), runs=3)
-        assert summary["clear"] is True and summary["not_checked_reviews"] == []
+    summary = service.ask_round(case, 2, Quiet(), runs=3)          # one round per change (#163)
+    assert summary["clear"] is True and summary["not_checked_reviews"] == []
     assert summary["closed"] is True
 
 
@@ -205,11 +205,13 @@ def test_the_workspace_holds_the_snapshot_the_tool_and_the_phase_methodology(tmp
     root.mkdir()
     layer = {"verdicts": [{"decision": "A02", "outcome": "asserts"}], "results": [], "gate_findings": []}
     workspace = explore.build_workspace(root, TEXTS, 2, layer)
+    # the State 2 round gets neither check code nor verdicts (owner decision 2026-11-08, #161)
+    assert not (root / "verdicts.json").exists()
     assert workspace["documents"] == ["docs/00_product.md", "docs/01_models.md", "docs/02_rules.md"]
     names = [name for name, _ in workspace["methodology"]]
     assert names == ["methodology/TRANSITION_PROTOCOL.md", "methodology/SECURITY_REVIEW_EVIDENCE.md",
                      "methodology/SPEC_STANDARD.md"]
-    assert (root / "nav.py").is_file() and json.loads((root / "verdicts.json").read_text())[0]["decision"] == "A02"
+    assert (root / "nav.py").is_file()
     done = subprocess.run([sys.executable, "nav.py", "read", "methodology/SPEC_STANDARD.md#title"], cwd=root,
                           capture_output=True, text=True)
     assert done.returncode == 0 and json.loads(done.stdout)["snapshot"] == workspace["snapshot"]
@@ -232,9 +234,9 @@ def test_an_answer_that_is_not_a_review_never_closes_the_round(tmp_path, monkeyp
 
         for _ in range(2):
             summary = service.ask_round(case, 2, Odd(), runs=3)
-            assert summary["clear"] is False and set(summary["blocked_units"]) == set(summary["scope"])
-            assert reason in summary["not_checked_reviews"][0]["reason"]
-        assert summary["closed"] is False and service.status(case, 2)["open_units"]
+            assert summary["clear"] is False and reason in summary["not_checked_reviews"][0]["reason"]
+            assert summary["closed"] is False and set(summary["open_units"]) == set(summary["scope"])
+        assert service.status(case, 2)["open_units"]
 
 
 def test_parallel_codex_explorations_each_read_their_own_answer(tmp_path, monkeypatch):

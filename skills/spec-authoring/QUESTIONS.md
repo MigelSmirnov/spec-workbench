@@ -18,8 +18,18 @@ it would otherwise make silently.
 
 ```bash
 python tools/design_questions.py ask examples/<case> --state <N>
+python tools/design_questions.py dispose examples/<case> --state <N> --topic T3 \
+    --fixed <commit> | --carried <later state|generation|factory_checks|deploy> --what <text> | --accepted <reason>
 python tools/design_questions.py status examples/<case> --state <N>
+python tools/design_questions.py carried examples/<case> [--to <layer>]
 ```
+
+**One round per change** (owner decision 2026-11-08, #147, comment
+6721261089). A round reviews only the units that need one: never reviewed, or
+changed since their latest review. A state is closed when the latest round
+on each unit's current text raised no open contradiction against it and every
+other judged topic of that round has an author disposition (below, "Closing a
+round"). No second round is asked on the same text.
 
 `ask` gives the prompt of the layer (owner decision 2026-11-08, #147): in
 States 0–5 the open units of State N whole, the closed units of N that name a
@@ -38,6 +48,41 @@ witness. The round is kept under
 with the texts' digests, every topic, how many reviews raised it and, for a
 repeated topic, its judgement.
 
+The instruction of a review in States 0–5 says three things (owner decision
+2026-11-08, item 5): **what the layer decides** — its `owns` and its
+`question_scope`; **what changed** — the units under review, each with its
+diff; and **what it receives** — the obligations earlier layers carried here
+(and the topics their authors carried here by a disposition), with the
+passages it depends on given below the instruction, and the deterministic
+results at its handoff. Lists of what not to ask were removed where the scope
+already excludes it (the State 2 paragraph on bound checks, the five protocol
+questions, "do not propose designs"): a long "do not ask about X" list signals
+an unclear layer boundary. The judge's mechanical rules are unchanged. On
+client-portal the fixed part of a State 2 instruction (one unit listed, no
+results) fell from 3,902 to 2,242 characters.
+
+The selection of what a layer receives falls back to the earlier texts whole
+less often (client-portal, units of State 1: 33 of 42 → 18 of 42; State 2: 25
+of 41 → 14 of 41): State 0 has no earlier state and never falls back; a
+level-2 section whose level-3 headings define names (`### R0-23 — …`,
+`### StaffAccount`) is received by those passages, not whole; model numbers
+(`M32`), a section cited by its quoted title, a module heading of one short
+name (`` `api` ``) and a model's id field (`service_principal_id` for
+ServicePrincipal) resolve; a qualified operation heading defines its last name
+only. The closure over what the chosen passages name still runs until nothing
+is added (owner review r4504187842 of #157), but through models, decisions and
+operations only, not through modules or plain sections. A unit that names
+nothing an earlier state defines still reads the earlier texts whole, and the
+round says why.
+
+A review whose answer is not a JSON object with `open_points` is asked once
+more. When the second answer fails too, the review is kept as failed — its
+answers recorded, no point taken from it, never a fabricated one — and the
+round goes on with the others while at least two answered; `summary.json`
+lists it under `failed_reviews`. With fewer than two answering reviews the
+round is refused. Before this, one malformed answer lost a round of three
+reviews already paid for (#147).
+
 ### A round is asked with its transition
 
 The texts alone hide what the next gate will reject. On client-portal (issue
@@ -52,23 +97,60 @@ when a result shows it open. The results are not design text: no quote may come
 from them, they are not cut into units, and a changed result reopens no unit.
 The round keeps a digest of what it was shown (`layer`).
 
-`status` keeps two verdicts: `closed`, whether the rounds closed every unit, and
-`ready`, which adds that the transition holds. It exits 0 only when both do; a
-closed round never hides a `not_checked` or blocking result.
+`status` keeps two verdicts: `closed`, whether the rounds and their
+dispositions closed every unit, and `ready`, which adds that the transition
+holds. It exits 0 only when both do; a closed round never hides a
+`not_checked` or blocking result. Per unit it reports what keeps it open — a
+round it needs, an open contradiction, topics awaiting a disposition — and
+what its latest round carried on (`unit_status`), and it lists what earlier
+states carried to this one (`carried_in`).
 
 A point's witness below is a **defect witness**: a history in which the texts
 give two outcomes. It is not a decision's `[witness: …]` tag, which binds an
 invariant to an existing check (`TRANSITION_PROTOCOL.md`, "Invariant
-evidence"); whether that check asserts the invariants its item names is a point
-of State 2.
+evidence"); whether that check asserts the invariants its item names is judged
+per check after State 7, at the State 8 handoff, never in a round of State 2.
+Nor is which existing check an item is bound to: of an invariant's test, a
+State 2 round asks only whether its Required tests item says what must be
+shown, and its judge takes a question about a binding as `later_state` 8. On
+client-portal rounds 84–91 reviewers kept asking which existing check is bound
+to CLK-002, because the scope still read "an invariant nothing can verify".
+
+### State 2's own work
+
+State 2 decides rules and invariants: what always holds, the one responsibility
+that owns each invariant, and a Required tests item that says what a witness
+must show. The author writes the decisions; the reviewers of a round ask why —
+what is missing, which decisions contradict each other, who owns each
+invariant — and the judge decides which of those questions the texts leave
+open. Its check at the handoff is `invariant_tests`: every invariant has a
+Required tests item.
+
+Whether an existing check asserts what an item names is not a State 2 question
+(owner decision 2026-11-08, issue #147). A new application has no code and no
+checks at State 2, and the layer must work the same way for it as for a
+migrated one: a decision is never fitted to the checks or the code that exist.
+So a State 2 round is given neither check code nor verdicts, a `[witness: …]`
+tag is only text of its item, and a changed check reopens no State 2 unit.
+State 2 carries the obligation to `state8_assembly`, where `witness_material`
+runs on the per-check judgement (`design_questions.py judge-checks`). A Factory
+check judged `partial` or `does_not`, or whose material cannot be read whole,
+is carried from there to Factory verification, addressed to the case's
+`factory_checks_issue` (owner decision 2026-11-08, item 6): it does not block
+State 8 or export. A State 2 invariant with no Required tests item still
+blocks State 2 (`invariant_tests`). On client-portal per-check
+judgement inside State 2 stopped the round on 52 `partial` verdicts out of 68
+bindings and drove it to the ping-pong limit; those were gaps of Factory checks,
+not of the decisions.
 
 ### State 2 is explored, not handed a package
 
 Issue #159. A review of State 2 is an agent with tools, not one request over a
 mechanically chosen package. It starts from the task and questions of the
 layer, the open units with their diff, the passages the layer prompt selected
-(`layer_prompt.py`, navigation only) and the deterministic results with the
-check verdicts (#158). It works in a read-only workspace
+(`layer_prompt.py`, navigation only) and the deterministic results. It is
+given no check code and no verdict: whether a bound check asserts its
+invariant is judged after State 7 (owner decision 2026-11-08). It works in a read-only workspace
 (`questions_workbench/explore.py`): the snapshot of States 0..2 under `docs/`,
 the phase's methodology under `methodology/` (TRANSITION_PROTOCOL.md,
 SECURITY_REVIEW_EVIDENCE.md, SPEC_STANDARD.md — the documents
@@ -81,7 +163,6 @@ python3 nav.py ids R0-             # written identifiers and where each is defin
 python3 nav.py read R0-07          # verbatim, with document, lines, sha256, snapshot id
 python3 nav.py refs R0-07          # explicit references both ways
 python3 nav.py search "deleted"    # lexical results, not dependencies
-python3 nav.py verdicts A29        # whether each bound check asserts (#158)
 ```
 
 The same navigation answers people: `python tools/design_navigate.py --root
@@ -99,8 +180,8 @@ non-empty basis of `{key, quote}`; `complete` true or false; `unresolved` and
 round's snapshot (`basis_verified`). A verified basis keeps that section,
 verbatim, and the judge is given the sections the judged points quote. A
 review whose answer is not that, that says it did not finish, or that lists
-unresolved questions is `not_checked`: the round is not clean and keeps its
-units open (`not_checked_reviews`). Every exploring call has its own output. The trace of
+unresolved questions is `not_checked`: the round is not clean, and its units
+need another round (`not_checked_reviews`; `units.unit_state` names it). Every exploring call has its own output. The trace of
 the commands it ran and the snapshot id are kept with the review. The reviews
 stay independent and their topics are judged apart. A provider that cannot
 explore (the Responses API) asks State 2 as before, and the round says so
@@ -246,6 +327,40 @@ the reviews are unchanged. Their digests are kept in the round's `judge` as
 `later_documents`; the state's closure still compares only States 0..N. A judge
 that cannot read files (the Responses API) is not offered `answered_later`.
 
+### What the judge receives
+
+The judge decides a few repeated topics, each carrying the reviewers' verbatim
+quotes. Until 2026-11-08 it was also given the whole round text — on
+client-portal State 2 round-91 the same 148k-character layer prompt the
+reviewers got, plus the whole 34k diff since closure: 223k characters for 16
+topics. A judge that reads files (`--provider codex`) in States 0–5 now gets
+the round text the way it gets the later states (owner decision 2026-11-08,
+#147; `questions_workbench/judge_context.py`). Inline it receives only:
+
+- the topics, with the reviewers' questions, points, quotes and witnesses;
+- the units of State N the topics concern, each with its diff since closure
+  when the round has `--since`; a topic naming no unit concerns every unit
+  under review;
+- the units, of State N or an earlier state, that hold a passage the reviews
+  quote, and the earlier-state units whose definitions the topics or their
+  units name (the identifier selection of the layer prompt, one step);
+- the prior judgements and the transition block, as before.
+
+The full texts of States 0..N are files under `states/` of its working
+directory, beside `later/`, and for a reopened state the texts it was closed
+with under `closed/`. The instruction tells it to search them before judging a
+topic answered, answered later, quoted only from another state, or contradicted
+by a passage the reviews did not quote. On round-91 the inline request falls
+from 222,746 to 71,899 characters; what is left is mostly the topics
+themselves (33k) and the four units they concern.
+
+Nothing about the check changes: `judge.check` receives the full texts from the
+round, not what the judge was shown, and finds every quote verbatim in them. A
+quote the judge found by searching a file passes; a quote found nowhere still
+blocks. The round keeps `searched_files` and `inline_characters` in its
+`judge`. A judge that cannot read files, and the State 7 judge, whose text is
+one module's prompt, still get the round text inline.
+
 ### The same question gets the same answer
 
 A judge call is a sample: on Cabinet Kernel State 2, rounds 67 and 68 judged
@@ -254,8 +369,11 @@ round 69, on texts that differed in three sentences, judged seven of the same
 topics contradictions or gaps. With that many topics, two clear rounds in a row
 are a matter of luck, and editing the texts does not change the odds.
 
-So the judge is shown the verified non-blocking judgements of the state's latest
-three judged rounds (newest first, one per topic) whose quoted passages are all
+Since 2026-11-08 a state closes by one round per change, so this luck no
+longer decides a closure; a precedent still keeps the answer the same when a
+later round, on a changed text, meets the same question about unchanged
+passages. The judge is shown the verified non-blocking judgements of the
+state's latest three judged rounds (newest first, one per topic) whose quoted passages are all
 still found verbatim, and may follow one as `judged_before`, naming it. A
 judgement whose passages changed is not offered: on Cabinet Kernel State 5
 round 104 a precedent quoting notes reworded by the Stage 8.1 modality repair
@@ -282,14 +400,14 @@ and a one-line edit to one decision reopened all 21.
 So a state closes in units: one per accepted decision (`## Accepted decision
 Axx` to the next level-2 heading), one per other level-2 section and per
 document preamble, and `context` — whether the earlier states' texts and this
-state agree. A round asks only about the units that are not closed: the
-reviewers still read every text, but each point names its unit, and a point
-about a closed unit is set aside (kept in the review, not grouped). A blocking
-topic keeps open only the units its points name; one that names none keeps
-every reviewed unit open. A unit is closed when the two latest rounds that
-reviewed it were clear for it on its current text; the state is closed when
-every unit is. Editing one section reopens that section; editing an earlier
-state reopens `context`. Decided by the owner 2026-10-06 for State 2.
+state agree. A round asks only about the units that need a round: each point
+names its unit, and a point about another unit is set aside (kept in the
+review, not grouped). A topic keeps open only the units its points name; one
+that names none concerns every reviewed unit. A unit is closed by its latest
+round on its current text (below); the state is closed when every unit is.
+Editing one section reopens that section; editing an earlier state reopens
+`context`. Decided by the owner 2026-10-06 for State 2; one round per change
+since 2026-11-08.
 
 Until 2026-10-10 only State 2 was cut so; the other states closed as one text,
 and any edit reopened all of it — Cabinet Kernel State 5 ran 107 rounds. Late
@@ -322,14 +440,16 @@ been closed since round 3. It came back into a round only because its rule 3
 happened to be edited in the same change, and the contradiction was found one
 round later.
 
-A unit that was closed and then edited is reviewed for its edit, not again
-whole: the round finds the text it closed on in the case's git history, gives
+A unit that was reviewed and then edited is reviewed for its edit, not again
+whole: the round finds the text of its latest review in the case's git
+history (one round per change: the base is that review, whether or not it
+closed the unit), gives
 the reviewers the diff, and asks only about the change and what it affects; a
 point quoting an unchanged passage of that unit, more than three lines from the
 change, is set aside. On 2026-10-07 a one-sentence edit reopened Cabinet Kernel
 A18, and three reviewers given the whole decision raised new storage-hardening
 topics every round — corrupt databases, hard links, link races — none about the
-edit. A unit never closed, or whose closed text git no longer holds, is
+edit. A unit never reviewed, or whose reviewed text git no longer holds, is
 reviewed whole (owner, 2026-10-08).
 
 ### State 7 is asked as the generator reads it
@@ -391,7 +511,8 @@ judged. Behaviour is closed by States 2–5 and checked by the semantic
 witnesses; what only the prompt can show is that it contradicts itself. So
 every State 7 topic is judged, even from one review (both quotes are checked
 mechanically), only a `contradiction` blocks, and a gap the judge still names
-is recorded without blocking.
+is recorded; since 2026-11-08 it takes a disposition like any other gap
+(below, "Closing a round").
 
 ### Closed on the current texts, before anything after State 5
 
@@ -403,7 +524,9 @@ declares a `question_scope` and has a document; the earliest one not closed on
 its current texts becomes the step, blocked, with its open units and the `ask`
 command — with `--since` the ref it last closed at, when it did. Stage 9
 admission checks the same as `FA019`. A case with no round for a state is
-blocked too ("no question round yet"): that is the rule, not a migration gap.
+blocked too ("no question round yet"): that is the rule, not a migration gap. A state whose units only wait for
+dispositions gets the `dispose` command instead of `ask`: its text did not
+change, so no round is asked.
 
 ### Where a quoted earlier passage came from
 
@@ -420,6 +543,50 @@ answer (`experiments/registry-state2-authoring/`).
 
 When a quoted passage is older than the promise that narrows it, ask the owner.
 Do not choose for them.
+
+## Closing a round: contradictions and dispositions
+
+Owner decision 2026-11-08 (#147, comment 6721261089). Every step of the
+method had moved the same work — getting certainty in advance — one layer up,
+and two LLM reviews agreeing twice is statistics, not proof: client-portal
+State 2 needed rounds 79–95, rounds 82–90 ping-ponged on A28 and A32 over how
+a check should work, and States 0–7 "closed" by rounds still met 270 findings
+at assembly. Each layer now does its share and hands the rest on explicitly.
+
+- **A contradiction blocks**, as before: two passages, both quoted verbatim
+  and checked mechanically, blocking wherever its passages are. It takes no
+  disposition. It closes when the text changes and the one round on that
+  change no longer raises it. A contradiction whose quotes failed is not
+  downgraded: it blocks too, and may be asked again on the same text.
+- **Every other judged topic** — a consequential gap (quoted, deferred or
+  recorded at State 7), a hypothesis, a judgement whose evidence failed — gets
+  one author disposition, recorded beside the round in `dispositions.json` by
+  `design_questions.py dispose`, with no further round required:
+  - `fixed` with `--fixed <commit>`: a commit of the case's history, after the
+    round, that changes the case. A unit whose text changed is reviewed by one
+    round on that change (its diff); that round's own topics get dispositions
+    in turn. A fix is not re-asked otherwise: the next layer reads it as its
+    input, and assembly and generation check it.
+  - `carried` with `--carried <layer> --what <text>`: the receiving layer from
+    a closed set — a later state (by number, up to 8, assembly), `generation`
+    (where the microscope shows the choice of principle), `factory_checks`,
+    or `deploy` — and what it must decide there. A topic carried to a state
+    reaches that state's round as an obligation it received (its transition,
+    `status` `carried_in`, `authoring next` `carried_dispositions`);
+    `design_questions.py carried` lists them all.
+  - `accepted` with `--accepted <reason>`: the author's reason.
+- **Judged kinds that already did not block need nothing**: `answered`,
+  `answered_later`, `judged_before`, `later_state`, `indifferent`,
+  `preexisting`. A topic raised again on unchanged text and judged
+  `judged_before` stays non-blocking as before.
+- **One round per change.** "Two clear rounds on the same text" is removed:
+  that rule is what made ping-pong. A round on unchanged text is not asked
+  (`ask` refuses and says which units wait for dispositions or for a fix), so
+  a session's stop on rounds that ping-pong over the same topic is moot.
+
+A disposition may name one unit (`--unit`) or none, when it covers every unit
+the topic concerns. `fixed` and `accepted` close the topic; `carried` closes it
+here and opens it where it was carried.
 
 ## Closing a question
 
@@ -440,14 +607,13 @@ Ask first who uses what the question is about.
   says. A question of a later state is recorded in the texts as carried to that
   state and is closed there; without this rule reviews descend forever into
   orders, encodings and formats.
-- **Clear round.** No judged topic blocks.
-- **Closure.** Every unit's two latest reviews are clear for it on the same
-  text, and that text has not changed since (`status` compares digests). One
-  clear round can be luck; two on the same texts show the questions have
-  stopped mattering, not merely changed. A topic raised by one review is
-  closed or carried when cheap, but does not hold the state open. Rounds kept
-  before the judge existed keep their rule: closed when no topic was raised by
-  two reviews.
+- **Closure.** Every unit's latest round on its current text (`status`
+  compares digests) raised no open contradiction against it, and every other
+  judged topic of that round that concerns it has a disposition. A topic
+  raised by one review without a witness is not judged and asks nothing. A
+  unit closed by two clear rounds before 2026-11-08 stays closed; the new rule
+  never reopens it. Rounds kept before the judge existed keep their rule:
+  closed when no topic was raised by two reviews.
 - **Reopened state.** When a closed state is edited, re-close it with
   `ask --since <git-ref where it was closed>`: the judge sees the change and
   sets aside, as `preexisting`, topics about passages the change did not touch.

@@ -26,7 +26,6 @@ Commands (every answer is JSON, every read carries the snapshot id):
                             defines (incoming)
     search TEXT             lexical occurrences — search results, never
                             proven dependencies
-    verdicts [DECISION]     the check verdicts of the round (#158), when given
 
 A section key is ``<document>#<heading path>``: the slugs of the headings from
 the top down, joined by ``/`` (a document's one ``#`` title is ``#title`` and
@@ -281,19 +280,13 @@ def main(argv: list[str] | None = None) -> int:
     refs.add_argument("key")
     search = sub.add_parser("search")
     search.add_argument("text")
-    verdicts = sub.add_parser("verdicts")
-    verdicts.add_argument("decision", nargs="?")
     args = parser.parse_args(argv)
     try:
-        if args.command == "verdicts":
-            path = args.root / "verdicts.json"
-            rows = json.loads(path.read_text(encoding="utf-8")) if path.is_file() else []
-            result: dict[str, Any] = {"verdicts": [r for r in rows if not args.decision or r["decision"] == args.decision]}
-        else:
-            snapshot = Snapshot(args.root)
-            result = {"toc": lambda: snapshot.toc(args.document), "ids": lambda: snapshot.ids(args.prefix),
-                      "read": lambda: snapshot.read(args.key, args.snapshot), "refs": lambda: snapshot.refs(args.key),
-                      "search": lambda: snapshot.search(args.text)}[args.command]()
+        snapshot = Snapshot(args.root)
+        result: dict[str, Any] = {
+            "toc": lambda: snapshot.toc(args.document), "ids": lambda: snapshot.ids(args.prefix),
+            "read": lambda: snapshot.read(args.key, args.snapshot), "refs": lambda: snapshot.refs(args.key),
+            "search": lambda: snapshot.search(args.text)}[args.command]()
     except NavigationError as error:
         print(json.dumps({"error": str(error)}, ensure_ascii=False))
         return 2

@@ -1,27 +1,24 @@
 """The two instructions of a round: ask, then group what was asked."""
 from __future__ import annotations
 
-ASK = """You review a design BEFORE the next states, modules and code exist.
-You receive the accepted design texts up to State {state}. Later, other agents will
-write the next states and the code from these texts alone; whatever the texts leave
-open, they will decide silently, and different agents will decide differently.
+# The review instruction of a document state says three things (owner
+# decision 2026-11-08, #147 comment 6721261089): what the layer decides, what
+# changed, and what it receives. Lists of what not to ask were removed where
+# the layer's scope already excludes it; they signalled an unclear boundary.
+ASK = """You review State {state} of a design before the later states and the code are
+written from it. Whatever it leaves open, later agents decide silently, each
+differently. List every point where continuing from it forces a guess.
 
-List every point where continuing from these texts would force a guess.
-
-Scope of State {state} — report a point only if it belongs here:
+The points of State {state}:
 {scope}
+A contradiction between two texts is always one; what the texts carry on
+purpose to a later state is not.
 
-Two texts that contradict each other always belong here. Points the texts list on
-purpose as carried to a later state do not.
-
-Do not propose designs as settled. Report only genuine gaps, not style.
-
-When you can, give the point a witness: one history the texts allow — a
-state the product can be in, the events in order with who acts, and the two
-outcomes careful implementers could both read from the texts (or, for a
-contradiction, the outcome each passage gives) and who would see the
-difference. A point with a witness is judged even when no other review raises
-it; a point without one is judged only when several reviews raise it.
+A point may carry a witness: one history the texts allow — a state the product
+can be in, the events in order with who acts, the two outcomes careful
+implementers could both read from the texts (for a contradiction, the outcome
+each passage gives), and who sees the difference. A point with a witness is
+judged even when no other review raises it.
 
 Output strict JSON, nothing else:
 {{"open_points":[{{"subject":"<model, decision, action or section>","kind":"<short kind>","text":"<the exact phrase that is silent, vague or contradictory>","question":"<the question the texts must answer>","options":["<option you see>"],"default_guess":"<what you would do if forced>","witness":{{"initial":"<state>","events":["<who does what>"],"outcomes":["<outcome one>","<outcome two>"],"observer":"<who sees the difference>"}}}}]}}
@@ -29,32 +26,20 @@ Output strict JSON, nothing else:
 
 UNIT_SCOPE = """
 
-Units under review. State {state} closes unit by unit: the units listed below are
-not closed yet, and every other part of State {state} is closed. Report points only
-about these units — a gap in one of them, or a contradiction between one of them
-and any other text. Every point carries one more member, "unit": the key of the
-unit it is about, exactly as listed. A point about anything else is not asked for
-and is set aside.
-
+What changed. State {state} closes unit by unit; these units are under review,
+the rest of it is closed. Each point names its "unit", exactly as listed; a
+point about another unit is set aside.
 {listing}"""
 
 
-CHANGED_UNIT = """- {key}: {title}
-  This unit was closed and has changed since. Review only this change and what
-  it affects — a gap the change opens, or a contradiction it makes with any
-  text. Its unchanged passages were closed; a point about one of them, away
-  from the change, is set aside.
+CHANGED_UNIT = """- {key}: {title} — changed since its latest review. Review this change and what
+  it affects; a point on an unchanged passage away from it is set aside.
 ```diff
 {diff}```"""
 
 
-REFERENCING_UNIT = """- {key}: {title}
-  This unit was closed and has not changed, but it names {names}, which
-  changed since its closure (the diff is listed with {it}). Review only
-  whether this unit still agrees with that change — a rule here that the
-  change contradicts or leaves without its exception. Its other passages are
-  closed; a point about one of them, away from what the change touches, is
-  not asked for."""
+REFERENCING_UNIT = """- {key}: {title} — unchanged, but it names {names}, which changed (the diff is
+  listed with {it}). Review only whether it still agrees with that change."""
 
 
 def unit_scope(state: int, scope: list[tuple[str, str]], changed: dict[str, str] | None = None,
@@ -174,7 +159,7 @@ from those that need not.{scope_rule} Judge each topic by exactly one kind:
 
 Quotes are checked mechanically against the texts: copy them character for
 character, without ellipsis, at least a full clause. A quote not found in the
-texts counts against your judgement, so never paraphrase. {unsure_rule}
+texts counts against your judgement, so never paraphrase. {unsure_rule}{state_files}
 
 Output strict JSON, nothing else:
 {{"judgements":[{{"id":"<topic id>","kind":"<kind>","quotes":["<verbatim passage>"],"later_state":<number or null>,"precedent":"<prior judgement id or null>","divergence":"<two behaviours and who notices, or empty>","why":"<one sentence>"{witness_schema}}}]}}"""
@@ -212,9 +197,8 @@ WITNESS_SCHEMA = ',"witness":{"initial":"","events":[""],"outcomes":["",""],"obs
 
 HYPOTHESES = """
 
-Hypotheses of the previous round. These were raised without a witness and did
-not block. Raise one again only with a witness (a history in which the texts
-give two different outcomes); without one, do not repeat it.
+Hypotheses of the previous round, raised without a witness. Raise one again
+only with a witness.
 {listing}"""
 
 
@@ -224,6 +208,27 @@ def hypotheses_note(hypotheses: list[tuple[str, str]]) -> str:
         return ""
     return HYPOTHESES.format(listing="\n".join(f"- {topic} ({why})" if why else f"- {topic}"
                                                for topic, why in hypotheses))
+
+STATE_FILES = """
+
+What you are given. The text below is not the whole of States 0 to {state}:
+it gives the units of State {state} the topics concern{change}, the units
+holding a passage the reviews quote, and the earlier-state passages the topics
+name. The full texts of States 0 to {state} are the files {files} in your
+working directory. Search them (by the names, ids, fields and operations a
+topic is about) before you judge: whether a passage the reviews did not quote
+answers the topic, contradicts one they did, or makes it a question of
+another state (answered, answered_later, a gap quoting only another state,
+a contradiction). Quote from those files verbatim: every quote is checked
+against the full texts."""
+
+PREEXISTING_FILES = """
+- "preexisting": only for a state reopened after it was closed. The texts it was
+  closed with are the files {closed}; the change since, of each unit the topics
+  concern, is given below with that unit. The topic concerns a passage the
+  change did not touch and the change did not make it matter. Quote that
+  passage verbatim; it must appear unchanged in both versions."""
+
 
 PREEXISTING = """
 - "preexisting": only for a state reopened after it was closed. The texts it was
@@ -281,20 +286,31 @@ LAST_DESIGN_STATE = 7
 
 
 def judge_instruction(state: int, reopened: bool, later_files: list[str] | None = None,
-                      precedents: bool = False, scope: str | None = None, witness: bool = False) -> str:
+                      precedents: bool = False, scope: str | None = None, witness: bool = False,
+                      state_files: list[str] | None = None, closed_files: list[str] | None = None) -> str:
     """`witness`: a blocking kind needs a witness and a contradiction its
-    bases (document states; State 7 keeps its own rule)."""
+    bases (document states; State 7 keeps its own rule). `state_files`: the
+    judge reads the round text as files and gets only the topics' units and
+    passages inline (judge_context.py); `closed_files`, the texts a reopened
+    state was closed with, likewise."""
     answered_later = ANSWERED_LATER.format(files=", ".join(later_files), state=state) if later_files else ""
     unquoted_gap = DEFERRED_GAP if state <= LAST_DEFERRING_STATE else ANSWERING_STATE_GAP.format(state=state)
     scope_rule = SCOPE_RULE.format(state=state, scope=scope) if scope else ""
     bases = CONTRADICTION_BASES.format(before=state - 1) if witness and state > 0 else ""
-    return JUDGE.format(state=state, preexisting=PREEXISTING if reopened else "", answered_later=answered_later,
+    preexisting = ""
+    if reopened:
+        preexisting = (PREEXISTING_FILES.format(closed=", ".join(closed_files)) if state_files and closed_files
+                       else PREEXISTING)
+    files = (STATE_FILES.format(state=state, files=", ".join(state_files),
+                                change=", each with its change since the state was closed" if reopened else "")
+             if state_files else "")
+    return JUDGE.format(state=state, preexisting=preexisting, answered_later=answered_later,
                         judged_before=JUDGED_BEFORE if precedents else "", unquoted_gap=unquoted_gap,
                         later_state=LATER_STATE.format(state=state) if state < LAST_DESIGN_STATE else "",
                         scope_rule=scope_rule, contradiction_extra=bases,
                         witness_rule=WITNESS_RULE if witness else "",
                         unsure_rule=UNSURE_WITNESS if witness else UNSURE_BLOCKING,
-                        witness_schema=WITNESS_SCHEMA if witness else "")
+                        witness_schema=WITNESS_SCHEMA if witness else "", state_files=files)
 
 
 def judge_input(texts: str, topics: list[dict], change: str | None, precedents: list[dict] | None = None,
@@ -321,31 +337,18 @@ def judge_input(texts: str, topics: list[dict], change: str | None, precedents: 
 
 LAYER = """
 
-The transition of State {state} (skills/spec-authoring/TRANSITION_PROTOCOL.md).
-Within the scope above, ask the protocol's five questions of the units under
-review: are the inputs this state needs available; are the decisions it owns
-made; can each be written in the standard; did the obligations earlier states
-carried here close; and is every obligation it carries further a decided
-execution with a receiving state and a check, never an open choice written as
-"later". A choice deferred without being decided is a gap of this state.
-
-This state owns:
+What State {state} decides (it owns):
 {owns}
-It received from earlier states (result now):
+What it receives from earlier states: the passages given below, verbatim, and
+these obligations (result now):
 {received}
-It carries further:
+What it carries further, decided there, not here:
 {carries}
-Deterministic results now. They are not design text: never quote them. A point
-they already state need not be raised, and no point may take a result that is
-not closed or carried for a pass; "not_checked" means an input is missing:
+Deterministic results at its handoff. They are not design text: never quote
+them; one not closed or carried is never a pass, and "not_checked" means an
+input is missing:
 {findings}
-
-Ask about an earlier state only whether this state fulfils what it carried
-here; its closed units are not audited again. A decision's "[witness: ...]" tag
-binds an invariant to an existing check: it is not the history you give as a
-point's witness. Whether the bound check asserts the very invariant its item
-names, and whether a Required tests item says what would show the invariant
-holds, are points of the state that owns the invariant."""
+A choice written as "later" without being decided is a gap of this state."""
 
 
 LAYER_JUDGE = """=== DETERMINISTIC RESULTS AT THIS TRANSITION (not design text; never quote) ===
@@ -353,15 +356,25 @@ LAYER_JUDGE = """=== DETERMINISTIC RESULTS AT THIS TRANSITION (not design text; 
 A topic these results show open is not judged answered or indifferent, by
 this state's texts or a later one's: the texts may say it, the check says it
 does not hold.
-{findings}"""
+{findings}{witness}"""
+
+WITNESS_CARRIED_JUDGE = """
+
+Of an invariant's test, this state answers only whether its Required tests item
+says what must be shown. A topic asking which existing check an item is bound
+to, or whether a bound check asserts it, is later_state 8: the binding and its
+assertion are carried and judged per check after State 7, at the State 8
+handoff."""
 
 MAX_LAYER_LINES = 40
 
 
 def _layer_lines(context: dict) -> tuple[str, str, str, str]:
     owns = "\n".join(f"- {item}" for item in context.get("owns") or []) or "- (nothing declared)"
-    received = "\n".join(f"- [{r['outcome']}] {r['obligation']} (from {r['from']}, check {r['check']})"
-                         for r in context.get("results") or []) or "- (nothing)"
+    received = "\n".join([f"- [{r['outcome']}] {r['obligation']} (from {r['from']}, check {r['check']})"
+                          for r in context.get("results") or []]
+                         + [f"- [carried by the author] {c['what']} (State {c['state']} {c['round']} {c['topic']})"
+                            for c in context.get("carried_in") or []]) or "- (nothing)"
     carries = "\n".join(f"- {c.get('obligation', '')} -> {c.get('to')} (confirmed by {c.get('check')})"
                         for c in context.get("carries") or []) or "- (nothing)"
     lines = [f"- [{r['outcome']}] {f.get('code')}: {f.get('message', '')}"
@@ -425,8 +438,10 @@ closed otherwise."""
 def layer_judge(context: dict | None, units: list[str] | None = None) -> str | None:
     if not context:
         return None
-    text = LAYER_JUDGE.format(findings=_layer_lines(context)[3])
     listing = _verdicts(context, units)
+    text = LAYER_JUDGE.format(findings=_layer_lines(context)[3],
+                              witness="" if listing or context.get("state", 0) >= LAST_DESIGN_STATE
+                              else WITNESS_CARRIED_JUDGE)
     reopened = context.get("evidence_reopened") or []
     note = EVIDENCE_REOPENED_JUDGE.format(units=", ".join(reopened)) if reopened else ""
     return text + (VERDICTS.format(listing=listing) if listing else "") + note

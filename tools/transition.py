@@ -77,6 +77,22 @@ def own_checks(sequence: dict[str, Any], phase_id: str) -> list[str]:
     return []
 
 
+def closing_checks(sequence: dict[str, Any], phase_id: str) -> list[str]:
+    """Every check that runs at `phase_id`'s handoff: its own, and those carried to it."""
+    return own_checks(sequence, phase_id) + [item["check"] for item in received(sequence, phase_id)]
+
+
+def judges_witnesses(sequence: dict[str, Any], state: int) -> bool:
+    """Whether `witness_material` closes at one of the state's phases.
+
+    The per-check verdicts, the judgement of bound checks and the evidence a
+    decision unit rests on follow the layer where that check runs. State 2
+    only carries it (owner decision 2026-11-08, #147): its rounds get neither
+    check code nor verdicts, and a changed check reopens none of its units.
+    """
+    return any("witness_material" in closing_checks(sequence, phase) for phase in state_phases(sequence, state))
+
+
 def layer(sequence: dict[str, Any], phase_id: str) -> dict[str, Any]:
     """The static protocol of one phase: what it owns, checks, carries and receives."""
     phase = next((p for p in _phases(sequence) if p["id"] == phase_id), {})
@@ -230,35 +246,91 @@ def check_decision_witness(project: Path, factory: Path | None = None) -> dict[s
     return _report(outcome, report["findings"], **report["summary"])
 
 
-def check_witness_material(project: Path, factory: Path | None = None) -> dict[str, Any]:
-    """Every binding made at State 2 has a current judgement of its check that it asserts.
+FACTORY_TARGET_FILE = "90_factory_target.json"
+# The key of 90_factory_target.json that addresses witness obligations carried
+# to Factory verification, e.g. "MigelSmirnov/code-factory#189".
+FACTORY_CHECKS_ISSUE = "factory_checks_issue"
+WITNESS_CARRY_LAYER = "factory_checks"
+FACTORY_CHECK_PREFIX = "verification:"
 
-    The judgement is made once per check and kept by digest (witness_judgement);
-    a binding without one on the current files and items is not checked, and
-    one whose check asserts its invariants only in part, or not at all, is open.
+
+def factory_checks_issue(project: Path) -> str | None:
+    """The Factory issue a case's carried witness obligations are addressed to."""
+    try:
+        target = json.loads((project / FACTORY_TARGET_FILE).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    issue = target.get(FACTORY_CHECKS_ISSUE) if isinstance(target, dict) else None
+    return issue.strip() if isinstance(issue, str) and issue.strip() else None
+
+
+def check_witness_material(project: Path, factory: Path | None = None) -> dict[str, Any]:
+    """Whether each binding made at State 2 has a check that asserts what its item names.
+
+    The judgement is made once per check and kept by digest (witness_judgement).
+    Owner decision 2026-11-08 (#147, comment 6721261089): a Factory check
+    (`verification:`) that asserts its invariants only in part (`partial`) or
+    not at all (`does_not`), and one whose material cannot be read whole
+    (`not_checked`, with its reason), is an obligation carried to Factory
+    verification, addressed to the case's `factory_checks_issue`
+    (90_factory_target.json). It no longer stops State 8 or export. A `note:`
+    or `workbench:` binding is no Factory check: it stops as before. A binding without a current judgement — `judge-checks` not run
+    on its current files, or a judgement whose quotes failed — is not carried:
+    that is work the Workbench does now, and it stops. So does a binding whose
+    check the Factory config does not hold, or whose config cannot be read:
+    that is an input missing here (decision_witness names the check), not
+    material the judge could not read. Carried obligations need an address:
+    without the issue they stop too.
     """
     import design_decision_witness
     import witness_judgement
 
     materials = design_decision_witness.binding_material(project, factory)
+    checks = witness_judgement.group(materials)
     rows = witness_judgement.verdicts(project, materials)
+    issue = factory_checks_issue(project)
     findings = []
     for row in rows:
         names = ", ".join(row["invariants"]) or "its invariant"
+        carried = {"outcome": "carried", "to": WITNESS_CARRY_LAYER, "issue": issue,
+                   "decision": row["decision"], "witness": row["witness"], "invariants": row["invariants"],
+                   "digest": row["digest"]}
+        factory_check = row["witness"].startswith(FACTORY_CHECK_PREFIX)  # a note or a Workbench gate is not carried
         if row["outcome"] == "not_checked":
+            if factory_check and checks[row["witness"]].get("unreadable"):  # the check exists, not readable whole
+                findings.append({**carried, "severity": "info", "code": "witness_material_carried",
+                                 "verdict": "not_checked", "reason": row["reason"],
+                                 "message": (f"{row['decision']}: whether {row['witness']} asserts {names} is carried to "
+                                             f"Factory verification ({issue or 'no issue named'}): its material "
+                                             f"cannot be judged — {row['reason']}")})
+                continue
             findings.append({"severity": "error", "code": "witness_material_not_checked", "outcome": "not_checked",
                              "decision": row["decision"], "witness": row["witness"],
                              "message": (f"{row['decision']}: whether {row['witness']} asserts {names} is not judged: "
                                          f"{row['reason']} — not checked is not a pass")})
-        elif row["outcome"] != "asserts":
+        elif row["outcome"] != "asserts" and not factory_check:
             findings.append({"severity": "error", "code": "witness_does_not_assert", "outcome": "open",
                              "decision": row["decision"], "witness": row["witness"],
                              "message": (f"{row['decision']}: {row['witness']} {row['outcome'].replace('_', ' ')} "
                                          f"assert {names} (check {row['digest'][:12]}): {row.get('why', '')}")})
+        elif row["outcome"] != "asserts":
+            findings.append({**carried, "severity": "info", "code": "witness_assertion_carried",
+                             "verdict": row["outcome"],
+                             "message": (f"{row['decision']}: {row['witness']} {row['outcome'].replace('_', ' ')} "
+                                         f"assert {names} (check {row['digest'][:12]}), carried to Factory "
+                                         f"verification ({issue or 'no issue named'}): {row.get('why', '')}")})
+    carried_rows = [f for f in findings if f["outcome"] == "carried"]
+    if carried_rows and issue is None:
+        findings.append({"severity": "error", "code": "witness_carry_unaddressed", "outcome": "open",
+                         "message": (f"{len(carried_rows)} witness obligation(s) are carried to Factory verification, "
+                                     f"and the case names no Factory issue to address them to: set "
+                                     f"\"{FACTORY_CHECKS_ISSUE}\" in {FACTORY_TARGET_FILE}")})
     outcome = ("not_checked" if any(f["outcome"] == "not_checked" for f in findings)
-               else "open" if findings else "closed")
+               else "open" if any(f["outcome"] == "open" for f in findings)
+               else "carried" if carried_rows else "closed")
     return _report(outcome, findings, bindings=len(rows),
-                   asserts=sum(1 for r in rows if r["outcome"] == "asserts"))
+                   asserts=sum(1 for r in rows if r["outcome"] == "asserts"),
+                   carried=len(carried_rows), issue=issue)
 
 
 CHECKS: dict[str, Callable[[Path], dict[str, Any]]] = {
@@ -422,13 +494,25 @@ def round_context(project: Path, state: int, sequence: dict[str, Any] | None = N
         gate = [{"code": "state_gate_not_checked", "severity": "error",
                  "message": f"the State {state} gate could not read the case ({exc}) — not checked is not a pass"}]
     verdicts: list[dict[str, Any]] = []
-    if "witness_material" in [c for phase in phases for c in own_checks(sequence, phase)]:
+    if judges_witnesses(sequence, state):
         import design_decision_witness
         import witness_judgement
         verdicts = witness_judgement.verdicts(project, design_decision_witness.binding_material(project))
     return {"state": state, "owns": owns, "carries": carries, "results": report["results"],
             "ready": report["ready"] and not any(f.get("severity") in {"error", "block"} for f in gate),
-            "gate_findings": gate, "verdicts": verdicts}
+            "gate_findings": gate, "verdicts": verdicts, "carried_in": carried_in(project, state)}
+
+
+def carried_in(project: Path, state: int) -> list[dict[str, Any]]:
+    """What the authors of earlier states carried to this one by a topic's
+    disposition (questions_workbench: `design_questions.py dispose --carried`).
+    It reaches the round of this state as an obligation it received."""
+    from questions_workbench import service as rounds
+
+    try:
+        return rounds.carried_items(project, to=state)
+    except (OSError, ValueError):
+        return []
 
 
 def module_obligations(project: Path, context: dict[str, Any], module: str) -> list[str]:

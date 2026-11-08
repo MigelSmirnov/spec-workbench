@@ -6,7 +6,9 @@ diff, the current bases and the deterministic results — and a read-only
 workspace it explores with tools: the snapshot of States 0..2 and of the
 phase's methodology documents, navigated by ``nav.py`` (design_navigate:
 table of contents, R0-* and other identifiers, reading by key, explicit
-references, lexical search), and the check verdicts of #158. The initial
+references, lexical search). Whether a bound check asserts its invariant is
+not State 2's question (owner decision 2026-11-08, #161): the workspace holds
+no check code and no verdicts. The initial
 selection is navigation, never the boundary of what it may read.
 
 What comes back is checked by tools, not trusted:
@@ -65,8 +67,6 @@ def build_workspace(root: Path, texts: list[tuple[int, str, str]], state: int,
             methodology.append((f"{METHODOLOGY}/{source.name}", None, source.read_text(encoding="utf-8"), why))
     snapshot = design_navigate.write_snapshot(root, docs + [(n, s, t) for n, s, t, _ in methodology])
     shutil.copyfile(NAVIGATOR, root / "nav.py")
-    (root / "verdicts.json").write_text(json.dumps((layer or {}).get("verdicts") or [], ensure_ascii=False, indent=1),
-                                        encoding="utf-8")
     results = {"results": (layer or {}).get("results") or [], "gate_findings": (layer or {}).get("gate_findings") or []}
     (root / "results.json").write_text(json.dumps(results, ensure_ascii=False, indent=1, default=str), encoding="utf-8")
     return {"snapshot": snapshot, "documents": [name for name, _, _ in docs],
@@ -88,8 +88,7 @@ snapshot id):
   and the section defining each;
 - `read KEY` — a section or an identifier's section, verbatim, with its lines;
 - `refs KEY` — what the section names and which sections name what it defines;
-- `search TEXT` — lexical occurrences (search results, not dependencies);
-- `verdicts [DECISION]` — whether each bound check asserts its invariants.
+- `search TEXT` — lexical occurrences (search results, not dependencies).
 You may also read the files directly. A missing reference proves nothing:
 when the meaning of a requirement matters, read it.
 

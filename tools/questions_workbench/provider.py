@@ -98,8 +98,9 @@ class CodexCliProvider:
     server reaches the model.
 
     `complete_with_files` is the one exception: the files it is given are
-    written under `later/` of that directory, the only files the model may
-    read there, so it searches them instead of receiving them whole.
+    written into that directory at the relative paths they are given under
+    (`later/…`, `states/…`, `closed/…`), the only files the model may read
+    there, so it searches them instead of receiving them whole.
     """
 
     reads_files = True
@@ -118,7 +119,7 @@ class CodexCliProvider:
         )
 
     def complete_with_files(self, instruction: str, text: str, files: dict[str, str]) -> tuple[str, dict[str, Any]]:
-        listing = ", ".join(f"{LATER_DIR}/{name}" for name in files)
+        listing = ", ".join(files)
         return self._exec(
             instruction, text,
             f"Answer from the text below and from the files {listing} in the working "
@@ -178,11 +179,12 @@ class CodexCliProvider:
     def _exec(self, instruction: str, text: str, rule: str, files: dict[str, str]) -> tuple[str, dict[str, Any]]:
         prompt = f"{instruction}\n\n{rule}\n\n=== TEXT ===\n{text}"
         with tempfile.TemporaryDirectory(prefix="design-questions-codex-") as work:
-            if files:
-                later = Path(work) / LATER_DIR
-                later.mkdir()
-                for name, body in files.items():
-                    (later / name).write_text(body, encoding="utf-8")
+            for name, body in files.items():
+                path = Path(work) / name
+                if Path(name).is_absolute() or ".." in Path(name).parts:
+                    raise ValueError(f"a file given to the model must stay in its directory: {name}")
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(body, encoding="utf-8")
             answer_file = Path(work) / "answer.txt"
             command = [
                 os.environ.get("DESIGN_QUESTIONS_CODEX_BIN", "codex"), "exec",

@@ -23,7 +23,26 @@ Never a pass by omission: when the selection cannot show what an open unit
 depends on (it names nothing an earlier state defines and nothing earlier
 names what it defines; its own definitions do not count), or the change of
 ``context`` cannot be read, the round says so and reads the earlier states'
-texts whole.
+texts whole. State 0 has no earlier state: nothing is missing there.
+
+Measured on client-portal (2026-11-08, #147 comment 6721261089), the
+selection fell back to whole texts for 16 of 16 State 0 units, 33 of 42 State
+1 units, 25 of 41 State 2 units, and even a unit that resolved read about the
+whole of the earlier texts (State 2 median 127k of 127k), because:
+
+- an earlier passage was a whole level-2 section: State 0's "Decisions" holds
+  every R0-nn as a level-3 section, so citing R0-23 brought all of them, and
+  R0-23 was never a defined name (only list items and the level-2 heading
+  were read). A level-2 section whose level-3 headings define names is now
+  cut into those level-3 passages, each verbatim, each defining what its
+  heading names (``### R0-23 — …``, ``### StaffAccount``);
+- model numbers (``M32``) were not identifiers, and a section cited by its
+  quoted title (State 0 ("Operator management")) resolved nothing;
+- a qualified heading (`public_op:derived_views.build_budget_view`) defined
+  its module and `public_op` too, so every unit naming the module was taken
+  as naming the operation, and the closure (kept until nothing is added,
+  owner review r4504187842) carried that through most of the earlier states.
+  Such a heading now defines its last name only.
 """
 from __future__ import annotations
 
@@ -36,6 +55,9 @@ LAST_STATE = 5  # States 0-5; State 6 is measured on a case with a State 6 docum
 
 INVARIANT_ID = re.compile(r"\b[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*-\d{1,4}\b")
 DECISION = re.compile(r"\bA\d+\b")
+MODEL_KEY = re.compile(r"\bM\d+\b")
+QUOTED = re.compile(r"[\"“«]([^\"”»\n]{3,80})[\"”»]")
+SUBSECTION = re.compile(r"^###\s+(.*\S)\s*$")
 CODE_SPAN = re.compile(r"`([^`\n]+)`")
 NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 CAMEL = re.compile(r"\b[A-Z][a-z0-9]+(?:[A-Z][A-Za-z0-9]*)+\b")
@@ -47,7 +69,7 @@ def identifiers(text: str) -> set[str]:
     """The names a passage shares with others: invariant ids, decision keys,
     CamelCase model names, snake_case function and module names, and the names
     in code spans. Plain words are not identifiers."""
-    found = set(INVARIANT_ID.findall(text)) | set(DECISION.findall(text))
+    found = set(INVARIANT_ID.findall(text)) | set(DECISION.findall(text)) | set(MODEL_KEY.findall(text))
     found |= set(CAMEL.findall(text)) | set(SNAKE.findall(text))
     for span in CODE_SPAN.findall(text):
         for name in NAME.findall(span):
@@ -67,10 +89,29 @@ def defined(key: str, text: str) -> set[str]:
     every other."""
     heading = next((line for line in text.splitlines() if line.startswith("#")), "")
     names = identifiers(heading)
+    # a qualified heading (`public_op:derived_views.build_budget_view`) defines
+    # its last name; the qualifiers are names it uses, not defines: taken as
+    # definitions they tied every operation of a module to every unit naming it
+    for span in CODE_SPAN.findall(heading):
+        segments = [n for n in re.split(r"[.:]", span) if n]
+        if len(segments) > 1:
+            names -= set(segments[:-1])
+            names.add(segments[-1])
+    # a heading that is one code span defines that name, however short (`api`)
+    whole = re.fullmatch(r"#+\s+`([A-Za-z_][A-Za-z0-9_]*)`\s*", heading.strip())
+    if whole:
+        names.add(whole.group(1))
     named = heading.split("—", 1)[1].strip().strip("`") if "—" in heading else ""
     if NAME.fullmatch(named) and named[0].isupper():  # "## Model M12 — Expense"
         names.add(named)
-    return names | set(ITEM_ID.findall(text)) | ({key} if DECISION.fullmatch(key) else set())
+    names |= set(ITEM_ID.findall(text)) | ({key} if DECISION.fullmatch(key) else set())
+    # a model is also named by the field that refers to it (ServicePrincipal ->
+    # service_principal_id), the only way a model text names another one
+    return names | {_snake(n) + "_id" for n in names if CAMEL.fullmatch(n)}
+
+
+def _snake(name: str) -> str:
+    return re.sub(r"(?<!^)(?=[A-Z])", "_", name).lower()
 
 
 def mentions(text: str, names: set[str]) -> bool:
@@ -87,19 +128,69 @@ class Selection:
     neighbours: list[str] = field(default_factory=list)
 
 
+def _pieces(key: str, block: str) -> list[tuple[str, str]]:
+    """A level-2 unit as the passages a later layer receives: whole, or, when
+    its level-3 headings define names (``### R0-23 — …``), its text before the
+    first of them and each level-3 section, verbatim. Concatenated they are
+    the unit's text."""
+    parts: list[tuple[str, list[str]]] = [(key, [])]
+    for line in block.splitlines(keepends=True):
+        sub = SUBSECTION.match(line)
+        if sub:
+            parts.append((f"{key} / {sub.group(1)}", []))
+        parts[-1][1].append(line)
+    if len(parts) == 1 or not any(identifiers(lines[0]) for _, lines in parts[1:]):
+        return [(key, block)]
+    seen: dict[str, int] = {}
+    found = []
+    for name, lines in parts:
+        seen[name] = seen.get(name, 0) + 1
+        found.append((name if seen[name] == 1 else f"{name} #{seen[name]}", "".join(lines)))
+    return [piece for piece in found if piece[1].strip()]
+
+
 def _earlier_units(texts: list[tuple[int, str, str]], state: int) -> list[tuple[int, str, str, str]]:
+    """The passages of the earlier states a layer can receive: their level-2
+    units, cut into level-3 sections where those define names (``_pieces``)."""
     found = []
     for doc_state, name, body in texts:
         if doc_state < state:
             for key, _, block in units.split(name, body):
-                found.append((doc_state, name, key, block))
+                for piece_key, piece in _pieces(key, block):
+                    found.append((doc_state, name, piece_key, piece))
     return found
+
+
+def _title(text: str) -> str:
+    """The title of a passage's own heading. Headings inside a passage do not
+    count: quoted words match them too often, and a whole section would come
+    with each (client-portal States 3-5: median input 111k -> 134k)."""
+    heading = next((line for line in text.splitlines() if line.startswith("#")), "")
+    return heading.lstrip("#").strip().lower()
+
+
+OPERATION_HEADING = re.compile(r"^#+\s+`?(?:public_op|op|operation):", re.M)
+
+
+def _closes(unit: tuple[int, str, str, str]) -> bool:
+    """Whether the selection's closure runs through this passage: a model
+    (``## Model M12 — Expense``), a decision (``## Accepted decision A7``,
+    ``### R0-23 — …``, or a passage whose items declare ids such as INV-*),
+    or an operation (``## `public_op:…` ``)."""
+    state, _, key, text = unit
+    heading = next((line for line in text.splitlines() if line.startswith("#")), "")
+    return bool(DECISION.fullmatch(key) or DECISION.search(heading) or (state == 1 and re.match(r"^##\s+Model\b", heading))
+                or INVARIANT_ID.search(heading) or ITEM_ID.search(text) or OPERATION_HEADING.match(heading))
 
 
 def resolves(text: str, exclude: set[str], earlier: list[tuple[int, str, str, str]],
              definitions: dict[str, set[str]]) -> list[str]:
-    """Keys of the earlier units whose definitions ``text`` names, its own definitions aside."""
-    return [unit[2] for unit in earlier if mentions(text, definitions[unit[2]] - exclude)]
+    """Keys of the earlier units whose definitions ``text`` names, its own
+    definitions aside, and of those it cites by their quoted title
+    (State 0 ("Operator management"))."""
+    quoted = {q.strip().lower() for q in QUOTED.findall(text)}
+    return [unit[2] for unit in earlier
+            if mentions(text, definitions[unit[2]] - exclude) or (quoted and _title(unit[3]) in quoted)]
 
 
 def select(texts: list[tuple[int, str, str]], state: int, current: dict[str, dict[str, str]],
@@ -130,8 +221,8 @@ def select(texts: list[tuple[int, str, str]], state: int, current: dict[str, dic
         text = current[key]["text"]
         own = defined(key, text)
         links = resolves(text, own, earlier, definitions)
-        links += [unit[2] for unit in earlier if own and identifiers(unit[3]) & own and unit[2] not in links]
-        if not links:
+        links += [unit[2] for unit in earlier if own and unit[2] not in links and mentions(unit[3], own)]
+        if not links and earlier:  # State 0 has no earlier state to depend on
             selection.whole.append(f"{key} names nothing an earlier state defines and nothing earlier names "
                                    "what it defines, so what it depends on cannot be selected")
         take(links)
@@ -156,11 +247,19 @@ def select(texts: list[tuple[int, str, str]], state: int, current: dict[str, dic
         selection.received = [(s, name, f"{name}:whole", body) for s, name, body in texts if s < state]
         return selection
     # 2. close the selection: a chosen passage brings what it names in turn
-    #    (Entry -> Money, A12 -> A7), by definitions only, until nothing is added
+    #    (Entry -> Money, A12 -> A7), until nothing is added, by the
+    #    definitions of models, decisions and operations (owner review
+    #    r4504187842 of #157). A module of State 3 or a plain section is taken
+    #    when an open unit names it, but the closure does not run through it:
+    #    a module names every decision it owns and each decision the modules
+    #    it touches, and through them the closure reached most of the earlier
+    #    states for every State 5 operation (client-portal, 2026-11-08).
+    closing = {k: names for k, names in definitions.items() if _closes(by_key[k])}
+    closing_units = [u for u in earlier if u[2] in closing]
     frontier = list(chosen)
     while frontier:
         key = frontier.pop()
-        found = [k for k in resolves(by_key[key][3], definitions[key], earlier, definitions) if k not in chosen]
+        found = [k for k in resolves(by_key[key][3], definitions[key], closing_units, closing) if k not in chosen]
         take(found)
         frontier += found
     order = {(s, name): i for i, (s, name, _) in enumerate(texts)}
@@ -197,19 +296,16 @@ def render(selection: Selection, texts: list[tuple[int, str, str]], state: int, 
 
 NOTE = """
 
-What you read. Not the whole specification: the units of State {state} under
-review{neighbours}, and, of the earlier states, {received}. Quote a basis only
-from what you are given; a passage you are not given is not a basis."""
+What you read: the units of State {state} under review{neighbours}, and, of the
+earlier states, {received}. Quote a basis only from what you are given."""
 
 
 def note(selection: Selection, state: int) -> str:
     if selection.whole:
         received = ("their texts whole, because " + "; ".join(selection.whole))
     elif selection.received:
-        received = ("the passages the units under review depend on: those defining what they name "
-                    "(a decision, a model, an operation, an INV-* or R-* id) and those naming what they define")
+        received = "the passages they depend on: those defining what they name and those naming what they define"
     else:
         received = "nothing: the units under review name nothing an earlier state holds"
-    neighbours = (", with the closed units of this state that name a changed decision or speak of a change below"
-                  if selection.neighbours else "")
+    neighbours = ", with closed neighbours that name or speak of a change" if selection.neighbours else ""
     return NOTE.format(state=state, neighbours=neighbours, received=received)
