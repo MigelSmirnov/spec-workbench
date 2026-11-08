@@ -159,6 +159,8 @@ def _group(provider: Provider, reviews: list[dict[str, Any]], keep_points: bool 
             topic["witnessed_by"] = witnessed
         if keep_points:
             topic["points"] = [f"{points[m].get('text', '')} -> {points[m].get('question', '')}"
+                               + (f" | breaks SPEC_STANDARD §{points[m].get('section', '')}: {points[m]['rule']}"
+                                  if points[m].get("rule") else "")
                                + (f" | reviewer's witness: {json.dumps(points[m]['witness'], ensure_ascii=False)}"
                                   if _has_witness(points[m]) else "")
                                for m in topic["members"]]
@@ -248,7 +250,7 @@ def _judge(provider: Provider, state: int, text: str, texts: list[tuple[int, str
            later: dict[str, str] | None = None,
            precedents: list[dict[str, Any]] | None = None,
            witness: bool = False, case: Path | None = None, layer: str | None = None,
-           scope: list[str] | None = None) -> dict[str, Any]:
+           scope: list[str] | None = None, sections: list[dict[str, str]] | None = None) -> dict[str, Any]:
     """Judge the repeated topics. `later` maps the later states' documents to
     their texts; `precedents` are the state's prior non-blocking judgements,
     which the judge may follow for the same question on unchanged passages.
@@ -266,7 +268,10 @@ def _judge(provider: Provider, state: int, text: str, texts: list[tuple[int, str
       and no later documents.
 
     Either way judge.check finds every quote in the full texts, which it gets
-    here from `texts`, never from what the judge was shown."""
+    here from `texts`, never from what the judge was shown. `sections` are the
+    state's SPEC_STANDARD sections the reviewers were given: the judge gets
+    them too, and a violation's rule is found in them."""
+    standard = prompts.standard_text(sections) if sections else None
     for index, topic in enumerate(repeated, 1):
         topic["id"] = f"T{index}"
     items = [{"id": t["id"], "topic": t["topic"], "points": t.get("points", t["questions"])} for t in repeated]
@@ -292,8 +297,10 @@ def _judge(provider: Provider, state: int, text: str, texts: list[tuple[int, str
         closed_files = ([f"{judge_context.CLOSED_DIR}/{name}" for _, name, _ in texts]
                         if old is not None else None)
         instruction = prompts.judge_instruction(state, old is not None, later_files, bool(precedents),
-                                                question_scope, witness, state_files, closed_files)
-        judge_text = prompts.judge_input(judge_context.render(selected, state), items, None, precedents, layer)
+                                                question_scope, witness, state_files, closed_files,
+                                                standard=standard is not None)
+        judge_text = prompts.judge_input(judge_context.render(selected, state), items, None, precedents, layer,
+                                         standard)
     else:
         change = None
         if old is not None:
@@ -302,8 +309,8 @@ def _judge(provider: Provider, state: int, text: str, texts: list[tuple[int, str
                 for _, name, body in texts
             )
         instruction = prompts.judge_instruction(state, old is not None, later_files, bool(precedents),
-                                                question_scope, witness)
-        judge_text = prompts.judge_input(text, items, change, precedents, layer)
+                                                question_scope, witness, standard=standard is not None)
+        judge_text = prompts.judge_input(text, items, change, precedents, layer, standard)
         files = {f"{LATER_DIR}/{name}": body for name, body in later.items()} if later else {}
     if files:
         answer = provider.complete_with_files(instruction, judge_text, files)[0]
@@ -318,7 +325,7 @@ def _judge(provider: Provider, state: int, text: str, texts: list[tuple[int, str
                                          "\n\n".join(later.values()) if later else None,
                                          {p["id"]: p for p in precedents or []},
                                          "\n\n".join(b for s, _, b in texts if s == state),
-                                         witness_required=witness, earlier_texts=earlier)
+                                         witness_required=witness, earlier_texts=earlier, standard=standard)
     if case is not None and state > 0:
         provenance = QuoteProvenance(case, [(s, n, b) for s, n, b in texts if s < state])
         for topic in repeated:
@@ -644,7 +651,8 @@ def _document_round(provider: Provider, state: int, runs: int, read: StateTexts,
     """States 0-6: every review reads the texts of States 0..N, asked about the open units,
     with the transition of the state (TRANSITION_PROTOCOL.md): what it owns, receives and
     carries, and the deterministic results of its gate and checks."""
-    base = prompts.ask_instruction(state, documents.question_scope(state))
+    sections = documents.standard_sections(state)
+    base = prompts.ask_instruction(state, documents.question_scope(state), sections)
     base += prompts.unit_scope(state, [(key, read.units[key]["title"]) for key in scope],
                                {key: diff for key, (diff, _) in changed.items()}, referencing)
     base += prompts.hypotheses_note(_previous_hypotheses(case, state))
@@ -667,7 +675,8 @@ def _document_round(provider: Provider, state: int, runs: int, read: StateTexts,
     topics = _group(provider, reviews, keep_points=True)
     repeated = _judged(topics, witness=True)
     judged = (_judge(provider, state, text, read.texts, repeated, old, later, precedents,
-                     witness=True, case=case, layer=prompts.layer_judge(layer, scope), scope=scope) if repeated
+                     witness=True, case=case, layer=prompts.layer_judge(layer, scope), scope=scope,
+                     sections=sections) if repeated
               else {"provider": provider.name})
     return reviews, topics, repeated, judged
 
@@ -685,10 +694,13 @@ def _previous_hypotheses(case: Path, state: int) -> list[tuple[str, str]]:
 def _module_round(provider: Provider, state: int, runs: int, read: StateTexts, scope: list[str],
                   changed: dict[str, tuple[str, list[str]]], old: dict[str, str] | None,
                   case: Path, referencing: dict[str, list[str]] | None = None,
-                  layer: dict[str, Any] | None = None) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
+                  layer: dict[str, Any] | None = None, probe: bool = False
+                  ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
     """State 7: each review reads one module's prompt, as its generator would, and is
-    asked against the obligations received at State 7 that the module takes part in."""
+    asked against the obligations received at State 7 that the module takes part in.
+    A `probe` offers the judge no precedent: every topic is judged afresh."""
     scope_text = documents.question_scope(state)
+    sections = documents.standard_sections(state)
 
     import transition
 
@@ -700,7 +712,8 @@ def _module_round(provider: Provider, state: int, runs: int, read: StateTexts, s
         module = job[0]
         diff = changed[module][0] if module in changed else None
         review = _review_or_failed(provider,
-                                   prompts.module_ask_instruction(state, scope_text, diff, obligations[module]),
+                                   prompts.module_ask_instruction(state, scope_text, diff, obligations[module],
+                                                                  sections),
                                    prompts.module_input(module, read.units[module]["text"]))
         review["unit"] = module
         for point in review["open_points"]:
@@ -714,7 +727,7 @@ def _module_round(provider: Provider, state: int, runs: int, read: StateTexts, s
         reviews = list(pool.map(one, jobs))
     for module in scope:
         _valid_reviews([r for r in reviews if r["unit"] == module], f"State {state} module {module}")
-    precedents = _precedents(case, state)
+    precedents = [] if probe else _precedents(case, state)
     topics: list[dict[str, Any]] = []
     repeated: list[dict[str, Any]] = []
     judged: dict[str, Any] = {"provider": provider.name, "modules": {}}
@@ -730,7 +743,8 @@ def _module_round(provider: Provider, state: int, runs: int, read: StateTexts, s
             module_old = None if old is None else {module: old.get(module, "")}
             judged["modules"][module] = _judge(provider, state, text, [(state, module, read.units[module]["text"])],
                                                again, module_old, None, precedents,
-                                               layer=prompts.module_layer_judge(obligations[module]))
+                                               layer=prompts.module_layer_judge(obligations[module]),
+                                               sections=sections)
             for topic in again:
                 topic["id"] = f"{module}:{topic['id']}"
         topics += mine
@@ -1102,8 +1116,9 @@ def dispose(case: Path, state: int, topic_id: str, disposition: str, *, round_na
     _, topic = found
     need = units.topic_need(topic, summary)
     if need == units.CONTRADICTION:
-        raise QuestionRoundError(f"{topic_id} is a contradiction: it takes no disposition and closes when a round "
-                                 "on the changed text no longer raises it")
+        kind = (topic.get("judgement") or {}).get("kind") or "contradiction"
+        raise QuestionRoundError(f"{topic_id} is a {kind.replace('_', ' ')}: it takes no disposition and closes "
+                                 "when a round on the changed text no longer raises it")
     if need is None:
         raise QuestionRoundError(f"{topic_id} needs no disposition: "
                                  f"{(topic.get('judgement') or {}).get('kind') or 'it was not judged'}")
@@ -1155,3 +1170,100 @@ def carried_items(case: Path, to: int | str | None = None) -> list[dict[str, Any
             found.append({"state": int(state_name), "round": directory.name,
                           **{k: entry.get(k) for k in ("topic", "topic_text", "unit", "to", "what")}})
     return found
+
+
+class _SizeLog:
+    """A provider that records the input size of every request it passes on:
+    what a round costs, per review, grouping and judgement."""
+
+    def __init__(self, provider: Provider):
+        self.provider, self.name, self.requests = provider, provider.name, []
+        self.reads_files = bool(getattr(provider, "reads_files", False))
+
+    def _log(self, instruction: str, text: str, files: dict[str, str] | None = None) -> None:
+        kind = ("judge" if instruction.startswith("You judge") else
+                "group" if instruction.startswith("You receive the open points") else "review")
+        module = text.split("`", 2)[1] if text.startswith("=== the Factory's prompt for generating `") else None
+        if kind == "judge" and "=== the Factory's prompt for generating `" in text:
+            module = text.split("=== the Factory's prompt for generating `", 1)[1].split("`", 1)[0]
+        self.requests.append({"kind": kind, "module": module, "instruction_chars": len(instruction),
+                              "text_chars": len(text), "file_chars": sum(len(b) for b in (files or {}).values()),
+                              "total_chars": len(instruction) + len(text)
+                              + sum(len(b) for b in (files or {}).values())})
+
+    def complete(self, instruction: str, text: str) -> tuple[str, dict[str, Any]]:
+        self._log(instruction, text)
+        return self.provider.complete(instruction, text)
+
+    def complete_with_files(self, instruction: str, text: str, files: dict[str, str]) -> tuple[str, dict[str, Any]]:
+        self._log(instruction, text, files)
+        return self.provider.complete_with_files(instruction, text, files)  # type: ignore[attr-defined]
+
+
+PROBE_SCHEMA = "spec_workbench_question_probe.v1"
+
+
+def probe_round(case: Path, state: int, provider: Provider, out: Path, runs: int = DEFAULT_RUNS,
+                factory_root: Path | None = None, modules: list[str] | None = None) -> dict[str, Any]:
+    """A State 7 round over the named generated modules, or all of them, on
+    their current prompts whether they are closed or not, kept in `out`, never
+    in the case: it records no round, no closure and no disposition, offers no
+    precedent and judges no bound check. It measures what a round would raise
+    now, after a change of the round's own instruction, and logs the input
+    size of every request."""
+    if state != documents.MODULE_STATE:
+        raise QuestionRoundError(f"a probe asks State {documents.MODULE_STATE} module by module; "
+                                 f"State {state} is asked by `ask`")
+    if runs < REPEATED:
+        raise QuestionRoundError(f"a round needs at least {REPEATED} reviews to tell a repeated topic")
+    out = Path(out)
+    if out.exists() and any(out.iterdir()):
+        raise QuestionRoundError(f"{out} is not empty: a probe writes into a directory of its own")
+    if out.resolve().is_relative_to(case.resolve()):
+        raise QuestionRoundError("a probe is kept outside the case: it must not read as a round")
+    read = state_texts(case, state, factory_root)
+    unknown = sorted(set(modules or []) - set(read.units))
+    if unknown:
+        raise QuestionRoundError(f"not generated modules of State {state}: {', '.join(unknown)}")
+    scope = [key for key in read.units if not modules or key in modules]
+    logged = _SizeLog(provider)
+    layer = layer_context(case, state)
+    reviews, topics, repeated, judged = _module_round(logged, state, runs, read, scope, {}, None, case, None,
+                                                      layer, probe=True)
+    for topic in topics:
+        topic.pop("points", None)
+        topic.pop("quoted", None)
+    out.mkdir(parents=True, exist_ok=True)
+    (out / PROMPTS_DIR).mkdir()
+    for key in scope:
+        (out / PROMPTS_DIR / f"{key}.txt").write_text(read.units[key]["text"], encoding="utf-8")
+    for index, review in enumerate(reviews):
+        name = f"review-{review['unit']}-{index % runs + 1}.json"
+        (out / name).write_text(json.dumps(review, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+    blocking = [t for t in repeated if t["judgement"]["blocking"]]
+    per_module = {}
+    for key in scope:
+        mine = [t for t in topics if key in (t.get("units") or [])]
+        kinds: dict[str, int] = {}
+        for topic in mine:
+            kind = (topic.get("judgement") or {}).get("kind") or "not judged"
+            kinds[kind] = kinds.get(kind, 0) + 1
+        per_module[key] = {"topics": len(mine), "blocking": sum(1 for t in mine if t in blocking), "kinds": kinds,
+                           "prompt_chars": len(read.units[key]["text"])}
+    summary = {
+        "schema_version": PROBE_SCHEMA,
+        "state": state,
+        "provider": provider.name,
+        "reviews": runs,
+        "scope": scope,
+        "units": {key: read.units[key]["digest"] for key in scope},
+        "standard_sections": [s["section"] for s in documents.standard_sections(state)],
+        "judge": judged,
+        "modules": per_module,
+        "blocking_topics": len(blocking),
+        "topics": topics,
+        "requests": logged.requests,
+        "failed_reviews": [{"unit": r.get("unit"), "reason": r["failed"]} for r in reviews if "failed" in r],
+    }
+    (out / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+    return summary

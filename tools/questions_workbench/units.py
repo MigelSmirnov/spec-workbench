@@ -75,6 +75,9 @@ CLOSURE_RULE = "single_round"
 SETTLED_KINDS = frozenset({"answered", "answered_later", "judged_before", "later_state", "indifferent",
                            "preexisting"})
 CONTRADICTION = "contradiction"
+# A verified violation of the state's SPEC_STANDARD sections asks what a
+# contradiction asks: a change of the text and one round on it (judge.py).
+CHANGE_KINDS = frozenset({CONTRADICTION, "standard_violation"})
 DISPOSITION = "disposition"
 # why a unit needs a round
 NEVER_REVIEWED = "never reviewed"
@@ -189,7 +192,7 @@ def topic_units(topic: dict[str, Any], scope: list[str]) -> list[str]:
 
 def topic_need(topic: dict[str, Any], summary: dict[str, Any]) -> str | None:
     """What a topic of a round asks of the author: CONTRADICTION (a change of
-    the text and a round on it), DISPOSITION (fixed, carried or accepted), or
+    the text and a round on it; a contradiction or a standard violation), DISPOSITION (fixed, carried or accepted), or
     None. A topic no judge saw — raised by one review without a witness — asks
     nothing; in a round kept before the judge, a topic two reviews raised
     needs a disposition."""
@@ -199,8 +202,9 @@ def topic_need(topic: dict[str, Any], summary: dict[str, Any]) -> str | None:
     if not isinstance(judgement, dict):
         return None
     kind = judgement.get("kind")
-    if kind == CONTRADICTION:
-        return CONTRADICTION  # verified or not: an unverified contradiction is not downgraded
+    if kind in CHANGE_KINDS:
+        # verified or not: an unverified contradiction or standard violation is not downgraded
+        return CONTRADICTION
     if not judgement.get("verified"):
         return DISPOSITION if judgement.get("blocking", True) else None
     if kind in SETTLED_KINDS:

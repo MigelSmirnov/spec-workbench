@@ -18,6 +18,12 @@ round: never reviewed, or changed since their latest review (one round per
 change). `--since` reopens a state closed at that git ref: the judge sees the
 change and may set aside topics about passages the change did not touch.
 
+`ask --probe OUT` asks State 7 over every generated module (or each
+`--module`) on its current prompt, closed or not, and keeps the round in OUT,
+outside the case: no round, closure or disposition is recorded and no
+precedent is offered. It measures a change of the round's own instruction and
+logs the input size of every request.
+
 `dispose` records the author's disposition of a judged topic beside its round.
 `status` exits 0 when the state is closed — every unit's latest round on its
 current text raised no open contradiction and every other judged topic of it
@@ -88,6 +94,10 @@ def main(argv: list[str] | None = None) -> int:
     ask.add_argument("--reasoning")
     ask.add_argument("--since", help="git ref at which a reopened state was closed")
     ask.add_argument("--factory-root", type=Path, help="the Factory that builds the State 7 prompts")
+    ask.add_argument("--probe", metavar="OUT", type=Path,
+                     help="State 7 only: ask every generated module (or --module) on its current prompt, closed or "
+                          "not, and keep the round in OUT outside the case; it records no round and closes nothing")
+    ask.add_argument("--module", action="append", help="with --probe: a module to ask (repeatable; default: all)")
     ask.add_argument("--json", action="store_true")
     checks = sub.add_parser("judge-checks", help="judge each bound check once, kept by digest (witness_judgement)")
     checks.add_argument("case", type=Path)
@@ -155,6 +165,19 @@ def main(argv: list[str] | None = None) -> int:
                           + (f" ({row['unit']})" if row.get("unit") else "")
                           + f" -> {row['to']}: {row['what']}")
             return 0
+        if args.command == "ask" and args.probe is not None:
+            summary = service.probe_round(args.case, args.state, _provider(args), args.probe, args.runs,
+                                          args.factory_root, args.module)
+            if args.json:
+                print(json.dumps(summary, ensure_ascii=False, indent=2))
+            else:
+                for module, row in summary["modules"].items():
+                    print(f"{module}: topics={row['topics']} blocking={row['blocking']} kinds={row['kinds']} "
+                          f"prompt_chars={row['prompt_chars']}")
+                print(f"probe kept in {args.probe}: blocking={summary['blocking_topics']}")
+            return 0
+        if args.command == "ask" and args.module:
+            parser.error("--module needs --probe")
         if args.command == "ask":
             summary = service.ask_round(args.case, args.state, _provider(args), args.runs, args.since,
                                         args.factory_root)
