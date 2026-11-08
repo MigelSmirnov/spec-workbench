@@ -30,17 +30,26 @@ reviewers, who are asked for a witness. A contradiction also names, for each
 of its two passages, the earlier-state passage it rests on (verbatim, or none):
 a side that rests on no State 0 or State 1 passage is usually the side to
 change. State 7 asks for contradictions inside one prompt and keeps its rule.
+
+A `standard_violation` is a passage of the texts that breaks a rule of the
+SPEC_STANDARD sections the state's phase lists in `docs`, the sections the
+round gave its reviewers and its judge verbatim (owner decision 2026-11-08,
+#147 comment 6724353913). Both sides are checked mechanically: the passage in
+the texts, the rule in those sections. A verified one blocks like a
+contradiction, in every state and without a witness: the rule is the
+standard's, not an outcome the texts would have to allow.
 """
 from __future__ import annotations
 
 from typing import Any
 
 BLOCKING = {"contradiction", "consequential_gap"}
+STANDARD_VIOLATION = "standard_violation"
 DEFERRED_TO = "State 6 contracts or State 7 notes"
 LAST_DEFERRING_STATE = 5
 MODULE_STATE = 7
 HYPOTHESIS = "hypothesis"
-KINDS = BLOCKING | {"answered", "answered_later", "later_state", "indifferent", "preexisting", "judged_before",
+KINDS = BLOCKING | {STANDARD_VIOLATION, "answered", "answered_later", "later_state", "indifferent", "preexisting", "judged_before",
                     HYPOTHESIS}
 WITNESS_FIELDS = ("initial", "events", "outcomes", "observer", "basis")
 
@@ -124,13 +133,14 @@ def _bases(judgement: dict[str, Any], earlier: str | None) -> tuple[list[dict[st
 def check(judgement: dict[str, Any] | None, state: int, texts: str, old_texts: str | None,
           later_texts: str | None = None, precedents: dict[str, dict[str, Any]] | None = None,
           own_texts: str | None = None, witness_required: bool = False,
-          earlier_texts: str | None = None) -> dict[str, Any]:
+          earlier_texts: str | None = None, standard: str | None = None) -> dict[str, Any]:
     """The judgement as kept in the round, with `verified` and `blocking`.
     `own_texts` are the asked state's own documents; without them every text
     counts as the state's own. With `witness_required`, a contradiction or a
     quoted gap without a complete witness becomes a non-blocking `hypothesis`.
     `earlier_texts` are the documents of the states before this one, where a
-    contradiction's bases are looked up."""
+    contradiction's bases are looked up. `standard` is the text of the
+    SPEC_STANDARD sections the round gave, where a violation's rule is looked up."""
     if not isinstance(judgement, dict):
         return {"kind": None, "verified": False, "blocking": True, "failure": "the judge gave no judgement"}
     kind = judgement.get("kind")
@@ -149,6 +159,15 @@ def check(judgement: dict[str, Any] | None, state: int, texts: str, old_texts: s
     elif kind == "contradiction":
         if len(quotes) < 2 or not all(_found(q, corpus) for q in quotes):
             failure = "a contradiction needs two quotes found verbatim in the texts"
+    elif kind == STANDARD_VIOLATION:
+        kept["rule"] = str(judgement.get("rule") or "")
+        kept["section"] = str(judgement.get("section") or "")
+        if standard is None:
+            failure = "standard_violation is allowed only when the round gave the state's SPEC_STANDARD sections"
+        elif not quotes or not all(_found(q, corpus) for q in quotes):
+            failure = "the passage of a standard violation is not found verbatim in the texts"
+        elif not _found(kept["rule"], _norm(standard)):
+            failure = "the rule of a standard violation is not found verbatim in the state's SPEC_STANDARD sections"
     elif kind == "consequential_gap":
         if not kept["divergence"].strip():
             failure = "a consequential gap needs the two behaviours and who notices"
@@ -226,7 +245,8 @@ def check(judgement: dict[str, Any] | None, state: int, texts: str, old_texts: s
     # State 7 asks only for contradictions inside a module's prompt: a gap the
     # judge still names there is recorded, never a reason to keep notes open
     gap_recorded = kind == "consequential_gap" and state == MODULE_STATE and failure is None
-    kept["blocking"] = (kind in BLOCKING and not deferred and not gap_recorded) or failure is not None
+    kept["blocking"] = ((kind in BLOCKING and not deferred and not gap_recorded) or kind == STANDARD_VIOLATION
+                        or failure is not None)
     if failure:
         kept["failure"] = failure
     return kept

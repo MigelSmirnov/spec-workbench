@@ -72,9 +72,10 @@ obey one passage without breaking another:
 Read the prompt as the code you would write from it: for every function you
 must define, does any note allow or require what the IMPORTS list, a contract,
 a model's fields or a constant do not hold, or what another note forbids or
-decides differently? Report only such contradictions, each with both passages
+decides differently? Report each contradiction with both passages
 copied character for character from the prompt. Do not report what the prompt
-leaves open, style, or designs you would prefer.
+leaves open, style, or designs you would prefer; the one other kind of point
+is a violation of the standard, asked below.
 Output strict JSON, nothing else:
 {{"open_points":[{{"subject":"<function, class, note or section of the prompt>","kind":"contradiction","text":"<the first passage, verbatim>","other_text":"<the passage it contradicts, verbatim>","question":"<which of the two must change, or how they are reconciled>"}}]}}"""
 
@@ -102,8 +103,9 @@ prompt, the contract or note of the function that should carry it, and in
 
 
 def module_ask_instruction(state: int, scope: str, diff: str | None = None,
-                           obligations: list[str] | None = None) -> str:
-    instruction = MODULE_ASK.format(state=state, scope=scope)
+                           obligations: list[str] | None = None,
+                           sections: list[dict[str, str]] | None = None) -> str:
+    instruction = MODULE_ASK.format(state=state, scope=scope) + standard_ask(sections, "the prompt")
     if obligations:
         instruction += MODULE_OBLIGATIONS.format(listing="\n".join(obligations))
     return instruction + (MODULE_CHANGE.format(diff=diff) if diff is not None else "")
@@ -133,8 +135,43 @@ Output strict JSON, nothing else:
 {"groups":[{"topic":"<one line naming the missing decision>","members":["<point id>"]}]}"""
 
 
-def ask_instruction(state: int, scope: str) -> str:
-    return ASK.format(state=state, scope=scope)
+def ask_instruction(state: int, scope: str, sections: list[dict[str, str]] | None = None) -> str:
+    return ASK.format(state=state, scope=scope) + standard_ask(sections, "the texts of State {state}".format(state=state))
+
+
+# The rules a state is written by are SPEC_STANDARD's own sections, the ones
+# its phase lists in `docs` (authoring_sequence.json), given verbatim (owner
+# decision 2026-11-08, #147 comment 6724353913): the reviewer quotes the rule
+# it finds broken, the judge finds both quotes mechanically. No list of our own.
+STANDARD_ASK = """
+
+Violations of the standard. {Reviewed} must be written by the rules of the
+SPEC_STANDARD sections below, given verbatim — the sections this state lists
+as its rules. List also every passage of {reviewed} that breaks a rule of
+these sections, as a point of kind "standard_violation": in "text" copy the
+passage verbatim from {reviewed}; in "rule" copy, verbatim from the sections
+below, the rule it breaks (at least a full clause, without ellipsis); in
+"section" give that section's number; in "question" say what the passage must
+become. Both quotes are checked mechanically. Report only a rule these
+sections state; not a rule you would add. Such a point, in the same
+"open_points" list:
+{{"subject":"<function, note, unit or section>","kind":"standard_violation","text":"<the passage, verbatim>","rule":"<the rule, verbatim from the sections below>","section":"<its number>","question":"<what the passage must become>"}}
+
+{sections}"""
+
+
+def standard_text(sections: list[dict[str, str]] | None) -> str:
+    """The sections as given to a reviewer and the judge: each headed by its
+    number and why the phase lists it, then its text verbatim."""
+    return "\n\n".join(f"=== SPEC_STANDARD {s['title']} — {s['why']} ===\n\n{s['text']}"
+                        for s in sections or [])
+
+
+def standard_ask(sections: list[dict[str, str]] | None, reviewed: str) -> str:
+    if not sections:
+        return ""
+    return STANDARD_ASK.format(reviewed=reviewed, Reviewed=reviewed[:1].upper() + reviewed[1:],
+                               sections=standard_text(sections))
 
 
 def ask_input(documents: list[tuple[int, str, str]]) -> str:
@@ -146,7 +183,7 @@ task is to tell the questions that must change the texts before the next state
 from those that need not.{scope_rule} Judge each topic by exactly one kind:
 
 - "contradiction": two passages of the texts say different things. Quote both,
-  verbatim.{contradiction_extra}
+  verbatim.{contradiction_extra}{standard_kind}
 - "consequential_gap": the texts leave a choice open, and two careful
   implementers would build different behaviour that the owner, an agent, a
   caller or an external service would notice. Name the two behaviours and who
@@ -162,7 +199,7 @@ character, without ellipsis, at least a full clause. A quote not found in the
 texts counts against your judgement, so never paraphrase. {unsure_rule}{state_files}
 
 Output strict JSON, nothing else:
-{{"judgements":[{{"id":"<topic id>","kind":"<kind>","quotes":["<verbatim passage>"],"later_state":<number or null>,"precedent":"<prior judgement id or null>","divergence":"<two behaviours and who notices, or empty>","why":"<one sentence>"{witness_schema}}}]}}"""
+{{"judgements":[{{"id":"<topic id>","kind":"<kind>","quotes":["<verbatim passage>"],"later_state":<number or null>,"precedent":"<prior judgement id or null>","divergence":"<two behaviours and who notices, or empty>","why":"<one sentence>"{witness_schema}{standard_schema}}}]}}"""
 
 UNSURE_BLOCKING = """When unsure between a
 blocking kind (contradiction, consequential_gap) and another, choose the
@@ -280,6 +317,17 @@ A topic outside this scope does not keep State {state} open, however real the
 gap: it belongs to the later state that owns it, and that state's own round
 asks it there."""
 
+STANDARD_KIND = """
+- "standard_violation": a passage of the texts breaks a rule of the
+  SPEC_STANDARD sections given below (the rules of this state). Quote the
+  passage verbatim in "quotes", copy the rule verbatim from those sections in
+  "rule", and give its section number in "section". Judge it only on a rule
+  the sections state; a passage the rule does not reach is another kind. It
+  blocks like a contradiction."""
+
+STANDARD_SCHEMA = ',"rule":"<the rule, verbatim from the SPEC_STANDARD sections, or empty>","section":"<its number, or empty>"'
+
+
 # The last state a gap without a passage is deferred from (judge.LAST_DEFERRING_STATE).
 LAST_DEFERRING_STATE = 5
 LAST_DESIGN_STATE = 7
@@ -287,8 +335,11 @@ LAST_DESIGN_STATE = 7
 
 def judge_instruction(state: int, reopened: bool, later_files: list[str] | None = None,
                       precedents: bool = False, scope: str | None = None, witness: bool = False,
-                      state_files: list[str] | None = None, closed_files: list[str] | None = None) -> str:
-    """`witness`: a blocking kind needs a witness and a contradiction its
+                      state_files: list[str] | None = None, closed_files: list[str] | None = None,
+                      standard: bool = False) -> str:
+    """`standard`: the round gives the state's SPEC_STANDARD sections, and a
+    passage that breaks one of their rules is judged a standard_violation.
+    `witness`: a blocking kind needs a witness and a contradiction its
     bases (document states; State 7 keeps its own rule). `state_files`: the
     judge reads the round text as files and gets only the topics' units and
     passages inline (judge_context.py); `closed_files`, the texts a reopened
@@ -310,11 +361,13 @@ def judge_instruction(state: int, reopened: bool, later_files: list[str] | None 
                         scope_rule=scope_rule, contradiction_extra=bases,
                         witness_rule=WITNESS_RULE if witness else "",
                         unsure_rule=UNSURE_WITNESS if witness else UNSURE_BLOCKING,
-                        witness_schema=WITNESS_SCHEMA if witness else "", state_files=files)
+                        witness_schema=WITNESS_SCHEMA if witness else "", state_files=files,
+                        standard_kind=STANDARD_KIND if standard else "",
+                        standard_schema=STANDARD_SCHEMA if standard else "")
 
 
 def judge_input(texts: str, topics: list[dict], change: str | None, precedents: list[dict] | None = None,
-                layer: str | None = None) -> str:
+                layer: str | None = None, standard: str | None = None) -> str:
     listing = "\n\n".join(
         f"{t['id']}: {t['topic']}\n" + "\n".join(f"  - {p}" for p in t["points"]) for t in topics
     )
@@ -331,6 +384,9 @@ def judge_input(texts: str, topics: list[dict], change: str | None, precedents: 
         parts.append(f"=== PRIOR JUDGEMENTS (non-blocking, verified) ===\n\n{prior}")
     if layer:
         parts.append(layer)
+    if standard:
+        parts.append("=== THE RULES OF THIS STATE: SPEC_STANDARD SECTIONS, VERBATIM (not design text; "
+                     f"a rule is quoted from here) ===\n\n{standard}")
     parts.append(f"=== TOPICS TO JUDGE ===\n\n{listing}")
     return "\n\n".join(parts)
 

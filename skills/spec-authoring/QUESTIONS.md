@@ -237,7 +237,8 @@ invariant. The author changed the invariant to agree with the defective rule,
 and the defect stood seven more rounds.
 
 State 7 keeps its own rule: a contradiction inside one module's prompt, quoted
-on both sides. A witness does not apply there.
+on both sides. A witness does not apply there, nor to a `standard_violation`
+in any state: its two quotes are its evidence.
 
 ### A gap no passage speaks to
 
@@ -470,6 +471,15 @@ mechanically), only a `contradiction` blocks, and a gap the judge still names
 is recorded; since 2026-11-08 it takes a disposition like any other gap
 (below, "Closing a round").
 
+Asking for contradictions alone missed what the notes leave to the generator
+and the standard forbids: `expense_intake` of client-portal passed rounds
+18–20, then Route B rejected its generated code. Since 2026-11-08 (#147,
+comment 6724353913) the State 7 review also gets the SPEC_STANDARD sections
+`state7_notes` lists and is asked for violations of their rules, each quoting
+the rule and the passage; a verified one blocks like a contradiction ("The
+rules of the state", above). Gaps the standard does not speak to are still not
+asked.
+
 ### Closed on the current texts, before anything after State 5
 
 A round no one runs closes nothing, and until 2026-10-10 nothing asked for
@@ -500,6 +510,63 @@ answer (`experiments/registry-state2-authoring/`).
 When a quoted passage is older than the promise that narrows it, ask the owner.
 Do not choose for them.
 
+## The rules of the state: its SPEC_STANDARD sections
+
+Owner decision 2026-11-08 (#147, comment 6724353913). Every phase of
+`authoring_sequence.json` lists in `docs` the SPEC_STANDARD sections it is
+written by (path, section, why): `state7_notes` §2 notes, §15.3.1, §7 imports
+and §15.9; `state1_models` §5; `state2_rules_decisions` §15.3.1;
+`state3_module_responsibilities` §7; `state5_public_module_operations` §7 and
+§8. They reached the author, never the reviewer: the round's instruction never
+named the standard, and a reviewer asked "what contradicts what" reads a note
+against the prompt alone.
+
+So every round of a state whose phase lists sections gives its reviewers those
+sections verbatim, cut by the extractor `spec_standard` uses
+(`notes_authoring.standard.section`: by number or heading, with subsections),
+and asks, beside the state's own `question_scope`, for every passage of the
+text under review (State 7: the module's Factory prompt) that breaks one of
+their rules. Such a point quotes both sides verbatim: the rule from the
+standard, the passage from the text. The judge gets the same sections and
+judges it a `standard_violation`; `judge.check` finds the passage in the texts
+and the rule in the sections given, as it finds a contradiction's two quotes.
+No list of our own is added: the rule is the standard's, or there is no topic.
+
+A verified violation blocks like a contradiction, in every state and without
+a witness — the rule is the standard's, not an outcome the texts allow. It
+takes no disposition, `accepted` included, and closes when the text changes and
+the one round on that change no longer raises it. One whose quotes fail is not
+downgraded either. Each phase gets only the sections it lists, never the whole
+standard: State 7 about 20 000 characters (§2 8 232, §15.3.1 3 168, §7 6 557,
+§15.9 1 974) on top of a module prompt of 8 000–40 000; State 1 6 611; State 2
+3 168; State 3 6 557; State 5 8 446; States 0 and 4 list none and are asked as
+before.
+
+Why. client-portal `expense_intake` passed State 7 rounds 18–20 on
+contradictions alone (7ef7b262, below), then Route B stopped it at
+`model_constructor_unknown_field`: the generator built
+`Expense(currency=…, document_reference=…)` and
+`ExpenseIntake(intake_fingerprint=…)` from a `[FIELD_ASSIGNMENT]` note that
+says only "assign to each record exactly the fields that record's model
+declares". A structure left to prose contradicts nothing.
+
+What the sections find is the standard's, no more. The first probe of
+`expense_intake` with them (2026-11-08) raised 14 verified §2 violations — the
+dotted navigation and method calls the notes write (`tx.expenses()`,
+`intake.project_id`), the inline allow-list "supported OCR contract versions
+[1]", a note class chosen by topic — and not the field defect: no section of
+SPEC_STANDARD requires a note to give the source of every field of a record it
+builds, or forbids naming a field the model does not declare. Only the
+deterministic backends have such a rule (§6.1 `projections` cover the return
+model's fields exactly; §6.2 the aggregate's fields are covered by root and
+relations). Until the standard states one for notes, a round does not ask it.
+
+To measure a change of the round's own instruction on a case whose units are
+closed, `ask --probe <dir> [--module <m>]` asks State 7 over every generated
+module (or the named ones) on its current prompt, offers no precedent, logs the
+input size of every request, and keeps the round in `<dir>`, outside the case:
+it records no round, closure or disposition.
+
 ## Closing a round: contradictions and dispositions
 
 Owner decision 2026-11-08 (#147, comment 6721261089). Every step of the
@@ -510,7 +577,8 @@ a check should work, and States 0–7 "closed" by rounds still met 270 findings
 at assembly. Each layer now does its share and hands the rest on explicitly.
 
 - **A contradiction blocks**, as before: two passages, both quoted verbatim
-  and checked mechanically, blocking wherever its passages are. It takes no
+  and checked mechanically, blocking wherever its passages are. So does a
+  verified `standard_violation` (above). It takes no
   disposition. It closes when the text changes and the one round on that
   change no longer raises it. A contradiction whose quotes failed is not
   downgraded: it blocks too, and may be asked again on the same text.
