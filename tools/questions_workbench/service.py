@@ -558,40 +558,17 @@ def _document_round(provider: Provider, state: int, runs: int, read: StateTexts,
     later = {p.name: p.read_text(encoding="utf-8") for _, p in documents.later_documents(case, state)}
     evidence = (layer or {}).get("unit_evidence") or {}
     precedents = [p for p in _precedents(case, state) if _evidence_holds(p, evidence, scope)]
-    # the bindings' checks are split into passes when they do not fit one input
-    # (ROUND_MATERIAL_BUDGET); pass 1 also asks about the texts
-    parts = prompts.material_parts(layer, scope)
-    contexts = ([prompts.material_pass(layer, parts, i) for i in range(len(parts))]
-                if layer is not None and len(parts) > 1 else [layer])
-    reviews_all: list[dict[str, Any]] = []
-    topics_all: list[dict[str, Any]] = []
-    repeated_all: list[dict[str, Any]] = []
-    judged: dict[str, Any] = {"provider": provider.name}
-    for number, context in enumerate(contexts, 1):
-        instruction = base + prompts.layer_scope(context, scope) + prompts.material_pass_note(context or {})
-        with ThreadPoolExecutor(max_workers=runs) as pool:
-            reviews = list(pool.map(lambda _: _review(provider, instruction, text), range(runs)))
-        for review in reviews:
-            _set_aside(review, scope, changed, read.units)
-            if number > 1:
-                review["pass"] = number
-        topics = _group(provider, reviews, keep_points=True)
-        repeated = _judged(topics, witness=True)
-        result = (_judge(provider, state, text, read.texts, repeated, old, later, precedents,
-                         witness=True, case=case, layer=prompts.layer_judge(context, scope)) if repeated
-                  else {"provider": provider.name})
-        if number == 1:
-            judged = result
-        else:
-            for topic in repeated:
-                topic["id"] = f"P{number}:{topic['id']}"
-            judged.setdefault("passes", []).append({"pass": number, **result})
-        reviews_all += reviews
-        topics_all += topics
-        repeated_all += repeated
-    if len(contexts) > 1:
-        judged["material_passes"] = len(contexts)
-    return reviews_all, topics_all, repeated_all, judged
+    instruction = base + prompts.layer_scope(layer, scope)
+    with ThreadPoolExecutor(max_workers=runs) as pool:
+        reviews = list(pool.map(lambda _: _review(provider, instruction, text), range(runs)))
+    for review in reviews:
+        _set_aside(review, scope, changed, read.units)
+    topics = _group(provider, reviews, keep_points=True)
+    repeated = _judged(topics, witness=True)
+    judged = (_judge(provider, state, text, read.texts, repeated, old, later, precedents,
+                     witness=True, case=case, layer=prompts.layer_judge(layer, scope)) if repeated
+              else {"provider": provider.name})
+    return reviews, topics, repeated, judged
 
 
 def _previous_hypotheses(case: Path, state: int) -> list[tuple[str, str]]:
@@ -687,11 +664,10 @@ def ask_round(case: Path, state: int, provider: Provider, runs: int = DEFAULT_RU
         scope = [key for key in read.units if key in scope or key in referencing]
     old = _old_texts(case, state, [name for _, name, _ in read.texts], since, factory_root)
     asked = _module_round if state == documents.MODULE_STATE else _document_round
+    judge_checks(case, state, provider)  # each bound check judged once, kept by digest
     layer = layer_context(case, state)
     layer["evidence_reopened"] = evidence_reopened
     layer["unit_evidence"] = evidence
-    layer["material_scope"] = material_scope(scope, changed, evidence_reopened, layer.get("materials") or [],
-                                             referencing, evidence_moved(previous_summaries, scope, evidence))
     reviews, topics, repeated, judged = asked(provider, state, runs, read, scope, changed, old, case, referencing,
                                               layer)
     for topic in topics:
@@ -748,76 +724,18 @@ def ask_round(case: Path, state: int, provider: Provider, runs: int = DEFAULT_RU
     return summary
 
 
-def evidence_moved(summaries: list[dict[str, Any]], scope: list[str], evidence: dict[str, str]) -> set[str]:
-    """Units whose bound checks are not the ones their last review judged.
-
-    The last round that reviewed the unit recorded another evidence digest,
-    or none at all: either way the checks have not been shown on this basis.
-    """
-    moved: set[str] = set()
-    for key in scope:
-        if key not in evidence:
-            continue
-        reviewed = [s for s in summaries if key in (s.get("scope") or [])]
-        if not reviewed or (reviewed[-1].get("unit_evidence") or {}).get(key) != evidence[key]:
-            moved.add(key)
-    return moved
-
-
-def material_scope(scope: list[str], changed: dict[str, tuple[str, list[str]]], evidence_reopened: list[str],
-                   materials: list[dict[str, Any]], referencing: dict[str, list[str]] | None = None,
-                   moved: set[str] | None = None) -> dict[str, list[str] | None]:
-    """unit -> the bindings whose check the round is given (None: all of them).
-
-    Evidence comes first: a unit whose bound checks changed since its last
-    review (``moved``), or reopened for them, gets every binding, whatever its
-    text did. A unit never closed gets every binding. A unit reopened by an
-    edit gets only what the edit provably concerns:
-
-    - a changed line of a Required tests item (an earlier version is matched
-      by its witness tag): that item's binding;
-    - a changed line naming formal invariants by identifier (a strengthened
-      INV-001): the bindings whose item names them;
-    - any other change (normative text, an unidentified invariant, a removed
-      line nothing can be tied to): every binding, since the edit may change
-      what the checks must show.
-
-    A closed unit asked only because it names a changed decision gets none.
-    """
+def judge_checks(case: Path, state: int, provider: Provider) -> list[dict[str, Any]]:
+    """Judge the bound checks that have no judgement on their current files and
+    items, for the states that judge bindings (witness_judgement)."""
     import design_decision_witness
+    import transition
+    import witness_judgement
 
-    moved = moved or set()
-    selected: dict[str, list[str] | None] = {}
-    for key in scope:
-        if key in moved or key in evidence_reopened:
-            selected[key] = None
-        elif referencing and key in referencing and key not in changed:
-            selected[key] = []
-        elif key not in changed:
-            selected[key] = None
-        else:
-            own = [m for m in materials if m["decision"] == key]
-            item_lines = {m["item"]: {line.strip() for line in str(m["item"]).splitlines() if line.strip()}
-                          for m in own}
-            chosen: list[str] = []
-            provable = True
-            for line in changed[key][0].splitlines():
-                if not line[:1] in "+-" or line.startswith(("+++", "---")) or not line[1:].strip():
-                    continue
-                text = line[1:].strip()
-                items = [item for item, lines in item_lines.items() if text in lines]
-                tags = set(design_decision_witness.WITNESS_RE.findall(text))
-                if not items and tags:  # an earlier version of an item: its witness tag anchors it
-                    items = [m["item"] for m in own if tags & set(design_decision_witness.WITNESS_RE.findall(m["item"]))]
-                if not items:
-                    ids = set(design_decision_witness.invariant_ids(text))
-                    items = [m["item"] for m in own if ids & set(design_decision_witness.invariant_ids(m["item"]))]
-                if not items:
-                    provable = False
-                    break
-                chosen += [item for item in items if item not in chosen]
-            selected[key] = chosen if provable else None
-    return selected
+    sequence = transition.load_sequence()
+    if not any("witness_material" in transition.own_checks(sequence, phase)
+               for phase in transition.state_phases(sequence, state)):
+        return []
+    return witness_judgement.judge(case, provider, design_decision_witness.binding_material(case))
 
 
 def unit_evidence(case: Path, state: int) -> dict[str, str]:
@@ -858,10 +776,9 @@ def layer_record(layer: dict[str, Any]) -> dict[str, Any]:
             "results": [{"check": r["check"], "from": r["from"], "outcome": r["outcome"],
                          "findings": len(r.get("findings") or [])} for r in layer.get("results") or []],
             "gate_findings": len(layer.get("gate_findings") or []),
-            # the basis a sufficiency judgement rests on: which content, by digest
-            "materials": [{"decision": m["decision"], "witness": m["witness"], "status": m["status"],
-                           "files": [{"path": f["path"], "sha256": f["sha256"]} for f in m.get("files") or []]}
-                          for m in layer.get("materials") or []],
+            # the verdicts the round was given: which check judgement, by digest
+            "verdicts": [{"decision": v["decision"], "witness": v["witness"], "digest": v["digest"],
+                          "outcome": v["outcome"]} for v in layer.get("verdicts") or []],
             "digest": _sha(json.dumps(layer, sort_keys=True, ensure_ascii=False, default=str))}
 
 

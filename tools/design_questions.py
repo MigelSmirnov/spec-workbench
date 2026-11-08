@@ -75,6 +75,12 @@ def main(argv: list[str] | None = None) -> int:
     ask.add_argument("--since", help="git ref at which a reopened state was closed")
     ask.add_argument("--factory-root", type=Path, help="the Factory that builds the State 7 prompts")
     ask.add_argument("--json", action="store_true")
+    checks = sub.add_parser("judge-checks", help="judge each bound check once, kept by digest (witness_judgement)")
+    checks.add_argument("case", type=Path)
+    checks.add_argument("--provider", choices=("openai", "codex"), default="codex")
+    checks.add_argument("--model")
+    checks.add_argument("--reasoning")
+    checks.add_argument("--json", action="store_true")
     stat = sub.add_parser("status")
     stat.add_argument("case", type=Path)
     stat.add_argument("--state", type=int, required=True)
@@ -82,6 +88,21 @@ def main(argv: list[str] | None = None) -> int:
     stat.add_argument("--json", action="store_true")
     args = parser.parse_args(argv)
     try:
+        if args.command == "judge-checks":
+            import design_decision_witness
+            import witness_judgement
+
+            materials = design_decision_witness.binding_material(args.case)
+            done = witness_judgement.judge(args.case, _provider(args), materials)
+            rows = witness_judgement.verdicts(args.case, materials)
+            if args.json:
+                print(json.dumps({"judged": len(done), "verdicts": rows}, ensure_ascii=False, indent=2))
+            else:
+                print(f"judged {len(done)} check(s) now; {len(rows)} binding(s):")
+                for row in rows:
+                    print(f"  {row['decision']} {row['witness']} [{row['outcome']}] "
+                          f"{row.get('reason') or row.get('why') or ''}"[:200])
+            return 0 if all(r["outcome"] == "asserts" for r in rows) else 1
         if args.command == "ask":
             summary = service.ask_round(args.case, args.state, _provider(args), args.runs, args.since,
                                         args.factory_root)

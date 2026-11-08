@@ -231,17 +231,34 @@ def check_decision_witness(project: Path, factory: Path | None = None) -> dict[s
 
 
 def check_witness_material(project: Path, factory: Path | None = None) -> dict[str, Any]:
-    """A binding made at State 2 is judged there: its check's content must be readable whole."""
+    """Every binding made at State 2 has a current judgement of its check that it asserts.
+
+    The judgement is made once per check and kept by digest (witness_judgement);
+    a binding without one on the current files and items is not checked, and
+    one whose check asserts its invariants only in part, or not at all, is open.
+    """
     import design_decision_witness
+    import witness_judgement
 
     materials = design_decision_witness.binding_material(project, factory)
-    missing = [m for m in materials if m["status"] != "available"]
-    findings = [{"severity": "error", "code": "witness_material_not_checked", "outcome": "not_checked",
-                 "decision": m["decision"], "witness": m["witness"],
-                 "message": (f"{m['decision']}: whether {m['witness']} asserts {', '.join(m['invariants']) or 'its invariant'} "
-                             f"cannot be judged: {m.get('reason')} — not checked is not a pass")} for m in missing]
-    return _report("not_checked" if findings else "closed", findings, bindings=len(materials),
-                   available=len(materials) - len(missing))
+    rows = witness_judgement.verdicts(project, materials)
+    findings = []
+    for row in rows:
+        names = ", ".join(row["invariants"]) or "its invariant"
+        if row["outcome"] == "not_checked":
+            findings.append({"severity": "error", "code": "witness_material_not_checked", "outcome": "not_checked",
+                             "decision": row["decision"], "witness": row["witness"],
+                             "message": (f"{row['decision']}: whether {row['witness']} asserts {names} is not judged: "
+                                         f"{row['reason']} — not checked is not a pass")})
+        elif row["outcome"] != "asserts":
+            findings.append({"severity": "error", "code": "witness_does_not_assert", "outcome": "open",
+                             "decision": row["decision"], "witness": row["witness"],
+                             "message": (f"{row['decision']}: {row['witness']} {row['outcome'].replace('_', ' ')} "
+                                         f"assert {names} (check {row['digest'][:12]}): {row.get('why', '')}")})
+    outcome = ("not_checked" if any(f["outcome"] == "not_checked" for f in findings)
+               else "open" if findings else "closed")
+    return _report(outcome, findings, bindings=len(rows),
+                   asserts=sum(1 for r in rows if r["outcome"] == "asserts"))
 
 
 CHECKS: dict[str, Callable[[Path], dict[str, Any]]] = {
@@ -404,13 +421,14 @@ def round_context(project: Path, state: int, sequence: dict[str, Any] | None = N
     except Exception as exc:  # the gate cannot read the case: say so, never report it clean
         gate = [{"code": "state_gate_not_checked", "severity": "error",
                  "message": f"the State {state} gate could not read the case ({exc}) — not checked is not a pass"}]
-    materials: list[dict[str, Any]] = []
+    verdicts: list[dict[str, Any]] = []
     if "witness_material" in [c for phase in phases for c in own_checks(sequence, phase)]:
         import design_decision_witness
-        materials = design_decision_witness.binding_material(project)
+        import witness_judgement
+        verdicts = witness_judgement.verdicts(project, design_decision_witness.binding_material(project))
     return {"state": state, "owns": owns, "carries": carries, "results": report["results"],
             "ready": report["ready"] and not any(f.get("severity") in {"error", "block"} for f in gate),
-            "gate_findings": gate, "materials": materials}
+            "gate_findings": gate, "verdicts": verdicts}
 
 
 def module_obligations(project: Path, context: dict[str, Any], module: str) -> list[str]:

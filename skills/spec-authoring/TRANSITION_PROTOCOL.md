@@ -126,27 +126,26 @@ Three things share the word "witness" and are kept apart:
 - the **defect witness** of a question round — a history in which the texts give
   two outcomes. It proves a defect; it never proves an invariant.
 
-Whether a bound check really asserts its invariant is a judgement, asked in the
-State 2 round on the check's content: the round is given, read-only, the files
-the check's command names in the Factory checkout, the assembled
-[TEST_EVIDENCE] notes of a `note:` scope, or the implementation of a
-`workbench:` gate (resolved through the assembly check table to the code it
-delegates to, or to `design_lint` for a lint gate), each with its sha256, and
-keeps those digests as the basis of its result (`layer.materials`).
-A check's material is the files its command names and the Factory modules
-they import, with the `__init__.py` of every package on the way (its own
-support modules; not the product under test in `projects/`). A round is given
-each file once, by sha256, and only for the bindings that need judging now.
-Evidence comes first: a unit whose checks are not the ones its last review
-judged gets all its bindings, whatever its text did. A unit never closed gets
-all of them too. A unit reopened by an edit gets the bindings the edit
-provably concerns — an edited Required tests item, or the items naming an
-edited identified invariant — and all of them for any other edit, since a
-normative change may change what the checks must show. A unit asked only
-because it names a changed decision gets none. When the material does not fit one input
-(`ROUND_MATERIAL_BUDGET`), the round is split into passes, each with its own
-reviews and judge over its share of bindings, the first also asking about the
-texts; nothing is cut.
+Whether a bound check really asserts its invariant is a judgement made once
+per check, outside the document round (`tools/witness_judgement.py`, owner
+review of #156, 2026-11-08). Its input is the check's material — the files its
+command names in the Factory checkout and the Factory modules they import, with
+the `__init__.py` of every package on the way (not the product under test in
+`projects/`), the assembled [TEST_EVIDENCE] notes of a `note:` scope, or the
+implementation of a `workbench:` gate (resolved through the assembly check
+table to the code it delegates to, or to `design_lint` for a lint gate) — and
+every Required tests item bound to it across all decisions, with the invariants
+each names as stated. For each item it answers `asserts`, `partial` or
+`does_not`, quoting the asserting lines; a quote not found in the files makes
+the answer unverified. The judgement is kept under `questions/checks/`, keyed
+by the sha256 of the files and of the bound items with their invariants, and
+made again only when one of them changes (`design_questions.py judge-checks`,
+or at the start of a State 2 round). The round receives the verdicts only, one
+line per binding with its digest and outcome (`layer.verdicts`), never the
+code. `witness_material` stops the transition on a binding without a current
+verdict (`not_checked`) and on one whose check does not assert, or asserts in
+part, what its item names (`witness_does_not_assert`). Material that cannot be
+given whole is `not_checked`, never cut.
 The basis is kept per decision unit too (`unit_evidence`): when a bound check
 changes — a file, the command, a digest — while the decision's text does not,
 exactly that decision reopens and is reviewed for whether its bindings still
@@ -155,9 +154,7 @@ hold on the new evidence, until two clear reviews on it close it again
 only on the evidence it was judged on: on changed evidence, or with no
 recorded basis, it is not offered to the judge, and the judge is told the unit
 reopened for its evidence. Rounds kept before the basis was recorded are
-taken as they stand for closure, not as precedents for bound decisions. A binding whose content
-cannot be read whole is `not_checked` (`witness_material`, a State 2 check): its
-sufficiency is not judged, and it is never taken as sufficient. On client-portal 28 of 32 decisions were bound to existing
+taken as they stand for closure, not as precedents for bound decisions. On client-portal 28 of 32 decisions were bound to existing
 checks; A7, A15, A20 and A32 have none. A binding found by reading check code
 is evidence; a binding to a check that does not assert the invariant is a
 false claim.
