@@ -1,0 +1,141 @@
+{
+ "open_points": [
+  {
+   "unit": "A28",
+   "subject": "CLK-002 wall-clock reading cardinality",
+   "kind": "contradictory scope",
+   "text": "The normative rule says “one reading per operation for its own timestamps,” CLK-002 says “an operation takes one wall reading,” and the Required tests narrow this again to “a test per operation that reads the wall clock.”",
+   "question": "Must an operation that neither writes a timestamp nor makes a current-time comparison take a wall-clock reading?",
+   "options": [
+    "Every operation takes exactly one wall reading.",
+    "Only operations needing timestamps or current-time comparisons take one wall reading; other operations take none."
+   ],
+   "default_guess": "Only operations that need the current instant take one wall reading.",
+   "witness": {
+    "initial": "A valid viewer session exists and the requested project has readable persisted data.",
+    "events": [
+     "The viewer requests a read-only project view that writes no timestamp and needs no expiry comparison after authentication has already produced its actor context."
+    ],
+    "outcomes": [
+     "The operation takes no wall reading because it has no timestamps of its own.",
+     "The operation takes one wall reading because CLK-002 says every operation does."
+    ],
+    "observer": "A counting clock source or a test asserting the operation's call count."
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "CLK-002 exclusive host-clock ownership",
+   "kind": "insufficient required test",
+   "text": "CLK-002 requires that “the clock source is the only reader of the host's wall and elapsed clocks,” but its source check only excludes imports of the `time` module and calls to `datetime` or `date` methods `now`, `utcnow`, and `today`.",
+   "question": "What Required test demonstrates that no other host-clock access mechanism is used, such as `os.clock_gettime`, a native binding, or an indirectly imported clock reader?",
+   "options": [
+    "Define the invariant only over the enumerated Python APIs.",
+    "Require a check covering every permitted host-clock boundary.",
+    "Add a runtime test that fails on any host-clock access outside the source."
+   ],
+   "default_guess": "Treat all host-clock APIs as forbidden outside a single replaceable backend and test that boundary dynamically as well as statically.",
+   "witness": {
+    "initial": "A module outside the clock source performs an operation that needs the current instant.",
+    "events": [
+     "Its implementer reads `CLOCK_REALTIME` through `os.clock_gettime` and converts the result to an offset-naive UTC datetime.",
+     "The stated source check scans for `time` imports and calls to `now`, `utcnow`, or `today`."
+    ],
+    "outcomes": [
+     "The source check passes although CLK-002 is false.",
+     "A broader checker rejects the module as a second reader of the host wall clock."
+    ],
+    "observer": "The State 2 invariant gate and any test using a controlled clock source."
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "CLK-002 Required-test witness",
+   "kind": "missing witness binding",
+   "text": "The witness line binds only CLK-001: “CLK-001 [witness: verification:service_identity_consumer_uow_client_portal]; CLK-001 [witness: verification:staff_bootstrap_client_portal].” No witness is named for the CLK-002 Required tests.",
+   "question": "Which existing witness check is bound to CLK-002 and asserts its exclusive-reader, exact wall-reading-count, audit-reading-count, expiry-boundary, and elapsed-reading requirements?",
+   "options": [
+    "Bind one existing verification check covering all CLK-002 requirements.",
+    "Bind several existing checks, each naming the CLK-002 requirements it covers."
+   ],
+   "default_guess": "Require explicit witness bindings for separate static clock-ownership, wall-clock-count, and viewer elapsed-clock checks."
+  },
+  {
+   "unit": "A32",
+   "subject": "DEP-002 treatment of withdrawn OSV entries",
+   "kind": "internal contradiction",
+   "text": "The normative rule says a vulnerability counts only when “an OSV entry that is not withdrawn lists its installed version as affected,” while DEP-002 and its Required test omit that exception and respectively forbid any vulnerability “listed in OSV for its version” and say “a listed version ... does not start it.”",
+   "question": "Does a withdrawn OSV entry that still lists the installed version as affected block deployment?",
+   "options": [
+    "It does not block, following the normative definition.",
+    "It blocks, following the literal invariant and Required-test wording."
+   ],
+   "default_guess": "A withdrawn entry does not block, and the invariant and test should state that exception.",
+   "witness": {
+    "initial": "The built image contains distribution D version V; the one OSV copy contains exactly one entry listing D V as affected, and that entry is withdrawn.",
+    "events": [
+     "A deploy checks that image against that OSV copy."
+    ],
+    "outcomes": [
+     "The service starts because no non-withdrawn entry affects D V.",
+     "The service does not start because D V is still listed in OSV."
+    ],
+    "observer": "The deploy operator and service users waiting for the new service instance."
+   }
+  },
+  {
+   "unit": "A32",
+   "subject": "OSV one-copy consistency boundary",
+   "kind": "undefined snapshot semantics",
+   "text": "The text requires OSV to be “read once ... as one copy of the PyPI ecosystem data” and says an advisory “added, changed or withdrawn after that read is judged by the next deploy,” but it does not define the boundary of that read or how one internally consistent copy is identified.",
+   "question": "If OSV changes while a paginated, streamed, mirrored, or otherwise multi-part read is being obtained, which revision constitutes the deploy's one copy, and when must the read be treated as incomplete?",
+   "options": [
+    "Use the state visible independently for each response during the read.",
+    "Require a database snapshot or revision identifier shared by every part.",
+    "Define the copy as the locally completed artifact even if its parts came from different OSV revisions."
+   ],
+   "default_guess": "Require one immutable snapshot or revision identifier and fail the deploy if consistency cannot be established.",
+   "witness": {
+    "initial": "Image I contains D version V. OSV initially has no affecting entry for it, and an affecting entry is added while the deploy is retrieving different parts of the PyPI data.",
+    "events": [
+     "The deploy begins its OSV read.",
+     "OSV adds the entry for D V before the retrieval finishes.",
+     "The deploy evaluates I against the retrieved data."
+    ],
+    "outcomes": [
+     "The entry belongs to the next deploy because the current deploy's read began before it was added, so I starts.",
+     "The entry belongs to the current deploy because it was present before the read completed, so I is blocked."
+    ],
+    "observer": "The deploy operator and users of image I."
+   }
+  },
+  {
+   "unit": "A32",
+   "subject": "DEP-002 unmatchable advisory data",
+   "kind": "undefined refusal condition",
+   "text": "The Required test says “unreadable or unmatchable advisory data ... does not start it,” but neither “unmatchable” nor the scope of advisory data whose mismatch invalidates the check is defined in the normative rules.",
+   "question": "Which conditions make OSV data unmatchable, and does an unmatchable entry unrelated to any installed distribution fail the entire deploy or only cease to provide a verdict for a matching distribution?",
+   "options": [
+    "Any malformed or unmatchable entry in the copied PyPI data fails the deploy.",
+    "Only data needed to judge an installed distribution must be matchable.",
+    "Unmatchable entries are ignored unless they identify an installed distribution.",
+    "Package-name, version, range, and ecosystem matching rules are explicitly enumerated."
+   ],
+   "default_guess": "Fail when the checker cannot obtain a determinate verdict for an installed distribution; define normalization and version/range matching explicitly.",
+   "witness": {
+    "initial": "The image's installed distributions have valid names and versions and no valid OSV entry affects them, but the copied data also contains one malformed or unmatchable entry for an unrelated package.",
+    "events": [
+     "The deploy evaluates every installed distribution against the copied OSV data."
+    ],
+    "outcomes": [
+     "The deploy is blocked because any unmatchable advisory data makes the check incomplete.",
+     "The malformed unrelated entry is ignored and the service starts because every installed distribution received a determinate passing verdict."
+    ],
+    "observer": "The deploy operator and service users."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A28\",\"subject\":\"CLK-002 wall-clock reading cardinality\",\"kind\":\"contradictory scope\",\"text\":\"The normative rule says “one reading per operation for its own timestamps,” CLK-002 says “an operation takes one wall reading,” and the Required tests narrow this again to “a test per operation that reads the wall clock.”\",\"question\":\"Must an operation that neither writes a timestamp nor makes a current-time comparison take a wall-clock reading?\",\"options\":[\"Every operation takes exactly one wall reading.\",\"Only operations needing timestamps or current-time comparisons take one wall reading; other operations take none.\"],\"default_guess\":\"Only operations that need the current instant take one wall reading.\",\"witness\":{\"initial\":\"A valid viewer session exists and the requested project has readable persisted data.\",\"events\":[\"The viewer requests a read-only project view that writes no timestamp and needs no expiry comparison after authentication has already produced its actor context.\"],\"outcomes\":[\"The operation takes no wall reading because it has no timestamps of its own.\",\"The operation takes one wall reading because CLK-002 says every operation does.\"],\"observer\":\"A counting clock source or a test asserting the operation's call count.\"}},{\"unit\":\"A28\",\"subject\":\"CLK-002 exclusive host-clock ownership\",\"kind\":\"insufficient required test\",\"text\":\"CLK-002 requires that “the clock source is the only reader of the host's wall and elapsed clocks,” but its source check only excludes imports of the `time` module and calls to `datetime` or `date` methods `now`, `utcnow`, and `today`.\",\"question\":\"What Required test demonstrates that no other host-clock access mechanism is used, such as `os.clock_gettime`, a native binding, or an indirectly imported clock reader?\",\"options\":[\"Define the invariant only over the enumerated Python APIs.\",\"Require a check covering every permitted host-clock boundary.\",\"Add a runtime test that fails on any host-clock access outside the source.\"],\"default_guess\":\"Treat all host-clock APIs as forbidden outside a single replaceable backend and test that boundary dynamically as well as statically.\",\"witness\":{\"initial\":\"A module outside the clock source performs an operation that needs the current instant.\",\"events\":[\"Its implementer reads `CLOCK_REALTIME` through `os.clock_gettime` and converts the result to an offset-naive UTC datetime.\",\"The stated source check scans for `time` imports and calls to `now`, `utcnow`, or `today`.\"],\"outcomes\":[\"The source check passes although CLK-002 is false.\",\"A broader checker rejects the module as a second reader of the host wall clock.\"],\"observer\":\"The State 2 invariant gate and any test using a controlled clock source.\"}},{\"unit\":\"A28\",\"subject\":\"CLK-002 Required-test witness\",\"kind\":\"missing witness binding\",\"text\":\"The witness line binds only CLK-001: “CLK-001 [witness: verification:service_identity_consumer_uow_client_portal]; CLK-001 [witness: verification:staff_bootstrap_client_portal].” No witness is named for the CLK-002 Required tests.\",\"question\":\"Which existing witness check is bound to CLK-002 and asserts its exclusive-reader, exact wall-reading-count, audit-reading-count, expiry-boundary, and elapsed-reading requirements?\",\"options\":[\"Bind one existing verification check covering all CLK-002 requirements.\",\"Bind several existing checks, each naming the CLK-002 requirements it covers.\"],\"default_guess\":\"Require explicit witness bindings for separate static clock-ownership, wall-clock-count, and viewer elapsed-clock checks.\"},{\"unit\":\"A32\",\"subject\":\"DEP-002 treatment of withdrawn OSV entries\",\"kind\":\"internal contradiction\",\"text\":\"The normative rule says a vulnerability counts only when “an OSV entry that is not withdrawn lists its installed version as affected,” while DEP-002 and its Required test omit that exception and respectively forbid any vulnerability “listed in OSV for its version” and say “a listed version ... does not start it.”\",\"question\":\"Does a withdrawn OSV entry that still lists the installed version as affected block deployment?\",\"options\":[\"It does not block, following the normative definition.\",\"It blocks, following the literal invariant and Required-test wording.\"],\"default_guess\":\"A withdrawn entry does not block, and the invariant and test should state that exception.\",\"witness\":{\"initial\":\"The built image contains distribution D version V; the one OSV copy contains exactly one entry listing D V as affected, and that entry is withdrawn.\",\"events\":[\"A deploy checks that image against that OSV copy.\"],\"outcomes\":[\"The service starts because no non-withdrawn entry affects D V.\",\"The service does not start because D V is still listed in OSV.\"],\"observer\":\"The deploy operator and service users waiting for the new service instance.\"}},{\"unit\":\"A32\",\"subject\":\"OSV one-copy consistency boundary\",\"kind\":\"undefined snapshot semantics\",\"text\":\"The text requires OSV to be “read once ... as one copy of the PyPI ecosystem data” and says an advisory “added, changed or withdrawn after that read is judged by the next deploy,” but it does not define the boundary of that read or how one internally consistent copy is identified.\",\"question\":\"If OSV changes while a paginated, streamed, mirrored, or otherwise multi-part read is being obtained, which revision constitutes the deploy's one copy, and when must the read be treated as incomplete?\",\"options\":[\"Use the state visible independently for each response during the read.\",\"Require a database snapshot or revision identifier shared by every part.\",\"Define the copy as the locally completed artifact even if its parts came from different OSV revisions.\"],\"default_guess\":\"Require one immutable snapshot or revision identifier and fail the deploy if consistency cannot be established.\",\"witness\":{\"initial\":\"Image I contains D version V. OSV initially has no affecting entry for it, and an affecting entry is added while the deploy is retrieving different parts of the PyPI data.\",\"events\":[\"The deploy begins its OSV read.\",\"OSV adds the entry for D V before the retrieval finishes.\",\"The deploy evaluates I against the retrieved data.\"],\"outcomes\":[\"The entry belongs to the next deploy because the current deploy's read began before it was added, so I starts.\",\"The entry belongs to the current deploy because it was present before the read completed, so I is blocked.\"],\"observer\":\"The deploy operator and users of image I.\"}},{\"unit\":\"A32\",\"subject\":\"DEP-002 unmatchable advisory data\",\"kind\":\"undefined refusal condition\",\"text\":\"The Required test says “unreadable or unmatchable advisory data ... does not start it,” but neither “unmatchable” nor the scope of advisory data whose mismatch invalidates the check is defined in the normative rules.\",\"question\":\"Which conditions make OSV data unmatchable, and does an unmatchable entry unrelated to any installed distribution fail the entire deploy or only cease to provide a verdict for a matching distribution?\",\"options\":[\"Any malformed or unmatchable entry in the copied PyPI data fails the deploy.\",\"Only data needed to judge an installed distribution must be matchable.\",\"Unmatchable entries are ignored unless they identify an installed distribution.\",\"Package-name, version, range, and ecosystem matching rules are explicitly enumerated.\"],\"default_guess\":\"Fail when the checker cannot obtain a determinate verdict for an installed distribution; define normalization and version/range matching explicitly.\",\"witness\":{\"initial\":\"The image's installed distributions have valid names and versions and no valid OSV entry affects them, but the copied data also contains one malformed or unmatchable entry for an unrelated package.\",\"events\":[\"The deploy evaluates every installed distribution against the copied OSV data.\"],\"outcomes\":[\"The deploy is blocked because any unmatchable advisory data makes the check incomplete.\",\"The malformed unrelated entry is ignored and the service starts because every installed distribution received a determinate passing verdict.\"],\"observer\":\"The deploy operator and service users.\"}}]}",
+ "set_aside": []
+}

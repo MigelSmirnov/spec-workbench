@@ -1,0 +1,194 @@
+{
+ "open_points": [
+  {
+   "unit": "A28",
+   "subject": "CLK-002 witness binding",
+   "kind": "missing required witness",
+   "text": "The Required tests bind only `CLK-001` to witness checks: `CLK-001 [witness: verification:service_identity_consumer_uow_client_portal]; CLK-001 [witness: verification:staff_bootstrap_client_portal]`; no `[witness: ...]` binds CLK-002.",
+   "question": "Which existing check is bound to CLK-002 and will assert its clock-reader, reading-count, reuse, and elapsed-clock obligations?",
+   "options": [
+    "Bind CLK-002 to one existing check that covers all its required tests",
+    "Bind its source, wall-clock, and elapsed-clock portions to separate existing checks"
+   ],
+   "default_guess": "Bind separate checks for the static source restriction, wall-clock operations, and viewer-entry elapsed-clock behavior."
+  },
+  {
+   "unit": "A28",
+   "subject": "source-supplied datetime normalization",
+   "kind": "deferred open choice",
+   "text": "Source-supplied times are `kept as supplied: the same instant, stored offset-naive UTC`, but `their accepted forms and checks` are merely said to be `the accepted spec's, carried to States 6–7`.",
+   "question": "Which input representations are accepted for source-supplied datetimes, especially offset-naive values, and how is each accepted value converted to offset-naive UTC without changing its instant?",
+   "options": [
+    "Require an offset-aware datetime, convert it to UTC, then remove the offset",
+    "Require an already offset-naive UTC datetime",
+    "Accept both, interpreting an offset-naive value as UTC"
+   ],
+   "default_guess": "Require an offset-aware datetime, normalize it to UTC, and strip the offset for persistence.",
+   "witness": {
+    "initial": "A producer submits a snapshot whose `approved_at` is the offset-naive value `2026-11-08 10:00:00`.",
+    "events": [
+     "The authenticated producer imports the snapshot.",
+     "The import validates and stores the supplied time."
+    ],
+    "outcomes": [
+     "The import is refused because an offset-naive source value does not identify an instant.",
+     "The value is accepted as UTC and stored unchanged as `2026-11-08 10:00:00`."
+    ],
+    "observer": "The producer sees acceptance versus refusal, and later readers may see a different represented instant."
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "meaning of one operation",
+   "kind": "undefined counting boundary",
+   "text": "`An operation reads the clock once` and CLK-002 says `an operation takes one wall reading`, but the text does not define whether authorization, the owning use case, nested helpers, retries, and transaction/audit work form one operation or several.",
+   "question": "What is the exact operation boundary over which one wall reading must be shared?",
+   "options": [
+    "One inbound command/request, including authorization and every nested use case except the audit-writer exception",
+    "Each application use-case invocation, so authorization and a mutation may take separate readings",
+    "One unit-of-work attempt, with a retry taking a new reading"
+   ],
+   "default_guess": "Treat one inbound command and its authorization and owning use case as one operation; give a retried unit-of-work attempt a new operation reading.",
+   "witness": {
+    "initial": "A valid staff session is near expiry and a mutation will write `updated_at` and append an audit record.",
+    "events": [
+     "A staff request enters the authorization guard.",
+     "The guard compares session expiry with current time.",
+     "The owning use case performs the mutation and writes its timestamp."
+    ],
+    "outcomes": [
+     "The guard and mutation share one wall reading because the whole request is one operation.",
+     "The guard and mutation each read the source because they are separate operations, so authorization and the write use different instants."
+    ],
+    "observer": "The staff member can see the request succeed or fail at the expiry boundary, and persisted timestamps differ."
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "CLK-002 exclusivity verification",
+   "kind": "invariant not demonstrated",
+   "text": "CLK-002 requires the clock source to be `the only reader of the host's wall and elapsed clocks`, while its source check names only imports of `time` and calls to `now`, `utcnow` or `today` of `datetime` or `date`.",
+   "question": "How must the required check demonstrate that no other host-clock API or indirect wrapper reads wall or elapsed time?",
+   "options": [
+    "Define an exhaustive allowed/forbidden clock-API set and check all imports and aliases",
+    "Make host-clock access available only through an injected backend that other modules cannot import",
+    "Narrow CLK-002 to only the named Python APIs"
+   ],
+   "default_guess": "Expose host clocks only through a dedicated backend module and enforce an import-boundary allow-list.",
+   "witness": {
+    "initial": "A non-clock module reads wall time through `os.clock_gettime(os.CLOCK_REALTIME)` and uses it for a validity comparison.",
+    "events": [
+     "The CLK-002 source check scans for `time` imports and `datetime`/`date` clock methods.",
+     "The check finds none and passes."
+    ],
+    "outcomes": [
+     "The implementation is accepted by the described check although CLK-002 is false.",
+     "A broader exclusivity check rejects the implementation."
+    ],
+    "observer": "The release verifier sees a passing versus failing CLK-002 gate; users can see boundary decisions based on a second instant."
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "system clock backend value",
+   "kind": "missing required test",
+   "text": "The normative rule requires the wall reading to be `the same value datetime.utcnow() gives` with `no cache` and `no arithmetic in the clock source`, but the Required tests only count operation-level readings and compare written values with the value returned by the supplied clock source.",
+   "question": "What required test or source check shows that the production clock source itself performs one fresh host read and returns it unchanged, rather than caching or adjusting it?",
+   "options": [
+    "Test the production source against a controllable backend and assert one backend read and unchanged return per call",
+    "Add a source check forbidding cache state and datetime arithmetic in the clock-source implementation",
+    "Leave production-backend behavior outside the invariant tests"
+   ],
+   "default_guess": "Use a controllable backend test that supplies distinct instants and asserts one unchanged backend value per source call.",
+   "witness": {
+    "initial": "The production clock source caches its first host reading and returns that value to two later operations.",
+    "events": [
+     "Each operation calls the clock source exactly once.",
+     "Each operation writes exactly the value returned by the source.",
+     "The existing counting and timestamp-equality assertions run."
+    ],
+    "outcomes": [
+     "The tests pass even though the source violates the no-cache rule.",
+     "A backend-level freshness test fails on the second operation."
+    ],
+    "observer": "The release verifier and readers of the persisted timestamps see the difference."
+   }
+  },
+  {
+   "unit": "A32",
+   "subject": "withdrawn OSV entries",
+   "kind": "normative-invariant contradiction",
+   "text": "The normative rule says a vulnerability is known only when `an OSV entry that is not withdrawn lists its installed version as affected`; DEP-002 omits that exception, and its Required test says simply that `a listed version ... does not start` the service.",
+   "question": "Does a withdrawn OSV entry that still lists the installed version as affected block deployment?",
+   "options": [
+    "Do not block; withdrawn entries are excluded as the normative rule states",
+    "Block whenever the version remains listed, as DEP-002 and its Required test state"
+   ],
+   "default_guess": "Do not block on a withdrawn entry, and add the exception to DEP-002 and its Required test.",
+   "witness": {
+    "initial": "The image contains package P version 1.0, and the one OSV copy contains only a withdrawn entry listing P 1.0 as affected.",
+    "events": [
+     "The deployment check evaluates the image against that OSV copy."
+    ],
+    "outcomes": [
+     "The deploy may start because the only matching entry is withdrawn.",
+     "The deploy is refused because the installed version is still listed in OSV."
+    ],
+    "observer": "The deployment operator sees the service start or remain stopped."
+   }
+  },
+  {
+   "unit": "A32",
+   "subject": "one OSV copy per deploy",
+   "kind": "undefined source snapshot",
+   "text": "Every distribution is judged against `one copy of the PyPI ecosystem data` that is `read once in that same deploy`, but the text does not define what constitutes one copy or one read, nor the consistency/completeness condition that makes the read successful.",
+   "question": "Must the check use an immutable complete OSV snapshot with one revision identity, or may it issue package queries during one check, and how is a partial or changing result detected?",
+   "options": [
+    "Use one immutable complete PyPI-ecosystem snapshot identified by a revision or digest",
+    "Use one batch request whose response covers every installed distribution",
+    "Allow per-distribution queries performed during one logical check"
+   ],
+   "default_guess": "Require one immutable snapshot or one atomic batch response with a recorded revision/digest and explicit coverage of every installed distribution.",
+   "witness": {
+    "initial": "The image contains distributions A and B; OSV adds an advisory for B after A has been queried but before B is queried.",
+    "events": [
+     "The deployment gate performs its single logical vulnerability check.",
+     "The service is started only if that check passes."
+    ],
+    "outcomes": [
+     "A snapshot taken at the beginning contains no B advisory, so the deploy passes and the advisory is considered at the next deploy.",
+     "Sequential live queries see the new B advisory, so the same deploy is refused."
+    ],
+    "observer": "The deployment operator sees the service start or remain stopped."
+   }
+  },
+  {
+   "unit": "A32",
+   "subject": "unmatchable OSV advisory data",
+   "kind": "ambiguous refusal condition",
+   "text": "The normative rule refuses a deploy when `A check ... cannot complete`, while the Required test states that `unreadable or unmatchable advisory data ... does not start it` without defining unmatchable data or whether an unrelated malformed entry prevents completion.",
+   "question": "Which OSV parsing or matching failures make the whole deploy check incomplete, including failures in entries unrelated to an installed distribution?",
+   "options": [
+    "Any unreadable or unmatchable entry in the copied PyPI dataset blocks the deploy",
+    "Only unreadable data or an unmatchable entry potentially referring to an installed distribution blocks",
+    "Ignore malformed unrelated entries but require complete matching for every installed distribution"
+   ],
+   "default_guess": "Block unless the checker can prove complete, unambiguous coverage for every installed distribution; ignore an unrelated malformed entry only when it can be proven unrelated.",
+   "witness": {
+    "initial": "The OSV copy is readable and completely matches every installed distribution, but also contains a malformed entry for an unrelated package whose affected range cannot be parsed.",
+    "events": [
+     "The deployment gate evaluates the copied dataset.",
+     "No valid entry lists an installed version as affected."
+    ],
+    "outcomes": [
+     "The deploy is refused because any unmatchable advisory data means the check cannot complete.",
+     "The deploy starts because the malformed entry is provably unrelated to the installed image."
+    ],
+    "observer": "The deployment operator sees the service start or remain stopped."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A28\",\"subject\":\"CLK-002 witness binding\",\"kind\":\"missing required witness\",\"text\":\"The Required tests bind only `CLK-001` to witness checks: `CLK-001 [witness: verification:service_identity_consumer_uow_client_portal]; CLK-001 [witness: verification:staff_bootstrap_client_portal]`; no `[witness: ...]` binds CLK-002.\",\"question\":\"Which existing check is bound to CLK-002 and will assert its clock-reader, reading-count, reuse, and elapsed-clock obligations?\",\"options\":[\"Bind CLK-002 to one existing check that covers all its required tests\",\"Bind its source, wall-clock, and elapsed-clock portions to separate existing checks\"],\"default_guess\":\"Bind separate checks for the static source restriction, wall-clock operations, and viewer-entry elapsed-clock behavior.\"},{\"unit\":\"A28\",\"subject\":\"source-supplied datetime normalization\",\"kind\":\"deferred open choice\",\"text\":\"Source-supplied times are `kept as supplied: the same instant, stored offset-naive UTC`, but `their accepted forms and checks` are merely said to be `the accepted spec's, carried to States 6–7`.\",\"question\":\"Which input representations are accepted for source-supplied datetimes, especially offset-naive values, and how is each accepted value converted to offset-naive UTC without changing its instant?\",\"options\":[\"Require an offset-aware datetime, convert it to UTC, then remove the offset\",\"Require an already offset-naive UTC datetime\",\"Accept both, interpreting an offset-naive value as UTC\"],\"default_guess\":\"Require an offset-aware datetime, normalize it to UTC, and strip the offset for persistence.\",\"witness\":{\"initial\":\"A producer submits a snapshot whose `approved_at` is the offset-naive value `2026-11-08 10:00:00`.\",\"events\":[\"The authenticated producer imports the snapshot.\",\"The import validates and stores the supplied time.\"],\"outcomes\":[\"The import is refused because an offset-naive source value does not identify an instant.\",\"The value is accepted as UTC and stored unchanged as `2026-11-08 10:00:00`.\"],\"observer\":\"The producer sees acceptance versus refusal, and later readers may see a different represented instant.\"}},{\"unit\":\"A28\",\"subject\":\"meaning of one operation\",\"kind\":\"undefined counting boundary\",\"text\":\"`An operation reads the clock once` and CLK-002 says `an operation takes one wall reading`, but the text does not define whether authorization, the owning use case, nested helpers, retries, and transaction/audit work form one operation or several.\",\"question\":\"What is the exact operation boundary over which one wall reading must be shared?\",\"options\":[\"One inbound command/request, including authorization and every nested use case except the audit-writer exception\",\"Each application use-case invocation, so authorization and a mutation may take separate readings\",\"One unit-of-work attempt, with a retry taking a new reading\"],\"default_guess\":\"Treat one inbound command and its authorization and owning use case as one operation; give a retried unit-of-work attempt a new operation reading.\",\"witness\":{\"initial\":\"A valid staff session is near expiry and a mutation will write `updated_at` and append an audit record.\",\"events\":[\"A staff request enters the authorization guard.\",\"The guard compares session expiry with current time.\",\"The owning use case performs the mutation and writes its timestamp.\"],\"outcomes\":[\"The guard and mutation share one wall reading because the whole request is one operation.\",\"The guard and mutation each read the source because they are separate operations, so authorization and the write use different instants.\"],\"observer\":\"The staff member can see the request succeed or fail at the expiry boundary, and persisted timestamps differ.\"}},{\"unit\":\"A28\",\"subject\":\"CLK-002 exclusivity verification\",\"kind\":\"invariant not demonstrated\",\"text\":\"CLK-002 requires the clock source to be `the only reader of the host's wall and elapsed clocks`, while its source check names only imports of `time` and calls to `now`, `utcnow` or `today` of `datetime` or `date`.\",\"question\":\"How must the required check demonstrate that no other host-clock API or indirect wrapper reads wall or elapsed time?\",\"options\":[\"Define an exhaustive allowed/forbidden clock-API set and check all imports and aliases\",\"Make host-clock access available only through an injected backend that other modules cannot import\",\"Narrow CLK-002 to only the named Python APIs\"],\"default_guess\":\"Expose host clocks only through a dedicated backend module and enforce an import-boundary allow-list.\",\"witness\":{\"initial\":\"A non-clock module reads wall time through `os.clock_gettime(os.CLOCK_REALTIME)` and uses it for a validity comparison.\",\"events\":[\"The CLK-002 source check scans for `time` imports and `datetime`/`date` clock methods.\",\"The check finds none and passes.\"],\"outcomes\":[\"The implementation is accepted by the described check although CLK-002 is false.\",\"A broader exclusivity check rejects the implementation.\"],\"observer\":\"The release verifier sees a passing versus failing CLK-002 gate; users can see boundary decisions based on a second instant.\"}},{\"unit\":\"A28\",\"subject\":\"system clock backend value\",\"kind\":\"missing required test\",\"text\":\"The normative rule requires the wall reading to be `the same value datetime.utcnow() gives` with `no cache` and `no arithmetic in the clock source`, but the Required tests only count operation-level readings and compare written values with the value returned by the supplied clock source.\",\"question\":\"What required test or source check shows that the production clock source itself performs one fresh host read and returns it unchanged, rather than caching or adjusting it?\",\"options\":[\"Test the production source against a controllable backend and assert one backend read and unchanged return per call\",\"Add a source check forbidding cache state and datetime arithmetic in the clock-source implementation\",\"Leave production-backend behavior outside the invariant tests\"],\"default_guess\":\"Use a controllable backend test that supplies distinct instants and asserts one unchanged backend value per source call.\",\"witness\":{\"initial\":\"The production clock source caches its first host reading and returns that value to two later operations.\",\"events\":[\"Each operation calls the clock source exactly once.\",\"Each operation writes exactly the value returned by the source.\",\"The existing counting and timestamp-equality assertions run.\"],\"outcomes\":[\"The tests pass even though the source violates the no-cache rule.\",\"A backend-level freshness test fails on the second operation.\"],\"observer\":\"The release verifier and readers of the persisted timestamps see the difference.\"}},{\"unit\":\"A32\",\"subject\":\"withdrawn OSV entries\",\"kind\":\"normative-invariant contradiction\",\"text\":\"The normative rule says a vulnerability is known only when `an OSV entry that is not withdrawn lists its installed version as affected`; DEP-002 omits that exception, and its Required test says simply that `a listed version ... does not start` the service.\",\"question\":\"Does a withdrawn OSV entry that still lists the installed version as affected block deployment?\",\"options\":[\"Do not block; withdrawn entries are excluded as the normative rule states\",\"Block whenever the version remains listed, as DEP-002 and its Required test state\"],\"default_guess\":\"Do not block on a withdrawn entry, and add the exception to DEP-002 and its Required test.\",\"witness\":{\"initial\":\"The image contains package P version 1.0, and the one OSV copy contains only a withdrawn entry listing P 1.0 as affected.\",\"events\":[\"The deployment check evaluates the image against that OSV copy.\"],\"outcomes\":[\"The deploy may start because the only matching entry is withdrawn.\",\"The deploy is refused because the installed version is still listed in OSV.\"],\"observer\":\"The deployment operator sees the service start or remain stopped.\"}},{\"unit\":\"A32\",\"subject\":\"one OSV copy per deploy\",\"kind\":\"undefined source snapshot\",\"text\":\"Every distribution is judged against `one copy of the PyPI ecosystem data` that is `read once in that same deploy`, but the text does not define what constitutes one copy or one read, nor the consistency/completeness condition that makes the read successful.\",\"question\":\"Must the check use an immutable complete OSV snapshot with one revision identity, or may it issue package queries during one check, and how is a partial or changing result detected?\",\"options\":[\"Use one immutable complete PyPI-ecosystem snapshot identified by a revision or digest\",\"Use one batch request whose response covers every installed distribution\",\"Allow per-distribution queries performed during one logical check\"],\"default_guess\":\"Require one immutable snapshot or one atomic batch response with a recorded revision/digest and explicit coverage of every installed distribution.\",\"witness\":{\"initial\":\"The image contains distributions A and B; OSV adds an advisory for B after A has been queried but before B is queried.\",\"events\":[\"The deployment gate performs its single logical vulnerability check.\",\"The service is started only if that check passes.\"],\"outcomes\":[\"A snapshot taken at the beginning contains no B advisory, so the deploy passes and the advisory is considered at the next deploy.\",\"Sequential live queries see the new B advisory, so the same deploy is refused.\"],\"observer\":\"The deployment operator sees the service start or remain stopped.\"}},{\"unit\":\"A32\",\"subject\":\"unmatchable OSV advisory data\",\"kind\":\"ambiguous refusal condition\",\"text\":\"The normative rule refuses a deploy when `A check ... cannot complete`, while the Required test states that `unreadable or unmatchable advisory data ... does not start it` without defining unmatchable data or whether an unrelated malformed entry prevents completion.\",\"question\":\"Which OSV parsing or matching failures make the whole deploy check incomplete, including failures in entries unrelated to an installed distribution?\",\"options\":[\"Any unreadable or unmatchable entry in the copied PyPI dataset blocks the deploy\",\"Only unreadable data or an unmatchable entry potentially referring to an installed distribution blocks\",\"Ignore malformed unrelated entries but require complete matching for every installed distribution\"],\"default_guess\":\"Block unless the checker can prove complete, unambiguous coverage for every installed distribution; ignore an unrelated malformed entry only when it can be proven unrelated.\",\"witness\":{\"initial\":\"The OSV copy is readable and completely matches every installed distribution, but also contains a malformed entry for an unrelated package whose affected range cannot be parsed.\",\"events\":[\"The deployment gate evaluates the copied dataset.\",\"No valid entry lists an installed version as affected.\"],\"outcomes\":[\"The deploy is refused because any unmatchable advisory data means the check cannot complete.\",\"The deploy starts because the malformed entry is provably unrelated to the installed image.\"],\"observer\":\"The deployment operator sees the service start or remain stopped.\"}}]}",
+ "set_aside": []
+}

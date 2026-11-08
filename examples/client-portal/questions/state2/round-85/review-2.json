@@ -1,0 +1,140 @@
+{
+ "open_points": [
+  {
+   "unit": "A28",
+   "subject": "wall-clock versus elapsed-clock comparisons",
+   "kind": "contradictory clock authority",
+   "text": "“that one instant supplies ... every current-time comparison” and CLK-002 says the wall instant “decides every current-time comparison”; the elapsed clock nevertheless “measures the viewer-entry rate-limit window” and its boundary decision follows that reading",
+   "question": "Is the A25 viewer-entry rate-limit comparison an exception to the rule that the wall-clock instant decides every current-time comparison?",
+   "options": [
+    "Use the elapsed-clock reading for the rate-limit comparison as a stated exception",
+    "Use the wall-clock instant because every current-time comparison must use it"
+   ],
+   "default_guess": "Treat the elapsed-clock rule as the more specific rule and add an explicit exception for the rate-limit comparison.",
+   "witness": {
+    "initial": "A viewer-entry rate-limit window is open immediately before its boundary; the wall clock and monotonic clock do not place the request on the same side of that boundary.",
+    "events": [
+     "A viewer submits an entry request.",
+     "The clock source returns one wall-clock instant and one elapsed-clock reading."
+    ],
+    "outcomes": [
+     "The request is admitted or refused according to the elapsed reading.",
+     "The request is admitted or refused according to the wall-clock instant."
+    ],
+    "observer": "The viewer and the viewer-entry rate-limit test"
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "wall readings by clock-independent operations",
+   "kind": "conflicting quantifier and test scope",
+   "text": "CLK-002 says “an operation takes one wall reading,” while the Required tests cover “a test per time-dependent operation” and the normative introduction describes the reading as being “for its own timestamps”",
+   "question": "Must an operation that writes no timestamp and makes no current-time comparison still take exactly one wall-clock reading, or must it take none?",
+   "options": [
+    "Every portal operation takes exactly one wall reading",
+    "Only operations needing a timestamp or current-time comparison take one wall reading; clock-independent operations take none"
+   ],
+   "default_guess": "Read the requirement as applying only to time-dependent operations.",
+   "witness": {
+    "initial": "The service is running and its public liveness endpoint needs no timestamp or expiry decision.",
+    "events": [
+     "A caller requests liveness.",
+     "A counting clock source records whether the operation requests wall time."
+    ],
+    "outcomes": [
+     "The liveness operation reads the wall clock exactly once under CLK-002’s unqualified wording.",
+     "The liveness operation reads it zero times because it is not time-dependent and has no timestamp."
+    ],
+    "observer": "A counting-clock conformance test or runtime instrumentation"
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "CLK-002 witness binding",
+   "kind": "missing required-test witness",
+   "text": "The witness line binds only CLK-001: “CLK-001 [witness: verification:service_identity_consumer_uow_client_portal]; CLK-001 [witness: verification:staff_bootstrap_client_portal]”",
+   "question": "Which existing witness check is bound to the CLK-002 Required tests item and asserts CLK-002?",
+   "options": [
+    "Bind CLK-002 to an existing named verification check",
+    "Add a distinct named verification check for CLK-002"
+   ],
+   "default_guess": "Add a dedicated CLK-002 verification check covering clock ownership and reading counts."
+  },
+  {
+   "unit": "A28",
+   "subject": "CLK-002 host-clock source check",
+   "kind": "undefined test scope",
+   "text": "The Required test prohibits calls to a listed set of clock functions “and their variants,” but does not define which APIs, aliases, wrappers, native calls, or equivalent clocks count as variants",
+   "question": "What exact calls and access patterns must the source check reject as host-clock variants?",
+   "options": [
+    "Reject only the explicitly listed functions and aliases of those functions",
+    "Reject every wall- or elapsed-clock API, including equivalent APIs such as perf_counter and indirect wrappers outside the clock source"
+   ],
+   "default_guess": "Reject all direct or indirect host wall/elapsed-clock access outside the clock source, with an explicit closed list of recognized APIs and alias handling.",
+   "witness": {
+    "initial": "A module outside the clock source calls time.perf_counter() to make a duration-based decision.",
+    "events": [
+     "The CLK-002 source check scans the module.",
+     "One implementation treats perf_counter as a time.monotonic variant; another limits the check to the functions explicitly named."
+    ],
+    "outcomes": [
+     "The check fails because the module reads a host elapsed clock.",
+     "The check passes because perf_counter is not one of the enumerated function names."
+    ],
+    "observer": "The deployment or conformance-test operator"
+   }
+  },
+  {
+   "unit": "A31",
+   "subject": "security-review dependency scope",
+   "kind": "stale scope after A32 change",
+   "text": "The dependency category says “affected: deploy/requirements.txt (fastapi, pydantic, argon2-cffi, uvicorn pinned),” while changed A32 makes every distribution installed in the built image, including libraries pip resolves, part of the vulnerability decision",
+   "question": "Does the State 2 security review’s dependency category cover every installed resolved distribution, or only the four direct pins named in deploy/requirements.txt?",
+   "options": [
+    "Expand the affected scope to the complete installed distribution set judged by A32",
+    "Keep the security-review scope limited to the four direct pins"
+   ],
+   "default_guess": "Expand the security-review affected scope to the complete installed distribution set.",
+   "witness": {
+    "initial": "The four direct pins have no OSV vulnerability, but one transitive distribution installed by pip has a non-withdrawn OSV entry affecting its installed version.",
+    "events": [
+     "The security-review dependency category is evaluated.",
+     "The A32 deployment gate evaluates the same image."
+    ],
+    "outcomes": [
+     "A review scoped to the named requirements file reports the dependency category resolved while omitting the vulnerable transitive distribution.",
+     "A review scoped to A32’s installed set identifies the transitive distribution as affected and the deploy is blocked."
+    ],
+    "observer": "The security reviewer and deployment operator"
+   }
+  },
+  {
+   "unit": "A32",
+   "subject": "failed vulnerability-check recovery",
+   "kind": "undefined retry semantics",
+   "text": "“A check that cannot complete does not pass, and the deploy waits” appears together with “Each deploy makes one check”",
+   "question": "After that one check cannot complete, can the same waiting deploy retry and eventually start, or can it proceed only through a new deploy with a new single check?",
+   "options": [
+    "The same deploy may retry while waiting; define those attempts as part of its one check",
+    "The failed deploy can never start; recovery requires a new deploy and its new check",
+    "The deploy remains pending until an external completion of the original check supplies a verdict, without rerunning it"
+   ],
+   "default_guess": "Treat retries as attempts within one deployment-gate check and start only when that check obtains a complete passing verdict.",
+   "witness": {
+    "initial": "A built image is ready, but OSV is temporarily unreachable when its deploy performs the required check.",
+    "events": [
+     "The check cannot complete, so deployment waits.",
+     "OSV becomes reachable without any image change or new deploy request."
+    ],
+    "outcomes": [
+     "The same deploy retries or resumes its check, obtains a passing verdict, and starts the service.",
+     "The same deploy remains unable to start because its sole check already failed; an operator must initiate a new deploy."
+    ],
+    "observer": "The deployment operator"
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A28\",\"subject\":\"wall-clock versus elapsed-clock comparisons\",\"kind\":\"contradictory clock authority\",\"text\":\"“that one instant supplies ... every current-time comparison” and CLK-002 says the wall instant “decides every current-time comparison”; the elapsed clock nevertheless “measures the viewer-entry rate-limit window” and its boundary decision follows that reading\",\"question\":\"Is the A25 viewer-entry rate-limit comparison an exception to the rule that the wall-clock instant decides every current-time comparison?\",\"options\":[\"Use the elapsed-clock reading for the rate-limit comparison as a stated exception\",\"Use the wall-clock instant because every current-time comparison must use it\"],\"default_guess\":\"Treat the elapsed-clock rule as the more specific rule and add an explicit exception for the rate-limit comparison.\",\"witness\":{\"initial\":\"A viewer-entry rate-limit window is open immediately before its boundary; the wall clock and monotonic clock do not place the request on the same side of that boundary.\",\"events\":[\"A viewer submits an entry request.\",\"The clock source returns one wall-clock instant and one elapsed-clock reading.\"],\"outcomes\":[\"The request is admitted or refused according to the elapsed reading.\",\"The request is admitted or refused according to the wall-clock instant.\"],\"observer\":\"The viewer and the viewer-entry rate-limit test\"}},{\"unit\":\"A28\",\"subject\":\"wall readings by clock-independent operations\",\"kind\":\"conflicting quantifier and test scope\",\"text\":\"CLK-002 says “an operation takes one wall reading,” while the Required tests cover “a test per time-dependent operation” and the normative introduction describes the reading as being “for its own timestamps”\",\"question\":\"Must an operation that writes no timestamp and makes no current-time comparison still take exactly one wall-clock reading, or must it take none?\",\"options\":[\"Every portal operation takes exactly one wall reading\",\"Only operations needing a timestamp or current-time comparison take one wall reading; clock-independent operations take none\"],\"default_guess\":\"Read the requirement as applying only to time-dependent operations.\",\"witness\":{\"initial\":\"The service is running and its public liveness endpoint needs no timestamp or expiry decision.\",\"events\":[\"A caller requests liveness.\",\"A counting clock source records whether the operation requests wall time.\"],\"outcomes\":[\"The liveness operation reads the wall clock exactly once under CLK-002’s unqualified wording.\",\"The liveness operation reads it zero times because it is not time-dependent and has no timestamp.\"],\"observer\":\"A counting-clock conformance test or runtime instrumentation\"}},{\"unit\":\"A28\",\"subject\":\"CLK-002 witness binding\",\"kind\":\"missing required-test witness\",\"text\":\"The witness line binds only CLK-001: “CLK-001 [witness: verification:service_identity_consumer_uow_client_portal]; CLK-001 [witness: verification:staff_bootstrap_client_portal]”\",\"question\":\"Which existing witness check is bound to the CLK-002 Required tests item and asserts CLK-002?\",\"options\":[\"Bind CLK-002 to an existing named verification check\",\"Add a distinct named verification check for CLK-002\"],\"default_guess\":\"Add a dedicated CLK-002 verification check covering clock ownership and reading counts.\"},{\"unit\":\"A28\",\"subject\":\"CLK-002 host-clock source check\",\"kind\":\"undefined test scope\",\"text\":\"The Required test prohibits calls to a listed set of clock functions “and their variants,” but does not define which APIs, aliases, wrappers, native calls, or equivalent clocks count as variants\",\"question\":\"What exact calls and access patterns must the source check reject as host-clock variants?\",\"options\":[\"Reject only the explicitly listed functions and aliases of those functions\",\"Reject every wall- or elapsed-clock API, including equivalent APIs such as perf_counter and indirect wrappers outside the clock source\"],\"default_guess\":\"Reject all direct or indirect host wall/elapsed-clock access outside the clock source, with an explicit closed list of recognized APIs and alias handling.\",\"witness\":{\"initial\":\"A module outside the clock source calls time.perf_counter() to make a duration-based decision.\",\"events\":[\"The CLK-002 source check scans the module.\",\"One implementation treats perf_counter as a time.monotonic variant; another limits the check to the functions explicitly named.\"],\"outcomes\":[\"The check fails because the module reads a host elapsed clock.\",\"The check passes because perf_counter is not one of the enumerated function names.\"],\"observer\":\"The deployment or conformance-test operator\"}},{\"unit\":\"A31\",\"subject\":\"security-review dependency scope\",\"kind\":\"stale scope after A32 change\",\"text\":\"The dependency category says “affected: deploy/requirements.txt (fastapi, pydantic, argon2-cffi, uvicorn pinned),” while changed A32 makes every distribution installed in the built image, including libraries pip resolves, part of the vulnerability decision\",\"question\":\"Does the State 2 security review’s dependency category cover every installed resolved distribution, or only the four direct pins named in deploy/requirements.txt?\",\"options\":[\"Expand the affected scope to the complete installed distribution set judged by A32\",\"Keep the security-review scope limited to the four direct pins\"],\"default_guess\":\"Expand the security-review affected scope to the complete installed distribution set.\",\"witness\":{\"initial\":\"The four direct pins have no OSV vulnerability, but one transitive distribution installed by pip has a non-withdrawn OSV entry affecting its installed version.\",\"events\":[\"The security-review dependency category is evaluated.\",\"The A32 deployment gate evaluates the same image.\"],\"outcomes\":[\"A review scoped to the named requirements file reports the dependency category resolved while omitting the vulnerable transitive distribution.\",\"A review scoped to A32’s installed set identifies the transitive distribution as affected and the deploy is blocked.\"],\"observer\":\"The security reviewer and deployment operator\"}},{\"unit\":\"A32\",\"subject\":\"failed vulnerability-check recovery\",\"kind\":\"undefined retry semantics\",\"text\":\"“A check that cannot complete does not pass, and the deploy waits” appears together with “Each deploy makes one check”\",\"question\":\"After that one check cannot complete, can the same waiting deploy retry and eventually start, or can it proceed only through a new deploy with a new single check?\",\"options\":[\"The same deploy may retry while waiting; define those attempts as part of its one check\",\"The failed deploy can never start; recovery requires a new deploy and its new check\",\"The deploy remains pending until an external completion of the original check supplies a verdict, without rerunning it\"],\"default_guess\":\"Treat retries as attempts within one deployment-gate check and start only when that check obtains a complete passing verdict.\",\"witness\":{\"initial\":\"A built image is ready, but OSV is temporarily unreachable when its deploy performs the required check.\",\"events\":[\"The check cannot complete, so deployment waits.\",\"OSV becomes reachable without any image change or new deploy request.\"],\"outcomes\":[\"The same deploy retries or resumes its check, obtains a passing verdict, and starts the service.\",\"The same deploy remains unable to start because its sole check already failed; an operator must initiate a new deploy.\"],\"observer\":\"The deployment operator\"}}]}",
+ "set_aside": []
+}

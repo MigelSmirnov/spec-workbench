@@ -1,0 +1,142 @@
+{
+ "open_points": [
+  {
+   "unit": "A18",
+   "subject": "INV-027 storage prohibition",
+   "kind": "contradiction",
+   "text": "The invariant says derived values are “never stored as editable values”, while its new Required test says “no table stores a budget total, financial aggregate or other value of a derived view”.",
+   "question": "Are automatically maintained, non-editable cached derived values permitted, or is any persisted derived value forbidden?",
+   "options": [
+    "Permit persisted derived values when they are not editable",
+    "Forbid every persisted derived value"
+   ],
+   "default_guess": "Forbid every persisted derived value.",
+   "witness": {
+    "initial": "A compliant portal has owning financial rows and no user-editable aggregate field.",
+    "events": [
+     "The implementation automatically persists a read-only cached budget total after an owning row changes.",
+     "The budget view returns the same value as a fresh recomputation."
+    ],
+    "outcomes": [
+     "The cache satisfies INV-027 because it is not editable and remains recomputable.",
+     "The cache violates the Required test because a table stores a derived value."
+    ],
+    "observer": "The invariant test and deployment gate"
+   }
+  },
+  {
+   "unit": "A18",
+   "subject": "INV-027 refusal test",
+   "kind": "undefined refusal case",
+   "text": "“INV-027: a focused test at `build_budget_view` showing the invariant holds; a violating input is refused and changes nothing” is followed by checks that forbid aggregate columns, require reads to write nothing, and compare reads with recomputation, but it never identifies an input that `build_budget_view` must refuse.",
+   "question": "What concrete input violates INV-027 at `build_budget_view`, and what exact refusal must the Required test assert?",
+   "options": [
+    "There is no runtime refusal case; verify schema, read purity, and recomputation instead",
+    "Define a malformed or inconsistent owning-record state that the view builder must refuse"
+   ],
+   "default_guess": "Treat INV-027 as structural and recomputational, with no runtime violating-input refusal."
+  },
+  {
+   "unit": "A21",
+   "subject": "INV-050 project-overview components",
+   "kind": "scope ambiguity",
+   "text": "The new test says “the project overview is equal … on repeated reads” and “every component of the overview (budget, expenses, progress, payments, photos) equals a recomputation from the owning records”, but `ProjectOverview` also contains the live Registry project component and its availability, and M17 says each Registry read is a fresh observation.",
+   "question": "Does repeated-read equality cover the live project/project-availability component, or only the five parenthesized portal-owned components?",
+   "options": [
+    "Require equality only for budget, expenses, progress, payments, and photos when their accepted inputs are unchanged",
+    "Require the entire ProjectOverview, including live Registry project data and availability, to be equal"
+   ],
+   "default_guess": "Limit equality to the five portal-owned components under unchanged inputs.",
+   "witness": {
+    "initial": "Portal owning records are unchanged; Registry currently returns project display name “A”.",
+    "events": [
+     "A staff or viewer reads the project overview.",
+     "Registry changes the project display name to “B”.",
+     "The same principal reads the overview again."
+    ],
+    "outcomes": [
+     "The project component changes to “B”, while the five listed derived components remain equal.",
+     "The whole overview must remain equal because the test says repeated reads are equal."
+    ],
+    "observer": "The overview caller"
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "wall-clock reading count for operations without time use",
+   "kind": "contradictory scope",
+   "text": "The normative rule says an operation reads once “for its own timestamps” and current-time comparisons, CLK-002 says “an operation takes one wall reading”, while the Required test asks for one only “per time-dependent operation”.",
+   "question": "Must an operation that writes no timestamp and performs no current-time comparison take one wall-clock reading or none?",
+   "options": [
+    "Zero readings for operations that do not use current time",
+    "Exactly one reading for every operation, including time-independent reads"
+   ],
+   "default_guess": "Take zero readings for time-independent operations.",
+   "witness": {
+    "initial": "A project overview can be built from already-authorized stored records without writing timestamps or testing an expiry.",
+    "events": [
+     "A caller requests the overview using a counting clock source."
+    ],
+    "outcomes": [
+     "The view operation takes zero wall-clock readings because it is not time-dependent.",
+     "The view operation takes exactly one wall-clock reading because CLK-002 says every operation does."
+    ],
+    "observer": "The counting-clock verification and clock-source implementation"
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "CLK-002 witness binding",
+   "kind": "missing required witness",
+   "text": "The Required tests define checks for CLK-002, but the only witness bindings are “CLK-001 [witness: verification:service_identity_consumer_uow_client_portal]” and “CLK-001 [witness: verification:staff_bootstrap_client_portal]”.",
+   "question": "Which existing witness check is bound to the CLK-002 source exclusivity, exact wall-reading count, and viewer-entry elapsed-reading requirements?",
+   "options": [
+    "Bind CLK-002 to a named existing verification check",
+    "Split CLK-002 and bind its source, wall-clock, and elapsed-clock obligations to named checks"
+   ],
+   "default_guess": "Add a dedicated CLK-002 verification witness covering all three obligations."
+  },
+  {
+   "unit": "A28",
+   "subject": "elapsed-clock retention by the rate limiter",
+   "kind": "ambiguous storage rule",
+   "text": "The elapsed reading “measures the viewer-entry rate-limit window” but “is never stored”.",
+   "question": "Does “never stored” prohibit only persistence in portal records, or also retaining the reading or a value derived from it in process memory to maintain the rate-limit window across requests?",
+   "options": [
+    "Forbid persistence only; in-memory rate-limit state may retain elapsed values",
+    "Forbid retaining the reading or derived elapsed deadlines anywhere after the request"
+   ],
+   "default_guess": "Forbid persistence in records but permit process-local rate-limit state."
+  },
+  {
+   "unit": "A32",
+   "subject": "temporal consistency of OSV data during a deploy",
+   "kind": "undefined decision instant",
+   "text": "Every distribution is checked against OSV data “read in that same deploy”, while “an image in which a distribution has a known vulnerability is not deployed”; no single advisory snapshot or instant at which vulnerability status is decided is specified.",
+   "question": "If OSV adds, changes, or withdraws an advisory after one distribution was checked but before the service starts, must the deploy reconsider that distribution?",
+   "options": [
+    "Use one consistent OSV snapshot or verdict instant for the whole image",
+    "Allow sequential live queries; each distribution is judged by the OSV response obtained when it is checked",
+    "Recheck the complete installed set immediately before service start"
+   ],
+   "default_guess": "Use one deploy-scoped consistent OSV snapshot for the complete installed set.",
+   "witness": {
+    "initial": "A built image contains distributions X and Y; OSV initially reports neither as affected.",
+    "events": [
+     "The deploy checks X and receives a passing response.",
+     "OSV publishes a non-withdrawn advisory affecting X.",
+     "The deploy checks Y and receives a passing response.",
+     "The deploy is ready to start the service."
+    ],
+    "outcomes": [
+     "The image starts because every distribution passed against OSV data read during this deploy.",
+     "The image does not start because X is known vulnerable at the deploy verdict or service-start instant."
+    ],
+    "observer": "The deployment operator and release gate"
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A18\",\"subject\":\"INV-027 storage prohibition\",\"kind\":\"contradiction\",\"text\":\"The invariant says derived values are “never stored as editable values”, while its new Required test says “no table stores a budget total, financial aggregate or other value of a derived view”.\",\"question\":\"Are automatically maintained, non-editable cached derived values permitted, or is any persisted derived value forbidden?\",\"options\":[\"Permit persisted derived values when they are not editable\",\"Forbid every persisted derived value\"],\"default_guess\":\"Forbid every persisted derived value.\",\"witness\":{\"initial\":\"A compliant portal has owning financial rows and no user-editable aggregate field.\",\"events\":[\"The implementation automatically persists a read-only cached budget total after an owning row changes.\",\"The budget view returns the same value as a fresh recomputation.\"],\"outcomes\":[\"The cache satisfies INV-027 because it is not editable and remains recomputable.\",\"The cache violates the Required test because a table stores a derived value.\"],\"observer\":\"The invariant test and deployment gate\"}},{\"unit\":\"A18\",\"subject\":\"INV-027 refusal test\",\"kind\":\"undefined refusal case\",\"text\":\"“INV-027: a focused test at `build_budget_view` showing the invariant holds; a violating input is refused and changes nothing” is followed by checks that forbid aggregate columns, require reads to write nothing, and compare reads with recomputation, but it never identifies an input that `build_budget_view` must refuse.\",\"question\":\"What concrete input violates INV-027 at `build_budget_view`, and what exact refusal must the Required test assert?\",\"options\":[\"There is no runtime refusal case; verify schema, read purity, and recomputation instead\",\"Define a malformed or inconsistent owning-record state that the view builder must refuse\"],\"default_guess\":\"Treat INV-027 as structural and recomputational, with no runtime violating-input refusal.\"},{\"unit\":\"A21\",\"subject\":\"INV-050 project-overview components\",\"kind\":\"scope ambiguity\",\"text\":\"The new test says “the project overview is equal … on repeated reads” and “every component of the overview (budget, expenses, progress, payments, photos) equals a recomputation from the owning records”, but `ProjectOverview` also contains the live Registry project component and its availability, and M17 says each Registry read is a fresh observation.\",\"question\":\"Does repeated-read equality cover the live project/project-availability component, or only the five parenthesized portal-owned components?\",\"options\":[\"Require equality only for budget, expenses, progress, payments, and photos when their accepted inputs are unchanged\",\"Require the entire ProjectOverview, including live Registry project data and availability, to be equal\"],\"default_guess\":\"Limit equality to the five portal-owned components under unchanged inputs.\",\"witness\":{\"initial\":\"Portal owning records are unchanged; Registry currently returns project display name “A”.\",\"events\":[\"A staff or viewer reads the project overview.\",\"Registry changes the project display name to “B”.\",\"The same principal reads the overview again.\"],\"outcomes\":[\"The project component changes to “B”, while the five listed derived components remain equal.\",\"The whole overview must remain equal because the test says repeated reads are equal.\"],\"observer\":\"The overview caller\"}},{\"unit\":\"A28\",\"subject\":\"wall-clock reading count for operations without time use\",\"kind\":\"contradictory scope\",\"text\":\"The normative rule says an operation reads once “for its own timestamps” and current-time comparisons, CLK-002 says “an operation takes one wall reading”, while the Required test asks for one only “per time-dependent operation”.\",\"question\":\"Must an operation that writes no timestamp and performs no current-time comparison take one wall-clock reading or none?\",\"options\":[\"Zero readings for operations that do not use current time\",\"Exactly one reading for every operation, including time-independent reads\"],\"default_guess\":\"Take zero readings for time-independent operations.\",\"witness\":{\"initial\":\"A project overview can be built from already-authorized stored records without writing timestamps or testing an expiry.\",\"events\":[\"A caller requests the overview using a counting clock source.\"],\"outcomes\":[\"The view operation takes zero wall-clock readings because it is not time-dependent.\",\"The view operation takes exactly one wall-clock reading because CLK-002 says every operation does.\"],\"observer\":\"The counting-clock verification and clock-source implementation\"}},{\"unit\":\"A28\",\"subject\":\"CLK-002 witness binding\",\"kind\":\"missing required witness\",\"text\":\"The Required tests define checks for CLK-002, but the only witness bindings are “CLK-001 [witness: verification:service_identity_consumer_uow_client_portal]” and “CLK-001 [witness: verification:staff_bootstrap_client_portal]”.\",\"question\":\"Which existing witness check is bound to the CLK-002 source exclusivity, exact wall-reading count, and viewer-entry elapsed-reading requirements?\",\"options\":[\"Bind CLK-002 to a named existing verification check\",\"Split CLK-002 and bind its source, wall-clock, and elapsed-clock obligations to named checks\"],\"default_guess\":\"Add a dedicated CLK-002 verification witness covering all three obligations.\"},{\"unit\":\"A28\",\"subject\":\"elapsed-clock retention by the rate limiter\",\"kind\":\"ambiguous storage rule\",\"text\":\"The elapsed reading “measures the viewer-entry rate-limit window” but “is never stored”.\",\"question\":\"Does “never stored” prohibit only persistence in portal records, or also retaining the reading or a value derived from it in process memory to maintain the rate-limit window across requests?\",\"options\":[\"Forbid persistence only; in-memory rate-limit state may retain elapsed values\",\"Forbid retaining the reading or derived elapsed deadlines anywhere after the request\"],\"default_guess\":\"Forbid persistence in records but permit process-local rate-limit state.\"},{\"unit\":\"A32\",\"subject\":\"temporal consistency of OSV data during a deploy\",\"kind\":\"undefined decision instant\",\"text\":\"Every distribution is checked against OSV data “read in that same deploy”, while “an image in which a distribution has a known vulnerability is not deployed”; no single advisory snapshot or instant at which vulnerability status is decided is specified.\",\"question\":\"If OSV adds, changes, or withdraws an advisory after one distribution was checked but before the service starts, must the deploy reconsider that distribution?\",\"options\":[\"Use one consistent OSV snapshot or verdict instant for the whole image\",\"Allow sequential live queries; each distribution is judged by the OSV response obtained when it is checked\",\"Recheck the complete installed set immediately before service start\"],\"default_guess\":\"Use one deploy-scoped consistent OSV snapshot for the complete installed set.\",\"witness\":{\"initial\":\"A built image contains distributions X and Y; OSV initially reports neither as affected.\",\"events\":[\"The deploy checks X and receives a passing response.\",\"OSV publishes a non-withdrawn advisory affecting X.\",\"The deploy checks Y and receives a passing response.\",\"The deploy is ready to start the service.\"],\"outcomes\":[\"The image starts because every distribution passed against OSV data read during this deploy.\",\"The image does not start because X is known vulnerable at the deploy verdict or service-start instant.\"],\"observer\":\"The deployment operator and release gate\"}}]}",
+ "set_aside": []
+}

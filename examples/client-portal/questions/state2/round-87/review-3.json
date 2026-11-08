@@ -1,0 +1,158 @@
+{
+ "open_points": [
+  {
+   "unit": "A28",
+   "subject": "source-supplied datetime acceptance and normalization",
+   "kind": "undefined representation boundary",
+   "text": "“kept as supplied: the same instant, stored offset-naive UTC” leaves “their accepted forms and checks” to States 6–7 without stating them here",
+   "question": "Which datetime forms are accepted for source-supplied instants, and must an offset-aware non-UTC value be normalized to naive UTC or refused?",
+   "options": [
+    "Accept any offset-aware datetime, convert the instant to UTC, then remove the offset",
+    "Accept only UTC-aware datetimes and refuse other offsets",
+    "Also accept naive datetimes by interpreting them as UTC"
+   ],
+   "default_guess": "Accept offset-aware datetimes, normalize to UTC, remove tzinfo for persistence, and refuse naive input.",
+   "witness": {
+    "initial": "An authorized producer submits a valid snapshot whose approved_at is 2026-11-08T10:00:00+02:00.",
+    "events": [
+     "The producer invokes snapshot import.",
+     "The import validates the source-supplied datetime."
+    ],
+    "outcomes": [
+     "The import accepts it and stores 2026-11-08 08:00:00 as naive UTC.",
+     "The import refuses it because only an explicitly UTC input form is accepted."
+    ],
+    "observer": "The producer sees acceptance versus a typed rejection."
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "wall-clock read timing and operation coverage",
+   "kind": "undefined read point",
+   "text": "“An operation reads the clock once” and “where in an operation its one clock read happens, are the accepted spec's, carried to States 6–7” do not identify which failed or read-only invocations count as operations that read it or the point at which they do so",
+   "question": "For every operation, including early refusals and operations that write no portal-owned timestamp, exactly when is the wall clock read, and which such invocations take no operation-level reading?",
+   "options": [
+    "Read once immediately on entering every application operation, including early refusals",
+    "Read only after preliminary validation or authorization establishes that current time or a fresh timestamp is needed",
+    "Specify the read point separately for each operation contract"
+   ],
+   "default_guess": "Specify it per operation and defer the read until the first time-dependent decision, while reusing that value thereafter.",
+   "witness": {
+    "initial": "A staff-login request presents a well-formed token envelope but an incorrect password; the failed-login audit writer will append its own audit record.",
+    "events": [
+     "The caller submits the failed login.",
+     "The login operation rejects it.",
+     "The audit writer records staff.login_failed."
+    ],
+    "outcomes": [
+     "The login operation reads the wall clock at entry and the audit writer reads it again: two readings.",
+     "The login operation never needs its own instant and only the audit writer reads: one reading."
+    ],
+    "observer": "A counting clock source and its Required test see different call counts."
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "CLK-002 exclusivity verification",
+   "kind": "insufficient required test",
+   "text": "CLK-002 requires that “the clock source is the only reader of the host's wall and elapsed clocks”, but its source check only forbids imports of `time` and calls to `datetime`/`date` `now`, `utcnow`, or `today`",
+   "question": "What check demonstrates that no other host-clock path—such as `os.clock_gettime`, a database time function/default, another library, or an indirect alias—reads time outside the clock source?",
+   "options": [
+    "Enumerate and prohibit every permitted host-clock API and database time expression outside the source",
+    "Instrument all host-clock boundaries in tests and fail on any read outside the source",
+    "Narrow CLK-002 to only the specifically enumerated Python APIs"
+   ],
+   "default_guess": "Keep the broad invariant and combine an exhaustive source-policy check with instrumented database and host-clock boundaries.",
+   "witness": {
+    "initial": "The audit writer calls the injected clock source once but discards its result; its insert lets a database `CURRENT_TIMESTAMP` default populate occurred_at.",
+    "events": [
+     "An operation appends an audit record.",
+     "The counting clock source reports the required one audit-writer call.",
+     "The database independently reads its host clock while inserting the record."
+    ],
+    "outcomes": [
+     "The stated source and counting checks pass even though CLK-002 is false and occurred_at may differ from the injected reading.",
+     "A check covering database clock expressions rejects the implementation."
+    ],
+    "observer": "The invariant checker and readers of the audit timestamp see the difference."
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "CLK-002 witness binding",
+   "kind": "missing witness obligation",
+   "text": "The Required tests define CLK-002, but the witness line binds only CLK-001: “CLK-001 [witness: verification:service_identity_consumer_uow_client_portal]; CLK-001 [witness: verification:staff_bootstrap_client_portal]”",
+   "question": "Which existing witness check is bound to CLK-002 and asserts its required source, counting, boundary, and viewer-entry behavior?",
+   "options": [
+    "Bind CLK-002 to one existing verification check that covers the complete item",
+    "Bind its source, wall-clock, audit, and elapsed-clock clauses to several named checks"
+   ],
+   "default_guess": "Use separate named checks for static source exclusivity, wall/audit counts, and the viewer-entry elapsed-clock boundary."
+  },
+  {
+   "unit": "A31",
+   "subject": "security-review dependency surface",
+   "kind": "contradictory scope",
+   "text": "A31 says the dependency category affects only “deploy/requirements.txt (fastapi, pydantic, argon2-cffi, uvicorn pinned)”, while A32 now makes every distribution installed in the built image and the release gate part of the vulnerability decision",
+   "question": "Does the security review's dependency category cover only the four direct pins, or every installed transitive distribution plus the built-image release gate required by A32?",
+   "options": [
+    "Keep the A31 affected set limited to the four direct pins",
+    "Expand A31 to the complete installed distribution set, built image, OSV data acquisition, and release gate"
+   ],
+   "default_guess": "Expand the affected set to match A32.",
+   "witness": {
+    "initial": "The image contains the four clean direct pins and a transitively resolved distribution whose installed version has a non-withdrawn OSV vulnerability.",
+    "events": [
+     "The security review inventories the affected dependency surface.",
+     "The pre-deploy gate evaluates the image."
+    ],
+    "outcomes": [
+     "Reading A31 literally, the review records only the four direct pins as affected.",
+     "Reading A32, the transitive distribution and image-bound release gate are also affected and the deploy is blocked."
+    ],
+    "observer": "The security reviewer sees different coverage; the deployment operator sees whether the transitive vulnerability is within the reviewed control."
+   }
+  },
+  {
+   "unit": "A32",
+   "subject": "matching installed distributions to OSV packages and versions",
+   "kind": "undefined matching rule",
+   "text": "“an OSV entry that is not withdrawn lists its installed version as affected” and “unmatchable advisory data” do not define distribution-name normalization, version interpretation, or what makes data unmatchable",
+   "question": "How is an installed distribution identified and matched to an OSV PyPI package/version, and which missing, malformed, or noncanonical metadata conditions make the deploy fail closed?",
+   "options": [
+    "Use PyPI/PEP 503 name normalization and the ecosystem's standard version semantics; fail if an installed distribution lacks a matchable name or version",
+    "Require an exact textual package-name and version match and fail every non-exact case",
+    "Let the selected OSV tool's matching behavior define normalization and unmatchable cases"
+   ],
+   "default_guess": "Use canonical PyPI name normalization and standard Python version semantics, and fail closed when an installed distribution cannot be represented or evaluated.",
+   "witness": {
+    "initial": "A built image contains distribution metadata named `Foo_Bar` version `1.0`; the OSV copy identifies the PyPI package as `foo-bar` and lists version 1.0 as affected.",
+    "events": [
+     "The deploy enumerates installed distributions.",
+     "The release gate matches them against its OSV copy."
+    ],
+    "outcomes": [
+     "A normalizing matcher treats the names as the same package and blocks the deploy.",
+     "An exact-text matcher treats the advisory as unmatchable, with the text leaving whether that blocks or is ignored to implementation."
+    ],
+    "observer": "The deployment operator sees a vulnerability block versus a different matching/refusal result."
+   }
+  },
+  {
+   "unit": "A32",
+   "subject": "deployment-procedure handoff",
+   "kind": "incomplete carry",
+   "text": "“The tool that runs the check is a deployment procedure, not a portal rule, carried to the deploy route” names neither a receiving state nor a confirming check",
+   "question": "Which later state owns the concrete image enumeration, single-copy OSV acquisition, image-content binding, and service-start gate, and which check confirms that execution?",
+   "options": [
+    "Assign the complete procedure to a named deployment state with the dependency release-gate witness",
+    "Keep the procedure in State 2 and specify it here",
+    "Name an existing deploy-route artifact and its verification check as the receiver"
+   ],
+   "default_guess": "Assign it explicitly to the deployment-route state and confirm it with `verification:dependency_release_gate_client_portal`."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A28\",\"subject\":\"source-supplied datetime acceptance and normalization\",\"kind\":\"undefined representation boundary\",\"text\":\"“kept as supplied: the same instant, stored offset-naive UTC” leaves “their accepted forms and checks” to States 6–7 without stating them here\",\"question\":\"Which datetime forms are accepted for source-supplied instants, and must an offset-aware non-UTC value be normalized to naive UTC or refused?\",\"options\":[\"Accept any offset-aware datetime, convert the instant to UTC, then remove the offset\",\"Accept only UTC-aware datetimes and refuse other offsets\",\"Also accept naive datetimes by interpreting them as UTC\"],\"default_guess\":\"Accept offset-aware datetimes, normalize to UTC, remove tzinfo for persistence, and refuse naive input.\",\"witness\":{\"initial\":\"An authorized producer submits a valid snapshot whose approved_at is 2026-11-08T10:00:00+02:00.\",\"events\":[\"The producer invokes snapshot import.\",\"The import validates the source-supplied datetime.\"],\"outcomes\":[\"The import accepts it and stores 2026-11-08 08:00:00 as naive UTC.\",\"The import refuses it because only an explicitly UTC input form is accepted.\"],\"observer\":\"The producer sees acceptance versus a typed rejection.\"}},{\"unit\":\"A28\",\"subject\":\"wall-clock read timing and operation coverage\",\"kind\":\"undefined read point\",\"text\":\"“An operation reads the clock once” and “where in an operation its one clock read happens, are the accepted spec's, carried to States 6–7” do not identify which failed or read-only invocations count as operations that read it or the point at which they do so\",\"question\":\"For every operation, including early refusals and operations that write no portal-owned timestamp, exactly when is the wall clock read, and which such invocations take no operation-level reading?\",\"options\":[\"Read once immediately on entering every application operation, including early refusals\",\"Read only after preliminary validation or authorization establishes that current time or a fresh timestamp is needed\",\"Specify the read point separately for each operation contract\"],\"default_guess\":\"Specify it per operation and defer the read until the first time-dependent decision, while reusing that value thereafter.\",\"witness\":{\"initial\":\"A staff-login request presents a well-formed token envelope but an incorrect password; the failed-login audit writer will append its own audit record.\",\"events\":[\"The caller submits the failed login.\",\"The login operation rejects it.\",\"The audit writer records staff.login_failed.\"],\"outcomes\":[\"The login operation reads the wall clock at entry and the audit writer reads it again: two readings.\",\"The login operation never needs its own instant and only the audit writer reads: one reading.\"],\"observer\":\"A counting clock source and its Required test see different call counts.\"}},{\"unit\":\"A28\",\"subject\":\"CLK-002 exclusivity verification\",\"kind\":\"insufficient required test\",\"text\":\"CLK-002 requires that “the clock source is the only reader of the host's wall and elapsed clocks”, but its source check only forbids imports of `time` and calls to `datetime`/`date` `now`, `utcnow`, or `today`\",\"question\":\"What check demonstrates that no other host-clock path—such as `os.clock_gettime`, a database time function/default, another library, or an indirect alias—reads time outside the clock source?\",\"options\":[\"Enumerate and prohibit every permitted host-clock API and database time expression outside the source\",\"Instrument all host-clock boundaries in tests and fail on any read outside the source\",\"Narrow CLK-002 to only the specifically enumerated Python APIs\"],\"default_guess\":\"Keep the broad invariant and combine an exhaustive source-policy check with instrumented database and host-clock boundaries.\",\"witness\":{\"initial\":\"The audit writer calls the injected clock source once but discards its result; its insert lets a database `CURRENT_TIMESTAMP` default populate occurred_at.\",\"events\":[\"An operation appends an audit record.\",\"The counting clock source reports the required one audit-writer call.\",\"The database independently reads its host clock while inserting the record.\"],\"outcomes\":[\"The stated source and counting checks pass even though CLK-002 is false and occurred_at may differ from the injected reading.\",\"A check covering database clock expressions rejects the implementation.\"],\"observer\":\"The invariant checker and readers of the audit timestamp see the difference.\"}},{\"unit\":\"A28\",\"subject\":\"CLK-002 witness binding\",\"kind\":\"missing witness obligation\",\"text\":\"The Required tests define CLK-002, but the witness line binds only CLK-001: “CLK-001 [witness: verification:service_identity_consumer_uow_client_portal]; CLK-001 [witness: verification:staff_bootstrap_client_portal]”\",\"question\":\"Which existing witness check is bound to CLK-002 and asserts its required source, counting, boundary, and viewer-entry behavior?\",\"options\":[\"Bind CLK-002 to one existing verification check that covers the complete item\",\"Bind its source, wall-clock, audit, and elapsed-clock clauses to several named checks\"],\"default_guess\":\"Use separate named checks for static source exclusivity, wall/audit counts, and the viewer-entry elapsed-clock boundary.\"},{\"unit\":\"A31\",\"subject\":\"security-review dependency surface\",\"kind\":\"contradictory scope\",\"text\":\"A31 says the dependency category affects only “deploy/requirements.txt (fastapi, pydantic, argon2-cffi, uvicorn pinned)”, while A32 now makes every distribution installed in the built image and the release gate part of the vulnerability decision\",\"question\":\"Does the security review's dependency category cover only the four direct pins, or every installed transitive distribution plus the built-image release gate required by A32?\",\"options\":[\"Keep the A31 affected set limited to the four direct pins\",\"Expand A31 to the complete installed distribution set, built image, OSV data acquisition, and release gate\"],\"default_guess\":\"Expand the affected set to match A32.\",\"witness\":{\"initial\":\"The image contains the four clean direct pins and a transitively resolved distribution whose installed version has a non-withdrawn OSV vulnerability.\",\"events\":[\"The security review inventories the affected dependency surface.\",\"The pre-deploy gate evaluates the image.\"],\"outcomes\":[\"Reading A31 literally, the review records only the four direct pins as affected.\",\"Reading A32, the transitive distribution and image-bound release gate are also affected and the deploy is blocked.\"],\"observer\":\"The security reviewer sees different coverage; the deployment operator sees whether the transitive vulnerability is within the reviewed control.\"}},{\"unit\":\"A32\",\"subject\":\"matching installed distributions to OSV packages and versions\",\"kind\":\"undefined matching rule\",\"text\":\"“an OSV entry that is not withdrawn lists its installed version as affected” and “unmatchable advisory data” do not define distribution-name normalization, version interpretation, or what makes data unmatchable\",\"question\":\"How is an installed distribution identified and matched to an OSV PyPI package/version, and which missing, malformed, or noncanonical metadata conditions make the deploy fail closed?\",\"options\":[\"Use PyPI/PEP 503 name normalization and the ecosystem's standard version semantics; fail if an installed distribution lacks a matchable name or version\",\"Require an exact textual package-name and version match and fail every non-exact case\",\"Let the selected OSV tool's matching behavior define normalization and unmatchable cases\"],\"default_guess\":\"Use canonical PyPI name normalization and standard Python version semantics, and fail closed when an installed distribution cannot be represented or evaluated.\",\"witness\":{\"initial\":\"A built image contains distribution metadata named `Foo_Bar` version `1.0`; the OSV copy identifies the PyPI package as `foo-bar` and lists version 1.0 as affected.\",\"events\":[\"The deploy enumerates installed distributions.\",\"The release gate matches them against its OSV copy.\"],\"outcomes\":[\"A normalizing matcher treats the names as the same package and blocks the deploy.\",\"An exact-text matcher treats the advisory as unmatchable, with the text leaving whether that blocks or is ignored to implementation.\"],\"observer\":\"The deployment operator sees a vulnerability block versus a different matching/refusal result.\"}},{\"unit\":\"A32\",\"subject\":\"deployment-procedure handoff\",\"kind\":\"incomplete carry\",\"text\":\"“The tool that runs the check is a deployment procedure, not a portal rule, carried to the deploy route” names neither a receiving state nor a confirming check\",\"question\":\"Which later state owns the concrete image enumeration, single-copy OSV acquisition, image-content binding, and service-start gate, and which check confirms that execution?\",\"options\":[\"Assign the complete procedure to a named deployment state with the dependency release-gate witness\",\"Keep the procedure in State 2 and specify it here\",\"Name an existing deploy-route artifact and its verification check as the receiver\"],\"default_guess\":\"Assign it explicitly to the deployment-route state and confirm it with `verification:dependency_release_gate_client_portal`.\"}]}",
+ "set_aside": []
+}

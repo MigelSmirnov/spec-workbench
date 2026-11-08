@@ -1,0 +1,170 @@
+{
+ "open_points": [
+  {
+   "unit": "A28",
+   "subject": "Clock-reading obligation",
+   "kind": "contradiction",
+   "text": "CLK-002 says “an operation takes one wall reading”, while the normative rules qualify the reading as “for its own timestamps” and the Required tests cover only “each operation that reads the wall clock”.",
+   "question": "Must every portal operation take exactly one wall-clock reading, or only an operation that writes a portal-owned timestamp or makes a current-time comparison?",
+   "options": [
+    "Every operation takes one wall reading",
+    "Only operations needing an instant take one reading",
+    "Some additional named operation classes take a reading"
+   ],
+   "default_guess": "Only operations that write a fresh timestamp or make a current-time comparison read the wall clock.",
+   "witness": {
+    "initial": "The service is healthy and no persisted record is expired or being written.",
+    "events": [
+     "A caller requests the public liveness endpoint."
+    ],
+    "outcomes": [
+     "The endpoint takes one wall-clock reading because every operation must do so.",
+     "The endpoint takes no wall-clock reading because it writes no timestamp and makes no current-time comparison."
+    ],
+    "observer": "A counting time source or the CLK-002 conformance check"
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "Meaning and boundary of an operation",
+   "kind": "undefined boundary",
+   "text": "The rules repeatedly require “one reading per operation” but do not identify whether an operation is an HTTP request, an application use case, a transaction, or each nested module invocation.",
+   "question": "What exact boundary shares the single wall-clock instant when one request invokes authorization, a use case, cascaded mutations, and audit writing?",
+   "options": [
+    "The complete externally invoked request or command",
+    "Each application use case",
+    "Each transaction or unit of work",
+    "Each module invocation, with explicit sharing only for named multi-write cases"
+   ],
+   "default_guess": "Treat the complete application command/use-case transaction as one operation, with the audit writer's expressly separate reading.",
+   "witness": {
+    "initial": "An active administrator has a session, and an active staff account has several active sessions.",
+    "events": [
+     "The administrator submits one status-change request that suspends the account.",
+     "Authorization validates the administrator, the use case updates the account, revokes the target's sessions, and appends audit."
+    ],
+    "outcomes": [
+     "The account update and every session revocation share the request's one wall instant; audit alone may have its separate instant.",
+     "The status-change use case and the nested revocation operation each take their own permitted ‘one’ reading, so their persisted timestamps may differ."
+    ],
+    "observer": "The administrator or a later reader of the account, sessions, and audit records"
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "Wall-clock read point",
+   "kind": "undelivered decision",
+   "text": "“where in an operation its one clock read happens, are the accepted spec's, carried to States 6–7” does not state those read points in the supplied design text.",
+   "question": "For each operation, at what ordered point is its sole wall-clock instant captured relative to request validation, authentication, Registry calls, persistence reads, and the final write?",
+   "options": [
+    "At operation entry",
+    "Immediately before the first current-time comparison",
+    "After non-time-dependent validation and external calls",
+    "A separately stated point for each operation"
+   ],
+   "default_guess": "Read immediately before the first current-time comparison or timestamp construction, then reuse it through the operation.",
+   "witness": {
+    "initial": "A staff session is valid at request arrival but expires while non-time-dependent request validation or an external Registry call is in progress.",
+    "events": [
+     "The staff member submits a project mutation just before the session expiry.",
+     "The operation performs work spanning the expiry instant before checking session validity."
+    ],
+    "outcomes": [
+     "A read at request entry makes the session valid and the mutation may proceed.",
+     "A read immediately before authorization finds the session expired and refuses the mutation."
+    ],
+    "observer": "The staff caller"
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "Source-supplied naive datetimes",
+   "kind": "missing acceptance rule",
+   "text": "The rules define conversion for “a supplied time carrying an offset” but leave the accepted forms and checks to States 6–7 and do not say what a source-supplied offset-naive datetime means.",
+   "question": "Must a source-supplied datetime carry an offset, or may an offset-naive value be accepted and, if so, which timezone or instant does it denote?",
+   "options": [
+    "Reject every offset-naive source datetime",
+    "Accept it as UTC",
+    "Accept it according to a source-specific timezone rule"
+   ],
+   "default_guess": "Reject offset-naive source-supplied datetimes; normalize offset-bearing values to the same instant in offset-naive UTC.",
+   "witness": {
+    "initial": "An authorized producer can publish a snapshot for an active project.",
+    "events": [
+     "The producer submits `approved_at` and `published_at` as offset-naive datetime values."
+    ],
+    "outcomes": [
+     "The publication is rejected because the source times do not identify instants.",
+     "The publication is accepted by interpreting the naive values as UTC and storing them unchanged."
+    ],
+    "observer": "The producer and later readers of the accepted snapshot"
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "CLK-002 witness obligation",
+   "kind": "missing witness binding",
+   "text": "The Required tests bind existing checks only for “CLK-001”; no `[witness: ...]` tag binds CLK-002, although CLK-002 is a formal invariant with a Required tests item.",
+   "question": "Which existing check is bound to CLK-002 and will assert its sole-host-clock-reader, reading-count, validity-boundary, and non-persistence requirements?",
+   "options": [
+    "Bind CLK-002 to a named existing verification check",
+    "Split CLK-002 among explicitly named existing checks",
+    "Declare that no existing check exists and carry creation of one to the stated receiving state"
+   ],
+   "default_guess": "Bind CLK-002 to a dedicated verification check covering both wall and elapsed clock requirements."
+  },
+  {
+   "unit": "A32",
+   "subject": "Installed-distribution inventory failure",
+   "kind": "missing fail-closed rule",
+   "text": "Every installed distribution must be judged using its name and version, but the fail-closed sentence covers “an OSV entry ... that cannot be read this way” and says nothing about an installed distribution whose metadata, name, or version cannot be read or parsed under PEP 503/PEP 440.",
+   "question": "What happens when the built image contains a discoverable Python distribution but the gate cannot obtain or parse that distribution's canonical name or installed version?",
+   "options": [
+    "The deploy is blocked because not every installed distribution could be judged",
+    "The unreadable distribution is ignored",
+    "The gate derives identity or version from a separately specified fallback"
+   ],
+   "default_guess": "Block the deploy as an incomplete check.",
+   "witness": {
+    "initial": "The built image identified by digest contains the application dependencies and one installed distribution whose metadata reports a version that PEP 440 cannot parse.",
+    "events": [
+     "A deploy downloads a complete readable OSV PyPI export.",
+     "The release gate inventories the image and reaches the malformed installed version."
+    ],
+    "outcomes": [
+     "The gate blocks because it cannot judge every installed distribution.",
+     "The gate skips that distribution because only unreadable OSV entries are expressly fail-closed, then starts the service if all other distributions pass."
+    ],
+    "observer": "The deploy operator and users waiting for the new service instance"
+   }
+  },
+  {
+   "unit": "A32",
+   "subject": "Unreadable OSV package identity",
+   "kind": "ambiguous refusal condition",
+   "text": "“An entry naming an installed distribution that cannot be read this way blocks the deploy” does not cover a syntactically readable OSV entry whose package-name field itself is missing or malformed, because the gate cannot first determine whether it names an installed distribution.",
+   "question": "Does an OSV entry with an unreadable package identity block the deploy, invalidate the whole check, or get ignored as an entry not known to name an installed distribution?",
+   "options": [
+    "Block as an unreadable relevant-or-potentially-relevant entry",
+    "Treat the check as unable to complete",
+    "Ignore it because no installed-distribution match can be established"
+   ],
+   "default_guess": "Treat the check as unable to complete and block the deploy.",
+   "witness": {
+    "initial": "The complete OSV export contains valid archive/index structure and one syntactically valid entry with affected ranges but a missing or malformed PyPI package name.",
+    "events": [
+     "The built image contains several installed distributions.",
+     "The release gate reads the malformed advisory while evaluating the export."
+    ],
+    "outcomes": [
+     "The deploy is blocked because the advisory cannot be safely classified against installed distributions.",
+     "The advisory is ignored because it cannot be shown to name an installed distribution, and the service starts if all classifiable entries pass."
+    ],
+    "observer": "The deploy operator and users of the started image"
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A28\",\"subject\":\"Clock-reading obligation\",\"kind\":\"contradiction\",\"text\":\"CLK-002 says “an operation takes one wall reading”, while the normative rules qualify the reading as “for its own timestamps” and the Required tests cover only “each operation that reads the wall clock”.\",\"question\":\"Must every portal operation take exactly one wall-clock reading, or only an operation that writes a portal-owned timestamp or makes a current-time comparison?\",\"options\":[\"Every operation takes one wall reading\",\"Only operations needing an instant take one reading\",\"Some additional named operation classes take a reading\"],\"default_guess\":\"Only operations that write a fresh timestamp or make a current-time comparison read the wall clock.\",\"witness\":{\"initial\":\"The service is healthy and no persisted record is expired or being written.\",\"events\":[\"A caller requests the public liveness endpoint.\"],\"outcomes\":[\"The endpoint takes one wall-clock reading because every operation must do so.\",\"The endpoint takes no wall-clock reading because it writes no timestamp and makes no current-time comparison.\"],\"observer\":\"A counting time source or the CLK-002 conformance check\"}},{\"unit\":\"A28\",\"subject\":\"Meaning and boundary of an operation\",\"kind\":\"undefined boundary\",\"text\":\"The rules repeatedly require “one reading per operation” but do not identify whether an operation is an HTTP request, an application use case, a transaction, or each nested module invocation.\",\"question\":\"What exact boundary shares the single wall-clock instant when one request invokes authorization, a use case, cascaded mutations, and audit writing?\",\"options\":[\"The complete externally invoked request or command\",\"Each application use case\",\"Each transaction or unit of work\",\"Each module invocation, with explicit sharing only for named multi-write cases\"],\"default_guess\":\"Treat the complete application command/use-case transaction as one operation, with the audit writer's expressly separate reading.\",\"witness\":{\"initial\":\"An active administrator has a session, and an active staff account has several active sessions.\",\"events\":[\"The administrator submits one status-change request that suspends the account.\",\"Authorization validates the administrator, the use case updates the account, revokes the target's sessions, and appends audit.\"],\"outcomes\":[\"The account update and every session revocation share the request's one wall instant; audit alone may have its separate instant.\",\"The status-change use case and the nested revocation operation each take their own permitted ‘one’ reading, so their persisted timestamps may differ.\"],\"observer\":\"The administrator or a later reader of the account, sessions, and audit records\"}},{\"unit\":\"A28\",\"subject\":\"Wall-clock read point\",\"kind\":\"undelivered decision\",\"text\":\"“where in an operation its one clock read happens, are the accepted spec's, carried to States 6–7” does not state those read points in the supplied design text.\",\"question\":\"For each operation, at what ordered point is its sole wall-clock instant captured relative to request validation, authentication, Registry calls, persistence reads, and the final write?\",\"options\":[\"At operation entry\",\"Immediately before the first current-time comparison\",\"After non-time-dependent validation and external calls\",\"A separately stated point for each operation\"],\"default_guess\":\"Read immediately before the first current-time comparison or timestamp construction, then reuse it through the operation.\",\"witness\":{\"initial\":\"A staff session is valid at request arrival but expires while non-time-dependent request validation or an external Registry call is in progress.\",\"events\":[\"The staff member submits a project mutation just before the session expiry.\",\"The operation performs work spanning the expiry instant before checking session validity.\"],\"outcomes\":[\"A read at request entry makes the session valid and the mutation may proceed.\",\"A read immediately before authorization finds the session expired and refuses the mutation.\"],\"observer\":\"The staff caller\"}},{\"unit\":\"A28\",\"subject\":\"Source-supplied naive datetimes\",\"kind\":\"missing acceptance rule\",\"text\":\"The rules define conversion for “a supplied time carrying an offset” but leave the accepted forms and checks to States 6–7 and do not say what a source-supplied offset-naive datetime means.\",\"question\":\"Must a source-supplied datetime carry an offset, or may an offset-naive value be accepted and, if so, which timezone or instant does it denote?\",\"options\":[\"Reject every offset-naive source datetime\",\"Accept it as UTC\",\"Accept it according to a source-specific timezone rule\"],\"default_guess\":\"Reject offset-naive source-supplied datetimes; normalize offset-bearing values to the same instant in offset-naive UTC.\",\"witness\":{\"initial\":\"An authorized producer can publish a snapshot for an active project.\",\"events\":[\"The producer submits `approved_at` and `published_at` as offset-naive datetime values.\"],\"outcomes\":[\"The publication is rejected because the source times do not identify instants.\",\"The publication is accepted by interpreting the naive values as UTC and storing them unchanged.\"],\"observer\":\"The producer and later readers of the accepted snapshot\"}},{\"unit\":\"A28\",\"subject\":\"CLK-002 witness obligation\",\"kind\":\"missing witness binding\",\"text\":\"The Required tests bind existing checks only for “CLK-001”; no `[witness: ...]` tag binds CLK-002, although CLK-002 is a formal invariant with a Required tests item.\",\"question\":\"Which existing check is bound to CLK-002 and will assert its sole-host-clock-reader, reading-count, validity-boundary, and non-persistence requirements?\",\"options\":[\"Bind CLK-002 to a named existing verification check\",\"Split CLK-002 among explicitly named existing checks\",\"Declare that no existing check exists and carry creation of one to the stated receiving state\"],\"default_guess\":\"Bind CLK-002 to a dedicated verification check covering both wall and elapsed clock requirements.\"},{\"unit\":\"A32\",\"subject\":\"Installed-distribution inventory failure\",\"kind\":\"missing fail-closed rule\",\"text\":\"Every installed distribution must be judged using its name and version, but the fail-closed sentence covers “an OSV entry ... that cannot be read this way” and says nothing about an installed distribution whose metadata, name, or version cannot be read or parsed under PEP 503/PEP 440.\",\"question\":\"What happens when the built image contains a discoverable Python distribution but the gate cannot obtain or parse that distribution's canonical name or installed version?\",\"options\":[\"The deploy is blocked because not every installed distribution could be judged\",\"The unreadable distribution is ignored\",\"The gate derives identity or version from a separately specified fallback\"],\"default_guess\":\"Block the deploy as an incomplete check.\",\"witness\":{\"initial\":\"The built image identified by digest contains the application dependencies and one installed distribution whose metadata reports a version that PEP 440 cannot parse.\",\"events\":[\"A deploy downloads a complete readable OSV PyPI export.\",\"The release gate inventories the image and reaches the malformed installed version.\"],\"outcomes\":[\"The gate blocks because it cannot judge every installed distribution.\",\"The gate skips that distribution because only unreadable OSV entries are expressly fail-closed, then starts the service if all other distributions pass.\"],\"observer\":\"The deploy operator and users waiting for the new service instance\"}},{\"unit\":\"A32\",\"subject\":\"Unreadable OSV package identity\",\"kind\":\"ambiguous refusal condition\",\"text\":\"“An entry naming an installed distribution that cannot be read this way blocks the deploy” does not cover a syntactically readable OSV entry whose package-name field itself is missing or malformed, because the gate cannot first determine whether it names an installed distribution.\",\"question\":\"Does an OSV entry with an unreadable package identity block the deploy, invalidate the whole check, or get ignored as an entry not known to name an installed distribution?\",\"options\":[\"Block as an unreadable relevant-or-potentially-relevant entry\",\"Treat the check as unable to complete\",\"Ignore it because no installed-distribution match can be established\"],\"default_guess\":\"Treat the check as unable to complete and block the deploy.\",\"witness\":{\"initial\":\"The complete OSV export contains valid archive/index structure and one syntactically valid entry with affected ranges but a missing or malformed PyPI package name.\",\"events\":[\"The built image contains several installed distributions.\",\"The release gate reads the malformed advisory while evaluating the export.\"],\"outcomes\":[\"The deploy is blocked because the advisory cannot be safely classified against installed distributions.\",\"The advisory is ignored because it cannot be shown to name an installed distribution, and the service starts if all classifiable entries pass.\"],\"observer\":\"The deploy operator and users of the started image\"}}]}",
+ "set_aside": []
+}

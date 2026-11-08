@@ -1,0 +1,141 @@
+{
+ "open_points": [
+  {
+   "unit": "A28",
+   "subject": "source-supplied timestamp representation",
+   "kind": "contradiction",
+   "text": "“kept as supplied: the same instant, stored offset-naive UTC” conflicts with the Required test saying each supplied time “is stored as supplied”",
+   "question": "When a supplied timestamp has a non-UTC offset or is offset-aware, must the stored value be normalized to offset-naive UTC, or preserved literally in its supplied representation?",
+   "options": [
+    "Normalize to offset-naive UTC while preserving the instant",
+    "Preserve the supplied datetime representation literally"
+   ],
+   "default_guess": "Normalize to offset-naive UTC while preserving the instant.",
+   "witness": {
+    "initial": "A producer supplies approved_at = 2026-08-09T12:00:00+02:00.",
+    "events": [
+     "The producer imports a snapshot.",
+     "The portal persists approved_at."
+    ],
+    "outcomes": [
+     "The portal stores offset-naive UTC 2026-08-09T10:00:00, following the normative representation rule.",
+     "The portal stores 2026-08-09T12:00:00+02:00 unchanged, following the test's instruction to store it as supplied."
+    ],
+    "observer": "A repository test or operator inspecting the stored snapshot sees the different representation."
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "wall-clock reading count for operations without time use",
+   "kind": "scope mismatch",
+   "text": "CLK-002 says “an operation takes one wall reading,” while its Required test applies only “per operation that reads the wall clock” and the normative rule describes the reading as being “for its own timestamps” and current-time comparisons",
+   "question": "Must every portal operation take exactly one wall-clock reading, including operations that write no timestamp and make no current-time comparison, or only operations that need current time?",
+   "options": [
+    "Every operation takes exactly one wall reading",
+    "Only an operation that writes a portal-owned timestamp or makes a current-time comparison takes one wall reading"
+   ],
+   "default_guess": "Only operations that need current time take one wall reading.",
+   "witness": {
+    "initial": "The service is running and the clock source counts wall-clock reads.",
+    "events": [
+     "A caller invokes the stateless liveness operation."
+    ],
+    "outcomes": [
+     "The liveness operation reads the wall clock once because CLK-002 says every operation does.",
+     "The liveness operation reads it zero times because it writes no timestamp and makes no current-time comparison."
+    ],
+    "observer": "The counting clock-source test and service instrumentation see different read counts."
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "CLK-002 witness binding",
+   "kind": "missing required witness",
+   "text": "The only witness bindings are “CLK-001 [witness: verification:service_identity_consumer_uow_client_portal]” and “CLK-001 [witness: verification:staff_bootstrap_client_portal]”; no witness is bound to CLK-002 or its Required tests item",
+   "question": "Which existing check is the witness for CLK-002 and for the Required tests item that names it?",
+   "options": [
+    "Bind one existing verification check that asserts the whole CLK-002 item",
+    "Bind separate existing checks for the source restriction, wall-read counting, and elapsed-clock boundary behavior"
+   ],
+   "default_guess": "Bind separate checks for the source restriction, wall-clock behavior, and elapsed-clock behavior."
+  },
+  {
+   "unit": "A32",
+   "subject": "unreadable or unmatchable OSV data",
+   "kind": "undefined refusal condition",
+   "text": "The Required test says “unreadable or unmatchable advisory data … does not start it,” but neither “unreadable” nor “unmatchable” is defined or scoped",
+   "question": "What exact OSV-data conditions make the deploy check fail, and does malformed or unmatchable data unrelated to every installed distribution block the deploy?",
+   "options": [
+    "Any unreadable or unmatchable entry in the one PyPI data copy blocks the deploy",
+    "Only unreadable or unmatchable data needed to decide an installed distribution blocks the deploy",
+    "An unmatchable entry is ignored unless it names an installed distribution, while failure to read the data copy itself always blocks"
+   ],
+   "default_guess": "Block when the data copy cannot be read or when data needed to decide an installed distribution cannot be matched; ignore malformed unrelated entries only if completeness can still be established.",
+   "witness": {
+    "initial": "The built image contains distributions A and B; the copied OSV PyPI data contains valid information for both and one malformed entry naming unrelated distribution C.",
+    "events": [
+     "The deployment gate reads the one OSV data copy.",
+     "It evaluates the image."
+    ],
+    "outcomes": [
+     "The deploy is refused because any unmatchable advisory data fails the check.",
+     "The deploy starts because the malformed entry cannot affect any installed distribution and A and B were fully judged."
+    ],
+    "observer": "The deployment operator sees whether the service starts."
+   }
+  },
+  {
+   "unit": "A32",
+   "subject": "OSV affected-version matching",
+   "kind": "undefined decision rule",
+   "text": "A distribution is vulnerable when an OSV entry “lists its installed version as affected,” without stating how OSV ranges, events, package-name normalization, or an inability to associate installed metadata with an OSV PyPI package are judged",
+   "question": "What exact matching rule maps an installed distribution name and version to OSV packages and determines that the version is affected, including range-based entries and normalization failures?",
+   "options": [
+    "Use OSV's ecosystem/package normalization and affected-range semantics",
+    "Require the installed version to appear in an explicit affected-version list",
+    "Treat any package-name or version-normalization uncertainty as an unmatchable check that blocks deployment"
+   ],
+   "default_guess": "Use OSV's PyPI package normalization and affected-range semantics, and block if the installed distribution cannot be mapped unambiguously.",
+   "witness": {
+    "initial": "The image contains distribution Foo_Bar version 2.0; OSV names package foo-bar and describes the affected versions with range events rather than an explicit version list.",
+    "events": [
+     "The deployment gate inventories the installed image.",
+     "It matches the inventory against the copied OSV data."
+    ],
+    "outcomes": [
+     "The gate normalizes the name, evaluates the range, and refuses deployment because 2.0 is affected.",
+     "The gate finds no literal package/version listing and passes the image, or treats the data as unmatchable and refuses without classifying it as vulnerable."
+    ],
+    "observer": "The deployment operator sees a pass or refusal for the same image and advisory copy."
+   }
+  },
+  {
+   "unit": "A31",
+   "subject": "dependency security-review affected set",
+   "kind": "cross-text inconsistency",
+   "text": "A31 records dependencies as “affected: deploy/requirements.txt (fastapi, pydantic, argon2-cffi, uvicorn pinned),” while changed A32 makes every installed distribution, including every library pip resolves for those pins, part of the deployment vulnerability decision",
+   "question": "Does the A31 dependency-category outcome cover all distributions installed in the image, or only the requirements file and its four direct pins?",
+   "options": [
+    "Expand the affected set to every installed distribution judged by A32",
+    "Treat the four direct pins and requirements file as shorthand for the complete resolved installation",
+    "Keep A31 limited to direct pins despite A32's broader deployment gate"
+   ],
+   "default_guess": "Treat the category as covering every installed distribution and state that scope explicitly.",
+   "witness": {
+    "initial": "The requirements file has four safe direct pins, but pip resolves a vulnerable transitive distribution into the built image.",
+    "events": [
+     "The security review records the dependency category.",
+     "The A32 deployment gate evaluates the image."
+    ],
+    "outcomes": [
+     "A31 treats the transitive distribution as affected and A32 refuses the deploy.",
+     "A31's recorded affected set excludes it even though A32 refuses the deploy because it is installed."
+    ],
+    "observer": "A security reviewer comparing the review evidence with the deployment verdict sees the inconsistent scope."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A28\",\"subject\":\"source-supplied timestamp representation\",\"kind\":\"contradiction\",\"text\":\"“kept as supplied: the same instant, stored offset-naive UTC” conflicts with the Required test saying each supplied time “is stored as supplied”\",\"question\":\"When a supplied timestamp has a non-UTC offset or is offset-aware, must the stored value be normalized to offset-naive UTC, or preserved literally in its supplied representation?\",\"options\":[\"Normalize to offset-naive UTC while preserving the instant\",\"Preserve the supplied datetime representation literally\"],\"default_guess\":\"Normalize to offset-naive UTC while preserving the instant.\",\"witness\":{\"initial\":\"A producer supplies approved_at = 2026-08-09T12:00:00+02:00.\",\"events\":[\"The producer imports a snapshot.\",\"The portal persists approved_at.\"],\"outcomes\":[\"The portal stores offset-naive UTC 2026-08-09T10:00:00, following the normative representation rule.\",\"The portal stores 2026-08-09T12:00:00+02:00 unchanged, following the test's instruction to store it as supplied.\"],\"observer\":\"A repository test or operator inspecting the stored snapshot sees the different representation.\"}},{\"unit\":\"A28\",\"subject\":\"wall-clock reading count for operations without time use\",\"kind\":\"scope mismatch\",\"text\":\"CLK-002 says “an operation takes one wall reading,” while its Required test applies only “per operation that reads the wall clock” and the normative rule describes the reading as being “for its own timestamps” and current-time comparisons\",\"question\":\"Must every portal operation take exactly one wall-clock reading, including operations that write no timestamp and make no current-time comparison, or only operations that need current time?\",\"options\":[\"Every operation takes exactly one wall reading\",\"Only an operation that writes a portal-owned timestamp or makes a current-time comparison takes one wall reading\"],\"default_guess\":\"Only operations that need current time take one wall reading.\",\"witness\":{\"initial\":\"The service is running and the clock source counts wall-clock reads.\",\"events\":[\"A caller invokes the stateless liveness operation.\"],\"outcomes\":[\"The liveness operation reads the wall clock once because CLK-002 says every operation does.\",\"The liveness operation reads it zero times because it writes no timestamp and makes no current-time comparison.\"],\"observer\":\"The counting clock-source test and service instrumentation see different read counts.\"}},{\"unit\":\"A28\",\"subject\":\"CLK-002 witness binding\",\"kind\":\"missing required witness\",\"text\":\"The only witness bindings are “CLK-001 [witness: verification:service_identity_consumer_uow_client_portal]” and “CLK-001 [witness: verification:staff_bootstrap_client_portal]”; no witness is bound to CLK-002 or its Required tests item\",\"question\":\"Which existing check is the witness for CLK-002 and for the Required tests item that names it?\",\"options\":[\"Bind one existing verification check that asserts the whole CLK-002 item\",\"Bind separate existing checks for the source restriction, wall-read counting, and elapsed-clock boundary behavior\"],\"default_guess\":\"Bind separate checks for the source restriction, wall-clock behavior, and elapsed-clock behavior.\"},{\"unit\":\"A32\",\"subject\":\"unreadable or unmatchable OSV data\",\"kind\":\"undefined refusal condition\",\"text\":\"The Required test says “unreadable or unmatchable advisory data … does not start it,” but neither “unreadable” nor “unmatchable” is defined or scoped\",\"question\":\"What exact OSV-data conditions make the deploy check fail, and does malformed or unmatchable data unrelated to every installed distribution block the deploy?\",\"options\":[\"Any unreadable or unmatchable entry in the one PyPI data copy blocks the deploy\",\"Only unreadable or unmatchable data needed to decide an installed distribution blocks the deploy\",\"An unmatchable entry is ignored unless it names an installed distribution, while failure to read the data copy itself always blocks\"],\"default_guess\":\"Block when the data copy cannot be read or when data needed to decide an installed distribution cannot be matched; ignore malformed unrelated entries only if completeness can still be established.\",\"witness\":{\"initial\":\"The built image contains distributions A and B; the copied OSV PyPI data contains valid information for both and one malformed entry naming unrelated distribution C.\",\"events\":[\"The deployment gate reads the one OSV data copy.\",\"It evaluates the image.\"],\"outcomes\":[\"The deploy is refused because any unmatchable advisory data fails the check.\",\"The deploy starts because the malformed entry cannot affect any installed distribution and A and B were fully judged.\"],\"observer\":\"The deployment operator sees whether the service starts.\"}},{\"unit\":\"A32\",\"subject\":\"OSV affected-version matching\",\"kind\":\"undefined decision rule\",\"text\":\"A distribution is vulnerable when an OSV entry “lists its installed version as affected,” without stating how OSV ranges, events, package-name normalization, or an inability to associate installed metadata with an OSV PyPI package are judged\",\"question\":\"What exact matching rule maps an installed distribution name and version to OSV packages and determines that the version is affected, including range-based entries and normalization failures?\",\"options\":[\"Use OSV's ecosystem/package normalization and affected-range semantics\",\"Require the installed version to appear in an explicit affected-version list\",\"Treat any package-name or version-normalization uncertainty as an unmatchable check that blocks deployment\"],\"default_guess\":\"Use OSV's PyPI package normalization and affected-range semantics, and block if the installed distribution cannot be mapped unambiguously.\",\"witness\":{\"initial\":\"The image contains distribution Foo_Bar version 2.0; OSV names package foo-bar and describes the affected versions with range events rather than an explicit version list.\",\"events\":[\"The deployment gate inventories the installed image.\",\"It matches the inventory against the copied OSV data.\"],\"outcomes\":[\"The gate normalizes the name, evaluates the range, and refuses deployment because 2.0 is affected.\",\"The gate finds no literal package/version listing and passes the image, or treats the data as unmatchable and refuses without classifying it as vulnerable.\"],\"observer\":\"The deployment operator sees a pass or refusal for the same image and advisory copy.\"}},{\"unit\":\"A31\",\"subject\":\"dependency security-review affected set\",\"kind\":\"cross-text inconsistency\",\"text\":\"A31 records dependencies as “affected: deploy/requirements.txt (fastapi, pydantic, argon2-cffi, uvicorn pinned),” while changed A32 makes every installed distribution, including every library pip resolves for those pins, part of the deployment vulnerability decision\",\"question\":\"Does the A31 dependency-category outcome cover all distributions installed in the image, or only the requirements file and its four direct pins?\",\"options\":[\"Expand the affected set to every installed distribution judged by A32\",\"Treat the four direct pins and requirements file as shorthand for the complete resolved installation\",\"Keep A31 limited to direct pins despite A32's broader deployment gate\"],\"default_guess\":\"Treat the category as covering every installed distribution and state that scope explicitly.\",\"witness\":{\"initial\":\"The requirements file has four safe direct pins, but pip resolves a vulnerable transitive distribution into the built image.\",\"events\":[\"The security review records the dependency category.\",\"The A32 deployment gate evaluates the image.\"],\"outcomes\":[\"A31 treats the transitive distribution as affected and A32 refuses the deploy.\",\"A31's recorded affected set excludes it even though A32 refuses the deploy because it is installed.\"],\"observer\":\"A security reviewer comparing the review evidence with the deployment verdict sees the inconsistent scope.\"}}]}",
+ "set_aside": []
+}

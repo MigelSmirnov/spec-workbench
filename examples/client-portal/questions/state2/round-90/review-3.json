@@ -1,0 +1,184 @@
+{
+ "open_points": [
+  {
+   "unit": "A28",
+   "subject": "wall-clock reading count for operations that do not use current time",
+   "kind": "contradictory scope",
+   "text": "“an operation takes one wall reading” conflicts with “one reading per operation for its own timestamps” and the Required test’s narrower “a test per operation that reads the wall clock”",
+   "question": "Must every portal operation read the wall clock once, including pure reads and health checks, or only an operation that needs a fresh timestamp or current-time comparison?",
+   "options": [
+    "Every operation takes exactly one wall reading",
+    "Only operations needing current time take one wall reading; other operations take none"
+   ],
+   "default_guess": "Only operations needing current time take one wall reading.",
+   "witness": {
+    "initial": "The service is ready and a liveness request requires no timestamp write or expiry check.",
+    "events": [
+     "A caller requests liveness.",
+     "The handler returns the fixed health response."
+    ],
+    "outcomes": [
+     "The handler calls the wall-clock source exactly once because every operation must do so.",
+     "The handler makes no wall-clock call because it has no timestamp or current-time decision."
+    ],
+    "observer": "A counting clock source or the operation test suite"
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "scope of the sole-reader clock invariant",
+   "kind": "undefined boundary",
+   "text": "“the clock source is the only reader of the host's wall and elapsed clocks; every other part of the portal obtains time from it” and the test requirement that “every host-clock read during the operation is made by a call of the clock source” do not define whether framework, dependency, database-driver, logging, or runtime clock reads are part of the portal",
+   "question": "Which executing components are forbidden to read a host clock directly, and what observable boundary must CLK-002 instrument?",
+   "options": [
+    "Only portal-owned application modules are governed",
+    "Every process component executing during a portal operation, including third-party libraries, is governed",
+    "Only reads used for portal timestamps, validity decisions, or the A25 window are governed"
+   ],
+   "default_guess": "Treat portal-owned application code and its time decisions as governed, while excluding incidental third-party runtime reads.",
+   "witness": {
+    "initial": "A request invokes portal code through a framework that reads a monotonic clock internally for timeout accounting.",
+    "events": [
+     "A caller makes an authenticated read request.",
+     "The framework reads the host monotonic clock directly.",
+     "Portal application code does not use that reading."
+    ],
+    "outcomes": [
+     "CLK-002 fails because a host-clock read bypassed the clock source.",
+     "CLK-002 holds because the framework's incidental timing is outside the portal-owned clock policy."
+    ],
+    "observer": "The CLK-002 instrumentation test and deployer"
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "Registry-supplied transient timestamps",
+   "kind": "missing representation rule",
+   "text": "The source-supplied list names snapshot, recognition, photo, credential, and payment values, but does not name `ProjectContext.created_at` or `ProjectContext.registry_updated_at`; the opening representation rule is limited to “Persisted timestamps”",
+   "question": "In which representation must Registry-supplied timestamps that are consumed and returned but not persisted be held and emitted, and must an offset-bearing value be normalized to offset-naive UTC?",
+   "options": [
+    "Normalize them to the same offset-naive UTC representation as persisted instants",
+    "Preserve the Registry representation, including its offset",
+    "Require offset-aware UTC at the Registry boundary and preserve that form"
+   ],
+   "default_guess": "Normalize them to offset-naive UTC for consistency with the decided instant representation.",
+   "witness": {
+    "initial": "Registry returns a project context whose `registry_updated_at` is `2026-11-08T12:00:00+02:00`.",
+    "events": [
+     "A staff or viewer operation obtains the live project context.",
+     "The portal builds a response containing that context."
+    ],
+    "outcomes": [
+     "The response carries the normalized UTC instant `2026-11-08T10:00:00` without an offset.",
+     "The response preserves `2026-11-08T12:00:00+02:00`."
+    ],
+    "observer": "The API caller"
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "CLK-002 witness binding",
+   "kind": "missing required-test witness",
+   "text": "The Required tests define CLK-002 tests, but the only witness bindings are “CLK-001 [witness: verification:service_identity_consumer_uow_client_portal]” and “CLK-001 [witness: verification:staff_bootstrap_client_portal]”",
+   "question": "Which existing check is bound to CLK-002 and asserts its wall-clock, elapsed-clock, sole-reader, reading-count, boundary, and non-persistence requirements?",
+   "options": [
+    "Bind CLK-002 to a named existing verification check",
+    "Explicitly bind CLK-002 to one or both currently named checks if they cover it"
+   ],
+   "default_guess": "Bind CLK-002 to a dedicated clock-source verification check."
+  },
+  {
+   "unit": "A32",
+   "subject": "authentication and integrity of the OSV copy",
+   "kind": "missing refusal condition",
+   "text": "The archive must be “downloaded whole” and the transfer and index must read without error, but the rules do not say how the gate establishes that the downloaded copy actually came from OSV or what happens on certificate, origin, redirect, or integrity failure",
+   "question": "What source-authentication and transport-integrity conditions must the OSV download satisfy, and which failures block the deploy?",
+   "options": [
+    "Require authenticated HTTPS to an allowed OSV origin with normal certificate validation and fail closed on any validation or disallowed-redirect failure",
+    "Accept any transport or mirror that produces a whole readable PyPI export",
+    "Require an independently verified digest or signature in addition to transport authentication"
+   ],
+   "default_guess": "Require authenticated HTTPS to the fixed OSV origin and fail closed on transport or certificate validation failure.",
+   "witness": {
+    "initial": "A built image is awaiting deployment and the network path can substitute a syntactically valid, complete OSV archive containing no advisories.",
+    "events": [
+     "The deploy gate requests the PyPI export.",
+     "A substituted archive arrives at the announced length and its index reads successfully.",
+     "The image contains a distribution affected according to the real OSV data."
+    ],
+    "outcomes": [
+     "The deploy starts because completeness and readability are the only stated download evidence.",
+     "The deploy is blocked because the archive's origin or transport authentication fails."
+    ],
+    "observer": "The deploy operator and users of the started service"
+   }
+  },
+  {
+   "unit": "A32",
+   "subject": "unreadable installed-distribution metadata",
+   "kind": "uncovered failure case",
+   "text": "“every distribution installed in that image” must be judged, while the fail-closed clause covers “An entry naming an installed distribution that cannot be read this way” but does not cover an installed distribution whose own name or version cannot be enumerated or parsed",
+   "question": "Does unreadable, missing, or invalid installed-distribution metadata make the check incomplete and block deployment even when no readable OSV entry can be matched to it?",
+   "options": [
+    "Block because the gate cannot prove that every installed distribution was judged",
+    "Ignore the unreadable distribution unless an OSV entry can be matched to its name",
+    "Judge it by a fallback name/version extraction rule"
+   ],
+   "default_guess": "Block the deploy because the check cannot establish a verdict for every installed distribution.",
+   "witness": {
+    "initial": "The image contains a package with discoverable distribution metadata but an invalid PEP 440 version string; the downloaded OSV archive is whole and readable.",
+    "events": [
+     "The deploy gate inventories the image.",
+     "It encounters the invalid installed version.",
+     "No OSV entry can be reliably compared with that version."
+    ],
+    "outcomes": [
+     "The deploy is blocked as a check that cannot complete.",
+     "The malformed distribution is skipped and the deploy starts if all readable distributions pass."
+    ],
+    "observer": "The deploy operator"
+   }
+  },
+  {
+   "unit": "A32",
+   "subject": "PEP 440 membership semantics for OSV affected versions",
+   "kind": "ambiguous matching rule",
+   "text": "A version is vulnerable when it “is one of the entry's affected versions or lies in one of its affected ranges,” with versions “read by PEP 440,” but the text does not define equality/specifier semantics for local versions and other PEP 440 variants",
+   "question": "Which PEP 440 matching relation decides exact affected-version membership and range membership, especially for local, pre-release, post-release, and epoch-bearing versions?",
+   "options": [
+    "Use parsed PEP 440 version equality for explicit versions and PEP 440 ordering for range endpoints",
+    "Use PEP 440 specifier matching, under which some public-version specifiers also match local variants",
+    "Require exact normalized-version equality for explicit versions and separately defined OSV event semantics for ranges"
+   ],
+   "default_guess": "Use normalized parsed-version equality for explicit versions and PEP 440 ordering with OSV event semantics for ranges.",
+   "witness": {
+    "initial": "The image contains distribution `example` version `1.0+vendor`; a non-withdrawn OSV entry for `example` explicitly lists affected version `1.0`.",
+    "events": [
+     "The gate PEP 503-normalizes the package names and they match.",
+     "The gate parses both versions successfully under PEP 440."
+    ],
+    "outcomes": [
+     "The deploy starts because parsed exact versions `1.0+vendor` and `1.0` are unequal.",
+     "The deploy is blocked because matching the public version `1.0` also covers its local build `1.0+vendor`."
+    ],
+    "observer": "The deploy operator"
+   }
+  },
+  {
+   "unit": "A32",
+   "subject": "deployment-procedure handoff",
+   "kind": "undecided carry",
+   "text": "“The tool that runs the check is a deployment procedure, not a portal rule, carried to the deploy route” names neither a receiving state nor a confirmation check and leaves the procedure/tool as a later choice",
+   "question": "Which receiving state owns the concrete release-gate execution, and which check confirms that the selected procedure inventories the bound image, reads one fresh whole OSV copy, applies the decided matching rules, and controls the start?",
+   "options": [
+    "Assign the procedure to a named later state and bind it to a named confirmation check",
+    "Declare the procedure fully outside the state transition while retaining only the already bound release-gate behavior",
+    "Specify the concrete procedure in State 2"
+   ],
+   "default_guess": "Assign it to the deployment assembly state and confirm it through `verification:dependency_release_gate_client_portal`."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A28\",\"subject\":\"wall-clock reading count for operations that do not use current time\",\"kind\":\"contradictory scope\",\"text\":\"“an operation takes one wall reading” conflicts with “one reading per operation for its own timestamps” and the Required test’s narrower “a test per operation that reads the wall clock”\",\"question\":\"Must every portal operation read the wall clock once, including pure reads and health checks, or only an operation that needs a fresh timestamp or current-time comparison?\",\"options\":[\"Every operation takes exactly one wall reading\",\"Only operations needing current time take one wall reading; other operations take none\"],\"default_guess\":\"Only operations needing current time take one wall reading.\",\"witness\":{\"initial\":\"The service is ready and a liveness request requires no timestamp write or expiry check.\",\"events\":[\"A caller requests liveness.\",\"The handler returns the fixed health response.\"],\"outcomes\":[\"The handler calls the wall-clock source exactly once because every operation must do so.\",\"The handler makes no wall-clock call because it has no timestamp or current-time decision.\"],\"observer\":\"A counting clock source or the operation test suite\"}},{\"unit\":\"A28\",\"subject\":\"scope of the sole-reader clock invariant\",\"kind\":\"undefined boundary\",\"text\":\"“the clock source is the only reader of the host's wall and elapsed clocks; every other part of the portal obtains time from it” and the test requirement that “every host-clock read during the operation is made by a call of the clock source” do not define whether framework, dependency, database-driver, logging, or runtime clock reads are part of the portal\",\"question\":\"Which executing components are forbidden to read a host clock directly, and what observable boundary must CLK-002 instrument?\",\"options\":[\"Only portal-owned application modules are governed\",\"Every process component executing during a portal operation, including third-party libraries, is governed\",\"Only reads used for portal timestamps, validity decisions, or the A25 window are governed\"],\"default_guess\":\"Treat portal-owned application code and its time decisions as governed, while excluding incidental third-party runtime reads.\",\"witness\":{\"initial\":\"A request invokes portal code through a framework that reads a monotonic clock internally for timeout accounting.\",\"events\":[\"A caller makes an authenticated read request.\",\"The framework reads the host monotonic clock directly.\",\"Portal application code does not use that reading.\"],\"outcomes\":[\"CLK-002 fails because a host-clock read bypassed the clock source.\",\"CLK-002 holds because the framework's incidental timing is outside the portal-owned clock policy.\"],\"observer\":\"The CLK-002 instrumentation test and deployer\"}},{\"unit\":\"A28\",\"subject\":\"Registry-supplied transient timestamps\",\"kind\":\"missing representation rule\",\"text\":\"The source-supplied list names snapshot, recognition, photo, credential, and payment values, but does not name `ProjectContext.created_at` or `ProjectContext.registry_updated_at`; the opening representation rule is limited to “Persisted timestamps”\",\"question\":\"In which representation must Registry-supplied timestamps that are consumed and returned but not persisted be held and emitted, and must an offset-bearing value be normalized to offset-naive UTC?\",\"options\":[\"Normalize them to the same offset-naive UTC representation as persisted instants\",\"Preserve the Registry representation, including its offset\",\"Require offset-aware UTC at the Registry boundary and preserve that form\"],\"default_guess\":\"Normalize them to offset-naive UTC for consistency with the decided instant representation.\",\"witness\":{\"initial\":\"Registry returns a project context whose `registry_updated_at` is `2026-11-08T12:00:00+02:00`.\",\"events\":[\"A staff or viewer operation obtains the live project context.\",\"The portal builds a response containing that context.\"],\"outcomes\":[\"The response carries the normalized UTC instant `2026-11-08T10:00:00` without an offset.\",\"The response preserves `2026-11-08T12:00:00+02:00`.\"],\"observer\":\"The API caller\"}},{\"unit\":\"A28\",\"subject\":\"CLK-002 witness binding\",\"kind\":\"missing required-test witness\",\"text\":\"The Required tests define CLK-002 tests, but the only witness bindings are “CLK-001 [witness: verification:service_identity_consumer_uow_client_portal]” and “CLK-001 [witness: verification:staff_bootstrap_client_portal]”\",\"question\":\"Which existing check is bound to CLK-002 and asserts its wall-clock, elapsed-clock, sole-reader, reading-count, boundary, and non-persistence requirements?\",\"options\":[\"Bind CLK-002 to a named existing verification check\",\"Explicitly bind CLK-002 to one or both currently named checks if they cover it\"],\"default_guess\":\"Bind CLK-002 to a dedicated clock-source verification check.\"},{\"unit\":\"A32\",\"subject\":\"authentication and integrity of the OSV copy\",\"kind\":\"missing refusal condition\",\"text\":\"The archive must be “downloaded whole” and the transfer and index must read without error, but the rules do not say how the gate establishes that the downloaded copy actually came from OSV or what happens on certificate, origin, redirect, or integrity failure\",\"question\":\"What source-authentication and transport-integrity conditions must the OSV download satisfy, and which failures block the deploy?\",\"options\":[\"Require authenticated HTTPS to an allowed OSV origin with normal certificate validation and fail closed on any validation or disallowed-redirect failure\",\"Accept any transport or mirror that produces a whole readable PyPI export\",\"Require an independently verified digest or signature in addition to transport authentication\"],\"default_guess\":\"Require authenticated HTTPS to the fixed OSV origin and fail closed on transport or certificate validation failure.\",\"witness\":{\"initial\":\"A built image is awaiting deployment and the network path can substitute a syntactically valid, complete OSV archive containing no advisories.\",\"events\":[\"The deploy gate requests the PyPI export.\",\"A substituted archive arrives at the announced length and its index reads successfully.\",\"The image contains a distribution affected according to the real OSV data.\"],\"outcomes\":[\"The deploy starts because completeness and readability are the only stated download evidence.\",\"The deploy is blocked because the archive's origin or transport authentication fails.\"],\"observer\":\"The deploy operator and users of the started service\"}},{\"unit\":\"A32\",\"subject\":\"unreadable installed-distribution metadata\",\"kind\":\"uncovered failure case\",\"text\":\"“every distribution installed in that image” must be judged, while the fail-closed clause covers “An entry naming an installed distribution that cannot be read this way” but does not cover an installed distribution whose own name or version cannot be enumerated or parsed\",\"question\":\"Does unreadable, missing, or invalid installed-distribution metadata make the check incomplete and block deployment even when no readable OSV entry can be matched to it?\",\"options\":[\"Block because the gate cannot prove that every installed distribution was judged\",\"Ignore the unreadable distribution unless an OSV entry can be matched to its name\",\"Judge it by a fallback name/version extraction rule\"],\"default_guess\":\"Block the deploy because the check cannot establish a verdict for every installed distribution.\",\"witness\":{\"initial\":\"The image contains a package with discoverable distribution metadata but an invalid PEP 440 version string; the downloaded OSV archive is whole and readable.\",\"events\":[\"The deploy gate inventories the image.\",\"It encounters the invalid installed version.\",\"No OSV entry can be reliably compared with that version.\"],\"outcomes\":[\"The deploy is blocked as a check that cannot complete.\",\"The malformed distribution is skipped and the deploy starts if all readable distributions pass.\"],\"observer\":\"The deploy operator\"}},{\"unit\":\"A32\",\"subject\":\"PEP 440 membership semantics for OSV affected versions\",\"kind\":\"ambiguous matching rule\",\"text\":\"A version is vulnerable when it “is one of the entry's affected versions or lies in one of its affected ranges,” with versions “read by PEP 440,” but the text does not define equality/specifier semantics for local versions and other PEP 440 variants\",\"question\":\"Which PEP 440 matching relation decides exact affected-version membership and range membership, especially for local, pre-release, post-release, and epoch-bearing versions?\",\"options\":[\"Use parsed PEP 440 version equality for explicit versions and PEP 440 ordering for range endpoints\",\"Use PEP 440 specifier matching, under which some public-version specifiers also match local variants\",\"Require exact normalized-version equality for explicit versions and separately defined OSV event semantics for ranges\"],\"default_guess\":\"Use normalized parsed-version equality for explicit versions and PEP 440 ordering with OSV event semantics for ranges.\",\"witness\":{\"initial\":\"The image contains distribution `example` version `1.0+vendor`; a non-withdrawn OSV entry for `example` explicitly lists affected version `1.0`.\",\"events\":[\"The gate PEP 503-normalizes the package names and they match.\",\"The gate parses both versions successfully under PEP 440.\"],\"outcomes\":[\"The deploy starts because parsed exact versions `1.0+vendor` and `1.0` are unequal.\",\"The deploy is blocked because matching the public version `1.0` also covers its local build `1.0+vendor`.\"],\"observer\":\"The deploy operator\"}},{\"unit\":\"A32\",\"subject\":\"deployment-procedure handoff\",\"kind\":\"undecided carry\",\"text\":\"“The tool that runs the check is a deployment procedure, not a portal rule, carried to the deploy route” names neither a receiving state nor a confirmation check and leaves the procedure/tool as a later choice\",\"question\":\"Which receiving state owns the concrete release-gate execution, and which check confirms that the selected procedure inventories the bound image, reads one fresh whole OSV copy, applies the decided matching rules, and controls the start?\",\"options\":[\"Assign the procedure to a named later state and bind it to a named confirmation check\",\"Declare the procedure fully outside the state transition while retaining only the already bound release-gate behavior\",\"Specify the concrete procedure in State 2\"],\"default_guess\":\"Assign it to the deployment assembly state and confirm it through `verification:dependency_release_gate_client_portal`.\"}]}",
+ "set_aside": []
+}

@@ -1,0 +1,109 @@
+{
+ "open_points": [
+  {
+   "unit": "A28",
+   "subject": "Wall-clock arithmetic and TTL-derived expiry",
+   "kind": "ambiguous exception",
+   "text": "The wall clock gives the instant ... (no cache, no local time, no second reading by the operation, no arithmetic); CLK-001: an expiry it derives from a TTL is that instant plus its TTL.",
+   "question": "Does “no arithmetic” prohibit only adjusting the clock reading used as `now`, or does it also prohibit the explicitly required `now + TTL` expiry derivation?",
+   "options": [
+    "Arithmetic is forbidden only when obtaining or modifying the operation's `now`; expiry may be `now + TTL`.",
+    "No arithmetic may be performed on the wall-clock value, so an expiry must come from some separately supplied value."
+   ],
+   "default_guess": "Treat “no arithmetic” as applying only to the operation's current-time instant and permit the explicitly required TTL addition.",
+   "witness": {
+    "initial": "An active staff account logs in successfully; the configured staff-session TTL is 12 hours and the one wall reading is 2026-11-08 10:00 UTC.",
+    "events": [
+     "The staff member submits valid credentials.",
+     "The login operation creates a StaffSession."
+    ],
+    "outcomes": [
+     "The session expires at 2026-11-08 22:00 UTC because CLK-001 requires the wall reading plus the TTL.",
+     "The implementation refuses to add the TTL to the wall reading, or stores an expiry not derived by that addition, because the wall-clock rule says “no arithmetic”."
+    ],
+    "observer": "The staff member at or before the expected session-expiry boundary, and the deployment's CLK-001 test."
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "CLK-002 verification coverage",
+   "kind": "incomplete required test",
+   "text": "CLK-002 requires that the elapsed reading is “kept only in that window's in-memory state, never persisted, turned into an instant or ordered against a persisted record,” but its Required tests only require “that no record written by the request holds it.”",
+   "question": "What required check demonstrates that the elapsed reading is never converted to an instant, compared or ordered against persisted timestamps, or retained anywhere outside the A25 in-memory window?",
+   "options": [
+    "Add a structural/source check forbidding those uses outside the rate-limit window.",
+    "Add observable tests or instrumentation that identify every consumer and retained copy of the elapsed reading.",
+    "Narrow CLK-002 to the properties the stated tests actually demonstrate."
+   ],
+   "default_guess": "Use a structural dependency/use check proving that the elapsed value cannot leave the rate-limit component or enter wall-time and persistence APIs."
+  },
+  {
+   "unit": "A28",
+   "subject": "CLK-002 witness binding",
+   "kind": "missing invariant witness",
+   "text": "The witness line binds only CLK-001: “CLK-001 [witness: verification:service_identity_consumer_uow_client_portal]; CLK-001 [witness: verification:staff_bootstrap_client_portal].” No Required tests line naming CLK-002 has a `[witness: ...]` binding.",
+   "question": "Which existing check is bound to CLK-002 and will assert its source-check, counting-wall-clock, expiry-boundary, and elapsed-clock obligations?",
+   "options": [
+    "Bind one existing verification check covering all CLK-002 obligations.",
+    "Bind separate existing checks to the wall-clock/source and elapsed-clock portions.",
+    "Declare and carry a specific missing witness check for State 8 assembly."
+   ],
+   "default_guess": "Bind separate existing checks for host-clock ownership/wall readings and viewer-entry elapsed-clock behavior."
+  },
+  {
+   "unit": "A32",
+   "subject": "OSV consistency point during a multi-distribution check",
+   "kind": "undefined decision instant",
+   "text": "Every distribution is checked against “the OSV database ... read in that same deploy,” and “an advisory added, changed or withdrawn after that read is judged by the next deploy,” but the text does not define one read/cutoff when OSV data for different distributions may be fetched at different times.",
+   "question": "What single OSV-data cutoff governs a deploy when advisory data changes while the check is reading results for multiple installed distributions?",
+   "options": [
+    "The check must use one atomic or snapshotted OSV view for the whole image.",
+    "Each distribution is judged by OSV when its own query is read, so query order may affect the deploy.",
+    "The check records a cutoff instant and must repeat or fail if the advisory data cannot be shown consistent with it."
+   ],
+   "default_guess": "Require one logically consistent OSV view for the complete installed-distribution set.",
+   "witness": {
+    "initial": "A built image contains distributions A and B. At the start of its deploy, OSV has no advisory for either.",
+    "events": [
+     "The deployment check begins.",
+     "After one distribution has been queried, OSV publishes a non-withdrawn advisory affecting the installed version of A.",
+     "The check queries the remaining distribution and decides whether to start the image."
+    ],
+    "outcomes": [
+     "If A was queried before publication, the image passes and starts; the advisory is deferred to the next deploy as added after A's read.",
+     "If A was queried after publication, the same image is blocked in this deploy."
+    ],
+    "observer": "The deployment operator and users waiting for the service to start."
+   }
+  },
+  {
+   "unit": "A32",
+   "subject": "Retry after an incomplete OSV check",
+   "kind": "ambiguous refusal duration",
+   "text": "“A check that cannot complete does not pass, and the deploy waits. Each deploy makes one check.”",
+   "question": "After a transient OSV failure, may the waiting deploy retry OSV and start when that retry passes, or is any retry a new deploy because each deploy makes only one check?",
+   "options": [
+    "The same deploy may retry; all retry attempts together constitute its one logical check.",
+    "The failed check permanently blocks that deploy, and a newly initiated deploy must perform the next check.",
+    "The deploy may retry only under a specified retry limit or unchanged-image condition."
+   ],
+   "default_guess": "Allow retries against the same unchanged image and treat them as one logical deploy check, with only the final complete read producing a verdict.",
+   "witness": {
+    "initial": "A built image is ready and contains no vulnerable distributions, but OSV is temporarily unreachable.",
+    "events": [
+     "The operator initiates the deploy.",
+     "The OSV read fails, so the check cannot complete.",
+     "OSV becomes reachable while the deploy is waiting."
+    ],
+    "outcomes": [
+     "The waiting deploy retries, obtains a passing verdict for the same image, and starts the service.",
+     "The original deploy can never pass because its one check failed; the operator must initiate a new deploy before the service can start."
+    ],
+    "observer": "The deployment operator and users observing service availability."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A28\",\"subject\":\"Wall-clock arithmetic and TTL-derived expiry\",\"kind\":\"ambiguous exception\",\"text\":\"The wall clock gives the instant ... (no cache, no local time, no second reading by the operation, no arithmetic); CLK-001: an expiry it derives from a TTL is that instant plus its TTL.\",\"question\":\"Does “no arithmetic” prohibit only adjusting the clock reading used as `now`, or does it also prohibit the explicitly required `now + TTL` expiry derivation?\",\"options\":[\"Arithmetic is forbidden only when obtaining or modifying the operation's `now`; expiry may be `now + TTL`.\",\"No arithmetic may be performed on the wall-clock value, so an expiry must come from some separately supplied value.\"],\"default_guess\":\"Treat “no arithmetic” as applying only to the operation's current-time instant and permit the explicitly required TTL addition.\",\"witness\":{\"initial\":\"An active staff account logs in successfully; the configured staff-session TTL is 12 hours and the one wall reading is 2026-11-08 10:00 UTC.\",\"events\":[\"The staff member submits valid credentials.\",\"The login operation creates a StaffSession.\"],\"outcomes\":[\"The session expires at 2026-11-08 22:00 UTC because CLK-001 requires the wall reading plus the TTL.\",\"The implementation refuses to add the TTL to the wall reading, or stores an expiry not derived by that addition, because the wall-clock rule says “no arithmetic”.\"],\"observer\":\"The staff member at or before the expected session-expiry boundary, and the deployment's CLK-001 test.\"}},{\"unit\":\"A28\",\"subject\":\"CLK-002 verification coverage\",\"kind\":\"incomplete required test\",\"text\":\"CLK-002 requires that the elapsed reading is “kept only in that window's in-memory state, never persisted, turned into an instant or ordered against a persisted record,” but its Required tests only require “that no record written by the request holds it.”\",\"question\":\"What required check demonstrates that the elapsed reading is never converted to an instant, compared or ordered against persisted timestamps, or retained anywhere outside the A25 in-memory window?\",\"options\":[\"Add a structural/source check forbidding those uses outside the rate-limit window.\",\"Add observable tests or instrumentation that identify every consumer and retained copy of the elapsed reading.\",\"Narrow CLK-002 to the properties the stated tests actually demonstrate.\"],\"default_guess\":\"Use a structural dependency/use check proving that the elapsed value cannot leave the rate-limit component or enter wall-time and persistence APIs.\"},{\"unit\":\"A28\",\"subject\":\"CLK-002 witness binding\",\"kind\":\"missing invariant witness\",\"text\":\"The witness line binds only CLK-001: “CLK-001 [witness: verification:service_identity_consumer_uow_client_portal]; CLK-001 [witness: verification:staff_bootstrap_client_portal].” No Required tests line naming CLK-002 has a `[witness: ...]` binding.\",\"question\":\"Which existing check is bound to CLK-002 and will assert its source-check, counting-wall-clock, expiry-boundary, and elapsed-clock obligations?\",\"options\":[\"Bind one existing verification check covering all CLK-002 obligations.\",\"Bind separate existing checks to the wall-clock/source and elapsed-clock portions.\",\"Declare and carry a specific missing witness check for State 8 assembly.\"],\"default_guess\":\"Bind separate existing checks for host-clock ownership/wall readings and viewer-entry elapsed-clock behavior.\"},{\"unit\":\"A32\",\"subject\":\"OSV consistency point during a multi-distribution check\",\"kind\":\"undefined decision instant\",\"text\":\"Every distribution is checked against “the OSV database ... read in that same deploy,” and “an advisory added, changed or withdrawn after that read is judged by the next deploy,” but the text does not define one read/cutoff when OSV data for different distributions may be fetched at different times.\",\"question\":\"What single OSV-data cutoff governs a deploy when advisory data changes while the check is reading results for multiple installed distributions?\",\"options\":[\"The check must use one atomic or snapshotted OSV view for the whole image.\",\"Each distribution is judged by OSV when its own query is read, so query order may affect the deploy.\",\"The check records a cutoff instant and must repeat or fail if the advisory data cannot be shown consistent with it.\"],\"default_guess\":\"Require one logically consistent OSV view for the complete installed-distribution set.\",\"witness\":{\"initial\":\"A built image contains distributions A and B. At the start of its deploy, OSV has no advisory for either.\",\"events\":[\"The deployment check begins.\",\"After one distribution has been queried, OSV publishes a non-withdrawn advisory affecting the installed version of A.\",\"The check queries the remaining distribution and decides whether to start the image.\"],\"outcomes\":[\"If A was queried before publication, the image passes and starts; the advisory is deferred to the next deploy as added after A's read.\",\"If A was queried after publication, the same image is blocked in this deploy.\"],\"observer\":\"The deployment operator and users waiting for the service to start.\"}},{\"unit\":\"A32\",\"subject\":\"Retry after an incomplete OSV check\",\"kind\":\"ambiguous refusal duration\",\"text\":\"“A check that cannot complete does not pass, and the deploy waits. Each deploy makes one check.”\",\"question\":\"After a transient OSV failure, may the waiting deploy retry OSV and start when that retry passes, or is any retry a new deploy because each deploy makes only one check?\",\"options\":[\"The same deploy may retry; all retry attempts together constitute its one logical check.\",\"The failed check permanently blocks that deploy, and a newly initiated deploy must perform the next check.\",\"The deploy may retry only under a specified retry limit or unchanged-image condition.\"],\"default_guess\":\"Allow retries against the same unchanged image and treat them as one logical deploy check, with only the final complete read producing a verdict.\",\"witness\":{\"initial\":\"A built image is ready and contains no vulnerable distributions, but OSV is temporarily unreachable.\",\"events\":[\"The operator initiates the deploy.\",\"The OSV read fails, so the check cannot complete.\",\"OSV becomes reachable while the deploy is waiting.\"],\"outcomes\":[\"The waiting deploy retries, obtains a passing verdict for the same image, and starts the service.\",\"The original deploy can never pass because its one check failed; the operator must initiate a new deploy before the service can start.\"],\"observer\":\"The deployment operator and users observing service availability.\"}}]}",
+ "set_aside": []
+}

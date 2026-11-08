@@ -19,6 +19,15 @@ A10 states that the portal has none; the challenge rows of A3, A11 and A13, the
 challenge settings of A30 and the invariants INV-010, INV-011, INV-012, INV-013 and
 INV-016 are removed, and A3/A4 no longer require a verified email to authenticate.
 
+On 2026-11-08 (State 2 rounds 82-91; owner decision of that day on #147: State 2
+decides what a witness must show, not what an existing check asserts) A18, A21, A28
+and A32 were completed on their substance: INV-027's test covers every write of an
+owning record, activation included; INV-050's test recomputes every overview
+component; A28 keeps supplied calendar dates as dates and CLK-001 states the one
+wall reading, derived expiries and supplied times; A32 names OSV, judges every
+distribution installed in the started image, and carries the check's mechanics to
+the deploy route and State 8 (code-factory #189).
+
 The former status, kept:
 
 > **Authoring pass State 2. Builds on `00_product.md` and `10_models.md`
@@ -955,9 +964,11 @@ The former ledger rows INV-020…INV-029 that no table of R1–R17 carries. Thei
   changes no snapshot, budget version, plan or expense and is recorded only
   as its import result and audit (A12, A13); expense operations never move a
   plan. INV-027: no table
-  has a derived-value column, reading the views writes nothing, and after
-  each change of an owning record (inclusion, allocations, progress,
-  payment, plan) the next read equals a recomputation from the stored rows.
+  stores a value of a derived view (a total or aggregate; an import's
+  content fingerprint is not one), reading the views writes nothing, and
+  after every write of an owning record (inclusion, allocations, progress,
+  payment, plan, budget-version activation) the next read equals a
+  recomputation from the stored rows.
   INV-028: no service code deletes or replaces a portal section and no store
   surface removes one; activating a budget version without an allocated
   section is refused and writes nothing, and the activation keeps the
@@ -1039,8 +1050,9 @@ The former ledger rows INV-050 and INV-052; product text of State 0 ("Derived va
 - Witnesses, the focused Factory verification checks that assert it: INV-052 [witness: verification:snapshot_import_sqlite_uow_client_portal].
 - INV-050: the budget derivation check: the project overview is equal for
   staff and viewer and on repeated reads, equal records inserted in either
-  order (ties of sort order, dates and amounts) derive equal values, and the
-  budget and payment views equal a recomputation from the owning records
+  order (ties of sort order, dates and amounts) derive equal values, and
+  every component of the overview (budget, expenses, progress, payments,
+  photos) equals a recomputation from the owning records
   [witness: verification:budget_derivation_client_portal].
 
 ### Consequence
@@ -1253,11 +1265,13 @@ instant supplies every portal-owned timestamp it writes (event times such as
 `created_at`, `received_at`, `revoked_at`) and every current-time comparison
 that decides the validity of those writes or of persisted records. Times a
 source supplies — `approved_at`, `published_at` of a snapshot, `confirmed_at`
-and `document_date` of a recognition, `photo_date`, `payment_date`, a service
-credential's `expires_at` — are
+of a recognition, `photo_date`, a service credential's `expires_at` — are
 kept as supplied: the same instant, stored offset-naive UTC like every
 persisted timestamp, never replaced by the clock (State 1 Modeling
-conventions); their accepted forms and checks, and where in an operation
+conventions). Calendar dates a source supplies — `document_date` of a
+recognition, `payment_date` — are `date` values, kept as the supplied
+calendar day: they carry no time or offset, are never converted to an
+instant and never replaced by the clock's day; their accepted forms and checks, and where in an operation
 its one clock read happens, are the accepted spec's, carried to States 6–7. An expiry is valid strictly before its instant: a
 session, credential or token is usable while `now < expires_at` and expired
 from `now = expires_at` on (Factory code `application/authorization_guard.py`,
@@ -1277,7 +1291,8 @@ clock itself:
 - the wall clock gives the instant: the current UTC time as an offset-naive
   datetime, one reading per operation for its own timestamps, the same value
   `datetime.utcnow()` gives (no cache, no local time, no second reading by
-  the operation, no arithmetic); the audit writer's reading of an appended
+  the operation, no arithmetic in the clock source; an operation derives
+  an expiry by adding its TTL to the instant it read); the audit writer's reading of an appended
   record's `occurred_at` is the one further reading (the exception above);
 - the elapsed clock gives a duration scale: one reading per request of a
   clock that cannot move backwards, in seconds as a float, the same value
@@ -1301,14 +1316,20 @@ reading equals `datetime.utcnow()` and the elapsed reading equals
 
 ### Formal invariants
 
-- CLK-001: all portal-owned event timestamps written by one operation, other than an
-  audit record's `occurred_at`, are equal; an expiry it derives from a TTL is that instant plus its TTL, and source-supplied times, a service credential's supplied `expires_at` among them, keep their supplied values.
+- CLK-001: an operation takes one wall reading from the clock source, the
+  only reader of the host clocks; every portal-owned event timestamp it
+  writes, other than an audit record's `occurred_at` taken by the audit
+  writer, is that instant; an expiry it derives from a TTL is that instant
+  plus its TTL; source-supplied times and dates, a service credential's
+  supplied `expires_at` among them, keep their supplied values.
 
 ### Required tests
 
-- CLK-001: a test per multi-write operation (activation, revocation cascades,
-  bootstrap) that its written timestamps, other than audit `occurred_at`,
-  are one instant.
+- CLK-001: a test per operation that writes timestamps, with the clock
+  source fixed at a known instant, that the operation reads it once, that
+  its portal-owned event timestamps equal that instant, that a derived
+  expiry equals that instant plus the TTL, and that supplied times and
+  dates are stored as supplied.
 - Witnesses, the focused Factory verification checks that assert it: CLK-001 [witness: verification:service_identity_consumer_uow_client_portal]; CLK-001 [witness: verification:staff_bootstrap_client_portal].
 
 ### Consequence
@@ -1479,18 +1500,22 @@ Security review: PERFORMED
    source; the pinned versions are those of that file.
 2. A pin changes only through the Factory route, like any other deployed
    source change; nothing updates a dependency at run time or on the host.
-3. Before a deploy, the pinned versions are checked against a public
-   known-vulnerability database, together with every library pip resolves
-   for them in the built image; a pin with a known vulnerability that affects
-   the portal, or one pulling in such a library, is not deployed until it is
-   updated through the Factory route.
-   A pin counts as affecting the portal when the database lists a known
+3. A deploy is the start of the service from a built image. Before it,
+   every distribution installed in that image — the pins and every library
+   pip resolves for them — is checked against a snapshot of the OSV
+   database (osv.dev, ecosystem PyPI) no older than the deploy route's
+   maximum snapshot age; an image with a distribution that has a known
+   vulnerability is not deployed until a rebuild through the Factory route
+   passes the check.
+   A distribution counts as affecting the portal when OSV lists a known
    vulnerability for its version; reachability inside the portal is not
-   judged case by case, so such a pin blocks the deploy whatever feature the
+   judged case by case, so such a distribution blocks the deploy whatever feature the
    advisory concerns. A check that cannot complete does not pass, and the
    deploy waits. How the
-   check is run (its tool, its database, the resolved set it covers) is a
-   deployment procedure, not a portal rule, carried to the deploy route.
+   check is run (its tool, how the snapshot is obtained and verified, how a
+   version is matched to an advisory) is a deployment procedure, not a
+   portal rule, carried to the deploy route and to its witness check at
+   State 8 (code-factory #189).
 4. The portal adds no runtime feature for this: no update service, no
    network call at start, no dependency report on any API.
 
@@ -1502,9 +1527,10 @@ This describes the existing deployment and answers OQ-17 and
 - DEP-001: every library from outside its own source that the running
   portal imports directly is pinned to one exact version in the deployment
   requirements; the libraries pip resolves for them are not pinned.
-- DEP-002: no deploy ships an image in which an installed distribution — a
-  pin or a library pip resolves for it — has a known vulnerability listed for
-  its version.
+- DEP-002: no deploy starts the service from an image in which an
+  installed distribution — a pin or a library pip resolves for it — has a
+  known vulnerability listed for its version in the deploy route's OSV
+  snapshot, within the route's age limits.
 
 ### Required tests
 
@@ -1512,7 +1538,7 @@ This describes the existing deployment and answers OQ-17 and
   import [witness: verification:dependency_pins_client_portal].
 - DEP-002: the pre-deploy vulnerability check of those pins passes: the deploy
   step judges every distribution installed in the built image, bound to its
-  content id, against a public advisory snapshot no older than the deploy
+  content id, against an OSV snapshot no older than the deploy
   route's maximum snapshot age, and starts the service only on a passing
   verdict about that same image no older than its maximum environment age
   (`max_snapshot_age`, `max_environment_age`: deployment procedure values of

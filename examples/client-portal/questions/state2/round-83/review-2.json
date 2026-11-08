@@ -1,0 +1,166 @@
+{
+ "open_points": [
+  {
+   "unit": "A4",
+   "subject": "PLAT-REG-004 request decoding",
+   "kind": "undefined refusal scope",
+   "text": "“an import or request carrying its own status or project facts is refused at decoding” does not define “project facts”, although SnapshotPublication and ProjectAuthorizationRequest necessarily carry project_id.",
+   "question": "Which caller-supplied fields are forbidden Registry context, and which required identifiers or business facts may a request carry?",
+   "options": [
+    "Only Registry-owned context such as status, display name, address and customer_ref is forbidden; project_id remains allowed.",
+    "Every caller-supplied project fact, potentially including project_id, triggers decoding refusal."
+   ],
+   "default_guess": "Forbid Registry-owned descriptive and lifecycle context but allow the typed project_id required to select the project.",
+   "witness": {
+    "initial": "A producer has a valid credential and an active Registry project UUID.",
+    "events": [
+     "The producer submits a SnapshotPublication containing its required project_id and no status, display name, address or customer_ref."
+    ],
+    "outcomes": [
+     "The decoder accepts project_id, and the server asks Registry for authoritative context.",
+     "The decoder treats project_id as a caller-carried project fact and refuses the publication before any Registry call."
+    ],
+    "observer": "The producer and the Registry gateway"
+   }
+  },
+  {
+   "unit": "A9",
+   "subject": "completed_work_total with no progress records",
+   "kind": "contradictory missing-data representation",
+   "text": "A9 says a section without progress has completed_work_value None and must not look like zero, while State 1 declares completed_work_total: Decimal and defines it as the sum of non-None section values; an empty such sum is zero.",
+   "question": "When an active budget has sections but none has a progress record, is project-level completed_work_total zero or unavailable?",
+   "options": [
+    "Return Decimal 0 as the empty sum.",
+    "Represent the total as unavailable/None so absence of all progress is not shown as zero."
+   ],
+   "default_guess": "Represent it as unavailable until at least one section has recorded progress.",
+   "witness": {
+    "initial": "An active budget contains two sections with positive work_planned and neither has a SectionProgress record.",
+    "events": [
+     "A viewer reads BudgetView, ProgressView or PaymentSummaryView."
+    ],
+    "outcomes": [
+     "Both section values are None, but completed_work_total is Decimal 0.",
+     "Both section values and the aggregate completed-work total are unavailable."
+    ],
+    "observer": "The viewer"
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "source-supplied timestamp input and normalization",
+   "kind": "deferred owned decision",
+   "text": "Source times are “the same instant, stored offset-naive UTC” and the test says they are “stored as supplied”, but “their accepted forms and checks” are carried to States 6–7.",
+   "question": "Which supplied datetime representations are accepted, and does “stored as supplied” mean preserving fields or preserving the instant while converting to offset-naive UTC?",
+   "options": [
+    "Accept offset-aware datetimes and convert the same instant to offset-naive UTC.",
+    "Accept only UTC datetimes and reject non-UTC offsets.",
+    "Accept offset-naive values and interpret them as UTC.",
+    "Preserve the supplied wall-clock fields while removing the offset."
+   ],
+   "default_guess": "Accept datetimes that identify an instant, convert that instant to offset-naive UTC, and reject naive inputs whose UTC meaning is not explicit.",
+   "witness": {
+    "initial": "A photo publication supplies photo_date 2026-11-08T12:00:00+02:00.",
+    "events": [
+     "Authorized staff publishes the photo.",
+     "The stored ProgressPhoto is read later."
+    ],
+    "outcomes": [
+     "The input is accepted and stored as 2026-11-08T10:00:00 with no offset, preserving the instant.",
+     "The input is rejected because only an already-UTC form is accepted, or is stored as 2026-11-08T12:00:00 with the offset removed under a literal reading of “as supplied”."
+    ],
+    "observer": "The staff caller and gallery reader"
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "single wall-clock reading and comparison reuse",
+   "kind": "unverifiable rule",
+   "text": "The rules require one wall-clock reading whose instant supplies both current-time comparisons and portal-owned timestamps, but CLK-001 tests timestamp equality and TTL arithmetic, while CLK-002 counts only elapsed-clock readings.",
+   "question": "What Required test must demonstrate that each time-dependent operation reads the wall clock exactly once and reuses that same instant for validity comparisons as well as writes?",
+   "options": [
+    "Use a counting/ticking wall-clock source for every time-dependent operation and assert one read.",
+    "Treat equal written timestamps and TTL arithmetic as sufficient even though they cannot observe comparison-time reads."
+   ],
+   "default_guess": "Use a counting wall-clock source and assert exactly one read per operation, including operations with only one written timestamp.",
+   "witness": {
+    "initial": "A staff session expires at 10:00:00.500, and a mutation begins just before that boundary.",
+    "events": [
+     "The operation checks the session at 10:00:00.400.",
+     "The implementation reads the wall clock again at 10:00:00.600 to assign its sole event timestamp."
+    ],
+    "outcomes": [
+     "With one reused reading, the mutation succeeds and its event timestamp is 10:00:00.400.",
+     "With two readings, the mutation still succeeds but stores 10:00:00.600; the stated CLK-001 tests can pass because there is only one portal-owned event timestamp."
+    ],
+    "observer": "An audit or record reader inspecting the mutation time"
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "clock source contracts for read-only operations",
+   "kind": "missing receiving obligation",
+   "text": "A28 says every part of the portal obtains time from the clock source, including every comparison deciding validity of persisted records, but the stated carry to State 6 covers only “every mutating operation that writes a fresh timestamp”.",
+   "question": "Which receiving-state obligation ensures that read-only authentication and authorization operations that compare expires_at also receive the decided clock source rather than choosing an ambient source?",
+   "options": [
+    "Carry every operation performing a current-time comparison to State 6 with an explicit time-source contract.",
+    "Carry only timestamp-writing mutations and leave read-only expiry checks to module implementation."
+   ],
+   "default_guess": "Carry all current-time consumers, including read-only session and credential resolution, with an explicit time-source contract.",
+   "witness": {
+    "initial": "A persisted session is at its exact expiry boundary.",
+    "events": [
+     "A caller performs a read-only project request.",
+     "The authorization module resolves the session and must obtain now."
+    ],
+    "outcomes": [
+     "The resolver uses the handed clock source and deterministically refuses at now = expires_at.",
+     "Because no read-operation contract was carried, the resolver chooses an ambient or separately constructed clock and may admit or refuse depending on that reading."
+    ],
+    "observer": "The caller"
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "CLK-002 witness binding",
+   "kind": "missing required witness",
+   "text": "CLK-002 has a Required tests item, but no Required tests line binds CLK-002 to an existing check with a [witness: ...] tag.",
+   "question": "Which existing witness check is bound to CLK-002 and asserts its source scan and one-reading viewer-entry requirements?",
+   "options": [
+    "Bind CLK-002 to an existing verification check that performs both required checks.",
+    "Add a distinct clock-source verification check and bind CLK-002 to it."
+   ],
+   "default_guess": "Bind CLK-002 to a dedicated clock-source verification check covering both the source scan and counting-clock viewer-entry behavior."
+  },
+  {
+   "unit": "A32",
+   "subject": "remediation of a vulnerable transitive distribution",
+   "kind": "conflicting deploy condition",
+   "text": "Transitive libraries “are not pinned”, DEP-002 permits any image with no affected installed distribution, but rule 3 says a vulnerable image is not deployed “until the pin is updated through the Factory route”.",
+   "question": "If a vulnerable transitive distribution is replaced by a fixed compatible version when the image is rebuilt with unchanged direct pins, may that new passing image deploy, or must some direct pin still change?",
+   "options": [
+    "The rebuilt passing image may deploy because DEP-002 judges the installed distributions of that image.",
+    "A direct pin must change through the Factory route even when the vulnerable transitive version is no longer installed.",
+    "The transitive distribution must become an explicit exact pin before deployment."
+   ],
+   "default_guess": "Allow the newly built image to deploy if its complete installed distribution set passes the fresh OSV check, without requiring an unrelated direct-pin change.",
+   "witness": {
+    "initial": "The requirements contain an unchanged exact direct pin P; the built image contains vulnerable transitive distribution T version 1.",
+    "events": [
+     "The deploy is blocked by OSV.",
+     "T version 2, which fixes the advisory and remains compatible with P, is released.",
+     "A new image is built from the same requirements and resolves T version 2.",
+     "The new image passes a fresh OSV check."
+    ],
+    "outcomes": [
+     "DEP-002 permits the new image because no installed distribution is affected.",
+     "Rule 3 continues to block deployment because no direct pin was updated through the Factory route."
+    ],
+    "observer": "The deployment operator"
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A4\",\"subject\":\"PLAT-REG-004 request decoding\",\"kind\":\"undefined refusal scope\",\"text\":\"“an import or request carrying its own status or project facts is refused at decoding” does not define “project facts”, although SnapshotPublication and ProjectAuthorizationRequest necessarily carry project_id.\",\"question\":\"Which caller-supplied fields are forbidden Registry context, and which required identifiers or business facts may a request carry?\",\"options\":[\"Only Registry-owned context such as status, display name, address and customer_ref is forbidden; project_id remains allowed.\",\"Every caller-supplied project fact, potentially including project_id, triggers decoding refusal.\"],\"default_guess\":\"Forbid Registry-owned descriptive and lifecycle context but allow the typed project_id required to select the project.\",\"witness\":{\"initial\":\"A producer has a valid credential and an active Registry project UUID.\",\"events\":[\"The producer submits a SnapshotPublication containing its required project_id and no status, display name, address or customer_ref.\"],\"outcomes\":[\"The decoder accepts project_id, and the server asks Registry for authoritative context.\",\"The decoder treats project_id as a caller-carried project fact and refuses the publication before any Registry call.\"],\"observer\":\"The producer and the Registry gateway\"}},{\"unit\":\"A9\",\"subject\":\"completed_work_total with no progress records\",\"kind\":\"contradictory missing-data representation\",\"text\":\"A9 says a section without progress has completed_work_value None and must not look like zero, while State 1 declares completed_work_total: Decimal and defines it as the sum of non-None section values; an empty such sum is zero.\",\"question\":\"When an active budget has sections but none has a progress record, is project-level completed_work_total zero or unavailable?\",\"options\":[\"Return Decimal 0 as the empty sum.\",\"Represent the total as unavailable/None so absence of all progress is not shown as zero.\"],\"default_guess\":\"Represent it as unavailable until at least one section has recorded progress.\",\"witness\":{\"initial\":\"An active budget contains two sections with positive work_planned and neither has a SectionProgress record.\",\"events\":[\"A viewer reads BudgetView, ProgressView or PaymentSummaryView.\"],\"outcomes\":[\"Both section values are None, but completed_work_total is Decimal 0.\",\"Both section values and the aggregate completed-work total are unavailable.\"],\"observer\":\"The viewer\"}},{\"unit\":\"A28\",\"subject\":\"source-supplied timestamp input and normalization\",\"kind\":\"deferred owned decision\",\"text\":\"Source times are “the same instant, stored offset-naive UTC” and the test says they are “stored as supplied”, but “their accepted forms and checks” are carried to States 6–7.\",\"question\":\"Which supplied datetime representations are accepted, and does “stored as supplied” mean preserving fields or preserving the instant while converting to offset-naive UTC?\",\"options\":[\"Accept offset-aware datetimes and convert the same instant to offset-naive UTC.\",\"Accept only UTC datetimes and reject non-UTC offsets.\",\"Accept offset-naive values and interpret them as UTC.\",\"Preserve the supplied wall-clock fields while removing the offset.\"],\"default_guess\":\"Accept datetimes that identify an instant, convert that instant to offset-naive UTC, and reject naive inputs whose UTC meaning is not explicit.\",\"witness\":{\"initial\":\"A photo publication supplies photo_date 2026-11-08T12:00:00+02:00.\",\"events\":[\"Authorized staff publishes the photo.\",\"The stored ProgressPhoto is read later.\"],\"outcomes\":[\"The input is accepted and stored as 2026-11-08T10:00:00 with no offset, preserving the instant.\",\"The input is rejected because only an already-UTC form is accepted, or is stored as 2026-11-08T12:00:00 with the offset removed under a literal reading of “as supplied”.\"],\"observer\":\"The staff caller and gallery reader\"}},{\"unit\":\"A28\",\"subject\":\"single wall-clock reading and comparison reuse\",\"kind\":\"unverifiable rule\",\"text\":\"The rules require one wall-clock reading whose instant supplies both current-time comparisons and portal-owned timestamps, but CLK-001 tests timestamp equality and TTL arithmetic, while CLK-002 counts only elapsed-clock readings.\",\"question\":\"What Required test must demonstrate that each time-dependent operation reads the wall clock exactly once and reuses that same instant for validity comparisons as well as writes?\",\"options\":[\"Use a counting/ticking wall-clock source for every time-dependent operation and assert one read.\",\"Treat equal written timestamps and TTL arithmetic as sufficient even though they cannot observe comparison-time reads.\"],\"default_guess\":\"Use a counting wall-clock source and assert exactly one read per operation, including operations with only one written timestamp.\",\"witness\":{\"initial\":\"A staff session expires at 10:00:00.500, and a mutation begins just before that boundary.\",\"events\":[\"The operation checks the session at 10:00:00.400.\",\"The implementation reads the wall clock again at 10:00:00.600 to assign its sole event timestamp.\"],\"outcomes\":[\"With one reused reading, the mutation succeeds and its event timestamp is 10:00:00.400.\",\"With two readings, the mutation still succeeds but stores 10:00:00.600; the stated CLK-001 tests can pass because there is only one portal-owned event timestamp.\"],\"observer\":\"An audit or record reader inspecting the mutation time\"}},{\"unit\":\"A28\",\"subject\":\"clock source contracts for read-only operations\",\"kind\":\"missing receiving obligation\",\"text\":\"A28 says every part of the portal obtains time from the clock source, including every comparison deciding validity of persisted records, but the stated carry to State 6 covers only “every mutating operation that writes a fresh timestamp”.\",\"question\":\"Which receiving-state obligation ensures that read-only authentication and authorization operations that compare expires_at also receive the decided clock source rather than choosing an ambient source?\",\"options\":[\"Carry every operation performing a current-time comparison to State 6 with an explicit time-source contract.\",\"Carry only timestamp-writing mutations and leave read-only expiry checks to module implementation.\"],\"default_guess\":\"Carry all current-time consumers, including read-only session and credential resolution, with an explicit time-source contract.\",\"witness\":{\"initial\":\"A persisted session is at its exact expiry boundary.\",\"events\":[\"A caller performs a read-only project request.\",\"The authorization module resolves the session and must obtain now.\"],\"outcomes\":[\"The resolver uses the handed clock source and deterministically refuses at now = expires_at.\",\"Because no read-operation contract was carried, the resolver chooses an ambient or separately constructed clock and may admit or refuse depending on that reading.\"],\"observer\":\"The caller\"}},{\"unit\":\"A28\",\"subject\":\"CLK-002 witness binding\",\"kind\":\"missing required witness\",\"text\":\"CLK-002 has a Required tests item, but no Required tests line binds CLK-002 to an existing check with a [witness: ...] tag.\",\"question\":\"Which existing witness check is bound to CLK-002 and asserts its source scan and one-reading viewer-entry requirements?\",\"options\":[\"Bind CLK-002 to an existing verification check that performs both required checks.\",\"Add a distinct clock-source verification check and bind CLK-002 to it.\"],\"default_guess\":\"Bind CLK-002 to a dedicated clock-source verification check covering both the source scan and counting-clock viewer-entry behavior.\"},{\"unit\":\"A32\",\"subject\":\"remediation of a vulnerable transitive distribution\",\"kind\":\"conflicting deploy condition\",\"text\":\"Transitive libraries “are not pinned”, DEP-002 permits any image with no affected installed distribution, but rule 3 says a vulnerable image is not deployed “until the pin is updated through the Factory route”.\",\"question\":\"If a vulnerable transitive distribution is replaced by a fixed compatible version when the image is rebuilt with unchanged direct pins, may that new passing image deploy, or must some direct pin still change?\",\"options\":[\"The rebuilt passing image may deploy because DEP-002 judges the installed distributions of that image.\",\"A direct pin must change through the Factory route even when the vulnerable transitive version is no longer installed.\",\"The transitive distribution must become an explicit exact pin before deployment.\"],\"default_guess\":\"Allow the newly built image to deploy if its complete installed distribution set passes the fresh OSV check, without requiring an unrelated direct-pin change.\",\"witness\":{\"initial\":\"The requirements contain an unchanged exact direct pin P; the built image contains vulnerable transitive distribution T version 1.\",\"events\":[\"The deploy is blocked by OSV.\",\"T version 2, which fixes the advisory and remains compatible with P, is released.\",\"A new image is built from the same requirements and resolves T version 2.\",\"The new image passes a fresh OSV check.\"],\"outcomes\":[\"DEP-002 permits the new image because no installed distribution is affected.\",\"Rule 3 continues to block deployment because no direct pin was updated through the Factory route.\"],\"observer\":\"The deployment operator\"}}]}",
+ "set_aside": []
+}

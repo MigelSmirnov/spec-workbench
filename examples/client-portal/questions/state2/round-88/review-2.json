@@ -1,0 +1,128 @@
+{
+ "open_points": [
+  {
+   "unit": "A28",
+   "subject": "CLK-002 wall-clock reading cardinality",
+   "kind": "contradictory scope",
+   "text": "CLK-002 says “an operation takes one wall reading”, while the Required tests narrow this to “a test per operation that reads the wall clock” and the normative rule describes a reading “for its own timestamps”.",
+   "question": "Must every portal operation take exactly one wall-clock reading, including an operation that writes no timestamp and makes no current-time comparison, or may such an operation take zero readings?",
+   "options": [
+    "Every operation takes one wall reading.",
+    "Only operations needing a portal-owned timestamp or current-time comparison take one; others take zero."
+   ],
+   "default_guess": "Only operations that need the current instant take one wall reading.",
+   "witness": {
+    "initial": "The service is running with a counting wall-clock source, and its unauthenticated liveness operation neither writes state nor performs an expiry or other current-time comparison.",
+    "events": [
+     "A monitor requests liveness.",
+     "The liveness operation executes."
+    ],
+    "outcomes": [
+     "The operation reads the wall clock once because CLK-002 says every operation takes one reading.",
+     "The operation reads the wall clock zero times because it has no timestamp or current-time decision and the Required tests apply only to operations that read it."
+    ],
+    "observer": "A clock-source verification test or operator inspecting the read count."
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "CLK-002 timestamp test versus source-supplied and derived timestamps",
+   "kind": "test contradicts rule",
+   "text": "The CLK-002 Required test requires “every timestamp it writes equals that instant”, but the normative rules require source-supplied timestamps to keep their supplied instant, TTL-derived expiries to equal the clock instant plus the TTL, and audit `occurred_at` to use the audit writer's further reading.",
+   "question": "Which timestamps must the CLK-002 test require to equal the operation's wall-clock instant: only portal-owned event timestamps governed by that reading, or literally every timestamp written by the operation?",
+   "options": [
+    "Only portal-owned event timestamps governed by the operation reading equal it; supplied times, TTL expiries, and audit times follow their stated exceptions.",
+    "Every timestamp written must equal the operation reading."
+   ],
+   "default_guess": "Apply equality only to portal-owned event timestamps, with the stated supplied-time, expiry, and audit exceptions.",
+   "witness": {
+    "initial": "A snapshot publication supplies an `approved_at` earlier than the fixed wall-clock instant; importing it writes the snapshot, a TTL-independent `received_at`, and an audit record.",
+    "events": [
+     "A producer submits the snapshot.",
+     "The import operation reads the fixed wall clock and stores the accepted records."
+    ],
+    "outcomes": [
+     "The source `approved_at` remains its supplied instant, `received_at` equals the operation instant, and audit `occurred_at` uses the audit writer's reading, as the normative rules require.",
+     "The test oracle requires `approved_at`, `received_at`, and every other written timestamp to equal the operation instant, as the unqualified Required-test sentence says."
+    ],
+    "observer": "The verification author and anyone inspecting the persisted snapshot and audit record."
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "CLK-001 source-supplied datetime normalization",
+   "kind": "test wording contradiction",
+   "text": "The normative rule says source-supplied times keep “the same instant, stored offset-naive UTC”, while the CLK-001 Required test says each supplied time “is stored as supplied”.",
+   "question": "For an accepted timezone-aware UTC source datetime, must the test compare the stored offset-naive UTC representation of the same instant, or require the original timezone-aware representation to be stored unchanged?",
+   "options": [
+    "Normalize representation to offset-naive UTC while preserving the instant.",
+    "Store the supplied timezone-aware datetime literally unchanged."
+   ],
+   "default_guess": "Preserve the instant and store its offset-naive UTC representation.",
+   "witness": {
+    "initial": "An accepted snapshot contains `approved_at = 2026-08-09T10:00:00+00:00`.",
+    "events": [
+     "The producer submits the snapshot.",
+     "The portal persists its `approved_at`."
+    ],
+    "outcomes": [
+     "The stored value is the offset-naive UTC datetime `2026-08-09T10:00:00`, preserving the instant.",
+     "The stored value retains `+00:00` because the Required test demands storage “as supplied”."
+    ],
+    "observer": "The persistence test and any reader inspecting the datetime representation."
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "CLK-002 decision-witness binding",
+   "kind": "missing required witness",
+   "text": "The witness line binds only CLK-001 — “CLK-001 [witness: verification:service_identity_consumer_uow_client_portal]; CLK-001 [witness: verification:staff_bootstrap_client_portal]” — and names no witness check for CLK-002.",
+   "question": "Which existing verification check is bound to CLK-002 and must assert its clock-reader exclusivity, read counts, validity boundaries, and non-persistence requirements?",
+   "options": [
+    "Bind CLK-002 to a named existing verification check.",
+    "State that no existing check binds CLK-002 and identify the decided receiving work that creates the required check."
+   ],
+   "default_guess": "Bind CLK-002 to a dedicated clock-policy verification check before the State 8 handoff.",
+   "witness": {
+    "initial": "The implementation satisfies the two named CLK-001 checks, but one viewer-entry path reads `time.monotonic()` directly instead of through the clock source.",
+    "events": [
+     "The focused checks named on the witness line run and pass.",
+     "The State 8 assembler resolves Required-test witnesses."
+    ],
+    "outcomes": [
+     "Assembly passes because the only named clock witnesses pass, leaving the CLK-002 violation undetected.",
+     "Assembly blocks because CLK-002 has no bound witness capable of detecting the direct host-clock read."
+    ],
+    "observer": "The State 8 assembler and later maintainers relying on the invariant evidence."
+   }
+  },
+  {
+   "unit": "A32",
+   "subject": "Completeness of the downloaded OSV PyPI export",
+   "kind": "unverifiable refusal condition",
+   "text": "A32 requires “OSV's PyPI export archive, downloaded whole” and says “a download that is not whole is a check that cannot complete”, but neither DEP-002 nor its Required test states what proves that the received archive is the whole export rather than a valid readable subset.",
+   "question": "What observable evidence establishes that the OSV export copy is whole, so the deploy can distinguish a complete vulnerability-free archive from a readable archive missing entries?",
+   "options": [
+    "Transport completion alone establishes wholeness.",
+    "A specified manifest, checksum, archive index, expected member set, or equivalent completeness evidence is required.",
+    "Any archive whose completeness cannot be independently established blocks the deploy."
+   ],
+   "default_guess": "Require specified integrity and completeness evidence for the exact downloaded export; otherwise fail the deploy.",
+   "witness": {
+    "initial": "The built image contains distribution `foo` version 1.0, and the current OSV export contains an advisory affecting it.",
+    "events": [
+     "During the deploy, an intermediary returns HTTP success with a syntactically valid readable archive that omits the portion containing the `foo` advisory.",
+     "The deployment gate enumerates the installed distributions and checks them against the received archive."
+    ],
+    "outcomes": [
+     "The gate treats successful receipt and readable archive structure as a whole download, finds no advisory for `foo`, and starts the image.",
+     "The gate requires independent completeness evidence, cannot establish that the archive is whole, and refuses to start the image."
+    ],
+    "observer": "The release operator; the vulnerable image starts in only the first outcome."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A28\",\"subject\":\"CLK-002 wall-clock reading cardinality\",\"kind\":\"contradictory scope\",\"text\":\"CLK-002 says “an operation takes one wall reading”, while the Required tests narrow this to “a test per operation that reads the wall clock” and the normative rule describes a reading “for its own timestamps”.\",\"question\":\"Must every portal operation take exactly one wall-clock reading, including an operation that writes no timestamp and makes no current-time comparison, or may such an operation take zero readings?\",\"options\":[\"Every operation takes one wall reading.\",\"Only operations needing a portal-owned timestamp or current-time comparison take one; others take zero.\"],\"default_guess\":\"Only operations that need the current instant take one wall reading.\",\"witness\":{\"initial\":\"The service is running with a counting wall-clock source, and its unauthenticated liveness operation neither writes state nor performs an expiry or other current-time comparison.\",\"events\":[\"A monitor requests liveness.\",\"The liveness operation executes.\"],\"outcomes\":[\"The operation reads the wall clock once because CLK-002 says every operation takes one reading.\",\"The operation reads the wall clock zero times because it has no timestamp or current-time decision and the Required tests apply only to operations that read it.\"],\"observer\":\"A clock-source verification test or operator inspecting the read count.\"}},{\"unit\":\"A28\",\"subject\":\"CLK-002 timestamp test versus source-supplied and derived timestamps\",\"kind\":\"test contradicts rule\",\"text\":\"The CLK-002 Required test requires “every timestamp it writes equals that instant”, but the normative rules require source-supplied timestamps to keep their supplied instant, TTL-derived expiries to equal the clock instant plus the TTL, and audit `occurred_at` to use the audit writer's further reading.\",\"question\":\"Which timestamps must the CLK-002 test require to equal the operation's wall-clock instant: only portal-owned event timestamps governed by that reading, or literally every timestamp written by the operation?\",\"options\":[\"Only portal-owned event timestamps governed by the operation reading equal it; supplied times, TTL expiries, and audit times follow their stated exceptions.\",\"Every timestamp written must equal the operation reading.\"],\"default_guess\":\"Apply equality only to portal-owned event timestamps, with the stated supplied-time, expiry, and audit exceptions.\",\"witness\":{\"initial\":\"A snapshot publication supplies an `approved_at` earlier than the fixed wall-clock instant; importing it writes the snapshot, a TTL-independent `received_at`, and an audit record.\",\"events\":[\"A producer submits the snapshot.\",\"The import operation reads the fixed wall clock and stores the accepted records.\"],\"outcomes\":[\"The source `approved_at` remains its supplied instant, `received_at` equals the operation instant, and audit `occurred_at` uses the audit writer's reading, as the normative rules require.\",\"The test oracle requires `approved_at`, `received_at`, and every other written timestamp to equal the operation instant, as the unqualified Required-test sentence says.\"],\"observer\":\"The verification author and anyone inspecting the persisted snapshot and audit record.\"}},{\"unit\":\"A28\",\"subject\":\"CLK-001 source-supplied datetime normalization\",\"kind\":\"test wording contradiction\",\"text\":\"The normative rule says source-supplied times keep “the same instant, stored offset-naive UTC”, while the CLK-001 Required test says each supplied time “is stored as supplied”.\",\"question\":\"For an accepted timezone-aware UTC source datetime, must the test compare the stored offset-naive UTC representation of the same instant, or require the original timezone-aware representation to be stored unchanged?\",\"options\":[\"Normalize representation to offset-naive UTC while preserving the instant.\",\"Store the supplied timezone-aware datetime literally unchanged.\"],\"default_guess\":\"Preserve the instant and store its offset-naive UTC representation.\",\"witness\":{\"initial\":\"An accepted snapshot contains `approved_at = 2026-08-09T10:00:00+00:00`.\",\"events\":[\"The producer submits the snapshot.\",\"The portal persists its `approved_at`.\"],\"outcomes\":[\"The stored value is the offset-naive UTC datetime `2026-08-09T10:00:00`, preserving the instant.\",\"The stored value retains `+00:00` because the Required test demands storage “as supplied”.\"],\"observer\":\"The persistence test and any reader inspecting the datetime representation.\"}},{\"unit\":\"A28\",\"subject\":\"CLK-002 decision-witness binding\",\"kind\":\"missing required witness\",\"text\":\"The witness line binds only CLK-001 — “CLK-001 [witness: verification:service_identity_consumer_uow_client_portal]; CLK-001 [witness: verification:staff_bootstrap_client_portal]” — and names no witness check for CLK-002.\",\"question\":\"Which existing verification check is bound to CLK-002 and must assert its clock-reader exclusivity, read counts, validity boundaries, and non-persistence requirements?\",\"options\":[\"Bind CLK-002 to a named existing verification check.\",\"State that no existing check binds CLK-002 and identify the decided receiving work that creates the required check.\"],\"default_guess\":\"Bind CLK-002 to a dedicated clock-policy verification check before the State 8 handoff.\",\"witness\":{\"initial\":\"The implementation satisfies the two named CLK-001 checks, but one viewer-entry path reads `time.monotonic()` directly instead of through the clock source.\",\"events\":[\"The focused checks named on the witness line run and pass.\",\"The State 8 assembler resolves Required-test witnesses.\"],\"outcomes\":[\"Assembly passes because the only named clock witnesses pass, leaving the CLK-002 violation undetected.\",\"Assembly blocks because CLK-002 has no bound witness capable of detecting the direct host-clock read.\"],\"observer\":\"The State 8 assembler and later maintainers relying on the invariant evidence.\"}},{\"unit\":\"A32\",\"subject\":\"Completeness of the downloaded OSV PyPI export\",\"kind\":\"unverifiable refusal condition\",\"text\":\"A32 requires “OSV's PyPI export archive, downloaded whole” and says “a download that is not whole is a check that cannot complete”, but neither DEP-002 nor its Required test states what proves that the received archive is the whole export rather than a valid readable subset.\",\"question\":\"What observable evidence establishes that the OSV export copy is whole, so the deploy can distinguish a complete vulnerability-free archive from a readable archive missing entries?\",\"options\":[\"Transport completion alone establishes wholeness.\",\"A specified manifest, checksum, archive index, expected member set, or equivalent completeness evidence is required.\",\"Any archive whose completeness cannot be independently established blocks the deploy.\"],\"default_guess\":\"Require specified integrity and completeness evidence for the exact downloaded export; otherwise fail the deploy.\",\"witness\":{\"initial\":\"The built image contains distribution `foo` version 1.0, and the current OSV export contains an advisory affecting it.\",\"events\":[\"During the deploy, an intermediary returns HTTP success with a syntactically valid readable archive that omits the portion containing the `foo` advisory.\",\"The deployment gate enumerates the installed distributions and checks them against the received archive.\"],\"outcomes\":[\"The gate treats successful receipt and readable archive structure as a whole download, finds no advisory for `foo`, and starts the image.\",\"The gate requires independent completeness evidence, cannot establish that the archive is whole, and refuses to start the image.\"],\"observer\":\"The release operator; the vulnerable image starts in only the first outcome.\"}}]}",
+ "set_aside": []
+}

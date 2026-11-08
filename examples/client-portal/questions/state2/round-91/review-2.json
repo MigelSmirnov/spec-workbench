@@ -1,0 +1,383 @@
+{
+ "open_points": [
+  {
+   "unit": "A18",
+   "subject": "INV-020 immutability and append-only retention test",
+   "kind": "unverifiable invariant",
+   "text": "“INV-020: a focused test at `import_snapshot` showing the invariant holds; a violating input is refused and changes nothing.”",
+   "question": "What must the test do to demonstrate that accepted snapshots can never be overwritten or deleted, rather than merely demonstrating that one conflicting import is refused?",
+   "options": [
+    "Exercise every snapshot write/remove surface and show an accepted snapshot remains byte-for-byte unchanged and present",
+    "Test only same-key/different-content import refusal",
+    "Prove structurally that no repository or service surface can update or delete a snapshot"
+   ],
+   "default_guess": "Test conflicting re-publication and also prove that no update or delete surface exists.",
+   "witness": {
+    "initial": "An accepted snapshot S is stored for one project.",
+    "events": [
+     "A later same-key publication with different content is refused by `import_snapshot`.",
+     "A repository or another service path later overwrites or deletes S."
+    ],
+    "outcomes": [
+     "A test covering only the refused import passes although INV-020 is violated.",
+     "A test that checks all mutation/removal surfaces fails when S can be overwritten or deleted."
+    ],
+    "observer": "The State 8 invariant gate and a producer reading historical snapshot results."
+   }
+  },
+  {
+   "unit": "A18",
+   "subject": "INV-022 import/activation separation and producer authority test",
+   "kind": "incomplete required test",
+   "text": "“INV-022: a focused test at `activate_budget_version` showing the invariant holds; a violating input is refused and changes nothing.”",
+   "question": "What exact cases must show both that import and activation are distinct actions and that no producer possesses or can exercise activation capability?",
+   "options": [
+    "Test the capability catalog, producer authorization path, import side effects, and activation operation separately",
+    "Test only that `activate_budget_version` refuses a producer-shaped actor",
+    "Test only that importing a snapshot does not immediately activate it"
+   ],
+   "default_guess": "Test that import leaves the version inactive and that a producer bearer credential cannot obtain an activation context or activate it.",
+   "witness": {
+    "initial": "A producer has imported a snapshot and the project has no active imported version.",
+    "events": [
+     "The producer uses its valid bearer credential to attempt activation."
+    ],
+    "outcomes": [
+     "The request is refused before activation because the producer lacks `estimate_snapshot.activate`.",
+     "An implementation exposes activation through the import flow or admits the producer because the test exercises only the inner activation function with a pre-authorized context."
+    ],
+    "observer": "The producer and project viewers."
+   }
+  },
+  {
+   "unit": "A18",
+   "subject": "INV-023 activation with an existing active budget version",
+   "kind": "rule-test contradiction",
+   "text": "The invariant says “activation atomically deactivates the previous active version,” while its Required test says “a violating input is refused and changes nothing.”",
+   "question": "When another version is already active, must activation of a new version succeed and atomically deactivate the old one, or is that state treated as a violating input and refused?",
+   "options": [
+    "Succeed atomically: deactivate the old version and activate the new one",
+    "Refuse whenever the project already has an active version",
+    "Specify another concrete condition as the violating input while testing atomic replacement separately"
+   ],
+   "default_guess": "Activation should succeed atomically; the test should reserve refusal for a different, explicitly named violation.",
+   "witness": {
+    "initial": "Project P has active budget version V1 and inactive eligible version V2.",
+    "events": [
+     "An authorized staff member activates V2."
+    ],
+    "outcomes": [
+     "V2 becomes active and V1 becomes inactive in one commit.",
+     "The operation is refused because V1 is already active, and both versions remain unchanged."
+    ],
+    "observer": "The staff actor and every viewer reading P's budget."
+   }
+  },
+  {
+   "unit": "A18",
+   "subject": "INV-024 manual-version uniqueness and plan mutability test",
+   "kind": "incomplete required test",
+   "text": "“INV-024: a focused test at `upsert_manual_section_plan` showing the invariant holds; a violating input is refused and changes nothing.”",
+   "question": "What must this test show for each independent clause: at most one manual version per project, manual plans mutable only while active, and imported plans always immutable copies of their snapshots?",
+   "options": [
+    "Name and exercise all three clauses, including attempted creation of a second manual version and attempted imported-plan mutation",
+    "Exercise only manual-plan editing on an archived project",
+    "Treat repository constraints or absence of APIs as sufficient without saying how they are verified"
+   ],
+   "default_guess": "Require separate assertions for manual-version uniqueness, archived-project refusal, and the absence or refusal of every imported-plan mutation path."
+  },
+  {
+   "unit": "A18",
+   "subject": "INV-025 source-key linking and display-name collisions",
+   "kind": "contradictory refusal expectation",
+   "text": "INV-025 says “automatic linking uses source_key equality only; display-name matching is forbidden,” but its Required test generically says “a violating input is refused and changes nothing”; State 1 says an unmatched source section creates a new `PortalSection`.",
+   "question": "For a new source section whose display name matches an existing section but whose source key differs, what exact outcome must the INV-025 test require?",
+   "options": [
+    "Do not link; create a distinct section because the source key is unmatched",
+    "Refuse the whole linking operation as a violating input",
+    "Leave the source section unlinked without creating a section"
+   ],
+   "default_guess": "Do not link by name; treat it as an unmatched source section and create a distinct section.",
+   "witness": {
+    "initial": "Project P has section S1 with source key `k1` and display name `Kitchen`. A later snapshot contains source key `k2` and the same display name.",
+    "events": [
+     "The snapshot sections are processed by `_link_snapshot_sections`."
+    ],
+    "outcomes": [
+     "A new section S2 is created for `k2`; S1 is not reused.",
+     "The operation is refused because of the name collision, or S1 is reused by display name."
+    ],
+    "observer": "The operator reviewing the imported version and viewers reading allocations by section."
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "Clock used for viewer-entry rate-limit decisions",
+   "kind": "clock-source contradiction",
+   "text": "The first paragraph says the operation's one wall-clock instant supplies “every current-time comparison that decides the validity of those writes,” while the new passage says the elapsed clock “measures the viewer-entry rate-limit window of A25 only.”",
+   "question": "Does the viewer-entry rate-limit comparison use the wall-clock instant reused for the session write, or the elapsed-clock reading?",
+   "options": [
+    "Use elapsed time for the rate-limit window and wall time only for persisted timestamps and expiry",
+    "Use the operation's wall instant for the rate-limit comparison",
+    "Require both clocks and define which result has precedence"
+   ],
+   "default_guess": "Use elapsed time for rate limiting and the single wall instant for the created session and expiry.",
+   "witness": {
+    "initial": "A viewer-entry limit window is open; the host wall clock then jumps backward while the monotonic clock continues forward.",
+    "events": [
+     "The viewer submits another valid entry request after enough monotonic time has elapsed but before the adjusted wall-clock window appears to end."
+    ],
+    "outcomes": [
+     "The entry is admitted because the elapsed-clock window has ended.",
+     "The entry is rate-limited because the wall-clock comparison says the window remains active."
+    ],
+    "observer": "The viewer attempting entry."
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "Scope of elapsed-clock readings",
+   "kind": "ambiguous reading count",
+   "text": "“the elapsed clock gives a duration scale: one reading per request … It measures the viewer-entry rate-limit window of A25 only”",
+   "question": "Does “one reading per request” mean every portal request reads the elapsed clock once, or only each viewer-entry request governed by A25 does so?",
+   "options": [
+    "Every portal request reads it once",
+    "Only viewer-entry requests read it once",
+    "Only requests that actually reach the rate-limit check read it once"
+   ],
+   "default_guess": "Only viewer-entry requests that execute the A25 rate-limit check should read it once.",
+   "witness": {
+    "initial": "The portal receives a normal authenticated budget-read request unrelated to viewer entry.",
+    "events": [
+     "The request completes successfully."
+    ],
+    "outcomes": [
+     "The shared clock source records one elapsed-clock read because every request must take one.",
+     "The request makes no elapsed-clock read because that clock is used only by A25."
+    ],
+    "observer": "A clock-source conformance test or instrumentation around the clock backend."
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "Operation wall read versus audit-writer wall read",
+   "kind": "ambiguous read accounting",
+   "text": "CLK-001 says “an operation takes one wall reading from the clock source,” while the audit writer's `occurred_at` is “the one further reading”; the Required test says “the operation reads it once.”",
+   "question": "For an audited operation, must a clock-source test observe one total wall read or two total wall reads, and is the audit writer considered part of that operation for read-count purposes?",
+   "options": [
+    "Two total reads: one attributed to the owning operation and one attributed to the audit writer",
+    "One total read reused by both business timestamps and audit `occurred_at`",
+    "The owning operation takes no read when its only timestamp is the audit record"
+   ],
+   "default_guess": "Observe two reads for an audited timestamp-writing operation, except bootstrap: one owning-operation read and one separately attributed audit-writer read.",
+   "witness": {
+    "initial": "An authorized staff mutation writes `updated_at` and appends one audit record.",
+    "events": [
+     "The clock source is fixed and instrumented.",
+     "The mutation completes."
+    ],
+    "outcomes": [
+     "The clock source is called twice: once for `updated_at`, once for audit `occurred_at`.",
+     "A test enforcing “the operation reads it once” permits or requires only one total call and reuses that value for audit."
+    ],
+    "observer": "The CLK-001 conformance test and readers comparing business and audit timestamps."
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "Normalization of source-supplied instants",
+   "kind": "representation contradiction",
+   "text": "Source-supplied times are “the same instant, stored offset-naive UTC,” while the Required test says supplied times “are stored as supplied.”",
+   "question": "For a source-supplied offset-aware datetime, does “stored as supplied” mean preserve its wall-clock fields while dropping the offset, or convert the same instant to UTC and then remove the UTC marker?",
+   "options": [
+    "Convert to UTC and store the UTC wall fields without an offset",
+    "Drop the supplied offset without changing wall fields",
+    "Accept only already-UTC source datetimes so both phrases coincide"
+   ],
+   "default_guess": "Accept an aware instant, convert it to UTC, and store the resulting UTC datetime offset-naively.",
+   "witness": {
+    "initial": "A producer supplies `approved_at = 2026-11-08 12:00:00+02:00`.",
+    "events": [
+     "The snapshot is accepted and persisted."
+    ],
+    "outcomes": [
+     "The portal stores `2026-11-08 10:00:00` offset-naive, preserving the instant.",
+     "The portal stores `2026-11-08 12:00:00` offset-naive, preserving the supplied fields but changing the represented instant."
+    ],
+    "observer": "The producer reading the import and any staff or viewer seeing the approval time."
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "Accepted forms and read point for wall-clock instants",
+   "kind": "undelivered decision",
+   "text": "“their accepted forms and checks, and where in an operation its one clock read happens, are the accepted spec's, carried to States 6–7.”",
+   "question": "What are the accepted input forms/checks for each source-supplied time, and at what exact point does each operation perform its single wall read? The referenced accepted-spec rules are not present in the supplied texts.",
+   "options": [
+    "Accept aware datetimes with any offset and normalize them; read after validation and authorization immediately before mutation",
+    "Accept only UTC-aware datetimes; read at operation entry",
+    "Accept offset-naive values as already UTC; choose a read point per operation in States 6–7"
+   ],
+   "default_guess": "Accept only unambiguous instants, normalize to naive UTC, and read once after refusal checks but before constructing any timestamped writes.",
+   "witness": {
+    "initial": "A request begins at instant T1, performs authorization and external validation, and reaches mutation at later instant T2.",
+    "events": [
+     "The operation creates a session or another expiring record."
+    ],
+    "outcomes": [
+     "`created_at` and expiry derive from T1 because the clock is read at operation entry.",
+     "They derive from T2 because the clock is read immediately before constructing the write."
+    ],
+    "observer": "The caller observing the created and expiry times, especially near an expiry or day boundary."
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "CLK-001 coverage of read-only expiry checks",
+   "kind": "incomplete required test",
+   "text": "The normative rule applies the one instant to “every current-time comparison … of persisted records,” but the Required test covers only “a test per operation that writes timestamps.”",
+   "question": "What required test demonstrates that operations which only validate an existing session, credential, or token obtain their comparison time from the sole clock source with the required reading count?",
+   "options": [
+    "Add tests for every expiry-checking operation, including operations that write no timestamp",
+    "Treat authentication/authorization checks as part of a later timestamp-writing operation's test",
+    "Exclude read-only expiry comparisons from CLK-001 despite the normative rule"
+   ],
+   "default_guess": "Add clock-source tests for every operation that performs an expiry comparison, whether or not it writes a timestamp.",
+   "witness": {
+    "initial": "A credential expires at instant E and a read-only authenticated request is processed exactly at E.",
+    "events": [
+     "The authorization guard checks the credential without writing a new timestamp."
+    ],
+    "outcomes": [
+     "It reads the shared wall source and refuses because `now = expires_at`.",
+     "It reads a host clock directly, takes multiple readings, or is omitted from clock-policy tests while producing a potentially different authorization result."
+    ],
+    "observer": "The authenticated caller and the CLK-001 conformance gate."
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "Elapsed-clock source invariant and test",
+   "kind": "missing formal invariant",
+   "text": "The change requires one clock source to be “the only reader” of `time.monotonic()` and defines one elapsed reading per request, but CLK-001 and its Required test mention only wall readings and persisted timestamps.",
+   "question": "Which formal invariant and Required test show that no module reads the host monotonic clock directly, that the prescribed request takes exactly one elapsed reading, and that the value is never stored or converted to an instant?",
+   "options": [
+    "Extend CLK-001 to cover both wall and elapsed clocks",
+    "Add a separate elapsed-clock invariant and bound witness",
+    "Leave the elapsed-clock rules without an invariant test"
+   ],
+   "default_guess": "Add a separate invariant and test for exclusive elapsed-clock access, one reading in the defined viewer-entry request, and non-persistence/non-conversion.",
+   "witness": {
+    "initial": "The viewer-entry guard is configured with a rate limit.",
+    "events": [
+     "A viewer makes an entry request.",
+     "The guard reads `time.monotonic()` directly twice while the shared source is never called."
+    ],
+    "outcomes": [
+     "The implementation is rejected by a test covering exclusive elapsed-clock access and exact read count.",
+     "All stated CLK-001 tests pass because they inspect only wall-clock timestamp writes."
+    ],
+    "observer": "The State 8 clock-policy gate."
+   }
+  },
+  {
+   "unit": "A32",
+   "subject": "OSV advisory matching and snapshot verification",
+   "kind": "deferred open choice",
+   "text": "“How the check is run (its tool, how the snapshot is obtained and verified, how a version is matched to an advisory) is a deployment procedure … carried to the deploy route and to its witness check at State 8.”",
+   "question": "What decided rules determine snapshot authenticity/completeness and whether an installed distribution version matches an OSV advisory?",
+   "options": [
+    "Use OSV's defined PyPI package normalization and affected-range semantics, with a specified authenticated snapshot format",
+    "Match only exact versions explicitly enumerated in OSV records",
+    "Let the later deployment implementation choose its normalization, range and snapshot-verification rules"
+   ],
+   "default_guess": "Use OSV's PyPI normalization and affected-range semantics and fail closed when snapshot authenticity, completeness, package identity, or range evaluation cannot be established.",
+   "witness": {
+    "initial": "The image contains distribution D version 2.0; the OSV snapshot has an advisory naming a normalized variant of D and an affected version range containing 2.0 but no exact `2.0` entry.",
+    "events": [
+     "The release gate evaluates the image against the snapshot."
+    ],
+    "outcomes": [
+     "The gate matches the normalized package and affected range and blocks deployment.",
+     "The gate performs literal name/version matching, finds no exact entry, and starts the service."
+    ],
+    "observer": "The deploy operator and users of the started service."
+   }
+  },
+  {
+   "unit": "A32",
+   "subject": "Snapshot and environment age limits",
+   "kind": "undefined refusal threshold",
+   "text": "DEP-002 depends on “the deploy route's maximum snapshot age” and the Required test adds a verdict “no older than its maximum environment age,” but neither value nor the instant and representation used to calculate either age is stated.",
+   "question": "What are `max_snapshot_age` and `max_environment_age`, what timestamps begin those ages, which clock measures them, and how are equality and clock skew handled?",
+   "options": [
+    "Specify fixed route values, UTC timestamp origins, and strict boundary comparisons",
+    "Treat the values as deployment configuration whose concrete values may differ by environment",
+    "Let the deploy implementation choose both values and age origins"
+   ],
+   "default_guess": "Define explicit route values and UTC origins, fail at equality or beyond, and fail closed on missing, future, or unparseable timestamps.",
+   "witness": {
+    "initial": "An OSV snapshot is 24 hours old and a passing verdict for image I is 30 minutes old.",
+    "events": [
+     "A deploy of I starts at the exact configured boundary under one implementation; another route uses different unstated age values or origins."
+    ],
+    "outcomes": [
+     "The service starts because both artifacts are considered within their age limits.",
+     "The service does not start because one artifact is stale or equality is treated as expired."
+    ],
+    "observer": "The deploy operator and service users."
+   }
+  },
+  {
+   "unit": "A32",
+   "subject": "Environment-age gate versus normative deployment rule",
+   "kind": "test-rule mismatch",
+   "text": "Normative rule 3 specifies only an OSV snapshot no older than `maximum snapshot age`, while the DEP-002 Required test additionally requires a same-image verdict “no older than its maximum environment age.”",
+   "question": "Is verdict/environment age a normative deployment refusal condition, or is it only test machinery not allowed to change whether a deploy starts?",
+   "options": [
+    "Make maximum environment age an explicit normative refusal condition",
+    "Remove environment age from the Required test",
+    "Define environment age as another name for snapshot age"
+   ],
+   "default_guess": "Make the same-image verdict's maximum age an explicit normative condition and define it separately from snapshot age.",
+   "witness": {
+    "initial": "Image I passed against a fresh OSV snapshot, but its passing verdict is older than `max_environment_age`; the snapshot itself remains within `max_snapshot_age`.",
+    "events": [
+     "The operator attempts to deploy I."
+    ],
+    "outcomes": [
+     "Rule 3 permits the start because its stated snapshot-age and vulnerability conditions pass.",
+     "The Required test forbids the start because the verdict/environment is stale."
+    ],
+    "observer": "The deploy operator."
+   }
+  },
+  {
+   "unit": "A31",
+   "subject": "Security-review dependency scope after A32 expansion",
+   "kind": "stale cross-reference",
+   "text": "A31 says “dependencies: APPLICABLE; references: A32; affected: deploy/requirements.txt (fastapi, pydantic, argon2-cffi, uvicorn pinned),” while changed A32 governs every distribution installed in the built image, including transitively resolved libraries, plus the OSV snapshot and release verdict.",
+   "question": "Does the dependency security-review outcome cover the complete built-image distribution set and release-gate artifacts, or only the four direct pins in `deploy/requirements.txt`?",
+   "options": [
+    "Expand the affected scope to every installed Python distribution and the OSV release gate",
+    "Limit A32 back to the four direct pins",
+    "State explicitly that the short affected list is illustrative rather than exhaustive"
+   ],
+   "default_guess": "Expand A31's affected scope to the full installed distribution set and the OSV snapshot/verdict release gate.",
+   "witness": {
+    "initial": "The requirements file contains four safe direct pins, but pip installs a transitive distribution with an OSV-listed vulnerability.",
+    "events": [
+     "The security review and release gate assess the image."
+    ],
+    "outcomes": [
+     "A31's recorded dependency scope is treated as only the four pins and reports the category resolved without covering the vulnerable transitive distribution.",
+     "A32's expanded scope is applied and the image is blocked."
+    ],
+    "observer": "The security-review gate and deploy operator."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A18\",\"subject\":\"INV-020 immutability and append-only retention test\",\"kind\":\"unverifiable invariant\",\"text\":\"“INV-020: a focused test at `import_snapshot` showing the invariant holds; a violating input is refused and changes nothing.”\",\"question\":\"What must the test do to demonstrate that accepted snapshots can never be overwritten or deleted, rather than merely demonstrating that one conflicting import is refused?\",\"options\":[\"Exercise every snapshot write/remove surface and show an accepted snapshot remains byte-for-byte unchanged and present\",\"Test only same-key/different-content import refusal\",\"Prove structurally that no repository or service surface can update or delete a snapshot\"],\"default_guess\":\"Test conflicting re-publication and also prove that no update or delete surface exists.\",\"witness\":{\"initial\":\"An accepted snapshot S is stored for one project.\",\"events\":[\"A later same-key publication with different content is refused by `import_snapshot`.\",\"A repository or another service path later overwrites or deletes S.\"],\"outcomes\":[\"A test covering only the refused import passes although INV-020 is violated.\",\"A test that checks all mutation/removal surfaces fails when S can be overwritten or deleted.\"],\"observer\":\"The State 8 invariant gate and a producer reading historical snapshot results.\"}},{\"unit\":\"A18\",\"subject\":\"INV-022 import/activation separation and producer authority test\",\"kind\":\"incomplete required test\",\"text\":\"“INV-022: a focused test at `activate_budget_version` showing the invariant holds; a violating input is refused and changes nothing.”\",\"question\":\"What exact cases must show both that import and activation are distinct actions and that no producer possesses or can exercise activation capability?\",\"options\":[\"Test the capability catalog, producer authorization path, import side effects, and activation operation separately\",\"Test only that `activate_budget_version` refuses a producer-shaped actor\",\"Test only that importing a snapshot does not immediately activate it\"],\"default_guess\":\"Test that import leaves the version inactive and that a producer bearer credential cannot obtain an activation context or activate it.\",\"witness\":{\"initial\":\"A producer has imported a snapshot and the project has no active imported version.\",\"events\":[\"The producer uses its valid bearer credential to attempt activation.\"],\"outcomes\":[\"The request is refused before activation because the producer lacks `estimate_snapshot.activate`.\",\"An implementation exposes activation through the import flow or admits the producer because the test exercises only the inner activation function with a pre-authorized context.\"],\"observer\":\"The producer and project viewers.\"}},{\"unit\":\"A18\",\"subject\":\"INV-023 activation with an existing active budget version\",\"kind\":\"rule-test contradiction\",\"text\":\"The invariant says “activation atomically deactivates the previous active version,” while its Required test says “a violating input is refused and changes nothing.”\",\"question\":\"When another version is already active, must activation of a new version succeed and atomically deactivate the old one, or is that state treated as a violating input and refused?\",\"options\":[\"Succeed atomically: deactivate the old version and activate the new one\",\"Refuse whenever the project already has an active version\",\"Specify another concrete condition as the violating input while testing atomic replacement separately\"],\"default_guess\":\"Activation should succeed atomically; the test should reserve refusal for a different, explicitly named violation.\",\"witness\":{\"initial\":\"Project P has active budget version V1 and inactive eligible version V2.\",\"events\":[\"An authorized staff member activates V2.\"],\"outcomes\":[\"V2 becomes active and V1 becomes inactive in one commit.\",\"The operation is refused because V1 is already active, and both versions remain unchanged.\"],\"observer\":\"The staff actor and every viewer reading P's budget.\"}},{\"unit\":\"A18\",\"subject\":\"INV-024 manual-version uniqueness and plan mutability test\",\"kind\":\"incomplete required test\",\"text\":\"“INV-024: a focused test at `upsert_manual_section_plan` showing the invariant holds; a violating input is refused and changes nothing.”\",\"question\":\"What must this test show for each independent clause: at most one manual version per project, manual plans mutable only while active, and imported plans always immutable copies of their snapshots?\",\"options\":[\"Name and exercise all three clauses, including attempted creation of a second manual version and attempted imported-plan mutation\",\"Exercise only manual-plan editing on an archived project\",\"Treat repository constraints or absence of APIs as sufficient without saying how they are verified\"],\"default_guess\":\"Require separate assertions for manual-version uniqueness, archived-project refusal, and the absence or refusal of every imported-plan mutation path.\"},{\"unit\":\"A18\",\"subject\":\"INV-025 source-key linking and display-name collisions\",\"kind\":\"contradictory refusal expectation\",\"text\":\"INV-025 says “automatic linking uses source_key equality only; display-name matching is forbidden,” but its Required test generically says “a violating input is refused and changes nothing”; State 1 says an unmatched source section creates a new `PortalSection`.\",\"question\":\"For a new source section whose display name matches an existing section but whose source key differs, what exact outcome must the INV-025 test require?\",\"options\":[\"Do not link; create a distinct section because the source key is unmatched\",\"Refuse the whole linking operation as a violating input\",\"Leave the source section unlinked without creating a section\"],\"default_guess\":\"Do not link by name; treat it as an unmatched source section and create a distinct section.\",\"witness\":{\"initial\":\"Project P has section S1 with source key `k1` and display name `Kitchen`. A later snapshot contains source key `k2` and the same display name.\",\"events\":[\"The snapshot sections are processed by `_link_snapshot_sections`.\"],\"outcomes\":[\"A new section S2 is created for `k2`; S1 is not reused.\",\"The operation is refused because of the name collision, or S1 is reused by display name.\"],\"observer\":\"The operator reviewing the imported version and viewers reading allocations by section.\"}},{\"unit\":\"A28\",\"subject\":\"Clock used for viewer-entry rate-limit decisions\",\"kind\":\"clock-source contradiction\",\"text\":\"The first paragraph says the operation's one wall-clock instant supplies “every current-time comparison that decides the validity of those writes,” while the new passage says the elapsed clock “measures the viewer-entry rate-limit window of A25 only.”\",\"question\":\"Does the viewer-entry rate-limit comparison use the wall-clock instant reused for the session write, or the elapsed-clock reading?\",\"options\":[\"Use elapsed time for the rate-limit window and wall time only for persisted timestamps and expiry\",\"Use the operation's wall instant for the rate-limit comparison\",\"Require both clocks and define which result has precedence\"],\"default_guess\":\"Use elapsed time for rate limiting and the single wall instant for the created session and expiry.\",\"witness\":{\"initial\":\"A viewer-entry limit window is open; the host wall clock then jumps backward while the monotonic clock continues forward.\",\"events\":[\"The viewer submits another valid entry request after enough monotonic time has elapsed but before the adjusted wall-clock window appears to end.\"],\"outcomes\":[\"The entry is admitted because the elapsed-clock window has ended.\",\"The entry is rate-limited because the wall-clock comparison says the window remains active.\"],\"observer\":\"The viewer attempting entry.\"}},{\"unit\":\"A28\",\"subject\":\"Scope of elapsed-clock readings\",\"kind\":\"ambiguous reading count\",\"text\":\"“the elapsed clock gives a duration scale: one reading per request … It measures the viewer-entry rate-limit window of A25 only”\",\"question\":\"Does “one reading per request” mean every portal request reads the elapsed clock once, or only each viewer-entry request governed by A25 does so?\",\"options\":[\"Every portal request reads it once\",\"Only viewer-entry requests read it once\",\"Only requests that actually reach the rate-limit check read it once\"],\"default_guess\":\"Only viewer-entry requests that execute the A25 rate-limit check should read it once.\",\"witness\":{\"initial\":\"The portal receives a normal authenticated budget-read request unrelated to viewer entry.\",\"events\":[\"The request completes successfully.\"],\"outcomes\":[\"The shared clock source records one elapsed-clock read because every request must take one.\",\"The request makes no elapsed-clock read because that clock is used only by A25.\"],\"observer\":\"A clock-source conformance test or instrumentation around the clock backend.\"}},{\"unit\":\"A28\",\"subject\":\"Operation wall read versus audit-writer wall read\",\"kind\":\"ambiguous read accounting\",\"text\":\"CLK-001 says “an operation takes one wall reading from the clock source,” while the audit writer's `occurred_at` is “the one further reading”; the Required test says “the operation reads it once.”\",\"question\":\"For an audited operation, must a clock-source test observe one total wall read or two total wall reads, and is the audit writer considered part of that operation for read-count purposes?\",\"options\":[\"Two total reads: one attributed to the owning operation and one attributed to the audit writer\",\"One total read reused by both business timestamps and audit `occurred_at`\",\"The owning operation takes no read when its only timestamp is the audit record\"],\"default_guess\":\"Observe two reads for an audited timestamp-writing operation, except bootstrap: one owning-operation read and one separately attributed audit-writer read.\",\"witness\":{\"initial\":\"An authorized staff mutation writes `updated_at` and appends one audit record.\",\"events\":[\"The clock source is fixed and instrumented.\",\"The mutation completes.\"],\"outcomes\":[\"The clock source is called twice: once for `updated_at`, once for audit `occurred_at`.\",\"A test enforcing “the operation reads it once” permits or requires only one total call and reuses that value for audit.\"],\"observer\":\"The CLK-001 conformance test and readers comparing business and audit timestamps.\"}},{\"unit\":\"A28\",\"subject\":\"Normalization of source-supplied instants\",\"kind\":\"representation contradiction\",\"text\":\"Source-supplied times are “the same instant, stored offset-naive UTC,” while the Required test says supplied times “are stored as supplied.”\",\"question\":\"For a source-supplied offset-aware datetime, does “stored as supplied” mean preserve its wall-clock fields while dropping the offset, or convert the same instant to UTC and then remove the UTC marker?\",\"options\":[\"Convert to UTC and store the UTC wall fields without an offset\",\"Drop the supplied offset without changing wall fields\",\"Accept only already-UTC source datetimes so both phrases coincide\"],\"default_guess\":\"Accept an aware instant, convert it to UTC, and store the resulting UTC datetime offset-naively.\",\"witness\":{\"initial\":\"A producer supplies `approved_at = 2026-11-08 12:00:00+02:00`.\",\"events\":[\"The snapshot is accepted and persisted.\"],\"outcomes\":[\"The portal stores `2026-11-08 10:00:00` offset-naive, preserving the instant.\",\"The portal stores `2026-11-08 12:00:00` offset-naive, preserving the supplied fields but changing the represented instant.\"],\"observer\":\"The producer reading the import and any staff or viewer seeing the approval time.\"}},{\"unit\":\"A28\",\"subject\":\"Accepted forms and read point for wall-clock instants\",\"kind\":\"undelivered decision\",\"text\":\"“their accepted forms and checks, and where in an operation its one clock read happens, are the accepted spec's, carried to States 6–7.”\",\"question\":\"What are the accepted input forms/checks for each source-supplied time, and at what exact point does each operation perform its single wall read? The referenced accepted-spec rules are not present in the supplied texts.\",\"options\":[\"Accept aware datetimes with any offset and normalize them; read after validation and authorization immediately before mutation\",\"Accept only UTC-aware datetimes; read at operation entry\",\"Accept offset-naive values as already UTC; choose a read point per operation in States 6–7\"],\"default_guess\":\"Accept only unambiguous instants, normalize to naive UTC, and read once after refusal checks but before constructing any timestamped writes.\",\"witness\":{\"initial\":\"A request begins at instant T1, performs authorization and external validation, and reaches mutation at later instant T2.\",\"events\":[\"The operation creates a session or another expiring record.\"],\"outcomes\":[\"`created_at` and expiry derive from T1 because the clock is read at operation entry.\",\"They derive from T2 because the clock is read immediately before constructing the write.\"],\"observer\":\"The caller observing the created and expiry times, especially near an expiry or day boundary.\"}},{\"unit\":\"A28\",\"subject\":\"CLK-001 coverage of read-only expiry checks\",\"kind\":\"incomplete required test\",\"text\":\"The normative rule applies the one instant to “every current-time comparison … of persisted records,” but the Required test covers only “a test per operation that writes timestamps.”\",\"question\":\"What required test demonstrates that operations which only validate an existing session, credential, or token obtain their comparison time from the sole clock source with the required reading count?\",\"options\":[\"Add tests for every expiry-checking operation, including operations that write no timestamp\",\"Treat authentication/authorization checks as part of a later timestamp-writing operation's test\",\"Exclude read-only expiry comparisons from CLK-001 despite the normative rule\"],\"default_guess\":\"Add clock-source tests for every operation that performs an expiry comparison, whether or not it writes a timestamp.\",\"witness\":{\"initial\":\"A credential expires at instant E and a read-only authenticated request is processed exactly at E.\",\"events\":[\"The authorization guard checks the credential without writing a new timestamp.\"],\"outcomes\":[\"It reads the shared wall source and refuses because `now = expires_at`.\",\"It reads a host clock directly, takes multiple readings, or is omitted from clock-policy tests while producing a potentially different authorization result.\"],\"observer\":\"The authenticated caller and the CLK-001 conformance gate.\"}},{\"unit\":\"A28\",\"subject\":\"Elapsed-clock source invariant and test\",\"kind\":\"missing formal invariant\",\"text\":\"The change requires one clock source to be “the only reader” of `time.monotonic()` and defines one elapsed reading per request, but CLK-001 and its Required test mention only wall readings and persisted timestamps.\",\"question\":\"Which formal invariant and Required test show that no module reads the host monotonic clock directly, that the prescribed request takes exactly one elapsed reading, and that the value is never stored or converted to an instant?\",\"options\":[\"Extend CLK-001 to cover both wall and elapsed clocks\",\"Add a separate elapsed-clock invariant and bound witness\",\"Leave the elapsed-clock rules without an invariant test\"],\"default_guess\":\"Add a separate invariant and test for exclusive elapsed-clock access, one reading in the defined viewer-entry request, and non-persistence/non-conversion.\",\"witness\":{\"initial\":\"The viewer-entry guard is configured with a rate limit.\",\"events\":[\"A viewer makes an entry request.\",\"The guard reads `time.monotonic()` directly twice while the shared source is never called.\"],\"outcomes\":[\"The implementation is rejected by a test covering exclusive elapsed-clock access and exact read count.\",\"All stated CLK-001 tests pass because they inspect only wall-clock timestamp writes.\"],\"observer\":\"The State 8 clock-policy gate.\"}},{\"unit\":\"A32\",\"subject\":\"OSV advisory matching and snapshot verification\",\"kind\":\"deferred open choice\",\"text\":\"“How the check is run (its tool, how the snapshot is obtained and verified, how a version is matched to an advisory) is a deployment procedure … carried to the deploy route and to its witness check at State 8.”\",\"question\":\"What decided rules determine snapshot authenticity/completeness and whether an installed distribution version matches an OSV advisory?\",\"options\":[\"Use OSV's defined PyPI package normalization and affected-range semantics, with a specified authenticated snapshot format\",\"Match only exact versions explicitly enumerated in OSV records\",\"Let the later deployment implementation choose its normalization, range and snapshot-verification rules\"],\"default_guess\":\"Use OSV's PyPI normalization and affected-range semantics and fail closed when snapshot authenticity, completeness, package identity, or range evaluation cannot be established.\",\"witness\":{\"initial\":\"The image contains distribution D version 2.0; the OSV snapshot has an advisory naming a normalized variant of D and an affected version range containing 2.0 but no exact `2.0` entry.\",\"events\":[\"The release gate evaluates the image against the snapshot.\"],\"outcomes\":[\"The gate matches the normalized package and affected range and blocks deployment.\",\"The gate performs literal name/version matching, finds no exact entry, and starts the service.\"],\"observer\":\"The deploy operator and users of the started service.\"}},{\"unit\":\"A32\",\"subject\":\"Snapshot and environment age limits\",\"kind\":\"undefined refusal threshold\",\"text\":\"DEP-002 depends on “the deploy route's maximum snapshot age” and the Required test adds a verdict “no older than its maximum environment age,” but neither value nor the instant and representation used to calculate either age is stated.\",\"question\":\"What are `max_snapshot_age` and `max_environment_age`, what timestamps begin those ages, which clock measures them, and how are equality and clock skew handled?\",\"options\":[\"Specify fixed route values, UTC timestamp origins, and strict boundary comparisons\",\"Treat the values as deployment configuration whose concrete values may differ by environment\",\"Let the deploy implementation choose both values and age origins\"],\"default_guess\":\"Define explicit route values and UTC origins, fail at equality or beyond, and fail closed on missing, future, or unparseable timestamps.\",\"witness\":{\"initial\":\"An OSV snapshot is 24 hours old and a passing verdict for image I is 30 minutes old.\",\"events\":[\"A deploy of I starts at the exact configured boundary under one implementation; another route uses different unstated age values or origins.\"],\"outcomes\":[\"The service starts because both artifacts are considered within their age limits.\",\"The service does not start because one artifact is stale or equality is treated as expired.\"],\"observer\":\"The deploy operator and service users.\"}},{\"unit\":\"A32\",\"subject\":\"Environment-age gate versus normative deployment rule\",\"kind\":\"test-rule mismatch\",\"text\":\"Normative rule 3 specifies only an OSV snapshot no older than `maximum snapshot age`, while the DEP-002 Required test additionally requires a same-image verdict “no older than its maximum environment age.”\",\"question\":\"Is verdict/environment age a normative deployment refusal condition, or is it only test machinery not allowed to change whether a deploy starts?\",\"options\":[\"Make maximum environment age an explicit normative refusal condition\",\"Remove environment age from the Required test\",\"Define environment age as another name for snapshot age\"],\"default_guess\":\"Make the same-image verdict's maximum age an explicit normative condition and define it separately from snapshot age.\",\"witness\":{\"initial\":\"Image I passed against a fresh OSV snapshot, but its passing verdict is older than `max_environment_age`; the snapshot itself remains within `max_snapshot_age`.\",\"events\":[\"The operator attempts to deploy I.\"],\"outcomes\":[\"Rule 3 permits the start because its stated snapshot-age and vulnerability conditions pass.\",\"The Required test forbids the start because the verdict/environment is stale.\"],\"observer\":\"The deploy operator.\"}},{\"unit\":\"A31\",\"subject\":\"Security-review dependency scope after A32 expansion\",\"kind\":\"stale cross-reference\",\"text\":\"A31 says “dependencies: APPLICABLE; references: A32; affected: deploy/requirements.txt (fastapi, pydantic, argon2-cffi, uvicorn pinned),” while changed A32 governs every distribution installed in the built image, including transitively resolved libraries, plus the OSV snapshot and release verdict.\",\"question\":\"Does the dependency security-review outcome cover the complete built-image distribution set and release-gate artifacts, or only the four direct pins in `deploy/requirements.txt`?\",\"options\":[\"Expand the affected scope to every installed Python distribution and the OSV release gate\",\"Limit A32 back to the four direct pins\",\"State explicitly that the short affected list is illustrative rather than exhaustive\"],\"default_guess\":\"Expand A31's affected scope to the full installed distribution set and the OSV snapshot/verdict release gate.\",\"witness\":{\"initial\":\"The requirements file contains four safe direct pins, but pip installs a transitive distribution with an OSV-listed vulnerability.\",\"events\":[\"The security review and release gate assess the image.\"],\"outcomes\":[\"A31's recorded dependency scope is treated as only the four pins and reports the category resolved without covering the vulnerable transitive distribution.\",\"A32's expanded scope is applied and the image is blocked.\"],\"observer\":\"The security-review gate and deploy operator.\"}}]}",
+ "set_aside": []
+}

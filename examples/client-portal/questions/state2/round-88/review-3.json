@@ -1,0 +1,140 @@
+{
+ "open_points": [
+  {
+   "unit": "A28",
+   "subject": "Clock reads by operations that do not use current time",
+   "kind": "contradictory scope",
+   "text": "CLK-002 says \"an operation takes one wall reading\", while the wall-clock rule limits it to a reading \"per operation for its own timestamps\" and the Required tests cover only an \"operation that reads the wall clock\".",
+   "question": "Must every operation, including health checks and reads with no timestamp or current-time comparison, take one wall-clock reading, or only operations that need current time?",
+   "options": [
+    "Every operation takes exactly one wall reading.",
+    "Only an operation that writes a fresh timestamp or performs a current-time comparison takes one wall reading."
+   ],
+   "default_guess": "Read the wall clock only when an operation needs an instant for a timestamp or comparison.",
+   "witness": {
+    "initial": "The service is running and its liveness endpoint needs no timestamp or expiry comparison.",
+    "events": [
+     "A caller requests liveness.",
+     "The clock source is instrumented to count wall-clock reads."
+    ],
+    "outcomes": [
+     "The handler takes one wall reading because CLK-002 says every operation does.",
+     "The handler takes no wall reading because it has no timestamps or current-time comparisons and the Required tests describe operations that read the clock."
+    ],
+    "observer": "The deployment test or clock instrumentation sees a count of one versus zero."
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "Storage of source-supplied instants",
+   "kind": "rule-test contradiction",
+   "text": "The normative rule says a supplied time keeps \"the same instant, stored offset-naive UTC\", but CLK-001's Required test says each supplied time is \"stored as supplied\".",
+   "question": "For an offset-aware supplied datetime, must the test expect normalization to offset-naive UTC or preservation of the supplied datetime representation?",
+   "options": [
+    "Preserve the instant by converting to UTC and removing the offset before persistence.",
+    "Persist the datetime representation exactly as supplied, including its offset."
+   ],
+   "default_guess": "Normalize to offset-naive UTC while preserving the instant.",
+   "witness": {
+    "initial": "The clock is fixed at a different instant, and a producer supplies approved_at as 2026-11-08T12:00:00+02:00.",
+    "events": [
+     "The producer imports a snapshot.",
+     "The persistence or CLK-001 test examines approved_at."
+    ],
+    "outcomes": [
+     "The stored value is the offset-naive UTC datetime 2026-11-08T10:00:00, following the normative representation rule.",
+     "The stored value remains 2026-11-08T12:00:00+02:00, following the literal instruction to store it as supplied."
+    ],
+    "observer": "The persistence adapter and CLK-001 test see different datetime values and offset representations."
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "CLK-002 unique-reader invariant",
+   "kind": "insufficient required test",
+   "text": "CLK-002 requires that \"the clock source is the only reader of the host's wall and elapsed clocks\", but its Required tests detect another clock path only when it changes a timestamp, validity decision, rate-limit boundary, or persisted record.",
+   "question": "What required check demonstrates that no portal code outside the clock source reads either host clock, including reads whose values do not reach the outputs covered by the behavioral tests?",
+   "options": [
+    "Add a structural or instrumented check that fails on every host-clock read outside the clock source.",
+    "Narrow CLK-002 so it forbids only host-clock reads used for portal timestamps, comparisons, or the A25 window."
+   ],
+   "default_guess": "Use an instrumented or structural check covering every direct host-clock read in portal code.",
+   "witness": {
+    "initial": "An operation uses the injected fixed clock correctly for every timestamp and validity decision.",
+    "events": [
+     "One implementation also calls datetime.utcnow() directly for an internal diagnostic value that is not persisted or returned.",
+     "The prescribed fixed-source behavioral test runs."
+    ],
+    "outcomes": [
+     "The implementation passes because all tested timestamps and decisions follow the injected instant, despite violating the unique-reader invariant.",
+     "An implementation with no direct diagnostic clock read also passes and satisfies the invariant."
+    ],
+    "observer": "Host-clock instrumentation or a structural source check sees the extra read; the described behavioral test does not."
+   }
+  },
+  {
+   "unit": "A28",
+   "subject": "CLK-002 witness binding",
+   "kind": "missing witness check",
+   "text": "The Required tests define CLK-002, but the witness line binds only CLK-001: \"CLK-001 [witness: verification:service_identity_consumer_uow_client_portal]; CLK-001 [witness: verification:staff_bootstrap_client_portal]\".",
+   "question": "Which existing witness check is bound to CLK-002 and will assert its clock-source, read-count, comparison, boundary, and non-persistence requirements?",
+   "options": [
+    "Bind CLK-002 to a named existing verification check.",
+    "Add a new named verification check and bind CLK-002 to it."
+   ],
+   "default_guess": "Add a dedicated CLK-002 verification check and bind it on the Required tests line."
+  },
+  {
+   "unit": "A32",
+   "subject": "Completeness of the OSV PyPI export copy",
+   "kind": "undefined refusal condition",
+   "text": "The rule requires OSV's PyPI export archive to be \"downloaded whole\" and says \"a download that is not whole is a check that cannot complete\", but gives no observable criterion by which the deployment gate establishes that the archive is whole.",
+   "question": "What evidence proves that the downloaded archive is complete rather than a syntactically valid but incomplete copy?",
+   "options": [
+    "Require and verify an authoritative manifest, digest, size, or equivalent completeness metadata for that export.",
+    "Treat successful transport completion and successful archive parsing as proof that the copy is whole.",
+    "Fail unless the archive can be independently compared with an authoritative inventory of all export entries."
+   ],
+   "default_guess": "Verify authoritative completeness metadata bound to the downloaded export and fail when it is absent or mismatched.",
+   "witness": {
+    "initial": "The built image contains package x version 1.0, and the authoritative OSV export contains an advisory affecting it.",
+    "events": [
+     "The deploy downloads an HTTP 200 archive that parses successfully but omits the advisory entry.",
+     "The vulnerability gate evaluates the image."
+    ],
+    "outcomes": [
+     "A gate treating successful download and parsing as whole starts the service.",
+     "A gate requiring independent completeness evidence treats the check as incomplete and refuses to start the service."
+    ],
+    "observer": "The deploy operator sees the same image start in one implementation and remain stopped in the other."
+   }
+  },
+  {
+   "unit": "A32",
+   "subject": "DEP-002 matching semantics in Required tests",
+   "kind": "incomplete invariant test",
+   "text": "The normative rule defines known vulnerabilities using non-withdrawn entries, PEP 503 package-name normalization, PEP 440 versions, explicit affected versions and affected ranges, while DEP-002's Required test only says the step \"judges\" distributions and that \"a listed version\" does not start the service.",
+   "question": "Which required test cases show that normalized names and range-only advisories block, withdrawn advisories do not block, and PEP 440 version membership is applied as the normative rule requires?",
+   "options": [
+    "Name explicit test cases for normalized-name matching, PEP 440 range membership, withdrawn entries, and explicit affected-version membership.",
+    "State that the generic word \"judges\" implicitly requires all normative matching cases without enumerating them."
+   ],
+   "default_guess": "Add explicit boundary cases for every normative matching rule.",
+   "witness": {
+    "initial": "The image contains distribution Foo_Bar version 1.5; OSV has a non-withdrawn PyPI entry named foo-bar whose affected range is introduced at 1.0 and fixed at 2.0, with no explicit affected-version list.",
+    "events": [
+     "The DEP-002 release-gate test suite runs.",
+     "A deploy of that image is attempted."
+    ],
+    "outcomes": [
+     "An implementation checking only explicitly listed versions passes its described listed-version cases and starts the vulnerable image.",
+     "An implementation applying normalized-name and PEP 440 range matching blocks the deploy."
+    ],
+    "observer": "The deploy operator sees the service start versus remain stopped."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A28\",\"subject\":\"Clock reads by operations that do not use current time\",\"kind\":\"contradictory scope\",\"text\":\"CLK-002 says \\\"an operation takes one wall reading\\\", while the wall-clock rule limits it to a reading \\\"per operation for its own timestamps\\\" and the Required tests cover only an \\\"operation that reads the wall clock\\\".\",\"question\":\"Must every operation, including health checks and reads with no timestamp or current-time comparison, take one wall-clock reading, or only operations that need current time?\",\"options\":[\"Every operation takes exactly one wall reading.\",\"Only an operation that writes a fresh timestamp or performs a current-time comparison takes one wall reading.\"],\"default_guess\":\"Read the wall clock only when an operation needs an instant for a timestamp or comparison.\",\"witness\":{\"initial\":\"The service is running and its liveness endpoint needs no timestamp or expiry comparison.\",\"events\":[\"A caller requests liveness.\",\"The clock source is instrumented to count wall-clock reads.\"],\"outcomes\":[\"The handler takes one wall reading because CLK-002 says every operation does.\",\"The handler takes no wall reading because it has no timestamps or current-time comparisons and the Required tests describe operations that read the clock.\"],\"observer\":\"The deployment test or clock instrumentation sees a count of one versus zero.\"}},{\"unit\":\"A28\",\"subject\":\"Storage of source-supplied instants\",\"kind\":\"rule-test contradiction\",\"text\":\"The normative rule says a supplied time keeps \\\"the same instant, stored offset-naive UTC\\\", but CLK-001's Required test says each supplied time is \\\"stored as supplied\\\".\",\"question\":\"For an offset-aware supplied datetime, must the test expect normalization to offset-naive UTC or preservation of the supplied datetime representation?\",\"options\":[\"Preserve the instant by converting to UTC and removing the offset before persistence.\",\"Persist the datetime representation exactly as supplied, including its offset.\"],\"default_guess\":\"Normalize to offset-naive UTC while preserving the instant.\",\"witness\":{\"initial\":\"The clock is fixed at a different instant, and a producer supplies approved_at as 2026-11-08T12:00:00+02:00.\",\"events\":[\"The producer imports a snapshot.\",\"The persistence or CLK-001 test examines approved_at.\"],\"outcomes\":[\"The stored value is the offset-naive UTC datetime 2026-11-08T10:00:00, following the normative representation rule.\",\"The stored value remains 2026-11-08T12:00:00+02:00, following the literal instruction to store it as supplied.\"],\"observer\":\"The persistence adapter and CLK-001 test see different datetime values and offset representations.\"}},{\"unit\":\"A28\",\"subject\":\"CLK-002 unique-reader invariant\",\"kind\":\"insufficient required test\",\"text\":\"CLK-002 requires that \\\"the clock source is the only reader of the host's wall and elapsed clocks\\\", but its Required tests detect another clock path only when it changes a timestamp, validity decision, rate-limit boundary, or persisted record.\",\"question\":\"What required check demonstrates that no portal code outside the clock source reads either host clock, including reads whose values do not reach the outputs covered by the behavioral tests?\",\"options\":[\"Add a structural or instrumented check that fails on every host-clock read outside the clock source.\",\"Narrow CLK-002 so it forbids only host-clock reads used for portal timestamps, comparisons, or the A25 window.\"],\"default_guess\":\"Use an instrumented or structural check covering every direct host-clock read in portal code.\",\"witness\":{\"initial\":\"An operation uses the injected fixed clock correctly for every timestamp and validity decision.\",\"events\":[\"One implementation also calls datetime.utcnow() directly for an internal diagnostic value that is not persisted or returned.\",\"The prescribed fixed-source behavioral test runs.\"],\"outcomes\":[\"The implementation passes because all tested timestamps and decisions follow the injected instant, despite violating the unique-reader invariant.\",\"An implementation with no direct diagnostic clock read also passes and satisfies the invariant.\"],\"observer\":\"Host-clock instrumentation or a structural source check sees the extra read; the described behavioral test does not.\"}},{\"unit\":\"A28\",\"subject\":\"CLK-002 witness binding\",\"kind\":\"missing witness check\",\"text\":\"The Required tests define CLK-002, but the witness line binds only CLK-001: \\\"CLK-001 [witness: verification:service_identity_consumer_uow_client_portal]; CLK-001 [witness: verification:staff_bootstrap_client_portal]\\\".\",\"question\":\"Which existing witness check is bound to CLK-002 and will assert its clock-source, read-count, comparison, boundary, and non-persistence requirements?\",\"options\":[\"Bind CLK-002 to a named existing verification check.\",\"Add a new named verification check and bind CLK-002 to it.\"],\"default_guess\":\"Add a dedicated CLK-002 verification check and bind it on the Required tests line.\"},{\"unit\":\"A32\",\"subject\":\"Completeness of the OSV PyPI export copy\",\"kind\":\"undefined refusal condition\",\"text\":\"The rule requires OSV's PyPI export archive to be \\\"downloaded whole\\\" and says \\\"a download that is not whole is a check that cannot complete\\\", but gives no observable criterion by which the deployment gate establishes that the archive is whole.\",\"question\":\"What evidence proves that the downloaded archive is complete rather than a syntactically valid but incomplete copy?\",\"options\":[\"Require and verify an authoritative manifest, digest, size, or equivalent completeness metadata for that export.\",\"Treat successful transport completion and successful archive parsing as proof that the copy is whole.\",\"Fail unless the archive can be independently compared with an authoritative inventory of all export entries.\"],\"default_guess\":\"Verify authoritative completeness metadata bound to the downloaded export and fail when it is absent or mismatched.\",\"witness\":{\"initial\":\"The built image contains package x version 1.0, and the authoritative OSV export contains an advisory affecting it.\",\"events\":[\"The deploy downloads an HTTP 200 archive that parses successfully but omits the advisory entry.\",\"The vulnerability gate evaluates the image.\"],\"outcomes\":[\"A gate treating successful download and parsing as whole starts the service.\",\"A gate requiring independent completeness evidence treats the check as incomplete and refuses to start the service.\"],\"observer\":\"The deploy operator sees the same image start in one implementation and remain stopped in the other.\"}},{\"unit\":\"A32\",\"subject\":\"DEP-002 matching semantics in Required tests\",\"kind\":\"incomplete invariant test\",\"text\":\"The normative rule defines known vulnerabilities using non-withdrawn entries, PEP 503 package-name normalization, PEP 440 versions, explicit affected versions and affected ranges, while DEP-002's Required test only says the step \\\"judges\\\" distributions and that \\\"a listed version\\\" does not start the service.\",\"question\":\"Which required test cases show that normalized names and range-only advisories block, withdrawn advisories do not block, and PEP 440 version membership is applied as the normative rule requires?\",\"options\":[\"Name explicit test cases for normalized-name matching, PEP 440 range membership, withdrawn entries, and explicit affected-version membership.\",\"State that the generic word \\\"judges\\\" implicitly requires all normative matching cases without enumerating them.\"],\"default_guess\":\"Add explicit boundary cases for every normative matching rule.\",\"witness\":{\"initial\":\"The image contains distribution Foo_Bar version 1.5; OSV has a non-withdrawn PyPI entry named foo-bar whose affected range is introduced at 1.0 and fixed at 2.0, with no explicit affected-version list.\",\"events\":[\"The DEP-002 release-gate test suite runs.\",\"A deploy of that image is attempted.\"],\"outcomes\":[\"An implementation checking only explicitly listed versions passes its described listed-version cases and starts the vulnerable image.\",\"An implementation applying normalized-name and PEP 440 range matching blocks the deploy.\"],\"observer\":\"The deploy operator sees the service start versus remain stopped.\"}}]}",
+ "set_aside": []
+}
