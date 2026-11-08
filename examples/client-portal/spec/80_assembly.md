@@ -1,9 +1,10 @@
 # State 8 — assembly of `global_spec.json` (current output)
 
-Generated on 2026-11-08 from Workbench `agent/client-portal` at `93db1b0d`
-(Workbench main with #163 merged), with the clean Factory checkout
-`code_factory_cp_witnesses` at origin/main `5a3bdec2`
-(`SPEC_WORKBENCH_FACTORY_ROOT`). The assembled file is `../global_spec.json`.
+Generated on 2026-11-08 (evening, after the email-challenge sweep) from
+Workbench `agent/client-portal` at `22df7e39`, with the clean Factory
+checkout `code_factory_cp_witnesses` at origin/main `9409b8e2` (#190 merged,
+accepted `018b2e2e`) (`SPEC_WORKBENCH_FACTORY_ROOT`). `global_spec.json`
+sha256 `cbcc75374b82a3ffda85edb4a933275dc3844572a78bc5f3e83a843ab3caf9ef`. The assembled file is `../global_spec.json`.
 It equals its deterministic projection (`design_spec_projection.py
 --verify`, admission FA016), and its notes equal `../80_notes.md` (1090).
 `tools/authoring.py next client-portal` stops at `state8_assembly`: every
@@ -51,14 +52,16 @@ the type imports the Factory slicer and Spec Inspector need (FA015):
 ## Stage 8.1 module review (`tools/design_module_review.py --review`)
 
 37 modules, each 0 deterministic blocks. Ledger
-`../81_module_review_status.json`: closed, 37/37 PASS, slice hashes current.
+`../81_module_review_status.json`: closed, 37/37 PASS, slice hashes current
+(refreshed after the sweep: content changed in `staff_identity` only, which
+rests on State 7 round 20; the other 36 by decision line numbers).
 The 19 model-generated modules rest on their State 7 round on the current
 generation prompt. The 18 emitted modules rest on their emitter IR and the
 assembly. No separate per-module adversarial review was run.
 
 ## Stage 9 admission (`tools/design_factory_admission.py --update-existing`)
 
-Factory read: `code_factory_cp_witnesses` (clean, `5a3bdec2`); the main
+Factory read: `code_factory_cp_witnesses` (clean, `9409b8e2`); the main
 `code_factory` checkout was not used. Status `READY_TO_EXPORT`: 22 checks,
 17 PASS, 5 NOT_APPLICABLE, 0 BLOCK, 0 WARN.
 
@@ -104,7 +107,7 @@ Factory read: `code_factory_cp_witnesses` (clean, `5a3bdec2`); the main
   read `datetime.utcnow()` themselves. The findings close with the next
   Route B; they are not spec findings.
 
-## Export (prepared, not run)
+## Export
 
 ```bash
 cd /home/smirnov/jestor_VBC/exp_vbc/demo/spec-workbench-worktrees/client-portal-migration
@@ -116,4 +119,7 @@ python tools/export_to_factory.py --case client-portal \
 ```
 
 The same command with `--check` runs the admission gate without writing.
-Export waits for the owner's approval; no export, Route B or deploy was run.
+#190 exported `018b2e2e`. The sweep is exported with `--factory-root` the
+worktree `code_factory_cp_export2` (branch
+`spec/client-portal-staff-auth-note` from origin/main `9409b8e2`); merge is
+the owner's. No Route B or deploy was run.

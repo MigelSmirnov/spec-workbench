@@ -1,31 +1,101 @@
 # Handoff — Client Portal (current)
 
-Replaces the handoff of the morning of 2026-11-08. State of
-`agent/client-portal` on 2026-11-08 after the first pass on the single-round
-closure rule (Workbench #163, merged into the branch at `d407634a`), checked
-against the clean Factory checkout `code_factory_cp_witnesses` at origin/main
-`5a3bdec2`. The assembly, admission and diagnosis results are in
-`80_assembly.md`; the semantic diff against the accepted Factory spec
-459ac96c, for the owner, is `SEMANTIC_DIFF.md`.
+Replaces the handoff written before the export of 2026-11-08. State of
+`agent/client-portal` on 2026-11-08 (evening) after the sweep for remnants
+of the removed staff email challenges, checked against the clean Factory
+checkout `code_factory_cp_witnesses` at origin/main `9409b8e2` (#190
+merged: accepted spec `018b2e2e`). The assembly, admission and diagnosis
+results are in `80_assembly.md`; the semantic diff, for the owner, is
+`SEMANTIC_DIFF.md` (against `018b2e2e` first, then against `459ac96c`).
 
 ## Where the case stands
 
-- **Ready for export, not exported.** States 0-7 are closed on their current
-  texts (`status` per state: closed, ready). `authoring next` stops at
-  `state8_assembly`, which is ready. Admission reads `READY_TO_EXPORT` (22
-  checks: 17 PASS, 5 NOT_APPLICABLE). The export command is prepared in
-  `80_assembly.md` and waits for the owner's approval. No export, Route B or
-  deploy was run.
+- **Exported once, re-export of the sweep pending merge.** Factory #190
+  accepted `018b2e2e`. The sweep below changes two notes and gives
+  `global_spec.json` sha256 `cbcc7537…` (`cbcc75374b82a3ffda85edb4a933275dc3844572a78bc5f3e83a843ab3caf9ef`).
+  It is exported to Factory branch `spec/client-portal-staff-auth-note`
+  (a separate PR, not merged by the agent). No Route B or deploy was run.
+- States 0-5 and 7 are closed on their current texts (`status` per state:
+  closed, ready). `authoring next` stops at `state8_assembly`, which is
+  ready. Admission reads `READY_TO_EXPORT` (22 checks: 17 PASS, 5
+  NOT_APPLICABLE).
 - `90_factory_target.json` names `factory_checks_issue`
   MigelSmirnov/code-factory#189. The 54 partial witness verdicts are carried
-  there by `witness_material` and no longer block.
-- FA002 is closed by the Stage 8.1 ledger `81_module_review_status.json`.
-  FA015 is closed by type imports in the imports closure. FA019 is closed by
-  the rounds below.
+  there by `witness_material` and do not block.
 - The running service still differs from the spec until the next Route B:
   the email routes, 0.00 instead of `None` (INV-044), direct clock reads
   (`design_diagnose` Factory code check: 46 findings) and
   `BootstrapAlreadyCompleted`.
+
+## Sweep of 2026-11-08: remnants of the removed staff email challenges
+
+Owner decision: a spec contradiction is fixed at once, before Route B. The
+Factory verification agent found that the State 7 note of
+`change_staff_status` still said "an account left unverified could never
+authenticate", while `authenticate_staff` decides nothing on
+`email_verified_at` (R0-23, A3).
+
+Swept: every authored layer (`00_product.md` … `80_notes.md`, the plans and
+closures, `65_imports.json`, `global_spec.json`, `README.md`,
+`spec/invariant_ledger.json`) for `unverified`, `email_verified_at`,
+`verification`, `challenge`, `email_deliver`, `pending_verification`, the
+six removed routes and the six removed audit actions. What stays true and
+was kept: activation of a `pending_verification` account records
+`email_verified_at`; the first administrator and the recovery override set
+it; the account view shows it. Records of the removal (the "Withdrawn" and
+"Carried changes" passages, the rejected imports of the removed
+`staff_challenges` symbols, `SOURCE.md`, `open_questions.md` Q19) state
+history and contradict nothing. `global_spec.json` holds none of the six
+routes, the six audit actions, the challenge models or errors.
+
+| file, address | old text | new text |
+|---|---|---|
+| `80_notes.md` `change_staff_status` [FIELD_ASSIGNMENT] | "…at that same captured timestamp: while the self-service verification challenge has no storage, the administrator performing the activation is what vouches for the address, and an account left unverified could never authenticate." | "…at that same captured timestamp, because the administrator performing the activation is what vouches for the address; the recorded value is a record only, and sign-in decides nothing on it." |
+| `80_notes.md` `change_staff_status` [BEHAVIOR] (audit) | "…because suspending or disabling an account ends its sessions and outstanding challenges; the outstanding challenges that entry also names have no persistence while that slice is deferred, so this function revokes none of them by declaration rather than by omission." | "…because suspending or disabling an account ends its sessions; the account has nothing else to revoke." |
+| `02_rules.md` "Invariant ledger overview" | "Full statements live in `invariant_ledger.json`." (the ledger keeps INV-014 "…with a verified email", INV-001 "(verified email for staff)", the challenge tokens of INV-003/004, INV-010…013, 016) | "`invariant_ledger.json` is the evidence of 2026-07-19 whose rows were distributed into the decisions (Status above). It keeps wording the owner withdrew with the email challenges (R0-23): …" |
+| `README.md` ledger row | "its rows are the formal invariants of `02_rules.md`" | "its rows were distributed into the decisions of `02_rules.md`, and it keeps the email-challenge wording the owner withdrew (R0-23)" |
+
+`spec/invariant_ledger.json` itself is unchanged (evidence). No behaviour
+changes: activation still sets `email_verified_at`, sign-in still requires
+an active account and a matching password, suspension and disabling still
+revoke the sessions — as the accepted `018b2e2e` already says elsewhere.
+
+Commits: `c28dc1b9` (notes), `19ba0aff` (ledger pointer), `fd1d2d11`
+(rounds), `10a066a4` (r19 fix), `11060e68` (pointer reworded), `57ac7149`
+(rounds), `22df7e39` (Stage 8.1 ledger).
+
+Rounds (one per change; provider `codex-cli:gpt-5.6-sol:medium`; input
+characters per request; the judge's files written apart):
+
+| state, round | unit | requests | review (each) | grouping | judge inline (instr + text); files apart | blocking | outcome |
+|---|---|---|---|---|---|---|---|
+| 2 r98 | Invariant ledger overview | 3 | 9,295 | — | — | 0 | clear, 0 points |
+| 3 r40 | context | 3 | 129,723 | — | — | 0 | clear |
+| 4 r42 | context | 3 | 130,131 | — | — | 0 | clear |
+| 5 r30 | context | 5 | 129,708 | 2,258 | 50,670 (6,134 + 44,536); 1,181,548 | 3 | T4 INV-001, T5 INV-051, T7 PLAT-REG-003: each "newly authoritative" against its decision's exceptions — caused by the pointer's wording "the current statements are each decision's Formal invariants"; reworded `11060e68` |
+| 7 r19 | staff_identity | 5 | 47,572 | 853 | 45,690 (2,933 + 42,757) | 1 | T1: "sign-in depends on the active status alone" vs `authenticate_staff`'s active status and matching password; fixed `10a066a4` |
+| 2 r99 | Invariant ledger overview (reworded) | 5 | 9,602 | 4,141 | 23,855 (6,296 + 17,559); 997,306 | 0 | clear; 4 judged topics, all `answered` |
+| 3 r41 | context | 5 | 130,030 | 965 | 10,216 (6,105 + 4,111); 1,042,513 | 0 | clear; 1 judged topic `answered` |
+| 4 r43 | context | 3 | 130,438 | — | — | 0 | clear, 0 points |
+| 5 r31 | context | 4 | 130,015 | 720 | — | 0 | clear; two single-review topics, not judged; r30 T4/T5/T7 did not recur |
+| 7 r20 | staff_identity | 3 | 46,311 | — | — | 0 | clear, 0 points |
+
+No topic needed a disposition: the contradictions were fixed and their one
+round on the fix did not raise them again; every other judged topic was
+`answered`.
+
+After the rounds: imports closure strict-ready (195/195, the
+`change_staff_status` scope re-decided twice, `--draft` 0 pending, then its
+`basis_sha256` set to the gate's current value); State 8 assembly 15/15
+ready; State 8 transition ready (54 carried, code-factory#189); Stage 8.1
+ledger: all 37 slice hashes refreshed — content changed in
+`staff_identity` only, the other 36 by decision line numbers (02_rules.md
+grew by three lines) — `staff_identity` rests on State 7 r20; admission
+`READY_TO_EXPORT` (17 PASS, 5 NOT_APPLICABLE).
+
+Factory consequences: none for behaviour, so Factory PR #191 (verification
+config) is unaffected. The removed-module cleanup record of #190 is not
+re-added (reasons in the Factory PR).
 
 ## Pass of 2026-11-08 on the single-round rule (#163)
 
@@ -439,9 +509,12 @@ the State 2 edits enter the `context` of States 3-5. State 0 stays closed.
 
 ## Other open items
 
-- **Export** waits for the owner (command in `80_assembly.md`). It targets
-  the clean checkout `code_factory_cp_witnesses`. The main `code_factory`
-  checkout is dirty (FA008 there) and was not used.
+- **Export.** #190 accepted `018b2e2e`. The sweep's re-export (`cbcc7537…`)
+  is on Factory branch `spec/client-portal-staff-auth-note`, made in the
+  worktree `code_factory_cp_export2` from origin/main `9409b8e2`; merge is
+  the owner's. The main `code_factory` checkout was not used.
+- **Route B** must start from the spec the owner merges: `cbcc7537…` once
+  the sweep's PR is merged (not `018b2e2e`).
 - **Factory checks, code-factory #189** (owner: Factory): 54 partial
   bindings (`transition.py --phase state8_assembly`), INV-044's `None`
   assertion in `budget_derivation_client_portal`, and the CLK-002
