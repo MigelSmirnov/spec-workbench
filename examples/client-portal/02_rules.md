@@ -220,7 +220,8 @@ the challenges (owner 2026-11-07, A3 "Carried changes").
 - INV-017: a focused test at `_require_staff_scope` showing the invariant holds; a violating input is refused and changes nothing.
 - PLAT-REG-003: a focused test at `_authorize_project_operation` showing the invariant holds; a violating input is refused and changes nothing.
 - PLAT-REG-004: a focused test at `_authorize_project_operation` showing the invariant holds; a violating input is refused and changes nothing.
-- Witnesses, the focused Factory verification checks that assert it: INV-001, INV-017, PLAT-REG-003 [witness: verification:authorization_guard_client_portal]; INV-004 [witness: verification:staff_identity_uow_client_portal].
+- Witnesses, the focused Factory verification checks that assert it: INV-001, INV-017, PLAT-REG-003 [witness: verification:authorization_guard_client_portal].
+- Witnesses, the focused Factory verification checks that assert it: INV-004 [witness: verification:staff_identity_uow_client_portal].
 - PLAT-REG-004: the Registry linkage check: the guard's request has no field
   for Registry context; an import or request carrying its own status or
   project facts is refused at decoding, before any Registry call, and writes
@@ -488,7 +489,12 @@ current service behaviour accepted; technical decisions delegated).
 - INV-030: a focused test at `create_expense_from_recognition` showing the invariant holds; a violating input is refused and changes nothing.
 - INV-042: a focused test at `register_work_payment` showing the invariant holds; a violating input is refused and changes nothing.
 - INV-043: a focused test at `publish_progress_photo` showing the invariant holds; a violating input is refused and changes nothing.
-- Witnesses, the focused Factory verification checks that assert it: INV-009 [witness: verification:service_identity_consumer_uow_client_portal]; INV-009 [witness: verification:viewer_access_sqlite_uow_client_portal]; INV-021 [witness: verification:snapshot_import_sqlite_uow_client_portal]; INV-030 [witness: verification:expense_intake_uow_client_portal]; INV-042 [witness: verification:project_tracking_audit_writer_sqlite_uow_client_portal]; INV-043 [witness: verification:photo_management_uow_client_portal].
+- Witnesses, the focused Factory verification checks that assert it: INV-009 [witness: verification:service_identity_consumer_uow_client_portal].
+- Witnesses, the focused Factory verification checks that assert it: INV-009 [witness: verification:viewer_access_sqlite_uow_client_portal].
+- Witnesses, the focused Factory verification checks that assert it: INV-021 [witness: verification:snapshot_import_sqlite_uow_client_portal].
+- Witnesses, the focused Factory verification checks that assert it: INV-030 [witness: verification:expense_intake_uow_client_portal].
+- Witnesses, the focused Factory verification checks that assert it: INV-042 [witness: verification:project_tracking_audit_writer_sqlite_uow_client_portal].
+- Witnesses, the focused Factory verification checks that assert it: INV-043 [witness: verification:photo_management_uow_client_portal].
 
 ### Consequence
 
@@ -546,7 +552,9 @@ running service still returns 0 until the next Route B regenerates
 - INV-037: a check against the rules table at `validate_eur_amount` showing the invariant holds; a violating input is refused and changes nothing.
 - INV-041: a check against the rules table at `calculate_overall_progress` showing the invariant holds; a violating input is refused and changes nothing.
 - INV-044: the ledger's property at `calculate_material_balance` showing the invariant holds; a violating input is refused and changes nothing.
-- Witnesses, the focused Factory verification checks that assert it: INV-037 [witness: verification:project_tracking_audit_writer_sqlite_uow_client_portal]; INV-037 [witness: verification:snapshot_import_sqlite_uow_client_portal]; INV-041 [witness: verification:derived_views_uow_client_portal].
+- Witnesses, the focused Factory verification checks that assert it: INV-037 [witness: verification:project_tracking_audit_writer_sqlite_uow_client_portal].
+- Witnesses, the focused Factory verification checks that assert it: INV-037 [witness: verification:snapshot_import_sqlite_uow_client_portal].
+- Witnesses, the focused Factory verification checks that assert it: INV-041 [witness: verification:derived_views_uow_client_portal].
 - INV-044: the budget derivation check:
   `calculate_material_balance` and the budget view show an overspent section
   as a negative remaining, a section without a progress record reads
@@ -584,7 +592,7 @@ INV-010, INV-012, INV-013 and INV-016 (`open_questions.md` Q19, closed).
 
 ### Formal invariants
 
-- INV-015: administrative recovery override is an exceptional flow with enhanced audit
+- INV-015: administrative recovery override is an exceptional flow with enhanced audit: one distinct `staff.recovery_override` record naming the account (`entity_id` = its `staff_id`) and the acting administrator, appended atomically with the change, keeping neither email (A13)
 
 ### Required tests
 
@@ -627,7 +635,10 @@ The accepted Factory spec revokes the sessions of a suspended or disabled staff 
 - INV-005: a check against the rules table at `_authorize_project_operation` showing the invariant holds; a violating input is refused and changes nothing.
 - INV-006: a check against the rules table at `_authorize_project_operation` showing the invariant holds; a violating input is refused and changes nothing.
 - INV-008: a focused test at `issue_viewer_access` showing the invariant holds; a violating input is refused and changes nothing.
-- Witnesses, the focused Factory verification checks that assert it: INV-005 [witness: verification:end_to_end_walkthrough_client_portal]; INV-005, INV-006 [witness: verification:authorization_guard_client_portal]; INV-006 [witness: verification:staff_identity_uow_client_portal]; INV-006 [witness: verification:service_identity_consumer_uow_client_portal].
+- Witnesses, the focused Factory verification checks that assert it: INV-005 [witness: verification:end_to_end_walkthrough_client_portal].
+- Witnesses, the focused Factory verification checks that assert it: INV-005, INV-006 [witness: verification:authorization_guard_client_portal].
+- Witnesses, the focused Factory verification checks that assert it: INV-006 [witness: verification:staff_identity_uow_client_portal].
+- Witnesses, the focused Factory verification checks that assert it: INV-006 [witness: verification:service_identity_consumer_uow_client_portal].
 - INV-008: the viewer credential re-issue check: after each re-issue exactly
   one credential is live, the previous one is revoked by the administrator,
   and neither its secret nor a session it opened is accepted; a re-issue
@@ -760,7 +771,8 @@ The accepted Factory spec adds two policies beside the catalog (Factory `5677993
 
 - INV-051: a focused test at `append_audit` showing the invariant holds; a violating input is refused and changes nothing.
 - INV-053: a focused test at `append_audit` showing the invariant holds; a violating input is refused and changes nothing.
-- Witnesses, the focused Factory verification checks that assert it: INV-051 [witness: verification:staff_identity_uow_client_portal]; INV-053 [witness: verification:snapshot_import_sqlite_uow_client_portal].
+- Witnesses, the focused Factory verification checks that assert it: INV-051 [witness: verification:staff_identity_uow_client_portal].
+- Witnesses, the focused Factory verification checks that assert it: INV-053 [witness: verification:snapshot_import_sqlite_uow_client_portal].
 
 ### Consequence
 
@@ -872,7 +884,8 @@ behaviour accepted; technical decisions delegated.
 
 - INV-018: a check against the rules table at `_normalize_staff_email` showing the invariant holds; a violating input is refused and changes nothing.
 - INV-019: a check against the rules table at `_validate_new_password` showing the invariant holds; a violating input is refused and changes nothing.
-- Witnesses, the focused Factory verification checks that assert it: INV-018 [witness: verification:staff_identity_uow_client_portal]; INV-019 [witness: verification:credential_security_policy_client_portal].
+- Witnesses, the focused Factory verification checks that assert it: INV-018 [witness: verification:staff_identity_uow_client_portal].
+- Witnesses, the focused Factory verification checks that assert it: INV-019 [witness: verification:credential_security_policy_client_portal].
 
 ### Consequence
 
@@ -934,11 +947,14 @@ The former ledger rows INV-020…INV-029 that no table of R1–R17 carries. Thei
 - INV-026: a focused test at `import_snapshot` showing the invariant holds; a violating input is refused and changes nothing.
 - INV-027: a focused test at `build_budget_view` showing the invariant holds; a violating input is refused and changes nothing.
 - INV-028: a focused test at `PortalTransaction.commit` showing the invariant holds; a violating input is refused and changes nothing.
-- Witnesses, the focused Factory verification checks that assert it: INV-022, INV-023, INV-024, INV-025 [witness: verification:budget_management_sqlite_uow_client_portal]; INV-020 [witness: verification:snapshot_import_sqlite_uow_client_portal].
+- Witnesses, the focused Factory verification checks that assert it: INV-022, INV-023, INV-024, INV-025 [witness: verification:budget_management_sqlite_uow_client_portal].
+- Witnesses, the focused Factory verification checks that assert it: INV-020 [witness: verification:snapshot_import_sqlite_uow_client_portal].
 - INV-026, INV-027, INV-028: the budget derivation check. INV-026: an
   accepted import stores the published planned values and rewrites no budget
   version, plan or expense; a changed re-publication is a conflict that
-  changes nothing; expense operations never move a plan. INV-027: no table
+  changes no snapshot, budget version, plan or expense and is recorded only
+  as its import result and audit (A12, A13); expense operations never move a
+  plan. INV-027: no table
   has a derived-value column, reading the views writes nothing, and after
   each change of an owning record (inclusion, allocations, progress,
   payment, plan) the next read equals a recomputation from the stored rows.
@@ -972,7 +988,9 @@ The former ledger rows INV-030…INV-037 that no table of R1–R17 carries; prod
   Witness: `replace_expense_allocations` with the explicit amounts 150.00 to a section and 50.00 to other expenses persists exactly those two allocations, and a replacement of 1.00 against the 200.00 total is refused with `ExpenseValidationError` while the stored row counts stay unchanged; nothing spreads an amount (`verification/client_portal_expense_consumer_support.py`, run by the check) [witness: verification:expense_management_uow_client_portal].
 - INV-035: a focused test at `_project_expense_summary` showing the invariant holds; a violating input is refused and changes nothing.
 - INV-036: a focused test at `validate_project_section` showing the invariant holds; a violating input is refused and changes nothing.
-- Witnesses, the focused Factory verification checks that assert it: INV-032, INV-036 [witness: verification:expense_intake_uow_client_portal]; INV-032, INV-036 [witness: verification:expense_management_uow_client_portal]; INV-035 [witness: verification:derived_views_uow_client_portal].
+- Witnesses, the focused Factory verification checks that assert it: INV-032, INV-036 [witness: verification:expense_intake_uow_client_portal].
+- Witnesses, the focused Factory verification checks that assert it: INV-032, INV-036 [witness: verification:expense_management_uow_client_portal].
+- Witnesses, the focused Factory verification checks that assert it: INV-035 [witness: verification:derived_views_uow_client_portal].
 
 ### Consequence
 
@@ -1237,7 +1255,8 @@ that decides the validity of those writes or of persisted records. Times a
 source supplies — `approved_at`, `published_at` of a snapshot, `confirmed_at`
 and `document_date` of a recognition, `photo_date`, `payment_date`, a service
 credential's `expires_at` — are
-kept as supplied, never replaced by the clock (State 1 Modeling
+kept as supplied: the same instant, stored offset-naive UTC like every
+persisted timestamp, never replaced by the clock (State 1 Modeling
 conventions); their accepted forms and checks, and where in an operation
 its one clock read happens, are the accepted spec's, carried to States 6–7. An expiry is valid strictly before its instant: a
 session, credential or token is usable while `now < expires_at` and expired
@@ -1256,8 +1275,10 @@ every other part of the portal obtains time from it and never reads a host
 clock itself:
 
 - the wall clock gives the instant: the current UTC time as an offset-naive
-  datetime, one reading per request, the same value `datetime.utcnow()`
-  gives (no cache, no local time, no second reading, no arithmetic);
+  datetime, one reading per operation for its own timestamps, the same value
+  `datetime.utcnow()` gives (no cache, no local time, no second reading by
+  the operation, no arithmetic); the audit writer's reading of an appended
+  record's `occurred_at` is the one further reading (the exception above);
 - the elapsed clock gives a duration scale: one reading per request of a
   clock that cannot move backwards, in seconds as a float, the same value
   `time.monotonic()` gives. It measures the viewer-entry rate-limit window of
@@ -1280,15 +1301,15 @@ reading equals `datetime.utcnow()` and the elapsed reading equals
 
 ### Formal invariants
 
-- All portal-owned event timestamps written by one operation, other than an
-  audit record's `occurred_at`, are equal; an expiry it writes is that instant plus its TTL, and source-supplied times keep their supplied values.
+- CLK-001: all portal-owned event timestamps written by one operation, other than an
+  audit record's `occurred_at`, are equal; an expiry it derives from a TTL is that instant plus its TTL, and source-supplied times, a service credential's supplied `expires_at` among them, keep their supplied values.
 
 ### Required tests
 
-- A test per multi-write operation (activation, revocation cascades,
+- CLK-001: a test per multi-write operation (activation, revocation cascades,
   bootstrap) that its written timestamps, other than audit `occurred_at`,
   are one instant.
-- Witnesses, the focused Factory verification checks that assert it: one instant per operation [witness: verification:service_identity_consumer_uow_client_portal]; one instant per operation [witness: verification:staff_bootstrap_client_portal].
+- Witnesses, the focused Factory verification checks that assert it: CLK-001 [witness: verification:service_identity_consumer_uow_client_portal]; CLK-001 [witness: verification:staff_bootstrap_client_portal].
 
 ### Consequence
 
@@ -1406,7 +1427,8 @@ to States 6–7.
 
 - `runtime_settings_client_portal`: an invalid or missing required variable
   stops start-up.
-- Witnesses, the focused Factory verification checks that assert it: required configuration [witness: verification:runtime_settings_client_portal]; bound existence [witness: verification:binary_storage_content_client_portal].
+- Witnesses, the focused Factory verification checks that assert it: required configuration [witness: verification:runtime_settings_client_portal].
+- Witnesses, the focused Factory verification checks that assert it: bound existence [witness: verification:binary_storage_content_client_portal].
 
 ### Consequence
 
@@ -1421,7 +1443,7 @@ It decides nothing new: each applicable category is owned by a decision above.
 
 ### Formal invariants
 
-- Every category resolves to an accepted decision or an open question.
+- Every category has an explicit outcome: APPLICABLE resolves to an accepted decision, UNRESOLVED to an open question, and NOT_APPLICABLE carries its project-specific rationale (`SECURITY_REVIEW_EVIDENCE.md`).
 
 ### Required tests
 
@@ -1458,8 +1480,10 @@ Security review: PERFORMED
 2. A pin changes only through the Factory route, like any other deployed
    source change; nothing updates a dependency at run time or on the host.
 3. Before a deploy, the pinned versions are checked against a public
-   known-vulnerability database; a pin with a known vulnerability that affects
-   the portal is not deployed until it is updated through the Factory route.
+   known-vulnerability database, together with every library pip resolves
+   for them in the built image; a pin with a known vulnerability that affects
+   the portal, or one pulling in such a library, is not deployed until it is
+   updated through the Factory route.
    A pin counts as affecting the portal when the database lists a known
    vulnerability for its version; reachability inside the portal is not
    judged case by case, so such a pin blocks the deploy whatever feature the
@@ -1478,8 +1502,9 @@ This describes the existing deployment and answers OQ-17 and
 - DEP-001: every library from outside its own source that the running
   portal imports directly is pinned to one exact version in the deployment
   requirements; the libraries pip resolves for them are not pinned.
-- DEP-002: no deploy ships a pin with a known vulnerability affecting the
-  portal.
+- DEP-002: no deploy ships an image in which an installed distribution — a
+  pin or a library pip resolves for it — has a known vulnerability listed for
+  its version.
 
 ### Required tests
 
@@ -1487,8 +1512,11 @@ This describes the existing deployment and answers OQ-17 and
   import [witness: verification:dependency_pins_client_portal].
 - DEP-002: the pre-deploy vulnerability check of those pins passes: the deploy
   step judges every distribution installed in the built image, bound to its
-  content id, against a fresh public advisory snapshot, and starts the
-  service only on a recent passing verdict about that same image; a listed
+  content id, against a public advisory snapshot no older than the deploy
+  route's maximum snapshot age, and starts the service only on a passing
+  verdict about that same image no older than its maximum environment age
+  (`max_snapshot_age`, `max_environment_age`: deployment procedure values of
+  the Factory deploy route, rule 3, not portal rules); a listed
   version, stale, missing or unmatchable data, or another image does not
   start it [witness: verification:dependency_release_gate_client_portal].
 
