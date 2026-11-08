@@ -61,6 +61,11 @@ give two outcomes. It is not a decision's `[witness: …]` tag, which binds an
 invariant to an existing check (`TRANSITION_PROTOCOL.md`, "Invariant
 evidence"); whether that check asserts the invariants its item names is judged
 per check after State 7, at the State 8 handoff, never in a round of State 2.
+Nor is which existing check an item is bound to: of an invariant's test, a
+State 2 round asks only whether its Required tests item says what must be
+shown, and its judge takes a question about a binding as `later_state` 8. On
+client-portal rounds 84–91 reviewers kept asking which existing check is bound
+to CLK-002, because the scope still read "an invariant nothing can verify".
 
 ### State 2's own work
 

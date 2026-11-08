@@ -374,12 +374,13 @@ not closed or carried for a pass; "not_checked" means an input is missing:
 
 Ask about an earlier state only whether this state fulfils what it carried
 here; its closed units are not audited again. A decision's "[witness: ...]" tag
-binds an invariant to an existing check: it is not the history you give as a
-point's witness. Whether a Required tests item says what would show the
-invariant holds is a point of the state that owns the invariant. Unless
-verdicts are listed below, whether a bound check asserts what its item names
-is not a point of this round: it is judged per check after State 7, where the
-witnesses are written, at the State 8 handoff."""
+is text of its Required tests item, not the history you give as a point's
+witness. Of an invariant's test, the state that owns the invariant answers one
+question: does its Required tests item say what must be shown? Unless verdicts
+are listed below, which existing check an item is bound to, and whether that
+check asserts what the item names, are not points of this round: they are
+carried, and judged per check after State 7, where the witnesses are written,
+at the State 8 handoff."""
 
 
 LAYER_JUDGE = """=== DETERMINISTIC RESULTS AT THIS TRANSITION (not design text; never quote) ===
@@ -387,7 +388,15 @@ LAYER_JUDGE = """=== DETERMINISTIC RESULTS AT THIS TRANSITION (not design text; 
 A topic these results show open is not judged answered or indifferent, by
 this state's texts or a later one's: the texts may say it, the check says it
 does not hold.
-{findings}"""
+{findings}{witness}"""
+
+WITNESS_CARRIED_JUDGE = """
+
+Of an invariant's test, this state answers only whether its Required tests item
+says what must be shown. A topic asking which existing check an item is bound
+to, or whether a bound check asserts it, is later_state 8: the binding and its
+assertion are carried and judged per check after State 7, at the State 8
+handoff."""
 
 MAX_LAYER_LINES = 40
 
@@ -459,8 +468,10 @@ closed otherwise."""
 def layer_judge(context: dict | None, units: list[str] | None = None) -> str | None:
     if not context:
         return None
-    text = LAYER_JUDGE.format(findings=_layer_lines(context)[3])
     listing = _verdicts(context, units)
+    text = LAYER_JUDGE.format(findings=_layer_lines(context)[3],
+                              witness="" if listing or context.get("state", 0) >= LAST_DESIGN_STATE
+                              else WITNESS_CARRIED_JUDGE)
     reopened = context.get("evidence_reopened") or []
     note = EVIDENCE_REOPENED_JUDGE.format(units=", ".join(reopened)) if reopened else ""
     return text + (VERDICTS.format(listing=listing) if listing else "") + note
