@@ -877,6 +877,15 @@ is removed (git keeps it at `7316b443`).
   `credential_id: UUID`, as `build_viewer_session` takes `session_id`; the
   caller generates a fresh uuid4, issues the secret for it and passes both
   (State 6 contracts, determinism now true, State 7 notes).
+- **Two Factory validation errors found at the State 7 prompt build.** The
+  executable property of the removed helper `_photo_mutation_result` was
+  still carried in the data closure (`properties._photo_mutation_result`);
+  it is dropped: the same equalities are what the IR of
+  `build_photo_mutation_result` constructs. The Q09 contract
+  `decode_recognition_publication(payload: dict[str, Any])` names `Any`,
+  which no import line bound: `from typing import Any` is added to
+  `imports.stdlib` of `global_spec.json`, which no tool projects (its lines
+  are the accepted spec's).
 
 ## Record construction: emitters first, gaps to the owner (2026-11-08)
 
