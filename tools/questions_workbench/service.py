@@ -39,7 +39,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
-from . import documents, judge, judge_context, layer_prompt, prompts, units
+from . import documents, explore, judge, judge_context, layer_prompt, prompts, units
 from .provenance import QuoteProvenance
 from .provider import LATER_DIR, Provider
 
@@ -161,9 +161,18 @@ def _group(provider: Provider, reviews: list[dict[str, Any]], keep_points: bool 
             topic["points"] = [f"{points[m].get('text', '')} -> {points[m].get('question', '')}"
                                + (f" | reviewer's witness: {json.dumps(points[m]['witness'], ensure_ascii=False)}"
                                   if _has_witness(points[m]) else "")
+                               + "".join(f" | basis {b.get('key')}: \"{b.get('quote')}\""
+                                         + ("" if b.get("verified") else " (NOT FOUND in the snapshot)")
+                                         for b in points[m].get("basis") or [] if isinstance(b, dict))
                                for m in topic["members"]]
             # the passages the points quote, which the judge is given inline (judge_context.py)
             topic["quoted"] = [q for m in topic["members"] for q in judge_context.topic_quotes(points[m])]
+            # an exploring review's verified bases (#159): their quotes, and the verbatim sections
+            bases = [b for m in topic["members"] for b in points[m].get("basis") or []
+                     if isinstance(b, dict) and b.get("verified")]
+            if bases:
+                topic["bases"] = bases
+                topic["quoted"] += [b["quote"] for b in bases if b.get("quote") not in topic["quoted"]]
     return sorted(topics, key=lambda t: (-len(t["runs"]), t["topic"]))
 
 
@@ -651,24 +660,45 @@ def _document_round(provider: Provider, state: int, runs: int, read: StateTexts,
     if state <= layer_prompt.LAST_STATE:
         # the prompt of the layer, not the texts of States 0..N (owner decision 2026-11-08)
         selection = layer_prompt.select(read.texts, state, read.units, scope, changed, referencing)
-        text = layer_prompt.render(selection, read.texts, state)
-        base += layer_prompt.note(selection, state)
+        explorable = state in explore.EXPLORING_STATES and hasattr(provider, "explore")
+        text = layer_prompt.render(selection, read.texts, state, explorable)
+        base += layer_prompt.note(selection, state) if not explorable else ""
     else:
         text = prompts.ask_input(read.texts)
     later = {p.name: p.read_text(encoding="utf-8") for _, p in documents.later_documents(case, state)}
     evidence = (layer or {}).get("unit_evidence") or {}
     precedents = [p for p in _precedents(case, state) if _evidence_holds(p, evidence, scope)]
     instruction = base + prompts.layer_scope(layer, scope)
-    with ThreadPoolExecutor(max_workers=runs) as pool:
-        reviews = list(pool.map(lambda _: _review_or_failed(provider, instruction, text), range(runs)))
-    _valid_reviews(reviews, f"State {state}")
+    exploration = None
+    if state in explore.EXPLORING_STATES and hasattr(provider, "explore"):
+        # the agentic review (#159): a read-only workspace it explores with tools
+        import tempfile
+
+        with tempfile.TemporaryDirectory(prefix="design-questions-explore-") as temp:
+            root = Path(temp) / "workspace"
+            root.mkdir()
+            exploration = explore.build_workspace(root, read.texts, state, layer)
+            asked = instruction + explore.instruction_note(exploration, state)
+            with ThreadPoolExecutor(max_workers=runs) as pool:
+                reviews = list(pool.map(
+                    lambda _: explore.review(provider, asked, text, root, exploration["snapshot"]), range(runs)))
+    else:
+        with ThreadPoolExecutor(max_workers=runs) as pool:
+            reviews = list(pool.map(lambda _: _review_or_failed(provider, instruction, text), range(runs)))
+        _valid_reviews(reviews, f"State {state}")
     for review in reviews:
         _set_aside(review, scope, changed, read.units)
     topics = _group(provider, reviews, keep_points=True)
     repeated = _judged(topics, witness=True)
+    judge_layer = (prompts.layer_judge(layer, scope) or "") + (
+        explore.bases_for_judge(repeated, exploration["snapshot"]) if exploration is not None else "")
     judged = (_judge(provider, state, text, read.texts, repeated, old, later, precedents,
-                     witness=True, case=case, layer=prompts.layer_judge(layer, scope), scope=scope) if repeated
+                     witness=True, case=case, layer=judge_layer or None, scope=scope) if repeated
               else {"provider": provider.name})
+    if exploration is not None:
+        judged["exploration"] = exploration
+    elif state in explore.EXPLORING_STATES:
+        judged["exploration"] = {"not_available": f"{provider.name} cannot explore a workspace"}
     return reviews, topics, repeated, judged
 
 
@@ -814,13 +844,17 @@ def ask_round(case: Path, state: int, provider: Provider, runs: int = DEFAULT_RU
         "hypothesis_topics": sum(1 for t in repeated if t["judgement"].get("kind") == judge.HYPOTHESIS),
         "blocking_topics": len(blocking),
         "deferred_topics": len(deferred),
-        "clear": not blocking,
+        # an exploring review that did not finish (#159) leaves the round not clean
+        "not_checked_reviews": [{"review": i + 1, "reason": r["not_checked"]}
+                                for i, r in enumerate(reviews) if r.get("not_checked")],
+        "clear": not blocking and not any(r.get("not_checked") for r in reviews),
         "closed": False,
         "units": {key: unit["digest"] for key, unit in read.units.items()},
         "scope": scope,
         "changed_units": sorted(changed),
         "referenced_by_change": referencing,
-        "blocked_units": units.blocked(repeated, scope),
+        "blocked_units": (list(scope) if any(r.get("not_checked") for r in reviews)
+                          else units.blocked(repeated, scope)),
         "set_aside": [len(r["set_aside"]) for r in reviews],
         "topics": topics,
         "layer": layer_record(layer),

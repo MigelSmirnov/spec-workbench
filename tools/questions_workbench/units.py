@@ -81,6 +81,7 @@ NEVER_REVIEWED = "never reviewed"
 CHANGED = "changed since its latest review"
 EVIDENCE_CHANGED = "the evidence its bindings rest on changed"
 UNVERIFIED = "a contradiction whose quotes were not verified"
+NOT_CHECKED = "a review of its latest round did not finish (not_checked)"
 
 
 def _digest(text: str) -> str:
@@ -260,6 +261,10 @@ def unit_state(summaries: list[dict[str, Any]], key: str, digest: str,
         return state
     if evidence is not None and evidence_changed(last, key, evidence):
         state["needs_round"] = EVIDENCE_CHANGED
+        return state
+    if last.get("not_checked_reviews"):
+        # an exploring review that did not finish (#159): the round is no review of it
+        state["needs_round"] = NOT_CHECKED
         return state
     scope = list(last.get("scope") or [])
     for index, topic in enumerate(last.get("topics") or [], 1):

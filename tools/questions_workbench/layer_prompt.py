@@ -269,11 +269,19 @@ def select(texts: list[tuple[int, str, str]], state: int, current: dict[str, dic
     return selection
 
 
-def render(selection: Selection, texts: list[tuple[int, str, str]], state: int) -> str:
+def render(selection: Selection, texts: list[tuple[int, str, str]], state: int, explorable: bool = False) -> str:
+    """The input of the round. ``explorable``: the reviewer has the whole snapshot to
+    explore (#159), so earlier texts the selection could not narrow are pointed to,
+    not pasted."""
     own_doc = {name for s, name, _ in texts if s == state}
     parts = [f"=== State {state}: {', '.join(sorted(own_doc))} — the units under review"
              + (" and their neighbours" if selection.neighbours else "") + " ===\n\n"
              + "\n".join(text for _, text in selection.own)]
+    if selection.whole and explorable:
+        earlier = ", ".join(f"docs/{name}" for s, name, _ in texts if s < state)
+        parts.append("=== The earlier states ===\n\nNot pasted here: " + "; ".join(selection.whole)
+                     + f". They are in your workspace ({earlier}); explore them with nav.py.")
+        return "\n\n".join(parts)
     if selection.whole:
         for s, name, _, body in selection.received:
             parts.append(f"=== {name} (State {s}), whole ===\n\n{body}")
