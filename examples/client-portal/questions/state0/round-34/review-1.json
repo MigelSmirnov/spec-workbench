@@ -1,0 +1,229 @@
+{
+ "open_points": [
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "Registry address configuration input",
+   "kind": "unnamed input",
+   "text": "the Registry address",
+   "question": "What is the exact environment-variable name and value syntax for the Registry address, and which values count as absent?",
+   "options": [
+    "A named variable containing an absolute base URL; unset, empty, or whitespace-only is absent",
+    "A named host-and-port variable; only an unset variable is absent",
+    "Separate environment variables provide scheme, host, port, and base path"
+   ],
+   "default_guess": "Use REGISTRY_BASE_URL containing an absolute URL, and treat unset, empty, or whitespace-only as absent.",
+   "witness": {
+    "initial": "The service starts with the Registry variable present but empty.",
+    "events": [
+     "An administrator requests the active Registry project list."
+    ],
+    "outcomes": [
+     "The gateway treats the value as absent and returns the configured Registry-unavailable failure.",
+     "The gateway treats the value as an address, attempts to resolve it, and returns a malformed-address or connection failure."
+    ],
+    "observer": "The administrator and the deployment operator"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "Registry address validation timing",
+   "kind": "ambiguous exception",
+   "text": "which the Registry gateway reads at each call and whose absence fails only Registry calls",
+   "question": "Does the startup-validation exception cover every Registry-address defect, or only absence; when is a present but malformed address rejected?",
+   "options": [
+    "Startup accepts any Registry-address value and the gateway validates it on each call",
+    "Startup permits absence but rejects a present malformed value",
+    "Startup performs syntax validation while the gateway performs additional resolution and policy validation per call"
+   ],
+   "default_guess": "Permit absence at startup, but reject a present syntactically invalid address at startup.",
+   "witness": {
+    "initial": "The Registry address is set to a malformed URL before startup.",
+    "events": [
+     "The host operator starts the service.",
+     "A caller later invokes an operation requiring Registry access."
+    ],
+    "outcomes": [
+     "Startup fails configuration validation.",
+     "Startup succeeds and only the later operation fails."
+    ],
+    "observer": "The host operator and the caller"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "Registry trust boundary",
+   "kind": "unspecified address policy",
+   "text": "the Registry address",
+   "question": "Which schemes, destinations, ports, URL components, redirects, and server-identity checks are permitted for the Registry address?",
+   "options": [
+    "Require HTTPS and validate the Registry server certificate; forbid credentials, fragments, and cross-origin redirects",
+    "Allow HTTP or HTTPS because the deployment network supplies trust",
+    "Allow any gateway-supported URL, including redirects"
+   ],
+   "default_guess": "Require an absolute HTTPS URL, normal certificate validation, no embedded credentials or fragments, and no redirects to another origin.",
+   "witness": {
+    "initial": "The environment supplies an HTTP Registry address or an HTTPS address that redirects to another host.",
+    "events": [
+     "A portal operation causes the gateway to contact the Registry."
+    ],
+    "outcomes": [
+     "The gateway refuses the configured destination before sending the request.",
+     "The gateway sends Registry traffic to the supplied or redirected destination."
+    ],
+    "observer": "The caller, deployment operator, and operator of the destination host"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "Registry address read scope",
+   "kind": "ambiguous action boundary",
+   "text": "reads at each call",
+   "question": "Does “each call” mean each portal operation or each individual outbound Registry request, and must one portal operation pin one address if it makes multiple Registry requests?",
+   "options": [
+    "Read and pin the address once per portal operation",
+    "Read the address before every outbound Registry request",
+    "Create a gateway client per call and let that client pin the address for all requests it performs"
+   ],
+   "default_guess": "Read and pin the address once for each portal operation that needs the Registry.",
+   "witness": {
+    "initial": "A portal operation needs two Registry requests, and the configured address changes from Registry A to Registry B between them.",
+    "events": [
+     "A caller starts the portal operation.",
+     "The gateway completes the first Registry request against A.",
+     "The environment value changes before the second Registry request."
+    ],
+    "outcomes": [
+     "Both requests use A because the operation pins one address.",
+     "The second request uses B because every outbound request rereads the address."
+    ],
+    "observer": "The caller and the operators of Registries A and B"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "Missing Registry address failure",
+   "kind": "unspecified observable failure",
+   "text": "whose absence fails only Registry calls",
+   "question": "What exact product/API failure is returned when a Registry-dependent operation encounters an absent address, including HTTP status, stable error identifier, response body, and retryability?",
+   "options": [
+    "Return a generic retryable dependency-unavailable error",
+    "Return a distinct Registry-not-configured error",
+    "Treat it as an internal configuration error without a stable public distinction"
+   ],
+   "default_guess": "Return a stable, retryable dependency-unavailable response without disclosing configuration details.",
+   "witness": {
+    "initial": "The service is running without a Registry address.",
+    "events": [
+     "An authenticated administrator requests the active Registry project list."
+    ],
+    "outcomes": [
+     "The response is a retryable dependency-unavailable error.",
+     "The response is an internal-server/configuration error with a different status and body."
+    ],
+    "observer": "The administrator's client"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "Registry-dependent operation classification",
+   "kind": "unnamed affected actions",
+   "text": "fails only Registry calls",
+   "question": "Which portal operations count as Registry calls or otherwise require the Registry address, and which operations must continue without it?",
+   "options": [
+    "Only operations that actually issue an outbound Registry request fail",
+    "Every operation whose domain rules mention Registry state fails, even when it could use stored facts",
+    "A fixed enumerated set of API operations fails whenever the address is absent"
+   ],
+   "default_guess": "Fail only when the operation reaches an actual outbound Registry request; authorization refusals and operations documented not to consult Registry continue normally.",
+   "witness": {
+    "initial": "The Registry address is absent and an unauthorized caller invokes an operation that would consult Registry after authorization.",
+    "events": [
+     "The portal evaluates the caller's authorization."
+    ],
+    "outcomes": [
+     "The portal returns the authorization refusal without consulting configuration.",
+     "The portal first treats the operation as Registry-dependent and returns the Registry failure."
+    ],
+    "observer": "The caller"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "Registry configuration failure atomicity",
+   "kind": "unspecified stored outcome",
+   "text": "whose absence fails only Registry calls",
+   "question": "When absence is discovered during a portal operation, what product-state changes and audit records, if any, may already have been committed?",
+   "options": [
+    "The operation makes no product-state or audit change",
+    "An audit of the failed attempt is recorded but domain state is unchanged",
+    "Changes completed before the outbound call remain committed"
+   ],
+   "default_guess": "Make no domain-state change; record a failure audit only where that operation's audit contract explicitly requires one.",
+   "witness": {
+    "initial": "A Registry-dependent mutation is accepted far enough to begin processing, but the address is absent when the gateway is invoked.",
+    "events": [
+     "An authenticated principal submits the mutation.",
+     "The portal performs its local checks.",
+     "The gateway discovers that no Registry address is configured."
+    ],
+    "outcomes": [
+     "The request fails with no stored mutation or success audit.",
+     "A local change or audit record remains despite the failed request."
+    ],
+    "observer": "The principal and a later administrator inspecting product state or audit history"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "Readiness with missing Registry configuration",
+   "kind": "unspecified health semantics",
+   "text": "whose absence fails only Registry calls",
+   "question": "Does an absent Registry address make the public readiness check fail, or is the service ready because startup and non-Registry operations remain available?",
+   "options": [
+    "Readiness succeeds; absence affects only an attempted Registry operation",
+    "Readiness fails until the address is present",
+    "Readiness depends on whether Registry-backed functionality is enabled by another setting"
+   ],
+   "default_guess": "Readiness succeeds because the text permits startup and confines the failure to Registry calls.",
+   "witness": {
+    "initial": "The service has started without a Registry address and its database and binary root are usable.",
+    "events": [
+     "An orchestrator requests readiness.",
+     "A user invokes a non-Registry operation."
+    ],
+    "outcomes": [
+     "Readiness reports ready and the non-Registry operation proceeds.",
+     "Readiness reports not ready even though the non-Registry operation could proceed."
+    ],
+    "observer": "The orchestrator and deployment operator"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "Runtime Registry address change",
+   "kind": "unspecified reconfiguration behavior",
+   "text": "the Registry gateway reads at each call",
+   "question": "When the environment value changes at runtime, must the gateway immediately use the new address, and what happens to cached clients, DNS results, connection pools, and in-flight calls created for the old address?",
+   "options": [
+    "New calls immediately use the new address while in-flight calls finish against the old one",
+    "The new value is used only after cached clients or connections expire",
+    "Runtime changes are unsupported despite the per-call read; a restart is required"
+   ],
+   "default_guess": "New calls use the newly read address immediately, while already-started calls finish against the address they captured.",
+   "witness": {
+    "initial": "The service has an open connection to Registry A, then its environment value is changed to Registry B without restart.",
+    "events": [
+     "A caller starts a new Registry-dependent operation after the change."
+    ],
+    "outcomes": [
+     "The new operation contacts Registry B.",
+     "The gateway reuses its pooled client and contacts Registry A."
+    ],
+    "observer": "The caller and the operators of Registries A and B"
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"00_product.md:Decisions\",\"subject\":\"Registry address configuration input\",\"kind\":\"unnamed input\",\"text\":\"the Registry address\",\"question\":\"What is the exact environment-variable name and value syntax for the Registry address, and which values count as absent?\",\"options\":[\"A named variable containing an absolute base URL; unset, empty, or whitespace-only is absent\",\"A named host-and-port variable; only an unset variable is absent\",\"Separate environment variables provide scheme, host, port, and base path\"],\"default_guess\":\"Use REGISTRY_BASE_URL containing an absolute URL, and treat unset, empty, or whitespace-only as absent.\",\"witness\":{\"initial\":\"The service starts with the Registry variable present but empty.\",\"events\":[\"An administrator requests the active Registry project list.\"],\"outcomes\":[\"The gateway treats the value as absent and returns the configured Registry-unavailable failure.\",\"The gateway treats the value as an address, attempts to resolve it, and returns a malformed-address or connection failure.\"],\"observer\":\"The administrator and the deployment operator\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"Registry address validation timing\",\"kind\":\"ambiguous exception\",\"text\":\"which the Registry gateway reads at each call and whose absence fails only Registry calls\",\"question\":\"Does the startup-validation exception cover every Registry-address defect, or only absence; when is a present but malformed address rejected?\",\"options\":[\"Startup accepts any Registry-address value and the gateway validates it on each call\",\"Startup permits absence but rejects a present malformed value\",\"Startup performs syntax validation while the gateway performs additional resolution and policy validation per call\"],\"default_guess\":\"Permit absence at startup, but reject a present syntactically invalid address at startup.\",\"witness\":{\"initial\":\"The Registry address is set to a malformed URL before startup.\",\"events\":[\"The host operator starts the service.\",\"A caller later invokes an operation requiring Registry access.\"],\"outcomes\":[\"Startup fails configuration validation.\",\"Startup succeeds and only the later operation fails.\"],\"observer\":\"The host operator and the caller\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"Registry trust boundary\",\"kind\":\"unspecified address policy\",\"text\":\"the Registry address\",\"question\":\"Which schemes, destinations, ports, URL components, redirects, and server-identity checks are permitted for the Registry address?\",\"options\":[\"Require HTTPS and validate the Registry server certificate; forbid credentials, fragments, and cross-origin redirects\",\"Allow HTTP or HTTPS because the deployment network supplies trust\",\"Allow any gateway-supported URL, including redirects\"],\"default_guess\":\"Require an absolute HTTPS URL, normal certificate validation, no embedded credentials or fragments, and no redirects to another origin.\",\"witness\":{\"initial\":\"The environment supplies an HTTP Registry address or an HTTPS address that redirects to another host.\",\"events\":[\"A portal operation causes the gateway to contact the Registry.\"],\"outcomes\":[\"The gateway refuses the configured destination before sending the request.\",\"The gateway sends Registry traffic to the supplied or redirected destination.\"],\"observer\":\"The caller, deployment operator, and operator of the destination host\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"Registry address read scope\",\"kind\":\"ambiguous action boundary\",\"text\":\"reads at each call\",\"question\":\"Does “each call” mean each portal operation or each individual outbound Registry request, and must one portal operation pin one address if it makes multiple Registry requests?\",\"options\":[\"Read and pin the address once per portal operation\",\"Read the address before every outbound Registry request\",\"Create a gateway client per call and let that client pin the address for all requests it performs\"],\"default_guess\":\"Read and pin the address once for each portal operation that needs the Registry.\",\"witness\":{\"initial\":\"A portal operation needs two Registry requests, and the configured address changes from Registry A to Registry B between them.\",\"events\":[\"A caller starts the portal operation.\",\"The gateway completes the first Registry request against A.\",\"The environment value changes before the second Registry request.\"],\"outcomes\":[\"Both requests use A because the operation pins one address.\",\"The second request uses B because every outbound request rereads the address.\"],\"observer\":\"The caller and the operators of Registries A and B\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"Missing Registry address failure\",\"kind\":\"unspecified observable failure\",\"text\":\"whose absence fails only Registry calls\",\"question\":\"What exact product/API failure is returned when a Registry-dependent operation encounters an absent address, including HTTP status, stable error identifier, response body, and retryability?\",\"options\":[\"Return a generic retryable dependency-unavailable error\",\"Return a distinct Registry-not-configured error\",\"Treat it as an internal configuration error without a stable public distinction\"],\"default_guess\":\"Return a stable, retryable dependency-unavailable response without disclosing configuration details.\",\"witness\":{\"initial\":\"The service is running without a Registry address.\",\"events\":[\"An authenticated administrator requests the active Registry project list.\"],\"outcomes\":[\"The response is a retryable dependency-unavailable error.\",\"The response is an internal-server/configuration error with a different status and body.\"],\"observer\":\"The administrator's client\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"Registry-dependent operation classification\",\"kind\":\"unnamed affected actions\",\"text\":\"fails only Registry calls\",\"question\":\"Which portal operations count as Registry calls or otherwise require the Registry address, and which operations must continue without it?\",\"options\":[\"Only operations that actually issue an outbound Registry request fail\",\"Every operation whose domain rules mention Registry state fails, even when it could use stored facts\",\"A fixed enumerated set of API operations fails whenever the address is absent\"],\"default_guess\":\"Fail only when the operation reaches an actual outbound Registry request; authorization refusals and operations documented not to consult Registry continue normally.\",\"witness\":{\"initial\":\"The Registry address is absent and an unauthorized caller invokes an operation that would consult Registry after authorization.\",\"events\":[\"The portal evaluates the caller's authorization.\"],\"outcomes\":[\"The portal returns the authorization refusal without consulting configuration.\",\"The portal first treats the operation as Registry-dependent and returns the Registry failure.\"],\"observer\":\"The caller\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"Registry configuration failure atomicity\",\"kind\":\"unspecified stored outcome\",\"text\":\"whose absence fails only Registry calls\",\"question\":\"When absence is discovered during a portal operation, what product-state changes and audit records, if any, may already have been committed?\",\"options\":[\"The operation makes no product-state or audit change\",\"An audit of the failed attempt is recorded but domain state is unchanged\",\"Changes completed before the outbound call remain committed\"],\"default_guess\":\"Make no domain-state change; record a failure audit only where that operation's audit contract explicitly requires one.\",\"witness\":{\"initial\":\"A Registry-dependent mutation is accepted far enough to begin processing, but the address is absent when the gateway is invoked.\",\"events\":[\"An authenticated principal submits the mutation.\",\"The portal performs its local checks.\",\"The gateway discovers that no Registry address is configured.\"],\"outcomes\":[\"The request fails with no stored mutation or success audit.\",\"A local change or audit record remains despite the failed request.\"],\"observer\":\"The principal and a later administrator inspecting product state or audit history\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"Readiness with missing Registry configuration\",\"kind\":\"unspecified health semantics\",\"text\":\"whose absence fails only Registry calls\",\"question\":\"Does an absent Registry address make the public readiness check fail, or is the service ready because startup and non-Registry operations remain available?\",\"options\":[\"Readiness succeeds; absence affects only an attempted Registry operation\",\"Readiness fails until the address is present\",\"Readiness depends on whether Registry-backed functionality is enabled by another setting\"],\"default_guess\":\"Readiness succeeds because the text permits startup and confines the failure to Registry calls.\",\"witness\":{\"initial\":\"The service has started without a Registry address and its database and binary root are usable.\",\"events\":[\"An orchestrator requests readiness.\",\"A user invokes a non-Registry operation.\"],\"outcomes\":[\"Readiness reports ready and the non-Registry operation proceeds.\",\"Readiness reports not ready even though the non-Registry operation could proceed.\"],\"observer\":\"The orchestrator and deployment operator\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"Runtime Registry address change\",\"kind\":\"unspecified reconfiguration behavior\",\"text\":\"the Registry gateway reads at each call\",\"question\":\"When the environment value changes at runtime, must the gateway immediately use the new address, and what happens to cached clients, DNS results, connection pools, and in-flight calls created for the old address?\",\"options\":[\"New calls immediately use the new address while in-flight calls finish against the old one\",\"The new value is used only after cached clients or connections expire\",\"Runtime changes are unsupported despite the per-call read; a restart is required\"],\"default_guess\":\"New calls use the newly read address immediately, while already-started calls finish against the address they captured.\",\"witness\":{\"initial\":\"The service has an open connection to Registry A, then its environment value is changed to Registry B without restart.\",\"events\":[\"A caller starts a new Registry-dependent operation after the change.\"],\"outcomes\":[\"The new operation contacts Registry B.\",\"The gateway reuses its pooled client and contacts Registry A.\"],\"observer\":\"The caller and the operators of Registries A and B\"}}]}",
+ "set_aside": []
+}
