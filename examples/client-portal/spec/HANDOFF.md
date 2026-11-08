@@ -1,8 +1,8 @@
 # Handoff — Client Portal (current)
 
 Replaces the handoff of 2026-11-07. State of `agent/client-portal` on
-2026-11-08 after the State 2 rounds 82-92 (on `fe8814d3`, origin/main with
-#161 merged), checked against the Factory
+2026-11-08 after the State 2 rounds 82-93 (on `404d1ccd`, origin/main with
+#161 and #162 merged), checked against the Factory
 checkout `code_factory_cp_witnesses` at origin/main `5a3bdec2`; the assembly
 result is `80_assembly.md`.
 
@@ -17,10 +17,10 @@ result is `80_assembly.md`.
   rounds still read the full texts and are to be cut down first). After
   Workbench #161 (owner decision 2026-11-08, #147: whether a check asserts
   is judged at State 8) the State 2 transition is ready (`invariant_tests`
-  closed, 32 decisions). Rounds 82-92 (below) closed the 17 units that
-  rounds 79-81 held open on check coverage. After round 92 State 2 is
-  still open: A18 and A28 block (3 topics, below). Stopped by the
-  coordinator after round 92.
+  closed, 32 decisions). Rounds 82-93 (below) closed the 17 units that
+  rounds 79-81 held open on check coverage. After round 93 State 2 is
+  still open: A18 and A28 block (2 topics, below). Stopped by the
+  coordinator after round 93.
 - The 52 partial verdicts below are now a State 8 obligation
   (`witness_material` at `state8_assembly`), Factory work in
   code-factory #189; they no longer hold State 2.
@@ -188,7 +188,7 @@ above, plus singletons on A28 (where in an operation the one wall reading
 happens; accepted forms of source-supplied datetimes) and A32 (whether the
 vulnerable-image rule covers builds or only deploys).
 
-## State 2 rounds 82-92 (2026-11-08, after #161)
+## State 2 rounds 82-93 (2026-11-08, after #161)
 
 Run with `--since 451ea6de` (the round-81 `closed_at`), provider
 `codex-cli:gpt-5.6-sol:medium`, 5 requests per round (3 reviews, grouping,
@@ -207,6 +207,7 @@ judge). Input characters per request:
 | 90 | 169,950 | 4,753 | 769,344 | 2 | A32 |
 | 91 | 165,937 | 8,484 | 782,086 | 2 | A28 |
 | 92 | 167,594 | 7,854 | 786,956 | 3 | A18, A28 |
+| 93 | 151,714 | 2,956 | 1,044,835 (6,296 + 56,597 + 981,942) | 2 | A18, A28 |
 
 Two attempts (rounds 83 and 85) failed after their three reviews on a
 review answer that was not valid JSON and saved nothing; they were rerun
@@ -294,11 +295,44 @@ Open after round 92 (blocking: 3), verbatim:
   while the detailed required test expressly requires a changed
   re-publication to append its import result and audit."
 
-T11 and T16 are about the generic migrated sentence "a focused test at X
-showing the invariant holds; a violating input is refused and changes
-nothing" in A18, against the detailed items; T15 asks how the check works
-(State 8 material by the coordinator's reading). Not edited (one round
-only).
+Round 93 (owner approved fixing the three round-92 topics; on 404d1ccd,
+origin/main with Workbench #162 merged: narrower judge input, review retry,
+no bound-check invitation). A18: the eight generic carried-over items "a
+focused test at X showing the invariant holds; a violating input is refused
+and changes nothing" were removed; INV-020 and INV-022…INV-025 got detailed
+items at the "what must be shown" level beside their witness tags
+(INV-026…028 kept theirs). CLK-001's Required tests item adds that no module
+other than the clock source reads the host wall or monotonic clock directly.
+
+Round 93 sizes: each review 151,714 (12,622 instruction + 139,092 text);
+grouping 2,956; judge 6,296 instruction + 56,597 inline text, files 981,942
+separately (1,044,835 in all). Under #162 the judge's inline text fell from
+~227k to 57k and its files rose from 554k to 982k; the request total is
+3,741 below the 1,048,576 limit noted for rounds 79-81 (if that limit
+still applies to files passed separately).
+
+Open after round 93 (blocking: 2; open units A18, A28), verbatim:
+
+- T4 (A18, contradiction) "Whether idempotent snapshot re-publication
+  permits any persistent writes": "The Required test's unqualified no-change
+  outcome conflicts with the product rule requiring two new persistent
+  records for every classified idempotent replay." Quotes: "a
+  re-publication of its identity with the same content changes nothing,"
+  and "An attempt the import classifies — accepted, idempotent replay,
+  integrity conflict, or a rejection — is recorded as a fresh immutable
+  import result with a fresh `import_id` and its `snapshot.import` audit;".
+  A defect of the new INV-020 item written for round 93: a same-content
+  replay should also say it is recorded as its import result and audit.
+  Not edited (one round only).
+- T7 (A28, consequential_gap) "Whether CLK-002 requires exactly one
+  monotonic-clock read per viewer-entry request": "Although the normative
+  rule requires one elapsed reading per request, neither CLK-002 nor its
+  Required tests item says that the test must demonstrate that read-count
+  requirement."
+
+Round 92's T11, T15, T16 did not recur as such (T16's replay question
+returned as T4 on the new text). No round-93 topic is about a bound
+check.
 
 Reopened by these edits and not asked (coordinator: State 2 only): State 1
 (`Projections and answers`), States 3 and 4 (`context`), State 5
