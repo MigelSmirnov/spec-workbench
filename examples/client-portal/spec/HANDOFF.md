@@ -449,6 +449,16 @@ the State 2 edits enter the `context` of States 3-5. State 0 stays closed.
 - **Route B** (owner: coordinator, after export): the live code has 46
   Factory code-check findings on the clock source and still serves the
   removed email routes and the 0.00 of INV-044.
+- **Known residue: `email_deliveries`** (owner, 2026-11-08). The storage
+  schema revision stays 13. The `email_deliveries` table, the outbox of the
+  removed staff email challenges, stays in live databases; the new code
+  neither creates nor reads it. The design has no migration form: the
+  persistence closure, SPEC_STANDARD §15.7 (versioning rules and
+  expand/contract, but no form to declare a step such as dropping a table)
+  and the Factory emitter (`storage_schema_revision` is only a setting
+  value there) all lack one. This is a Workbench and Factory gap. The table
+  is dropped manually after Route B with the owner's approval, or by a
+  later revision once a migration form exists. See `SEMANTIC_DIFF.md`.
 - **Stage 8.1** evidence is the State 7 rounds and the emitter IR. No
   separate per-module adversarial review was run (ledger `semantic_evidence`).
 - **Workbench gaps** (owner: Workbench):
